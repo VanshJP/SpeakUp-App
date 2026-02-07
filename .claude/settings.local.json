@@ -1,3 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild:*)",
+      "WebSearch",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:blog.research.google)",
+      "WebFetch(domain:research.google)",
+      "WebFetch(domain:github.com)"
+    ]
+  },
   "outputStyle": "default"
 }

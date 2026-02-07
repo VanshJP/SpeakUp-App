@@ -78,6 +78,7 @@
 			);
 			name = SpeakUp;
 			packageProductDependencies = (
+				BB0000022F290002005C1EB3 /* WhisperKit */,
 			);
 			productName = SpeakUp;
 			productReference = BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */;
@@ -109,6 +110,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBCE3AE02F285A2B005C1EB3 /* Products */;
+			packageReferences = (
+				BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -274,7 +278,6 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUp/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = YES;
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says ";
@@ -314,7 +317,6 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUp/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = YES;
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says ";
@@ -360,6 +362,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BB0000022F290002005C1EB3 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BBCE3AD72F285A2B005C1EB3 /* Project object */;
 }

@@ -3,6 +3,9 @@ import SwiftData
 
 @main
 struct SpeakUpApp: App {
+    // Shared speech service for preloading Whisper model
+    @State private var speechService = SpeechService()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Recording.self,
@@ -63,6 +66,8 @@ struct SpeakUpApp: App {
                 .task {
                     await seedPromptsIfNeeded()
                     await ensureSettingsExist()
+                    // Preload Whisper model in background for faster first transcription
+                    await speechService.preloadModel()
                 }
         }
         .modelContainer(sharedModelContainer)

@@ -14,54 +14,65 @@ struct RecordingDetailView: View {
     @State private var showingDeleteAlert = false
     @State private var showingShareSheet = false
     @State private var showFillerHighlights = true
+    @State private var waveformHeights: [CGFloat] = []
 
     // Services
     @State private var audioService = AudioService()
     @State private var speechService = SpeechService()
     
     var body: some View {
-        ScrollView {
+        ZStack(alignment: .top) {
             if let recording {
-                VStack(spacing: 20) {
-                    // Media Player
-                    mediaPlayerSection(recording)
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // 1. Prompt Header
+                        promptHeader(recording)
 
-                    // Score Card
-                    if let analysis = recording.analysis {
-                        ScoreDisplayCard(
-                            score: analysis.speechScore.overall,
-                            trend: analysis.speechScore.trend
-                        )
-                    } else if recording.isProcessing || isTranscribing {
-                        processingSection
+                        // 2. Score Card
+                        if let analysis = recording.analysis {
+                            ScoreDisplayCard(
+                                score: analysis.speechScore.overall,
+                                trend: analysis.speechScore.trend
+                            )
+                        } else if recording.isProcessing || isTranscribing {
+                            processingSection
+                        }
+
+                        // 3. Stats Grid
+                        if let analysis = recording.analysis {
+                            statsGrid(analysis)
+                        }
+
+                        // 4. Playback Control (directly above transcript)
+                        playbackControlSection(recording)
+
+                        // 5. Transcript
+                        if let words = recording.transcriptionWords, !words.isEmpty {
+                            transcriptSectionWithHighlights(words)
+                        } else if let text = recording.transcriptionText, !text.isEmpty {
+                            transcriptSection(text)
+                        }
+
+                        // 6. Filler Words
+                        if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
+                            fillerWordsSection(analysis.fillerWords)
+                        }
+
+                        // 7. Detailed Scores
+                        if let analysis = recording.analysis {
+                            subscoresSection(analysis)
+                        }
+
+                        // Actions
+                        actionsSection(recording)
                     }
-
-                    // Stats Grid (reordered: Words/Min, Total Words, Filler Words, Pauses)
-                    if let analysis = recording.analysis {
-                        statsGrid(analysis)
-                    }
-
-                    // Filler Words (moved up)
-                    if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
-                        fillerWordsSection(analysis.fillerWords)
-                    }
-
-                    // Transcript (moved up)
-                    if let words = recording.transcriptionWords, !words.isEmpty {
-                        transcriptSectionWithHighlights(words)
-                    } else if let text = recording.transcriptionText, !text.isEmpty {
-                        transcriptSection(text)
-                    }
-
-                    // Subscores (moved to bottom)
-                    if let analysis = recording.analysis {
-                        subscoresSection(analysis)
-                    }
-
-                    // Actions
-                    actionsSection(recording)
+                    .padding()
                 }
-                .padding()
+                .onAppear {
+                    generateWaveformHeights()
+                    initializePlayback(recording)
+                }
+
             } else if isLoading {
                 ProgressView("Loading...")
                     .padding(.top, 100)
@@ -73,7 +84,7 @@ struct RecordingDetailView: View {
                 )
             }
         }
-        .navigationTitle(recording?.date.relativeFormatted ?? "Recording")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -122,92 +133,139 @@ struct RecordingDetailView: View {
         }
     }
     
-    // MARK: - Media Player Section
-    
+    // MARK: - Prompt Header (Scrollable)
+
     @ViewBuilder
-    private func mediaPlayerSection(_ recording: Recording) -> some View {
+    private func promptHeader(_ recording: Recording) -> some View {
         GlassCard {
-            VStack(spacing: 16) {
-                if recording.mediaType == .video, let videoURL = recording.videoURL {
-                    VideoPlayer(player: AVPlayer(url: videoURL))
-                        .frame(height: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    // Audio player visualization
-                    audioPlayerView(recording)
-                }
-                
-                // Recording info
+            VStack(alignment: .leading, spacing: 8) {
+                // Category & Date row
                 HStack {
-                    Label(recording.prompt?.category ?? "Practice Session", systemImage: "text.bubble")
+                    if let prompt = recording.prompt {
+                        Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.teal)
+                    }
+
+                    Spacer()
+
+                    Text(recording.date.relativeFormatted)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
+                }
+
+                // Prompt text
+                if let prompt = recording.prompt {
+                    Text(prompt.text)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                } else {
+                    Text("Practice Session")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                }
+
+                // Duration & difficulty
+                HStack(spacing: 12) {
                     HStack(spacing: 4) {
-                        Image(systemName: recording.mediaType.iconName)
+                        Image(systemName: "clock")
                         Text(recording.formattedDuration)
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                    if let difficulty = recording.prompt?.difficulty {
+                        Text(difficulty.displayName)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background {
+                                Capsule()
+                                    .fill(AppColors.difficultyColor(difficulty).opacity(0.2))
+                            }
+                            .foregroundStyle(AppColors.difficultyColor(difficulty))
+                    }
                 }
             }
         }
     }
-    
+
+    // MARK: - Playback Control Section
+
     @ViewBuilder
-    private func audioPlayerView(_ recording: Recording) -> some View {
-        VStack(spacing: 16) {
-            // Waveform placeholder
-            HStack(spacing: 2) {
-                ForEach(0..<40, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.teal.opacity(Double.random(in: 0.3...1.0)))
-                        .frame(width: 4, height: CGFloat.random(in: 20...60))
+    private func playbackControlSection(_ recording: Recording) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Playback")
+                .font(.headline)
+
+            GlassCard(padding: 16) {
+                VStack(spacing: 16) {
+                    // Waveform row: Start time - Waveform - End time
+                    HStack(spacing: 8) {
+                        // Start time
+                        Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, alignment: .leading)
+
+                        // Waveform visualization
+                        GeometryReader { geometry in
+                            let barWidth: CGFloat = 3
+                            let spacing: CGFloat = 2
+                            let totalBarWidth = barWidth + spacing
+                            let barCount = max(1, Int(geometry.size.width / totalBarWidth))
+                            let width = geometry.size.width
+
+                            HStack(spacing: spacing) {
+                                ForEach(0..<barCount, id: \.self) { i in
+                                    let progress = Double(i) / Double(barCount)
+                                    let isPlayed = progress < audioService.playbackProgress
+                                    let height: CGFloat = waveformHeights.isEmpty ? 20 : waveformHeights[i % waveformHeights.count]
+
+                                    RoundedRectangle(cornerRadius: 1.5)
+                                        .fill(isPlayed ? Color.teal : Color.teal.opacity(0.3))
+                                        .frame(width: barWidth, height: height)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        let progress = max(0, min(1, value.location.x / max(1, width)))
+                                        audioService.seek(to: progress)
+                                    }
+                            )
+                        }
+                        .frame(height: 36)
+
+                        // End time
+                        Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 40, alignment: .trailing)
+                    }
+
+                    // Play/Pause button centered
+                    Button {
+                        togglePlayback(recording)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.teal)
+                                .frame(width: 52, height: 52)
+
+                            Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-            }
-            .frame(height: 80)
-            
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.gray.opacity(0.2))
-                    
-                    Capsule()
-                        .fill(Color.teal)
-                        .frame(width: geometry.size.width * audioService.playbackProgress)
-                }
-            }
-            .frame(height: 4)
-            
-            // Controls
-            HStack {
-                Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                
-                Spacer()
-                
-                Button {
-                    togglePlayback(recording)
-                } label: {
-                    Image(systemName: audioService.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.teal)
-                }
-                
-                Spacer()
-                
-                Text(formatTime(audioService.playbackDuration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 8)
     }
-    
+
     // MARK: - Subscores Section
 
     @ViewBuilder
@@ -277,37 +335,45 @@ struct RecordingDetailView: View {
     }
     
     // MARK: - Stats Grid
-    
+
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatCard(
-                title: "Words/Min",
-                value: "\(Int(analysis.wordsPerMinute))",
-                icon: "speedometer",
-                tint: .blue
-            )
-            
-            StatCard(
-                title: "Total Words",
-                value: "\(analysis.totalWords)",
-                icon: "text.word.spacing",
-                tint: .green
-            )
-            
-            StatCard(
-                title: "Filler Words",
-                value: "\(analysis.totalFillerCount)",
-                icon: "exclamationmark.bubble",
-                tint: .orange
-            )
-            
-            StatCard(
-                title: "Pauses",
-                value: "\(analysis.pauseCount)",
-                icon: "pause.circle",
-                tint: .purple
-            )
+        GlassCard(padding: 12) {
+            HStack(spacing: 0) {
+                CompactStatItem(
+                    icon: "speedometer",
+                    value: "\(Int(analysis.wordsPerMinute))",
+                    label: "WPM",
+                    color: .blue
+                )
+
+                Divider().frame(height: 36)
+
+                CompactStatItem(
+                    icon: "text.word.spacing",
+                    value: "\(analysis.totalWords)",
+                    label: "Words",
+                    color: .green
+                )
+
+                Divider().frame(height: 36)
+
+                CompactStatItem(
+                    icon: "exclamationmark.bubble",
+                    value: "\(analysis.totalFillerCount)",
+                    label: "Fillers",
+                    color: .orange
+                )
+
+                Divider().frame(height: 36)
+
+                CompactStatItem(
+                    icon: "pause.circle",
+                    value: "\(analysis.pauseCount)",
+                    label: "Pauses",
+                    color: .purple
+                )
+            }
         }
     }
     
@@ -357,6 +423,7 @@ struct RecordingDetailView: View {
                 Text(text)
                     .font(.body)
                     .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -387,6 +454,7 @@ struct RecordingDetailView: View {
                     words: words,
                     showHighlights: showFillerHighlights
                 )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
     }
@@ -418,7 +486,19 @@ struct RecordingDetailView: View {
     }
     
     // MARK: - Helpers
-    
+
+    private func generateWaveformHeights() {
+        guard waveformHeights.isEmpty else { return }
+        waveformHeights = (0..<50).map { _ in CGFloat.random(in: 12...36) }
+    }
+
+    private func initializePlayback(_ recording: Recording) {
+        guard let url = recording.audioURL ?? recording.videoURL else { return }
+        if let duration = audioService.getAudioDuration(at: url) {
+            audioService.playbackDuration = duration
+        }
+    }
+
     private func loadRecording() async {
         isLoading = true
         defer { isLoading = false }
@@ -587,6 +667,34 @@ struct SubscoreRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+// MARK: - Compact Stat Item (horizontal row style)
+
+struct CompactStatItem: View {
+    let icon: String
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                    .foregroundStyle(color)
+
+                Text(value)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(color)
+            }
+
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

@@ -11,7 +11,7 @@ struct HistoryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 // Contribution Graph
                 contributionGraphSection
 
@@ -49,8 +49,16 @@ struct HistoryView: View {
 
     private var contributionGraphSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Activity")
-                .font(.headline)
+            HStack {
+                Text("Activity")
+                    .font(.headline)
+
+                Spacer()
+
+                Text("Last 6 months")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             GlassCard {
                 ContributionGraph(viewModel: viewModel) { date in
@@ -64,20 +72,38 @@ struct HistoryView: View {
     // MARK: - Streak Section
     
     private var streakSection: some View {
-        HStack(spacing: 12) {
-            StatCard(
-                title: "Current Streak",
-                value: "\(viewModel.currentStreak) days",
-                icon: "flame.fill",
-                tint: .orange
-            )
-            
-            StatCard(
-                title: "Longest Streak",
-                value: "\(viewModel.longestStreak) days",
-                icon: "trophy.fill",
-                tint: .yellow
-            )
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Stats")
+                .font(.headline)
+
+            GlassCard(padding: 12) {
+                HStack(spacing: 0) {
+                    CompactStatItem(
+                        icon: "flame.fill",
+                        value: "\(viewModel.currentStreak)",
+                        label: "Streak",
+                        color: .orange
+                    )
+
+                    Divider().frame(height: 36)
+
+                    CompactStatItem(
+                        icon: "trophy.fill",
+                        value: "\(viewModel.longestStreak)",
+                        label: "Best",
+                        color: .yellow
+                    )
+
+                    Divider().frame(height: 36)
+
+                    CompactStatItem(
+                        icon: "mic.fill",
+                        value: "\(viewModel.recordings.count)",
+                        label: "Sessions",
+                        color: .teal
+                    )
+                }
+            }
         }
     }
     
@@ -85,8 +111,18 @@ struct HistoryView: View {
     
     private var recordingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent Sessions")
-                .font(.headline)
+            HStack {
+                Text("Recent Sessions")
+                    .font(.headline)
+
+                Spacer()
+
+                if !viewModel.recordings.isEmpty {
+                    Text("\(viewModel.recordings.count) total")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
             
             if viewModel.recordings.isEmpty {
                 EmptyStateCard(

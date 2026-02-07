@@ -5,22 +5,13 @@ struct RecordButton: View {
     let onTap: () -> Void
     
     @State private var isPressing = false
-    @State private var pulseScale: CGFloat = 1.0
-    
+
     private let buttonSize: CGFloat = 80
     private let innerSize: CGFloat = 64
     
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                // Outer pulsing ring (when recording)
-                if isRecording {
-                    Circle()
-                        .stroke(Color.red.opacity(0.3), lineWidth: 4)
-                        .frame(width: buttonSize + 20, height: buttonSize + 20)
-                        .scaleEffect(pulseScale)
-                }
-                
                 // Outer glass ring
                 Circle()
                     .fill(.ultraThinMaterial)
@@ -29,7 +20,7 @@ struct RecordButton: View {
                         Circle()
                             .strokeBorder(.white.opacity(0.3), lineWidth: 2)
                     }
-                
+
                 // Inner content
                 if isRecording {
                     // Stop icon (rounded square)
@@ -59,25 +50,6 @@ struct RecordButton: View {
             isPressing = false
         }
         .sensoryFeedback(.impact(flexibility: .soft), trigger: isRecording)
-        .onChange(of: isRecording) { _, newValue in
-            if newValue {
-                startPulseAnimation()
-            } else {
-                stopPulseAnimation()
-            }
-        }
-    }
-    
-    private func startPulseAnimation() {
-        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-            pulseScale = 1.2
-        }
-    }
-    
-    private func stopPulseAnimation() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            pulseScale = 1.0
-        }
     }
 }
 

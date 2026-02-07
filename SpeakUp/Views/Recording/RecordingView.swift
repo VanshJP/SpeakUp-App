@@ -40,6 +40,10 @@ struct RecordingView: View {
                 duration: duration
             )
             await viewModel.checkPermissions()
+            // Auto-start recording after countdown
+            if !viewModel.isRecording {
+                await viewModel.startRecording()
+            }
         }
         .onDisappear {
             viewModel.cleanup()
@@ -59,23 +63,15 @@ struct RecordingView: View {
     // MARK: - Audio Background
 
     private var audioBackground: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color.black,
-                    Color(white: 0.1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            // Show waveform during recording
-            if viewModel.isRecording {
-                AudioWaveformView(audioLevel: viewModel.audioLevel)
-                    .padding(.horizontal)
-            }
-        }
+        LinearGradient(
+            colors: [
+                Color.black,
+                Color(white: 0.1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 
     // MARK: - Top Bar
@@ -102,34 +98,24 @@ struct RecordingView: View {
 
                 Spacer()
 
-                // Duration badge
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                    Text(duration.displayName)
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                }
+                // Voice activity indicator (top right)
+                if viewModel.isRecording {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(viewModel.audioLevel > -40 ? Color.green : Color.gray)
+                            .frame(width: 8, height: 8)
+                            .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
 
-                Spacer()
-
-                // Audio badge
-                HStack(spacing: 6) {
-                    Image(systemName: "mic.fill")
-                    Text("Audio")
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
+                        Text(viewModel.audioLevel > -40 ? "Speaking" : "Silent")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(viewModel.audioLevel > -40 ? .white : .white.opacity(0.6))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                    }
                 }
             }
 
@@ -174,34 +160,10 @@ struct RecordingView: View {
                 isRecording: viewModel.isRecording
             )
 
-            // Voice activity indicator (during recording)
-            if viewModel.isRecording {
-                voiceActivityIndicator
-            }
-
             // Prompt Card (if available) - show only before recording starts
             if let prompt, !viewModel.isRecording {
                 promptCard(prompt)
             }
-        }
-    }
-
-    private var voiceActivityIndicator: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(viewModel.audioLevel > -40 ? Color.green : Color.gray)
-                .frame(width: 8, height: 8)
-                .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
-
-            Text(viewModel.audioLevel > -40 ? "Speaking" : "Silent")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(viewModel.audioLevel > -40 ? .white : .white.opacity(0.5))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
         }
     }
 
@@ -262,21 +224,28 @@ struct RecordingView: View {
                 }
             }
 
-            // Record Button
-            RecordButton(
-                isRecording: viewModel.isRecording,
-                onTap: {
-                    Task {
-                        if viewModel.isRecording {
-                            if let recording = await viewModel.stopRecording() {
-                                onComplete(recording)
+            // Record Button with circular waveform
+            ZStack {
+                // Circular waveform around button
+                if viewModel.isRecording {
+                    CircularWaveformView(audioLevel: viewModel.audioLevel)
+                }
+
+                RecordButton(
+                    isRecording: viewModel.isRecording,
+                    onTap: {
+                        Task {
+                            if viewModel.isRecording {
+                                if let recording = await viewModel.stopRecording() {
+                                    onComplete(recording)
+                                }
+                            } else {
+                                await viewModel.startRecording()
                             }
-                        } else {
-                            await viewModel.startRecording()
                         }
                     }
-                }
-            )
+                )
+            }
 
             // Hint text
             if !viewModel.isRecording {
@@ -293,75 +262,71 @@ struct RecordingView: View {
     }
 }
 
-// MARK: - Audio Waveform View
+// MARK: - Circular Waveform View (surrounds record button)
 
-struct AudioWaveformView: View {
+struct CircularWaveformView: View {
     let audioLevel: Float
-    private let barCount = 40
+    private let barCount = 48
+    private let baseRadius: CGFloat = 70  // Just outside the record button
 
-    // Store previous levels for smooth animation
-    @State private var barHeights: [CGFloat] = Array(repeating: 0.1, count: 40)
+    @State private var barHeights: [CGFloat] = Array(repeating: 0.15, count: 48)
 
     var body: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 3) {
-                // Left half (mirrored)
-                ForEach(0..<barCount/2, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(barGradient(for: index, isLeftSide: true))
-                        .frame(width: barWidth(geometry: geometry))
-                        .frame(height: barHeights[barCount/2 - 1 - index] * geometry.size.height)
-                }
-                // Right half
-                ForEach(0..<barCount/2, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(barGradient(for: index, isLeftSide: false))
-                        .frame(width: barWidth(geometry: geometry))
-                        .frame(height: barHeights[barCount/2 + index] * geometry.size.height)
-                }
+        ZStack {
+            ForEach(0..<barCount, id: \.self) { index in
+                WaveformBar(
+                    height: barHeights[index],
+                    index: index,
+                    totalBars: barCount,
+                    baseRadius: baseRadius
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
-        .frame(height: 160)
+        .frame(width: 200, height: 200)
         .onChange(of: audioLevel) { _, newLevel in
             updateBars(level: newLevel)
         }
     }
 
-    private func barWidth(geometry: GeometryProxy) -> CGFloat {
-        (geometry.size.width - CGFloat(barCount - 1) * 3) / CGFloat(barCount)
-    }
-
-    private func barGradient(for index: Int, isLeftSide: Bool) -> LinearGradient {
-        // Gradient fades from center outward
-        let distanceFromCenter = isLeftSide ? CGFloat(barCount/2 - index) : CGFloat(index)
-        let maxDistance = CGFloat(barCount/2)
-        let opacity = 1.0 - (distanceFromCenter / maxDistance * 0.5)
-
-        return LinearGradient(
-            colors: [
-                Color.teal.opacity(opacity),
-                Color.cyan.opacity(opacity)
-            ],
-            startPoint: .bottom,
-            endPoint: .top
-        )
-    }
-
     private func updateBars(level: Float) {
-        // Fix: Convert dB level (-60 to 0 range for speech) to normalized value (0 to 1)
+        // Convert dB level (-60 to 0 range for speech) to normalized value (0 to 1)
         let normalizedLevel = max(0, min(1, (level + 60) / 60))
-        let baseHeight = CGFloat(normalizedLevel) * 0.8 + 0.1
 
-        withAnimation(.easeOut(duration: 0.05)) {
-            // Shift bars to the left and add new value at the end
-            for i in 0..<(barCount - 1) {
-                barHeights[i] = barHeights[i + 1]
+        withAnimation(.easeOut(duration: 0.08)) {
+            for i in 0..<barCount {
+                // Create variation across bars for organic look
+                let variation = CGFloat.random(in: 0.7...1.3)
+                let waveOffset = sin(Double(i) * 0.3 + Date().timeIntervalSince1970 * 3) * 0.2
+                let height = CGFloat(normalizedLevel) * variation * 0.8 + 0.15 + waveOffset
+                barHeights[i] = min(1.0, max(0.1, height))
             }
-            // Add some randomness for visual interest
-            let variation = CGFloat.random(in: 0.85...1.15)
-            barHeights[barCount - 1] = min(1.0, baseHeight * variation)
         }
+    }
+}
+
+private struct WaveformBar: View {
+    let height: CGFloat
+    let index: Int
+    let totalBars: Int
+    let baseRadius: CGFloat
+
+    private let maxBarHeight: CGFloat = 35
+    private let barWidth: CGFloat = 3
+
+    var body: some View {
+        let angle = (Double(index) / Double(totalBars)) * 360
+
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color.teal, Color.cyan],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+            )
+            .frame(width: barWidth, height: maxBarHeight * height)
+            .offset(y: -(baseRadius + (maxBarHeight * height) / 2))
+            .rotationEffect(.degrees(angle))
     }
 }
 

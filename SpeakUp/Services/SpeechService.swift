@@ -8,95 +8,153 @@ class SpeechService {
     var isTranscribing = false
     var hasPermission = false
     var transcriptionProgress: Double = 0
-    
-    // Speech recognizer
+    var modelLoadProgress: Double = 0
+    var isModelLoaded: Bool { whisperService.isModelLoaded }
+
+    // Transcription backend
+    private let whisperService = WhisperService()
+
+    // Fallback: Apple Speech recognizer (for when WhisperKit fails)
     private let recognizer: SFSpeechRecognizer?
-    
+
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
-    
+
+    // MARK: - Model Loading
+
+    /// Pre-load the Whisper model (call on app launch for better UX)
+    func preloadModel() async {
+        await whisperService.loadModel(modelVariant: "base")
+    }
+
     // MARK: - Permission
-    
+
     func requestPermission() async -> Bool {
+        // For WhisperKit, we only need microphone permission (handled by AudioService)
+        // Keep this for backward compatibility
         let status = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status)
             }
         }
-        
+
         hasPermission = status == .authorized
         return hasPermission
     }
-    
+
     var permissionStatus: SFSpeechRecognizerAuthorizationStatus {
         SFSpeechRecognizer.authorizationStatus()
     }
-    
+
     // MARK: - Transcription
-    
-    func transcribe(audioURL: URL) async throws -> TranscriptionResult {
+
+    func transcribe(audioURL: URL) async throws -> SpeechTranscriptionResult {
+        isTranscribing = true
+        transcriptionProgress = 0
+
+        defer {
+            isTranscribing = false
+            transcriptionProgress = 1.0
+        }
+
+        do {
+            // Use WhisperKit for accurate filler word detection
+            let result = try await whisperService.transcribe(audioURL: audioURL)
+            transcriptionProgress = whisperService.transcriptionProgress
+            return result
+        } catch {
+            // Fallback to Apple Speech if WhisperKit fails
+            print("WhisperKit failed, falling back to Apple Speech: \(error)")
+            return try await transcribeWithAppleSpeech(audioURL: audioURL)
+        }
+    }
+
+    /// Fallback transcription using Apple's SFSpeechRecognizer
+    private func transcribeWithAppleSpeech(audioURL: URL) async throws -> SpeechTranscriptionResult {
         guard let recognizer, recognizer.isAvailable else {
             throw SpeechServiceError.recognizerUnavailable
         }
-        
+
         if !hasPermission {
             let granted = await requestPermission()
             guard granted else {
                 throw SpeechServiceError.noPermission
             }
         }
-        
-        isTranscribing = true
-        transcriptionProgress = 0
-        
-        defer {
-            isTranscribing = false
-            transcriptionProgress = 1.0
-        }
-        
+
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
         request.shouldReportPartialResults = false
         request.taskHint = .dictation
-        
-        // Enable timing information
+
         if #available(iOS 16.0, *) {
             request.addsPunctuation = true
         }
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             recognizer.recognitionTask(with: request) { [weak self] result, error in
                 if let error {
                     continuation.resume(throwing: SpeechServiceError.transcriptionFailed(error))
                     return
                 }
-                
+
                 guard let result, result.isFinal else { return }
-                
-                // Process the transcription
-                let transcription = self?.processTranscription(result) ?? TranscriptionResult(
+
+                let transcription = self?.processAppleTranscription(result) ?? SpeechTranscriptionResult(
                     text: result.bestTranscription.formattedString,
                     words: [],
                     duration: 0
                 )
-                
+
                 continuation.resume(returning: transcription)
             }
         }
     }
-    
-    private func processTranscription(_ result: SFSpeechRecognitionResult) -> TranscriptionResult {
+
+    private func processAppleTranscription(_ result: SFSpeechRecognitionResult) -> SpeechTranscriptionResult {
         let transcription = result.bestTranscription
+        let segments = transcription.segments
         var words: [TranscriptionWord] = []
         var duration: TimeInterval = 0
-        
-        for segment in transcription.segments {
+
+        let pauseThreshold: TimeInterval = 0.3
+
+        for (index, segment) in segments.enumerated() {
             let word = segment.substring
             let start = segment.timestamp
             let end = start + segment.duration
             let confidence = Double(segment.confidence)
-            let isFiller = FillerWordList.isFillerWord(word)
-            
+
+            let previousWord = index > 0 ? segments[index - 1].substring : nil
+            let nextWord = index < segments.count - 1 ? segments[index + 1].substring : nil
+
+            let pauseBefore: Bool
+            if index == 0 {
+                pauseBefore = start > pauseThreshold
+            } else {
+                let previousEnd = segments[index - 1].timestamp + segments[index - 1].duration
+                pauseBefore = (start - previousEnd) > pauseThreshold
+            }
+
+            let pauseAfter: Bool
+            if index == segments.count - 1 {
+                pauseAfter = true
+            } else {
+                let nextStart = segments[index + 1].timestamp
+                pauseAfter = (nextStart - end) > pauseThreshold
+            }
+
+            let isStartOfSentence = index == 0 || (pauseBefore && (start - (segments[index - 1].timestamp + segments[index - 1].duration)) > 0.8)
+
+            let isFiller = FillerWordList.isFillerWord(
+                word,
+                previousWord: previousWord,
+                nextWord: nextWord,
+                pauseBefore: pauseBefore,
+                pauseAfter: pauseAfter,
+                isStartOfSentence: isStartOfSentence
+            )
+
             words.append(TranscriptionWord(
                 word: word,
                 start: start,
@@ -104,20 +162,49 @@ class SpeechService {
                 confidence: confidence,
                 isFiller: isFiller
             ))
-            
+
             duration = max(duration, end)
         }
-        
-        return TranscriptionResult(
+
+        words = detectFillerPhrases(in: words)
+
+        return SpeechTranscriptionResult(
             text: transcription.formattedString,
             words: words,
             duration: duration
         )
     }
+
+    private func detectFillerPhrases(in words: [TranscriptionWord]) -> [TranscriptionWord] {
+        guard words.count >= 2 else { return words }
+
+        var result = words
+
+        for i in 0..<(result.count - 1) {
+            if FillerWordList.isFillerPhrase(result[i].word, result[i + 1].word) {
+                result[i] = TranscriptionWord(
+                    word: result[i].word,
+                    start: result[i].start,
+                    end: result[i].end,
+                    confidence: result[i].confidence,
+                    isFiller: true
+                )
+                result[i + 1] = TranscriptionWord(
+                    word: result[i + 1].word,
+                    start: result[i + 1].start,
+                    end: result[i + 1].end,
+                    confidence: result[i + 1].confidence,
+                    isFiller: true
+                )
+            }
+        }
+
+        return result
+    }
     
     // MARK: - Analysis
     
-    func analyze(transcription: TranscriptionResult, actualDuration: TimeInterval) -> SpeechAnalysis {
+    func analyze(transcription: SpeechTranscriptionResult, actualDuration: TimeInterval) -> SpeechAnalysis {
         // Count filler words
         var fillerCounts: [String: (count: Int, timestamps: [TimeInterval])] = [:]
         var totalWords = 0
@@ -266,7 +353,7 @@ class SpeechService {
 
 // MARK: - Result Types
 
-struct TranscriptionResult {
+struct SpeechTranscriptionResult {
     let text: String
     let words: [TranscriptionWord]
     let duration: TimeInterval
