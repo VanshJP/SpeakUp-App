@@ -3,8 +3,11 @@ import SwiftData
 
 @main
 struct SpeakUpApp: App {
-    // Shared speech service for preloading Whisper model
+    // Shared services – injected via .environment() so views don't recreate them
     @State private var speechService = SpeechService()
+    @State private var audioService = AudioService()
+
+    @Environment(\.scenePhase) private var scenePhase
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -12,40 +15,31 @@ struct SpeakUpApp: App {
             Prompt.self,
             UserGoal.self,
             UserSettings.self,
+            Achievement.self,
         ])
 
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            cloudKitDatabase: .none  // Disable CloudKit for now - enable later with proper entitlements
+            cloudKitDatabase: .none
         )
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: SpeakUpMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
         } catch {
-            print("Failed to create ModelContainer: \(error)")
+            print("Failed to create ModelContainer with migration plan: \(error)")
 
-            // Delete the old database and try again
-            let fileManager = FileManager.default
-            if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                let storeURL = appSupport.appendingPathComponent("default.store")
-                let storeShmURL = appSupport.appendingPathComponent("default.store-shm")
-                let storeWalURL = appSupport.appendingPathComponent("default.store-wal")
-
-                try? fileManager.removeItem(at: storeURL)
-                try? fileManager.removeItem(at: storeShmURL)
-                try? fileManager.removeItem(at: storeWalURL)
-
-                print("Deleted old database, recreating...")
-            }
-
-            // Try again with fresh database
+            // Attempt without migration plan as fallback
             do {
                 return try ModelContainer(for: schema, configurations: [modelConfiguration])
             } catch {
-                print("Still failed after deleting old store: \(error)")
+                print("Failed to create ModelContainer: \(error)")
 
-                // Last resort: in-memory store
+                // Last resort: in-memory store – avoids silent data deletion
                 let fallbackConfig = ModelConfiguration(
                     schema: schema,
                     isStoredInMemoryOnly: true
@@ -59,29 +53,40 @@ struct SpeakUpApp: App {
             }
         }
     }()
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(speechService)
+                .environment(audioService)
                 .task {
                     await seedPromptsIfNeeded()
                     await ensureSettingsExist()
-                    // Preload Whisper model in background for faster first transcription
-                    await speechService.preloadModel()
+                    await seedAchievementsIfNeeded()
+                    // Preload Whisper model in background – don't block UI on launch
+                    Task.detached(priority: .background) {
+                        await speechService.preloadModel()
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await NotificationService().clearBadge()
+                }
+            }
+        }
     }
-    
+
     @MainActor
     private func seedPromptsIfNeeded() async {
         let context = sharedModelContainer.mainContext
         let descriptor = FetchDescriptor<Prompt>()
-        
+
         do {
             let existingCount = try context.fetchCount(descriptor)
             if existingCount == 0 {
-                // Seed default prompts
                 for promptData in DefaultPrompts.all {
                     let prompt = Prompt(
                         id: promptData.id,
@@ -97,12 +102,30 @@ struct SpeakUpApp: App {
             print("Error seeding prompts: \(error)")
         }
     }
-    
+
+    @MainActor
+    private func seedAchievementsIfNeeded() async {
+        let context = sharedModelContainer.mainContext
+        let descriptor = FetchDescriptor<Achievement>()
+
+        do {
+            let existingCount = try context.fetchCount(descriptor)
+            if existingCount == 0 {
+                for def in AchievementDefinition.allCases {
+                    context.insert(def.toModel())
+                }
+                try context.save()
+            }
+        } catch {
+            print("Error seeding achievements: \(error)")
+        }
+    }
+
     @MainActor
     private func ensureSettingsExist() async {
         let context = sharedModelContainer.mainContext
         let descriptor = FetchDescriptor<UserSettings>()
-        
+
         do {
             let existingSettings = try context.fetch(descriptor)
             if existingSettings.isEmpty {

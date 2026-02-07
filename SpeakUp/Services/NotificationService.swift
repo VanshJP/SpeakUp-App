@@ -129,6 +129,39 @@ class NotificationService {
         try? await center.add(request)
     }
     
+    // MARK: - Streak At Risk
+
+    func scheduleStreakAtRiskNotification(currentStreak: Int) async {
+        guard hasPermission, currentStreak >= 2 else { return }
+
+        // Cancel any existing streak-at-risk notification
+        center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
+
+        let content = UNMutableNotificationContent()
+        content.title = "Streak at Risk!"
+        content.body = "Your \(currentStreak)-day streak ends today! Record a session to keep it alive."
+        content.sound = .default
+        content.badge = 1
+
+        // Schedule at 8pm today
+        var dateComponents = DateComponents()
+        dateComponents.hour = 20
+        dateComponents.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "streak_at_risk",
+            content: content,
+            trigger: trigger
+        )
+
+        try? await center.add(request)
+    }
+
+    func cancelStreakAtRiskNotification() {
+        center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
+    }
+
     // MARK: - Management
     
     func getScheduledNotifications() async -> [UNNotificationRequest] {

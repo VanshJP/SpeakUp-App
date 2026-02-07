@@ -92,14 +92,19 @@ class SpeechService {
         }
 
         return try await withCheckedThrowingContinuation { continuation in
+            var hasResumed = false
             recognizer.recognitionTask(with: request) { [weak self] result, error in
+                guard !hasResumed else { return }
+
                 if let error {
+                    hasResumed = true
                     continuation.resume(throwing: SpeechServiceError.transcriptionFailed(error))
                     return
                 }
 
                 guard let result, result.isFinal else { return }
 
+                hasResumed = true
                 let transcription = self?.processAppleTranscription(result) ?? SpeechTranscriptionResult(
                     text: result.bestTranscription.formattedString,
                     words: [],

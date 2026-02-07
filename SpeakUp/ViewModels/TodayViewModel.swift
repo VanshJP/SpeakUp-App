@@ -9,6 +9,8 @@ class TodayViewModel {
     var activeGoals: [UserGoal] = []
     var selectedDuration: RecordingDuration = .sixty
     var isLoading = true
+    var weeklyProgress: WeeklyProgressData?
+    var dailyChallenge: DailyChallenge?
     
     private var modelContext: ModelContext?
     
@@ -35,8 +37,49 @@ class TodayViewModel {
         // Load active goals
         await loadActiveGoals(context: context)
         
+        // Load daily challenge
+        loadDailyChallenge(recordings: (try? context.fetch(FetchDescriptor<Recording>())) ?? [])
+
         // Load user settings for defaults
         await loadUserSettings(context: context)
+
+        // Schedule streak-at-risk notification if applicable
+        await scheduleStreakNotificationIfNeeded()
+
+        // Update widget data
+        updateWidgetData()
+    }
+
+    private func updateWidgetData() {
+        WidgetDataProvider.updateStreak(userStats.currentStreak)
+        if let prompt = todaysPrompt {
+            WidgetDataProvider.updateTodaysPrompt(text: prompt.text, category: prompt.category, id: prompt.id)
+        }
+        if let lastScore = userStats.scoreHistory.first?.score {
+            WidgetDataProvider.updateLastScore(lastScore)
+        }
+    }
+
+    private func scheduleStreakNotificationIfNeeded() async {
+        let streak = userStats.currentStreak
+        guard streak >= 2 else { return }
+
+        // Check if user has already recorded today
+        guard let context = modelContext else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+        let descriptor = FetchDescriptor<Recording>(
+            predicate: #Predicate { $0.date >= today }
+        )
+
+        let todayCount = (try? context.fetchCount(descriptor)) ?? 0
+        let notificationService = NotificationService()
+        await notificationService.checkPermission()
+
+        if todayCount == 0 {
+            await notificationService.scheduleStreakAtRiskNotification(currentStreak: streak)
+        } else {
+            notificationService.cancelStreakAtRiskNotification()
+        }
     }
     
     @MainActor
@@ -109,6 +152,9 @@ class TodayViewModel {
             
             // Calculate improvement rate
             let improvementRate = calculateImprovementRate(from: recentRecordings)
+
+            // Weekly progress
+            weeklyProgress = WeeklyProgressService.calculate(recordings: recordings)
             
             userStats = UserStats(
                 totalRecordings: totalRecordings,
@@ -173,6 +219,14 @@ class TodayViewModel {
         }
     }
     
+    private func loadDailyChallenge(recordings: [Recording]) {
+        var challenge = DailyChallengeService.todaysChallenge()
+        let today = Calendar.current.startOfDay(for: Date())
+        let todayRecordings = recordings.filter { $0.date >= today }
+        challenge.isCompleted = todayRecordings.contains { DailyChallengeService.evaluate(challenge: challenge, recording: $0) }
+        dailyChallenge = challenge
+    }
+
     private func calculateImprovementRate(from recordings: [Recording]) -> Double {
         guard recordings.count >= 2 else { return 0 }
         

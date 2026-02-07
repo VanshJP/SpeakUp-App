@@ -115,6 +115,8 @@ struct RingStatsView: View {
                 animateRings = true
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Stats: \(streak) day streak, \(sessions) sessions, score \(score) out of 100, \(improvementText) progress")
     }
 }
 

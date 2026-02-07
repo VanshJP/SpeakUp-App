@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000022F290002005C1EB3 /* WhisperKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpeakUp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -108,11 +113,11 @@
 			);
 			mainGroup = BBCE3AD62F285A2B005C1EB3;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
-			productRefGroup = BBCE3AE02F285A2B005C1EB3 /* Products */;
 			packageReferences = (
 				BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = BBCE3AE02F285A2B005C1EB3 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

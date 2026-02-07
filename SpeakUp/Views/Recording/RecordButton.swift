@@ -44,6 +44,7 @@ struct RecordButton: View {
             .animation(.spring(duration: 0.2), value: isPressing)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(isRecording ? "Stop recording" : "Start recording")
         .pressEvents {
             isPressing = true
         } onRelease: {

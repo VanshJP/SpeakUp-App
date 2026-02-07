@@ -15,11 +15,21 @@ struct TodayView: View {
                 // Header Stats (Ring visualization)
                 headerSection
 
+                // Daily Challenge
+                if let challenge = viewModel.dailyChallenge {
+                    DailyChallengeCard(challenge: challenge)
+                }
+
                 // Interactive Prompt Card (tap to start)
                 interactivePromptSection
 
                 // Prominent Start Button
                 startButtonSection
+
+                // Weekly Progress Card
+                if let weeklyData = viewModel.weeklyProgress {
+                    WeeklyProgressCard(data: weeklyData)
+                }
 
                 // Active Goals Preview
                 if !viewModel.activeGoals.isEmpty {
@@ -51,16 +61,27 @@ struct TodayView: View {
     // MARK: - Start Button Section
 
     private var startButtonSection: some View {
-        GlassButton(
-            title: "Start Session",
-            icon: "mic.fill",
-            style: .primary,
-            fullWidth: true
-        ) {
-            onStartRecording(
-                viewModel.todaysPrompt,
-                viewModel.selectedDuration
-            )
+        VStack(spacing: 12) {
+            GlassButton(
+                title: "Start Session",
+                icon: "mic.fill",
+                style: .primary,
+                fullWidth: true
+            ) {
+                onStartRecording(
+                    viewModel.todaysPrompt,
+                    viewModel.selectedDuration
+                )
+            }
+
+            GlassButton(
+                title: "Free Practice",
+                icon: "waveform",
+                style: .secondary,
+                fullWidth: true
+            ) {
+                onStartRecording(nil, viewModel.selectedDuration)
+            }
         }
     }
     

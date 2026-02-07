@@ -63,14 +63,19 @@ struct RecordingView: View {
     // MARK: - Audio Background
 
     private var audioBackground: some View {
-        LinearGradient(
-            colors: [
-                Color.black,
-                Color(white: 0.1)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        ZStack {
+            Color.black
+
+            LinearGradient(
+                colors: [
+                    Color.teal.opacity(0.15),
+                    Color.clear,
+                    Color.teal.opacity(0.05)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
         .ignoresSafeArea()
     }
 
@@ -87,7 +92,7 @@ struct RecordingView: View {
                     onCancel()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.title3.weight(.semibold))
+                        .font(.tit le3.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                         .background {
@@ -99,23 +104,21 @@ struct RecordingView: View {
                 Spacer()
 
                 // Voice activity indicator (top right)
-                if viewModel.isRecording {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(viewModel.audioLevel > -40 ? Color.green : Color.gray)
-                            .frame(width: 8, height: 8)
-                            .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(viewModel.audioLevel > -40 ? Color.green : Color.gray)
+                        .frame(width: 8, height: 8)
+                        .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
 
-                        Text(viewModel.audioLevel > -40 ? "Speaking" : "Silent")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(viewModel.audioLevel > -40 ? .white : .white.opacity(0.6))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                    }
+                    Text(viewModel.audioLevel > -40 ? "Speaking" : "Silent")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(viewModel.audioLevel > -40 ? .white : .white.opacity(0.6))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
                 }
             }
 
@@ -205,23 +208,9 @@ struct RecordingView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 24) {
-            // Recording status
+            // Live filler counter
             if viewModel.isRecording {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 10, height: 10)
-
-                    Text("Recording")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule()
-                        .fill(.red.opacity(0.3))
-                }
+                FillerCounterOverlay(count: viewModel.liveFillerCount)
             }
 
             // Record Button with circular waveform

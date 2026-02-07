@@ -19,16 +19,21 @@ class ExportService {
     // MARK: - Share
     
     @MainActor
-    func shareRecording(_ recording: Recording) {
+    func shareRecording(_ recording: Recording, scoreCardImage: UIImage? = nil) {
         var items: [Any] = []
-        
+
+        // Score card image first (most visual)
+        if let image = scoreCardImage {
+            items.append(image)
+        }
+
         // Add media file
         if let videoURL = recording.videoURL {
             items.append(videoURL)
         } else if let audioURL = recording.audioURL {
             items.append(audioURL)
         }
-        
+
         // Add text summary
         let summary = generateShareText(for: recording)
         items.append(summary)
@@ -66,14 +71,12 @@ class ExportService {
         isSaving = true
         defer { isSaving = false }
         
+        guard recording.mediaType == .video else {
+            throw ExportError.audioNotSupported
+        }
+
         try await PHPhotoLibrary.shared().performChanges {
-            if recording.mediaType == .video {
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: mediaURL)
-            } else {
-                // For audio, we'd need to create a video with the audio
-                // For now, just save the audio file
-                // This would require AVFoundation composition for proper implementation
-            }
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: mediaURL)
         }
     }
     
@@ -96,11 +99,12 @@ class ExportService {
             text += "Filler words: \(analysis.totalFillerCount)\n"
         }
         
+        text += "\nPractice your speaking with SpeakUp!"
         text += "\n#SpeakUp #PublicSpeaking"
-        
+
         return text
     }
-    
+
     func generateSocialShareText(for recording: Recording) -> String {
         var text = ""
         
@@ -119,8 +123,9 @@ class ExportService {
             text += getScoreEmoji(for: score)
         }
         
-        text += "\n\n#SpeakUp #SpeakingPractice"
-        
+        text += "\n\nPractice your speaking with SpeakUp!"
+        text += "\n#SpeakUp #SpeakingPractice"
+
         return text
     }
     
@@ -182,14 +187,17 @@ struct StatsOverlayData {
 enum ExportError: LocalizedError {
     case noPermission
     case noMediaFile
+    case audioNotSupported
     case exportFailed(Error)
-    
+
     var errorDescription: String? {
         switch self {
         case .noPermission:
             return "Photo library permission is required to save recordings."
         case .noMediaFile:
             return "No media file found for this recording."
+        case .audioNotSupported:
+            return "Audio files cannot be saved to the Photo Library. Use the Share button instead."
         case .exportFailed(let error):
             return "Export failed: \(error.localizedDescription)"
         }

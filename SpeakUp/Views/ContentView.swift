@@ -11,6 +11,10 @@ struct ContentView: View {
     @State private var showingPromptWheel = false
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
+    @State private var showOnboarding = false
+    @State private var achievementService = AchievementService()
+    @State private var socialChallengeService = SocialChallengeService()
+    @State private var showingChallengeAccept = false
 
     // Recording parameters to pass
     @State private var recordingPrompt: Prompt?
@@ -19,11 +23,11 @@ struct ContentView: View {
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
     }
-    
+
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
-                Tab("Today", systemImage: "house.fill", value: .today) {
+                Tab("Today", systemImage: "mic.badge.plus", value: .today) {
                     NavigationStack {
                         TodayView(
                             onStartRecording: { prompt, duration in
@@ -53,6 +57,12 @@ struct ContentView: View {
                     }
                 }
                 
+                Tab("Achievements", systemImage: "trophy.fill", value: .achievements) {
+                    NavigationStack {
+                        AchievementGalleryView()
+                    }
+                }
+
                 Tab("Settings", systemImage: "gearshape.fill", value: .settings) {
                     NavigationStack {
                         SettingsView()
@@ -87,6 +97,10 @@ struct ContentView: View {
                 duration: recordingDuration,
                 onComplete: { recording in
                     showingRecording = false
+                    // Check achievements after recording
+                    Task {
+                        await achievementService.checkAchievements(context: modelContext)
+                    }
                     // Navigate to detail view after a short delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         selectedRecordingId = recording.id.uuidString
@@ -117,6 +131,82 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+        .overlay {
+            if let achievement = achievementService.newlyUnlocked {
+                AchievementUnlockedView(achievement: achievement) {
+                    achievementService.clearNewlyUnlocked()
+                }
+                .zIndex(10)
+            }
+        }
+        .onAppear {
+            if userSettings.first?.hasCompletedOnboarding != true {
+                showOnboarding = true
+            }
+        }
+        .fullScreenCover(isPresented: $showingChallengeAccept) {
+            if let challenge = socialChallengeService.incomingChallenge {
+                ChallengeAcceptView(
+                    challenge: challenge,
+                    onAccept: {
+                        showingChallengeAccept = false
+                        // Find prompt and start recording
+                        let descriptor = FetchDescriptor<Prompt>()
+                        if let prompts = try? modelContext.fetch(descriptor) {
+                            recordingPrompt = prompts.first { $0.id == challenge.promptId }
+                        }
+                        socialChallengeService.clearIncoming()
+                        showingCountdown = true
+                    },
+                    onDismiss: {
+                        showingChallengeAccept = false
+                        socialChallengeService.clearIncoming()
+                    }
+                )
+            }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView {
+                if let settings = userSettings.first {
+                    settings.hasCompletedOnboarding = true
+                    try? modelContext.save()
+                }
+                showOnboarding = false
+            }
+        }
+    }
+
+    // MARK: - Deep Links
+
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "speakup" else { return }
+
+        switch url.host {
+        case "record":
+            // Optional prompt param: speakup://record?prompt=prof-1
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let promptId = components.queryItems?.first(where: { $0.name == "prompt" })?.value {
+                // Find prompt by id
+                let descriptor = FetchDescriptor<Prompt>()
+                if let prompts = try? modelContext.fetch(descriptor) {
+                    recordingPrompt = prompts.first { $0.id == promptId }
+                }
+            } else {
+                recordingPrompt = nil
+            }
+            showingCountdown = true
+
+        case "challenge":
+            if socialChallengeService.handleIncomingURL(url) {
+                showingChallengeAccept = true
+            }
+
+        default:
+            break
+        }
     }
 }
 
@@ -125,6 +215,7 @@ struct ContentView: View {
 enum AppTab: String, CaseIterable, Identifiable {
     case today
     case history
+    case achievements
     case settings
     
     var id: String { rawValue }
@@ -133,22 +224,25 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: return "Today"
         case .history: return "History"
+        case .achievements: return "Achievements"
         case .settings: return "Settings"
         }
     }
     
     var icon: String {
         switch self {
-        case .today: return "house"
+        case .today: return "mic.badge.plus"
         case .history: return "clock"
+        case .achievements: return "trophy"
         case .settings: return "gearshape"
         }
     }
-    
+
     var selectedIcon: String {
         switch self {
-        case .today: return "house.fill"
+        case .today: return "mic.badge.plus"
         case .history: return "clock.fill"
+        case .achievements: return "trophy.fill"
         case .settings: return "gearshape.fill"
         }
     }

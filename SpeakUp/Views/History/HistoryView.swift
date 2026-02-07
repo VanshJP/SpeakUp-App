@@ -24,6 +24,15 @@ struct HistoryView: View {
             .padding()
         }
         .navigationTitle("History")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    ComparisonView()
+                } label: {
+                    Label("Compare", systemImage: "arrow.left.arrow.right")
+                }
+            }
+        }
         .refreshable {
             await viewModel.loadData()
         }

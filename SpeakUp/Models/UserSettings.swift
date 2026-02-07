@@ -25,6 +25,9 @@ final class UserSettings {
     var showDailyPrompt: Bool
     var enabledPromptCategories: [String] // Store category raw values
 
+    // Weekly Summary
+    var lastWeeklySummaryDate: Date?
+
     // Countdown Settings
     var countdownDuration: Int // 5, 10, 15, 20, 30 seconds
 

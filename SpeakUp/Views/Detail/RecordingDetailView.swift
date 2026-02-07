@@ -15,10 +15,12 @@ struct RecordingDetailView: View {
     @State private var showingShareSheet = false
     @State private var showFillerHighlights = true
     @State private var waveformHeights: [CGFloat] = []
+    @State private var scoreCardImage: UIImage?
+    @State private var showingScoreCardPreview = false
 
-    // Services
-    @State private var audioService = AudioService()
-    @State private var speechService = SpeechService()
+    // Services – shared via environment to avoid re-creating (and re-downloading 140MB model)
+    @Environment(AudioService.self) private var audioService
+    @Environment(SpeechService.self) private var speechService
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -36,6 +38,8 @@ struct RecordingDetailView: View {
                             )
                         } else if recording.isProcessing || isTranscribing {
                             processingSection
+                        } else if !speechService.isModelLoaded && recording.analysis == nil {
+                            modelLoadingSection
                         }
 
                         // 3. Stats Grid
@@ -61,6 +65,11 @@ struct RecordingDetailView: View {
                         // 7. Detailed Scores
                         if let analysis = recording.analysis {
                             subscoresSection(analysis)
+                        }
+
+                        // 8. Coaching Tips
+                        if let analysis = recording.analysis {
+                            CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
                         }
 
                         // Actions
@@ -90,6 +99,9 @@ struct RecordingDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
+                        if let recording {
+                            scoreCardImage = ScoreCardRenderer.render(recording: recording)
+                        }
                         showingShareSheet = true
                     } label: {
                         Label("Share", systemImage: "square.and.arrow.up")
@@ -130,6 +142,13 @@ struct RecordingDetailView: View {
             }
         } message: {
             Text("This action cannot be undone.")
+        }
+        .onChange(of: showingShareSheet) { _, show in
+            if show, let recording {
+                let exportService = ExportService()
+                exportService.shareRecording(recording, scoreCardImage: scoreCardImage)
+                showingShareSheet = false
+            }
         }
     }
     
@@ -334,6 +353,25 @@ struct RecordingDetailView: View {
         }
     }
     
+    private var modelLoadingSection: some View {
+        GlassCard(tint: .orange.opacity(0.1)) {
+            HStack(spacing: 12) {
+                ProgressView()
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Loading Speech Model...")
+                        .font(.subheadline.weight(.medium))
+
+                    Text("The analysis model is loading in the background.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
     // MARK: - Stats Grid
 
     @ViewBuilder
@@ -470,6 +508,7 @@ struct RecordingDetailView: View {
                 style: .primary,
                 fullWidth: true
             ) {
+                scoreCardImage = ScoreCardRenderer.render(recording: recording)
                 showingShareSheet = true
             }
             
@@ -489,7 +528,11 @@ struct RecordingDetailView: View {
 
     private func generateWaveformHeights() {
         guard waveformHeights.isEmpty else { return }
-        waveformHeights = (0..<50).map { _ in CGFloat.random(in: 12...36) }
+        if let url = recording?.audioURL ?? recording?.videoURL {
+            waveformHeights = AudioWaveformGenerator.generate(from: url, binCount: 50)
+        } else {
+            waveformHeights = Array(repeating: CGFloat(20), count: 50)
+        }
     }
 
     private func initializePlayback(_ recording: Recording) {
@@ -737,15 +780,23 @@ struct WordView: View {
 struct FlowLayout: Layout {
     var spacing: CGFloat = 4
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    struct CacheData {
+        var size: CGSize
+        var positions: [CGPoint]
+    }
+
+    func makeCache(subviews: Subviews) -> CacheData {
+        CacheData(size: .zero, positions: [])
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout CacheData) -> CGSize {
         let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        cache = CacheData(size: result.size, positions: result.positions)
         return result.size
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
-
-        for (index, position) in result.positions.enumerated() {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout CacheData) {
+        for (index, position) in cache.positions.enumerated() {
             subviews[index].place(
                 at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
                 proposal: .unspecified
@@ -765,7 +816,6 @@ struct FlowLayout: Layout {
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
 
-            // If this word doesn't fit on current line, move to next line
             if currentX + size.width > maxWidth && currentX > 0 {
                 currentX = 0
                 currentY += lineHeight + spacing

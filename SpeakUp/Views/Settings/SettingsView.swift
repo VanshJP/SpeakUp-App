@@ -222,7 +222,7 @@ struct SettingsView: View {
         } header: {
             Text("Data")
         } footer: {
-            Text("Your recordings and progress are synced to iCloud.")
+            Text("Your recordings and progress are stored locally on this device.")
         }
     }
     
@@ -235,10 +235,6 @@ struct SettingsView: View {
                 Spacer()
                 Text("\(viewModel.appVersion) (\(viewModel.buildNumber))")
                     .foregroundStyle(.secondary)
-            }
-            
-            Link(destination: URL(string: "https://github.com")!) {
-                Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             
             Link(destination: URL(string: "mailto:support@speakup.app")!) {

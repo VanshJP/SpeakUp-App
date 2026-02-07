@@ -6,6 +6,7 @@ import SwiftData
 class RecordingViewModel {
     // Services
     let audioService = AudioService()
+    let liveTranscriptionService = LiveTranscriptionService()
 
     // State
     var isRecording = false
@@ -30,6 +31,9 @@ class RecordingViewModel {
 
     // Audio level for waveform visualization
     var audioLevel: Float = -160
+
+    // Live filler counter
+    var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
 
     private var timer: Timer?
     private var audioLevelTimer: Timer?
@@ -67,6 +71,12 @@ class RecordingViewModel {
             isRecording = true
             startTimer()
             startAudioLevelMonitoring()
+
+            // Start live filler counting (after recorder is active so session is ready)
+            let authorized = await liveTranscriptionService.requestAuthorization()
+            if authorized {
+                liveTranscriptionService.start()
+            }
         } catch {
             self.error = error
         }
@@ -77,6 +87,7 @@ class RecordingViewModel {
         timer?.invalidate()
         timer = nil
         stopAudioLevelMonitoring()
+        liveTranscriptionService.stop()
 
         isRecording = false
         isProcessing = true
@@ -115,6 +126,7 @@ class RecordingViewModel {
         timer?.invalidate()
         timer = nil
         stopAudioLevelMonitoring()
+        liveTranscriptionService.stop()
 
         audioService.cancelRecording()
 
@@ -137,7 +149,9 @@ class RecordingViewModel {
                 self.recordingDuration = TimeInterval(self.targetDuration.seconds) - self.remainingTime
 
                 if self.remainingTime <= 0 {
-                    // Auto-stop when time is up
+                    // Invalidate timer BEFORE calling stop to prevent re-entry
+                    self.timer?.invalidate()
+                    self.timer = nil
                     _ = await self.stopRecording()
                 }
             }
@@ -185,6 +199,7 @@ class RecordingViewModel {
         timer?.invalidate()
         timer = nil
         stopAudioLevelMonitoring()
+        liveTranscriptionService.stop()
         audioService.cleanup()
     }
 }

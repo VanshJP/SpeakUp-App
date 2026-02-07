@@ -52,9 +52,12 @@ enum PromptCategory: String, CaseIterable {
     case currentEvents = "Current Events & Opinions"
     case quickFire = "Quick Fire"
     case debatePersuasion = "Debate & Persuasion"
-    
+    case interviewPrep = "Interview Prep"
+    case storytelling = "Storytelling"
+    case elevatorPitch = "Elevator Pitch"
+
     var displayName: String { rawValue }
-    
+
     var iconName: String {
         switch self {
         case .professionalDevelopment: return "briefcase.fill"
@@ -64,9 +67,12 @@ enum PromptCategory: String, CaseIterable {
         case .currentEvents: return "newspaper.fill"
         case .quickFire: return "bolt.fill"
         case .debatePersuasion: return "scale.3d"
+        case .interviewPrep: return "person.crop.rectangle.fill"
+        case .storytelling: return "book.fill"
+        case .elevatorPitch: return "arrow.up.right.circle.fill"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .professionalDevelopment: return .blue
@@ -76,6 +82,9 @@ enum PromptCategory: String, CaseIterable {
         case .currentEvents: return .teal
         case .quickFire: return .yellow
         case .debatePersuasion: return .red
+        case .interviewPrep: return .indigo
+        case .storytelling: return .brown
+        case .elevatorPitch: return .mint
         }
     }
 }
