@@ -63,20 +63,7 @@ struct RecordingView: View {
     // MARK: - Audio Background
 
     private var audioBackground: some View {
-        ZStack {
-            Color.black
-
-            LinearGradient(
-                colors: [
-                    Color.teal.opacity(0.15),
-                    Color.clear,
-                    Color.teal.opacity(0.05)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-        .ignoresSafeArea()
+        AppBackground(style: .recording)
     }
 
     // MARK: - Top Bar
@@ -92,7 +79,7 @@ struct RecordingView: View {
                     onCancel()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.tit le3.weight(.semibold))
+                        .font(.title.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                         .background {

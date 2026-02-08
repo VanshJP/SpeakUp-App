@@ -5,33 +5,140 @@ struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat
     var tint: Color?
     var padding: CGFloat
-    
+    var accentBorder: Color?
+    var elevated: Bool
+
     init(
         cornerRadius: CGFloat = 20,
         tint: Color? = nil,
         padding: CGFloat = 16,
+        accentBorder: Color? = nil,
+        elevated: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
         self.cornerRadius = cornerRadius
         self.tint = tint
         self.padding = padding
+        self.accentBorder = accentBorder
+        self.elevated = elevated
     }
-    
+
     var body: some View {
         content
             .padding(padding)
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        if let tint {
-                            RoundedRectangle(cornerRadius: cornerRadius)
-                                .fill(tint.opacity(0.1))
-                        }
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(.ultraThinMaterial)
+
+                    // Tint overlay
+                    if let tint {
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .fill(tint.opacity(0.12))
                     }
+
+                    // Inner glow gradient for depth against dark backgrounds
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.06), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+
+                    // Top edge highlight
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.3), .white.opacity(0.08), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+            }
+            .overlay {
+                if let accentBorder {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [accentBorder.opacity(0.6), accentBorder.opacity(0.2), .clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+    }
+}
+
+// MARK: - Featured Glass Card (for hero/prominent content)
+
+struct FeaturedGlassCard<Content: View>: View {
+    let content: Content
+    var gradientColors: [Color]
+    var cornerRadius: CGFloat
+    var padding: CGFloat
+
+    init(
+        gradientColors: [Color] = [.teal.opacity(0.15), .cyan.opacity(0.08)],
+        cornerRadius: CGFloat = 24,
+        padding: CGFloat = 20,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.content = content()
+        self.gradientColors = gradientColors
+        self.cornerRadius = cornerRadius
+        self.padding = padding
+    }
+
+    var body: some View {
+        content
+            .padding(padding)
+            .background {
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(.ultraThinMaterial)
+
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: gradientColors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    // Inner glow for premium depth
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.08), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+
+                    // Top edge highlight
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.35), .white.opacity(0.1), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: gradientColors.first?.opacity(0.25) ?? .clear, radius: 20, y: 8)
     }
 }
 

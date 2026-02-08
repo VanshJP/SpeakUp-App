@@ -5,18 +5,40 @@ import SwiftUI
 struct GlassCardModifier: ViewModifier {
     var cornerRadius: CGFloat = 20
     var tint: Color? = nil
-    
+
     func body(content: Content) -> some View {
         content
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(tint ?? Color.clear)
-                    }
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(.ultraThinMaterial)
+
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(tint ?? Color.clear)
+
+                    // Inner glow for depth on dark backgrounds
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.05), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.25), .white.opacity(0.05), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
     }
 }
 

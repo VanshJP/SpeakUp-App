@@ -17,7 +17,8 @@ final class Recording {
     var analysis: SpeechAnalysis?
     var isProcessing: Bool
     var isFavorite: Bool
-    
+    var customTitle: String?
+
     init(
         id: UUID = UUID(),
         date: Date = Date(),
@@ -32,7 +33,8 @@ final class Recording {
         transcriptionWords: [TranscriptionWord]? = nil,
         analysis: SpeechAnalysis? = nil,
         isProcessing: Bool = false,
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
+        customTitle: String? = nil
     ) {
         self.id = id
         self.date = date
@@ -48,6 +50,15 @@ final class Recording {
         self.analysis = analysis
         self.isProcessing = isProcessing
         self.isFavorite = isFavorite
+        self.customTitle = customTitle
+    }
+
+    /// Display title: custom title, prompt text, or fallback
+    var displayTitle: String {
+        if let customTitle, !customTitle.isEmpty {
+            return customTitle
+        }
+        return prompt?.text ?? "Practice Session"
     }
     
     // Computed property to check if media file is downloaded from iCloud

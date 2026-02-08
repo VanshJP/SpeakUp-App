@@ -9,6 +9,9 @@ struct SettingsView: View {
         settingsList
             .navigationTitle("Settings")
             .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .appBackground(.subtle)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .onAppear {
                 viewModel.configure(with: modelContext)
             }

@@ -92,14 +92,23 @@ class TodayViewModel {
         let descriptor = FetchDescriptor<Prompt>()
 
         do {
-            let allPrompts = try context.fetch(descriptor)
+            var allPrompts = try context.fetch(descriptor)
             todaysPrompt = allPrompts.first { $0.id == targetId }
 
-            // If no prompts found, database may not be seeded yet - retry after short delay
-            if todaysPrompt == nil && allPrompts.isEmpty {
-                try? await Task.sleep(for: .milliseconds(500))
-                let retryPrompts = try context.fetch(descriptor)
-                todaysPrompt = retryPrompts.first { $0.id == targetId }
+            // Database may not be seeded yet (race with SpeakUpApp.seedPromptsIfNeeded)
+            // Retry up to 3 times with increasing delay
+            if todaysPrompt == nil {
+                for delay in [300, 600, 1000] {
+                    try? await Task.sleep(for: .milliseconds(delay))
+                    allPrompts = try context.fetch(descriptor)
+                    todaysPrompt = allPrompts.first { $0.id == targetId }
+                    if todaysPrompt != nil { break }
+                }
+            }
+
+            // If still nil but other prompts exist, pick any matching prompt
+            if todaysPrompt == nil && !allPrompts.isEmpty {
+                todaysPrompt = allPrompts.randomElement()
             }
         } catch {
             print("Error loading today's prompt: \(error)")
@@ -213,6 +222,7 @@ class TodayViewModel {
             let allPrompts = try context.fetch(descriptor)
             withAnimation {
                 todaysPrompt = allPrompts.first { $0.id == targetId }
+                    ?? allPrompts.randomElement()
             }
         } catch {
             print("Error refreshing prompt: \(error)")

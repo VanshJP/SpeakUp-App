@@ -30,41 +30,58 @@ struct RingStatsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Centered rings section
+        VStack(spacing: 20) {
+            // Centered rings section - bigger and more dramatic
             ZStack {
+                // Ambient glow behind rings (stronger on dark gradient background)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [AppColors.scoreColor(for: score).opacity(0.25), Color.teal.opacity(0.08), .clear],
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 120
+                        )
+                    )
+                    .frame(width: 240, height: 240)
+
                 // Outer ring - Streak (orange)
                 RingProgress(
                     progress: animateRings ? Double(min(streak, streakTarget)) / Double(streakTarget) : 0,
                     color: .orange,
-                    lineWidth: 12
+                    lineWidth: 14
                 )
-                .frame(width: 140, height: 140)
+                .frame(width: 170, height: 170)
 
                 // Middle ring - Sessions (teal)
                 RingProgress(
                     progress: animateRings ? Double(min(sessions, sessionsTarget)) / Double(sessionsTarget) : 0,
                     color: .teal,
-                    lineWidth: 12
+                    lineWidth: 14
                 )
-                .frame(width: 105, height: 105)
+                .frame(width: 130, height: 130)
 
                 // Inner ring - Score (dynamic color)
                 RingProgress(
                     progress: animateRings ? Double(score) / 100 : 0,
                     color: AppColors.scoreColor(for: score),
-                    lineWidth: 12
+                    lineWidth: 14
                 )
-                .frame(width: 70, height: 70)
+                .frame(width: 90, height: 90)
 
                 // Center score display
-                Text("\(score)")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(AppColors.scoreColor(for: score))
+                VStack(spacing: 0) {
+                    Text("\(score)")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppColors.scoreColor(for: score))
+                    Text("avg")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .frame(height: 150)
+            .frame(height: 180)
 
-            // Metrics row: streak | sessions | score | progress
+            // Metrics row with better visual treatment
             HStack(spacing: 0) {
                 MetricItem(
                     icon: "flame.fill",
@@ -73,8 +90,7 @@ struct RingStatsView: View {
                     label: "Streak"
                 )
 
-                Divider()
-                    .frame(height: 36)
+                MetricDivider()
 
                 MetricItem(
                     icon: "mic.fill",
@@ -83,8 +99,7 @@ struct RingStatsView: View {
                     label: "Sessions"
                 )
 
-                Divider()
-                    .frame(height: 36)
+                MetricDivider()
 
                 MetricItem(
                     icon: "chart.line.uptrend.xyaxis",
@@ -93,8 +108,7 @@ struct RingStatsView: View {
                     label: "Score"
                 )
 
-                Divider()
-                    .frame(height: 36)
+                MetricDivider()
 
                 MetricItem(
                     icon: improvementIcon,
@@ -103,20 +117,74 @@ struct RingStatsView: View {
                     label: "Progress"
                 )
             }
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                    }
+            }
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity)
         .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
+            ZStack {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(.ultraThinMaterial)
+
+                // Gradient tint
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.teal.opacity(0.08), Color.cyan.opacity(0.03), .clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                // Inner glow
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.06), .clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+
+                // Top edge highlight
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.3), .white.opacity(0.08), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
         .onAppear {
-            withAnimation(.easeOut(duration: 1.0)) {
+            withAnimation(.easeOut(duration: 1.2)) {
                 animateRings = true
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Stats: \(streak) day streak, \(sessions) sessions, score \(score) out of 100, \(improvementText) progress")
+    }
+}
+
+// MARK: - Metric Divider
+
+private struct MetricDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(width: 0.5, height: 32)
     }
 }
 
@@ -129,10 +197,10 @@ private struct MetricItem: View {
     let label: String
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 3) {
+        VStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.caption2)
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(color)
 
                 Text(value)
@@ -158,13 +226,21 @@ struct RingProgress: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(color.opacity(0.2), lineWidth: lineWidth)
+                .stroke(color.opacity(0.15), lineWidth: lineWidth)
 
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(
+                    AngularGradient(
+                        colors: [color.opacity(0.5), color],
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360 * progress)
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
                 .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 1.0), value: progress)
+                .animation(.easeOut(duration: 1.2), value: progress)
         }
     }
 }
