@@ -70,9 +70,11 @@ struct PromptWheelView: View {
                 .fill(.ultraThinMaterial)
                 .frame(width: 60, height: 60)
                 .overlay {
-                    Image(systemName: "sparkles")
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                         .font(.title2)
                         .foregroundStyle(.white)
+                        .rotationEffect(.degrees(viewModel.isSpinning ? 360 : 0))
+                        .animation(viewModel.isSpinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isSpinning)
                 }
 
             // Pointer with landing state
@@ -138,15 +140,8 @@ struct PromptWheelView: View {
         Button {
             viewModel.spin()
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .font(.title3)
-                    .rotationEffect(.degrees(viewModel.isSpinning ? 360 : 0))
-                    .animation(viewModel.isSpinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isSpinning)
-                
-                Text(viewModel.isSpinning ? "Spinning..." : "Spin the Wheel")
-                    .font(.headline)
-            }
+            Text(viewModel.isSpinning ? "Spinning..." : "Spin the Wheel")
+                .font(.headline)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
@@ -209,19 +204,6 @@ struct WheelSegment: View {
     let color: Color
     let category: String
 
-    // Abbreviated category labels
-    private var abbreviatedLabel: String {
-        switch category {
-        case "Professional Development": return "PROF"
-        case "Communication Skills": return "COMM"
-        case "Personal Growth": return "GROWTH"
-        case "Problem Solving": return "SOLVE"
-        case "Current Events": return "NEWS"
-        case "Quick Fire": return "QUICK"
-        case "Debate & Persuasion": return "DEBATE"
-        default: return String(category.prefix(4)).uppercased()
-        }
-    }
 
     var body: some View {
         ZStack {
@@ -252,26 +234,16 @@ struct WheelSegment: View {
                 .stroke(color, lineWidth: 2) // Full color instead of 0.5 opacity
             }
 
-            // Category icon and label
+            // Category icon
             let midAngle = (startAngle + endAngle) / 2 - 90 // -90 to start from top
-            let iconRadius = radius * 0.55
-            let labelRadius = radius * 0.78
+            let iconRadius = radius * 0.65
             let x = center.x + iconRadius * cos(midAngle * .pi / 180)
             let y = center.y + iconRadius * sin(midAngle * .pi / 180)
-            let labelX = center.x + labelRadius * cos(midAngle * .pi / 180)
-            let labelY = center.y + labelRadius * sin(midAngle * .pi / 180)
 
             Image(systemName: PromptCategory(rawValue: category)?.iconName ?? "text.bubble")
                 .font(.title3)
                 .foregroundStyle(color)
                 .position(x: x, y: y)
-
-            // Abbreviated text label
-            Text(abbreviatedLabel)
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.white)
-                .position(x: labelX, y: labelY)
-                .rotationEffect(.degrees(midAngle + 90)) // Rotate to follow segment
         }
     }
 }
