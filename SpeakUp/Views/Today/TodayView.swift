@@ -15,27 +15,25 @@ struct TodayView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-                    // Personalized Greeting
-                    greetingSection
-
+        
                     // Header Stats (Ring visualization)
                     headerSection
+                    
+                    // Interactive Prompt Card (tap to start)
+                    interactivePromptSection
 
-                    // Streak Celebration (if active)
-                    if viewModel.userStats.currentStreak >= 2 {
-                        streakCelebrationBanner
-                    }
+                    // Prominent Start Button
+                    startButtonSection
 
                     // Daily Challenge
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
                     }
 
-                    // Interactive Prompt Card (tap to start)
-                    interactivePromptSection
-
-                    // Prominent Start Button
-                    startButtonSection
+                    // Streak Celebration (if active)
+                    if viewModel.userStats.currentStreak >= 2 {
+                        streakCelebrationBanner
+                    }
 
                     // Quick Insights Row
                     quickInsightsSection
@@ -63,46 +61,6 @@ struct TodayView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
-        }
-    }
-
-    // MARK: - Greeting Section
-
-    private var greetingSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(greetingText)
-                .font(.title.weight(.bold))
-
-            Text(motivationalSubtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 4)
-    }
-
-    private var greetingText: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12: return "Good morning"
-        case 12..<17: return "Good afternoon"
-        case 17..<22: return "Good evening"
-        default: return "Hey there"
-        }
-    }
-
-    private var motivationalSubtitle: String {
-        let streak = viewModel.userStats.currentStreak
-        let sessions = viewModel.userStats.totalRecordings
-
-        if sessions == 0 {
-            return "Ready for your first practice session?"
-        } else if streak >= 7 {
-            return "You're on fire! \(streak)-day streak going strong."
-        } else if streak >= 2 {
-            return "Keep the momentum! Day \(streak) of your streak."
-        } else {
-            return "Let's sharpen your speaking skills today."
         }
     }
 
@@ -502,7 +460,6 @@ struct InteractivePromptCard: View {
 
 struct SmallIconButton: View {
     let icon: String
-    var badge: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -524,7 +481,6 @@ struct SmallIconButton: View {
 
 struct DurationPill: View {
     @Binding var selectedDuration: RecordingDuration
-    @State private var showPicker = false
 
     var body: some View {
         Menu {
@@ -557,40 +513,6 @@ struct DurationPill: View {
             .background {
                 Capsule()
                     .fill(.ultraThinMaterial)
-            }
-        }
-    }
-}
-
-// MARK: - Compact Score Card
-
-struct CompactScoreCard: View {
-    let score: Int
-    var trend: ScoreTrend = .stable
-
-    var body: some View {
-        GlassCard(tint: AppColors.scoreColor(for: score).opacity(0.2), padding: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.caption2)
-                    Text("Score")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.secondary)
-
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(score)")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(AppColors.scoreColor(for: score))
-                    Text("/100")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(trend.rawValue.capitalized)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(trend.color)
             }
         }
     }
@@ -656,48 +578,6 @@ struct GoalProgressRow: View {
                 .clipShape(Capsule())
             }
         }
-    }
-}
-
-// MARK: - Legacy Prompt Card (for reference/other uses)
-
-struct PromptCard: View {
-    let prompt: Prompt?
-
-    var body: some View {
-        GlassCard(tint: categoryColor.opacity(0.1)) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Category & Difficulty
-                HStack {
-                    Label(prompt?.category ?? "Loading...", systemImage: categoryIcon)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(categoryColor)
-
-                    Spacer()
-
-                    if let difficulty = prompt?.difficulty {
-                        DifficultyBadge(difficulty: difficulty)
-                    }
-                }
-
-                // Prompt Text
-                Text(prompt?.text ?? "Loading today's prompt...")
-                    .font(.body)
-                    .lineLimit(4)
-                    .foregroundStyle(prompt == nil ? .secondary : .primary)
-            }
-        }
-        .redacted(reason: prompt == nil ? .placeholder : [])
-    }
-
-    private var categoryColor: Color {
-        guard let category = prompt?.category else { return .gray }
-        return AppColors.categoryColor(category)
-    }
-
-    private var categoryIcon: String {
-        guard let category = prompt?.category else { return "questionmark.circle" }
-        return PromptCategory(rawValue: category)?.iconName ?? "text.bubble"
     }
 }
 

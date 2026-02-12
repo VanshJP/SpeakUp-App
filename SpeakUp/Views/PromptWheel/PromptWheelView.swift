@@ -11,14 +11,8 @@ struct PromptWheelView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                LinearGradient(
-                    colors: [Color(white: 0.05), Color(white: 0.1)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
+                AppBackground(style: .subtle)
+
                 VStack(spacing: 32) {
                     // Wheel
                     wheelSection
@@ -43,7 +37,6 @@ struct PromptWheelView: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundStyle(.white)
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -70,11 +63,8 @@ struct PromptWheelView: View {
                 .fill(.ultraThinMaterial)
                 .frame(width: 60, height: 60)
                 .overlay {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .rotationEffect(.degrees(viewModel.isSpinning ? 360 : 0))
-                        .animation(viewModel.isSpinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isSpinning)
+                    Circle()
+                        .stroke(.white.opacity(0.3), lineWidth: 1)
                 }
 
             // Pointer with landing state
@@ -87,50 +77,65 @@ struct PromptWheelView: View {
     // MARK: - Result Card
     
     private func resultCard(_ prompt: Prompt) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(viewModel.colorForCategory(prompt.category))
-                
-                Spacer()
-                
-                DifficultyBadge(difficulty: prompt.difficulty)
-            }
-            
-            // Prompt text
-            Text(prompt.text)
-                .font(.body)
-                .foregroundStyle(.white)
-            
-            // Use this prompt button
-            Button {
-                onSelectPrompt(prompt)
-            } label: {
+        let categoryColor = viewModel.colorForCategory(prompt.category)
+
+        return GlassCard(tint: categoryColor.opacity(0.1), accentBorder: categoryColor.opacity(0.3)) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header
                 HStack {
-                    Image(systemName: "mic.fill")
-                    Text("Use This Prompt")
+                    Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(categoryColor)
+
+                    Spacer()
+
+                    DifficultyBadge(difficulty: prompt.difficulty)
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background {
-                    Capsule()
-                        .fill(viewModel.colorForCategory(prompt.category))
+
+                // Prompt text
+                Text(prompt.text)
+                    .font(.body)
+
+                // Use this prompt button
+                Button {
+                    onSelectPrompt(prompt)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Use This Prompt")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.teal, Color.cyan.opacity(0.85), Color.teal.opacity(0.9)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .shadow(color: .teal.opacity(0.4), radius: 12, y: 4)
+                    }
+                    .overlay {
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.4), .white.opacity(0.1), .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+                    .clipShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
             }
-            .padding(.top, 8)
-        }
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(viewModel.colorForCategory(prompt.category).opacity(0.1))
-                }
         }
     }
     
@@ -140,8 +145,12 @@ struct PromptWheelView: View {
         Button {
             viewModel.spin()
         } label: {
-            Text(viewModel.isSpinning ? "Spinning..." : "Spin the Wheel")
-                .font(.headline)
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                    .font(.system(size: 16, weight: .semibold))
+                Text(viewModel.isSpinning ? "Spinning..." : "Spin the Wheel")
+                    .font(.headline.weight(.semibold))
+            }
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
@@ -149,13 +158,28 @@ struct PromptWheelView: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [Color.purple.opacity(0.9), Color.purple],
+                            colors: [Color.teal, Color.cyan.opacity(0.85), Color.teal.opacity(0.9)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
+                    .shadow(color: .teal.opacity(0.5), radius: 16, y: 4)
+                    .shadow(color: .cyan.opacity(0.2), radius: 30, y: 8)
             }
+            .overlay {
+                Capsule()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.4), .white.opacity(0.1), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+            .clipShape(Capsule())
         }
+        .buttonStyle(.plain)
         .disabled(viewModel.isSpinning)
         .opacity(viewModel.isSpinning ? 0.7 : 1)
         .padding(.bottom, 20)
@@ -204,7 +228,6 @@ struct WheelSegment: View {
     let color: Color
     let category: String
 
-
     var body: some View {
         ZStack {
             // Segment shape
@@ -222,7 +245,7 @@ struct WheelSegment: View {
                     startAngle: startAngle,
                     endAngle: endAngle
                 )
-                .fill(color.opacity(0.6)) // Increased from 0.3
+                .fill(color.opacity(0.6))
             }
             .overlay {
                 SegmentShape(
@@ -231,7 +254,7 @@ struct WheelSegment: View {
                     startAngle: startAngle,
                     endAngle: endAngle
                 )
-                .stroke(color, lineWidth: 2) // Full color instead of 0.5 opacity
+                .stroke(color, lineWidth: 2)
             }
 
             // Category icon

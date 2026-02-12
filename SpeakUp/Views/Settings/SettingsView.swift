@@ -41,7 +41,6 @@ struct SettingsView: View {
             promptSettingsSection
             reminderSection
             weeklyGoalSection
-            exportSection
             dataManagementSection
             aboutSection
         }
@@ -191,22 +190,6 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - Export Section
-    
-    private var exportSection: some View {
-        Section {
-            Picker(selection: $viewModel.exportFormat) {
-                ForEach(ExportFormat.allCases, id: \.self) { format in
-                    Text(format.displayName).tag(format)
-                }
-            } label: {
-                Label("Video Format", systemImage: "rectangle.ratio.3.to.4")
-            }
-        } header: {
-            Text("Export")
-        }
-    }
-    
     // MARK: - Data Management Section
     
     private var dataManagementSection: some View {
@@ -266,9 +249,6 @@ struct SettingsChangeModifiers: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.weeklyGoalSessions) { _, _ in
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.exportFormat) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.trackPauses) { _, _ in

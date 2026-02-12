@@ -10,18 +10,45 @@ struct DailyChallengeCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Daily Challenge", systemImage: "star.circle.fill")
-                .font(.headline)
+        FeaturedGlassCard(
+            gradientColors: challenge.isCompleted
+                ? [.green.opacity(0.15), .green.opacity(0.05)]
+                : [.orange.opacity(0.18), .yellow.opacity(0.08)]
+        ) {
+            VStack(alignment: .leading, spacing: 14) {
+                // Header row
+                HStack {
+                    Label("Daily Challenge", systemImage: "star.circle.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(accentColor)
 
-            GlassCard(
-                tint: accentColor.opacity(0.12),
-                accentBorder: accentColor.opacity(0.35)
-            ) {
+                    Spacer()
+
+                    if challenge.isCompleted {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.subheadline)
+                            Text("Done")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.green)
+                    } else {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 7, height: 7)
+                                .scaleEffect(glowPulse ? 1.4 : 1.0)
+                                .opacity(glowPulse ? 0.6 : 1.0)
+                            Text("Active")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.orange)
+                    }
+                }
+
+                // Challenge content
                 HStack(spacing: 14) {
-                    // Challenge icon with gradient background + glow
                     ZStack {
-                        // Ambient glow behind icon
                         Circle()
                             .fill(accentColor.opacity(glowPulse ? 0.25 : 0.12))
                             .frame(width: 56, height: 56)
@@ -59,27 +86,6 @@ struct DailyChallengeCard: View {
                     }
 
                     Spacer(minLength: 0)
-
-                    if challenge.isCompleted {
-                        VStack(spacing: 2) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.green)
-                            Text("Done")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.green)
-                        }
-                    } else {
-                        // Active indicator with subtle pulse
-                        VStack(spacing: 2) {
-                            Image(systemName: "circle.dashed")
-                                .font(.title2)
-                                .foregroundStyle(.orange.opacity(glowPulse ? 0.7 : 0.4))
-                            Text("Active")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.orange)
-                        }
-                    }
                 }
             }
         }

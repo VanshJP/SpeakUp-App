@@ -19,9 +19,6 @@ class SettingsViewModel {
     // Local state - Goals
     var weeklyGoalSessions: Int = 5
     
-    // Local state - Export
-    var exportFormat: ExportFormat = .portrait
-    
     // Local state - Analysis Features
     var trackPauses: Bool = true
     var trackFillerWords: Bool = true
@@ -34,6 +31,7 @@ class SettingsViewModel {
     var countdownDuration: CountdownDuration = .fifteen
 
     private var modelContext: ModelContext?
+    private let notificationService = NotificationService()
     
     func configure(with context: ModelContext) {
         self.modelContext = context
@@ -80,8 +78,7 @@ class SettingsViewModel {
         reminderTime = Calendar.current.date(from: components) ?? Date()
         
         weeklyGoalSessions = settings.weeklyGoalSessions
-        exportFormat = settings.exportFormat
-        
+
         // Analysis features
         trackPauses = settings.trackPauses
         trackFillerWords = settings.trackFillerWords
@@ -106,8 +103,7 @@ class SettingsViewModel {
         settings.dailyReminderMinute = components.minute ?? 0
         
         settings.weeklyGoalSessions = weeklyGoalSessions
-        settings.exportFormat = exportFormat
-        
+
         // Analysis features
         settings.trackPauses = trackPauses
         settings.trackFillerWords = trackFillerWords
@@ -162,7 +158,6 @@ class SettingsViewModel {
         settings.dailyReminderHour = 9
         settings.dailyReminderMinute = 0
         settings.weeklyGoalSessions = 5
-        settings.exportFormat = .portrait
         settings.trackPauses = true
         settings.trackFillerWords = true
         settings.showDailyPrompt = true
@@ -212,13 +207,14 @@ class SettingsViewModel {
     // MARK: - Notification Helpers
     
     private func scheduleReminderNotification() async {
-        // This will be implemented in NotificationService
-        // For now, just a placeholder
+        let components = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
+        let hour = components.hour ?? 9
+        let minute = components.minute ?? 0
+        await notificationService.scheduleDailyReminder(hour: hour, minute: minute)
     }
-    
+
     private func cancelReminderNotification() async {
-        // This will be implemented in NotificationService
-        // For now, just a placeholder
+        await notificationService.cancelDailyReminder()
     }
     
     // MARK: - App Info

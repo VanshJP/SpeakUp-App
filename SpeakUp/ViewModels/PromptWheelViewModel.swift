@@ -12,10 +12,8 @@ class PromptWheelViewModel {
 
     var rotation: Double = 0
     var isSpinning = false
-    var spinVelocity: Double = 0
 
     private var modelContext: ModelContext?
-    private var spinTimer: Timer?
     
     let categoryColors: [Color] = [
         .blue,      // Professional Development
@@ -38,11 +36,18 @@ class PromptWheelViewModel {
     @MainActor
     func loadData() async {
         guard let context = modelContext else { return }
-        
-        let descriptor = FetchDescriptor<Prompt>()
-        
+
         do {
-            prompts = try context.fetch(descriptor)
+            // Fetch user settings to get enabled categories
+            let settingsDescriptor = FetchDescriptor<UserSettings>()
+            let enabledCategories = try context.fetch(settingsDescriptor).first?.enabledCategories ?? PromptCategory.allCases
+
+            let enabledCategoryNames = Set(enabledCategories.map { $0.rawValue })
+
+            // Fetch all prompts and filter by enabled categories
+            let promptDescriptor = FetchDescriptor<Prompt>()
+            let allPrompts = try context.fetch(promptDescriptor)
+            prompts = allPrompts.filter { enabledCategoryNames.contains($0.category) }
             categories = Array(Set(prompts.map { $0.category })).sorted()
         } catch {
             print("Error loading prompts: \(error)")
@@ -101,18 +106,6 @@ class PromptWheelViewModel {
         selectedPrompt = categoryPrompts.randomElement()
     }
     
-    // MARK: - Manual Selection
-    
-    func selectPrompt(_ prompt: Prompt) {
-        selectedPrompt = prompt
-        selectedCategory = prompt.category
-    }
-    
-    func clearSelection() {
-        selectedPrompt = nil
-        selectedCategory = nil
-    }
-    
     // MARK: - Helpers
     
     func colorForCategory(_ category: String) -> Color {
@@ -122,14 +115,4 @@ class PromptWheelViewModel {
         return categoryColors[index % categoryColors.count]
     }
     
-    func colorForIndex(_ index: Int) -> Color {
-        categoryColors[index % categoryColors.count]
-    }
-    
-    var segmentAngle: Double {
-        guard !categories.isEmpty else { return 360 }
-        return 360.0 / Double(categories.count)
-    }
 }
-
-
