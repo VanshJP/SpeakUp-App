@@ -54,6 +54,11 @@ struct HistoryView: View {
                     // Streak Stats
                     streakSection
 
+                    // Compare Progress
+                    if analyzedRecordings.count >= 2 {
+                        compareProgressCard
+                    }
+
                     // Filter & Search
                     filterSection
 
@@ -66,15 +71,6 @@ struct HistoryView: View {
         .navigationTitle("History")
         .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: $searchText, prompt: "Search recordings...")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    ComparisonView()
-                } label: {
-                    Label("Compare", systemImage: "arrow.left.arrow.right")
-                }
-            }
-        }
         .refreshable {
             await viewModel.loadData()
         }
@@ -168,8 +164,32 @@ struct HistoryView: View {
                     color: .purple,
                     isHighlighted: false
                 )
+
+                Rectangle()
+                    .fill(.quaternary)
+                    .frame(width: 0.5, height: 40)
+
+                StreakStatItem(
+                    icon: "chart.line.uptrend.xyaxis",
+                    value: averageScoreText,
+                    label: "Avg",
+                    color: averageScoreColor,
+                    isHighlighted: false
+                )
             }
         }
+    }
+
+    private var averageScoreText: String {
+        let scores = viewModel.recordings.compactMap { $0.analysis?.speechScore.overall }
+        guard !scores.isEmpty else { return "—" }
+        return "\(scores.reduce(0, +) / scores.count)"
+    }
+
+    private var averageScoreColor: Color {
+        let scores = viewModel.recordings.compactMap { $0.analysis?.speechScore.overall }
+        guard !scores.isEmpty else { return .gray }
+        return AppColors.scoreColor(for: scores.reduce(0, +) / scores.count)
     }
 
     private var totalPracticeTime: String {
@@ -179,6 +199,69 @@ struct HistoryView: View {
             return "\(minutes / 60)h\(minutes % 60)m"
         }
         return "\(minutes)m"
+    }
+
+    // MARK: - Analyzed Recordings Helper
+
+    private var analyzedRecordings: [Recording] {
+        viewModel.recordings.filter { $0.analysis != nil }
+    }
+
+    // MARK: - Compare Progress Card
+
+    private var compareProgressCard: some View {
+        let sorted = analyzedRecordings.sorted { $0.date < $1.date }
+        let firstScore = sorted.first?.analysis?.speechScore.overall ?? 0
+        let latestScore = sorted.last?.analysis?.speechScore.overall ?? 0
+        let change = latestScore - firstScore
+
+        return NavigationLink {
+            ComparisonView()
+        } label: {
+            FeaturedGlassCard(gradientColors: [.teal.opacity(0.15), .cyan.opacity(0.08)]) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Compare Progress", systemImage: "arrow.left.arrow.right")
+                            .font(.subheadline.weight(.semibold))
+
+                        HStack(spacing: 8) {
+                            Text("\(firstScore)")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(AppColors.scoreColor(for: firstScore))
+
+                            Image(systemName: "arrow.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+
+                            Text("\(latestScore)")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(AppColors.scoreColor(for: latestScore))
+                        }
+
+                        Text("First vs Latest Session")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    VStack(spacing: 4) {
+                        Text(change >= 0 ? "+\(change)" : "\(change)")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(change >= 0 ? .green : .red)
+
+                        Text("change")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Filter Section
@@ -530,10 +613,30 @@ struct RecordingRow: View {
                             }
                     }
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Text(detailedDateString)
                         Text("·")
                         Text(recording.formattedDuration)
+
+                        if let wpm = recording.analysis?.wordsPerMinute {
+                            Text("·")
+                            HStack(spacing: 2) {
+                                Image(systemName: "metronome")
+                                    .font(.system(size: 8))
+                                Text("\(Int(wpm)) wpm")
+                            }
+                            .foregroundStyle(.teal)
+                        }
+
+                        if let fillers = recording.analysis?.totalFillerCount, fillers > 0 {
+                            Text("·")
+                            HStack(spacing: 2) {
+                                Image(systemName: "bubble.left")
+                                    .font(.system(size: 8))
+                                Text("\(fillers)")
+                            }
+                            .foregroundStyle(.orange)
+                        }
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
