@@ -24,6 +24,18 @@ struct SettingsView: View {
             } message: {
                 Text("This will reset all settings to their default values.")
             }
+            .alert("Add Word", isPresented: $viewModel.showingAddVocabWord) {
+                TextField("Enter a word", text: $viewModel.newVocabWord)
+                    .textInputAutocapitalization(.never)
+                Button("Add") { viewModel.addVocabWord() }
+                Button("Cancel", role: .cancel) { viewModel.newVocabWord = "" }
+            } message: {
+                if let error = viewModel.vocabWordError {
+                    Text(error)
+                } else {
+                    Text("Add a vocabulary word you want to use more.")
+                }
+            }
             .alert("Clear All Data?", isPresented: $viewModel.showingClearDataConfirmation) {
                 Button("Cancel", role: .cancel) {}
                 Button("Clear Data", role: .destructive) {
@@ -38,6 +50,7 @@ struct SettingsView: View {
         List {
             recordingDefaultsSection
             analysisFeaturesSection
+            vocabWordBankSection
             promptSettingsSection
             reminderSection
             weeklyGoalSection
@@ -100,6 +113,70 @@ struct SettingsView: View {
         }
     }
     
+    // MARK: - Word Bank Section
+
+    private var vocabWordBankSection: some View {
+        Section {
+            if viewModel.vocabWords.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 6) {
+                        Image(systemName: "character.book.closed")
+                            .font(.title3)
+                            .foregroundStyle(.tertiary)
+                        Text("No words added yet")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 12)
+                    Spacer()
+                }
+            } else {
+                FlowLayout(spacing: 8) {
+                    ForEach(viewModel.vocabWords, id: \.self) { word in
+                        HStack(spacing: 4) {
+                            Text(word)
+                                .font(.caption.weight(.medium))
+                            Button {
+                                viewModel.removeVocabWord(word)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .foregroundStyle(.teal)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.teal.opacity(0.15)))
+                    }
+                }
+            }
+
+            Button {
+                viewModel.vocabWordError = nil
+                viewModel.newVocabWord = ""
+                viewModel.showingAddVocabWord = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Add Word")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(.teal)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().strokeBorder(.teal.opacity(0.4), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        } header: {
+            Text("Word Bank")
+        } footer: {
+            Text("Add vocabulary words you want to use more often. They'll be detected in your recordings and tracked as positive progress.")
+        }
+    }
+
     // MARK: - Prompt Settings Section
     
     private var promptSettingsSection: some View {

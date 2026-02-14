@@ -14,6 +14,7 @@ struct RecordingDetailView: View {
     @State private var showingDeleteAlert = false
     @State private var showingShareSheet = false
     @State private var showFillerHighlights = true
+    @State private var showVocabHighlights = true
     @State private var waveformHeights: [CGFloat] = []
     @State private var scoreCardImage: UIImage?
     @State private var showingScoreCardPreview = false
@@ -625,30 +626,71 @@ struct RecordingDetailView: View {
 
                 Spacer()
 
-                Button {
-                    showFillerHighlights.toggle()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: showFillerHighlights ? "eye.fill" : "eye.slash")
-                        Text("Fillers")
+                HStack(spacing: 6) {
+                    Button {
+                        showFillerHighlights.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showFillerHighlights ? "eye.fill" : "eye.slash")
+                            Text("Fillers")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(showFillerHighlights ? .orange : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background {
+                            Capsule()
+                                .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
+                        }
                     }
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(showFillerHighlights ? .orange : .secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background {
-                        Capsule()
-                            .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
+
+                    Button {
+                        showVocabHighlights.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showVocabHighlights ? "eye.fill" : "eye.slash")
+                            Text("Vocab")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(showVocabHighlights ? .green : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background {
+                            Capsule()
+                                .fill(showVocabHighlights ? .green.opacity(0.1) : .clear)
+                        }
                     }
                 }
             }
 
             GlassCard {
-                HighlightedTranscriptView(
-                    words: words,
-                    showHighlights: showFillerHighlights
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                VStack(alignment: .leading, spacing: 0) {
+                    HighlightedTranscriptView(
+                        words: words,
+                        showFillerHighlights: showFillerHighlights,
+                        showVocabHighlights: showVocabHighlights
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                    if let analysis = recording?.analysis, !analysis.vocabWordsUsed.isEmpty {
+                        Divider()
+                            .padding(.vertical, 10)
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "text.badge.checkmark")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+
+                            Text("Vocab:")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.green)
+
+                            Text(analysis.vocabWordsUsed.map { "\($0.word) (\($0.count))" }.joined(separator: ", "))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
         }
     }
@@ -778,13 +820,20 @@ struct RecordingDetailView: View {
         do {
             let result = try await speechService.transcribe(audioURL: audioURL)
 
+            // Fetch vocab words from settings
+            let settingsDescriptor = FetchDescriptor<UserSettings>()
+            let vocabWords = (try? modelContext.fetch(settingsDescriptor))?.first?.vocabWords ?? []
+
             let analysis = speechService.analyze(
                 transcription: result,
-                actualDuration: recording.actualDuration
+                actualDuration: recording.actualDuration,
+                vocabWords: vocabWords
             )
 
             recording.transcriptionText = result.text
-            recording.transcriptionWords = result.words
+            recording.transcriptionWords = speechService.markVocabWordsInTranscription(
+                result.words, vocabWords: vocabWords
+            )
             recording.analysis = analysis
 
             try modelContext.save()
@@ -971,12 +1020,17 @@ struct CompactStatItem: View {
 
 struct HighlightedTranscriptView: View {
     let words: [TranscriptionWord]
-    let showHighlights: Bool
+    let showFillerHighlights: Bool
+    let showVocabHighlights: Bool
 
     var body: some View {
         FlowLayout(spacing: 4) {
             ForEach(words) { word in
-                WordView(word: word, showHighlight: showHighlights && word.isFiller)
+                WordView(
+                    word: word,
+                    showFillerHighlight: showFillerHighlights && word.isFiller,
+                    showVocabHighlight: showVocabHighlights && word.isVocabWord
+                )
             }
         }
     }
@@ -984,18 +1038,22 @@ struct HighlightedTranscriptView: View {
 
 struct WordView: View {
     let word: TranscriptionWord
-    let showHighlight: Bool
+    let showFillerHighlight: Bool
+    let showVocabHighlight: Bool
+
+    private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
+    private var highlightColor: Color { showFillerHighlight ? .orange : .green }
 
     var body: some View {
         Text(word.word)
             .font(.body)
-            .foregroundStyle(showHighlight ? .orange : .primary)
-            .padding(.horizontal, showHighlight ? 4 : 0)
-            .padding(.vertical, showHighlight ? 2 : 0)
+            .foregroundStyle(isHighlighted ? highlightColor : .primary)
+            .padding(.horizontal, isHighlighted ? 4 : 0)
+            .padding(.vertical, isHighlighted ? 2 : 0)
             .background {
-                if showHighlight {
+                if isHighlighted {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.orange.opacity(0.2))
+                        .fill(highlightColor.opacity(0.2))
                 }
             }
     }

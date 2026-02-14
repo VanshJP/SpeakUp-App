@@ -10,15 +10,28 @@ struct TranscriptionWord: Codable, Identifiable {
     let end: TimeInterval
     var confidence: Double?
     var isFiller: Bool
-    
-    init(word: String, start: TimeInterval, end: TimeInterval, confidence: Double? = nil, isFiller: Bool = false) {
+    var isVocabWord: Bool
+
+    init(word: String, start: TimeInterval, end: TimeInterval, confidence: Double? = nil, isFiller: Bool = false, isVocabWord: Bool = false) {
         self.word = word
         self.start = start
         self.end = end
         self.confidence = confidence
         self.isFiller = isFiller
+        self.isVocabWord = isVocabWord
     }
-    
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        word = try container.decode(String.self, forKey: .word)
+        start = try container.decode(TimeInterval.self, forKey: .start)
+        end = try container.decode(TimeInterval.self, forKey: .end)
+        confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+        isFiller = try container.decodeIfPresent(Bool.self, forKey: .isFiller) ?? false
+        isVocabWord = try container.decodeIfPresent(Bool.self, forKey: .isVocabWord) ?? false
+    }
+
     var duration: TimeInterval {
         end - start
     }
@@ -37,6 +50,19 @@ struct FillerWord: Codable, Identifiable {
     }
 }
 
+// MARK: - Vocab Word Usage
+
+struct VocabWordUsage: Codable, Identifiable {
+    var id: UUID = UUID()
+    let word: String
+    var count: Int
+
+    init(word: String, count: Int = 0) {
+        self.word = word
+        self.count = count
+    }
+}
+
 // MARK: - Speech Analysis
 
 struct SpeechAnalysis: Codable {
@@ -47,7 +73,8 @@ struct SpeechAnalysis: Codable {
     var averagePauseLength: TimeInterval
     var clarity: Double // 0-100
     var speechScore: SpeechScore
-    
+    var vocabWordsUsed: [VocabWordUsage]
+
     init(
         fillerWords: [FillerWord] = [],
         totalWords: Int = 0,
@@ -55,7 +82,8 @@ struct SpeechAnalysis: Codable {
         pauseCount: Int = 0,
         averagePauseLength: TimeInterval = 0,
         clarity: Double = 0,
-        speechScore: SpeechScore = SpeechScore()
+        speechScore: SpeechScore = SpeechScore(),
+        vocabWordsUsed: [VocabWordUsage] = []
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
@@ -64,8 +92,22 @@ struct SpeechAnalysis: Codable {
         self.averagePauseLength = averagePauseLength
         self.clarity = clarity
         self.speechScore = speechScore
+        self.vocabWordsUsed = vocabWordsUsed
     }
-    
+
+    // Custom Decodable to handle missing vocabWordsUsed in existing data
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fillerWords = try container.decode([FillerWord].self, forKey: .fillerWords)
+        totalWords = try container.decode(Int.self, forKey: .totalWords)
+        wordsPerMinute = try container.decode(Double.self, forKey: .wordsPerMinute)
+        pauseCount = try container.decode(Int.self, forKey: .pauseCount)
+        averagePauseLength = try container.decode(TimeInterval.self, forKey: .averagePauseLength)
+        clarity = try container.decode(Double.self, forKey: .clarity)
+        speechScore = try container.decode(SpeechScore.self, forKey: .speechScore)
+        vocabWordsUsed = (try? container.decodeIfPresent([VocabWordUsage].self, forKey: .vocabWordsUsed)) ?? []
+    }
+
     var totalFillerCount: Int {
         fillerWords.reduce(0) { $0 + $1.count }
     }
@@ -73,6 +115,10 @@ struct SpeechAnalysis: Codable {
     var fillerPercentage: Double {
         guard totalWords > 0 else { return 0 }
         return (Double(totalFillerCount) / Double(totalWords)) * 100
+    }
+
+    var totalVocabWordsUsed: Int {
+        vocabWordsUsed.reduce(0) { $0 + $1.count }
     }
 }
 

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import UIKit
 
 @Observable
 class SettingsViewModel {
@@ -29,6 +30,12 @@ class SettingsViewModel {
 
     // Local state - Countdown
     var countdownDuration: CountdownDuration = .fifteen
+
+    // Local state - Word Bank
+    var vocabWords: [String] = []
+    var newVocabWord: String = ""
+    var vocabWordError: String? = nil
+    var showingAddVocabWord: Bool = false
 
     private var modelContext: ModelContext?
     private let notificationService = NotificationService()
@@ -89,6 +96,9 @@ class SettingsViewModel {
 
         // Countdown duration
         countdownDuration = CountdownDuration(rawValue: settings.countdownDuration) ?? .fifteen
+
+        // Word Bank
+        vocabWords = settings.vocabWords
     }
     
     @MainActor
@@ -114,6 +124,9 @@ class SettingsViewModel {
 
         // Countdown duration
         settings.countdownDuration = countdownDuration.rawValue
+
+        // Word Bank
+        settings.vocabWords = vocabWords
 
         do {
             try context.save()
@@ -147,6 +160,54 @@ class SettingsViewModel {
     func isCategoryEnabled(_ category: PromptCategory) -> Bool {
         enabledPromptCategories.contains(category)
     }
+
+    // MARK: - Word Bank
+
+    @MainActor
+    func addVocabWord() {
+        vocabWordError = nil
+        let trimmed = newVocabWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else {
+            newVocabWord = ""
+            return
+        }
+        guard !vocabWords.contains(trimmed) else {
+            vocabWordError = "Already in your word bank"
+            return
+        }
+        guard isRealWord(trimmed) else {
+            vocabWordError = "Not a recognized word"
+            return
+        }
+        vocabWords.append(trimmed)
+        newVocabWord = ""
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func removeVocabWord(at offsets: IndexSet) {
+        vocabWords.remove(atOffsets: offsets)
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func removeVocabWord(_ word: String) {
+        vocabWords.removeAll { $0 == word }
+        Task { await saveSettings() }
+    }
+
+    private func isRealWord(_ word: String) -> Bool {
+        let checker = UITextChecker()
+        let range = NSRange(location: 0, length: word.utf16.count)
+        let misspelled = checker.rangeOfMisspelledWord(
+            in: word,
+            range: range,
+            startingAt: 0,
+            wrap: false,
+            language: "en"
+        )
+        return misspelled.location == NSNotFound
+    }
     
     @MainActor
     func resetSettings() async {
@@ -163,6 +224,7 @@ class SettingsViewModel {
         settings.showDailyPrompt = true
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15
+        settings.vocabWords = []
 
         do {
             try context.save()

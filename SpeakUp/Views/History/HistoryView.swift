@@ -8,6 +8,7 @@ struct HistoryView: View {
     @State private var showingDayDetail = false
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText = ""
+    @Query private var userSettings: [UserSettings]
 
     var onSelectRecording: (String) -> Void
 
@@ -53,6 +54,9 @@ struct HistoryView: View {
 
                     // Streak Stats
                     streakSection
+
+                    // Vocab Word Usage
+                    vocabUsageSection
 
                     // Compare Progress
                     if analyzedRecordings.count >= 2 {
@@ -199,6 +203,62 @@ struct HistoryView: View {
             return "\(minutes / 60)h\(minutes % 60)m"
         }
         return "\(minutes)m"
+    }
+
+    // MARK: - Vocab Usage Section
+
+    @ViewBuilder
+    private var vocabUsageSection: some View {
+        let hasVocabWords = !(userSettings.first?.vocabWords ?? []).isEmpty
+        let aggregated = aggregateVocabUsage()
+
+        if hasVocabWords && !aggregated.isEmpty {
+            let totalUses = aggregated.reduce(0) { $0 + $1.value }
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Vocab Words", systemImage: "character.book.closed")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Text("\(totalUses) uses")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(aggregated.prefix(15), id: \.key) { item in
+                            HStack(spacing: 5) {
+                                Text(item.key)
+                                    .font(.caption.weight(.medium))
+                                Text("\(item.value)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(minWidth: 18, minHeight: 18)
+                                    .background(Circle().fill(.green))
+                            }
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.green.opacity(0.12)))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func aggregateVocabUsage() -> [(key: String, value: Int)] {
+        var aggregated: [String: Int] = [:]
+        for recording in viewModel.recordings {
+            guard let usage = recording.analysis?.vocabWordsUsed else { continue }
+            for item in usage {
+                aggregated[item.word, default: 0] += item.count
+            }
+        }
+        return aggregated.sorted { $0.value > $1.value }
     }
 
     // MARK: - Analyzed Recordings Helper

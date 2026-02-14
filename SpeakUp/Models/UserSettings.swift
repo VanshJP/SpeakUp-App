@@ -31,6 +31,9 @@ final class UserSettings {
     // Countdown Settings
     var countdownDuration: Int // 5, 10, 15, 20, 30 seconds
 
+    // Word Bank
+    var vocabWords: [String] = []
+
     init(
         id: UUID = UUID(),
         defaultDuration: Int = 60,
@@ -49,7 +52,8 @@ final class UserSettings {
         trackFillerWords: Bool = true,
         showDailyPrompt: Bool = true,
         enabledPromptCategories: [String]? = nil,
-        countdownDuration: Int = 15
+        countdownDuration: Int = 15,
+        vocabWords: [String] = []
     ) {
         self.id = id
         self.defaultDuration = defaultDuration
@@ -70,6 +74,7 @@ final class UserSettings {
         // Default to all categories enabled
         self.enabledPromptCategories = enabledPromptCategories ?? PromptCategory.allCases.map { $0.rawValue }
         self.countdownDuration = countdownDuration
+        self.vocabWords = vocabWords
     }
     
     var dailyReminderTime: DateComponents {
@@ -110,6 +115,18 @@ final class UserSettings {
     // Helper to get enabled categories as enum values
     var enabledCategories: [PromptCategory] {
         enabledPromptCategories.compactMap { PromptCategory(rawValue: $0) }
+    }
+
+    // MARK: - Word Bank Helpers
+
+    func addVocabWord(_ word: String) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty, !vocabWords.contains(trimmed) else { return }
+        vocabWords.append(trimmed)
+    }
+
+    func removeVocabWord(_ word: String) {
+        vocabWords.removeAll { $0 == word }
     }
 }
 
