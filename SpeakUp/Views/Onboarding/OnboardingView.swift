@@ -30,9 +30,13 @@ struct OnboardingView: View {
                 scoringPage
                     .tag(2)
 
-                // Page 4: Mic Permission
-                micPermissionPage
+                // Page 4: Listen Back
+                listenBackPage
                     .tag(3)
+
+                // Page 5: Mic Permission
+                micPermissionPage
+                    .tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.easeInOut(duration: 0.3), value: viewModel.currentPage)
@@ -106,6 +110,34 @@ struct OnboardingView: View {
                 ScorePreviewRow(icon: "pause.circle", title: "Pause Quality", color: .purple)
             }
             .padding(.horizontal, 40)
+
+            Spacer()
+            Spacer()
+        }
+        .padding()
+    }
+
+    // MARK: - Listen Back Page
+
+    private var listenBackPage: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "headphones")
+                .font(.system(size: 72))
+                .foregroundStyle(.purple)
+
+            VStack(spacing: 12) {
+                Text("About Hearing Your Voice")
+                    .font(.title.weight(.bold))
+                    .multilineTextAlignment(.center)
+
+                Text("Hearing your own voice feels weird at first — that's completely normal! Everyone sounds different to themselves. Listening back is actually a superpower for improvement.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
 
             Spacer()
             Spacer()

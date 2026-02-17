@@ -38,6 +38,12 @@ final class UserSettings {
     // Word Bank
     var vocabWords: [String] = []
 
+    // Haptic Coaching
+    var hapticCoachingEnabled: Bool = false
+
+    // Listen Back
+    var listenBackCount: Int = 0
+
     init(
         id: UUID = UUID(),
         defaultDuration: Int = 60,

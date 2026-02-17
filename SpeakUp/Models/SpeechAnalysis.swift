@@ -63,6 +63,99 @@ struct VocabWordUsage: Codable, Identifiable {
     }
 }
 
+// MARK: - Volume Metrics
+
+struct VolumeMetrics: Codable {
+    var averageLevel: Float
+    var peakLevel: Float
+    var dynamicRange: Float
+    var monotoneScore: Int // 0-100, higher = more variation (good)
+    var energyScore: Int // 0-100
+    var levelSamples: [Float]?
+
+    init(
+        averageLevel: Float = 0,
+        peakLevel: Float = 0,
+        dynamicRange: Float = 0,
+        monotoneScore: Int = 0,
+        energyScore: Int = 0,
+        levelSamples: [Float]? = nil
+    ) {
+        self.averageLevel = averageLevel
+        self.peakLevel = peakLevel
+        self.dynamicRange = dynamicRange
+        self.monotoneScore = monotoneScore
+        self.energyScore = energyScore
+        self.levelSamples = levelSamples
+    }
+}
+
+// MARK: - Vocabulary Complexity
+
+struct VocabComplexity: Codable {
+    var uniqueWordCount: Int
+    var uniqueWordRatio: Double
+    var averageWordLength: Double
+    var longWordCount: Int
+    var longWordRatio: Double
+    var repeatedPhrases: [RepeatedPhrase]
+    var complexityScore: Int // 0-100
+
+    init(
+        uniqueWordCount: Int = 0,
+        uniqueWordRatio: Double = 0,
+        averageWordLength: Double = 0,
+        longWordCount: Int = 0,
+        longWordRatio: Double = 0,
+        repeatedPhrases: [RepeatedPhrase] = [],
+        complexityScore: Int = 0
+    ) {
+        self.uniqueWordCount = uniqueWordCount
+        self.uniqueWordRatio = uniqueWordRatio
+        self.averageWordLength = averageWordLength
+        self.longWordCount = longWordCount
+        self.longWordRatio = longWordRatio
+        self.repeatedPhrases = repeatedPhrases
+        self.complexityScore = complexityScore
+    }
+}
+
+struct RepeatedPhrase: Codable, Identifiable {
+    var id: UUID = UUID()
+    let phrase: String
+    let count: Int
+}
+
+// MARK: - Sentence Analysis
+
+struct SentenceAnalysis: Codable {
+    var totalSentences: Int
+    var incompleteSentences: Int
+    var restartCount: Int
+    var averageSentenceLength: Double
+    var longestSentence: Int
+    var structureScore: Int // 0-100
+    var restartExamples: [String]
+
+    init(
+        totalSentences: Int = 0,
+        incompleteSentences: Int = 0,
+        restartCount: Int = 0,
+        averageSentenceLength: Double = 0,
+        longestSentence: Int = 0,
+        structureScore: Int = 0,
+        restartExamples: [String] = []
+    ) {
+        self.totalSentences = totalSentences
+        self.incompleteSentences = incompleteSentences
+        self.restartCount = restartCount
+        self.averageSentenceLength = averageSentenceLength
+        self.longestSentence = longestSentence
+        self.structureScore = structureScore
+        self.restartExamples = restartExamples
+    }
+}
+
 // MARK: - Speech Analysis
 
 struct SpeechAnalysis: Codable {
@@ -74,6 +167,9 @@ struct SpeechAnalysis: Codable {
     var clarity: Double // 0-100
     var speechScore: SpeechScore
     var vocabWordsUsed: [VocabWordUsage]
+    var volumeMetrics: VolumeMetrics?
+    var vocabComplexity: VocabComplexity?
+    var sentenceAnalysis: SentenceAnalysis?
 
     init(
         fillerWords: [FillerWord] = [],
@@ -83,7 +179,10 @@ struct SpeechAnalysis: Codable {
         averagePauseLength: TimeInterval = 0,
         clarity: Double = 0,
         speechScore: SpeechScore = SpeechScore(),
-        vocabWordsUsed: [VocabWordUsage] = []
+        vocabWordsUsed: [VocabWordUsage] = [],
+        volumeMetrics: VolumeMetrics? = nil,
+        vocabComplexity: VocabComplexity? = nil,
+        sentenceAnalysis: SentenceAnalysis? = nil
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
@@ -93,9 +192,12 @@ struct SpeechAnalysis: Codable {
         self.clarity = clarity
         self.speechScore = speechScore
         self.vocabWordsUsed = vocabWordsUsed
+        self.volumeMetrics = volumeMetrics
+        self.vocabComplexity = vocabComplexity
+        self.sentenceAnalysis = sentenceAnalysis
     }
 
-    // Custom Decodable to handle missing vocabWordsUsed in existing data
+    // Custom Decodable to handle missing fields in existing data
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         fillerWords = try container.decode([FillerWord].self, forKey: .fillerWords)
@@ -106,6 +208,13 @@ struct SpeechAnalysis: Codable {
         clarity = try container.decode(Double.self, forKey: .clarity)
         speechScore = try container.decode(SpeechScore.self, forKey: .speechScore)
         vocabWordsUsed = (try? container.decodeIfPresent([VocabWordUsage].self, forKey: .vocabWordsUsed)) ?? []
+
+        // New optional fields — these are populated during analysis, not stored yet.
+        // Decoding them from older data causes EXC_BREAKPOINT in SwiftData's
+        // internal decoder, so we skip decoding entirely for now.
+        volumeMetrics = nil
+        vocabComplexity = nil
+        sentenceAnalysis = nil
     }
 
     var totalFillerCount: Int {

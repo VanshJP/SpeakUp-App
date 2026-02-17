@@ -18,6 +18,9 @@ final class Recording {
     var isProcessing: Bool
     var isFavorite: Bool
     var customTitle: String?
+    var drillMode: String?
+    var frameworkUsed: String?
+    @Transient var audioLevelSamples: [Float]? = nil
 
     init(
         id: UUID = UUID(),
@@ -34,7 +37,10 @@ final class Recording {
         analysis: SpeechAnalysis? = nil,
         isProcessing: Bool = false,
         isFavorite: Bool = false,
-        customTitle: String? = nil
+        customTitle: String? = nil,
+        drillMode: String? = nil,
+        frameworkUsed: String? = nil,
+        audioLevelSamples: [Float]? = nil
     ) {
         self.id = id
         self.date = date
@@ -51,6 +57,9 @@ final class Recording {
         self.isProcessing = isProcessing
         self.isFavorite = isFavorite
         self.customTitle = customTitle
+        self.drillMode = drillMode
+        self.frameworkUsed = frameworkUsed
+        self.audioLevelSamples = audioLevelSamples
     }
 
     /// Display title: custom title, prompt text, or fallback
@@ -106,17 +115,23 @@ enum RecordingDuration: Int, CaseIterable, Identifiable {
     case sixty = 60
     case ninety = 90
     case onetwenty = 120
-    
+    case threeMinutes = 180
+    case fiveMinutes = 300
+    case tenMinutes = 600
+
     var id: Int { rawValue }
-    
+
     var displayName: String {
         switch self {
         case .thirty: return "30s"
         case .sixty: return "1m"
         case .ninety: return "1.5m"
         case .onetwenty: return "2m"
+        case .threeMinutes: return "3m"
+        case .fiveMinutes: return "5m"
+        case .tenMinutes: return "10m"
         }
     }
-    
+
     var seconds: Int { rawValue }
 }

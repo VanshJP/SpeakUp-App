@@ -35,6 +35,10 @@ class RecordingViewModel {
     // Audio level for waveform visualization
     var audioLevel: Float = -160
 
+    // Audio level samples for volume analysis (collected every ~0.5s)
+    var audioLevelSamples: [Float] = []
+    private var audioLevelSampleCounter = 0
+
     // Live filler counter
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
 
@@ -190,10 +194,19 @@ class RecordingViewModel {
     // MARK: - Audio Level Monitoring
 
     private func startAudioLevelMonitoring() {
+        audioLevelSampleCounter = 0
+        audioLevelSamples = []
         audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
-                self.audioLevel = self.audioService.getAudioLevel()
+                let level = self.audioService.getAudioLevel()
+                self.audioLevel = level
+                // Collect sample every ~0.5s (every 10th tick at 0.05s interval)
+                self.audioLevelSampleCounter += 1
+                if self.audioLevelSampleCounter >= 10 {
+                    self.audioLevelSampleCounter = 0
+                    self.audioLevelSamples.append(level)
+                }
             }
         }
     }

@@ -4,10 +4,17 @@ import SwiftData
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = TodayViewModel()
+    @State private var weakAreaService = WeakAreaService()
+    @State private var curriculumViewModel = CurriculumViewModel()
+    @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
 
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowWheel: () -> Void
     var onShowGoals: () -> Void
+    var onShowWarmUps: () -> Void
+    var onShowDrills: () -> Void
+    var onShowConfidence: () -> Void
+    var onShowCurriculum: () -> Void
 
     var body: some View {
         ZStack {
@@ -15,15 +22,32 @@ struct TodayView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-        
+
                     // Header Stats (Ring visualization)
                     headerSection
-                    
+
                     // Interactive Prompt Card (tap to start)
                     interactivePromptSection
 
                     // Prominent Start Button
                     startButtonSection
+
+                    // Quick-access toolbar strip
+                    toolbarStrip
+
+                    // Continue Learning (Curriculum)
+                    if curriculumViewModel.currentLesson != nil {
+                        CurriculumProgressCard(
+                            viewModel: curriculumViewModel,
+                            onTap: { onShowCurriculum() }
+                        )
+                    }
+
+                    // Practice Tools 2x2 Grid
+                    practiceToolsGrid
+
+                    // Suggested For You (weak areas)
+                    suggestedSection
 
                     // Daily Challenge
                     if let challenge = viewModel.dailyChallenge {
@@ -61,6 +85,10 @@ struct TodayView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
+            curriculumViewModel.loadProgress(context: modelContext)
+        }
+        .task {
+            weakAreaService.analyze(recordings: Array(recordings))
         }
     }
 
@@ -82,7 +110,6 @@ struct TodayView: View {
             gradientColors: [.orange.opacity(0.15), .yellow.opacity(0.08)]
         ) {
             HStack(spacing: 14) {
-                // Animated flame stack
                 ZStack {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 32))
@@ -107,7 +134,6 @@ struct TodayView: View {
 
                 Spacer()
 
-                // Streak badge
                 Text("\(viewModel.userStats.currentStreak)")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.orange)
@@ -136,7 +162,6 @@ struct TodayView: View {
 
     private var startButtonSection: some View {
         VStack(spacing: 12) {
-            // Primary CTA - larger and more prominent
             Button {
                 onStartRecording(
                     viewModel.todaysPrompt,
@@ -236,6 +261,135 @@ struct TodayView: View {
         }
     }
 
+    // MARK: - Quick-Access Toolbar Strip
+
+    private var toolbarStrip: some View {
+        HStack(spacing: 0) {
+            toolbarStripButton(icon: "wind", label: "Warm Up", color: .blue) {
+                onShowWarmUps()
+            }
+            toolbarStripButton(icon: "bolt.fill", label: "Drills", color: .orange) {
+                onShowDrills()
+            }
+            toolbarStripButton(icon: "heart.fill", label: "Calm", color: .pink) {
+                onShowConfidence()
+            }
+            toolbarStripButton(icon: "book.fill", label: "Learn", color: .purple) {
+                onShowCurriculum()
+            }
+        }
+        .padding(.vertical, 4)
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                }
+        }
+    }
+
+    private func toolbarStripButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Practice Tools 2x2 Grid
+
+    private var practiceToolsGrid: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Practice Tools", systemImage: "square.grid.2x2.fill")
+                .font(.headline)
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                PracticeToolCard(
+                    icon: "wind",
+                    title: "Warm Up",
+                    subtitle: "Breathing & vocal exercises",
+                    color: .blue
+                ) { onShowWarmUps() }
+
+                PracticeToolCard(
+                    icon: "bolt.fill",
+                    title: "Quick Drills",
+                    subtitle: "Focused skill practice",
+                    color: .orange
+                ) { onShowDrills() }
+
+                PracticeToolCard(
+                    icon: "heart.fill",
+                    title: "Confidence",
+                    subtitle: "Calming & visualization",
+                    color: .pink
+                ) { onShowConfidence() }
+
+                PracticeToolCard(
+                    icon: "book.fill",
+                    title: "Curriculum",
+                    subtitle: "Guided learning path",
+                    color: .purple
+                ) { onShowCurriculum() }
+            }
+        }
+    }
+
+    // MARK: - Suggested Section
+
+    @ViewBuilder
+    private var suggestedSection: some View {
+        if let suggestion = weakAreaService.suggestion {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Suggested For You", systemImage: "sparkles")
+                    .font(.headline)
+
+                Button {
+                    switch suggestion.type {
+                    case .drill:
+                        onShowDrills()
+                    case .exercise, .practice:
+                        onStartRecording(nil, viewModel.selectedDuration)
+                    }
+                } label: {
+                    FeaturedGlassCard(gradientColors: [.purple.opacity(0.12), .blue.opacity(0.06)]) {
+                        HStack(spacing: 14) {
+                            Image(systemName: suggestion.icon)
+                                .font(.title2)
+                                .foregroundStyle(.purple)
+                                .frame(width: 32)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(suggestion.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text(suggestion.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     // MARK: - Quick Insights Section
 
     private var quickInsightsSection: some View {
@@ -244,7 +398,6 @@ struct TodayView: View {
                 .font(.headline)
 
             HStack(spacing: 12) {
-                // Top filler word
                 QuickInsightCard(
                     icon: "exclamationmark.bubble.fill",
                     iconColor: .orange,
@@ -253,7 +406,6 @@ struct TodayView: View {
                     gradientColors: [.orange.opacity(0.1), .clear]
                 )
 
-                // Practice time
                 QuickInsightCard(
                     icon: "clock.fill",
                     iconColor: .purple,
@@ -389,9 +541,7 @@ struct InteractivePromptCard: View {
     var body: some View {
         GlassCard(tint: categoryColor.opacity(0.1), accentBorder: categoryColor.opacity(0.3)) {
             VStack(alignment: .leading, spacing: 16) {
-                // Header with category
                 HStack {
-                    // Category
                     Label(prompt?.category ?? "Loading...", systemImage: categoryIcon)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(categoryColor)
@@ -403,7 +553,6 @@ struct InteractivePromptCard: View {
                     }
                 }
 
-                // Prompt Text (main tappable area)
                 Text(prompt?.text ?? "Loading today's prompt...")
                     .font(.title3.weight(.medium))
                     .lineLimit(4)
@@ -413,14 +562,11 @@ struct InteractivePromptCard: View {
                     .contentShape(Rectangle())
                     .onTapGesture { Haptics.medium(); onTap() }
 
-                // Bottom row: duration + tap hint
                 HStack {
-                    // Duration selector
                     DurationPill(selectedDuration: $selectedDuration)
 
                     Spacer()
 
-                    // Tap to start hint with pulse
                     HStack(spacing: 6) {
                         Circle()
                             .fill(Color.teal)
@@ -581,12 +727,56 @@ struct GoalProgressRow: View {
     }
 }
 
+// MARK: - Practice Tool Card
+
+struct PracticeToolCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            GlassCard(tint: color.opacity(0.08)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(color.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(color)
+                    }
+
+                    Text(title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 100)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 #Preview {
     NavigationStack {
         TodayView(
             onStartRecording: { _, _ in },
             onShowWheel: {},
-            onShowGoals: {}
+            onShowGoals: {},
+            onShowWarmUps: {},
+            onShowDrills: {},
+            onShowConfidence: {},
+            onShowCurriculum: {}
         )
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)

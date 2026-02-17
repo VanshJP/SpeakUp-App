@@ -4,6 +4,8 @@ import SwiftData
 struct RecordingView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = RecordingViewModel()
+    @State private var selectedFramework: SpeechFramework?
+    @State private var showFrameworkPicker = false
 
     let prompt: Prompt?
     let duration: RecordingDuration
@@ -100,6 +102,29 @@ struct RecordingView: View {
 
                 Spacer()
 
+                // Framework picker button
+                Menu {
+                    Button("None") {
+                        selectedFramework = nil
+                    }
+                    ForEach(SpeechFramework.allCases) { framework in
+                        Button {
+                            selectedFramework = framework
+                        } label: {
+                            Label(framework.displayName, systemImage: framework.icon)
+                        }
+                    }
+                } label: {
+                    Image(systemName: selectedFramework?.icon ?? "list.bullet.rectangle")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        }
+                }
+
                 // Voice activity indicator (top right)
                 HStack(spacing: 6) {
                     Circle()
@@ -151,6 +176,15 @@ struct RecordingView: View {
 
     private var centerContent: some View {
         VStack(spacing: 24) {
+            // Framework overlay
+            if let framework = selectedFramework, viewModel.isRecording {
+                FrameworkOverlayView(
+                    framework: framework,
+                    elapsedTime: viewModel.recordingDuration,
+                    totalDuration: TimeInterval(duration.seconds)
+                )
+            }
+
             // Timer
             TimerView(
                 remainingTime: viewModel.displayTime,

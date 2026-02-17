@@ -16,6 +16,14 @@ struct ContentView: View {
     @State private var socialChallengeService = SocialChallengeService()
     @State private var showingChallengeAccept = false
 
+    // New feature sheets
+    @State private var showingWarmUps = false
+    @State private var showingDrills = false
+    @State private var showingConfidenceTools = false
+    @State private var showingBeforeAfter = false
+    @State private var showingJournalExport = false
+    @State private var showingCurriculum = false
+
     // Recording parameters to pass
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
@@ -41,7 +49,6 @@ struct ContentView: View {
                             onStartRecording: { prompt, duration in
                                 recordingPrompt = prompt
                                 recordingDuration = duration
-                                // Show countdown first instead of going directly to recording
                                 showingCountdown = true
                             },
                             onShowWheel: {
@@ -49,16 +56,43 @@ struct ContentView: View {
                             },
                             onShowGoals: {
                                 showingGoals = true
+                            },
+                            onShowWarmUps: {
+                                showingWarmUps = true
+                            },
+                            onShowDrills: {
+                                showingDrills = true
+                            },
+                            onShowConfidence: {
+                                showingConfidenceTools = true
+                            },
+                            onShowCurriculum: {
+                                showingCurriculum = true
                             }
                         )
+                        .sheet(isPresented: $showingCurriculum) {
+                            NavigationStack {
+                                CurriculumView()
+                            }
+                            .presentationDetents([.large])
+                            .presentationDragIndicator(.visible)
+                        }
                     }
                 }
-                
+
                 Tab("History", systemImage: "clock.fill", value: .history) {
                     NavigationStack {
-                        HistoryView(onSelectRecording: { recordingId in
-                            selectedRecordingId = recordingId
-                        })
+                        HistoryView(
+                            onSelectRecording: { recordingId in
+                                selectedRecordingId = recordingId
+                            },
+                            onShowBeforeAfter: {
+                                showingBeforeAfter = true
+                            },
+                            onShowJournalExport: {
+                                showingJournalExport = true
+                            }
+                        )
                         .navigationDestination(item: $selectedRecordingId) { recordingId in
                             RecordingDetailView(recordingId: recordingId)
                                 .onDisappear {
@@ -67,7 +101,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                
+
                 Tab("Achievements", systemImage: "trophy.fill", value: .achievements) {
                     NavigationStack {
                         AchievementGalleryView()
@@ -81,7 +115,7 @@ struct ContentView: View {
                 }
             }
             .tint(.teal)
-            
+
             // Countdown Overlay
             if showingCountdown {
                 CountdownOverlayView(
@@ -90,7 +124,6 @@ struct ContentView: View {
                     countdownDuration: countdownDuration,
                     countdownStyle: countdownStyle,
                     onComplete: {
-                        // Countdown finished - transition to recording
                         showingCountdown = false
                         showingRecording = true
                     },
@@ -111,11 +144,9 @@ struct ContentView: View {
                 countdownStyle: countdownStyle,
                 onComplete: { recording in
                     showingRecording = false
-                    // Check achievements after recording
                     Task {
                         await achievementService.checkAchievements(context: modelContext)
                     }
-                    // Navigate to detail view after a short delay
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         selectedRecordingId = recording.id.uuidString
                         selectedTab = .history
@@ -130,7 +161,6 @@ struct ContentView: View {
             PromptWheelView(onSelectPrompt: { prompt in
                 showingPromptWheel = false
                 recordingPrompt = prompt
-                // Small delay before showing countdown
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     showingCountdown = true
                 }
@@ -144,6 +174,27 @@ struct ContentView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingWarmUps) {
+            WarmUpListView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingDrills) {
+            DrillSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingConfidenceTools) {
+            ConfidenceToolsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingBeforeAfter) {
+            BeforeAfterReplayView()
+        }
+        .sheet(isPresented: $showingJournalExport) {
+            JournalExportView()
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -167,7 +218,6 @@ struct ContentView: View {
                     challenge: challenge,
                     onAccept: {
                         showingChallengeAccept = false
-                        // Find prompt and start recording
                         let descriptor = FetchDescriptor<Prompt>()
                         if let prompts = try? modelContext.fetch(descriptor) {
                             recordingPrompt = prompts.first { $0.id == challenge.promptId }
@@ -200,10 +250,8 @@ struct ContentView: View {
 
         switch url.host {
         case "record":
-            // Optional prompt param: speakup://record?prompt=prof-1
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let promptId = components.queryItems?.first(where: { $0.name == "prompt" })?.value {
-                // Find prompt by id
                 let descriptor = FetchDescriptor<Prompt>()
                 if let prompts = try? modelContext.fetch(descriptor) {
                     recordingPrompt = prompts.first { $0.id == promptId }
@@ -231,9 +279,9 @@ enum AppTab: String, CaseIterable, Identifiable {
     case history
     case achievements
     case settings
-    
+
     var id: String { rawValue }
-    
+
     var title: String {
         switch self {
         case .today: return "Today"
@@ -242,7 +290,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .settings: return "Settings"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .today: return "mic.badge.plus"

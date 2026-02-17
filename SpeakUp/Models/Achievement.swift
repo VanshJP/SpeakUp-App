@@ -41,6 +41,7 @@ enum AchievementDefinition: String, CaseIterable {
     case score95 = "score_95"
     case zeroFillers = "zero_fillers"
     case allCategories = "all_categories"
+    case listenBack = "listen_back"
 
     var title: String {
         switch self {
@@ -55,6 +56,7 @@ enum AchievementDefinition: String, CaseIterable {
         case .score95: return "Near Perfect"
         case .zeroFillers: return "Clean Speech"
         case .allCategories: return "Well Rounded"
+        case .listenBack: return "Brave Listener"
         }
     }
 
@@ -71,6 +73,7 @@ enum AchievementDefinition: String, CaseIterable {
         case .score95: return "Score 95 or higher"
         case .zeroFillers: return "Complete a session with zero filler words"
         case .allCategories: return "Record in every prompt category"
+        case .listenBack: return "Listen to your own recording for the first time"
         }
     }
 
@@ -87,6 +90,7 @@ enum AchievementDefinition: String, CaseIterable {
         case .score95: return "sparkles"
         case .zeroFillers: return "checkmark.seal.fill"
         case .allCategories: return "square.grid.3x3.fill"
+        case .listenBack: return "headphones"
         }
     }
 

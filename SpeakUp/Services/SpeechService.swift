@@ -343,6 +343,179 @@ class SpeechService {
         return max(0, min(100, Int(weighted)))
     }
     
+    // MARK: - Volume Analysis
+
+    func analyzeVolume(samples: [Float]) -> VolumeMetrics {
+        guard !samples.isEmpty else { return VolumeMetrics() }
+
+        let average = samples.reduce(0, +) / Float(samples.count)
+        let peak = samples.max() ?? 0
+
+        // Dynamic range: peak minus 5th percentile (ignoring outlier silence)
+        let sorted = samples.sorted()
+        let lowIdx = max(0, Int(Double(sorted.count) * 0.05))
+        let highIdx = min(sorted.count - 1, Int(Double(sorted.count) * 0.95))
+        let dynamicRange = sorted[highIdx] - sorted[lowIdx]
+
+        // Monotone score: based on standard deviation — higher variation = higher score
+        let mean = Double(average)
+        let variance = samples.reduce(0.0) { $0 + pow(Double($1) - mean, 2) } / Double(samples.count)
+        let stddev = sqrt(variance)
+        // stddev of 5-15 dB is good variation for speech
+        let monotoneScore = min(100, max(0, Int(stddev * 10)))
+
+        // Energy score: based on average level relative to -40dB baseline
+        // -40dB is quiet, 0dB is max; typical speech is -20 to -5 dB
+        let normalizedAvg = max(0, min(1, (average + 40) / 40))
+        let energyScore = min(100, max(0, Int(normalizedAvg * 100)))
+
+        return VolumeMetrics(
+            averageLevel: average,
+            peakLevel: peak,
+            dynamicRange: dynamicRange,
+            monotoneScore: monotoneScore,
+            energyScore: energyScore,
+            levelSamples: samples
+        )
+    }
+
+    // MARK: - Vocabulary Complexity Analysis
+
+    func analyzeVocabComplexity(words: [TranscriptionWord]) -> VocabComplexity {
+        guard !words.isEmpty else { return VocabComplexity() }
+
+        let cleaned = words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            .filter { !$0.isEmpty }
+        let totalCount = cleaned.count
+        guard totalCount > 0 else { return VocabComplexity() }
+
+        let uniqueWords = Set(cleaned)
+        let uniqueCount = uniqueWords.count
+        let uniqueRatio = Double(uniqueCount) / Double(totalCount)
+
+        let totalLength = cleaned.reduce(0) { $0 + $1.count }
+        let avgLength = Double(totalLength) / Double(totalCount)
+
+        let longWords = cleaned.filter { $0.count >= 7 }
+        let longWordCount = longWords.count
+        let longWordRatio = Double(longWordCount) / Double(totalCount)
+
+        // Find repeated 2-3 word n-grams appearing 3+ times
+        var phraseCounts: [String: Int] = [:]
+        for n in 2...3 {
+            guard cleaned.count >= n else { continue }
+            for i in 0...(cleaned.count - n) {
+                let phrase = cleaned[i..<(i + n)].joined(separator: " ")
+                phraseCounts[phrase, default: 0] += 1
+            }
+        }
+        let repeatedPhrases = phraseCounts
+            .filter { $0.value >= 3 }
+            .map { RepeatedPhrase(phrase: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+
+        // Composite score: 40% unique ratio + 30% long word ratio + 30% inverse repeated phrases
+        let uniqueComponent = min(1.0, uniqueRatio / 0.7) * 40 // 70% unique = full marks
+        let longComponent = min(1.0, longWordRatio / 0.2) * 30 // 20% long words = full marks
+        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 5.0)
+        let repeatComponent = (1.0 - repeatPenalty) * 30
+        let score = min(100, max(0, Int(uniqueComponent + longComponent + repeatComponent)))
+
+        return VocabComplexity(
+            uniqueWordCount: uniqueCount,
+            uniqueWordRatio: uniqueRatio,
+            averageWordLength: avgLength,
+            longWordCount: longWordCount,
+            longWordRatio: longWordRatio,
+            repeatedPhrases: Array(repeatedPhrases.prefix(10)),
+            complexityScore: score
+        )
+    }
+
+    // MARK: - Sentence Structure Analysis
+
+    func analyzeSentenceStructure(words: [TranscriptionWord], text: String) -> SentenceAnalysis {
+        guard !words.isEmpty else { return SentenceAnalysis() }
+
+        // Split into sentences based on long pauses (>1.0s) or punctuation
+        var sentences: [[TranscriptionWord]] = []
+        var currentSentence: [TranscriptionWord] = []
+
+        for (index, word) in words.enumerated() {
+            currentSentence.append(word)
+
+            let isEnd: Bool
+            if word.word.hasSuffix(".") || word.word.hasSuffix("?") || word.word.hasSuffix("!") {
+                isEnd = true
+            } else if index < words.count - 1 {
+                let gap = words[index + 1].start - word.end
+                isEnd = gap > 1.0
+            } else {
+                isEnd = true
+            }
+
+            if isEnd && !currentSentence.isEmpty {
+                sentences.append(currentSentence)
+                currentSentence = []
+            }
+        }
+        if !currentSentence.isEmpty {
+            sentences.append(currentSentence)
+        }
+
+        let totalSentences = sentences.count
+        guard totalSentences > 0 else { return SentenceAnalysis() }
+
+        let sentenceLengths = sentences.map { $0.count }
+        let avgLength = Double(sentenceLengths.reduce(0, +)) / Double(totalSentences)
+        let longestSentence = sentenceLengths.max() ?? 0
+
+        // Detect incomplete sentences (<3 words)
+        let incompleteSentences = sentences.filter { $0.count < 3 }.count
+
+        // Detect restarts: "I think... I mean...", words repeated at sentence starts
+        let restartPatterns = ["i mean", "what i'm saying", "let me", "i think i", "sorry"]
+        var restartCount = 0
+        var restartExamples: [String] = []
+
+        for sentence in sentences {
+            let sentenceText = sentence.map { $0.word.lowercased() }.joined(separator: " ")
+            for pattern in restartPatterns {
+                if sentenceText.contains(pattern) {
+                    restartCount += 1
+                    if restartExamples.count < 3 {
+                        let example = sentence.prefix(6).map { $0.word }.joined(separator: " ")
+                        restartExamples.append(example)
+                    }
+                    break
+                }
+            }
+        }
+
+        // Structure score
+        let incompleteRatio = Double(incompleteSentences) / Double(totalSentences)
+        let restartRatio = Double(restartCount) / Double(totalSentences)
+        let runOnPenalty = sentences.filter { $0.count > 40 }.count
+
+        var score = 100
+        score -= Int(incompleteRatio * 30)
+        score -= Int(restartRatio * 30)
+        score -= runOnPenalty * 10
+        if avgLength < 5 { score -= 10 }
+        if avgLength > 30 { score -= 10 }
+        score = max(0, min(100, score))
+
+        return SentenceAnalysis(
+            totalSentences: totalSentences,
+            incompleteSentences: incompleteSentences,
+            restartCount: restartCount,
+            averageSentenceLength: avgLength,
+            longestSentence: longestSentence,
+            structureScore: score,
+            restartExamples: restartExamples
+        )
+    }
+
     // MARK: - Vocab Word Detection
 
     private func detectVocabWords(in text: String, vocabWords: [String]) -> [VocabWordUsage] {

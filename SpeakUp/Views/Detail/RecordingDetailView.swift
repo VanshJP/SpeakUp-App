@@ -21,6 +21,9 @@ struct RecordingDetailView: View {
     @State private var animateScore = false
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
+    @State private var showingListenBackEncouragement = false
+
+    @Query private var userSettings: [UserSettings]
 
     // Services
     @Environment(AudioService.self) private var audioService
@@ -65,12 +68,45 @@ struct RecordingDetailView: View {
                             fillerWordsSection(analysis.fillerWords)
                         }
 
-                        // 7. Detailed Scores
+                        // 7. Speech Timeline
+                        if let words = recording.transcriptionWords, !words.isEmpty,
+                           let analysis = recording.analysis {
+                            SpeechTimelineView(
+                                words: words,
+                                fillerWords: analysis.fillerWords,
+                                totalDuration: recording.actualDuration
+                            )
+                        }
+
+                        // 8. Pace Chart
+                        if let words = recording.transcriptionWords, !words.isEmpty {
+                            PaceChartView(
+                                words: words,
+                                totalDuration: recording.actualDuration
+                            )
+                        }
+
+                        // 9. Detailed Scores
                         if let analysis = recording.analysis {
                             subscoresSection(analysis)
                         }
 
-                        // 8. Coaching Tips
+                        // 10. Volume & Energy
+                        if let volume = recording.analysis?.volumeMetrics {
+                            volumeSection(volume)
+                        }
+
+                        // 11. Vocabulary Complexity
+                        if let vocab = recording.analysis?.vocabComplexity {
+                            vocabComplexitySection(vocab)
+                        }
+
+                        // 12. Sentence Structure
+                        if let sentence = recording.analysis?.sentenceAnalysis {
+                            sentenceAnalysisSection(sentence)
+                        }
+
+                        // 13. Coaching Tips
                         if let analysis = recording.analysis {
                             CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
                         }
@@ -172,6 +208,16 @@ struct RecordingDetailView: View {
                 showingShareSheet = false
             }
         }
+        .overlay {
+            if showingListenBackEncouragement {
+                ListenBackEncouragementView {
+                    showingListenBackEncouragement = false
+                    proceedWithPlayback()
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showingListenBackEncouragement)
     }
 
     // MARK: - Hero Score Section
@@ -759,6 +805,144 @@ struct RecordingDetailView: View {
         .padding(.top, 12)
     }
 
+    // MARK: - Volume Section
+
+    @ViewBuilder
+    private func volumeSection(_ volume: VolumeMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Volume & Energy", systemImage: "speaker.wave.3.fill")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 0) {
+                    SubscoreRow(title: "Energy", score: volume.energyScore, icon: "bolt.fill")
+                    Divider().padding(.vertical, 8)
+                    SubscoreRow(title: "Vocal Variety", score: volume.monotoneScore, icon: "waveform.path.ecg")
+                }
+            }
+        }
+    }
+
+    // MARK: - Vocab Complexity Section
+
+    @ViewBuilder
+    private func vocabComplexitySection(_ vocab: VocabComplexity) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Vocabulary", systemImage: "text.book.closed.fill")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 0) {
+                    SubscoreRow(title: "Complexity", score: vocab.complexityScore, icon: "textformat.abc")
+
+                    Divider().padding(.vertical, 8)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Unique Words")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(vocab.uniqueWordCount) (\(Int(vocab.uniqueWordRatio * 100))%)")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Avg Length")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(String(format: "%.1f chars", vocab.averageWordLength))
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+
+                    if !vocab.repeatedPhrases.isEmpty {
+                        Divider().padding(.vertical, 8)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Repeated Phrases")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+
+                            ForEach(vocab.repeatedPhrases.prefix(5), id: \.phrase) { phrase in
+                                HStack {
+                                    Text("\"\(phrase.phrase)\"")
+                                        .font(.caption)
+                                    Spacer()
+                                    Text("\(phrase.count)x")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Sentence Analysis Section
+
+    @ViewBuilder
+    private func sentenceAnalysisSection(_ sentence: SentenceAnalysis) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Structure", systemImage: "text.alignleft")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 0) {
+                    SubscoreRow(title: "Structure", score: sentence.structureScore, icon: "text.alignleft")
+
+                    Divider().padding(.vertical, 8)
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Sentences")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(sentence.totalSentences)")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        Spacer()
+                        VStack(alignment: .center, spacing: 2) {
+                            Text("Restarts")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(sentence.restartCount)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(sentence.restartCount > 3 ? .orange : .primary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Incomplete")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(sentence.incompleteSentences)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(sentence.incompleteSentences > 2 ? .orange : .primary)
+                        }
+                    }
+
+                    if !sentence.restartExamples.isEmpty {
+                        Divider().padding(.vertical, 8)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Restart Examples")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+
+                            ForEach(sentence.restartExamples.prefix(3), id: \.self) { example in
+                                Text("\"\(example)\"")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private func generateWaveformHeights() {
@@ -847,9 +1031,26 @@ struct RecordingDetailView: View {
         if audioService.isPlaying {
             audioService.pause()
         } else {
+            // Check for first-time listen-back
+            if let settings = userSettings.first, settings.listenBackCount == 0 {
+                showingListenBackEncouragement = true
+                return
+            }
             Task {
                 try? await audioService.play(url: url)
             }
+        }
+    }
+
+    private func proceedWithPlayback() {
+        // Increment listen-back count
+        if let settings = userSettings.first {
+            settings.listenBackCount += 1
+            try? modelContext.save()
+        }
+        guard let recording, let url = recording.audioURL ?? recording.videoURL else { return }
+        Task {
+            try? await audioService.play(url: url)
         }
     }
 

@@ -129,10 +129,19 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .tint(.teal)
                     }
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    Toggle(isOn: $viewModel.hapticCoachingEnabled) {
+                        Label("Haptic Coaching", systemImage: "hand.tap")
+                            .font(.subheadline)
+                    }
+                    .tint(.teal)
                 }
             }
 
-            Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer.")
+            Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -180,23 +189,23 @@ struct SettingsView: View {
                 .font(.headline)
 
             GlassCard {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     if viewModel.vocabWords.isEmpty {
                         HStack {
                             Spacer()
-                            VStack(spacing: 6) {
+                            VStack(spacing: 4) {
                                 Image(systemName: "character.book.closed")
-                                    .font(.title3)
+                                    .font(.subheadline)
                                     .foregroundStyle(.tertiary)
                                 Text("No words added yet")
-                                    .font(.caption)
+                                    .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }
-                            .padding(.vertical, 8)
                             Spacer()
                         }
+                        .frame(height: 60)
                     } else {
-                        FlowLayout(spacing: 8) {
+                        FlowLayout(spacing: 6) {
                             ForEach(viewModel.vocabWords, id: \.self) { word in
                                 HStack(spacing: 4) {
                                     Text(word)
@@ -216,6 +225,7 @@ struct SettingsView: View {
                                 .background(Capsule().fill(.teal.opacity(0.15)))
                             }
                         }
+                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading)
                     }
 
                     Button {
@@ -236,6 +246,7 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Text("Words you want to use more often. They'll be detected and tracked in your recordings.")
@@ -491,6 +502,24 @@ struct SettingsView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    NavigationLink {
+                        JournalExportView()
+                    } label: {
+                        HStack {
+                            Label("Export Progress Journal", systemImage: "doc.richtext")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -532,6 +561,9 @@ struct SettingsChangeModifiers: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.timerEndBehavior) { _, _ in
+                Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.hapticCoachingEnabled) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
     }

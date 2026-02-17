@@ -7,7 +7,7 @@ class AchievementService {
 
     /// Check all achievements against current data and unlock any that are newly earned.
     @MainActor
-    func checkAchievements(context: ModelContext) async {
+    func checkAchievements(context: ModelContext, listenBackCount: Int = 0) async {
         let recordings: [Recording]
         let achievements: [Achievement]
 
@@ -26,14 +26,14 @@ class AchievementService {
             try? context.save()
             // Re-fetch after seeding
             guard let seeded = try? context.fetch(FetchDescriptor<Achievement>()) else { return }
-            evaluateAll(achievements: seeded, recordings: recordings, context: context)
+            evaluateAll(achievements: seeded, recordings: recordings, context: context, listenBackCount: listenBackCount)
             return
         }
 
-        evaluateAll(achievements: achievements, recordings: recordings, context: context)
+        evaluateAll(achievements: achievements, recordings: recordings, context: context, listenBackCount: listenBackCount)
     }
 
-    private func evaluateAll(achievements: [Achievement], recordings: [Recording], context: ModelContext) {
+    private func evaluateAll(achievements: [Achievement], recordings: [Recording], context: ModelContext, listenBackCount: Int = 0) {
         let lookup = Dictionary(uniqueKeysWithValues: achievements.map { ($0.id, $0) })
         let totalRecordings = recordings.count
         let recordingDates = recordings.map { $0.date }
@@ -58,6 +58,7 @@ class AchievementService {
                 let allCategories = Set(PromptCategory.allCases.map { $0.rawValue })
                 return allCategories.isSubset(of: usedCategories)
             }()),
+            ("listen_back", listenBackCount >= 1),
         ]
 
         for (id, met) in checks {

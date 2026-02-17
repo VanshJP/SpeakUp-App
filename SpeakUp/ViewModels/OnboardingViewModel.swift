@@ -8,7 +8,7 @@ class OnboardingViewModel {
     var hasMicPermission = false
     var isRequestingPermission = false
 
-    let totalPages = 4
+    let totalPages = 5
 
     var isLastPage: Bool { currentPage == totalPages - 1 }
     var canProceed: Bool {

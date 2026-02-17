@@ -35,6 +35,9 @@ class SettingsViewModel {
     // Local state - Timer End Behavior
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
 
+    // Local state - Haptic Coaching
+    var hapticCoachingEnabled: Bool = false
+
     // Local state - Word Bank
     var vocabWords: [String] = []
     var newVocabWord: String = ""
@@ -107,6 +110,9 @@ class SettingsViewModel {
 
         // Word Bank
         vocabWords = settings.vocabWords
+
+        // Haptic Coaching
+        hapticCoachingEnabled = settings.hapticCoachingEnabled
     }
     
     @MainActor
@@ -139,6 +145,9 @@ class SettingsViewModel {
 
         // Word Bank
         settings.vocabWords = vocabWords
+
+        // Haptic Coaching
+        settings.hapticCoachingEnabled = hapticCoachingEnabled
 
         do {
             try context.save()

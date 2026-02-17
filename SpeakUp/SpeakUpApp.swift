@@ -16,6 +16,7 @@ struct SpeakUpApp: App {
             UserGoal.self,
             UserSettings.self,
             Achievement.self,
+            CurriculumProgress.self,
         ])
 
         let modelConfiguration = ModelConfiguration(
@@ -25,15 +26,12 @@ struct SpeakUpApp: App {
         )
 
         do {
-            return try ModelContainer(
-                for: schema,
-                migrationPlan: SpeakUpMigrationPlan.self,
-                configurations: [modelConfiguration]
-            )
+            // Lightweight migrations (new models, optional fields, defaults) are automatic
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            print("Failed to create ModelContainer with migration plan: \(error)")
+            print("Failed to create ModelContainer: \(error)")
 
-            // Attempt without migration plan as fallback
+            // Attempt fresh without migration plan as fallback
             do {
                 return try ModelContainer(for: schema, configurations: [modelConfiguration])
             } catch {
@@ -63,6 +61,7 @@ struct SpeakUpApp: App {
                     await seedPromptsIfNeeded()
                     await ensureSettingsExist()
                     await seedAchievementsIfNeeded()
+                    await seedCurriculumIfNeeded()
                     // Preload Whisper model in background – don't block UI on launch
                     Task.detached(priority: .background) {
                         await speechService.preloadModel()
@@ -109,13 +108,17 @@ struct SpeakUpApp: App {
         let descriptor = FetchDescriptor<Achievement>()
 
         do {
-            let existingCount = try context.fetchCount(descriptor)
-            if existingCount == 0 {
-                for def in AchievementDefinition.allCases {
+            let existing = try context.fetch(descriptor)
+            let existingIds = Set(existing.map { $0.id })
+            let allDefinitions = AchievementDefinition.allCases
+
+            // Seed any missing achievements (handles new cases added over time)
+            for def in allDefinitions {
+                if !existingIds.contains(def.rawValue) {
                     context.insert(def.toModel())
                 }
-                try context.save()
             }
+            try context.save()
         } catch {
             print("Error seeding achievements: \(error)")
         }
@@ -135,6 +138,23 @@ struct SpeakUpApp: App {
             }
         } catch {
             print("Error ensuring settings: \(error)")
+        }
+    }
+
+    @MainActor
+    private func seedCurriculumIfNeeded() async {
+        let context = sharedModelContainer.mainContext
+        let descriptor = FetchDescriptor<CurriculumProgress>()
+
+        do {
+            let existing = try context.fetch(descriptor)
+            if existing.isEmpty {
+                let progress = CurriculumProgress()
+                context.insert(progress)
+                try context.save()
+            }
+        } catch {
+            print("Error seeding curriculum: \(error)")
         }
     }
 }

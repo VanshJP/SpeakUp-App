@@ -11,6 +11,8 @@ struct HistoryView: View {
     @Query private var userSettings: [UserSettings]
 
     var onSelectRecording: (String) -> Void
+    var onShowBeforeAfter: () -> Void = {}
+    var onShowJournalExport: () -> Void = {}
 
     private var filteredRecordings: [Recording] {
         var recordings = viewModel.recordings
@@ -58,6 +60,11 @@ struct HistoryView: View {
                     // Vocab Word Usage
                     vocabUsageSection
 
+                    // Listen to Your Progress
+                    if viewModel.recordings.count >= 5 {
+                        progressReplayBanner
+                    }
+
                     // Compare Progress
                     if analyzedRecordings.count >= 2 {
                         compareProgressCard
@@ -74,7 +81,16 @@ struct HistoryView: View {
         }
         .navigationTitle("History")
         .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: $searchText, prompt: "Search recordings...")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    onShowJournalExport()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+        }
+    .searchable(text: $searchText, prompt: "Search recordings...")
         .refreshable {
             await viewModel.loadData()
         }
@@ -259,6 +275,42 @@ struct HistoryView: View {
             }
         }
         return aggregated.sorted { $0.value > $1.value }
+    }
+
+    // MARK: - Progress Replay Banner
+
+    private var progressReplayBanner: some View {
+        Button {
+            onShowBeforeAfter()
+        } label: {
+            FeaturedGlassCard(gradientColors: [.purple.opacity(0.15), .teal.opacity(0.08)]) {
+                HStack(spacing: 14) {
+                    Image(systemName: "headphones")
+                        .font(.title2)
+                        .foregroundStyle(.purple)
+                        .frame(width: 44, height: 44)
+                        .background {
+                            Circle().fill(.purple.opacity(0.15))
+                        }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Listen to Your Progress")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text("Compare your first and latest recordings")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Analyzed Recordings Helper
@@ -769,7 +821,7 @@ struct DayDetailSheet: View {
 
 #Preview {
     NavigationStack {
-        HistoryView(onSelectRecording: { _ in })
+        HistoryView(onSelectRecording: { _ in }, onShowBeforeAfter: {}, onShowJournalExport: {})
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }
