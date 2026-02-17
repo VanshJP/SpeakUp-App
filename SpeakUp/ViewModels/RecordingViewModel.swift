@@ -18,6 +18,8 @@ class RecordingViewModel {
     // Timer
     var remainingTime: TimeInterval = 60
     var progress: Double = 0
+    var timerEndBehavior: TimerEndBehavior = .saveAndStop
+    var countdownStyle: CountdownStyle = .countUp
 
     // Permissions
     var hasAudioPermission = false
@@ -28,6 +30,7 @@ class RecordingViewModel {
     var recordingURL: URL?
     var isProcessing = false
     var error: Error?
+    var autoSavedRecording: Recording?
 
     // Audio level for waveform visualization
     var audioLevel: Float = -160
@@ -42,12 +45,17 @@ class RecordingViewModel {
     func configure(
         with context: ModelContext,
         prompt: Prompt?,
-        duration: RecordingDuration
+        duration: RecordingDuration,
+        timerEndBehavior: TimerEndBehavior = .saveAndStop,
+        countdownStyle: CountdownStyle = .countUp
     ) {
         self.modelContext = context
         self.prompt = prompt
         self.targetDuration = duration
         self.remainingTime = TimeInterval(duration.seconds)
+        self.timerEndBehavior = timerEndBehavior
+        self.countdownStyle = countdownStyle
+        self.progress = countdownStyle == .countDown ? 1.0 : 0.0
     }
 
     // MARK: - Permissions
@@ -69,6 +77,7 @@ class RecordingViewModel {
             recordingURL = try await audioService.startRecording()
 
             isRecording = true
+            Haptics.medium()
             startTimer()
             startAudioLevelMonitoring()
 
@@ -91,6 +100,7 @@ class RecordingViewModel {
 
         isRecording = false
         isProcessing = true
+        Haptics.success()
 
         defer { isProcessing = false }
 
@@ -138,22 +148,41 @@ class RecordingViewModel {
 
     private func startTimer() {
         remainingTime = TimeInterval(targetDuration.seconds)
-        progress = 0
+        progress = countdownStyle == .countDown ? 1.0 : 0.0
 
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // Brief pause so the user sees the full starting state
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
 
             Task { @MainActor in
                 self.remainingTime -= 0.1
-                self.progress = 1 - (self.remainingTime / TimeInterval(self.targetDuration.seconds))
                 self.recordingDuration = TimeInterval(self.targetDuration.seconds) - self.remainingTime
 
-                if self.remainingTime <= 0 {
-                    // Invalidate timer BEFORE calling stop to prevent re-entry
-                    self.timer?.invalidate()
-                    self.timer = nil
-                    _ = await self.stopRecording()
+                // Haptic pulse at 10s and 5s remaining
+                if abs(self.remainingTime - 10.0) < 0.1 {
+                    Haptics.warning()
+                } else if abs(self.remainingTime - 5.0) < 0.1 {
+                    Haptics.heavy()
                 }
+
+                if self.remainingTime <= 0 {
+                    // Clamp progress once timer expires
+                    self.progress = self.countdownStyle == .countDown ? 0.0 : 1.0
+
+                    if self.timerEndBehavior == .saveAndStop {
+                        // Invalidate timer BEFORE calling stop to prevent re-entry
+                        self.timer?.invalidate()
+                        self.timer = nil
+                        self.autoSavedRecording = await self.stopRecording()
+                    }
+                    // .keepGoing: timer continues into negative, recording keeps going
+                } else {
+                    let rawProgress = 1 - (self.remainingTime / TimeInterval(self.targetDuration.seconds))
+                    self.progress = self.countdownStyle == .countDown ? (1 - rawProgress) : rawProgress
+                }
+            }
             }
         }
     }
@@ -177,15 +206,45 @@ class RecordingViewModel {
 
     // MARK: - Computed Properties
 
+    var isOvertime: Bool {
+        remainingTime < 0 && timerEndBehavior == .keepGoing
+    }
+
+    /// The time value shown in the timer, accounting for countdown style.
+    var displayTime: TimeInterval {
+        if isOvertime {
+            return abs(remainingTime)
+        }
+        switch countdownStyle {
+        case .countDown:
+            return max(0, remainingTime)
+        case .countUp:
+            return recordingDuration
+        }
+    }
+
     var formattedRemainingTime: String {
-        let totalSeconds = Int(max(0, remainingTime))
+        if isOvertime {
+            let overtimeSeconds = Int(abs(remainingTime))
+            let minutes = overtimeSeconds / 60
+            let seconds = overtimeSeconds % 60
+            return String(format: "+%d:%02d", minutes, seconds)
+        }
+        let totalSeconds = Int(displayTime)
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
 
+    var timerLabel: String {
+        if isOvertime { return "overtime" }
+        return countdownStyle == .countDown ? "remaining" : "elapsed"
+    }
+
     var timerColor: Color {
-        if remainingTime <= 10 {
+        if isOvertime {
+            return .purple
+        } else if remainingTime <= 10 {
             return .red
         } else if remainingTime <= 30 {
             return .orange

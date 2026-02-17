@@ -153,7 +153,7 @@ class HistoryViewModel {
         }
         
         context.delete(recording)
-        
+
         do {
             try context.save()
             await loadData()
@@ -161,7 +161,7 @@ class HistoryViewModel {
             print("Error deleting recording: \(error)")
         }
     }
-    
+
     @MainActor
     func toggleFavorite(_ recording: Recording) async {
         recording.isFavorite.toggle()

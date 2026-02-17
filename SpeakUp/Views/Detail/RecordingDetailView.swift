@@ -844,7 +844,6 @@ struct RecordingDetailView: View {
 
     private func togglePlayback(_ recording: Recording) {
         guard let url = recording.audioURL ?? recording.videoURL else { return }
-
         if audioService.isPlaying {
             audioService.pause()
         } else {
@@ -871,6 +870,10 @@ struct RecordingDetailView: View {
 
         modelContext.delete(recording)
         try? modelContext.save()
+
+        // Nil out the local state before dismissing so SwiftUI doesn't
+        // try to render a body referencing the deleted SwiftData object.
+        self.recording = nil
 
         dismiss()
     }

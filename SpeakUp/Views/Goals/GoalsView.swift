@@ -252,9 +252,9 @@ class GoalsViewModel {
     @MainActor
     func createGoal(from template: GoalTemplate) async {
         guard let context = modelContext else { return }
-        
+
         let deadline = Date().adding(days: template.durationDays)
-        
+
         let goal = UserGoal(
             type: template.type,
             title: template.title,
@@ -262,25 +262,27 @@ class GoalsViewModel {
             target: template.target,
             deadline: deadline
         )
-        
+
         context.insert(goal)
-        
+
         do {
             try context.save()
+            Haptics.success()
             await loadGoals()
         } catch {
             print("Error creating goal: \(error)")
         }
     }
-    
+
     @MainActor
     func deleteGoal(_ goal: UserGoal) async {
         guard let context = modelContext else { return }
-        
+
         context.delete(goal)
-        
+
         do {
             try context.save()
+            Haptics.error()
             await loadGoals()
         } catch {
             print("Error deleting goal: \(error)")

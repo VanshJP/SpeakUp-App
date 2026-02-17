@@ -5,27 +5,44 @@ struct CountdownOverlayView: View {
     let prompt: Prompt?
     let duration: RecordingDuration
     let countdownDuration: Int
+    let countdownStyle: CountdownStyle
     let onComplete: () -> Void
     let onCancel: () -> Void
 
-    @State private var remainingSeconds: Int = 15
+    @State private var elapsedSeconds: Int = 0
     @State private var isPulsing: Bool = false
 
     private var totalSeconds: Int { countdownDuration }
+
+    /// The number displayed in the timer circle.
+    private var displayNumber: Int {
+        switch countdownStyle {
+        case .countDown:
+            return totalSeconds - elapsedSeconds
+        case .countUp:
+            return elapsedSeconds
+        }
+    }
+
+    /// Remaining seconds until completion (used for haptic timing).
+    private var remainingSeconds: Int {
+        totalSeconds - elapsedSeconds
+    }
 
     init(
         prompt: Prompt?,
         duration: RecordingDuration,
         countdownDuration: Int = 15,
+        countdownStyle: CountdownStyle = .countDown,
         onComplete: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.prompt = prompt
         self.duration = duration
         self.countdownDuration = countdownDuration
+        self.countdownStyle = countdownStyle
         self.onComplete = onComplete
         self.onCancel = onCancel
-        self._remainingSeconds = State(initialValue: countdownDuration)
     }
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -73,20 +90,18 @@ struct CountdownOverlayView: View {
             }
         }
         .onReceive(timer) { _ in
-            if remainingSeconds > 0 {
+            if elapsedSeconds < totalSeconds {
                 withAnimation(.easeInOut(duration: 0.3)) {
-                    remainingSeconds -= 1
+                    elapsedSeconds += 1
                 }
 
-                // Haptic feedback at certain intervals
                 if remainingSeconds <= 3 && remainingSeconds > 0 {
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
+                    Haptics.heavy()
+                } else {
+                    Haptics.light()
                 }
             } else {
-                // Countdown complete - transition to recording
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
+                Haptics.success()
                 onComplete()
             }
         }
@@ -128,11 +143,11 @@ struct CountdownOverlayView: View {
                 .animation(.linear(duration: 1), value: progress)
 
             // Timer number
-            Text("\(remainingSeconds)")
+            Text("\(displayNumber)")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
-                .animation(.spring(duration: 0.3), value: remainingSeconds)
+                .animation(.spring(duration: 0.3), value: displayNumber)
         }
     }
     
@@ -208,7 +223,12 @@ struct CountdownOverlayView: View {
     // MARK: - Helpers
     
     private var progress: Double {
-        Double(remainingSeconds) / Double(totalSeconds)
+        switch countdownStyle {
+        case .countDown:
+            return Double(remainingSeconds) / Double(totalSeconds)
+        case .countUp:
+            return Double(elapsedSeconds) / Double(totalSeconds)
+        }
     }
 }
 

@@ -7,6 +7,8 @@ struct RecordingView: View {
 
     let prompt: Prompt?
     let duration: RecordingDuration
+    var timerEndBehavior: TimerEndBehavior = .saveAndStop
+    var countdownStyle: CountdownStyle = .countUp
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
@@ -37,7 +39,9 @@ struct RecordingView: View {
             viewModel.configure(
                 with: modelContext,
                 prompt: prompt,
-                duration: duration
+                duration: duration,
+                timerEndBehavior: timerEndBehavior,
+                countdownStyle: countdownStyle
             )
             await viewModel.checkPermissions()
             // Auto-start recording after countdown
@@ -47,6 +51,11 @@ struct RecordingView: View {
         }
         .onDisappear {
             viewModel.cleanup()
+        }
+        .onChange(of: viewModel.autoSavedRecording) { _, recording in
+            if let recording {
+                onComplete(recording)
+            }
         }
         .alert("Permission Required", isPresented: $viewModel.showingPermissionAlert) {
             Button("Cancel") { onCancel() }
@@ -73,6 +82,7 @@ struct RecordingView: View {
             HStack {
                 // Close button
                 Button {
+                    Haptics.warning()
                     if viewModel.isRecording {
                         viewModel.cancelRecording()
                     }
@@ -143,11 +153,13 @@ struct RecordingView: View {
         VStack(spacing: 24) {
             // Timer
             TimerView(
-                remainingTime: viewModel.remainingTime,
+                remainingTime: viewModel.displayTime,
                 totalTime: TimeInterval(duration.seconds),
                 progress: viewModel.progress,
                 color: viewModel.timerColor,
-                isRecording: viewModel.isRecording
+                isRecording: viewModel.isRecording,
+                isOvertime: viewModel.isOvertime,
+                timerLabel: viewModel.timerLabel
             )
 
             // Prompt Card (if available) - show only before recording starts

@@ -30,6 +30,10 @@ class SettingsViewModel {
 
     // Local state - Countdown
     var countdownDuration: CountdownDuration = .fifteen
+    var countdownStyle: CountdownStyle = .countDown
+
+    // Local state - Timer End Behavior
+    var timerEndBehavior: TimerEndBehavior = .saveAndStop
 
     // Local state - Word Bank
     var vocabWords: [String] = []
@@ -94,8 +98,12 @@ class SettingsViewModel {
         showDailyPrompt = settings.showDailyPrompt
         enabledPromptCategories = Set(settings.enabledCategories)
 
-        // Countdown duration
+        // Countdown duration & style
         countdownDuration = CountdownDuration(rawValue: settings.countdownDuration) ?? .fifteen
+        countdownStyle = CountdownStyle(rawValue: settings.countdownStyle) ?? .countDown
+
+        // Timer end behavior
+        timerEndBehavior = TimerEndBehavior(rawValue: settings.timerEndBehavior) ?? .saveAndStop
 
         // Word Bank
         vocabWords = settings.vocabWords
@@ -122,8 +130,12 @@ class SettingsViewModel {
         settings.showDailyPrompt = showDailyPrompt
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
 
-        // Countdown duration
+        // Countdown duration & style
         settings.countdownDuration = countdownDuration.rawValue
+        settings.countdownStyle = countdownStyle.rawValue
+
+        // Timer end behavior
+        settings.timerEndBehavior = timerEndBehavior.rawValue
 
         // Word Bank
         settings.vocabWords = vocabWords
@@ -175,12 +187,17 @@ class SettingsViewModel {
             vocabWordError = "Already in your word bank"
             return
         }
+        guard !isFillerWord(trimmed) else {
+            vocabWordError = "That's a filler word — we track those separately"
+            return
+        }
         guard isRealWord(trimmed) else {
             vocabWordError = "Not a recognized word"
             return
         }
         vocabWords.append(trimmed)
         newVocabWord = ""
+        Haptics.success()
         Task { await saveSettings() }
     }
 
@@ -194,6 +211,13 @@ class SettingsViewModel {
     func removeVocabWord(_ word: String) {
         vocabWords.removeAll { $0 == word }
         Task { await saveSettings() }
+    }
+
+    private func isFillerWord(_ word: String) -> Bool {
+        let lowered = word.lowercased()
+        return FillerWordList.unconditionalFillers.contains(lowered)
+            || FillerWordList.contextDependentFillers.contains(lowered)
+            || FillerWordList.fillerPhrases.contains(lowered)
     }
 
     private func isRealWord(_ word: String) -> Bool {
@@ -224,6 +248,8 @@ class SettingsViewModel {
         settings.showDailyPrompt = true
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15
+        settings.countdownStyle = 0
+        settings.timerEndBehavior = 0
         settings.vocabWords = []
 
         do {

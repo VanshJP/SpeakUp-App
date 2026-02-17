@@ -24,6 +24,14 @@ struct ContentView: View {
         userSettings.first?.countdownDuration ?? 15
     }
 
+    private var countdownStyle: CountdownStyle {
+        CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown
+    }
+
+    private var timerEndBehavior: TimerEndBehavior {
+        TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
+    }
+
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
@@ -53,6 +61,9 @@ struct ContentView: View {
                         })
                         .navigationDestination(item: $selectedRecordingId) { recordingId in
                             RecordingDetailView(recordingId: recordingId)
+                                .onDisappear {
+                                    selectedRecordingId = nil
+                                }
                         }
                     }
                 }
@@ -77,6 +88,7 @@ struct ContentView: View {
                     prompt: recordingPrompt,
                     duration: recordingDuration,
                     countdownDuration: countdownDuration,
+                    countdownStyle: countdownStyle,
                     onComplete: {
                         // Countdown finished - transition to recording
                         showingCountdown = false
@@ -95,6 +107,8 @@ struct ContentView: View {
             RecordingView(
                 prompt: recordingPrompt,
                 duration: recordingDuration,
+                timerEndBehavior: timerEndBehavior,
+                countdownStyle: countdownStyle,
                 onComplete: { recording in
                     showingRecording = false
                     // Check achievements after recording

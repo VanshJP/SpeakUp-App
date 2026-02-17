@@ -411,7 +411,7 @@ struct InteractivePromptCard: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
-                    .onTapGesture { onTap() }
+                    .onTapGesture { Haptics.medium(); onTap() }
 
                 // Bottom row: duration + tap hint
                 HStack {
@@ -433,7 +433,7 @@ struct InteractivePromptCard: View {
                             .foregroundStyle(.secondary)
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture { onTap() }
+                    .onTapGesture { Haptics.medium(); onTap() }
                 }
             }
         }

@@ -97,10 +97,42 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .tint(.teal)
                     }
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    HStack {
+                        Label("Countdown Style", systemImage: "arrow.up.arrow.down")
+                            .font(.subheadline)
+                        Spacer()
+                        Picker("", selection: $viewModel.countdownStyle) {
+                            ForEach(CountdownStyle.allCases) { style in
+                                Text(style.displayName).tag(style)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.teal)
+                    }
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    HStack {
+                        Label("When Timer Ends", systemImage: "flag.checkered")
+                            .font(.subheadline)
+                        Spacer()
+                        Picker("", selection: $viewModel.timerEndBehavior) {
+                            ForEach(TimerEndBehavior.allCases) { behavior in
+                                Text(behavior.displayName).tag(behavior)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .tint(.teal)
+                    }
                 }
             }
 
-            Text("Countdown timer gives you time to prepare before recording starts.")
+            Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -170,6 +202,7 @@ struct SettingsView: View {
                                     Text(word)
                                         .font(.caption.weight(.medium))
                                     Button {
+                                        Haptics.light()
                                         viewModel.removeVocabWord(word)
                                     } label: {
                                         Image(systemName: "xmark")
@@ -177,7 +210,7 @@ struct SettingsView: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
-                                .foregroundStyle(.teal)
+                                .foregroundStyle(.white)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Capsule().fill(.teal.opacity(0.15)))
@@ -232,6 +265,7 @@ struct SettingsView: View {
 
                     // Categories expandable
                     Button {
+                        Haptics.light()
                         withAnimation(.spring(duration: 0.3)) {
                             showingCategories.toggle()
                         }
@@ -262,6 +296,7 @@ struct SettingsView: View {
                                     .padding(.vertical, 6)
 
                                 Button {
+                                    Haptics.selection()
                                     viewModel.toggleCategory(category)
                                 } label: {
                                     HStack {
@@ -381,6 +416,7 @@ struct SettingsView: View {
             GlassCard {
                 VStack(spacing: 0) {
                     Button {
+                        Haptics.warning()
                         viewModel.showingResetConfirmation = true
                     } label: {
                         HStack {
@@ -399,6 +435,7 @@ struct SettingsView: View {
                         .padding(.vertical, 8)
 
                     Button {
+                        Haptics.warning()
                         viewModel.showingClearDataConfirmation = true
                     } label: {
                         HStack {
@@ -489,6 +526,12 @@ struct SettingsChangeModifiers: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.countdownDuration) { _, _ in
+                Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.countdownStyle) { _, _ in
+                Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.timerEndBehavior) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
     }

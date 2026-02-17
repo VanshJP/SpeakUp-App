@@ -30,6 +30,10 @@ final class UserSettings {
 
     // Countdown Settings
     var countdownDuration: Int // 5, 10, 15, 20, 30 seconds
+    var countdownStyle: Int = 0 // 0 = count down, 1 = count up
+
+    // Timer End Behavior
+    var timerEndBehavior: Int = 0 // 0 = save & stop, 1 = keep going
 
     // Word Bank
     var vocabWords: [String] = []
@@ -53,6 +57,8 @@ final class UserSettings {
         showDailyPrompt: Bool = true,
         enabledPromptCategories: [String]? = nil,
         countdownDuration: Int = 15,
+        countdownStyle: Int = 0,
+        timerEndBehavior: Int = 0,
         vocabWords: [String] = []
     ) {
         self.id = id
@@ -74,6 +80,8 @@ final class UserSettings {
         // Default to all categories enabled
         self.enabledPromptCategories = enabledPromptCategories ?? PromptCategory.allCases.map { $0.rawValue }
         self.countdownDuration = countdownDuration
+        self.countdownStyle = countdownStyle
+        self.timerEndBehavior = timerEndBehavior
         self.vocabWords = vocabWords
     }
     
@@ -150,6 +158,45 @@ enum ExportFormat: String, Codable, CaseIterable {
         case .portrait: return 9.0 / 16.0
         case .square: return 1.0
         case .landscape: return 16.0 / 9.0
+        }
+    }
+}
+
+// MARK: - Timer End Behavior
+
+enum TimerEndBehavior: Int, Codable, CaseIterable, Identifiable {
+    case saveAndStop = 0
+    case keepGoing = 1
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .saveAndStop: return "Save & Stop"
+        case .keepGoing: return "Keep Going"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .saveAndStop: return "Auto-save when timer reaches zero"
+        case .keepGoing: return "Continue recording past the timer"
+        }
+    }
+}
+
+// MARK: - Countdown Style
+
+enum CountdownStyle: Int, Codable, CaseIterable, Identifiable {
+    case countUp = 0
+    case countDown = 1
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .countUp: return "Count Up"
+        case .countDown: return "Count Down"
         }
     }
 }

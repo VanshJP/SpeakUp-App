@@ -6,17 +6,19 @@ struct TimerView: View {
     let progress: Double
     let color: Color
     let isRecording: Bool
-    
+    var isOvertime: Bool = false
+    var timerLabel: String = "remaining"
+
     private let size: CGFloat = 200
     private let lineWidth: CGFloat = 8
-    
+
     var body: some View {
         ZStack {
             // Background circle
             Circle()
                 .stroke(Color.white.opacity(0.1), lineWidth: lineWidth)
                 .frame(width: size, height: size)
-            
+
             // Progress circle
             Circle()
                 .trim(from: 0, to: progress)
@@ -27,20 +29,20 @@ struct TimerView: View {
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.1), value: progress)
-            
+
             // Glass background
             Circle()
                 .fill(.ultraThinMaterial)
                 .frame(width: size - lineWidth * 2 - 8, height: size - lineWidth * 2 - 8)
-            
+
             // Time display
             VStack(spacing: 4) {
                 Text(formattedTime)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
-                
+                    .font(.system(size: isOvertime ? 40 : 48, weight: .bold, design: .monospaced))
+                    .foregroundStyle(isOvertime ? color : .white)
+
                 if isRecording {
-                    Text("remaining")
+                    Text(timerLabel)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
                 } else {
@@ -51,8 +53,14 @@ struct TimerView: View {
             }
         }
     }
-    
+
     private var formattedTime: String {
+        if isOvertime {
+            let overtimeSeconds = Int(abs(remainingTime))
+            let minutes = overtimeSeconds / 60
+            let seconds = overtimeSeconds % 60
+            return String(format: "+%d:%02d", minutes, seconds)
+        }
         let totalSeconds = Int(max(0, remainingTime))
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60

@@ -64,6 +64,7 @@ struct AchievementUnlockedView: View {
             .opacity(showContent ? 1 : 0)
         }
         .onAppear {
+            Haptics.success()
             withAnimation(.spring(duration: 0.5, bounce: 0.3)) {
                 showContent = true
             }
