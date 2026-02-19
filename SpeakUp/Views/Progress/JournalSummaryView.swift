@@ -24,7 +24,7 @@ struct JournalSummaryView: View {
             Divider()
 
             // Stats grid
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 summaryStatCard(icon: "mic.fill", label: "Sessions", value: "\(totalSessions)", color: .teal)
                 summaryStatCard(icon: "clock.fill", label: "Minutes", value: "\(totalMinutes)", color: .blue)
                 summaryStatCard(icon: "chart.bar.fill", label: "Avg Score", value: "\(averageScore)", color: .green)
@@ -47,8 +47,6 @@ struct JournalSummaryView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
-        .padding(20)
-        .background(RoundedRectangle(cornerRadius: 20).fill(.background))
     }
 
     private func summaryStatCard(icon: String, label: String, value: String, color: Color) -> some View {
@@ -66,6 +64,17 @@ struct JournalSummaryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.1)))
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(color.opacity(0.1))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                }
+        }
     }
 }

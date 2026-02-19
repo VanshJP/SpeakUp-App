@@ -760,7 +760,7 @@ struct PracticeToolCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(minHeight: 100)
+                .frame(height: 120)
             }
         }
         .buttonStyle(.plain)
@@ -781,3 +781,4 @@ struct PracticeToolCard: View {
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }
+

@@ -214,12 +214,12 @@ class SpeechService {
         var fillerCounts: [String: (count: Int, timestamps: [TimeInterval])] = [:]
         var totalWords = 0
         var pauses: [TimeInterval] = []
-        
+
         var previousEnd: TimeInterval = 0
-        
+
         for word in transcription.words {
             totalWords += 1
-            
+
             // Check for filler words
             let lowercased = word.word.lowercased()
             if word.isFiller {
@@ -228,7 +228,7 @@ class SpeechService {
                 current.timestamps.append(word.start)
                 fillerCounts[lowercased] = current
             }
-            
+
             // Detect pauses (gap > 0.5 seconds)
             if previousEnd > 0 {
                 let gap = word.start - previousEnd
@@ -238,15 +238,21 @@ class SpeechService {
             }
             previousEnd = word.end
         }
-        
+
         // Build filler words array
         let fillerWords = fillerCounts.map { key, value in
             FillerWord(word: key, count: value.count, timestamps: value.timestamps)
         }.sorted { $0.count > $1.count }
-        
-        // Calculate metrics
-        let wordsPerMinute = actualDuration > 0 ? Double(totalWords) / (actualDuration / 60) : 0
+
+        // Calculate metrics using speech span (first word to last word) for accurate WPM
+        // This avoids diluting pace with dead air at the start/end of the recording
+        let speechStart = transcription.words.first?.start ?? 0
+        let speechEnd = transcription.words.last?.end ?? actualDuration
+        let speechSpan = speechEnd - speechStart
+        // Use speech span if we have word timestamps, otherwise fall back to actualDuration
+        let effectiveDuration = speechSpan > 0 ? speechSpan : actualDuration
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
+        let wordsPerMinute = effectiveDuration > 0 ? Double(totalWords) / (effectiveDuration / 60) : 0
         let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
         let averagePauseLength = pauses.isEmpty ? 0 : pauses.reduce(0, +) / Double(pauses.count)
         

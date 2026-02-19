@@ -3,6 +3,7 @@ import SwiftUI
 struct BreathingAnimationView: View {
     let animation: StepAnimation
     let isRunning: Bool
+    var duration: TimeInterval = 4.0
 
     @State private var scale: CGFloat = 0.6
 
@@ -53,12 +54,12 @@ struct BreathingAnimationView: View {
     }
 
     private func animateForPhase(_ phase: StepAnimation) {
-        withAnimation(.easeInOut(duration: 3.0)) {
+        withAnimation(.easeInOut(duration: duration)) {
             switch phase {
             case .expand:
                 scale = 1.0
             case .hold:
-                break // Keep current scale
+                break
             case .contract:
                 scale = 0.6
             }

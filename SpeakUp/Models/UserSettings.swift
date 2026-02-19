@@ -41,6 +41,9 @@ final class UserSettings {
     // Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 
+    // Audio Cues
+    var chirpSoundEnabled: Bool = true
+
     // Listen Back
     var listenBackCount: Int = 0
 

@@ -5,6 +5,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = SettingsViewModel()
     @State private var showingCategories = false
+    @State private var isWordBankExpanded = false
+    @FocusState private var isWordInputFocused: Bool
 
     var body: some View {
         ZStack {
@@ -23,6 +25,7 @@ struct SettingsView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .navigationTitle("Settings")
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -37,18 +40,6 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will reset all settings to their default values.")
-        }
-        .alert("Add Word", isPresented: $viewModel.showingAddVocabWord) {
-            TextField("Enter a word", text: $viewModel.newVocabWord)
-                .textInputAutocapitalization(.never)
-            Button("Add") { viewModel.addVocabWord() }
-            Button("Cancel", role: .cancel) { viewModel.newVocabWord = "" }
-        } message: {
-            if let error = viewModel.vocabWordError {
-                Text(error)
-            } else {
-                Text("Add a vocabulary word you want to use more.")
-            }
         }
         .alert("Clear All Data?", isPresented: $viewModel.showingClearDataConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -138,10 +129,19 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    Toggle(isOn: $viewModel.chirpSoundEnabled) {
+                        Label("Audio Cues", systemImage: "speaker.wave.2")
+                            .font(.subheadline)
+                    }
+                    .tint(.teal)
                 }
             }
 
-            Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes.")
+            Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -189,70 +189,115 @@ struct SettingsView: View {
                 .font(.headline)
 
             GlassCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    if viewModel.vocabWords.isEmpty {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 4) {
-                                Image(systemName: "character.book.closed")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.tertiary)
-                                Text("No words added yet")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Spacer()
-                        }
-                        .frame(height: 60)
-                    } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !viewModel.vocabWords.isEmpty {
                         FlowLayout(spacing: 6) {
                             ForEach(viewModel.vocabWords, id: \.self) { word in
-                                HStack(spacing: 4) {
-                                    Text(word)
-                                        .font(.caption.weight(.medium))
-                                    Button {
-                                        Haptics.light()
-                                        viewModel.removeVocabWord(word)
-                                    } label: {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 8, weight: .bold))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(.teal.opacity(0.15)))
+                                wordBankChip(word)
                             }
                         }
-                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    Button {
-                        viewModel.vocabWordError = nil
-                        viewModel.newVocabWord = ""
-                        viewModel.showingAddVocabWord = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 10, weight: .bold))
-                            Text("Add Word")
-                                .font(.caption.weight(.medium))
-                        }
-                        .foregroundStyle(.teal)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().strokeBorder(.teal.opacity(0.4), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
+                    wordBankInputField
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let error = viewModel.vocabWordError {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.caption2)
+                    Text(error)
+                        .font(.caption)
+                }
+                .foregroundStyle(.red)
+                .padding(.horizontal, 4)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             Text("Words you want to use more often. They'll be detected and tracked in your recordings.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
+        }
+        .animation(.easeOut(duration: 0.2), value: viewModel.vocabWordError)
+        .animation(.spring(duration: 0.25), value: viewModel.vocabWords)
+    }
+
+    private func wordBankChip(_ word: String) -> some View {
+        HStack(spacing: 5) {
+            Text(word)
+                .font(.caption.weight(.medium))
+
+            Button {
+                Haptics.light()
+                withAnimation(.spring(duration: 0.25)) {
+                    viewModel.removeVocabWord(word)
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background {
+            Capsule()
+                .fill(.teal.opacity(0.15))
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+                }
+        }
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var wordBankInputField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.teal)
+
+            TextField("Add a word...", text: $viewModel.newVocabWord)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+                .tint(.teal)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($isWordInputFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    viewModel.addVocabWord()
+                    if !viewModel.vocabWords.isEmpty && viewModel.vocabWordError == nil {
+                        isWordInputFocused = true
+                    }
+                }
+
+            if !viewModel.newVocabWord.isEmpty {
+                Button {
+                    viewModel.newVocabWord = ""
+                    viewModel.vocabWordError = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            Capsule()
+                .fill(.white.opacity(0.06))
+                .overlay {
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                }
         }
     }
 
@@ -533,6 +578,16 @@ struct SettingsChangeModifiers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .modifier(SettingsChangeModifiersA(viewModel: viewModel))
+            .modifier(SettingsChangeModifiersB(viewModel: viewModel))
+    }
+}
+
+private struct SettingsChangeModifiersA: ViewModifier {
+    @Bindable var viewModel: SettingsViewModel
+
+    func body(content: Content) -> some View {
+        content
             .onChange(of: viewModel.defaultDuration) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
@@ -551,6 +606,14 @@ struct SettingsChangeModifiers: ViewModifier {
             .onChange(of: viewModel.trackFillerWords) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
+    }
+}
+
+private struct SettingsChangeModifiersB: ViewModifier {
+    @Bindable var viewModel: SettingsViewModel
+
+    func body(content: Content) -> some View {
+        content
             .onChange(of: viewModel.showDailyPrompt) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
@@ -564,6 +627,9 @@ struct SettingsChangeModifiers: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.hapticCoachingEnabled) { _, _ in
+                Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.chirpSoundEnabled) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
     }

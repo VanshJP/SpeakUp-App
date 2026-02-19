@@ -103,7 +103,7 @@ struct ConfidenceToolsView: View {
                     }
                 }
             }
-            .sheet(item: $showingExercise) { exercise in
+            .fullScreenCover(item: $showingExercise) { exercise in
                 ConfidenceExerciseView(exercise: exercise)
             }
         }

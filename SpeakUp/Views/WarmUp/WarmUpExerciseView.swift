@@ -32,55 +32,59 @@ struct WarmUpExerciseView: View {
                 }
 
                 Spacer()
+
+                if !viewModel.isComplete {
+                    bottomControls
+                }
             }
             .padding()
         }
     }
 
+    // MARK: - Exercise Content
+
     private var exerciseContent: some View {
-        VStack(spacing: 32) {
-            // Exercise title
+        VStack(spacing: 24) {
             Text(viewModel.currentExercise?.title ?? "")
-                .font(.title2.weight(.bold))
-                .foregroundStyle(.white)
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.6))
 
-            Spacer()
-
-            // Breathing animation or step label
             if let step = viewModel.currentStep {
                 if viewModel.currentExercise?.category == .breathing {
                     BreathingAnimationView(
                         animation: step.animation,
-                        isRunning: viewModel.isRunning
+                        isRunning: viewModel.isRunning,
+                        duration: TimeInterval(step.durationSeconds)
                     )
                 }
 
                 Text(step.label)
-                    .font(.title3.weight(.semibold))
+                    .font(.title.weight(.semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal)
 
-                // Timer
                 Text("\(viewModel.timeRemaining)")
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .font(.system(size: 64, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())
                     .animation(.default, value: viewModel.timeRemaining)
             }
+        }
+    }
 
-            Spacer()
+    // MARK: - Bottom Controls
 
-            // Progress indicator
-            ProgressView(value: viewModel.progress)
-                .tint(.teal)
-                .padding(.horizontal, 40)
+    private var bottomControls: some View {
+        VStack(spacing: 20) {
+            // Rounds picker (breathing only, before start)
+            if viewModel.canCustomizeRounds,
+               viewModel.currentStepIndex == 0,
+               !viewModel.isRunning {
+                roundsPicker
+            }
 
-            // Controls
             HStack(spacing: 32) {
-                Button {
-                    viewModel.reset()
-                } label: {
+                Button { viewModel.reset() } label: {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.title2)
                         .foregroundStyle(.white.opacity(0.7))
@@ -89,11 +93,7 @@ struct WarmUpExerciseView: View {
                 }
 
                 Button {
-                    if viewModel.isRunning {
-                        viewModel.pause()
-                    } else {
-                        viewModel.start()
-                    }
+                    if viewModel.isRunning { viewModel.pause() } else { viewModel.start() }
                 } label: {
                     Image(systemName: viewModel.isRunning ? "pause.fill" : "play.fill")
                         .font(.title)
@@ -102,10 +102,9 @@ struct WarmUpExerciseView: View {
                         .background(Circle().fill(.teal))
                         .shadow(color: .teal.opacity(0.4), radius: 8, y: 2)
                 }
+                .sensoryFeedback(.impact(flexibility: .soft), trigger: viewModel.isRunning)
 
-                Button {
-                    viewModel.skip()
-                } label: {
+                Button { viewModel.skip() } label: {
                     Image(systemName: "forward.fill")
                         .font(.title2)
                         .foregroundStyle(.white.opacity(0.7))
@@ -114,22 +113,69 @@ struct WarmUpExerciseView: View {
                 }
             }
         }
+        .padding(.bottom, 20)
     }
+
+    private var roundsPicker: some View {
+        HStack {
+            Text("Rounds")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.7))
+
+            Spacer()
+
+            Button {
+                if viewModel.selectedRounds > 1 {
+                    viewModel.rebuildWithRounds(viewModel.selectedRounds - 1)
+                }
+            } label: {
+                Image(systemName: "minus")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(.white.opacity(0.15)))
+            }
+
+            Text("\(viewModel.selectedRounds)")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 28, alignment: .center)
+                .contentTransition(.numericText())
+                .animation(.default, value: viewModel.selectedRounds)
+
+            Button {
+                if viewModel.selectedRounds < 10 {
+                    viewModel.rebuildWithRounds(viewModel.selectedRounds + 1)
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(.white.opacity(0.15)))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+    }
+
+    // MARK: - Complete
 
     private var completeView: some View {
         VStack(spacing: 24) {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 80))
+                .font(.system(size: 72))
                 .foregroundStyle(.green)
 
             Text("Exercise Complete!")
-                .font(.title.weight(.bold))
+                .font(.title2.weight(.bold))
                 .foregroundStyle(.white)
 
             Text("Great warm-up! You're ready to speak.")
-                .font(.body)
+                .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.7))
 
             Spacer()

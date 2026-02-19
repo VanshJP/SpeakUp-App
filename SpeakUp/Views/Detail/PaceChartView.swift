@@ -5,7 +5,6 @@ struct PaceChartView: View {
     let words: [TranscriptionWord]
     let totalDuration: TimeInterval
 
-    private let windowSize: TimeInterval = 8
     private let targetWPM: Double = 150
 
     private struct PacePoint: Identifiable {
@@ -16,6 +15,15 @@ struct PaceChartView: View {
         var deviation: Double { wpm - 150 }
     }
 
+    /// Adaptive window size: scales with speech length for better granularity
+    private var windowSize: TimeInterval {
+        let speechStart = words.first?.start ?? 0
+        let speechEnd = words.last?.end ?? totalDuration
+        let span = speechEnd - speechStart
+        // Use ~15% of the speech span, clamped between 3s and 10s
+        return max(3, min(10, span * 0.15))
+    }
+
     private var paceData: [PacePoint] {
         guard !words.isEmpty, totalDuration > 0 else { return [] }
 
@@ -24,13 +32,15 @@ struct PaceChartView: View {
         let span = speechEnd - speechStart
         guard span > 2 else { return [] }
 
+        let window = windowSize
+        // Adaptive step: sample ~40 points across the speech span
+        let step: TimeInterval = max(1, span / 40)
+
         var points: [PacePoint] = []
-        // Sample every 2 seconds for a smooth curve
-        let step: TimeInterval = 2
         var t = speechStart
         while t <= speechEnd {
-            let windowStart = max(speechStart, t - windowSize / 2)
-            let windowEnd = min(speechEnd, t + windowSize / 2)
+            let windowStart = max(speechStart, t - window / 2)
+            let windowEnd = min(speechEnd, t + window / 2)
             let windowSpan = windowEnd - windowStart
             guard windowSpan > 0 else {
                 t += step
@@ -45,8 +55,12 @@ struct PaceChartView: View {
     }
 
     private var avgWPM: Double {
-        guard !paceData.isEmpty else { return targetWPM }
-        return paceData.reduce(0) { $0 + $1.wpm } / Double(paceData.count)
+        guard !words.isEmpty else { return targetWPM }
+        let speechStart = words.first?.start ?? 0
+        let speechEnd = words.last?.end ?? totalDuration
+        let span = speechEnd - speechStart
+        guard span > 0 else { return targetWPM }
+        return Double(words.count) / span * 60
     }
 
     var body: some View {

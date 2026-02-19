@@ -69,11 +69,15 @@ class PromptWheelViewModel {
         let extraAngle = Double.random(in: 0..<360)
         let totalRotation = baseRotations + extraAngle
 
-        // Calculate which segment we'll land on
+        // Calculate which segment the pointer lands on
+        // The pointer is at the top (12 o'clock). When the wheel rotates clockwise
+        // by finalAngle degrees, the segment originally at (360 - finalAngle) is
+        // now under the pointer.
         let numberOfSegments = Double(categories.count)
         let segmentAngle = 360.0 / numberOfSegments
         let finalAngle = (rotation + totalRotation).truncatingRemainder(dividingBy: 360)
-        let selectedIndex = Int(finalAngle / segmentAngle) % categories.count
+        let pointerAngle = (360 - finalAngle).truncatingRemainder(dividingBy: 360)
+        let selectedIndex = Int(pointerAngle / segmentAngle) % categories.count
 
         // Dynamic animation duration based on rotation amount (2.5-4.5 seconds)
         let normalizedRotation = totalRotation / (6 * 360) // 0-1 range

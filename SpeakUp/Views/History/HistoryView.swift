@@ -15,7 +15,7 @@ struct HistoryView: View {
     var onShowJournalExport: () -> Void = {}
 
     private var filteredRecordings: [Recording] {
-        var recordings = viewModel.recordings
+        var recordings = viewModel.recordings.filter { !$0.isDeleted }
 
         // Apply filter
         switch selectedFilter {
@@ -680,6 +680,9 @@ struct RecordingRow: View {
     }
 
     var body: some View {
+        if recording.isDeleted {
+            EmptyView()
+        } else {
         GlassCard(padding: 12) {
             HStack(spacing: 12) {
                 // Media Type Icon with gradient
@@ -775,6 +778,7 @@ struct RecordingRow: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+        }
         }
     }
 }

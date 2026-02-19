@@ -25,22 +25,7 @@ struct SpeechTimelineView: View {
     }
 
     private var speechEnd: TimeInterval {
-        max(words.last?.end ?? totalDuration, totalDuration)
-    }
-
-    /// Build a set of all filler timestamps for fast lookup
-    private var fillerTimestamps: Set<Int> {
-        var stamps = Set<Int>()
-        for filler in fillerWords {
-            for ts in filler.timestamps {
-                // Mark a 0.5s window around each filler timestamp
-                let centisecond = Int(ts * 10)
-                for offset in -2...2 {
-                    stamps.insert(centisecond + offset)
-                }
-            }
-        }
-        return stamps
+        words.last?.end ?? totalDuration
     }
 
     private var segments: [SegmentType] {
@@ -57,7 +42,6 @@ struct SpeechTimelineView: View {
 
         let segmentDuration = timelineSpan / Double(segmentCount)
         var result = Array(repeating: SegmentType.pause, count: segmentCount)
-        let stamps = fillerTimestamps
 
         // Mark speech and filler segments from transcription words
         for word in words {

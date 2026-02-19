@@ -14,12 +14,21 @@ struct JournalExportView: View {
     @State private var showingShare = false
 
     enum DateRangeOption: String, CaseIterable, Identifiable {
-        case lastWeek = "Last Week"
-        case lastMonth = "Last Month"
-        case last3Months = "Last 3 Months"
+        case lastWeek = "Week"
+        case lastMonth = "Month"
+        case last3Months = "3 Months"
         case allTime = "All Time"
 
         var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .lastWeek: return "7.square"
+            case .lastMonth: return "30.square"
+            case .last3Months: return "calendar.badge.clock"
+            case .allTime: return "infinity"
+            }
+        }
 
         var dateFilter: Date {
             switch self {
@@ -35,6 +44,30 @@ struct JournalExportView: View {
         allRecordings.filter { $0.date >= selectedRange.dateFilter }
     }
 
+    private var analyzedSorted: [Recording] {
+        filteredRecordings.filter { $0.analysis != nil }.sorted { $0.date < $1.date }
+    }
+
+    private var totalMinutes: Int {
+        Int(filteredRecordings.reduce(0.0) { $0 + $1.actualDuration }) / 60
+    }
+
+    private var averageScore: Int {
+        let scores = analyzedSorted.compactMap { $0.analysis?.speechScore.overall }
+        guard !scores.isEmpty else { return 0 }
+        return scores.reduce(0, +) / scores.count
+    }
+
+    private var improvement: Int {
+        let scores = analyzedSorted.compactMap { $0.analysis?.speechScore.overall }
+        guard scores.count >= 2 else { return 0 }
+        return (scores.last ?? 0) - (scores.first ?? 0)
+    }
+
+    private var unlockedAchievementsCount: Int {
+        achievements.filter { $0.isUnlocked }.count
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -44,16 +77,31 @@ struct JournalExportView: View {
                     VStack(spacing: 20) {
                         // Date range picker
                         VStack(alignment: .leading, spacing: 8) {
-                            Label("Date Range", systemImage: "calendar")
-                                .font(.headline)
+                            HStack {
+                                Label("Date Range", systemImage: "calendar")
+                                    .font(.headline)
 
-                            GlassCard {
-                                Picker("Range", selection: $selectedRange) {
+                                Spacer()
+
+                                Text("\(filteredRecordings.count) sessions")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
                                     ForEach(DateRangeOption.allCases) { option in
-                                        Text(option.rawValue).tag(option)
+                                        FilterChip(
+                                            title: option.rawValue,
+                                            icon: option.icon,
+                                            isSelected: selectedRange == option
+                                        ) {
+                                            withAnimation(.spring(duration: 0.3)) {
+                                                selectedRange = option
+                                            }
+                                        }
                                     }
                                 }
-                                .pickerStyle(.segmented)
                             }
                         }
 
@@ -66,40 +114,29 @@ struct JournalExportView: View {
                             .tint(.teal)
                         }
 
-                        // Preview stats
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Export Preview")
-                                    .font(.subheadline.weight(.semibold))
+                        // Summary preview
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Summary", systemImage: "chart.bar.fill")
+                                .font(.headline)
 
-                                HStack(spacing: 16) {
-                                    statPreview(label: "Sessions", value: "\(filteredRecordings.count)")
-                                    statPreview(label: "Analyzed", value: "\(filteredRecordings.filter { $0.analysis != nil }.count)")
-                                    if includeAchievements {
-                                        statPreview(label: "Achievements", value: "\(achievements.filter { $0.isUnlocked }.count)")
-                                    }
-                                }
+                            FeaturedGlassCard(gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]) {
+                                JournalSummaryView(
+                                    totalSessions: filteredRecordings.count,
+                                    totalMinutes: totalMinutes,
+                                    averageScore: averageScore,
+                                    improvement: improvement,
+                                    unlockedAchievements: includeAchievements ? unlockedAchievementsCount : 0
+                                )
                             }
                         }
 
-                        // Export button
-                        Button {
+                        GlassButton(
+                            title: isExporting ? "Exporting..." : "Export PDF",
+                            icon: "doc.richtext",
+                            style: .secondary,
+                            fullWidth: true
+                        ) {
                             exportPDF()
-                        } label: {
-                            HStack {
-                                if isExporting {
-                                    ProgressView()
-                                        .tint(.white)
-                                } else {
-                                    Image(systemName: "doc.richtext")
-                                }
-                                Text("Export PDF")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 16).fill(.teal))
                         }
                         .disabled(filteredRecordings.isEmpty || isExporting)
                     }
@@ -108,6 +145,7 @@ struct JournalExportView: View {
             }
             .navigationTitle("Progress Journal")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -118,16 +156,6 @@ struct JournalExportView: View {
                     ShareSheet(items: [data])
                 }
             }
-        }
-    }
-
-    private func statPreview(label: String, value: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.headline)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
 

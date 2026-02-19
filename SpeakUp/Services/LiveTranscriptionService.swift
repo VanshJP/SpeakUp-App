@@ -5,6 +5,7 @@ import AVFoundation
 @Observable
 class LiveTranscriptionService {
     var liveFillerCount = 0
+    var liveWordCount = 0
     var isActive = false
 
     private var audioEngine: AVAudioEngine?
@@ -38,6 +39,7 @@ class LiveTranscriptionService {
         request.shouldReportPartialResults = true
 
         liveFillerCount = 0
+        liveWordCount = 0
         isActive = true
 
         let inputNode = engine.inputNode
@@ -85,13 +87,79 @@ class LiveTranscriptionService {
     }
 
     private func processPartialResult(_ result: SFSpeechRecognitionResult) {
-        // Each partial result contains ALL segments so far — just count fillers across all of them.
-        let count = result.bestTranscription.segments.reduce(0) { total, segment in
-            total + (FillerWordList.isFillerWord(segment.substring) ? 1 : 0)
+        let segments = result.bestTranscription.segments
+        let wordCount = segments.count
+        guard wordCount > 0 else {
+            Task { @MainActor in
+                self.liveFillerCount = 0
+                self.liveWordCount = 0
+            }
+            return
         }
 
+        let pauseThreshold: TimeInterval = 0.3
+        var fillerCount = 0
+        var fillerIndices = Set<Int>()
+
+        for (i, segment) in segments.enumerated() {
+            let word = segment.substring
+            let prev = i > 0 ? segments[i - 1].substring : nil
+            let next = i < segments.count - 1 ? segments[i + 1].substring : nil
+
+            // Pause before: gap between previous segment end and this segment start
+            let pauseBefore: Bool
+            if i == 0 {
+                pauseBefore = segment.timestamp > pauseThreshold
+            } else {
+                let prevEnd = segments[i - 1].timestamp + segments[i - 1].duration
+                pauseBefore = (segment.timestamp - prevEnd) > pauseThreshold
+            }
+
+            // Pause after: gap between this segment end and next segment start
+            let pauseAfter: Bool
+            if i == segments.count - 1 {
+                pauseAfter = true
+            } else {
+                let thisEnd = segment.timestamp + segment.duration
+                pauseAfter = (segments[i + 1].timestamp - thisEnd) > pauseThreshold
+            }
+
+            // Sentence boundary: long pause from previous word
+            let isStartOfSentence: Bool
+            if i == 0 {
+                isStartOfSentence = true
+            } else {
+                let prevEnd = segments[i - 1].timestamp + segments[i - 1].duration
+                isStartOfSentence = (segment.timestamp - prevEnd) > 0.8
+            }
+
+            if FillerWordList.isFillerWord(
+                word,
+                previousWord: prev,
+                nextWord: next,
+                pauseBefore: pauseBefore,
+                pauseAfter: pauseAfter,
+                isStartOfSentence: isStartOfSentence
+            ) {
+                fillerIndices.insert(i)
+            }
+        }
+
+        // Second pass: detect multi-word filler phrases ("you know", "I mean", etc.)
+        if segments.count >= 2 {
+            for i in 0..<(segments.count - 1) {
+                if FillerWordList.isFillerPhrase(segments[i].substring, segments[i + 1].substring) {
+                    fillerIndices.insert(i)
+                    fillerIndices.insert(i + 1)
+                }
+            }
+        }
+
+        fillerCount = fillerIndices.count
+
         Task { @MainActor in
-            self.liveFillerCount = count
+            self.liveFillerCount = fillerCount
+            self.liveWordCount = wordCount
         }
     }
 }

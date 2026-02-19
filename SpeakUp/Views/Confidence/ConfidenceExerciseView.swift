@@ -7,131 +7,157 @@ struct ConfidenceExerciseView: View {
     @State private var isComplete = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground()
+        ZStack {
+            AppBackground(style: .recording)
 
-                VStack(spacing: 24) {
-                    // Title
-                    VStack(spacing: 8) {
-                        Image(systemName: exercise.category.icon)
-                            .font(.largeTitle)
-                            .foregroundStyle(exercise.category.color)
-
-                        Text(exercise.title)
-                            .font(.title2.weight(.bold))
+            VStack(spacing: 32) {
+                // Close button
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(.ultraThinMaterial))
                     }
-                    .padding(.top)
+                    Spacer()
+                }
+                .padding(.top, 8)
 
-                    if isComplete {
-                        Spacer()
+                if isComplete {
+                    completeContent
+                } else {
+                    stepContent
+                }
 
-                        VStack(spacing: 16) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 64))
-                                .foregroundStyle(.green)
+                Spacer()
 
-                            Text("Well done!")
-                                .font(.title2.weight(.bold))
+                navigationControls
+            }
+            .padding()
+        }
+    }
 
-                            Text("You've completed this exercise. Take a moment to notice how you feel.")
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
+    // MARK: - Step Content
 
-                        Spacer()
+    private var stepContent: some View {
+        VStack(spacing: 20) {
+            Text(exercise.title)
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.6))
 
+            Text("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.4))
+
+            Spacer()
+
+            // Step card
+            VStack(spacing: 16) {
+                Image(systemName: exercise.category.icon)
+                    .font(.system(size: 36))
+                    .foregroundStyle(exercise.category.color)
+
+                Text(exercise.steps[currentStepIndex])
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.horizontal)
+            }
+            .padding(.vertical, 28)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(exercise.category.color.opacity(0.08))
+                    }
+            }
+
+            Spacer()
+
+            ProgressView(value: Double(currentStepIndex + 1), total: Double(exercise.steps.count))
+                .tint(exercise.category.color)
+                .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - Complete
+
+    private var completeContent: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.green)
+
+            Text("Well done!")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.white)
+
+            Text("Take a moment to notice how you feel.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Navigation
+
+    private var navigationControls: some View {
+        VStack(spacing: 12) {
+            if isComplete {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 16).fill(.teal))
+                }
+            } else {
+                HStack(spacing: 12) {
+                    if currentStepIndex > 0 {
                         Button {
-                            dismiss()
+                            ChirpPlayer.shared.play(.tick)
+                            withAnimation { currentStepIndex -= 1 }
                         } label: {
-                            Text("Done")
+                            Text("Back")
                                 .font(.headline)
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(RoundedRectangle(cornerRadius: 16).fill(.teal))
+                                .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
                         }
-                        .padding(.horizontal)
-                    } else {
-                        // Progress
-                        ProgressView(value: Double(currentStepIndex), total: Double(exercise.steps.count))
-                            .tint(exercise.category.color)
-                            .padding(.horizontal)
-
-                        Text("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        // Current step
-                        GlassCard {
-                            VStack(spacing: 12) {
-                                // Pulse animation circle
-                                Circle()
-                                    .fill(exercise.category.color.opacity(0.15))
-                                    .frame(width: 80, height: 80)
-                                    .overlay {
-                                        Text("\(currentStepIndex + 1)")
-                                            .font(.title.weight(.bold))
-                                            .foregroundStyle(exercise.category.color)
-                                    }
-
-                                Text(exercise.steps[currentStepIndex])
-                                    .font(.title3.weight(.medium))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal)
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        .padding(.horizontal)
-
-                        Spacer()
-
-                        // Navigation
-                        HStack(spacing: 16) {
-                            if currentStepIndex > 0 {
-                                Button {
-                                    withAnimation { currentStepIndex -= 1 }
-                                } label: {
-                                    Text("Back")
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 16)
-                                        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-                                }
-                            }
-
-                            Button {
-                                withAnimation {
-                                    if currentStepIndex < exercise.steps.count - 1 {
-                                        currentStepIndex += 1
-                                    } else {
-                                        isComplete = true
-                                    }
-                                }
-                            } label: {
-                                Text(currentStepIndex < exercise.steps.count - 1 ? "Next" : "Complete")
-                                    .font(.headline)
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(RoundedRectangle(cornerRadius: 16).fill(exercise.category.color))
-                            }
-                        }
-                        .padding(.horizontal)
                     }
-                }
-                .padding(.bottom)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { dismiss() }
+
+                    Button {
+                        ChirpPlayer.shared.play(.tick)
+                        withAnimation {
+                            if currentStepIndex < exercise.steps.count - 1 {
+                                currentStepIndex += 1
+                            } else {
+                                isComplete = true
+                            }
+                        }
+                    } label: {
+                        Text(currentStepIndex < exercise.steps.count - 1 ? "Next" : "Complete")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(RoundedRectangle(cornerRadius: 16).fill(exercise.category.color))
+                    }
                 }
             }
         }
+        .padding(.bottom, 8)
     }
 }

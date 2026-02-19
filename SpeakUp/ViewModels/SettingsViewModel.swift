@@ -38,11 +38,15 @@ class SettingsViewModel {
     // Local state - Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 
+    // Local state - Audio Cues
+    var chirpSoundEnabled: Bool = true
+
     // Local state - Word Bank
     var vocabWords: [String] = []
     var newVocabWord: String = ""
     var vocabWordError: String? = nil
     var showingAddVocabWord: Bool = false
+    private var vocabErrorDismissID = 0
 
     private var modelContext: ModelContext?
     private let notificationService = NotificationService()
@@ -113,6 +117,10 @@ class SettingsViewModel {
 
         // Haptic Coaching
         hapticCoachingEnabled = settings.hapticCoachingEnabled
+
+        // Audio Cues
+        chirpSoundEnabled = settings.chirpSoundEnabled
+        ChirpPlayer.shared.isEnabled = settings.chirpSoundEnabled
     }
     
     @MainActor
@@ -148,6 +156,10 @@ class SettingsViewModel {
 
         // Haptic Coaching
         settings.hapticCoachingEnabled = hapticCoachingEnabled
+
+        // Audio Cues
+        settings.chirpSoundEnabled = chirpSoundEnabled
+        ChirpPlayer.shared.isEnabled = chirpSoundEnabled
 
         do {
             try context.save()
@@ -193,21 +205,34 @@ class SettingsViewModel {
             return
         }
         guard !vocabWords.contains(trimmed) else {
-            vocabWordError = "Already in your word bank"
+            showVocabError("Already in your word bank")
             return
         }
         guard !isFillerWord(trimmed) else {
-            vocabWordError = "That's a filler word — we track those separately"
+            showVocabError("That's a filler word — we track those separately")
             return
         }
         guard isRealWord(trimmed) else {
-            vocabWordError = "Not a recognized word"
+            showVocabError("Not a recognized word")
             return
         }
         vocabWords.append(trimmed)
         newVocabWord = ""
         Haptics.success()
         Task { await saveSettings() }
+    }
+
+    @MainActor
+    private func showVocabError(_ message: String) {
+        Haptics.warning()
+        vocabWordError = message
+        vocabErrorDismissID += 1
+        let currentID = vocabErrorDismissID
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard currentID == vocabErrorDismissID else { return }
+            vocabWordError = nil
+        }
     }
 
     @MainActor
@@ -260,6 +285,7 @@ class SettingsViewModel {
         settings.countdownStyle = 0
         settings.timerEndBehavior = 0
         settings.vocabWords = []
+        settings.chirpSoundEnabled = true
 
         do {
             try context.save()
