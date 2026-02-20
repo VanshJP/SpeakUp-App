@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 
-@Observable
+@MainActor @Observable
 class HistoryViewModel {
     var recordings: [Recording] = []
     var weeklyActivity: [WeeklyActivity] = []
@@ -14,12 +14,11 @@ class HistoryViewModel {
     
     func configure(with context: ModelContext) {
         self.modelContext = context
-        Task { @MainActor in
+        Task {
             await loadData()
         }
     }
     
-    @MainActor
     func loadData() async {
         isLoading = true
         defer { isLoading = false }
@@ -31,7 +30,6 @@ class HistoryViewModel {
         await calculateStreaks()
     }
     
-    @MainActor
     private func loadRecordings(context: ModelContext) async {
         let descriptor = FetchDescriptor<Recording>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]
@@ -44,7 +42,6 @@ class HistoryViewModel {
         }
     }
     
-    @MainActor
     private func calculateWeeklyActivity(context: ModelContext) async {
         // Get recordings for last 26 weeks (half year)
         let startDate = Date().adding(weeks: -26)
@@ -107,7 +104,6 @@ class HistoryViewModel {
         }
     }
     
-    @MainActor
     private func calculateStreaks() async {
         let recordingDates = recordings.map { $0.date }
         currentStreak = Date.calculateStreak(from: recordingDates)
@@ -140,10 +136,9 @@ class HistoryViewModel {
         return maxStreak
     }
     
-    @MainActor
     func deleteRecording(_ recording: Recording) async {
         guard let context = modelContext else { return }
-        
+
         // Delete associated files
         if let audioURL = recording.audioURL {
             try? FileManager.default.removeItem(at: audioURL)
@@ -151,18 +146,22 @@ class HistoryViewModel {
         if let videoURL = recording.videoURL {
             try? FileManager.default.removeItem(at: videoURL)
         }
-        
+        if let thumbnailURL = recording.thumbnailURL {
+            try? FileManager.default.removeItem(at: thumbnailURL)
+        }
+
+        // Remove from local array first so SwiftUI stops rendering it
+        recordings.removeAll { $0.id == recording.id }
+
         context.delete(recording)
 
         do {
             try context.save()
-            await loadData()
         } catch {
             print("Error deleting recording: \(error)")
         }
     }
 
-    @MainActor
     func toggleFavorite(_ recording: Recording) async {
         recording.isFavorite.toggle()
         

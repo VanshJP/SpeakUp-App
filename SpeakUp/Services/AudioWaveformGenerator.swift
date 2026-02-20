@@ -2,7 +2,7 @@ import AVFoundation
 import CoreGraphics
 
 enum AudioWaveformGenerator {
-    /// Read an audio file and produce `binCount` peak amplitude values normalized to a given height range.
+    /// Read an audio file and produce `binCount` peak level values normalized to a given height range.
     static func generate(from url: URL, binCount: Int, minHeight: CGFloat = 12, maxHeight: CGFloat = 36) -> [CGFloat] {
         guard binCount > 0,
               let audioFile = try? AVAudioFile(forReading: url) else {

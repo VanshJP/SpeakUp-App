@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "greenlight": {
+      "source": "revylai/greenlight",
+      "sourceType": "github",
+      "computedHash": "c94165bbbbd7f3d9e2e690d8d86cc95fbe841454b9a1f8da34ea39fee413dd1d"
+    },
+    "swiftui-expert-skill": {
+      "source": "avdlee/swiftui-agent-skill",
+      "sourceType": "github",
+      "computedHash": "2266f713890104352fe8eca44fc546c096e3459cc25e7e21bc57514f57d2e5a4"
+    }
+  }
+}

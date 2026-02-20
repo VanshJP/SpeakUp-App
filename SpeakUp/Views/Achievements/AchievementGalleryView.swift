@@ -30,7 +30,7 @@ struct AchievementGalleryView: View {
                     if achievements.isEmpty {
                         EmptyStateCard(
                             icon: "trophy",
-                            title: "Achievements Coming Soon",
+                            title: "No Achievements Yet",
                             message: "Complete practice sessions to start unlocking achievements."
                         )
                     } else {

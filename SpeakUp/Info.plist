@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleIconFile</key>
 	<string>WavesIcon</string>
+	<key>CFBundleDisplayName</key>
+	<string>SpeakUp</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIImageName</key>

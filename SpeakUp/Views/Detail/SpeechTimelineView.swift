@@ -19,11 +19,7 @@ struct SpeechTimelineView: View {
         }
     }
 
-    /// The actual time range where speech occurs (trims dead air from start/end)
-    private var speechStart: TimeInterval {
-        words.first?.start ?? 0
-    }
-
+    /// End of the last spoken word — used to trim trailing dead air
     private var speechEnd: TimeInterval {
         words.last?.end ?? totalDuration
     }
@@ -33,7 +29,7 @@ struct SpeechTimelineView: View {
             return Array(repeating: .pause, count: segmentCount)
         }
 
-        let timelineStart = speechStart
+        let timelineStart: TimeInterval = 0
         let timelineEnd = speechEnd
         let timelineSpan = timelineEnd - timelineStart
         guard timelineSpan > 0 else {
@@ -94,11 +90,11 @@ struct SpeechTimelineView: View {
                     }
                     .frame(height: 24)
 
-                    // Time labels — show the actual speech range
+                    // Time labels
                     HStack {
-                        Text(formatTime(speechStart))
+                        Text(formatTime(0))
                         Spacer()
-                        Text(formatTime((speechStart + speechEnd) / 2))
+                        Text(formatTime(speechEnd / 2))
                         Spacer()
                         Text(formatTime(speechEnd))
                     }

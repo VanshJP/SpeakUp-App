@@ -8,6 +8,8 @@ struct HistoryView: View {
     @State private var showingDayDetail = false
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText = ""
+    @State private var recordingToDelete: Recording?
+    @State private var showingDeleteAlert = false
     @Query private var userSettings: [UserSettings]
 
     var onSelectRecording: (String) -> Void
@@ -35,10 +37,9 @@ struct HistoryView: View {
                 let promptText = recording.prompt?.text ?? ""
                 let category = recording.prompt?.category ?? ""
                 let transcript = recording.transcriptionText ?? ""
-                let query = searchText.lowercased()
-                return promptText.lowercased().contains(query)
-                    || category.lowercased().contains(query)
-                    || transcript.lowercased().contains(query)
+                return promptText.localizedStandardContains(searchText)
+                    || category.localizedStandardContains(searchText)
+                    || transcript.localizedStandardContains(searchText)
             }
         }
 
@@ -109,6 +110,21 @@ struct HistoryView: View {
                 )
                 .presentationDetents([.medium, .large])
             }
+        }
+        .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                if let recording = recordingToDelete {
+                    Task {
+                        await viewModel.deleteRecording(recording)
+                    }
+                }
+                recordingToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                recordingToDelete = nil
+            }
+        } message: {
+            Text("This recording and its audio will be permanently deleted.")
         }
     }
 
@@ -243,7 +259,7 @@ struct HistoryView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(aggregated.prefix(15), id: \.key) { item in
                             HStack(spacing: 5) {
@@ -262,6 +278,7 @@ struct HistoryView: View {
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
             }
         }
     }
@@ -379,7 +396,7 @@ struct HistoryView: View {
     // MARK: - Filter Section
 
     private var filterSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(HistoryFilter.allCases) { filter in
                     FilterChip(
@@ -394,6 +411,7 @@ struct HistoryView: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -434,11 +452,13 @@ struct HistoryView: View {
             } else {
                 LazyVStack(spacing: 12) {
                     ForEach(filteredRecordings) { recording in
-                        RecordingRow(recording: recording)
-                            .onTapGesture {
-                                onSelectRecording(recording.id.uuidString)
-                            }
-                            .contextMenu {
+                        Button {
+                            onSelectRecording(recording.id.uuidString)
+                        } label: {
+                            RecordingRow(recording: recording)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
                                 Button {
                                     Task {
                                         await viewModel.toggleFavorite(recording)
@@ -451,9 +471,8 @@ struct HistoryView: View {
                                 }
 
                                 Button(role: .destructive) {
-                                    Task {
-                                        await viewModel.deleteRecording(recording)
-                                    }
+                                    recordingToDelete = recording
+                                    showingDeleteAlert = true
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -808,10 +827,12 @@ struct DayDetailSheet: View {
                         )
                     } else {
                         ForEach(recordings) { recording in
-                            RecordingRow(recording: recording)
-                                .onTapGesture {
-                                    onSelectRecording(recording)
-                                }
+                            Button {
+                                onSelectRecording(recording)
+                            } label: {
+                                RecordingRow(recording: recording)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }

@@ -87,9 +87,7 @@ class SpeechService {
         request.shouldReportPartialResults = false
         request.taskHint = .dictation
 
-        if #available(iOS 16.0, *) {
-            request.addsPunctuation = true
-        }
+        request.addsPunctuation = true
 
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
@@ -249,7 +247,6 @@ class SpeechService {
         let speechStart = transcription.words.first?.start ?? 0
         let speechEnd = transcription.words.last?.end ?? actualDuration
         let speechSpan = speechEnd - speechStart
-        // Use speech span if we have word timestamps, otherwise fall back to actualDuration
         let effectiveDuration = speechSpan > 0 ? speechSpan : actualDuration
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
         let wordsPerMinute = effectiveDuration > 0 ? Double(totalWords) / (effectiveDuration / 60) : 0

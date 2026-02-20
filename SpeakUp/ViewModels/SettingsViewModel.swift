@@ -28,6 +28,9 @@ class SettingsViewModel {
     var showDailyPrompt: Bool = true
     var enabledPromptCategories: Set<PromptCategory> = Set(PromptCategory.allCases)
 
+    // Local state - Prompt Filtering
+    var hideAnsweredPrompts: Bool = false
+
     // Local state - Countdown
     var countdownDuration: CountdownDuration = .fifteen
     var countdownStyle: CountdownStyle = .countDown
@@ -103,6 +106,7 @@ class SettingsViewModel {
         
         // Prompt settings
         showDailyPrompt = settings.showDailyPrompt
+        hideAnsweredPrompts = settings.hideAnsweredPrompts
         enabledPromptCategories = Set(settings.enabledCategories)
 
         // Countdown duration & style
@@ -142,6 +146,7 @@ class SettingsViewModel {
         
         // Prompt settings
         settings.showDailyPrompt = showDailyPrompt
+        settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
 
         // Countdown duration & style
@@ -280,6 +285,7 @@ class SettingsViewModel {
         settings.trackPauses = true
         settings.trackFillerWords = true
         settings.showDailyPrompt = true
+        settings.hideAnsweredPrompts = false
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15
         settings.countdownStyle = 0

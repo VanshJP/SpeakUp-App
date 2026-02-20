@@ -11,8 +11,10 @@ class TodayViewModel {
     var isLoading = true
     var weeklyProgress: WeeklyProgressData?
     var dailyChallenge: DailyChallenge?
-    
+    var hideAnsweredPrompts: Bool = false
+
     private var modelContext: ModelContext?
+    private var answeredPromptIDs: Set<String> = []
     
     func configure(with context: ModelContext) {
         self.modelContext = context
@@ -28,20 +30,20 @@ class TodayViewModel {
         
         guard let context = modelContext else { return }
         
+        // Load user settings first (needed for prompt filtering)
+        await loadUserSettings(context: context)
+
         // Load today's prompt
         await loadTodaysPrompt(context: context)
-        
+
         // Load user stats
         await loadUserStats(context: context)
-        
+
         // Load active goals
         await loadActiveGoals(context: context)
-        
+
         // Load daily challenge
         loadDailyChallenge(recordings: (try? context.fetch(FetchDescriptor<Recording>())) ?? [])
-
-        // Load user settings for defaults
-        await loadUserSettings(context: context)
 
         // Schedule streak-at-risk notification if applicable
         await scheduleStreakNotificationIfNeeded()
@@ -109,6 +111,12 @@ class TodayViewModel {
             // If still nil but other prompts exist, pick any matching prompt
             if todaysPrompt == nil && !allPrompts.isEmpty {
                 todaysPrompt = allPrompts.randomElement()
+            }
+
+            // If hiding answered prompts and current prompt was already answered, pick an unanswered one
+            if hideAnsweredPrompts, let current = todaysPrompt, answeredPromptIDs.contains(current.id) {
+                let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
+                todaysPrompt = unanswered.randomElement() ?? current
             }
         } catch {
             print("Error loading today's prompt: \(error)")
@@ -201,9 +209,26 @@ class TodayViewModel {
         do {
             if let settings = try context.fetch(descriptor).first {
                 selectedDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
+                hideAnsweredPrompts = settings.hideAnsweredPrompts
             }
         } catch {
             print("Error loading user settings: \(error)")
+        }
+
+        // Build set of prompt IDs that have recordings
+        if hideAnsweredPrompts {
+            await loadAnsweredPromptIDs(context: context)
+        }
+    }
+
+    @MainActor
+    private func loadAnsweredPromptIDs(context: ModelContext) async {
+        let descriptor = FetchDescriptor<Recording>()
+        do {
+            let recordings = try context.fetch(descriptor)
+            answeredPromptIDs = Set(recordings.compactMap { $0.prompt?.id })
+        } catch {
+            print("Error loading answered prompts: \(error)")
         }
     }
     
@@ -220,9 +245,20 @@ class TodayViewModel {
 
         do {
             let allPrompts = try context.fetch(descriptor)
+            var candidate = allPrompts.first { $0.id == targetId }
+                ?? allPrompts.randomElement()
+
+            // If hiding answered prompts, prefer an unanswered one
+            if hideAnsweredPrompts {
+                await loadAnsweredPromptIDs(context: context)
+                let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
+                if let pick = unanswered.randomElement() {
+                    candidate = pick
+                }
+            }
+
             withAnimation {
-                todaysPrompt = allPrompts.first { $0.id == targetId }
-                    ?? allPrompts.randomElement()
+                todaysPrompt = candidate
             }
         } catch {
             print("Error refreshing prompt: \(error)")

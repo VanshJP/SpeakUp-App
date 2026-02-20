@@ -310,8 +310,8 @@ struct SettingsView: View {
 
             GlassCard {
                 VStack(spacing: 0) {
-                    Toggle(isOn: $viewModel.showDailyPrompt) {
-                        Label("Show Daily Prompt", systemImage: "text.quote")
+                    Toggle(isOn: $viewModel.hideAnsweredPrompts) {
+                        Label("Hide Answered Prompts", systemImage: "checkmark.circle")
                             .font(.subheadline)
                     }
                     .tint(.teal)
@@ -386,7 +386,7 @@ struct SettingsView: View {
                 }
             }
 
-            Text("Choose which categories of prompts you'd like to practice with.")
+            Text("Hide answered prompts to always get fresh topics. Choose which categories you'd like to practice with.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -614,9 +614,6 @@ private struct SettingsChangeModifiersB: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: viewModel.showDailyPrompt) { _, _ in
-                Task { await viewModel.saveSettings() }
-            }
             .onChange(of: viewModel.countdownDuration) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
@@ -630,6 +627,9 @@ private struct SettingsChangeModifiersB: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.chirpSoundEnabled) { _, _ in
+                Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.hideAnsweredPrompts) { _, _ in
                 Task { await viewModel.saveSettings() }
             }
     }

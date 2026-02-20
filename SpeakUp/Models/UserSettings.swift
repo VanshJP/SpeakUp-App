@@ -44,6 +44,9 @@ final class UserSettings {
     // Audio Cues
     var chirpSoundEnabled: Bool = true
 
+    // Prompt Filtering
+    var hideAnsweredPrompts: Bool = false
+
     // Listen Back
     var listenBackCount: Int = 0
 

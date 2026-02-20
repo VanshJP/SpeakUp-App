@@ -8,27 +8,58 @@ class OnboardingViewModel {
     var hasMicPermission = false
     var isRequestingPermission = false
 
-    let totalPages = 5
+    // Interactive state per page
+    var scoreAnimationTriggered = false
+    var toolsRevealed = 0
+    var progressItemsRevealed = 0
+    var micJustGranted = false
+
+    let totalPages = 6
 
     var isLastPage: Bool { currentPage == totalPages - 1 }
-    var canProceed: Bool {
-        if isLastPage {
-            return hasMicPermission
-        }
-        return true
-    }
 
     func nextPage() {
         guard currentPage < totalPages - 1 else { return }
-        withAnimation(.easeInOut(duration: 0.3)) {
+        Haptics.medium()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             currentPage += 1
         }
     }
 
     func previousPage() {
         guard currentPage > 0 else { return }
-        withAnimation(.easeInOut(duration: 0.3)) {
+        Haptics.light()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             currentPage -= 1
+        }
+    }
+
+    func triggerScoreAnimation() {
+        guard !scoreAnimationTriggered else { return }
+        scoreAnimationTriggered = true
+    }
+
+    func revealTools() {
+        guard toolsRevealed == 0 else { return }
+        for i in 1...4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.2) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    self.toolsRevealed = i
+                }
+                Haptics.light()
+            }
+        }
+    }
+
+    func revealProgressItems() {
+        guard progressItemsRevealed == 0 else { return }
+        for i in 1...2 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.25) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                    self.progressItemsRevealed = i
+                }
+                Haptics.light()
+            }
         }
     }
 
@@ -43,6 +74,13 @@ class OnboardingViewModel {
                 AVAudioSession.sharedInstance().requestRecordPermission { granted in
                     continuation.resume(returning: granted)
                 }
+            }
+        }
+
+        if hasMicPermission {
+            Haptics.success()
+            withAnimation(.spring(response: 0.5)) {
+                micJustGranted = true
             }
         }
     }

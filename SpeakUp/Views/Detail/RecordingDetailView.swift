@@ -78,15 +78,7 @@ struct RecordingDetailView: View {
                             )
                         }
 
-                        // 8. Pace Chart
-                        if let words = recording.transcriptionWords, !words.isEmpty {
-                            PaceChartView(
-                                words: words,
-                                totalDuration: recording.actualDuration
-                            )
-                        }
-
-                        // 9. Detailed Scores
+                        // 8. Detailed Scores
                         if let analysis = recording.analysis {
                             subscoresSection(analysis)
                         }
@@ -124,11 +116,12 @@ struct RecordingDetailView: View {
                 .onAppear {
                     generateWaveformHeights()
                     initializePlayback(recording)
+                }
+                .task {
                     // Delay score animation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation(.easeOut(duration: 0.8)) {
-                            animateScore = true
-                        }
+                    try? await Task.sleep(for: .milliseconds(300))
+                    withAnimation(.easeOut(duration: 0.8)) {
+                        animateScore = true
                     }
                 }
 
