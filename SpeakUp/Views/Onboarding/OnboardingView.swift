@@ -381,9 +381,25 @@ struct OnboardingView: View {
                 ? "SpeakUp can now record and analyze your speech. Let's start practicing!"
                 : "SpeakUp needs microphone access to record and analyze your speech."
         ) {
-            Image(systemName: viewModel.hasMicPermission ? "mic.circle.fill" : "mic.circle")
-                .font(.system(size: 72))
-                .foregroundStyle(viewModel.hasMicPermission ? .green : .teal)
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                (viewModel.hasMicPermission ? Color.green : Color.teal).opacity(0.2),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 20,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+
+                Image(systemName: viewModel.hasMicPermission ? "mic.circle.fill" : "mic.circle")
+                    .font(.system(size: 72))
+                    .foregroundStyle(viewModel.hasMicPermission ? .green : .teal)
+            }
         } detail: {
             if !viewModel.hasMicPermission {
                 VStack(spacing: 14) {

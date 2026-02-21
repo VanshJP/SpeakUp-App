@@ -78,7 +78,7 @@ class WhisperService {
 
         do {
             // Tokenize the filler prompt to condition the model
-            let promptTokens = await whisperKit.tokenizer?.encode(text: fillerPrompt).filter { $0 < 51865 } ?? []
+            let promptTokens = whisperKit.tokenizer?.encode(text: fillerPrompt).filter { $0 < 51865 } ?? []
             
             // Configure decoding options for filler word capture
             let options = DecodingOptions(

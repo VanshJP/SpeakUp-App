@@ -39,7 +39,7 @@ class AudioService: NSObject {
     
     func requestPermission() async -> Bool {
         do {
-            try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
             try recordingSession?.setActive(true)
             
             if #available(iOS 17.0, *) {

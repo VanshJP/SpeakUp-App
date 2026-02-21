@@ -11,21 +11,34 @@ struct SettingsView: View {
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
+                .ignoresSafeArea(.keyboard)
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    recordingDefaultsSection
-                    analysisFeaturesSection
-                    vocabWordBankSection
-                    promptSettingsSection
-                    reminderSection
-                    weeklyGoalSection
-                    dataManagementSection
-                    aboutSection
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 20) {
+                        recordingDefaultsSection
+                        analysisFeaturesSection
+                        vocabWordBankSection
+                            .id("wordBank")
+                        promptSettingsSection
+                        reminderSection
+                        weeklyGoalSection
+                        dataManagementSection
+                        aboutSection
+                    }
+                    .padding()
                 }
-                .padding()
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: isWordInputFocused) { _, focused in
+                    if focused {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                proxy.scrollTo("wordBank", anchor: .top)
+                            }
+                        }
+                    }
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
         }
         .navigationTitle("Settings")
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -190,7 +203,9 @@ struct SettingsView: View {
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    if !viewModel.vocabWords.isEmpty {
+                    if viewModel.vocabWords.isEmpty {
+                        wordBankEmptyState
+                    } else {
                         FlowLayout(spacing: 6) {
                             ForEach(viewModel.vocabWords, id: \.self) { word in
                                 wordBankChip(word)
@@ -223,6 +238,20 @@ struct SettingsView: View {
         }
         .animation(.easeOut(duration: 0.2), value: viewModel.vocabWordError)
         .animation(.spring(duration: 0.25), value: viewModel.vocabWords)
+    }
+
+    private var wordBankEmptyState: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "character.book.closed")
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.15))
+
+            Text("No words yet")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.3))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
     }
 
     private func wordBankChip(_ word: String) -> some View {

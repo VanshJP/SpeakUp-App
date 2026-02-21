@@ -86,11 +86,10 @@ class OnboardingViewModel {
     }
 
     func checkMicPermission() {
-        switch AVAudioSession.sharedInstance().recordPermission {
-        case .granted:
-            hasMicPermission = true
-        default:
-            hasMicPermission = false
+        if #available(iOS 17.0, *) {
+            hasMicPermission = AVAudioApplication.shared.recordPermission == .granted
+        } else {
+            hasMicPermission = AVAudioSession.sharedInstance().recordPermission == .granted
         }
     }
 }
