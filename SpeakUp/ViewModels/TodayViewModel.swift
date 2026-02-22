@@ -97,20 +97,19 @@ class TodayViewModel {
             var allPrompts = try context.fetch(descriptor)
             todaysPrompt = allPrompts.first { $0.id == targetId }
 
-            // Database may not be seeded yet (race with SpeakUpApp.seedPromptsIfNeeded)
-            // Retry up to 3 times with increasing delay
+            // If the prompt isn't in the DB yet (new prompts added, seeding hasn't run yet),
+            // insert it directly so we don't have to wait for the full seed pass.
             if todaysPrompt == nil {
-                for delay in [300, 600, 1000] {
-                    try? await Task.sleep(for: .milliseconds(delay))
-                    allPrompts = try context.fetch(descriptor)
-                    todaysPrompt = allPrompts.first { $0.id == targetId }
-                    if todaysPrompt != nil { break }
-                }
-            }
-
-            // If still nil but other prompts exist, pick any matching prompt
-            if todaysPrompt == nil && !allPrompts.isEmpty {
-                todaysPrompt = allPrompts.randomElement()
+                let newPrompt = Prompt(
+                    id: todayData.id,
+                    text: todayData.text,
+                    category: todayData.category,
+                    difficulty: todayData.difficulty
+                )
+                context.insert(newPrompt)
+                try context.save()
+                todaysPrompt = newPrompt
+                allPrompts.append(newPrompt)
             }
 
             // If hiding answered prompts and current prompt was already answered, pick an unanswered one
@@ -244,9 +243,22 @@ class TodayViewModel {
         let descriptor = FetchDescriptor<Prompt>()
 
         do {
-            let allPrompts = try context.fetch(descriptor)
+            var allPrompts = try context.fetch(descriptor)
             var candidate = allPrompts.first { $0.id == targetId }
-                ?? allPrompts.randomElement()
+
+            // If the prompt isn't in the DB yet, insert it directly
+            if candidate == nil {
+                let newPrompt = Prompt(
+                    id: randomData.id,
+                    text: randomData.text,
+                    category: randomData.category,
+                    difficulty: randomData.difficulty
+                )
+                context.insert(newPrompt)
+                try context.save()
+                candidate = newPrompt
+                allPrompts.append(newPrompt)
+            }
 
             // If hiding answered prompts, prefer an unanswered one
             if hideAnsweredPrompts {

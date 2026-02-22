@@ -16,10 +16,11 @@ struct HistoryView: View {
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
 
+    // MARK: - Filtered Recordings
+
     private var filteredRecordings: [Recording] {
         var recordings = viewModel.recordings.filter { !$0.isDeleted }
 
-        // Apply filter
         switch selectedFilter {
         case .all: break
         case .favorites:
@@ -31,7 +32,6 @@ struct HistoryView: View {
             recordings = recordings.filter { $0.date >= weekAgo }
         }
 
-        // Apply search
         if !searchText.isEmpty {
             recordings = recordings.filter { recording in
                 let promptText = recording.prompt?.text ?? ""
@@ -46,39 +46,36 @@ struct HistoryView: View {
         return recordings
     }
 
+    private var analyzedRecordings: [Recording] {
+        viewModel.recordings.filter { $0.analysis != nil }
+    }
+
+    // MARK: - Body
+
     var body: some View {
         ZStack {
             AppBackground()
 
             ScrollView {
                 VStack(spacing: 16) {
-                    // Contribution Graph
                     contributionGraphSection
-
-                    // Streak Stats
                     streakSection
-
-                    // Vocab Word Usage
                     vocabUsageSection
 
-                    // Listen to Your Progress
                     if viewModel.recordings.count >= 5 {
                         progressReplayBanner
                     }
 
-                    // Compare Progress
                     if analyzedRecordings.count >= 2 {
                         compareProgressCard
                     }
 
-                    // Filter & Search
                     filterSection
-
-                    // Recent Recordings
                     recordingsSection
                 }
                 .padding()
             }
+            .scrollIndicators(.hidden)
         }
         .navigationTitle("History")
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -91,7 +88,7 @@ struct HistoryView: View {
                 }
             }
         }
-    .searchable(text: $searchText, prompt: "Search recordings...")
+        .searchable(text: $searchText, prompt: "Search recordings...")
         .refreshable {
             await viewModel.loadData()
         }
@@ -143,11 +140,14 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
             }
 
-            GlassCard {
+            GlassCard(padding: 0) {
                 ContributionGraph(viewModel: viewModel) { date in
                     selectedDate = date
                     showingDayDetail = true
                 }
+                .padding(.top, 16)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
             }
         }
     }
@@ -165,9 +165,7 @@ struct HistoryView: View {
                     isHighlighted: viewModel.currentStreak > 0
                 )
 
-                Rectangle()
-                    .fill(.quaternary)
-                    .frame(width: 0.5, height: 40)
+                streakDivider
 
                 StreakStatItem(
                     icon: "trophy.fill",
@@ -177,9 +175,7 @@ struct HistoryView: View {
                     isHighlighted: false
                 )
 
-                Rectangle()
-                    .fill(.quaternary)
-                    .frame(width: 0.5, height: 40)
+                streakDivider
 
                 StreakStatItem(
                     icon: "mic.fill",
@@ -189,9 +185,7 @@ struct HistoryView: View {
                     isHighlighted: false
                 )
 
-                Rectangle()
-                    .fill(.quaternary)
-                    .frame(width: 0.5, height: 40)
+                streakDivider
 
                 StreakStatItem(
                     icon: "clock.fill",
@@ -201,9 +195,7 @@ struct HistoryView: View {
                     isHighlighted: false
                 )
 
-                Rectangle()
-                    .fill(.quaternary)
-                    .frame(width: 0.5, height: 40)
+                streakDivider
 
                 StreakStatItem(
                     icon: "chart.line.uptrend.xyaxis",
@@ -214,6 +206,12 @@ struct HistoryView: View {
                 )
             }
         }
+    }
+
+    private var streakDivider: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(width: 0.5, height: 40)
     }
 
     private var averageScoreText: String {
@@ -330,12 +328,6 @@ struct HistoryView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Analyzed Recordings Helper
-
-    private var analyzedRecordings: [Recording] {
-        viewModel.recordings.filter { $0.analysis != nil }
-    }
-
     // MARK: - Compare Progress Card
 
     private var compareProgressCard: some View {
@@ -411,8 +403,8 @@ struct HistoryView: View {
                     }
                 }
             }
-            .scrollIndicators(.hidden)
         }
+        .scrollIndicators(.hidden)
     }
 
     private func countForFilter(_ filter: HistoryFilter) -> Int? {
@@ -459,24 +451,24 @@ struct HistoryView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                                Button {
-                                    Task {
-                                        await viewModel.toggleFavorite(recording)
-                                    }
-                                } label: {
-                                    Label(
-                                        recording.isFavorite ? "Remove Favorite" : "Add to Favorites",
-                                        systemImage: recording.isFavorite ? "heart.slash" : "heart"
-                                    )
+                            Button {
+                                Task {
+                                    await viewModel.toggleFavorite(recording)
                                 }
-
-                                Button(role: .destructive) {
-                                    recordingToDelete = recording
-                                    showingDeleteAlert = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                            } label: {
+                                Label(
+                                    recording.isFavorite ? "Remove Favorite" : "Add to Favorites",
+                                    systemImage: recording.isFavorite ? "heart.slash" : "heart"
+                                )
                             }
+
+                            Button(role: .destructive) {
+                                recordingToDelete = recording
+                                showingDeleteAlert = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }
@@ -484,13 +476,10 @@ struct HistoryView: View {
     }
 }
 
-// MARK: - History Filter Enum
+// MARK: - History Filter
 
 enum HistoryFilter: String, CaseIterable, Identifiable {
-    case all
-    case favorites
-    case highScore
-    case recent
+    case all, favorites, highScore, recent
 
     var id: String { rawValue }
 
@@ -600,10 +589,9 @@ struct ContributionGraph: View {
     let viewModel: HistoryViewModel
     var onDateSelected: ((Date) -> Void)?
 
-    private let columns = 26 // 26 weeks (half year)
-    private let rows = 7 // Days of week
+    private let columns = 26
+    private let rows = 7
     private let cellSpacing: CGFloat = 3
-
     private let weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let legendIntensities: [Double] = [0.0, 0.25, 0.5, 0.75, 1.0]
 
@@ -611,22 +599,21 @@ struct ContributionGraph: View {
         GeometryReader { geometry in
             let availableWidth = max(100, geometry.size.width - 28)
             let cellSize = max(8, (availableWidth - CGFloat(columns - 1) * cellSpacing) / CGFloat(columns))
+            let cellHeight = cellSize * 1.4
 
             if cellSize > 0 {
                 VStack(alignment: .leading, spacing: 8) {
-                    // Weekday labels
                     HStack(spacing: cellSpacing) {
                         VStack(alignment: .trailing, spacing: cellSpacing) {
                             ForEach(0..<rows, id: \.self) { index in
                                 Text(index % 2 == 1 ? weekdayLabels[index] : "")
                                     .font(.system(size: 8))
                                     .foregroundStyle(.secondary)
-                                    .frame(height: cellSize)
+                                    .frame(height: cellHeight)
                             }
                         }
                         .frame(width: 24)
 
-                        // Grid
                         HStack(spacing: cellSpacing) {
                             ForEach(0..<columns, id: \.self) { week in
                                 VStack(spacing: cellSpacing) {
@@ -636,7 +623,7 @@ struct ContributionGraph: View {
 
                                         RoundedRectangle(cornerRadius: 2)
                                             .fill(contributionColor(intensity: intensity))
-                                            .frame(width: cellSize, height: cellSize)
+                                            .frame(width: cellSize, height: cellHeight)
                                             .onTapGesture {
                                                 if intensity > 0 {
                                                     onDateSelected?(date)
@@ -648,7 +635,6 @@ struct ContributionGraph: View {
                         }
                     }
 
-                    // Legend
                     HStack(spacing: 4) {
                         Text("Less")
                             .font(.caption2)
@@ -668,7 +654,7 @@ struct ContributionGraph: View {
                 }
             }
         }
-        .frame(height: 120)
+        .frame(height: 160)
     }
 
     private func contributionColor(intensity: Double) -> Color {
@@ -702,102 +688,98 @@ struct RecordingRow: View {
         if recording.isDeleted {
             EmptyView()
         } else {
-        GlassCard(padding: 12) {
-            HStack(spacing: 12) {
-                // Media Type Icon with gradient
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.teal.opacity(0.15), .cyan.opacity(0.08)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+            GlassCard(padding: 12) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.teal.opacity(0.15), .cyan.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .frame(width: 44, height: 44)
+                            .frame(width: 44, height: 44)
 
-                    Image(systemName: recording.mediaType.iconName)
-                        .foregroundStyle(.teal)
-                }
-
-                // Info
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(recording.displayTitle)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-
-                        if recording.isFavorite {
-                            Image(systemName: "heart.fill")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                    }
-
-                    // Category badge
-                    if let category = recording.prompt?.category {
-                        Text(category)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(PromptCategory(rawValue: category)?.color ?? .teal)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background {
-                                Capsule()
-                                    .fill((PromptCategory(rawValue: category)?.color ?? .teal).opacity(0.15))
-                            }
-                    }
-
-                    HStack(spacing: 6) {
-                        Text(detailedDateString)
-                        Text("·")
-                        Text(recording.formattedDuration)
-
-                        if let wpm = recording.analysis?.wordsPerMinute {
-                            Text("·")
-                            HStack(spacing: 2) {
-                                Image(systemName: "metronome")
-                                    .font(.system(size: 8))
-                                Text("\(Int(wpm)) wpm")
-                            }
+                        Image(systemName: recording.mediaType.iconName)
                             .foregroundStyle(.teal)
-                        }
+                    }
 
-                        if let fillers = recording.analysis?.totalFillerCount, fillers > 0 {
-                            Text("·")
-                            HStack(spacing: 2) {
-                                Image(systemName: "bubble.left")
-                                    .font(.system(size: 8))
-                                Text("\(fillers)")
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(recording.displayTitle)
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+
+                            if recording.isFavorite {
+                                Image(systemName: "heart.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
                             }
-                            .foregroundStyle(.orange)
                         }
+
+                        if let category = recording.prompt?.category {
+                            Text(category)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(PromptCategory(rawValue: category)?.color ?? .teal)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background {
+                                    Capsule()
+                                        .fill((PromptCategory(rawValue: category)?.color ?? .teal).opacity(0.15))
+                                }
+                        }
+
+                        HStack(spacing: 6) {
+                            Text(detailedDateString)
+                            Text("·")
+                            Text(recording.formattedDuration)
+
+                            if let wpm = recording.analysis?.wordsPerMinute {
+                                Text("·")
+                                HStack(spacing: 2) {
+                                    Image(systemName: "metronome")
+                                        .font(.system(size: 8))
+                                    Text("\(Int(wpm)) wpm")
+                                }
+                                .foregroundStyle(.teal)
+                            }
+
+                            if let fillers = recording.analysis?.totalFillerCount, fillers > 0 {
+                                Text("·")
+                                HStack(spacing: 2) {
+                                    Image(systemName: "bubble.left")
+                                        .font(.system(size: 8))
+                                    Text("\(fillers)")
+                                }
+                                .foregroundStyle(.orange)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
 
-                Spacer()
+                    Spacer()
 
-                // Score
-                if let score = recording.analysis?.speechScore.overall {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(score)")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(AppColors.scoreColor(for: score))
+                    if let score = recording.analysis?.speechScore.overall {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(score)")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(AppColors.scoreColor(for: score))
 
-                        Text("score")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            Text("score")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if recording.isProcessing {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.tertiary)
                     }
-                } else if recording.isProcessing {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.tertiary)
                 }
             }
-        }
         }
     }
 }

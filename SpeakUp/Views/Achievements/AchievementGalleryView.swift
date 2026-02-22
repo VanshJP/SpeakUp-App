@@ -69,6 +69,7 @@ struct AchievementGalleryView: View {
                 }
                 .padding()
             }
+            .scrollIndicators(.hidden)
         }
         .navigationTitle("Achievements")
         .toolbarBackground(.hidden, for: .navigationBar)

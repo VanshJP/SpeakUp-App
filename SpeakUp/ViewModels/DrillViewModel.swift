@@ -249,9 +249,10 @@ class DrillViewModel {
             details = finalFillerCount == 0 ? "Perfect! Zero fillers!" : "\(finalFillerCount) filler(s) detected"
 
         case .paceControl:
-            let deviation = abs(finalWPM - 150)
-            drillScore = max(0, 100 - Int(deviation * 2))
-            passed = deviation < 20
+            let sigma = 35.0
+            let deviation = finalWPM - 150.0
+            drillScore = max(0, Int(100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))))
+            passed = drillScore >= 70
             details = "Average pace: \(Int(finalWPM)) WPM (target: 130-170)"
 
         case .pausePractice:

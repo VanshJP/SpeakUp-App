@@ -20,7 +20,9 @@
       "Bash(for f in Services/HapticCoachingService.swift Models/SpeechFramework.swift Views/Recording/FrameworkOverlayView.swift Views/Detail/SpeechTimelineView.swift Views/Detail/PaceChartView.swift Models/WarmUpExercise.swift Data/DefaultWarmUps.swift Models/DrillMode.swift Models/ConfidenceExercise.swift Data/DefaultConfidenceExercises.swift ViewModels/WarmUpViewModel.swift ViewModels/DrillViewModel.swift Views/WarmUp/WarmUpListView.swift Views/WarmUp/WarmUpExerciseView.swift Views/WarmUp/BreathingAnimationView.swift Views/Drills/DrillSelectionView.swift Views/Drills/DrillSessionView.swift Views/Drills/DrillResultView.swift Views/Confidence/ConfidenceToolsView.swift Views/Confidence/ConfidenceExerciseView.swift Models/CurriculumModels.swift Models/CurriculumProgress.swift Data/DefaultCurriculum.swift Services/CurriculumService.swift ViewModels/CurriculumViewModel.swift Services/WeakAreaService.swift Views/Curriculum/CurriculumView.swift Views/Curriculum/LessonDetailView.swift Views/Curriculum/CurriculumProgressCard.swift ViewModels/ProgressReplayViewModel.swift Views/Progress/BeforeAfterReplayView.swift Views/Detail/ListenBackEncouragementView.swift Services/JournalExportService.swift Views/Progress/JournalExportView.swift Views/Progress/JournalSummaryView.swift)",
       "Bash(git status:*)",
       "Bash(swift -typecheck:*)",
-      "Bash(greenlight preflight:*)"
+      "Bash(greenlight preflight:*)",
+      "Bash(find:*)",
+      "Bash(python3:*)"
     ]
   },
   "outputStyle": "default"

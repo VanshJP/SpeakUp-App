@@ -154,8 +154,20 @@ struct OnboardingView: View {
             title: "Deep Speech Analysis",
             subtitle: "Every session is scored across four dimensions so you know exactly where to focus."
         ) {
-            // Animated score ring
+            // Hero — matches other pages: RadialGradient + icon + score ring
             ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.teal.opacity(0.2), Color.clear],
+                            center: .center,
+                            startRadius: 20,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+
+                // Score ring
                 Circle()
                     .stroke(Color.white.opacity(0.08), lineWidth: 8)
                     .frame(width: 110, height: 110)
@@ -164,7 +176,7 @@ struct OnboardingView: View {
                     .trim(from: 0, to: viewModel.scoreAnimationTriggered ? 0.82 : 0)
                     .stroke(
                         LinearGradient(
-                            colors: [.green, .teal],
+                            colors: [Color.teal.opacity(0.7), .cyan],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -172,20 +184,21 @@ struct OnboardingView: View {
                     )
                     .frame(width: 110, height: 110)
                     .rotationEffect(.degrees(-90))
-                    .animation(.spring(response: 1.0, dampingFraction: 0.7).delay(0.2), value: viewModel.scoreAnimationTriggered)
+                    .animation(.easeOut(duration: 1.5), value: viewModel.scoreAnimationTriggered)
 
                 VStack(spacing: 2) {
-                    Text(viewModel.scoreAnimationTriggered ? "82" : "--")
+                    Text("82")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .contentTransition(.numericText())
                     Text("score")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.5))
                 }
+                .opacity(viewModel.scoreAnimationTriggered ? 1 : 0)
+                .animation(.easeIn(duration: 0.5).delay(0.3), value: viewModel.scoreAnimationTriggered)
             }
         } detail: {
-            // Metric bars — matches RecordingDetailView subscores
+            // Metric bars — staggered entrance like other pages
             VStack(spacing: 10) {
                 AnimatedScoreRow(icon: "waveform", title: "Clarity", targetWidth: 0.85, color: .blue, delay: 0.3, animate: viewModel.scoreAnimationTriggered)
                 AnimatedScoreRow(icon: "speedometer", title: "Pace", targetWidth: 0.72, color: .green, delay: 0.5, animate: viewModel.scoreAnimationTriggered)

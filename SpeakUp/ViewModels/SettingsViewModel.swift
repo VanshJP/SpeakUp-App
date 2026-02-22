@@ -9,6 +9,7 @@ class SettingsViewModel {
     var isLoading = true
     var showingResetConfirmation = false
     var showingClearDataConfirmation = false
+    var clearDataAcknowledgement = ""
     
     // Local state for pickers - Recording Defaults
     var defaultDuration: RecordingDuration = .sixty
@@ -52,9 +53,13 @@ class SettingsViewModel {
     private var vocabErrorDismissID = 0
 
     private var modelContext: ModelContext?
+    private var hasConfigured = false
+    var isSyncing = false
     private let notificationService = NotificationService()
-    
+
     func configure(with context: ModelContext) {
+        guard !hasConfigured else { return }
+        hasConfigured = true
         self.modelContext = context
         Task { @MainActor in
             await loadSettings()
@@ -90,20 +95,23 @@ class SettingsViewModel {
     private func syncLocalState() {
         guard let settings else { return }
 
+        isSyncing = true
+        defer { isSyncing = false }
+
         defaultDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
         dailyReminderEnabled = settings.dailyReminderEnabled
-        
+
         var components = DateComponents()
         components.hour = settings.dailyReminderHour
         components.minute = settings.dailyReminderMinute
         reminderTime = Calendar.current.date(from: components) ?? Date()
-        
+
         weeklyGoalSessions = settings.weeklyGoalSessions
 
         // Analysis features
         trackPauses = settings.trackPauses
         trackFillerWords = settings.trackFillerWords
-        
+
         // Prompt settings
         showDailyPrompt = settings.showDailyPrompt
         hideAnsweredPrompts = settings.hideAnsweredPrompts
@@ -304,13 +312,12 @@ class SettingsViewModel {
     @MainActor
     func clearAllData() async {
         guard let context = modelContext else { return }
-        
+
         do {
-            // Delete all recordings
+            // Delete all recordings and their files
             let recordingDescriptor = FetchDescriptor<Recording>()
             let recordings = try context.fetch(recordingDescriptor)
             for recording in recordings {
-                // Delete files
                 if let audioURL = recording.audioURL {
                     try? FileManager.default.removeItem(at: audioURL)
                 }
@@ -319,14 +326,34 @@ class SettingsViewModel {
                 }
                 context.delete(recording)
             }
-            
+
             // Delete all goals
             let goalDescriptor = FetchDescriptor<UserGoal>()
             let goals = try context.fetch(goalDescriptor)
             for goal in goals {
                 context.delete(goal)
             }
-            
+
+            // Delete all achievements
+            let achievementDescriptor = FetchDescriptor<Achievement>()
+            let achievements = try context.fetch(achievementDescriptor)
+            for achievement in achievements {
+                context.delete(achievement)
+            }
+
+            // Delete curriculum progress
+            let curriculumDescriptor = FetchDescriptor<CurriculumProgress>()
+            let curriculumItems = try context.fetch(curriculumDescriptor)
+            for item in curriculumItems {
+                context.delete(item)
+            }
+
+            // Clear word bank from settings
+            if let settings {
+                settings.vocabWords = []
+            }
+            vocabWords = []
+
             try context.save()
         } catch {
             print("Error clearing data: \(error)")

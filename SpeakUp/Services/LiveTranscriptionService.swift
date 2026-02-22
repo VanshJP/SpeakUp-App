@@ -8,6 +8,14 @@ class LiveTranscriptionService {
     var liveWordCount = 0
     var isActive = false
 
+    /// Timestamp (relative to recognition start) when the last spoken word ended.
+    /// Used to detect sentence boundaries for graceful recording stop.
+    var lastSegmentEndTime: TimeInterval = 0
+
+    /// Monotonic clock time when recognition started, used to convert
+    /// segment timestamps into elapsed-recording time.
+    private var recognitionStartTime: CFAbsoluteTime = 0
+
     private var audioEngine: AVAudioEngine?
     private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -40,6 +48,8 @@ class LiveTranscriptionService {
 
         liveFillerCount = 0
         liveWordCount = 0
+        lastSegmentEndTime = 0
+        recognitionStartTime = CFAbsoluteTimeGetCurrent()
         isActive = true
 
         let inputNode = engine.inputNode
@@ -156,6 +166,14 @@ class LiveTranscriptionService {
         }
 
         fillerCount = fillerIndices.count
+
+        // Track when the last word ended (segment timestamp + duration)
+        if let lastSegment = segments.last {
+            let endTime = lastSegment.timestamp + lastSegment.duration
+            Task { @MainActor in
+                self.lastSegmentEndTime = endTime
+            }
+        }
 
         Task { @MainActor in
             self.liveFillerCount = fillerCount

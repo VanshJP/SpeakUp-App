@@ -36,7 +36,11 @@ class OnboardingViewModel {
 
     func triggerScoreAnimation() {
         guard !scoreAnimationTriggered else { return }
-        scoreAnimationTriggered = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation {
+                self.scoreAnimationTriggered = true
+            }
+        }
     }
 
     func revealTools() {

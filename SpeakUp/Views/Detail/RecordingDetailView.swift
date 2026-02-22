@@ -22,6 +22,7 @@ struct RecordingDetailView: View {
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
+    @State private var exportService = ExportService()
 
     @Query private var userSettings: [UserSettings]
 
@@ -34,7 +35,7 @@ struct RecordingDetailView: View {
             AppBackground(style: .subtle)
 
             if let recording {
-                ScrollView {
+                ScrollView(.vertical) {
                     VStack(spacing: 16) {
                         // 1. Prompt Header
                         promptHeader(recording)
@@ -113,6 +114,9 @@ struct RecordingDetailView: View {
                     }
                     .padding()
                 }
+                .scrollIndicators(.hidden)
+                .scrollBounceBehavior(.basedOnSize)
+                .contentMargins(.horizontal, 0)
                 .onAppear {
                     generateWaveformHeights()
                     initializePlayback(recording)
@@ -196,7 +200,6 @@ struct RecordingDetailView: View {
         }
         .onChange(of: showingShareSheet) { _, show in
             if show, let recording {
-                let exportService = ExportService()
                 exportService.shareRecording(recording, scoreCardImage: scoreCardImage)
                 showingShareSheet = false
             }

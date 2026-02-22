@@ -162,7 +162,10 @@ struct DrillSessionView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(Int(viewModel.liveWPM)) WPM")
                     .font(.title3.weight(.bold).monospacedDigit())
-                    .foregroundStyle(viewModel.liveWPM >= 130 && viewModel.liveWPM <= 170 ? .green : .red)
+                    .foregroundStyle(
+                        viewModel.liveWPM >= 130 && viewModel.liveWPM <= 170 ? .green :
+                        viewModel.liveWPM >= 115 && viewModel.liveWPM <= 185 ? .yellow : .red
+                    )
                     .contentTransition(.numericText())
                     .animation(.default, value: Int(viewModel.liveWPM))
 

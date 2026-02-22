@@ -77,6 +77,7 @@ struct TodayView: View {
                 }
                 .padding()
             }
+            .scrollIndicators(.hidden)
         }
         .navigationTitle("Today")
         .toolbarBackground(.hidden, for: .navigationBar)

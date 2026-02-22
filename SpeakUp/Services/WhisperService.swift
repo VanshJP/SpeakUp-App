@@ -28,7 +28,8 @@ class WhisperService {
     /// Load the Whisper model (call this early, e.g., on app launch)
     /// - Parameter modelVariant: Model variant to use (tiny, base, small, medium, large-v3)
     func loadModel(modelVariant: String = "base") async {
-        guard whisperKit == nil else { return }
+        // Allow re-initialization if model exists but isn't fully loaded
+        guard whisperKit == nil || !isModelLoaded else { return }
 
         do {
             modelLoadProgress = 0.1

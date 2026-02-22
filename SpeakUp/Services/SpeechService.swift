@@ -10,6 +10,7 @@ class SpeechService {
     var transcriptionProgress: Double = 0
     var modelLoadProgress: Double = 0
     var isModelLoaded: Bool { whisperService.isModelLoaded }
+    var transcriptionEngine: String?
 
     // Transcription backend
     private let whisperService = WhisperService()
@@ -62,11 +63,25 @@ class SpeechService {
             // Use WhisperKit for accurate filler word detection
             let result = try await whisperService.transcribe(audioURL: audioURL)
             transcriptionProgress = whisperService.transcriptionProgress
+            transcriptionEngine = "WhisperKit"
             return result
         } catch {
-            // Fallback to Apple Speech if WhisperKit fails
-            print("WhisperKit failed, falling back to Apple Speech: \(error)")
-            return try await transcribeWithAppleSpeech(audioURL: audioURL)
+            print("⚠️ WhisperKit failed: \(error). Retrying model load...")
+
+            // Retry once: unload and reload the model
+            whisperService.unloadModel()
+            await whisperService.loadModel(modelVariant: "base")
+
+            do {
+                let result = try await whisperService.transcribe(audioURL: audioURL)
+                transcriptionEngine = "WhisperKit (retry)"
+                print("✅ WhisperKit retry succeeded")
+                return result
+            } catch {
+                print("⚠️ WhisperKit retry failed: \(error). Falling back to Apple Speech (filler words may not be detected).")
+                transcriptionEngine = "Apple Speech (fallback)"
+                return try await transcribeWithAppleSpeech(audioURL: audioURL)
+            }
         }
     }
 
@@ -87,7 +102,9 @@ class SpeechService {
         request.shouldReportPartialResults = false
         request.taskHint = .dictation
 
-        request.addsPunctuation = true
+        // Don't add punctuation — it makes Apple Speech more aggressive
+        // about cleaning up raw speech and removing filler words
+        request.addsPunctuation = false
 
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
@@ -242,14 +259,11 @@ class SpeechService {
             FillerWord(word: key, count: value.count, timestamps: value.timestamps)
         }.sorted { $0.count > $1.count }
 
-        // Calculate metrics using speech span (first word to last word) for accurate WPM
-        // This avoids diluting pace with dead air at the start/end of the recording
-        let speechStart = transcription.words.first?.start ?? 0
-        let speechEnd = transcription.words.last?.end ?? actualDuration
-        let speechSpan = speechEnd - speechStart
-        let effectiveDuration = speechSpan > 0 ? speechSpan : actualDuration
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
-        let wordsPerMinute = effectiveDuration > 0 ? Double(totalWords) / (effectiveDuration / 60) : 0
+        let wordsPerMinute = actualDuration > 0 ? Double(totalWords) / (actualDuration / 60) : 0
+
+        // Confidence dampening for very short recordings (<10s)
+        let confidenceWeight = min(1.0, actualDuration / 10.0)
         let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
         let averagePauseLength = pauses.isEmpty ? 0 : pauses.reduce(0, +) / Double(pauses.count)
         
@@ -259,7 +273,8 @@ class SpeechService {
             fillerRatio: fillerRatio,
             pauseCount: pauses.count,
             averagePauseLength: averagePauseLength,
-            totalWords: totalWords
+            totalWords: totalWords,
+            confidenceWeight: confidenceWeight
         )
         
         let overallScore = calculateOverallScore(subscores: subscores)
@@ -289,25 +304,22 @@ class SpeechService {
         fillerRatio: Double,
         pauseCount: Int,
         averagePauseLength: TimeInterval,
-        totalWords: Int
+        totalWords: Int,
+        confidenceWeight: Double = 1.0
     ) -> SpeechSubscores {
         // Clarity score (based on confidence and articulation)
         // Higher is better, penalize high filler usage
         let clarityScore = max(0, min(100, Int(100 - (fillerRatio * 200))))
-        
-        // Pace score (optimal WPM is around 130-170)
-        let paceScore: Int
-        if wordsPerMinute < 100 {
-            paceScore = max(0, Int(wordsPerMinute * 0.7)) // Too slow
-        } else if wordsPerMinute > 200 {
-            paceScore = max(0, 100 - Int((wordsPerMinute - 200) * 0.5)) // Too fast
-        } else if wordsPerMinute >= 130 && wordsPerMinute <= 170 {
-            paceScore = 100 // Optimal
-        } else if wordsPerMinute < 130 {
-            paceScore = 70 + Int((wordsPerMinute - 100) * 1.0) // Slightly slow
-        } else {
-            paceScore = 70 + Int((200 - wordsPerMinute) * 1.0) // Slightly fast
-        }
+
+        // Pace score: Gaussian centered at 150 WPM, sigma=35
+        // 150→100, 130/170→87, 115/185→70, 100/200→48, 80/220→20
+        let optimalWPM = 150.0
+        let sigma = 35.0
+        let deviation = wordsPerMinute - optimalWPM
+        let rawPaceScore = 100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))
+
+        // Dampen toward 50 (neutral) for unreliable short recordings
+        let paceScore = max(0, min(100, Int(rawPaceScore * confidenceWeight + 50 * (1 - confidenceWeight))))
         
         // Filler usage score (lower filler ratio = higher score)
         let fillerScore = max(0, min(100, Int((1 - fillerRatio * 5) * 100)))

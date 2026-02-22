@@ -6,7 +6,7 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var showingCategories = false
     @State private var isWordBankExpanded = false
-    @FocusState private var isWordInputFocused: Bool
+    @State private var isWordInputFocused = false
 
     var body: some View {
         ZStack {
@@ -28,13 +28,12 @@ struct SettingsView: View {
                     }
                     .padding()
                 }
+                .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: isWordInputFocused) { _, focused in
                     if focused {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                proxy.scrollTo("wordBank", anchor: .top)
-                            }
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            proxy.scrollTo("wordBankInput", anchor: .center)
                         }
                     }
                 }
@@ -55,12 +54,19 @@ struct SettingsView: View {
             Text("This will reset all settings to their default values.")
         }
         .alert("Clear All Data?", isPresented: $viewModel.showingClearDataConfirmation) {
-            Button("Cancel", role: .cancel) {}
+            TextField("Type \"I acknowledge\"", text: $viewModel.clearDataAcknowledgement)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            Button("Cancel", role: .cancel) {
+                viewModel.clearDataAcknowledgement = ""
+            }
             Button("Clear Data", role: .destructive) {
                 Task { await viewModel.clearAllData() }
+                viewModel.clearDataAcknowledgement = ""
             }
+            .disabled(viewModel.clearDataAcknowledgement.trimmingCharacters(in: .whitespaces).lowercased() != "i acknowledge")
         } message: {
-            Text("This will permanently delete all your recordings and goals. This action cannot be undone.")
+            Text("This will permanently delete all your recordings, goals, achievements, and curriculum progress. Type \"I acknowledge\" to confirm.")
         }
     }
 
@@ -215,6 +221,7 @@ struct SettingsView: View {
                     }
 
                     wordBankInputField
+                        .id("wordBankInput")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -291,20 +298,13 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.teal)
 
-            TextField("Add a word...", text: $viewModel.newVocabWord)
-                .font(.subheadline)
-                .foregroundStyle(.white)
-                .tint(.teal)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($isWordInputFocused)
-                .submitLabel(.done)
-                .onSubmit {
-                    viewModel.addVocabWord()
-                    if !viewModel.vocabWords.isEmpty && viewModel.vocabWordError == nil {
-                        isWordInputFocused = true
-                    }
-                }
+            PersistentTextField(
+                placeholder: "Add a word...",
+                text: $viewModel.newVocabWord,
+                isFocused: $isWordInputFocused,
+                onSubmit: { viewModel.addVocabWord() }
+            )
+            .frame(height: 22)
 
             if !viewModel.newVocabWord.isEmpty {
                 Button {
@@ -618,21 +618,27 @@ private struct SettingsChangeModifiersA: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: viewModel.defaultDuration) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.dailyReminderEnabled) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.reminderTime) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.weeklyGoalSessions) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.trackPauses) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.trackFillerWords) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
     }
@@ -644,18 +650,23 @@ private struct SettingsChangeModifiersB: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: viewModel.countdownDuration) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.countdownStyle) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.timerEndBehavior) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.hapticCoachingEnabled) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.chirpSoundEnabled) { _, _ in
+                guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.hideAnsweredPrompts) { _, _ in

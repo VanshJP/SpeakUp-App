@@ -32,6 +32,13 @@ class RecordingViewModel {
     var error: Error?
     var autoSavedRecording: Recording?
 
+    // Sentence-end grace period for Save & Stop
+    var isWaitingForSentenceEnd = false
+    private let sentenceSilenceThreshold: TimeInterval = 0.5  // silence gap to consider sentence ended
+    private let silenceDbThreshold: Float = -40              // dB level below which counts as silence
+    private let maxGracePeriod: TimeInterval = 10.0           // max extra seconds before force-stop
+    private var graceStartTime: TimeInterval?
+
     // Audio level for waveform visualization
     var audioLevel: Float = -160
 
@@ -176,10 +183,42 @@ class RecordingViewModel {
                     self.progress = self.countdownStyle == .countDown ? 0.0 : 1.0
 
                     if self.timerEndBehavior == .saveAndStop {
-                        // Invalidate timer BEFORE calling stop to prevent re-entry
-                        self.timer?.invalidate()
-                        self.timer = nil
-                        self.autoSavedRecording = await self.stopRecording()
+                        let timeSinceLastWord = self.recordingDuration - self.liveTranscriptionService.lastSegmentEndTime
+                        let isQuiet = self.audioLevel < self.silenceDbThreshold
+
+                        if !self.isWaitingForSentenceEnd {
+                            // Timer just expired — check if user is mid-sentence
+                            let isMidSentence = self.liveTranscriptionService.isActive
+                                && self.liveTranscriptionService.lastSegmentEndTime > 0
+                                && (timeSinceLastWord < self.sentenceSilenceThreshold || !isQuiet)
+
+                            if isMidSentence {
+                                // User is still speaking — enter grace period
+                                self.isWaitingForSentenceEnd = true
+                                self.graceStartTime = self.recordingDuration
+                                Haptics.light()
+                            } else {
+                                // Not mid-sentence — stop immediately
+                                self.timer?.invalidate()
+                                self.timer = nil
+                                self.autoSavedRecording = await self.stopRecording()
+                            }
+                        } else {
+                            // Already in grace period — check for sentence end or timeout
+                            let graceElapsed = self.recordingDuration - (self.graceStartTime ?? self.recordingDuration)
+
+                            // Sentence ended = enough silence AND audio level is low
+                            let sentenceEnded = timeSinceLastWord >= self.sentenceSilenceThreshold && isQuiet
+                            let graceExpired = graceElapsed >= self.maxGracePeriod
+
+                            if sentenceEnded || graceExpired {
+                                self.isWaitingForSentenceEnd = false
+                                self.graceStartTime = nil
+                                self.timer?.invalidate()
+                                self.timer = nil
+                                self.autoSavedRecording = await self.stopRecording()
+                            }
+                        }
                     }
                     // .keepGoing: timer continues into negative, recording keeps going
                 } else {

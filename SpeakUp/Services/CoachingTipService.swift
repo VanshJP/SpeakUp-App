@@ -34,18 +34,32 @@ enum CoachingTipService {
         let topFillerCount = analysis.fillerWords.first?.count ?? 0
 
         // --- Pace ---
-        if wpm > 170 {
+        if wpm > 185 {
             tips.append(CoachingTip(
                 icon: "tortoise.fill",
                 title: "Slow Down",
                 message: "You spoke at \(Int(wpm)) WPM. Aim for 130-170 WPM for clarity.",
                 category: .pace
             ))
-        } else if wpm < 110 && wpm > 0 {
+        } else if wpm > 170 {
+            tips.append(CoachingTip(
+                icon: "gauge.with.dots.needle.50percent",
+                title: "Slightly Fast",
+                message: "At \(Int(wpm)) WPM you're just above optimal. Ease off slightly to land in the 130-170 sweet spot.",
+                category: .pace
+            ))
+        } else if wpm < 115 && wpm > 0 {
             tips.append(CoachingTip(
                 icon: "hare.fill",
                 title: "Pick Up the Pace",
                 message: "At \(Int(wpm)) WPM, try speaking a bit faster for better engagement.",
+                category: .pace
+            ))
+        } else if wpm >= 115 && wpm < 130 {
+            tips.append(CoachingTip(
+                icon: "figure.walk",
+                title: "A Bit More Energy",
+                message: "At \(Int(wpm)) WPM you're close to optimal. A touch more energy will bring you into the 130-170 range.",
                 category: .pace
             ))
         }

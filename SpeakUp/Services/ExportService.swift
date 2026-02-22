@@ -22,21 +22,10 @@ class ExportService {
     func shareRecording(_ recording: Recording, scoreCardImage: UIImage? = nil) {
         var items: [Any] = []
 
-        // Score card image first (most visual)
+        // Score card image
         if let image = scoreCardImage {
             items.append(image)
         }
-
-        // Add media file
-        if let videoURL = recording.videoURL {
-            items.append(videoURL)
-        } else if let audioURL = recording.audioURL {
-            items.append(audioURL)
-        }
-
-        // Add text summary
-        let summary = generateShareText(for: recording)
-        items.append(summary)
         
         let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
         
@@ -85,20 +74,20 @@ class ExportService {
     func generateShareText(for recording: Recording) -> String {
         var text = "SpeakUp Practice Session\n"
         text += "Date: \(recording.date.formatted(date: .abbreviated, time: .shortened))\n"
-        
+
         if let prompt = recording.prompt {
             text += "Topic: \(prompt.category)\n"
         }
-        
+
         text += "Duration: \(recording.formattedDuration)\n"
-        
+
         if let analysis = recording.analysis {
             text += "\nResults:\n"
             text += "Overall Score: \(analysis.speechScore.overall)/100\n"
             text += "Words per minute: \(Int(analysis.wordsPerMinute))\n"
             text += "Filler words: \(analysis.totalFillerCount)\n"
         }
-        
+
         text += "\nPractice your speaking with SpeakUp!"
         text += "\n#SpeakUp #PublicSpeaking"
 
@@ -107,10 +96,10 @@ class ExportService {
 
     func generateSocialShareText(for recording: Recording) -> String {
         var text = ""
-        
+
         if let analysis = recording.analysis {
             let score = analysis.speechScore.overall
-            
+
             if score >= 80 {
                 text += "Crushed it! "
             } else if score >= 60 {
@@ -118,11 +107,11 @@ class ExportService {
             } else {
                 text += "Practice makes progress! "
             }
-            
+
             text += "Score: \(score)/100 "
             text += getScoreEmoji(for: score)
         }
-        
+
         text += "\n\nPractice your speaking with SpeakUp!"
         text += "\n#SpeakUp #SpeakingPractice"
 

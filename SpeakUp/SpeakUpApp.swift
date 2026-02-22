@@ -82,20 +82,25 @@ struct SpeakUpApp: App {
     @MainActor
     private func seedPromptsIfNeeded() async {
         let context = sharedModelContainer.mainContext
-        let descriptor = FetchDescriptor<Prompt>()
 
         do {
-            let existingCount = try context.fetchCount(descriptor)
-            if existingCount == 0 {
-                for promptData in DefaultPrompts.all {
-                    let prompt = Prompt(
-                        id: promptData.id,
-                        text: promptData.text,
-                        category: promptData.category,
-                        difficulty: promptData.difficulty
-                    )
-                    context.insert(prompt)
-                }
+            let existing = try context.fetch(FetchDescriptor<Prompt>())
+            let existingIDs = Set(existing.map(\.id))
+
+            var inserted = 0
+            for promptData in DefaultPrompts.all {
+                guard !existingIDs.contains(promptData.id) else { continue }
+                let prompt = Prompt(
+                    id: promptData.id,
+                    text: promptData.text,
+                    category: promptData.category,
+                    difficulty: promptData.difficulty
+                )
+                context.insert(prompt)
+                inserted += 1
+            }
+
+            if inserted > 0 {
                 try context.save()
             }
         } catch {
