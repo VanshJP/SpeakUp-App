@@ -91,6 +91,7 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .tint(.teal)
                     }
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -107,6 +108,7 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .tint(.teal)
                     }
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -123,6 +125,7 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .tint(.teal)
                     }
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -139,6 +142,7 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .tint(.teal)
                     }
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -148,6 +152,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -157,6 +162,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -171,6 +177,7 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .frame(minHeight: 40)
                 }
             }
 
@@ -195,6 +202,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -204,6 +212,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+                    .frame(minHeight: 40)
                 }
             }
 
@@ -365,6 +374,7 @@ struct SettingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .frame(minHeight: 40)
                     }
                     .buttonStyle(.plain)
 
@@ -376,6 +386,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -403,6 +414,7 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                                 .rotationEffect(.degrees(showingCategories ? 90 : 0))
                         }
+                        .frame(minHeight: 40)
                     }
                     .buttonStyle(.plain)
 
@@ -471,6 +483,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+                    .frame(minHeight: 40)
 
                     if viewModel.dailyReminderEnabled {
                         Divider()
@@ -488,6 +501,7 @@ struct SettingsView: View {
                             .labelsHidden()
                             .tint(.teal)
                         }
+                        .frame(minHeight: 40)
                     }
                 }
             }
@@ -521,6 +535,7 @@ struct SettingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .frame(minHeight: 40)
                     }
                     .buttonStyle(.plain)
 
@@ -540,6 +555,7 @@ struct SettingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .frame(minHeight: 40)
                     }
                     .buttonStyle(.plain)
                 }
@@ -569,6 +585,7 @@ struct SettingsView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
+                    .frame(minHeight: 40)
 
                     Divider()
                         .padding(.vertical, 8)
@@ -583,6 +600,7 @@ struct SettingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .frame(minHeight: 40)
                     }
 
                     Divider()
@@ -600,6 +618,7 @@ struct SettingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                        .frame(minHeight: 40)
                     }
                     .buttonStyle(.plain)
                 }

@@ -68,7 +68,7 @@ final class UserSettings {
         trackFillerWords: Bool = true,
         showDailyPrompt: Bool = true,
         enabledPromptCategories: [String]? = nil,
-        countdownDuration: Int = 15,
+        countdownDuration: Int = 10,
         countdownStyle: Int = 0,
         timerEndBehavior: Int = 0,
         vocabWords: [String] = []

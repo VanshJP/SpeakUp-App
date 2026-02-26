@@ -12,6 +12,7 @@ class TodayViewModel {
     var weeklyProgress: WeeklyProgressData?
     var dailyChallenge: DailyChallenge?
     var hideAnsweredPrompts: Bool = false
+    var weeklyGoalSessions: Int = 5
 
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
@@ -175,6 +176,11 @@ class TodayViewModel {
 
             // Weekly progress
             weeklyProgress = WeeklyProgressService.calculate(recordings: recordings)
+
+            // Sessions this week (Mon-Sun)
+            let calendar = Calendar.current
+            let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+            let weeklySessionCount = recordings.filter { $0.date >= weekStart }.count
             
             userStats = UserStats(
                 totalRecordings: totalRecordings,
@@ -184,7 +190,9 @@ class TodayViewModel {
                 averageScore: averageScore,
                 scoreHistory: scoreHistory,
                 mostUsedFillers: Array(mostUsedFillers),
-                improvementRate: improvementRate
+                improvementRate: improvementRate,
+                weeklySessionCount: weeklySessionCount,
+                weeklyGoalSessions: weeklyGoalSessions
             )
         } catch {
             print("Error loading user stats: \(error)")
@@ -213,6 +221,7 @@ class TodayViewModel {
             if let settings = try context.fetch(descriptor).first {
                 selectedDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
                 hideAnsweredPrompts = settings.hideAnsweredPrompts
+                weeklyGoalSessions = settings.weeklyGoalSessions
             }
         } catch {
             print("Error loading user settings: \(error)")

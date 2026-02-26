@@ -12,6 +12,7 @@ struct JournalExportView: View {
     @State private var isExporting = false
     @State private var pdfURL: URL?
     @State private var showingShare = false
+    @State private var errorMessage: String?
 
     enum DateRangeOption: String, CaseIterable, Identifiable {
         case lastWeek = "Week"
@@ -69,120 +70,144 @@ struct JournalExportView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground()
+        ZStack {
+            AppBackground()
 
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Date range picker
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Label("Date Range", systemImage: "calendar")
-                                    .font(.headline)
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label("Date Range", systemImage: "calendar")
+                                .font(.headline)
 
-                                Spacer()
+                            Spacer()
 
-                                Text("\(filteredRecordings.count) sessions")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("\(filteredRecordings.count) sessions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(DateRangeOption.allCases) { option in
-                                        FilterChip(
-                                            title: option.rawValue,
-                                            icon: option.icon,
-                                            isSelected: selectedRange == option
-                                        ) {
-                                            withAnimation(.spring(duration: 0.3)) {
-                                                selectedRange = option
-                                            }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(DateRangeOption.allCases) { option in
+                                    FilterChip(
+                                        title: option.rawValue,
+                                        icon: option.icon,
+                                        isSelected: selectedRange == option
+                                    ) {
+                                        withAnimation(.spring(duration: 0.3)) {
+                                            selectedRange = option
                                         }
                                     }
                                 }
                             }
                         }
-
-                        // Options
-                        GlassCard {
-                            Toggle(isOn: $includeAchievements) {
-                                Label("Include Achievements", systemImage: "trophy")
-                                    .font(.subheadline)
-                            }
-                            .tint(.teal)
-                        }
-
-                        // Summary preview
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Summary", systemImage: "chart.bar.fill")
-                                .font(.headline)
-
-                            FeaturedGlassCard(gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]) {
-                                JournalSummaryView(
-                                    totalSessions: filteredRecordings.count,
-                                    totalMinutes: totalMinutes,
-                                    averageScore: averageScore,
-                                    improvement: improvement,
-                                    unlockedAchievements: includeAchievements ? unlockedAchievementsCount : 0
-                                )
-                            }
-                        }
-
-                        GlassButton(
-                            title: isExporting ? "Exporting..." : "Export PDF",
-                            icon: "doc.richtext",
-                            style: .secondary,
-                            fullWidth: true
-                        ) {
-                            exportPDF()
-                        }
-                        .disabled(filteredRecordings.isEmpty || isExporting)
                     }
-                    .padding()
+
+                    GlassCard {
+                        Toggle(isOn: $includeAchievements) {
+                            Label("Include Achievements", systemImage: "trophy")
+                                .font(.subheadline)
+                        }
+                        .tint(.teal)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Summary", systemImage: "chart.bar.fill")
+                            .font(.headline)
+
+                        FeaturedGlassCard(gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]) {
+                            JournalSummaryView(
+                                totalSessions: filteredRecordings.count,
+                                totalMinutes: totalMinutes,
+                                averageScore: averageScore,
+                                improvement: improvement,
+                                unlockedAchievements: includeAchievements ? unlockedAchievementsCount : 0
+                            )
+                        }
+                    }
+
+                    if let errorMessage {
+                        GlassCard {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+                        }
+                    }
+
+                    GlassButton(
+                        title: isExporting ? "Exporting..." : "Export PDF",
+                        icon: "doc.richtext",
+                        style: .secondary,
+                        isLoading: isExporting,
+                        fullWidth: true
+                    ) {
+                        exportPDF()
+                    }
+                    .disabled(filteredRecordings.isEmpty || isExporting)
                 }
+                .padding()
             }
-            .navigationTitle("Progress Journal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
+        }
+        .navigationTitle("Progress Journal")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") { dismiss() }
             }
-            .sheet(isPresented: $showingShare) {
-                if let url = pdfURL {
-                    ShareSheet(items: [url])
-                }
+        }
+        .sheet(isPresented: $showingShare) {
+            if let url = pdfURL {
+                ShareSheet(items: [url])
             }
         }
     }
 
     private func exportPDF() {
         isExporting = true
-        let service = JournalExportService()
-        guard let data = service.generatePDF(
-            recordings: filteredRecordings,
-            dateRange: selectedRange.rawValue,
-            includeAchievements: includeAchievements,
-            achievements: achievements
-        ) else {
-            isExporting = false
-            return
+        errorMessage = nil
+
+        let recordings = filteredRecordings
+        let range = selectedRange.rawValue
+        let withAchievements = includeAchievements
+        let achievementsList = achievements
+
+        Task.detached {
+            let service = JournalExportService()
+            let data = service.generatePDF(
+                recordings: recordings,
+                dateRange: range,
+                includeAchievements: withAchievements,
+                achievements: achievementsList
+            )
+
+            await MainActor.run {
+                guard let data else {
+                    errorMessage = "Failed to generate PDF."
+                    isExporting = false
+                    return
+                }
+
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                let dateString = formatter.string(from: Date())
+                let fileName = "SpeakUp-Journal-\(dateString).pdf"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+                do {
+                    try data.write(to: tempURL)
+                    pdfURL = tempURL
+                    isExporting = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        showingShare = true
+                    }
+                } catch {
+                    errorMessage = "Could not save PDF: \(error.localizedDescription)"
+                    isExporting = false
+                }
+            }
         }
-
-        let dateString = Date().formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))
-        let fileName = "SpeakUp Recordings \(dateString).pdf"
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
-        do {
-            try data.write(to: tempURL)
-            pdfURL = tempURL
-            showingShare = true
-        } catch {}
-
-        isExporting = false
     }
 }
 

@@ -607,6 +607,8 @@ struct UserStats {
     var scoreHistory: [ScoreHistoryEntry]
     var mostUsedFillers: [FillerWord]
     var improvementRate: Double // percentage change over last 7 days
+    var weeklySessionCount: Int
+    var weeklyGoalSessions: Int
     
     init(
         totalRecordings: Int = 0,
@@ -616,7 +618,9 @@ struct UserStats {
         averageScore: Double = 0,
         scoreHistory: [ScoreHistoryEntry] = [],
         mostUsedFillers: [FillerWord] = [],
-        improvementRate: Double = 0
+        improvementRate: Double = 0,
+        weeklySessionCount: Int = 0,
+        weeklyGoalSessions: Int = 5
     ) {
         self.totalRecordings = totalRecordings
         self.totalPracticeTime = totalPracticeTime
@@ -626,6 +630,8 @@ struct UserStats {
         self.scoreHistory = scoreHistory
         self.mostUsedFillers = mostUsedFillers
         self.improvementRate = improvementRate
+        self.weeklySessionCount = weeklySessionCount
+        self.weeklyGoalSessions = weeklyGoalSessions
     }
     
     var formattedPracticeTime: String {

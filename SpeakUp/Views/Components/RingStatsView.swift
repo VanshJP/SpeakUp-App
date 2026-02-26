@@ -3,11 +3,11 @@ import SwiftUI
 struct RingStatsView: View {
     let streak: Int
     let sessions: Int
+    let sessionsGoal: Int
     let score: Int
     var improvement: Double = 0  // e.g., 12.5 for +12.5%
 
-    private let streakTarget = 7  // Weekly goal
-    private let sessionsTarget = 7
+    private let streakTarget = 7
 
     @State private var animateRings = false
 
@@ -53,9 +53,9 @@ struct RingStatsView: View {
                 )
                 .frame(width: 170, height: 170)
 
-                // Middle ring - Sessions (teal)
+                // Middle ring - Sessions this week / weekly goal (teal)
                 RingProgress(
-                    progress: animateRings ? Double(min(sessions, sessionsTarget)) / Double(sessionsTarget) : 0,
+                    progress: animateRings ? Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)) : 0,
                     color: .teal,
                     lineWidth: 14
                 )
@@ -95,8 +95,8 @@ struct RingStatsView: View {
                 MetricItem(
                     icon: "mic.fill",
                     color: .teal,
-                    value: "\(sessions)",
-                    label: "Sessions"
+                    value: "\(sessions)/\(sessionsGoal)",
+                    label: "This Week"
                 )
 
                 MetricDivider()
@@ -174,7 +174,7 @@ struct RingStatsView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Stats: \(streak) day streak, \(sessions) sessions, score \(score) out of 100, \(improvementText) progress")
+        .accessibilityLabel("Stats: \(streak) day streak, \(sessions) of \(sessionsGoal) sessions this week, score \(score) out of 100, \(improvementText) progress")
     }
 }
 
@@ -247,8 +247,8 @@ struct RingProgress: View {
 
 #Preview {
     VStack(spacing: 20) {
-        RingStatsView(streak: 5, sessions: 3, score: 72, improvement: 12.5)
-        RingStatsView(streak: 2, sessions: 1, score: 45, improvement: -8.0)
+        RingStatsView(streak: 5, sessions: 3, sessionsGoal: 5, score: 72, improvement: 12.5)
+        RingStatsView(streak: 2, sessions: 1, sessionsGoal: 5, score: 45, improvement: -8.0)
     }
     .padding()
     .background(Color.gray.opacity(0.1))

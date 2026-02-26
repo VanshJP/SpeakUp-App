@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -112,7 +112,7 @@ struct ContentView: View {
                     }
                 }
 
-                Tab("Rewards", systemImage: "trophy.fill", value: .achievements) {
+                Tab("Awards", systemImage: "trophy.fill", value: .achievements) {
                     NavigationStack {
                         AchievementGalleryView()
                     }
@@ -204,7 +204,9 @@ struct ContentView: View {
             BeforeAfterReplayView()
         }
         .sheet(isPresented: $showingJournalExport) {
-            JournalExportView()
+            NavigationStack {
+                JournalExportView()
+            }
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -261,7 +263,8 @@ struct ContentView: View {
         switch url.host {
         case "record":
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let promptId = components.queryItems?.first(where: { $0.name == "prompt" })?.value {
+                let promptId = components.queryItems?.first(where: { $0.name == "prompt" })?.value
+            {
                 let descriptor = FetchDescriptor<Prompt>()
                 if let prompts = try? modelContext.fetch(descriptor) {
                     recordingPrompt = prompts.first { $0.id == promptId }
@@ -298,7 +301,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: return "Today"
         case .prompts: return "Prompts"
         case .history: return "History"
-        case .achievements: return "Rewards"
+        case .achievements: return "Awards"
         case .settings: return "Settings"
         }
     }
@@ -326,5 +329,6 @@ enum AppTab: String, CaseIterable, Identifiable {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
+        .modelContainer(
+            for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }

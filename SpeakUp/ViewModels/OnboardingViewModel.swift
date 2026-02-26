@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AVFoundation
+import UserNotifications
 
 @Observable
 class OnboardingViewModel {
@@ -8,13 +9,18 @@ class OnboardingViewModel {
     var hasMicPermission = false
     var isRequestingPermission = false
 
+    // Notification permission
+    var hasNotificationPermission = false
+    var isRequestingNotificationPermission = false
+    var notificationJustGranted = false
+
     // Interactive state per page
     var scoreAnimationTriggered = false
     var toolsRevealed = 0
     var progressItemsRevealed = 0
     var micJustGranted = false
 
-    let totalPages = 6
+    let totalPages = 7
 
     var isLastPage: Bool { currentPage == totalPages - 1 }
 
@@ -95,5 +101,31 @@ class OnboardingViewModel {
         } else {
             hasMicPermission = AVAudioSession.sharedInstance().recordPermission == .granted
         }
+    }
+
+    // MARK: - Notification Permission
+
+    func requestNotificationPermission() async {
+        isRequestingNotificationPermission = true
+        defer { isRequestingNotificationPermission = false }
+
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            hasNotificationPermission = granted
+            if granted {
+                Haptics.success()
+                withAnimation(.spring(response: 0.5)) {
+                    notificationJustGranted = true
+                }
+            }
+        } catch {
+            print("Notification permission error: \(error)")
+        }
+    }
+
+    func checkNotificationPermission() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        hasNotificationPermission = settings.authorizationStatus == .authorized
     }
 }

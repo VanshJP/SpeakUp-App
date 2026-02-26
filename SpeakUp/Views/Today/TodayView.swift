@@ -98,7 +98,8 @@ struct TodayView: View {
     private var headerSection: some View {
         RingStatsView(
             streak: viewModel.userStats.currentStreak,
-            sessions: viewModel.userStats.totalRecordings,
+            sessions: viewModel.userStats.weeklySessionCount,
+            sessionsGoal: viewModel.userStats.weeklyGoalSessions,
             score: Int(viewModel.userStats.averageScore),
             improvement: viewModel.userStats.improvementRate
         )

@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct AchievementGalleryView: View {
     @Query private var achievements: [Achievement]
@@ -44,7 +44,10 @@ struct AchievementGalleryView: View {
                                     .font(.headline)
                                     .foregroundStyle(.primary)
 
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                LazyVGrid(
+                                    columns: [GridItem(.flexible()), GridItem(.flexible())],
+                                    spacing: 12
+                                ) {
                                     ForEach(unlocked, id: \.id) { achievement in
                                         AchievementCard(achievement: achievement)
                                     }
@@ -58,7 +61,10 @@ struct AchievementGalleryView: View {
                                     .font(.headline)
                                     .foregroundStyle(.secondary)
 
-                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                LazyVGrid(
+                                    columns: [GridItem(.flexible()), GridItem(.flexible())],
+                                    spacing: 12
+                                ) {
                                     ForEach(locked, id: \.id) { achievement in
                                         AchievementCard(achievement: achievement)
                                     }
@@ -71,7 +77,7 @@ struct AchievementGalleryView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .navigationTitle("Achievements")
+        .navigationTitle("Awards")
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
@@ -186,11 +192,12 @@ private struct AchievementCard: View {
                         .font(.title2)
                         .foregroundStyle(
                             achievement.isUnlocked
-                                ? AnyShapeStyle(LinearGradient(
-                                    colors: [.teal, .cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ))
+                                ? AnyShapeStyle(
+                                    LinearGradient(
+                                        colors: [.teal, .cyan],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ))
                                 : AnyShapeStyle(.gray.opacity(0.35))
                         )
                 }

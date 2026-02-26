@@ -21,7 +21,8 @@ struct OnboardingView: View {
                 practiceToolkitPage.tag(2)
                 curriculumPage.tag(3)
                 trackProgressPage.tag(4)
-                micPermissionPage.tag(5)
+                notificationPage.tag(5)
+                micPermissionPage.tag(6)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.currentPage)
@@ -34,6 +35,7 @@ struct OnboardingView: View {
         .appBackground(.subtle)
         .onAppear {
             viewModel.checkMicPermission()
+            Task { await viewModel.checkNotificationPermission() }
         }
     }
 
@@ -385,7 +387,78 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Page 6: Mic Permission
+    // MARK: - Page 6: Notifications
+
+    private var notificationPage: some View {
+        onboardingPage(
+            title: viewModel.hasNotificationPermission ? "Notifications Enabled" : "Stay on Track",
+            subtitle: viewModel.hasNotificationPermission
+                ? "We'll send you helpful reminders to keep your practice streak alive."
+                : "Get daily reminders, streak alerts, and achievement notifications to stay motivated."
+        ) {
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                (viewModel.hasNotificationPermission ? Color.green : Color.orange).opacity(0.2),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 20,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+
+                Image(systemName: viewModel.hasNotificationPermission ? "bell.badge.fill" : "bell.badge")
+                    .font(.system(size: 62))
+                    .foregroundStyle(viewModel.hasNotificationPermission ? .green : .orange)
+                    .symbolEffect(.bounce, value: viewModel.notificationJustGranted)
+            }
+        } detail: {
+            if !viewModel.hasNotificationPermission {
+                VStack(spacing: 14) {
+                    GlassButton(
+                        title: "Enable Notifications",
+                        icon: "bell.fill",
+                        style: .primary,
+                        size: .large,
+                        isLoading: viewModel.isRequestingNotificationPermission
+                    ) {
+                        Haptics.medium()
+                        Task {
+                            await viewModel.requestNotificationPermission()
+                        }
+                    }
+
+                    HStack(spacing: 20) {
+                        PrivacyBadge(icon: "flame.fill", text: "Streak alerts")
+                        PrivacyBadge(icon: "bell.fill", text: "Reminders")
+                        PrivacyBadge(icon: "trophy.fill", text: "Achievements")
+                    }
+                }
+            } else {
+                GlassCard(tint: AppColors.glassTintSuccess, padding: 14) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Notifications enabled")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.white)
+                            Text("You'll get reminders to keep your streak alive.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Page 7: Mic Permission
 
     private var micPermissionPage: some View {
         onboardingPage(
