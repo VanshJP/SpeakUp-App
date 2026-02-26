@@ -2526,6 +2526,99 @@ enum DefaultPrompts {
             category: "Elevator Pitch",
             difficulty: .hard
         ),
+        // ============================================
+        // Describe & Explain (Step-by-step / Descriptive)
+        // ============================================
+        PromptData(
+            id: "desc-1",
+            text: "Describe how to make a peanut butter and jelly sandwich, step by step.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-2",
+            text: "Explain how to tie your shoes to someone who has never done it before.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-3",
+            text: "Describe your morning routine from the moment you wake up.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-4",
+            text: "Walk someone through how to brew the perfect cup of coffee or tea.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-5",
+            text: "Describe how to navigate from your home to your favorite restaurant.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-6",
+            text: "Explain the rules of your favorite sport or game to a complete beginner.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-7",
+            text: "Describe what your city or town looks like to someone who has never visited.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-8",
+            text: "Walk me through how to do laundry from start to finish.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-9",
+            text: "Explain how to change a flat tire as if you were teaching a teenager.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-10",
+            text: "Describe what happens when you send a text message, in simple terms.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-11",
+            text: "Explain how to cook your favorite meal so someone else could recreate it.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-12",
+            text: "Describe the process of packing a suitcase for a week-long trip.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "desc-13",
+            text: "Explain how a bicycle works to a five-year-old.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-14",
+            text: "Walk me through how to set up a new phone from unboxing to ready-to-use.",
+            category: "Describe & Explain",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "desc-15",
+            text: "Describe your ideal vacation day from sunrise to sunset.",
+            category: "Describe & Explain",
+            difficulty: .easy
+        ),
     ]
 
     // MARK: - Helper Functions

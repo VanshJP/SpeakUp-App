@@ -95,6 +95,7 @@ struct PromptWheelView: View {
                 // Prompt text
                 Text(prompt.text)
                     .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // Use this prompt button
                 Button {

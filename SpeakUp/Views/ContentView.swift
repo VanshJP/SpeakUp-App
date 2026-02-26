@@ -80,6 +80,16 @@ struct ContentView: View {
                     }
                 }
 
+                Tab("Prompts", systemImage: "text.bubble.fill", value: .prompts) {
+                    NavigationStack {
+                        AllPromptsView(onSelectPrompt: { prompt in
+                            recordingPrompt = prompt
+                            recordingDuration = .sixty
+                            showingCountdown = true
+                        })
+                    }
+                }
+
                 Tab("History", systemImage: "clock.fill", value: .history) {
                     NavigationStack {
                         HistoryView(
@@ -102,7 +112,7 @@ struct ContentView: View {
                     }
                 }
 
-                Tab("Achievements", systemImage: "trophy.fill", value: .achievements) {
+                Tab("Rewards", systemImage: "trophy.fill", value: .achievements) {
                     NavigationStack {
                         AchievementGalleryView()
                     }
@@ -276,6 +286,7 @@ struct ContentView: View {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case today
+    case prompts
     case history
     case achievements
     case settings
@@ -285,8 +296,9 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .today: return "Today"
+        case .prompts: return "Prompts"
         case .history: return "History"
-        case .achievements: return "Achievements"
+        case .achievements: return "Rewards"
         case .settings: return "Settings"
         }
     }
@@ -294,6 +306,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .today: return "mic.badge.plus"
+        case .prompts: return "text.bubble"
         case .history: return "clock"
         case .achievements: return "trophy"
         case .settings: return "gearshape"
@@ -303,6 +316,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var selectedIcon: String {
         switch self {
         case .today: return "mic.badge.plus"
+        case .prompts: return "text.bubble.fill"
         case .history: return "clock.fill"
         case .achievements: return "trophy.fill"
         case .settings: return "gearshape.fill"

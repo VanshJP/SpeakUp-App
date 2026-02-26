@@ -10,7 +10,7 @@ struct JournalExportView: View {
     @State private var selectedRange: DateRangeOption = .lastMonth
     @State private var includeAchievements = true
     @State private var isExporting = false
-    @State private var pdfData: Data?
+    @State private var pdfURL: URL?
     @State private var showingShare = false
 
     enum DateRangeOption: String, CaseIterable, Identifiable {
@@ -152,8 +152,8 @@ struct JournalExportView: View {
                 }
             }
             .sheet(isPresented: $showingShare) {
-                if let data = pdfData {
-                    ShareSheet(items: [data])
+                if let url = pdfURL {
+                    ShareSheet(items: [url])
                 }
             }
         }
@@ -162,16 +162,27 @@ struct JournalExportView: View {
     private func exportPDF() {
         isExporting = true
         let service = JournalExportService()
-        pdfData = service.generatePDF(
+        guard let data = service.generatePDF(
             recordings: filteredRecordings,
             dateRange: selectedRange.rawValue,
             includeAchievements: includeAchievements,
             achievements: achievements
-        )
-        isExporting = false
-        if pdfData != nil {
-            showingShare = true
+        ) else {
+            isExporting = false
+            return
         }
+
+        let dateString = Date().formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))
+        let fileName = "SpeakUp Recordings \(dateString).pdf"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        do {
+            try data.write(to: tempURL)
+            pdfURL = tempURL
+            showingShare = true
+        } catch {}
+
+        isExporting = false
     }
 }
 

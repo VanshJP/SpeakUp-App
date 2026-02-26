@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var showingCategories = false
     @State private var isWordBankExpanded = false
     @State private var isWordInputFocused = false
+    @State private var showingAddPrompt = false
 
     var body: some View {
         ZStack {
@@ -22,7 +23,6 @@ struct SettingsView: View {
                             .id("wordBank")
                         promptSettingsSection
                         reminderSection
-                        weeklyGoalSection
                         dataManagementSection
                         aboutSection
                     }
@@ -157,6 +157,20 @@ struct SettingsView: View {
                             .font(.subheadline)
                     }
                     .tint(.teal)
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    Stepper(value: $viewModel.weeklyGoalSessions, in: 1...14) {
+                        HStack {
+                            Label("Weekly Goal", systemImage: "target")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(viewModel.weeklyGoalSessions) sessions")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
 
@@ -339,6 +353,24 @@ struct SettingsView: View {
 
             GlassCard {
                 VStack(spacing: 0) {
+                    Button {
+                        showingAddPrompt = true
+                    } label: {
+                        HStack {
+                            Label("Add Custom Prompt", systemImage: "plus.circle")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider()
+                        .padding(.vertical, 8)
+
                     Toggle(isOn: $viewModel.hideAnsweredPrompts) {
                         Label("Hide Answered Prompts", systemImage: "checkmark.circle")
                             .font(.subheadline)
@@ -415,10 +447,13 @@ struct SettingsView: View {
                 }
             }
 
-            Text("Hide answered prompts to always get fresh topics. Choose which categories you'd like to practice with.")
+            Text("Browse, search, and manage all prompts. Add your own custom prompts to practice with.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
+        }
+        .sheet(isPresented: $showingAddPrompt) {
+            AddPromptView()
         }
     }
 
@@ -458,33 +493,6 @@ struct SettingsView: View {
             }
 
             Text("Get a daily notification to practice your speaking skills.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-        }
-    }
-
-    // MARK: - Weekly Goal Section
-
-    private var weeklyGoalSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Goals", systemImage: "target")
-                .font(.headline)
-
-            GlassCard {
-                Stepper(value: $viewModel.weeklyGoalSessions, in: 1...14) {
-                    HStack {
-                        Label("Weekly Goal", systemImage: "target")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(viewModel.weeklyGoalSessions) sessions")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            Text("Set your target number of practice sessions per week.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -565,7 +573,7 @@ struct SettingsView: View {
                     Divider()
                         .padding(.vertical, 8)
 
-                    Link(destination: URL(string: "mailto:support@speakup.app")!) {
+                    Link(destination: URL(string: "mailto:vansh@trygoldfinch.com")!) {
                         HStack {
                             Label("Send Feedback", systemImage: "envelope")
                                 .font(.subheadline)

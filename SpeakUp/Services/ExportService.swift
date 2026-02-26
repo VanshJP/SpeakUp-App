@@ -1,6 +1,5 @@
 import Foundation
 import Photos
-import UniformTypeIdentifiers
 import UIKit
 
 @Observable
@@ -118,22 +117,8 @@ class ExportService {
         return text
     }
     
-    // MARK: - Stats Overlay Data
-    
-    func getStatsOverlayData(for recording: Recording) -> StatsOverlayData? {
-        guard let analysis = recording.analysis else { return nil }
-        
-        return StatsOverlayData(
-            score: analysis.speechScore.overall,
-            wpm: Int(analysis.wordsPerMinute),
-            fillerCount: analysis.totalFillerCount,
-            duration: recording.formattedDuration,
-            trend: analysis.speechScore.trend
-        )
-    }
-    
     // MARK: - Helpers
-    
+
     private func getScoreEmoji(for score: Int) -> String {
         switch score {
         case 90...100: return "🔥"
@@ -144,31 +129,6 @@ class ExportService {
         }
     }
     
-    func getScoreColor(for score: Int) -> UIColor {
-        switch score {
-        case 0..<40: return .systemRed
-        case 40..<60: return .systemOrange
-        case 60..<80: return .systemYellow
-        case 80...100: return .systemGreen
-        default: return .systemGray
-        }
-    }
-    
-    func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-// MARK: - Supporting Types
-
-struct StatsOverlayData {
-    let score: Int
-    let wpm: Int
-    let fillerCount: Int
-    let duration: String
-    let trend: ScoreTrend
 }
 
 // MARK: - Errors

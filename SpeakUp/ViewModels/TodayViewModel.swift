@@ -15,6 +15,7 @@ class TodayViewModel {
 
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
+    private var hasRerolledPrompt = false
     
     func configure(with context: ModelContext) {
         self.modelContext = context
@@ -86,6 +87,9 @@ class TodayViewModel {
     
     @MainActor
     private func loadTodaysPrompt(context: ModelContext) async {
+        // If the user has rerolled the prompt this session, keep it
+        if hasRerolledPrompt && todaysPrompt != nil { return }
+
         // Get today's prompt based on date seed
         let todayData = DefaultPrompts.getTodaysPrompt()
         let targetId = todayData.id
@@ -272,6 +276,7 @@ class TodayViewModel {
             withAnimation {
                 todaysPrompt = candidate
             }
+            hasRerolledPrompt = true
         } catch {
             print("Error refreshing prompt: \(error)")
         }

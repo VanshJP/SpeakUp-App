@@ -1,29 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xcodebuild:*)",
-      "WebSearch",
-      "WebFetch(domain:arxiv.org)",
-      "WebFetch(domain:blog.research.google)",
-      "WebFetch(domain:research.google)",
-      "WebFetch(domain:github.com)",
-      "Bash(wc:*)",
-      "Bash(ls:*)",
-      "Bash(for f in SpeakUp/Services/HapticCoachingService.swift SpeakUp/Models/SpeechFramework.swift SpeakUp/Views/Recording/FrameworkOverlayView.swift SpeakUp/Views/Detail/SpeechTimelineView.swift SpeakUp/Views/Detail/PaceChartView.swift SpeakUp/Models/WarmUpExercise.swift SpeakUp/Data/DefaultWarmUps.swift SpeakUp/Models/DrillMode.swift SpeakUp/Models/ConfidenceExercise.swift SpeakUp/Data/DefaultConfidenceExercises.swift SpeakUp/ViewModels/WarmUpViewModel.swift SpeakUp/ViewModels/DrillViewModel.swift SpeakUp/Views/WarmUp/WarmUpListView.swift SpeakUp/Views/WarmUp/WarmUpExerciseView.swift SpeakUp/Views/WarmUp/BreathingAnimationView.swift SpeakUp/Views/Drills/DrillSelectionView.swift SpeakUp/Views/Drills/DrillSessionView.swift SpeakUp/Views/Drills/DrillResultView.swift SpeakUp/Views/Confidence/ConfidenceToolsView.swift SpeakUp/Views/Confidence/ConfidenceExerciseView.swift SpeakUp/Models/CurriculumModels.swift SpeakUp/Models/CurriculumProgress.swift SpeakUp/Data/DefaultCurriculum.swift SpeakUp/Services/CurriculumService.swift SpeakUp/ViewModels/CurriculumViewModel.swift SpeakUp/Services/WeakAreaService.swift SpeakUp/Views/Curriculum/CurriculumView.swift SpeakUp/Views/Curriculum/LessonDetailView.swift SpeakUp/Views/Curriculum/CurriculumProgressCard.swift SpeakUp/ViewModels/ProgressReplayViewModel.swift SpeakUp/Views/Progress/BeforeAfterReplayView.swift SpeakUp/Views/Detail/ListenBackEncouragementView.swift SpeakUp/Services/JournalExportService.swift SpeakUp/Views/Progress/JournalExportView.swift SpeakUp/Views/Progress/JournalSummaryView.swift)",
-      "Bash(do)",
-      "Bash(if [ -f \"/Users/vanshpatel/SpeakUp/SpeakUp/$f\" ])",
-      "Bash(then)",
-      "Bash(echo:*)",
-      "Bash(else)",
-      "Bash(fi:*)",
-      "Bash(done)",
-      "Bash(for f in Services/HapticCoachingService.swift Models/SpeechFramework.swift Views/Recording/FrameworkOverlayView.swift Views/Detail/SpeechTimelineView.swift Views/Detail/PaceChartView.swift Models/WarmUpExercise.swift Data/DefaultWarmUps.swift Models/DrillMode.swift Models/ConfidenceExercise.swift Data/DefaultConfidenceExercises.swift ViewModels/WarmUpViewModel.swift ViewModels/DrillViewModel.swift Views/WarmUp/WarmUpListView.swift Views/WarmUp/WarmUpExerciseView.swift Views/WarmUp/BreathingAnimationView.swift Views/Drills/DrillSelectionView.swift Views/Drills/DrillSessionView.swift Views/Drills/DrillResultView.swift Views/Confidence/ConfidenceToolsView.swift Views/Confidence/ConfidenceExerciseView.swift Models/CurriculumModels.swift Models/CurriculumProgress.swift Data/DefaultCurriculum.swift Services/CurriculumService.swift ViewModels/CurriculumViewModel.swift Services/WeakAreaService.swift Views/Curriculum/CurriculumView.swift Views/Curriculum/LessonDetailView.swift Views/Curriculum/CurriculumProgressCard.swift ViewModels/ProgressReplayViewModel.swift Views/Progress/BeforeAfterReplayView.swift Views/Detail/ListenBackEncouragementView.swift Services/JournalExportService.swift Views/Progress/JournalExportView.swift Views/Progress/JournalSummaryView.swift)",
-      "Bash(git status:*)",
-      "Bash(swift -typecheck:*)",
-      "Bash(greenlight preflight:*)",
-      "Bash(find:*)",
-      "Bash(python3:*)"
+      "Bash(xcodebuild:*)"
     ]
-  },
-  "outputStyle": "default"
+  }
 }

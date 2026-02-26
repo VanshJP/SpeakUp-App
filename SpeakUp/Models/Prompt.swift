@@ -8,17 +8,20 @@ final class Prompt {
     var text: String
     var category: String
     var difficulty: PromptDifficulty
+    var isUserCreated: Bool = false
     
     init(
         id: String,
         text: String,
         category: String,
-        difficulty: PromptDifficulty
+        difficulty: PromptDifficulty,
+        isUserCreated: Bool = false
     ) {
         self.id = id
         self.text = text
         self.category = category
         self.difficulty = difficulty
+        self.isUserCreated = isUserCreated
     }
 }
 

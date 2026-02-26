@@ -69,16 +69,6 @@ struct RecordingDetailView: View {
                             fillerWordsSection(analysis.fillerWords)
                         }
 
-                        // 7. Speech Timeline
-                        if let words = recording.transcriptionWords, !words.isEmpty,
-                           let analysis = recording.analysis {
-                            SpeechTimelineView(
-                                words: words,
-                                fillerWords: analysis.fillerWords,
-                                totalDuration: recording.actualDuration
-                            )
-                        }
-
                         // 8. Detailed Scores
                         if let analysis = recording.analysis {
                             subscoresSection(analysis)
@@ -145,41 +135,45 @@ struct RecordingDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
+                HStack(alignment: .center, spacing: 12) {
                     Button {
                         if let recording {
                             scoreCardImage = ScoreCardRenderer.render(recording: recording)
                         }
                         showingShareSheet = true
                     } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.body)
                     }
 
-                    if let recording {
-                        Button {
-                            editingTitleText = recording.customTitle ?? ""
-                            isEditingTitle = true
-                        } label: {
-                            Label("Rename", systemImage: "pencil")
+                    Menu {
+                        if let recording {
+                            Button {
+                                editingTitleText = recording.customTitle ?? ""
+                                isEditingTitle = true
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+
+                            Button {
+                                toggleFavorite(recording)
+                            } label: {
+                                Label(
+                                    recording.isFavorite ? "Remove Favorite" : "Add to Favorites",
+                                    systemImage: recording.isFavorite ? "heart.slash" : "heart"
+                                )
+                            }
                         }
 
-                        Button {
-                            toggleFavorite(recording)
+                        Button(role: .destructive) {
+                            showingDeleteAlert = true
                         } label: {
-                            Label(
-                                recording.isFavorite ? "Remove Favorite" : "Add to Favorites",
-                                systemImage: recording.isFavorite ? "heart.slash" : "heart"
-                            )
+                            Label("Delete", systemImage: "trash")
                         }
-                    }
-
-                    Button(role: .destructive) {
-                        showingDeleteAlert = true
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Image(systemName: "ellipsis.circle")
+                            .font(.body)
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
             }
         }
@@ -249,6 +243,7 @@ struct RecordingDetailView: View {
                     Text("\(animateScore ? analysis.speechScore.overall : 0)")
                         .font(.system(size: 64, weight: .bold, design: .rounded))
                         .foregroundStyle(AppColors.scoreColor(for: analysis.speechScore.overall))
+                        .minimumScaleFactor(0.7)
                         .contentTransition(.numericText())
 
                     Text("/100")
@@ -404,7 +399,8 @@ struct RecordingDetailView: View {
                         Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .frame(width: 40, alignment: .leading)
+                            .frame(width: 45, alignment: .leading)
+                            .minimumScaleFactor(0.8)
 
                         GeometryReader { geometry in
                             let barWidth: CGFloat = 3
@@ -439,7 +435,8 @@ struct RecordingDetailView: View {
                         Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .frame(width: 40, alignment: .trailing)
+                            .frame(width: 45, alignment: .trailing)
+                            .minimumScaleFactor(0.8)
                     }
 
                     // Play button
@@ -1058,21 +1055,26 @@ struct RecordingDetailView: View {
     private func deleteRecording() {
         guard let recording else { return }
 
-        if let audioURL = recording.audioURL {
-            try? FileManager.default.removeItem(at: audioURL)
-        }
-        if let videoURL = recording.videoURL {
-            try? FileManager.default.removeItem(at: videoURL)
-        }
+        // Stop any playback first
+        audioService.stop()
 
-        modelContext.delete(recording)
-        try? modelContext.save()
+        // Capture file URLs before nilling out
+        let audioURL = recording.audioURL
+        let videoURL = recording.videoURL
 
-        // Nil out the local state before dismissing so SwiftUI doesn't
-        // try to render a body referencing the deleted SwiftData object.
+        // Nil out local state FIRST so SwiftUI stops rendering the deleted object
         self.recording = nil
 
+        // Dismiss before deletion to avoid accessing deleted object during animation
         dismiss()
+
+        // Clean up files and delete from context after dismiss
+        Task { @MainActor in
+            if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
+            if let videoURL { try? FileManager.default.removeItem(at: videoURL) }
+            modelContext.delete(recording)
+            try? modelContext.save()
+        }
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
@@ -1098,6 +1100,7 @@ private struct MiniSubscore: View {
             Text("\(score)")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppColors.scoreColor(for: score))
+                .minimumScaleFactor(0.8)
 
             Text(label)
                 .font(.system(size: 9))
@@ -1178,6 +1181,7 @@ struct SubscoreRow: View {
                 Text("\(score)")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(AppColors.scoreColor(for: score))
+                    .minimumScaleFactor(0.8)
 
                 Text("/100")
                     .font(.caption)

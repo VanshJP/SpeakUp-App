@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import UIKit
 
 @Observable
 class RecordingViewModel {
@@ -88,6 +89,7 @@ class RecordingViewModel {
             recordingURL = try await audioService.startRecording()
 
             isRecording = true
+            UIApplication.shared.isIdleTimerDisabled = true
             Haptics.medium()
             startTimer()
             startAudioLevelMonitoring()
@@ -110,6 +112,7 @@ class RecordingViewModel {
         liveTranscriptionService.stop()
 
         isRecording = false
+        UIApplication.shared.isIdleTimerDisabled = false
         isProcessing = true
         Haptics.success()
 
@@ -152,6 +155,7 @@ class RecordingViewModel {
         audioService.cancelRecording()
 
         isRecording = false
+        UIApplication.shared.isIdleTimerDisabled = false
         recordingURL = nil
     }
 
@@ -312,5 +316,6 @@ class RecordingViewModel {
         stopAudioLevelMonitoring()
         liveTranscriptionService.stop()
         audioService.cleanup()
+        UIApplication.shared.isIdleTimerDisabled = false
     }
 }
