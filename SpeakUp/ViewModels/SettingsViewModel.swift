@@ -24,6 +24,7 @@ class SettingsViewModel {
     // Local state - Analysis Features
     var trackPauses: Bool = true
     var trackFillerWords: Bool = true
+    var targetWPM: Int = 150
     
     // Local state - Prompt Settings
     var showDailyPrompt: Bool = true
@@ -111,6 +112,7 @@ class SettingsViewModel {
         // Analysis features
         trackPauses = settings.trackPauses
         trackFillerWords = settings.trackFillerWords
+        targetWPM = settings.targetWPM
 
         // Prompt settings
         showDailyPrompt = settings.showDailyPrompt
@@ -151,6 +153,7 @@ class SettingsViewModel {
         // Analysis features
         settings.trackPauses = trackPauses
         settings.trackFillerWords = trackFillerWords
+        settings.targetWPM = targetWPM
         
         // Prompt settings
         settings.showDailyPrompt = showDailyPrompt
@@ -292,6 +295,7 @@ class SettingsViewModel {
         settings.weeklyGoalSessions = 5
         settings.trackPauses = true
         settings.trackFillerWords = true
+        settings.targetWPM = 150
         settings.showDailyPrompt = true
         settings.hideAnsweredPrompts = false
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }

@@ -38,6 +38,9 @@ final class UserSettings {
     // Word Bank
     var vocabWords: [String] = []
 
+    // Target Pace
+    var targetWPM: Int = 150
+
     // Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 

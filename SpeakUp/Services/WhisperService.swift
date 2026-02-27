@@ -166,6 +166,10 @@ class WhisperService {
             }
         }
 
+        // Sort all word timings by start time to ensure chronological order
+        // across segments which might occasionally be out of order or overlapping
+        allWordTimings.sort { $0.start < $1.start }
+
         // Process each word with context-aware filler detection
         for (index, wordTiming) in allWordTimings.enumerated() {
             let word = wordTiming.word

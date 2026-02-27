@@ -12,6 +12,8 @@ struct CoachingTip: Identifiable {
         case fillers
         case pauses
         case clarity
+        case delivery
+        case relevance
         case encouragement
     }
 }
@@ -113,6 +115,35 @@ enum CoachingTipService {
                 message: "Slow down and focus on enunciating each word clearly.",
                 category: .clarity
             ))
+        }
+
+        // --- Delivery ---
+        if let delivery = analysis.speechScore.subscores.delivery, delivery < 50 {
+            tips.append(CoachingTip(
+                icon: "speaker.wave.3",
+                title: "Add Vocal Energy",
+                message: "Vary your volume and tone to keep listeners engaged. Try emphasizing key words.",
+                category: .delivery
+            ))
+        }
+
+        // --- Relevance ---
+        if let relevance = analysis.speechScore.subscores.relevance, relevance < 40 {
+            if analysis.promptRelevanceScore != nil {
+                tips.append(CoachingTip(
+                    icon: "target",
+                    title: "Stay on Topic",
+                    message: "Your response drifted from the prompt. Try outlining 2-3 key points before speaking.",
+                    category: .relevance
+                ))
+            } else {
+                tips.append(CoachingTip(
+                    icon: "arrow.triangle.branch",
+                    title: "Improve Coherence",
+                    message: "Connect your ideas with transition words like \"however\", \"therefore\", or \"for example\".",
+                    category: .relevance
+                ))
+            }
         }
 
         // --- Encouragement ---

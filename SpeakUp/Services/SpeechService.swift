@@ -133,7 +133,7 @@ class SpeechService {
 
     private func processAppleTranscription(_ result: SFSpeechRecognitionResult) -> SpeechTranscriptionResult {
         let transcription = result.bestTranscription
-        let segments = transcription.segments
+        let segments = transcription.segments.sorted { $0.timestamp < $1.timestamp }
         var words: [TranscriptionWord] = []
         var duration: TimeInterval = 0
 
@@ -223,32 +223,56 @@ class SpeechService {
     }
     
     // MARK: - Analysis
-    
-    func analyze(transcription: SpeechTranscriptionResult, actualDuration: TimeInterval, vocabWords: [String] = []) -> SpeechAnalysis {
+
+    func analyze(
+        transcription: SpeechTranscriptionResult,
+        actualDuration: TimeInterval,
+        vocabWords: [String] = [],
+        audioLevelSamples: [Float] = [],
+        prompt: Prompt? = nil,
+        targetWPM: Int = 150,
+        trackFillerWords: Bool = true,
+        trackPauses: Bool = true
+    ) -> SpeechAnalysis {
+        // Sort words by start time to ensure accurate pause detection
+        // Whisper/Apple Speech results are usually sorted but segments can sometimes overlap or be out of order
+        let sortedWords = transcription.words.sorted { $0.start < $1.start }
+        
         // Count filler words
         var fillerCounts: [String: (count: Int, timestamps: [TimeInterval])] = [:]
         var totalWords = 0
-        var pauses: [TimeInterval] = []
+        var pauseMetadata: [PauseInfo] = []
 
         var previousEnd: TimeInterval = 0
 
-        for word in transcription.words {
+        for (index, word) in sortedWords.enumerated() {
             totalWords += 1
 
-            // Check for filler words
-            let lowercased = word.word.lowercased()
-            if word.isFiller {
-                var current = fillerCounts[lowercased] ?? (count: 0, timestamps: [])
-                current.count += 1
-                current.timestamps.append(word.start)
-                fillerCounts[lowercased] = current
+            // Check for filler words (honor settings flag)
+            if trackFillerWords {
+                let lowercased = word.word.lowercased()
+                if word.isFiller {
+                    var current = fillerCounts[lowercased] ?? (count: 0, timestamps: [])
+                    current.count += 1
+                    current.timestamps.append(word.start)
+                    fillerCounts[lowercased] = current
+                }
             }
 
-            // Detect pauses (gap > 0.5 seconds)
-            if previousEnd > 0 {
+            // Detect pauses (gap > 0.4 seconds) — honor settings flag
+            if trackPauses, previousEnd > 0 {
                 let gap = word.start - previousEnd
-                if gap > 0.5 {
-                    pauses.append(gap)
+                if gap > 0.4 {
+                    // Context detection
+                    let isTransition: Bool
+                    if index > 0 {
+                        let prevWord = sortedWords[index - 1].word
+                        isTransition = prevWord.hasSuffix(".") || prevWord.hasSuffix("?") || prevWord.hasSuffix("!")
+                    } else {
+                        isTransition = false
+                    }
+                    
+                    pauseMetadata.append(PauseInfo(duration: gap, isTransition: isTransition, startTime: previousEnd))
                 }
             }
             previousEnd = word.end
@@ -265,23 +289,63 @@ class SpeechService {
         // Confidence dampening for very short recordings (<10s)
         let confidenceWeight = min(1.0, actualDuration / 10.0)
         let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
+        let pauses = pauseMetadata.map { $0.duration }
         let averagePauseLength = pauses.isEmpty ? 0 : pauses.reduce(0, +) / Double(pauses.count)
-        
-        // Calculate scores
+
+        // Run sub-analyses that were previously orphaned
+        let volumeMetrics = !audioLevelSamples.isEmpty ? analyzeVolume(samples: audioLevelSamples) : nil
+        let vocabComplexity = !sortedWords.isEmpty ? analyzeVocabComplexity(words: sortedWords) : nil
+        let sentenceAnalysis = !sortedWords.isEmpty ? analyzeSentenceStructure(words: sortedWords, text: transcription.text) : nil
+
+        // Prompt relevance / coherence
+        let relevanceScore: Int?
+        if let prompt, totalWords >= 10 {
+            relevanceScore = PromptRelevanceService.score(promptText: prompt.text, transcript: transcription.text)
+        } else if totalWords >= 20 {
+            relevanceScore = PromptRelevanceService.coherenceScore(transcript: transcription.text)
+        } else {
+            relevanceScore = nil
+        }
+
+        // Content density
+        let contentDensity = contentDensityScore(words: sortedWords, totalFillers: totalFillers)
+
+        // Detect vocab word usage (before subscores so we can feed it in)
+        let vocabWordsUsed = detectVocabWords(in: transcription.text, vocabWords: vocabWords)
+
+        // Count strategic vs hesitation pauses
+        let strategicPauseCount = pauseMetadata.filter { $0.isTransition }.count
+        let hesitationPauseCount = pauseMetadata.filter { !$0.isTransition && $0.duration > 1.2 }.count
+
+        // Calculate subscores
         let subscores = calculateSubscores(
             wordsPerMinute: wordsPerMinute,
             fillerRatio: fillerRatio,
             pauseCount: pauses.count,
             averagePauseLength: averagePauseLength,
             totalWords: totalWords,
-            confidenceWeight: confidenceWeight
+            confidenceWeight: confidenceWeight,
+            targetWPM: targetWPM,
+            trackPauses: trackPauses,
+            actualDuration: actualDuration,
+            words: sortedWords,
+            volumeMetrics: volumeMetrics,
+            vocabComplexity: vocabComplexity,
+            sentenceAnalysis: sentenceAnalysis,
+            relevanceScore: relevanceScore,
+            contentDensity: contentDensity,
+            vocabWordsUsed: vocabWordsUsed,
+            pauseMetadata: pauseMetadata
         )
-        
-        let overallScore = calculateOverallScore(subscores: subscores)
-        let clarity = Double(100 - Int(fillerRatio * 100))
-        
-        // Detect vocab word usage
-        let vocabWordsUsed = detectVocabWords(in: transcription.text, vocabWords: vocabWords)
+
+        var overallScore = calculateOverallScore(subscores: subscores)
+
+        // Substance gate: very short recordings get capped
+        if totalWords < 20 && actualDuration < 15 {
+            overallScore = min(overallScore, 40)
+        }
+
+        let clarity = Double(subscores.clarity)
 
         return SpeechAnalysis(
             fillerWords: fillerWords,
@@ -289,73 +353,239 @@ class SpeechService {
             wordsPerMinute: wordsPerMinute,
             pauseCount: pauses.count,
             averagePauseLength: averagePauseLength,
+            strategicPauseCount: strategicPauseCount,
+            hesitationPauseCount: hesitationPauseCount,
             clarity: clarity,
             speechScore: SpeechScore(
                 overall: overallScore,
                 subscores: subscores,
-                trend: .stable // Will be calculated based on history
+                trend: .stable
             ),
-            vocabWordsUsed: vocabWordsUsed
+            vocabWordsUsed: vocabWordsUsed,
+            volumeMetrics: volumeMetrics,
+            vocabComplexity: vocabComplexity,
+            sentenceAnalysis: sentenceAnalysis,
+            promptRelevanceScore: relevanceScore
         )
     }
-    
+
+    // MARK: - Content Density
+
+    private func contentDensityScore(words: [TranscriptionWord], totalFillers: Int) -> Int {
+        let nonFillerWords = words.filter { !$0.isFiller }
+        guard !nonFillerWords.isEmpty else { return 0 }
+
+        let cleaned = nonFillerWords.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            .filter { !$0.isEmpty && !Self.stopWords.contains($0) }
+
+        guard !cleaned.isEmpty else { return 0 }
+
+        let uniqueContent = Set(cleaned)
+        let ratio = Double(uniqueContent.count) / Double(cleaned.count)
+        return max(0, min(100, Int(ratio * 130))) // scale so ~77% unique content = 100
+    }
+
+    private static let stopWords: Set<String> = [
+        "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+        "of", "with", "by", "from", "is", "it", "this", "that", "was", "are",
+        "be", "have", "has", "had", "do", "does", "did", "will", "would",
+        "can", "could", "should", "may", "might", "i", "you", "he", "she",
+        "we", "they", "me", "my", "your", "his", "her", "our", "their",
+        "not", "no", "if", "then", "than", "so", "as", "up", "out",
+        "just", "also", "very", "too", "its", "all", "been", "being"
+    ]
+
+    // MARK: - Subscore Calculation
+
     private func calculateSubscores(
         wordsPerMinute: Double,
         fillerRatio: Double,
         pauseCount: Int,
         averagePauseLength: TimeInterval,
         totalWords: Int,
-        confidenceWeight: Double = 1.0
+        confidenceWeight: Double = 1.0,
+        targetWPM: Int = 150,
+        trackPauses: Bool = true,
+        actualDuration: TimeInterval = 60,
+        words: [TranscriptionWord] = [],
+        volumeMetrics: VolumeMetrics? = nil,
+        vocabComplexity: VocabComplexity? = nil,
+        sentenceAnalysis: SentenceAnalysis? = nil,
+        relevanceScore: Int? = nil,
+        contentDensity: Int = 50,
+        vocabWordsUsed: [VocabWordUsage] = [],
+        pauseMetadata: [PauseInfo] = []
     ) -> SpeechSubscores {
-        // Clarity score (based on confidence and articulation)
-        // Higher is better, penalize high filler usage
-        let clarityScore = max(0, min(100, Int(100 - (fillerRatio * 200))))
+        // Clarity score — based on transcription confidence + word duration consistency
+        let clarityScore: Int
+        let confidences = words.compactMap { $0.confidence }
+        if !confidences.isEmpty {
+            let avgConfidence = confidences.reduce(0, +) / Double(confidences.count)
+            let confidenceComponent = avgConfidence * 100 // 0-100
 
-        // Pace score: Gaussian centered at 150 WPM, sigma=35
-        // 150→100, 130/170→87, 115/185→70, 100/200→48, 80/220→20
-        let optimalWPM = 150.0
-        let sigma = 35.0
+            // Word duration consistency: lower variance = steadier articulation
+            let durations = words.map { $0.duration }.filter { $0 > 0 }
+            let durationComponent: Double
+            if durations.count >= 2 {
+                let meanDur = durations.reduce(0, +) / Double(durations.count)
+                let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
+                let cv = meanDur > 0 ? sqrt(variance) / meanDur : 1.0 // coefficient of variation
+                // CV of 0.3-0.5 is typical; lower = more consistent
+                durationComponent = max(0, min(100, (1.0 - cv) * 100))
+            } else {
+                durationComponent = 50 // neutral when insufficient data
+            }
+
+            let rawClarity = confidenceComponent * 0.65 + durationComponent * 0.35
+            clarityScore = max(0, min(100, Int(rawClarity * confidenceWeight + 50 * (1 - confidenceWeight))))
+        } else {
+            // Fallback when no confidence data: use inverse filler ratio
+            let raw = 100 - (fillerRatio * 300)
+            clarityScore = max(0, min(100, Int(raw * confidenceWeight + 50 * (1 - confidenceWeight))))
+        }
+
+        // Pace score: Gaussian centered on user's targetWPM
+        let optimalWPM = Double(targetWPM)
+        let sigma = 45.0
         let deviation = wordsPerMinute - optimalWPM
         let rawPaceScore = 100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))
-
-        // Dampen toward 50 (neutral) for unreliable short recordings
         let paceScore = max(0, min(100, Int(rawPaceScore * confidenceWeight + 50 * (1 - confidenceWeight))))
-        
-        // Filler usage score (lower filler ratio = higher score)
-        let fillerScore = max(0, min(100, Int((1 - fillerRatio * 5) * 100)))
-        
+
+        // Filler usage score — dampen for short recordings
+        let rawFillerScore = (1 - fillerRatio * 5) * 100
+        let fillerScore = max(0, min(100, Int(rawFillerScore * confidenceWeight + 50 * (1 - confidenceWeight))))
+
         // Pause quality score
-        // Good: Some pauses (0.5-2 seconds), not too many, not too few
         let pauseScore: Int
-        let pausesPerMinute = totalWords > 0 ? Double(pauseCount) / Double(totalWords) * 60 : 0
-        if pausesPerMinute < 2 {
-            pauseScore = 60 // Too few pauses
-        } else if pausesPerMinute > 10 {
-            pauseScore = max(0, 100 - Int((pausesPerMinute - 10) * 5)) // Too many
-        } else if averagePauseLength > 3 {
-            pauseScore = max(0, 100 - Int((averagePauseLength - 3) * 20)) // Too long
+        if !trackPauses {
+            pauseScore = 50 // Neutral when tracking is off
         } else {
-            pauseScore = min(100, 70 + Int(pausesPerMinute * 3))
+            let rawPauseScore = calculatePauseScore(
+                metadata: pauseMetadata,
+                fillerRatio: fillerRatio,
+                wordsPerMinute: wordsPerMinute,
+                targetWPM: Double(targetWPM),
+                actualDuration: actualDuration
+            )
+            pauseScore = max(0, min(100, Int(Double(rawPauseScore) * confidenceWeight + 50 * (1 - confidenceWeight))))
         }
-        
+
+        // Delivery score: volume energy + vocal variation + content density
+        let deliveryScore: Int?
+        if let vol = volumeMetrics {
+            let energyComponent = Double(vol.energyScore) * 0.35
+            let variationComponent = Double(vol.monotoneScore) * 0.35
+            let densityComponent = Double(contentDensity) * 0.30
+            deliveryScore = max(0, min(100, Int(energyComponent + variationComponent + densityComponent)))
+        } else {
+            deliveryScore = nil
+        }
+
+        // Vocabulary score — boost when user's word bank words are used
+        var vocabularyScore = vocabComplexity?.complexityScore
+        if let base = vocabularyScore, !vocabWordsUsed.isEmpty {
+            let totalUsed = vocabWordsUsed.reduce(0) { $0 + $1.count }
+            let bonus = min(15, totalUsed * 5) // up to +15 for 3+ vocab word uses
+            vocabularyScore = min(100, base + bonus)
+        }
+
+        // Structure score
+        let structureScore = sentenceAnalysis?.structureScore
+
         return SpeechSubscores(
             clarity: clarityScore,
             pace: paceScore,
             fillerUsage: fillerScore,
-            pauseQuality: pauseScore
+            pauseQuality: pauseScore,
+            delivery: deliveryScore,
+            vocabulary: vocabularyScore,
+            structure: structureScore,
+            relevance: relevanceScore
         )
     }
-    
+
+    /// Sophisticated pause scoring based on professional standards (e.g. Toastmasters)
+    private func calculatePauseScore(
+        metadata: [PauseInfo],
+        fillerRatio: Double,
+        wordsPerMinute: Double,
+        targetWPM: Double,
+        actualDuration: TimeInterval
+    ) -> Int {
+        guard !metadata.isEmpty else {
+            // No pauses: if WPM is high, this is a major penalty (rushing)
+            // If WPM is low/normal, it's just a moderate penalty
+            return wordsPerMinute > (targetWPM + 20) ? 40 : 60
+        }
+
+        var score = 70.0 // Starting base score
+
+        let shortPauses = metadata.filter { $0.duration >= 0.4 && $0.duration < 1.2 }
+        let mediumPauses = metadata.filter { $0.duration >= 1.2 && $0.duration < 3.0 }
+        let longPauses = metadata.filter { $0.duration >= 3.0 }
+
+        // 1. Reward strategic Medium/Long pauses at transitions
+        let strategicMediumCount = mediumPauses.filter { $0.isTransition }.count
+        let strategicLongCount = longPauses.filter { $0.isTransition }.count
+        score += Double(strategicMediumCount) * 4.0
+        score += Double(strategicLongCount) * 8.0
+
+        // 2. Penalize Long pauses NOT at transitions (hesitations)
+        let hesitationLongCount = longPauses.filter { !$0.isTransition }.count
+        score -= Double(hesitationLongCount) * 15.0
+
+        // 3. Reward "Silence as Filler Replacement"
+        // If filler ratio is low (< 0.02) and they have a healthy amount of short/medium pauses
+        if fillerRatio < 0.02 && (shortPauses.count + mediumPauses.count) > 2 {
+            score += 10.0
+        }
+
+        // 4. Frequency Check
+        let pausesPerMinute = Double(metadata.count) / (actualDuration / 60)
+        if pausesPerMinute < 3 {
+            score -= 10.0 // Too few pauses = monolithic speech
+        } else if pausesPerMinute > 15 {
+            score -= (pausesPerMinute - 15) * 2.0 // Too many pauses = choppy
+        }
+
+        // 5. Pace Correlation
+        // If they are rushing, they get a bigger bonus for strategic pauses
+        if wordsPerMinute > (targetWPM + 10) {
+            score += Double(strategicMediumCount + strategicLongCount) * 2.0
+        }
+
+        return max(0, min(100, Int(score)))
+    }
+
     private func calculateOverallScore(subscores: SpeechSubscores) -> Int {
-        // Weighted average
-        let weights = (clarity: 0.3, pace: 0.25, filler: 0.3, pause: 0.15)
-        
-        let weighted = Double(subscores.clarity) * weights.clarity +
-                       Double(subscores.pace) * weights.pace +
-                       Double(subscores.fillerUsage) * weights.filler +
-                       Double(subscores.pauseQuality) * weights.pause
-        
-        return max(0, min(100, Int(weighted)))
+        // Weight distribution (totals 100% when all subscores present)
+        var weighted = Double(subscores.clarity) * 0.15 +
+                       Double(subscores.pace) * 0.18 +
+                       Double(subscores.fillerUsage) * 0.15 +
+                       Double(subscores.pauseQuality) * 0.13
+
+        var totalWeight = 0.61
+
+        if let delivery = subscores.delivery {
+            weighted += Double(delivery) * 0.13
+            totalWeight += 0.13
+        }
+        if let vocabulary = subscores.vocabulary {
+            weighted += Double(vocabulary) * 0.09
+            totalWeight += 0.09
+        }
+        if let structure = subscores.structure {
+            weighted += Double(structure) * 0.05
+            totalWeight += 0.05
+        }
+        if let relevance = subscores.relevance {
+            weighted += Double(relevance) * 0.10
+            totalWeight += 0.10
+        }
+
+        // Normalize by actual weight used (handles nil subscores)
+        let normalized = weighted / totalWeight
+        return max(0, min(100, Int(normalized)))
     }
     
     // MARK: - Volume Analysis
@@ -649,6 +879,12 @@ struct SpeechTranscriptionResult {
     let text: String
     let words: [TranscriptionWord]
     let duration: TimeInterval
+}
+
+struct PauseInfo {
+    let duration: TimeInterval
+    let isTransition: Bool
+    let startTime: TimeInterval
 }
 
 // MARK: - Errors

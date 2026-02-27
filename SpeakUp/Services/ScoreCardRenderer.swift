@@ -83,6 +83,18 @@ private struct ScoreCardView: View {
                         ShareSubscoreRow(label: "Pace", value: analysis.speechScore.subscores.pace, color: .green)
                         ShareSubscoreRow(label: "Fillers", value: analysis.speechScore.subscores.fillerUsage, color: .orange)
                         ShareSubscoreRow(label: "Pauses", value: analysis.speechScore.subscores.pauseQuality, color: .purple)
+                        if let delivery = analysis.speechScore.subscores.delivery {
+                            ShareSubscoreRow(label: "Delivery", value: delivery, color: .cyan)
+                        }
+                        if let vocabulary = analysis.speechScore.subscores.vocabulary {
+                            ShareSubscoreRow(label: "Vocab", value: vocabulary, color: .teal)
+                        }
+                        if let structure = analysis.speechScore.subscores.structure {
+                            ShareSubscoreRow(label: "Structure", value: structure, color: .indigo)
+                        }
+                        if let relevance = analysis.speechScore.subscores.relevance {
+                            ShareSubscoreRow(label: "Relevance", value: relevance, color: .pink)
+                        }
                     }
                 }
             }

@@ -74,6 +74,11 @@ struct RecordingDetailView: View {
                             subscoresSection(analysis)
                         }
 
+                        // Pause Breakdown
+                        if let analysis = recording.analysis {
+                            pauseAnalysisSection(analysis)
+                        }
+
                         // 10. Volume & Energy
                         if let volume = recording.analysis?.volumeMetrics {
                             volumeSection(volume)
@@ -214,91 +219,107 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func heroScoreSection(_ analysis: SpeechAnalysis) -> some View {
-        FeaturedGlassCard(
-            gradientColors: [
-                AppColors.scoreColor(for: analysis.speechScore.overall).opacity(0.12),
-                AppColors.scoreColor(for: analysis.speechScore.overall).opacity(0.04)
-            ],
-            cornerRadius: 24
-        ) {
+        GlassCard {
             VStack(spacing: 16) {
-                // Score label + trend
-                HStack {
-                    Text("Speech Score")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-
+                // Header row with score and trend
+                HStack(alignment: .center) {
+                    // Large score
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("\(animateScore ? analysis.speechScore.overall : 0)")
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppColors.scoreColor(for: analysis.speechScore.overall))
+                            .contentTransition(.numericText())
+                        
+                        Text("/100")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    
                     Spacer()
-
+                    
+                    // Trend badge
                     HStack(spacing: 4) {
                         Image(systemName: analysis.speechScore.trend.iconName)
                         Text(analysis.speechScore.trend.rawValue.capitalized)
                     }
-                    .font(.caption.weight(.medium))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(analysis.speechScore.trend.color)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule()
+                            .fill(analysis.speechScore.trend.color.opacity(0.15))
+                    }
                 }
-
-                // Large animated score
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(animateScore ? analysis.speechScore.overall : 0)")
-                        .font(.system(size: 64, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppColors.scoreColor(for: analysis.speechScore.overall))
-                        .minimumScaleFactor(0.7)
-                        .contentTransition(.numericText())
-
-                    Text("/100")
-                        .font(.title3.weight(.medium))
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-                }
-
-                // Score bar with gradient
+                
+                // Progress bar
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color.gray.opacity(0.15))
-
+                            .fill(Color.white.opacity(0.08))
+                        
                         Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        AppColors.scoreColor(for: analysis.speechScore.overall).opacity(0.7),
-                                        AppColors.scoreColor(for: analysis.speechScore.overall)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .fill(AppColors.scoreColor(for: analysis.speechScore.overall))
                             .frame(width: animateScore ? geometry.size.width * CGFloat(analysis.speechScore.overall) / 100 : 0)
-                            .animation(.easeOut(duration: 1.0), value: animateScore)
+                            .animation(.easeOut(duration: 0.8), value: animateScore)
                     }
                 }
-                .frame(height: 10)
-                .clipShape(Capsule())
+                .frame(height: 8)
+            }
+        }
+    }
 
-                // Quick subscore summary
-                HStack(spacing: 0) {
-                    MiniSubscore(
-                        label: "Clarity",
-                        score: analysis.speechScore.subscores.clarity,
-                        icon: "waveform"
-                    )
-                    MiniSubscore(
-                        label: "Pace",
-                        score: analysis.speechScore.subscores.pace,
-                        icon: "speedometer"
-                    )
-                    MiniSubscore(
-                        label: "Fillers",
-                        score: analysis.speechScore.subscores.fillerUsage,
-                        icon: "text.badge.minus"
-                    )
-                    MiniSubscore(
-                        label: "Pauses",
-                        score: analysis.speechScore.subscores.pauseQuality,
-                        icon: "pause.circle"
-                    )
+    // MARK: - Pause Analysis Section
+
+    @ViewBuilder
+    private func pauseAnalysisSection(_ analysis: SpeechAnalysis) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Pause Analysis")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 14) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Strategic Pauses")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text("\(analysis.strategicPauseCount)")
+                                    .font(.title3.weight(.semibold))
+                                Text("for emphasis")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Hesitations")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text("\(analysis.hesitationPauseCount)")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(analysis.hesitationPauseCount > 3 ? .orange : .primary)
+                                Text("mid-sentence")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    
+                    if analysis.averagePauseLength > 0 {
+                        HStack {
+                            Text("Average pause")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(String(format: "%.1f seconds", analysis.averagePauseLength))
+                                .font(.caption.weight(.medium))
+                        }
+                    }
                 }
             }
         }
@@ -388,80 +409,70 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func playbackControlSection(_ recording: Recording) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Playback", systemImage: "play.circle.fill")
-                .font(.headline)
+        GlassCard {
+            VStack(spacing: 14) {
+                // Waveform with timestamps
+                HStack(spacing: 10) {
+                    Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .leading)
 
-            GlassCard(padding: 16) {
-                VStack(spacing: 16) {
-                    // Waveform
-                    HStack(spacing: 8) {
-                        Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 45, alignment: .leading)
-                            .minimumScaleFactor(0.8)
+                    GeometryReader { geometry in
+                        let barWidth: CGFloat = 3
+                        let spacing: CGFloat = 2
+                        let totalBarWidth = barWidth + spacing
+                        let barCount = max(1, Int(geometry.size.width / totalBarWidth))
+                        let width = geometry.size.width
 
-                        GeometryReader { geometry in
-                            let barWidth: CGFloat = 3
-                            let spacing: CGFloat = 2
-                            let totalBarWidth = barWidth + spacing
-                            let barCount = max(1, Int(geometry.size.width / totalBarWidth))
-                            let width = geometry.size.width
+                        HStack(spacing: spacing) {
+                            ForEach(0..<barCount, id: \.self) { i in
+                                let progress = Double(i) / Double(barCount)
+                                let isPlayed = progress < audioService.playbackProgress
+                                let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
 
-                            HStack(spacing: spacing) {
-                                ForEach(0..<barCount, id: \.self) { i in
-                                    let progress = Double(i) / Double(barCount)
-                                    let isPlayed = progress < audioService.playbackProgress
-                                    let height: CGFloat = waveformHeights.isEmpty ? 20 : waveformHeights[i % waveformHeights.count]
-
-                                    RoundedRectangle(cornerRadius: 1.5)
-                                        .fill(isPlayed ? Color.teal : Color.teal.opacity(0.25))
-                                        .frame(width: barWidth, height: height)
-                                }
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(isPlayed ? Color.teal : Color.white.opacity(0.2))
+                                    .frame(width: barWidth, height: height)
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { value in
-                                        let progress = max(0, min(1, value.location.x / max(1, width)))
-                                        audioService.seek(to: progress)
-                                    }
-                            )
                         }
-                        .frame(height: 36)
-
-                        Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 45, alignment: .trailing)
-                            .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let progress = max(0, min(1, value.location.x / max(1, width)))
+                                    audioService.seek(to: progress)
+                                }
+                        )
                     }
+                    .frame(height: 32)
 
-                    // Play button
-                    Button {
-                        togglePlayback(recording)
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.teal.opacity(0.9), .teal],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 52, height: 52)
-                                .shadow(color: .teal.opacity(0.3), radius: 8, y: 2)
-
-                            Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+                    Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
                 }
+
+                // Play button
+                Button {
+                    togglePlayback(recording)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.body.weight(.semibold))
+                        Text(audioService.isPlaying ? "Pause" : "Listen Back")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background {
+                        Capsule()
+                            .fill(Color.teal)
+                    }
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -471,43 +482,35 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func subscoresSection(_ analysis: SpeechAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Detailed Scores", systemImage: "chart.bar.fill")
+            Text("Score Breakdown")
                 .font(.headline)
 
             GlassCard {
-                VStack(spacing: 0) {
-                    SubscoreRow(
-                        title: "Clarity",
-                        score: analysis.speechScore.subscores.clarity,
-                        icon: "waveform"
-                    )
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    SubscoreRow(
-                        title: "Pace",
-                        score: analysis.speechScore.subscores.pace,
-                        icon: "speedometer"
-                    )
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    SubscoreRow(
-                        title: "Filler Usage",
-                        score: analysis.speechScore.subscores.fillerUsage,
-                        icon: "text.badge.minus"
-                    )
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    SubscoreRow(
-                        title: "Pauses",
-                        score: analysis.speechScore.subscores.pauseQuality,
-                        icon: "pause.circle"
-                    )
+                VStack(spacing: 16) {
+                    // Core scores
+                    SubscoreRow(title: "Clarity", score: analysis.speechScore.subscores.clarity, icon: "waveform")
+                    SubscoreRow(title: "Pace", score: analysis.speechScore.subscores.pace, icon: "speedometer")
+                    SubscoreRow(title: "Filler Usage", score: analysis.speechScore.subscores.fillerUsage, icon: "text.badge.minus")
+                    SubscoreRow(title: "Pauses", score: analysis.speechScore.subscores.pauseQuality, icon: "pause.circle")
+                    
+                    // Extended scores (if available)
+                    if let delivery = analysis.speechScore.subscores.delivery {
+                        SubscoreRow(title: "Delivery", score: delivery, icon: "speaker.wave.3")
+                    }
+                    if let vocabulary = analysis.speechScore.subscores.vocabulary {
+                        SubscoreRow(title: "Vocabulary", score: vocabulary, icon: "textformat.abc")
+                    }
+                    if let structure = analysis.speechScore.subscores.structure {
+                        SubscoreRow(title: "Structure", score: structure, icon: "list.bullet.indent")
+                    }
+                    if let relevance = analysis.speechScore.subscores.relevance {
+                        let isRelevanceScore = analysis.promptRelevanceScore != nil && recording?.prompt != nil
+                        SubscoreRow(
+                            title: isRelevanceScore ? "Relevance" : "Coherence",
+                            score: relevance,
+                            icon: isRelevanceScore ? "target" : "arrow.triangle.branch"
+                        )
+                    }
                 }
             }
         }
@@ -557,42 +560,34 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        GlassCard(padding: 12) {
-            HStack(spacing: 0) {
-                CompactStatItem(
-                    icon: "speedometer",
-                    value: "\(Int(analysis.wordsPerMinute))",
-                    label: "WPM",
-                    color: .blue
-                )
-
-                Divider().frame(height: 36)
-
-                CompactStatItem(
-                    icon: "text.word.spacing",
-                    value: "\(analysis.totalWords)",
-                    label: "Words",
-                    color: .green
-                )
-
-                Divider().frame(height: 36)
-
-                CompactStatItem(
-                    icon: "exclamationmark.bubble",
-                    value: "\(analysis.totalFillerCount)",
-                    label: "Fillers",
-                    color: .orange
-                )
-
-                Divider().frame(height: 36)
-
-                CompactStatItem(
-                    icon: "pause.circle",
-                    value: "\(analysis.pauseCount)",
-                    label: "Pauses",
-                    color: .purple
-                )
-            }
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatGridItem(
+                label: "Speaking Pace",
+                value: "\(Int(analysis.wordsPerMinute)) wpm",
+                icon: "speedometer",
+                color: .cyan
+            )
+            
+            StatGridItem(
+                label: "Total Words",
+                value: "\(analysis.totalWords)",
+                icon: "text.word.spacing",
+                color: .white
+            )
+            
+            StatGridItem(
+                label: "Filler Words",
+                value: "\(analysis.totalFillerCount)",
+                icon: "exclamationmark.bubble",
+                color: analysis.totalFillerCount > 5 ? .orange : .green
+            )
+            
+            StatGridItem(
+                label: "Pauses",
+                value: "\(analysis.pauseCount)",
+                icon: "pause.circle",
+                color: .green
+            )
         }
     }
 
@@ -601,37 +596,21 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Filler Words", systemImage: "exclamationmark.bubble.fill")
+            Text("Filler Words Used")
                 .font(.headline)
 
-            GlassCard(tint: .orange.opacity(0.05)) {
-                VStack(spacing: 0) {
-                    ForEach(Array(fillerWords.prefix(5).enumerated()), id: \.element.id) { index, filler in
+            GlassCard {
+                VStack(spacing: 12) {
+                    ForEach(fillerWords.prefix(5)) { filler in
                         HStack {
-                            Text("\"\(filler.word)\"")
-                                .font(.subheadline.weight(.medium))
+                            Text(filler.word)
+                                .font(.subheadline)
 
                             Spacer()
 
-                            Text("\(filler.count)")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(minWidth: 28, minHeight: 28)
-                                .background {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [.orange, .orange.opacity(0.8)],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
-                                }
-                        }
-                        .padding(.vertical, 8)
-
-                        if index < fillerWords.prefix(5).count - 1 {
-                            Divider()
+                            Text("\(filler.count)×")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.orange)
                         }
                     }
                 }
@@ -738,15 +717,12 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func shareCTASection(_ recording: Recording) -> some View {
-        FeaturedGlassCard(
-            gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]
-        ) {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Share Your Score")
-                        .font(.subheadline.weight(.semibold))
-
-                    Text("Show friends your speaking progress")
+        GlassCard(tint: .teal.opacity(0.1)) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Share your progress")
+                        .font(.subheadline.weight(.medium))
+                    Text("Create a shareable score card")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -757,28 +733,13 @@ struct RecordingDetailView: View {
                     scoreCardImage = ScoreCardRenderer.render(recording: recording)
                     showingShareSheet = true
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.caption.weight(.semibold))
                         Text("Share")
-                            .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.teal.opacity(0.9), .teal],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    .clipShape(Capsule())
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.teal)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -803,13 +764,12 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func volumeSection(_ volume: VolumeMetrics) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Volume & Energy", systemImage: "speaker.wave.3.fill")
+            Text("Volume & Energy")
                 .font(.headline)
 
             GlassCard {
-                VStack(spacing: 0) {
-                    SubscoreRow(title: "Energy", score: volume.energyScore, icon: "bolt.fill")
-                    Divider().padding(.vertical, 8)
+                VStack(spacing: 16) {
+                    SubscoreRow(title: "Energy Level", score: volume.energyScore, icon: "bolt.fill")
                     SubscoreRow(title: "Vocal Variety", score: volume.monotoneScore, icon: "waveform.path.ecg")
                 }
             }
@@ -821,18 +781,16 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func vocabComplexitySection(_ vocab: VocabComplexity) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Vocabulary", systemImage: "text.book.closed.fill")
+            Text("Vocabulary")
                 .font(.headline)
 
             GlassCard {
-                VStack(spacing: 0) {
+                VStack(spacing: 14) {
                     SubscoreRow(title: "Complexity", score: vocab.complexityScore, icon: "textformat.abc")
-
-                    Divider().padding(.vertical, 8)
 
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Unique Words")
+                            Text("Unique words")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Text("\(vocab.uniqueWordCount) (\(Int(vocab.uniqueWordRatio * 100))%)")
@@ -840,7 +798,7 @@ struct RecordingDetailView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("Avg Length")
+                            Text("Avg word length")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Text(String(format: "%.1f chars", vocab.averageWordLength))
@@ -849,20 +807,18 @@ struct RecordingDetailView: View {
                     }
 
                     if !vocab.repeatedPhrases.isEmpty {
-                        Divider().padding(.vertical, 8)
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Repeated Phrases")
-                                .font(.caption.weight(.medium))
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Repeated phrases")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            ForEach(vocab.repeatedPhrases.prefix(5), id: \.phrase) { phrase in
+                            ForEach(vocab.repeatedPhrases.prefix(3), id: \.phrase) { phrase in
                                 HStack {
                                     Text("\"\(phrase.phrase)\"")
                                         .font(.caption)
                                     Spacer()
-                                    Text("\(phrase.count)x")
-                                        .font(.caption.weight(.bold))
+                                    Text("\(phrase.count)×")
+                                        .font(.caption.weight(.medium))
                                         .foregroundStyle(.orange)
                                 }
                             }
@@ -878,14 +834,12 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func sentenceAnalysisSection(_ sentence: SentenceAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Structure", systemImage: "text.alignleft")
+            Text("Sentence Structure")
                 .font(.headline)
 
             GlassCard {
-                VStack(spacing: 0) {
-                    SubscoreRow(title: "Structure", score: sentence.structureScore, icon: "text.alignleft")
-
-                    Divider().padding(.vertical, 8)
+                VStack(spacing: 14) {
+                    SubscoreRow(title: "Structure Score", score: sentence.structureScore, icon: "text.alignleft")
 
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -916,14 +870,12 @@ struct RecordingDetailView: View {
                     }
 
                     if !sentence.restartExamples.isEmpty {
-                        Divider().padding(.vertical, 8)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Restart Examples")
-                                .font(.caption.weight(.medium))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Example restarts")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            ForEach(sentence.restartExamples.prefix(3), id: \.self) { example in
+                            ForEach(sentence.restartExamples.prefix(2), id: \.self) { example in
                                 Text("\"\(example)\"")
                                     .font(.caption)
                                     .foregroundStyle(.orange)
@@ -997,14 +949,20 @@ struct RecordingDetailView: View {
         do {
             let result = try await speechService.transcribe(audioURL: audioURL)
 
-            // Fetch vocab words from settings
+            // Fetch settings for analysis configuration
             let settingsDescriptor = FetchDescriptor<UserSettings>()
-            let vocabWords = (try? modelContext.fetch(settingsDescriptor))?.first?.vocabWords ?? []
+            let settings = (try? modelContext.fetch(settingsDescriptor))?.first
+            let vocabWords = settings?.vocabWords ?? []
 
             let analysis = speechService.analyze(
                 transcription: result,
                 actualDuration: recording.actualDuration,
-                vocabWords: vocabWords
+                vocabWords: vocabWords,
+                audioLevelSamples: recording.audioLevelSamples ?? [],
+                prompt: recording.prompt,
+                targetWPM: settings?.targetWPM ?? 150,
+                trackFillerWords: settings?.trackFillerWords ?? true,
+                trackPauses: settings?.trackPauses ?? true
             )
 
             recording.transcriptionText = result.text
@@ -1084,65 +1042,6 @@ struct RecordingDetailView: View {
     }
 }
 
-// MARK: - Mini Subscore (for hero card)
-
-private struct MiniSubscore: View {
-    let label: String
-    let score: Int
-    let icon: String
-
-    var body: some View {
-        VStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.caption2)
-                .foregroundStyle(AppColors.scoreColor(for: score))
-
-            Text("\(score)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(AppColors.scoreColor(for: score))
-                .minimumScaleFactor(0.8)
-
-            Text(label)
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Subscore Card
-
-struct SubscoreCard: View {
-    let title: String
-    let score: Int
-    let icon: String
-
-    var body: some View {
-        GlassCard(padding: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: icon)
-                        .foregroundStyle(AppColors.scoreColor(for: score))
-
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack {
-                    Text("\(score)")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(AppColors.scoreColor(for: score))
-
-                    Text("/100")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Subscore Row
 
 struct SubscoreRow: View {
@@ -1151,11 +1050,11 @@ struct SubscoreRow: View {
     let icon: String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.body)
-                .foregroundStyle(AppColors.scoreColor(for: score))
-                .frame(width: 24)
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
 
             Text(title)
                 .font(.subheadline)
@@ -1163,60 +1062,56 @@ struct SubscoreRow: View {
 
             Spacer()
 
-            // Mini progress bar
+            // Progress bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.gray.opacity(0.15))
+                        .fill(Color.white.opacity(0.08))
 
                     Capsule()
-                        .fill(AppColors.scoreColor(for: score).opacity(0.8))
+                        .fill(AppColors.scoreColor(for: score))
                         .frame(width: geometry.size.width * CGFloat(score) / 100)
                 }
             }
-            .frame(width: 60, height: 4)
-            .clipShape(Capsule())
+            .frame(width: 60, height: 6)
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(score)")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(AppColors.scoreColor(for: score))
-                    .minimumScaleFactor(0.8)
-
-                Text("/100")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 65, alignment: .trailing)
+            Text("\(score)")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(AppColors.scoreColor(for: score))
+                .frame(width: 30, alignment: .trailing)
         }
     }
 }
 
-// MARK: - Compact Stat Item
+// MARK: - Stat Grid Item
 
-struct CompactStatItem: View {
-    let icon: String
-    let value: String
+struct StatGridItem: View {
     let label: String
+    let value: String
+    let icon: String
     let color: Color
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 3) {
+        GlassCard(padding: 14) {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.caption2)
+                    .font(.title3)
                     .foregroundStyle(color)
-
-                Text(value)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(color)
+                    .frame(width: 24)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Text(value)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+                
+                Spacer(minLength: 0)
             }
-
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
     }
 }
 

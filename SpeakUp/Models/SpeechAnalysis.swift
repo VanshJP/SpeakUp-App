@@ -164,12 +164,15 @@ struct SpeechAnalysis: Codable {
     var wordsPerMinute: Double
     var pauseCount: Int
     var averagePauseLength: TimeInterval
+    var strategicPauseCount: Int
+    var hesitationPauseCount: Int
     var clarity: Double // 0-100
     var speechScore: SpeechScore
     var vocabWordsUsed: [VocabWordUsage]
     var volumeMetrics: VolumeMetrics?
     var vocabComplexity: VocabComplexity?
     var sentenceAnalysis: SentenceAnalysis?
+    var promptRelevanceScore: Int?
 
     init(
         fillerWords: [FillerWord] = [],
@@ -177,24 +180,30 @@ struct SpeechAnalysis: Codable {
         wordsPerMinute: Double = 0,
         pauseCount: Int = 0,
         averagePauseLength: TimeInterval = 0,
+        strategicPauseCount: Int = 0,
+        hesitationPauseCount: Int = 0,
         clarity: Double = 0,
         speechScore: SpeechScore = SpeechScore(),
         vocabWordsUsed: [VocabWordUsage] = [],
         volumeMetrics: VolumeMetrics? = nil,
         vocabComplexity: VocabComplexity? = nil,
-        sentenceAnalysis: SentenceAnalysis? = nil
+        sentenceAnalysis: SentenceAnalysis? = nil,
+        promptRelevanceScore: Int? = nil
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
         self.wordsPerMinute = wordsPerMinute
         self.pauseCount = pauseCount
         self.averagePauseLength = averagePauseLength
+        self.strategicPauseCount = strategicPauseCount
+        self.hesitationPauseCount = hesitationPauseCount
         self.clarity = clarity
         self.speechScore = speechScore
         self.vocabWordsUsed = vocabWordsUsed
         self.volumeMetrics = volumeMetrics
         self.vocabComplexity = vocabComplexity
         self.sentenceAnalysis = sentenceAnalysis
+        self.promptRelevanceScore = promptRelevanceScore
     }
 
     // Custom Decodable to handle missing fields in existing data
@@ -205,16 +214,19 @@ struct SpeechAnalysis: Codable {
         wordsPerMinute = try container.decode(Double.self, forKey: .wordsPerMinute)
         pauseCount = try container.decode(Int.self, forKey: .pauseCount)
         averagePauseLength = try container.decode(TimeInterval.self, forKey: .averagePauseLength)
+        strategicPauseCount = (try? container.decodeIfPresent(Int.self, forKey: .strategicPauseCount)) ?? 0
+        hesitationPauseCount = (try? container.decodeIfPresent(Int.self, forKey: .hesitationPauseCount)) ?? 0
         clarity = try container.decode(Double.self, forKey: .clarity)
         speechScore = try container.decode(SpeechScore.self, forKey: .speechScore)
         vocabWordsUsed = (try? container.decodeIfPresent([VocabWordUsage].self, forKey: .vocabWordsUsed)) ?? []
 
-        // New optional fields — these are populated during analysis, not stored yet.
-        // Decoding them from older data causes EXC_BREAKPOINT in SwiftData's
-        // internal decoder, so we skip decoding entirely for now.
+        // SwiftData's internal decoder throws EXC_BREAKPOINT (uncatchable trap)
+        // when decoding these from older data, so we skip decoding entirely.
+        // They get populated fresh during analysis and stored with the recording.
         volumeMetrics = nil
         vocabComplexity = nil
         sentenceAnalysis = nil
+        promptRelevanceScore = nil
     }
 
     var totalFillerCount: Int {
@@ -251,20 +263,44 @@ struct SpeechScore: Codable {
 
 struct SpeechSubscores: Codable {
     var clarity: Int      // 0-100: Based on filler word frequency
-    var pace: Int         // 0-100: Based on WPM (optimal ~150)
+    var pace: Int         // 0-100: Based on WPM (optimal ~targetWPM)
     var fillerUsage: Int  // 0-100: Inverse of filler word ratio
     var pauseQuality: Int // 0-100: Natural vs awkward pauses
-    
+    var delivery: Int?    // 0-100: Volume energy + vocal variation + content density
+    var vocabulary: Int?  // 0-100: From VocabComplexity.complexityScore
+    var structure: Int?   // 0-100: From SentenceAnalysis.structureScore
+    var relevance: Int?   // 0-100: Prompt relevance or coherence (nil when unavailable)
+
     init(
         clarity: Int = 0,
         pace: Int = 0,
         fillerUsage: Int = 0,
-        pauseQuality: Int = 0
+        pauseQuality: Int = 0,
+        delivery: Int? = nil,
+        vocabulary: Int? = nil,
+        structure: Int? = nil,
+        relevance: Int? = nil
     ) {
         self.clarity = clarity
         self.pace = pace
         self.fillerUsage = fillerUsage
         self.pauseQuality = pauseQuality
+        self.delivery = delivery
+        self.vocabulary = vocabulary
+        self.structure = structure
+        self.relevance = relevance
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clarity = try container.decode(Int.self, forKey: .clarity)
+        pace = try container.decode(Int.self, forKey: .pace)
+        fillerUsage = try container.decode(Int.self, forKey: .fillerUsage)
+        pauseQuality = try container.decode(Int.self, forKey: .pauseQuality)
+        delivery = try? container.decodeIfPresent(Int.self, forKey: .delivery)
+        vocabulary = try? container.decodeIfPresent(Int.self, forKey: .vocabulary)
+        structure = try? container.decodeIfPresent(Int.self, forKey: .structure)
+        relevance = try? container.decodeIfPresent(Int.self, forKey: .relevance)
     }
 }
 

@@ -324,29 +324,6 @@ You are an expert at preparing iOS apps for App Store submission. You have acces
 
 Run `greenlight preflight` immediately on the project root. Do NOT try to install greenlight — it is already available in PATH. Just run it:
 
-```bash
-greenlight preflight .
-```
-
-If the user has a built IPA, include it:
-```bash
-greenlight preflight . --ipa /path/to/build.ipa
-```
-
-If `greenlight` is not found, install it:
-```bash
-# Homebrew (macOS)
-brew install revylai/tap/greenlight
-
-# Go install
-go install github.com/RevylAI/greenlight/cmd/greenlight@latest
-
-# Build from source
-git clone https://github.com/RevylAI/greenlight.git
-cd greenlight && make build
-# Binary at: build/greenlight
-```
-
 ## Step 2: Read the output and fix every issue
 
 Every finding has a severity, guideline reference, file location, and fix suggestion. Fix them in order:

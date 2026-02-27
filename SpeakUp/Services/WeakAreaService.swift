@@ -57,6 +57,18 @@ class WeakAreaService {
         let pauseAvg = analyzed.compactMap { $0.analysis?.speechScore.subscores.pauseQuality }.reduce(0, +) / max(1, analyzed.count)
         metrics.append(("Pause Quality", pauseAvg, .pausePractice))
 
+        let deliveryScores = analyzed.compactMap { $0.analysis?.speechScore.subscores.delivery }
+        if !deliveryScores.isEmpty {
+            let deliveryAvg = deliveryScores.reduce(0, +) / deliveryScores.count
+            metrics.append(("Delivery", deliveryAvg, nil))
+        }
+
+        let vocabScores = analyzed.compactMap { $0.analysis?.speechScore.subscores.vocabulary }
+        if !vocabScores.isEmpty {
+            let vocabAvg = vocabScores.reduce(0, +) / vocabScores.count
+            metrics.append(("Vocabulary", vocabAvg, .impromptuSprint))
+        }
+
         // Sort by score (weakest first)
         metrics.sort { $0.avg < $1.avg }
 

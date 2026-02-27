@@ -213,10 +213,35 @@ struct SettingsView: View {
                     }
                     .tint(.teal)
                     .frame(minHeight: 40)
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    VStack(spacing: 8) {
+                        HStack {
+                            Label("Target Pace", systemImage: "speedometer")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(viewModel.targetWPM) WPM")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.teal)
+                        }
+
+                        Slider(
+                            value: Binding(
+                                get: { Double(viewModel.targetWPM) },
+                                set: { viewModel.targetWPM = Int($0) }
+                            ),
+                            in: 100...200,
+                            step: 5
+                        )
+                        .tint(.teal)
+                    }
+                    .frame(minHeight: 60)
                 }
             }
 
-            Text("Analyze your speech patterns for pauses and filler words like \"um\", \"uh\", and \"like\".")
+            Text("Analyze your speech patterns for pauses and filler words. Target pace sets the ideal WPM for your pace score (default 150).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -665,6 +690,10 @@ private struct SettingsChangeModifiersA: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.trackFillerWords) { _, _ in
+                guard !viewModel.isSyncing else { return }
+                Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.targetWPM) { _, _ in
                 guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }

@@ -38,43 +38,18 @@ struct GlassCard<Content: View>: View {
                             .fill(tint.opacity(0.12))
                     }
 
-                    // Inner glow gradient for depth against dark backgrounds
+                    // Subtle border
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.06), .clear],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-
-                    // Top edge highlight
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.3), .white.opacity(0.08), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                 }
             }
             .overlay {
                 if let accentBorder {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [accentBorder.opacity(0.6), accentBorder.opacity(0.2), .clear],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.5
-                        )
+                        .stroke(accentBorder.opacity(0.4), lineWidth: 1)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
     }
 }
 
@@ -115,30 +90,12 @@ struct FeaturedGlassCard<Content: View>: View {
                             )
                         )
 
-                    // Inner glow for premium depth
+                    // Subtle border
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.08), .clear],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-
-                    // Top edge highlight
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.35), .white.opacity(0.1), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .shadow(color: gradientColors.first?.opacity(0.25) ?? .clear, radius: 20, y: 8)
     }
 }
 
