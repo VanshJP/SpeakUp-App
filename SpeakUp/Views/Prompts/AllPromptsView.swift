@@ -648,7 +648,7 @@ enum PromptSortMode: String, CaseIterable, Identifiable {
 
 // MARK: - Prompt Stat Item
 
-private struct PromptStatItem: View {
+struct PromptStatItem: View {
     let icon: String
     let value: String
     let label: String

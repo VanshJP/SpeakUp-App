@@ -5,7 +5,7 @@ struct CoachingTipsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Coaching Tips")
+            Label("Coaching Tips", systemImage: "lightbulb.fill")
                 .font(.headline)
 
             VStack(spacing: 8) {

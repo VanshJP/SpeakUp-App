@@ -35,95 +35,98 @@ struct RecordingDetailView: View {
             AppBackground(style: .subtle)
 
             if let recording {
-                ScrollView(.vertical) {
-                    VStack(spacing: 16) {
-                        // 1. Prompt Header
-                        promptHeader(recording)
+                if recording.isProcessing || isTranscribing || (!speechService.isModelLoaded && recording.analysis == nil) {
+                    // Full-page analyzing experience
+                    AnalyzingView(
+                        recording: recording,
+                        isModelLoading: !speechService.isModelLoaded
+                    )
+                } else {
+                    ScrollView(.vertical) {
+                        VStack(spacing: 20) {
+                            // Prompt Header
+                            promptHeader(recording)
 
-                        // 2. Score Card - Hero element
-                        if let analysis = recording.analysis {
-                            heroScoreSection(analysis)
-                        } else if recording.isProcessing || isTranscribing {
-                            processingSection
-                        } else if !speechService.isModelLoaded && recording.analysis == nil {
-                            modelLoadingSection
+                            // Score Card - Hero element
+                            if let analysis = recording.analysis {
+                                heroScoreSection(analysis)
+                            }
+
+                            // Stats Grid
+                            if let analysis = recording.analysis {
+                                statsGrid(analysis)
+                            }
+
+                            // Playback Control
+                            playbackControlSection(recording)
+
+                            // Transcript
+                            if let words = recording.transcriptionWords, !words.isEmpty {
+                                transcriptSectionWithHighlights(words)
+                            } else if let text = recording.transcriptionText, !text.isEmpty {
+                                transcriptSection(text)
+                            }
+
+                            // Filler Words
+                            if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
+                                fillerWordsSection(analysis.fillerWords)
+                            }
+
+                            // Detailed Scores
+                            if let analysis = recording.analysis {
+                                subscoresSection(analysis)
+                            }
+
+                            // Pause Breakdown
+                            if let analysis = recording.analysis {
+                                pauseAnalysisSection(analysis)
+                            }
+
+                            // Volume & Energy
+                            if let volume = recording.analysis?.volumeMetrics {
+                                volumeSection(volume)
+                            }
+
+                            // Vocabulary Complexity
+                            if let vocab = recording.analysis?.vocabComplexity {
+                                vocabComplexitySection(vocab)
+                            }
+
+                            // Sentence Structure
+                            if let sentence = recording.analysis?.sentenceAnalysis {
+                                sentenceAnalysisSection(sentence)
+                            }
+
+                            // Coaching Tips
+                            if let analysis = recording.analysis {
+                                CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
+                            }
+
+                            // Share CTA
+                            if recording.analysis != nil {
+                                shareCTASection(recording)
+                            }
+
+                            // Actions
+                            actionsSection(recording)
                         }
-
-                        // 3. Stats Grid
-                        if let analysis = recording.analysis {
-                            statsGrid(analysis)
-                        }
-
-                        // 4. Playback Control
-                        playbackControlSection(recording)
-
-                        // 5. Transcript
-                        if let words = recording.transcriptionWords, !words.isEmpty {
-                            transcriptSectionWithHighlights(words)
-                        } else if let text = recording.transcriptionText, !text.isEmpty {
-                            transcriptSection(text)
-                        }
-
-                        // 6. Filler Words
-                        if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
-                            fillerWordsSection(analysis.fillerWords)
-                        }
-
-                        // 8. Detailed Scores
-                        if let analysis = recording.analysis {
-                            subscoresSection(analysis)
-                        }
-
-                        // Pause Breakdown
-                        if let analysis = recording.analysis {
-                            pauseAnalysisSection(analysis)
-                        }
-
-                        // 10. Volume & Energy
-                        if let volume = recording.analysis?.volumeMetrics {
-                            volumeSection(volume)
-                        }
-
-                        // 11. Vocabulary Complexity
-                        if let vocab = recording.analysis?.vocabComplexity {
-                            vocabComplexitySection(vocab)
-                        }
-
-                        // 12. Sentence Structure
-                        if let sentence = recording.analysis?.sentenceAnalysis {
-                            sentenceAnalysisSection(sentence)
-                        }
-
-                        // 13. Coaching Tips
-                        if let analysis = recording.analysis {
-                            CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
-                        }
-
-                        // 9. Share CTA
-                        if recording.analysis != nil {
-                            shareCTASection(recording)
-                        }
-
-                        // Actions
-                        actionsSection(recording)
+                        .padding()
                     }
-                    .padding()
-                }
-                .scrollIndicators(.hidden)
-                .scrollBounceBehavior(.basedOnSize)
-                .contentMargins(.horizontal, 0)
-                .onAppear {
-                    generateWaveformHeights()
-                    initializePlayback(recording)
-                }
-                .task {
-                    // Delay score animation
-                    try? await Task.sleep(for: .milliseconds(300))
-                    withAnimation(.easeOut(duration: 0.8)) {
-                        animateScore = true
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .contentMargins(.horizontal, 0)
+                    .onAppear {
+                        generateWaveformHeights()
+                        initializePlayback(recording)
+                    }
+                    .task {
+                        // Delay score animation
+                        try? await Task.sleep(for: .milliseconds(300))
+                        withAnimation(.easeOut(duration: 0.8)) {
+                            animateScore = true
+                        }
                     }
                 }
-
             } else if isLoading {
                 ProgressView("Loading...")
                     .padding(.top, 100)
@@ -149,6 +152,7 @@ struct RecordingDetailView: View {
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                             .font(.body)
+                            .frame(width: 28, height: 28)
                     }
 
                     Menu {
@@ -178,6 +182,7 @@ struct RecordingDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.body)
+                            .frame(width: 28, height: 28)
                     }
                 }
             }
@@ -274,7 +279,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func pauseAnalysisSection(_ analysis: SpeechAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Pause Analysis")
+            Label("Pause Analysis", systemImage: "pause.circle.fill")
                 .font(.headline)
 
             GlassCard {
@@ -482,7 +487,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func subscoresSection(_ analysis: SpeechAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Score Breakdown")
+            Label("Score Breakdown", systemImage: "chart.bar.fill")
                 .font(.headline)
 
             GlassCard {
@@ -516,79 +521,55 @@ struct RecordingDetailView: View {
         }
     }
 
-    // MARK: - Processing Section
-
-    private var processingSection: some View {
-        GlassCard(tint: .blue.opacity(0.1)) {
-            HStack(spacing: 12) {
-                ProgressView()
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Analyzing Speech...")
-                        .font(.subheadline.weight(.medium))
-
-                    Text("Transcribing and detecting filler words")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-            }
-        }
-    }
-
-    private var modelLoadingSection: some View {
-        GlassCard(tint: .orange.opacity(0.1)) {
-            HStack(spacing: 12) {
-                ProgressView()
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Loading Speech Model...")
-                        .font(.subheadline.weight(.medium))
-
-                    Text("The analysis model is loading in the background.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-            }
-        }
-    }
+    // MARK: - Processing Section (moved to AnalyzingView)
 
     // MARK: - Stats Grid
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatGridItem(
-                label: "Speaking Pace",
-                value: "\(Int(analysis.wordsPerMinute)) wpm",
-                icon: "speedometer",
-                color: .cyan
-            )
-            
-            StatGridItem(
-                label: "Total Words",
-                value: "\(analysis.totalWords)",
-                icon: "text.word.spacing",
-                color: .white
-            )
-            
-            StatGridItem(
-                label: "Filler Words",
-                value: "\(analysis.totalFillerCount)",
-                icon: "exclamationmark.bubble",
-                color: analysis.totalFillerCount > 5 ? .orange : .green
-            )
-            
-            StatGridItem(
-                label: "Pauses",
-                value: "\(analysis.pauseCount)",
-                icon: "pause.circle",
-                color: .green
-            )
+        GlassCard(padding: 14) {
+            HStack(spacing: 0) {
+                PromptStatItem(
+                    icon: "speedometer",
+                    value: "\(Int(analysis.wordsPerMinute)) wpm",
+                    label: "Speaking Pace",
+                    color: .cyan
+                )
+
+                detailStatDivider
+
+                PromptStatItem(
+                    icon: "text.word.spacing",
+                    value: "\(analysis.totalWords)",
+                    label: "Total Words",
+                    color: .white
+                )
+
+                detailStatDivider
+
+                PromptStatItem(
+                    icon: "exclamationmark.bubble",
+                    value: "\(analysis.totalFillerCount)",
+                    label: "Filler Words",
+                    color: analysis.totalFillerCount > 5 ? .orange : .green
+                )
+
+                detailStatDivider
+
+                PromptStatItem(
+                    icon: "pause.circle",
+                    value: "\(analysis.pauseCount)",
+                    label: "Pauses",
+                    color: .green
+                )
+            }
         }
+    }
+
+    private var detailStatDivider: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(width: 0.5, height: 40)
     }
 
     // MARK: - Filler Words Section
@@ -596,7 +577,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Filler Words Used")
+            Label("Filler Words Used", systemImage: "exclamationmark.bubble.fill")
                 .font(.headline)
 
             GlassCard {
@@ -764,7 +745,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func volumeSection(_ volume: VolumeMetrics) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Volume & Energy")
+            Label("Volume & Energy", systemImage: "speaker.wave.3.fill")
                 .font(.headline)
 
             GlassCard {
@@ -781,7 +762,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func vocabComplexitySection(_ vocab: VocabComplexity) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Vocabulary")
+            Label("Vocabulary", systemImage: "textformat.abc")
                 .font(.headline)
 
             GlassCard {
@@ -834,7 +815,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func sentenceAnalysisSection(_ sentence: SentenceAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sentence Structure")
+            Label("Sentence Structure", systemImage: "text.alignleft")
                 .font(.headline)
 
             GlassCard {

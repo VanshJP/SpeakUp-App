@@ -166,7 +166,7 @@ enum PromptRelevanceService {
         let avgSim = totalSimilarity / Double(pairs)
         
         // Semantic similarity of 0.3-0.5 between adjacent sentences is actually quite strong
-        return min(1.0, avgSim * 2.0)
+        return min(1.0, avgSim * 1.5)
     }
 
     private static func computeJaccardConsistency(sentences: [String]) -> Double {
@@ -186,7 +186,7 @@ enum PromptRelevanceService {
         }
 
         guard pairs > 0 else { return 0.5 }
-        return min(1.0, (totalOverlap / Double(pairs)) * 4.0)
+        return min(1.0, (totalOverlap / Double(pairs)) * 3.0)
     }
 
     private static func computeStructuralConnectives(transcript: String) -> Double {
@@ -196,21 +196,23 @@ enum PromptRelevanceService {
 
         var foundConnectives = Set<String>()
         var totalFound = 0
-        
+
         for connective in connectives {
             // Use word boundary check to avoid partial matches (e.g., "so" in "soon")
             let pattern = "\\b\(NSRegularExpression.escapedPattern(for: connective))\\b"
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-               regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
-                foundConnectives.insert(connective)
-                totalFound += 1
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matchCount = regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+                if matchCount > 0 {
+                    foundConnectives.insert(connective)
+                    totalFound += matchCount
+                }
             }
         }
 
         // Scoring: Reward both variety and presence
-        // 4+ unique connectives or 6+ total usages is a great score
-        let varietyScore = min(1.0, Double(foundConnectives.count) / 4.0)
-        let frequencyScore = min(1.0, Double(totalFound) / 6.0)
+        // 6+ unique connectives or 8+ total usages is a great score
+        let varietyScore = min(1.0, Double(foundConnectives.count) / 6.0)
+        let frequencyScore = min(1.0, Double(totalFound) / 8.0)
         
         return (varietyScore * 0.7) + (frequencyScore * 0.3)
     }
@@ -225,16 +227,14 @@ enum PromptRelevanceService {
     ]
 
     private static let connectives: [String] = [
-        // Spoken/Casual transitions
-        "so", "actually", "basically", "literally", "honestly", "anyway", 
-        "well", "like", "you know", "right", "okay", "then", "but", "and",
-        
         // Logical/Formal transitions
         "however", "therefore", "because", "although", "furthermore",
         "moreover", "consequently", "nevertheless", "for example",
         "for instance", "in addition", "on the other hand",
         "in contrast", "as a result", "in conclusion",
         "first", "second", "third", "finally",
-        "similarly", "meanwhile", "instead", "otherwise", "specifically"
+        "similarly", "meanwhile", "instead", "otherwise", "specifically",
+        "then", "but", "and", "yet", "while", "since", "thus",
+        "hence", "accordingly", "rather", "indeed"
     ]
 }
