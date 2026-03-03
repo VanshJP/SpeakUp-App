@@ -326,6 +326,52 @@ enum ScoreTrend: String, Codable {
     }
 }
 
+// MARK: - Session Feedback Types
+
+enum FeedbackQuestionType: String, Codable {
+    case scale // 1-5
+    case yesNo
+}
+
+struct FeedbackQuestion: Codable, Identifiable {
+    var id: UUID
+    var text: String
+    var type: FeedbackQuestionType
+
+    init(id: UUID = UUID(), text: String, type: FeedbackQuestionType) {
+        self.id = id
+        self.text = text
+        self.type = type
+    }
+}
+
+struct FeedbackAnswer: Codable, Identifiable {
+    var id: UUID = UUID()
+    var questionId: UUID
+    var questionText: String
+    var type: FeedbackQuestionType
+    var scaleValue: Int?
+    var boolValue: Bool?
+
+    init(questionId: UUID, questionText: String, type: FeedbackQuestionType, scaleValue: Int? = nil, boolValue: Bool? = nil) {
+        self.questionId = questionId
+        self.questionText = questionText
+        self.type = type
+        self.scaleValue = scaleValue
+        self.boolValue = boolValue
+    }
+}
+
+struct SessionFeedback: Codable {
+    var answers: [FeedbackAnswer]
+    var submittedAt: Date
+
+    init(answers: [FeedbackAnswer], submittedAt: Date = Date()) {
+        self.answers = answers
+        self.submittedAt = submittedAt
+    }
+}
+
 // MARK: - Filler Words List
 
 struct FillerWordList {

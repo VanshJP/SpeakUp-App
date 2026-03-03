@@ -23,6 +23,7 @@ struct RecordingDetailView: View {
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
     @State private var exportService = ExportService()
+    @State private var pendingFeedback = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -35,11 +36,24 @@ struct RecordingDetailView: View {
             AppBackground(style: .subtle)
 
             if let recording {
-                if recording.isProcessing || isTranscribing || (!speechService.isModelLoaded && recording.analysis == nil) {
+                if recording.isProcessing || isTranscribing || (!speechService.isModelLoaded && recording.analysis == nil) || pendingFeedback {
                     // Full-page analyzing experience
                     AnalyzingView(
                         recording: recording,
-                        isModelLoading: !speechService.isModelLoaded
+                        isModelLoading: !speechService.isModelLoaded,
+                        feedbackEnabled: userSettings.first?.sessionFeedbackEnabled ?? false,
+                        feedbackQuestions: feedbackQuestionsForAnalyzing,
+                        existingFeedback: recording.sessionFeedback,
+                        onFeedbackSubmitted: { feedback in
+                            recording.sessionFeedback = feedback
+                            try? modelContext.save()
+                        },
+                        onFeedbackCompleted: {
+                            withAnimation(.spring(response: 0.3)) {
+                                pendingFeedback = false
+                            }
+                        },
+                        analysisReady: recording.analysis != nil
                     )
                 } else {
                     ScrollView(.vertical) {
@@ -100,6 +114,11 @@ struct RecordingDetailView: View {
                             // Coaching Tips
                             if let analysis = recording.analysis {
                                 CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
+                            }
+
+                            // Self-Assessment
+                            if let feedback = recording.sessionFeedback {
+                                selfAssessmentSection(feedback)
                             }
 
                             // Share CTA
@@ -871,6 +890,72 @@ struct RecordingDetailView: View {
 
     // MARK: - Helpers
 
+    // MARK: - Self-Assessment Section
+
+    @ViewBuilder
+    private func selfAssessmentSection(_ feedback: SessionFeedback) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Self-Assessment", systemImage: "checkmark.message")
+                .font(.headline)
+
+            GlassCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(feedback.answers) { answer in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(answer.questionText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            if answer.type == .scale, let value = answer.scaleValue {
+                                HStack(spacing: 6) {
+                                    ForEach(1...5, id: \.self) { i in
+                                        Circle()
+                                            .fill(i <= value
+                                                  ? AppColors.scoreColor(for: value * 20)
+                                                  : Color.white.opacity(0.1))
+                                            .frame(width: 10, height: 10)
+                                    }
+
+                                    Text(selfAssessmentLabel(for: value))
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(AppColors.scoreColor(for: value * 20))
+                                        .padding(.leading, 4)
+                                }
+                            } else if answer.type == .yesNo, let value = answer.boolValue {
+                                HStack(spacing: 6) {
+                                    Image(systemName: value ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .foregroundStyle(value ? .green : .orange)
+                                    Text(value ? "Yes" : "No")
+                                        .font(.subheadline.weight(.medium))
+                                }
+                            }
+                        }
+
+                        if answer.id != feedback.answers.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func selfAssessmentLabel(for value: Int) -> String {
+        switch value {
+        case 1: return "Very Poor"
+        case 2: return "Poor"
+        case 3: return "Okay"
+        case 4: return "Good"
+        case 5: return "Excellent"
+        default: return ""
+        }
+    }
+
+    private var feedbackQuestionsForAnalyzing: [FeedbackQuestion] {
+        let custom = userSettings.first?.customFeedbackQuestions ?? []
+        return DefaultFeedbackQuestions.questions + custom
+    }
+
     private func generateWaveformHeights() {
         guard waveformHeights.isEmpty else { return }
         if let url = recording?.audioURL ?? recording?.videoURL {
@@ -919,6 +1004,12 @@ struct RecordingDetailView: View {
 
         isTranscribing = true
         recording.isProcessing = true
+
+        // Activate pending feedback if enabled and not already submitted
+        let feedbackEnabled = userSettings.first?.sessionFeedbackEnabled ?? false
+        if feedbackEnabled && recording.sessionFeedback == nil {
+            pendingFeedback = true
+        }
 
         defer {
             isTranscribing = false

@@ -13,7 +13,6 @@ struct OnboardingPageView: View {
             Image(systemName: icon)
                 .font(.system(size: 72))
                 .foregroundStyle(accentColor)
-                .symbolEffect(.pulse, options: .repeating)
 
             VStack(spacing: 12) {
                 Text(title)

@@ -53,6 +53,10 @@ final class UserSettings {
     // Listen Back
     var listenBackCount: Int = 0
 
+    // Session Feedback
+    var sessionFeedbackEnabled: Bool = true
+    var customFeedbackQuestions: [FeedbackQuestion] = []
+
     init(
         id: UUID = UUID(),
         defaultDuration: Int = 60,

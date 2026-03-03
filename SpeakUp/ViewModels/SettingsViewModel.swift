@@ -46,6 +46,17 @@ class SettingsViewModel {
     // Local state - Audio Cues
     var chirpSoundEnabled: Bool = true
 
+    // Local state - Session Feedback
+    var sessionFeedbackEnabled: Bool = true
+    var customFeedbackQuestions: [FeedbackQuestion] = []
+    var showingAddFeedbackQuestion: Bool = false
+    var newFeedbackQuestionText: String = ""
+    var newFeedbackQuestionType: FeedbackQuestionType = .scale
+
+    var activeFeedbackQuestions: [FeedbackQuestion] {
+        DefaultFeedbackQuestions.questions + customFeedbackQuestions
+    }
+
     // Local state - Word Bank
     var vocabWords: [String] = []
     var newVocabWord: String = ""
@@ -135,6 +146,10 @@ class SettingsViewModel {
         // Audio Cues
         chirpSoundEnabled = settings.chirpSoundEnabled
         ChirpPlayer.shared.isEnabled = settings.chirpSoundEnabled
+
+        // Session Feedback
+        sessionFeedbackEnabled = settings.sessionFeedbackEnabled
+        customFeedbackQuestions = settings.customFeedbackQuestions
     }
     
     @MainActor
@@ -176,6 +191,10 @@ class SettingsViewModel {
         // Audio Cues
         settings.chirpSoundEnabled = chirpSoundEnabled
         ChirpPlayer.shared.isEnabled = chirpSoundEnabled
+
+        // Session Feedback
+        settings.sessionFeedbackEnabled = sessionFeedbackEnabled
+        settings.customFeedbackQuestions = customFeedbackQuestions
 
         do {
             try context.save()
@@ -263,6 +282,28 @@ class SettingsViewModel {
         Task { await saveSettings() }
     }
 
+    // MARK: - Feedback Questions
+
+    @MainActor
+    func addFeedbackQuestion() {
+        let trimmed = newFeedbackQuestionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let question = FeedbackQuestion(text: trimmed, type: newFeedbackQuestionType)
+        customFeedbackQuestions.append(question)
+        newFeedbackQuestionText = ""
+        newFeedbackQuestionType = .scale
+        showingAddFeedbackQuestion = false
+        Haptics.success()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func removeFeedbackQuestion(_ question: FeedbackQuestion) {
+        customFeedbackQuestions.removeAll { $0.id == question.id }
+        Haptics.light()
+        Task { await saveSettings() }
+    }
+
     private func isFillerWord(_ word: String) -> Bool {
         let lowered = word.lowercased()
         return FillerWordList.unconditionalFillers.contains(lowered)
@@ -304,6 +345,8 @@ class SettingsViewModel {
         settings.timerEndBehavior = 0
         settings.vocabWords = []
         settings.chirpSoundEnabled = true
+        settings.sessionFeedbackEnabled = true
+        settings.customFeedbackQuestions = []
 
         do {
             try context.save()

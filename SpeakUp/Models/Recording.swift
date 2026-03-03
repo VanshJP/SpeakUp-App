@@ -20,6 +20,7 @@ final class Recording {
     var customTitle: String?
     var drillMode: String?
     var frameworkUsed: String?
+    var sessionFeedback: SessionFeedback?
     @Transient var audioLevelSamples: [Float]? = nil
 
     init(

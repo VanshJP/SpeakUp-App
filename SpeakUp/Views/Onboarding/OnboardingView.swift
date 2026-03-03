@@ -18,10 +18,9 @@ struct OnboardingView: View {
             let isSmallScreen = geometry.size.height < 700
             let heroHeight = isSmallScreen ? geometry.size.height * 0.18 : 160.0
             let topPadding = isSmallScreen ? geometry.size.height * 0.05 : 60.0
-            
+
             ZStack {
-                // Premium dynamic background that shifts with pages
-                PremiumOnboardingBackground(currentPage: viewModel.currentPage, size: geometry.size)
+                AppBackground(style: .subtle)
                     .ignoresSafeArea()
 
                 TabView(selection: $viewModel.currentPage) {
@@ -51,7 +50,7 @@ struct OnboardingView: View {
 
     private func bottomControls(safeAreaInsets: EdgeInsets, isSmallScreen: Bool) -> some View {
         VStack(spacing: isSmallScreen ? 16 : 24) {
-            // Animated Page Indicators (Magnetic effect)
+            // Page Indicators
             HStack(spacing: 8) {
                 ForEach(0..<viewModel.totalPages, id: \.self) { index in
                     Capsule()
@@ -60,14 +59,7 @@ struct OnboardingView: View {
                             width: index == viewModel.currentPage ? 28 : 8,
                             height: 8
                         )
-                        .overlay {
-                            if index == viewModel.currentPage {
-                                Capsule()
-                                    .stroke(Color.teal.opacity(0.5), lineWidth: 4)
-                                    .blur(radius: 4)
-                            }
-                        }
-                        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: viewModel.currentPage)
+                        .animation(.easeInOut(duration: 0.25), value: viewModel.currentPage)
                 }
             }
 
@@ -87,9 +79,6 @@ struct OnboardingView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .shadow(color: .teal.opacity(viewModel.currentPage == 6 ? 0.3 : 0), radius: 20)
-            .scaleEffect(viewModel.currentPage == 6 ? 1.02 : 1.0)
-            .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: viewModel.currentPage)
         }
         .padding(.bottom, max(20, safeAreaInsets.bottom + (isSmallScreen ? 10 : 20)))
     }
@@ -110,7 +99,6 @@ struct OnboardingView: View {
 
     // MARK: - Shared Page Layout
 
-    /// Consistent page structure with STAGGERED animations
     private func onboardingPage<Hero: View, Detail: View>(
         pageIndex: Int,
         title: String,
@@ -120,26 +108,17 @@ struct OnboardingView: View {
         @ViewBuilder hero: () -> Hero,
         @ViewBuilder detail: () -> Detail
     ) -> some View {
-        let isCurrent = viewModel.currentPage == pageIndex
-        
-        return ScrollView(showsIndicators: false) {
+        ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                // 1. Hero Area (Staggered Entrance)
                 hero()
                     .frame(height: heroHeight)
                     .padding(.top, topPadding)
-                    .scaleEffect(isCurrent ? 1 : 0.85)
-                    .opacity(isCurrent ? 1 : 0)
-                    .blur(radius: isCurrent ? 0 : 10)
-                    .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.1), value: isCurrent)
 
-                // 2. Title & Subtitle (Staggered Entrance)
                 VStack(spacing: 12) {
                     Text(title)
                         .font(.system(size: heroHeight > 140 ? 32 : 28, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
-                        .glow(color: .teal.opacity(0.3), radius: 10)
 
                     Text(subtitle)
                         .font(.system(size: 17, weight: .regular))
@@ -149,16 +128,9 @@ struct OnboardingView: View {
                         .lineSpacing(4)
                 }
                 .padding(.top, OnboardingLayout.heroToTitleSpacing)
-                .offset(y: isCurrent ? 0 : 20)
-                .opacity(isCurrent ? 1 : 0)
-                .animation(.spring(response: 0.8, dampingFraction: 0.8).delay(0.25), value: isCurrent)
 
-                // 3. Detail Content (Staggered Entrance)
                 detail()
                     .padding(.top, OnboardingLayout.titleToContentSpacing)
-                    .offset(y: isCurrent ? 0 : 30)
-                    .opacity(isCurrent ? 1 : 0)
-                    .animation(.spring(response: 0.8, dampingFraction: 0.8).delay(0.4), value: isCurrent)
 
                 Spacer(minLength: OnboardingLayout.bottomPadding)
             }
@@ -177,7 +149,9 @@ struct OnboardingView: View {
             heroHeight: heroHeight,
             topPadding: topPadding
         ) {
-            WaveformHeroView()
+            Image(systemName: "waveform")
+                .font(.system(size: heroHeight * 0.35, weight: .bold))
+                .foregroundStyle(.teal)
         } detail: {
             HStack(spacing: 8) {
                 FeaturePill(icon: "waveform", text: "Analyze")
@@ -199,21 +173,13 @@ struct OnboardingView: View {
             topPadding: topPadding
         ) {
             ZStack {
-                // Animated background glow for score
-                Circle()
-                    .fill(Color.teal.opacity(0.15))
-                    .frame(width: heroHeight * 0.8, height: heroHeight * 0.8)
-                    .blur(radius: 20)
-                    .scaleEffect(viewModel.scoreAnimationTriggered ? 1.1 : 0.8)
-                    .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: viewModel.scoreAnimationTriggered)
-
-                // Main Score Ring
+                // Score Ring
                 Circle()
                     .stroke(Color.white.opacity(0.08), lineWidth: 10)
                     .frame(width: heroHeight * 0.75, height: heroHeight * 0.75)
 
                 Circle()
-                    .trim(from: 0, to: viewModel.scoreAnimationTriggered ? 0.82 : 0)
+                    .trim(from: 0, to: 0.82)
                     .stroke(
                         LinearGradient(
                             colors: [.teal, .cyan],
@@ -224,8 +190,6 @@ struct OnboardingView: View {
                     )
                     .frame(width: heroHeight * 0.75, height: heroHeight * 0.75)
                     .rotationEffect(.degrees(-90))
-                    .animation(.expoOut(duration: 2.0), value: viewModel.scoreAnimationTriggered)
-                    .glow(color: .teal.opacity(0.5), radius: 10)
 
                 VStack(spacing: 0) {
                     Text("82")
@@ -236,23 +200,15 @@ struct OnboardingView: View {
                         .foregroundStyle(.white.opacity(0.5))
                         .kerning(1)
                 }
-                .scaleEffect(viewModel.scoreAnimationTriggered ? 1 : 0.5)
-                .opacity(viewModel.scoreAnimationTriggered ? 1 : 0)
-                .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.5), value: viewModel.scoreAnimationTriggered)
             }
         } detail: {
             VStack(spacing: 12) {
-                AnimatedScoreRow(icon: "waveform", title: "Clarity", targetWidth: 0.85, color: .blue, delay: 0.6, animate: viewModel.scoreAnimationTriggered)
-                AnimatedScoreRow(icon: "speedometer", title: "Pace", targetWidth: 0.72, color: .green, delay: 0.7, animate: viewModel.scoreAnimationTriggered)
-                AnimatedScoreRow(icon: "text.badge.minus", title: "Fillers", targetWidth: 0.90, color: .orange, delay: 0.8, animate: viewModel.scoreAnimationTriggered)
-                AnimatedScoreRow(icon: "pause.circle", title: "Pausing", targetWidth: 0.78, color: .purple, delay: 0.9, animate: viewModel.scoreAnimationTriggered)
+                ScoreRow(icon: "waveform", title: "Clarity", width: 0.85, color: .blue)
+                ScoreRow(icon: "speedometer", title: "Pace", width: 0.72, color: .green)
+                ScoreRow(icon: "text.badge.minus", title: "Fillers", width: 0.90, color: .orange)
+                ScoreRow(icon: "pause.circle", title: "Pausing", width: 0.78, color: .purple)
             }
             .padding(.horizontal, 16)
-        }
-        .onChange(of: viewModel.currentPage) { _, newValue in
-            if newValue == 1 {
-                viewModel.triggerScoreAnimation()
-            }
         }
     }
 
@@ -266,60 +222,21 @@ struct OnboardingView: View {
             heroHeight: heroHeight,
             topPadding: topPadding
         ) {
-            ZStack {
-                Circle()
-                    .fill(Color.teal.opacity(0.2))
-                    .frame(width: heroHeight * 0.8, height: heroHeight * 0.8)
-                    .blur(radius: 20)
-
-                Image(systemName: "sparkles")
-                    .font(.system(size: heroHeight * 0.4))
-                    .foregroundStyle(.teal)
-                    .symbolEffect(.bounce, options: .repeating, value: viewModel.currentPage == 2)
-                    .glow(color: .teal, radius: 20)
-            }
+            Image(systemName: "sparkles")
+                .font(.system(size: heroHeight * 0.4))
+                .foregroundStyle(.teal)
         } detail: {
             VStack(spacing: 16) {
                 HStack(spacing: 16) {
-                    ToolkitCard(
-                        icon: "wind",
-                        title: "Warm-Ups",
-                        subtitle: "Vocal & breathing",
-                        color: .cyan,
-                        isVisible: viewModel.toolsRevealed >= 1
-                    )
-                    ToolkitCard(
-                        icon: "bolt.circle",
-                        title: "Drills",
-                        subtitle: "Active training",
-                        color: .orange,
-                        isVisible: viewModel.toolsRevealed >= 2
-                    )
+                    ToolkitCard(icon: "wind", title: "Warm-Ups", subtitle: "Vocal & breathing", color: .cyan)
+                    ToolkitCard(icon: "bolt.circle", title: "Drills", subtitle: "Active training", color: .orange)
                 }
-
                 HStack(spacing: 16) {
-                    ToolkitCard(
-                        icon: "leaf",
-                        title: "Calm",
-                        subtitle: "Mental preparation",
-                        color: .green,
-                        isVisible: viewModel.toolsRevealed >= 3
-                    )
-                    ToolkitCard(
-                        icon: "bubble.left.and.text.bubble.right",
-                        title: "Prompts",
-                        subtitle: "Topic library",
-                        color: .purple,
-                        isVisible: viewModel.toolsRevealed >= 4
-                    )
+                    ToolkitCard(icon: "leaf", title: "Calm", subtitle: "Mental preparation", color: .green)
+                    ToolkitCard(icon: "bubble.left.and.text.bubble.right", title: "Prompts", subtitle: "Topic library", color: .purple)
                 }
             }
             .padding(.horizontal, 8)
-        }
-        .onChange(of: viewModel.currentPage) { _, newValue in
-            if newValue == 2 {
-                viewModel.revealTools()
-            }
         }
     }
 
@@ -333,17 +250,9 @@ struct OnboardingView: View {
             heroHeight: heroHeight,
             topPadding: topPadding
         ) {
-            ZStack {
-                Circle()
-                    .fill(Color.blue.opacity(0.2))
-                    .frame(width: heroHeight * 0.8, height: heroHeight * 0.8)
-                    .blur(radius: 20)
-
-                Image(systemName: "map.fill")
-                    .font(.system(size: heroHeight * 0.35))
-                    .foregroundStyle(.blue)
-                    .symbolEffect(.pulse, value: viewModel.currentPage == 3)
-            }
+            Image(systemName: "map.fill")
+                .font(.system(size: heroHeight * 0.35))
+                .foregroundStyle(.blue)
         } detail: {
             VStack(spacing: 12) {
                 CurriculumPhaseRow(
@@ -374,37 +283,19 @@ struct OnboardingView: View {
             heroHeight: heroHeight,
             topPadding: topPadding
         ) {
-            ZStack {
-                Circle()
-                    .fill(Color.green.opacity(0.2))
-                    .frame(width: heroHeight * 0.8, height: heroHeight * 0.8)
-                    .blur(radius: 20)
-
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: heroHeight * 0.35))
-                    .foregroundStyle(.green)
-                    .symbolEffect(.variableColor.iterative, value: viewModel.currentPage == 4)
-            }
+            Image(systemName: "chart.bar.fill")
+                .font(.system(size: heroHeight * 0.35))
+                .foregroundStyle(.green)
         } detail: {
             VStack(spacing: 12) {
                 CompactProgressRow(
                     icon: "flame.fill",
                     title: "Daily Consistency",
                     subtitle: "Build a lasting practice habit",
-                    color: .orange,
-                    isVisible: viewModel.progressItemsRevealed >= 1
+                    color: .orange
                 )
-                
                 MiniContributionGraph()
                     .padding(.top, 4)
-                    .opacity(viewModel.progressItemsRevealed >= 2 ? 1 : 0)
-                    .scaleEffect(viewModel.progressItemsRevealed >= 2 ? 1 : 0.95)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: viewModel.progressItemsRevealed)
-            }
-        }
-        .onChange(of: viewModel.currentPage) { _, newValue in
-            if newValue == 4 {
-                viewModel.revealProgressItems()
             }
         }
     }
@@ -421,17 +312,9 @@ struct OnboardingView: View {
             heroHeight: heroHeight,
             topPadding: topPadding
         ) {
-            ZStack {
-                Circle()
-                    .fill((viewModel.hasNotificationPermission ? Color.green : Color.orange).opacity(0.2))
-                    .frame(width: heroHeight * 0.8, height: heroHeight * 0.8)
-                    .blur(radius: 20)
-
-                Image(systemName: viewModel.hasNotificationPermission ? "bell.badge.fill" : "bell.badge")
-                    .font(.system(size: heroHeight * 0.45))
-                    .foregroundStyle(viewModel.hasNotificationPermission ? .green : .orange)
-                    .symbolEffect(.bounce, value: viewModel.notificationJustGranted)
-            }
+            Image(systemName: viewModel.hasNotificationPermission ? "bell.badge.fill" : "bell.badge")
+                .font(.system(size: heroHeight * 0.45))
+                .foregroundStyle(viewModel.hasNotificationPermission ? .green : .orange)
         } detail: {
             VStack(spacing: 20) {
                 if !viewModel.hasNotificationPermission {
@@ -477,17 +360,9 @@ struct OnboardingView: View {
             heroHeight: heroHeight,
             topPadding: topPadding
         ) {
-            ZStack {
-                Circle()
-                    .fill((viewModel.hasMicPermission ? Color.green : Color.teal).opacity(0.2))
-                    .frame(width: heroHeight * 0.8, height: heroHeight * 0.8)
-                    .blur(radius: 20)
-
-                Image(systemName: viewModel.hasMicPermission ? "mic.circle.fill" : "mic.circle")
-                    .font(.system(size: heroHeight * 0.5))
-                    .foregroundStyle(viewModel.hasMicPermission ? .green : .teal)
-                    .symbolEffect(.pulse, isActive: !viewModel.hasMicPermission)
-            }
+            Image(systemName: viewModel.hasMicPermission ? "mic.circle.fill" : "mic.circle")
+                .font(.system(size: heroHeight * 0.5))
+                .foregroundStyle(viewModel.hasMicPermission ? .green : .teal)
         } detail: {
             VStack(spacing: 20) {
                 if !viewModel.hasMicPermission {
@@ -514,197 +389,28 @@ struct OnboardingView: View {
                 HStack(spacing: 24) {
                     PrivacyBadge(icon: "iphone", text: "Local")
                     PrivacyBadge(icon: "lock.fill", text: "Private")
-                    PrivacyBadge(icon: "cloud.slash.fill", text: "Offline ✈️")
+                    PrivacyBadge(icon: "wifi.slash", text: "Offline ")
                 }
             }
         }
     }
 }
 
-// MARK: - Premium Background
-
-struct PremiumOnboardingBackground: View {
-    let currentPage: Int
-    let size: CGSize
-    
-    var body: some View {
-        ZStack {
-            // Deep obsidian base
-            Color(red: 0.02, green: 0.03, blue: 0.06)
-                .ignoresSafeArea()
-            
-            // Dynamic breathing orbs
-            OrbView(
-                color: Color.teal.opacity(0.15),
-                position: orbPosition(for: 0),
-                screenSize: size,
-                orbSize: 450,
-                delay: 0
-            )
-            
-            OrbView(
-                color: Color.indigo.opacity(0.12),
-                position: orbPosition(for: 1),
-                screenSize: size,
-                orbSize: 400,
-                delay: 1.0
-            )
-            
-            OrbView(
-                color: Color.cyan.opacity(0.08),
-                position: orbPosition(for: 2),
-                screenSize: size,
-                orbSize: 350,
-                delay: 2.0
-            )
-        }
-        .drawingGroup() // High performance for complex gradients
-    }
-    
-    private func orbPosition(for index: Int) -> UnitPoint {
-        let positions: [UnitPoint] = [
-            .init(x: 0.1, y: 0.1), .init(x: 0.9, y: 0.2), .init(x: 0.5, y: 0.8),
-            .init(x: 0.8, y: 0.1), .init(x: 0.2, y: 0.7), .init(x: 0.6, y: 0.3),
-            .init(x: 0.1, y: 0.9)
-        ]
-        
-        let targetIndex = (currentPage + index) % positions.count
-        return positions[targetIndex]
-    }
-}
-
-struct OrbView: View {
-    let color: Color
-    let position: UnitPoint
-    let screenSize: CGSize
-    let orbSize: CGFloat
-    let delay: Double
-    
-    @State private var floating = false
-    
-    var body: some View {
-        RadialGradient(
-            colors: [color, .clear],
-            center: .center,
-            startRadius: 0,
-            endRadius: orbSize / 2
-        )
-        .frame(width: orbSize, height: orbSize)
-        .position(
-            x: position.x * screenSize.width,
-            y: position.y * screenSize.height
-        )
-        .blur(radius: 50)
-        .scaleEffect(floating ? 1.1 : 0.9)
-        .opacity(floating ? 1.0 : 0.7)
-        .animation(.spring(response: 3.0, dampingFraction: 0.9).delay(delay), value: position)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 4.0 + delay).repeatForever(autoreverses: true)) {
-                floating = true
-            }
-        }
-    }
-}
-
-// MARK: - Enhanced Waveform Hero
-
-private struct WaveformHeroView: View {
-    @State private var animating = false
-
-    var body: some View {
-        ZStack {
-            // Liquid background glow
-            Circle()
-                .fill(Color.teal.opacity(0.15))
-                .blur(radius: 40)
-                .scaleEffect(animating ? 1.2 : 0.8)
-            
-            // Multiple layers of fluid waveforms
-            ForEach(0..<3) { layer in
-                FluidWaveform(layer: layer, animating: animating)
-                    .frame(width: 200, height: 100)
-            }
-            
-            Image(systemName: "waveform")
-                .font(.system(size: 44, weight: .bold))
-                .foregroundStyle(.white)
-                .glow(color: .teal, radius: 20)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-                animating = true
-            }
-        }
-    }
-}
-
-struct FluidWaveform: View {
-    let layer: Int
-    let animating: Bool
-    
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                let time: Double = timeline.date.timeIntervalSinceReferenceDate
-                let width: CGFloat = size.width
-                let height: CGFloat = size.height
-                let midY: CGFloat = height / 2.0
-
-                // Precompute speeds and amplitudes to reduce inline math
-                let baseSpeed: Double = 1.2
-                let layerSpeed: Double = baseSpeed + (Double(layer) * 0.4)
-                let amplitude: CGFloat = 25.0
-                let step: CGFloat = 2.0
-
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: midY))
-
-                var x: CGFloat = 0
-                while x < width {
-                    let relativeX: CGFloat = width == 0 ? 0 : (x / width)
-                    let phase: Double = Double(relativeX) * .pi * 2.0 + time * layerSpeed
-                    let sine: CGFloat = CGFloat(sin(phase))
-                    let envelope: CGFloat = CGFloat(sin(Double(relativeX) * .pi))
-                    let y: CGFloat = midY + sine * amplitude * envelope * (animating ? 1.0 : 0.6)
-                    path.addLine(to: CGPoint(x: x, y: y))
-                    x += step
-                }
-
-                // Break up style construction
-                let startColor: Color = .teal.opacity(0.7 / Double(layer + 1))
-                let endColor: Color = .cyan.opacity((0.7 / Double(layer + 1)) * 0.5)
-                let gradient = Gradient(colors: [startColor, endColor])
-                let startPoint: CGPoint = .zero
-                let endPoint: CGPoint = CGPoint(x: width, y: height)
-
-                let lineWidth: Double = max(0.5, 4.0 - Double(layer))
-
-                context.stroke(
-                    path,
-                    with: .linearGradient(gradient, startPoint: startPoint, endPoint: endPoint),
-                    lineWidth: lineWidth
-                )
-            }
-        }
-    }
-}
-
-// MARK: - Enhanced Components
+// MARK: - Components
 
 private struct StatusCard: View {
     let icon: String
     let title: String
     let subtitle: String
     let color: Color
-    
+
     var body: some View {
         GlassCard(tint: color.opacity(0.15), padding: 16) {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .foregroundStyle(color)
                     .font(.title2)
-                    .glow(color: color, radius: 10)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.headline)
@@ -742,17 +448,14 @@ private struct FeaturePill: View {
                 .fill(.ultraThinMaterial)
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
         }
-        .shimmer()
     }
 }
 
-private struct AnimatedScoreRow: View {
+private struct ScoreRow: View {
     let icon: String
     let title: String
-    let targetWidth: CGFloat
+    let width: CGFloat
     let color: Color
-    let delay: CGFloat
-    let animate: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -780,8 +483,7 @@ private struct AnimatedScoreRow: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: animate ? geo.size.width * targetWidth : 0, height: 8)
-                        .animation(.spring(response: 1.2, dampingFraction: 0.8).delay(delay), value: animate)
+                        .frame(width: geo.size.width * width, height: 8)
                 }
             }
             .frame(height: 8)
@@ -794,7 +496,6 @@ private struct ToolkitCard: View {
     let title: String
     let subtitle: String
     let color: Color
-    let isVisible: Bool
 
     var body: some View {
         GlassCard(cornerRadius: 20, tint: color.opacity(0.15), padding: 16) {
@@ -802,7 +503,6 @@ private struct ToolkitCard: View {
                 Image(systemName: icon)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(color)
-                    .glow(color: color, radius: 10)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -817,10 +517,6 @@ private struct ToolkitCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .opacity(isVisible ? 1 : 0)
-        .scaleEffect(isVisible ? 1 : 0.9)
-        .offset(y: isVisible ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7), value: isVisible)
     }
 }
 
@@ -837,7 +533,6 @@ private struct CurriculumPhaseRow: View {
                 Image(systemName: icon)
                     .font(.system(size: 32))
                     .foregroundStyle(color)
-                    .glow(color: color, radius: 8)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
@@ -870,7 +565,6 @@ private struct CompactProgressRow: View {
     let title: String
     let subtitle: String
     let color: Color
-    let isVisible: Bool
 
     var body: some View {
         GlassCard(cornerRadius: 16, tint: color.opacity(0.1), padding: 12) {
@@ -891,9 +585,6 @@ private struct CompactProgressRow: View {
                 Spacer()
             }
         }
-        .opacity(isVisible ? 1 : 0)
-        .offset(y: isVisible ? 0 : 15)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7), value: isVisible)
     }
 }
 
@@ -919,7 +610,6 @@ private struct MiniContributionGraph: View {
                                 RoundedRectangle(cornerRadius: 3)
                                     .fill(AppColors.contributionColor(intensity: intensity))
                                     .frame(width: 18, height: 18)
-                                    .shimmer()
                             }
                         }
                     }
@@ -954,13 +644,5 @@ private struct PrivacyBadge: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.white.opacity(0.5))
         }
-    }
-}
-
-// MARK: - Animation Extensions
-
-extension Animation {
-    static func expoOut(duration: Double = 1.0) -> Animation {
-        .timingCurve(0.16, 1, 0.3, 1, duration: duration)
     }
 }
