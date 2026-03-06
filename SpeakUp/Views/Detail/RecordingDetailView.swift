@@ -116,6 +116,22 @@ struct RecordingDetailView: View {
                                 sentenceAnalysisSection(sentence)
                             }
 
+                            // Vocal Variety (Pitch + Rate + Emphasis)
+                            if let analysis = recording.analysis,
+                               analysis.speechScore.subscores.vocalVariety != nil {
+                                vocalVarietySection(analysis)
+                            }
+
+                            // Language Quality
+                            if let textQuality = recording.analysis?.textQuality {
+                                textQualitySection(textQuality)
+                            }
+
+                            // Energy Arc
+                            if let energyArc = recording.analysis?.energyArc {
+                                energyArcSection(energyArc)
+                            }
+
                             // Coaching Tips
                             if let analysis = recording.analysis {
                                 CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
@@ -524,6 +540,9 @@ struct RecordingDetailView: View {
                     SubscoreRow(title: "Pauses", score: analysis.speechScore.subscores.pauseQuality, icon: "pause.circle")
                     
                     // Extended scores (if available)
+                    if let vocalVariety = analysis.speechScore.subscores.vocalVariety {
+                        SubscoreRow(title: "Vocal Variety", score: vocalVariety, icon: "waveform.path.ecg")
+                    }
                     if let delivery = analysis.speechScore.subscores.delivery {
                         SubscoreRow(title: "Delivery", score: delivery, icon: "speaker.wave.3")
                     }
@@ -794,7 +813,7 @@ struct RecordingDetailView: View {
             GlassCard {
                 VStack(spacing: 16) {
                     SubscoreRow(title: "Energy Level", score: volume.energyScore, icon: "bolt.fill")
-                    SubscoreRow(title: "Vocal Variety", score: volume.monotoneScore, icon: "waveform.path.ecg")
+                    SubscoreRow(title: "Volume Dynamics", score: volume.monotoneScore, icon: "waveform.path.ecg")
                 }
             }
         }
@@ -909,6 +928,233 @@ struct RecordingDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Vocal Variety Section
+
+    @ViewBuilder
+    private func vocalVarietySection(_ analysis: SpeechAnalysis) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Vocal Variety", systemImage: "waveform.path.ecg")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 14) {
+                    if let vv = analysis.speechScore.subscores.vocalVariety {
+                        SubscoreRow(title: "Overall Variety", score: vv, icon: "waveform.path.ecg")
+                    }
+
+                    // Pitch metrics
+                    if let pitch = analysis.pitchMetrics {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Pitch Range")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.1f semitones", pitch.f0RangeSemitones))
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Avg Pitch")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.0f Hz", pitch.f0Mean))
+                                    .font(.subheadline.weight(.medium))
+                            }
+                        }
+
+                        SubscoreRow(title: "Pitch Variation", score: pitch.pitchVariationScore, icon: "music.note")
+                    }
+
+                    // Rate variation
+                    if let rv = analysis.rateVariation, rv.rateCV > 0 {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Rate Range")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.0f WPM spread", rv.rateRange))
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Articulation Rate")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.0f WPM", rv.articulationRate))
+                                    .font(.subheadline.weight(.medium))
+                            }
+                        }
+
+                        SubscoreRow(title: "Rate Variation", score: rv.rateVariationScore, icon: "speedometer")
+                    }
+
+                    // Emphasis
+                    if let em = analysis.emphasisMetrics, em.emphasisCount > 0 {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Emphasis Points")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("\(em.emphasisCount)")
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            Spacer()
+                            VStack(alignment: .center, spacing: 2) {
+                                Text("Per Minute")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(String(format: "%.1f", em.emphasisPerMinute))
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Distribution")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(emphasisDistributionLabel(em.distributionScore))
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(AppColors.scoreColor(for: em.distributionScore))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func emphasisDistributionLabel(_ score: Int) -> String {
+        if score >= 75 { return "Well Spread" }
+        if score >= 50 { return "Moderate" }
+        return "Clustered"
+    }
+
+    // MARK: - Text Quality Section
+
+    @ViewBuilder
+    private func textQualitySection(_ tq: TextQualityMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Language Quality", systemImage: "text.magnifyingglass")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 14) {
+                    SubscoreRow(title: "Authority", score: tq.authorityScore, icon: "shield.checkered")
+                    SubscoreRow(title: "Craft", score: tq.craftScore, icon: "paintbrush.pointed")
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Power Words")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 4) {
+                                Text("\(tq.powerWordCount)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.green)
+                                Text("used")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Hedge Words")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 4) {
+                                Text("\(tq.hedgeWordCount)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(tq.hedgeWordCount > 5 ? .orange : .primary)
+                                Text("found")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Rhetorical Devices")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(tq.rhetoricalDeviceCount)")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Transition Variety")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(tq.transitionVariety) types")
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Energy Arc Section
+
+    @ViewBuilder
+    private func energyArcSection(_ arc: EnergyArcMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Energy Arc", systemImage: "chart.line.uptrend.xyaxis")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 14) {
+                    SubscoreRow(title: "Arc Score", score: arc.arcScore, icon: "chart.line.uptrend.xyaxis")
+
+                    // Visual energy bars
+                    HStack(spacing: 12) {
+                        energyBar(label: "Opening", value: arc.openingEnergy)
+                        energyBar(label: "Body", value: arc.bodyEnergy)
+                        energyBar(label: "Closing", value: arc.closingEnergy)
+                    }
+                    .frame(height: 80)
+
+                    if arc.hasClimax {
+                        HStack(spacing: 6) {
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                            Text("Dynamic range detected — your energy builds and releases effectively")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func energyBar(label: String, value: Double) -> some View {
+        VStack(spacing: 6) {
+            GeometryReader { geometry in
+                VStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.teal.opacity(0.4), Color.teal],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(height: max(4, geometry.size.height * CGFloat(value)))
+                }
+            }
+
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text("\(Int(value * 100))%")
+                .font(.caption.weight(.medium).monospacedDigit())
         }
     }
 
