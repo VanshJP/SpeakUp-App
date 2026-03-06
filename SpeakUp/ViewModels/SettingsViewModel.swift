@@ -306,9 +306,8 @@ class SettingsViewModel {
 
     private func isFillerWord(_ word: String) -> Bool {
         let lowered = word.lowercased()
-        return FillerWordList.unconditionalFillers.contains(lowered)
+        return FillerWordList.isFillerWord(lowered)
             || FillerWordList.contextDependentFillers.contains(lowered)
-            || FillerWordList.fillerPhrases.contains(lowered)
     }
 
     private func isRealWord(_ word: String) -> Bool {

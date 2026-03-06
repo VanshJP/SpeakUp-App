@@ -107,65 +107,15 @@ class LiveTranscriptionService {
             return
         }
 
-        let pauseThreshold: TimeInterval = 0.3
-        var fillerCount = 0
-        var fillerIndices = Set<Int>()
+        let words = segments.map { $0.substring }
+        let timestamps = segments.map { $0.timestamp }
+        let durations = segments.map { $0.duration }
 
-        for (i, segment) in segments.enumerated() {
-            let word = segment.substring
-            let prev = i > 0 ? segments[i - 1].substring : nil
-            let next = i < segments.count - 1 ? segments[i + 1].substring : nil
-
-            // Pause before: gap between previous segment end and this segment start
-            let pauseBefore: Bool
-            if i == 0 {
-                pauseBefore = segment.timestamp > pauseThreshold
-            } else {
-                let prevEnd = segments[i - 1].timestamp + segments[i - 1].duration
-                pauseBefore = (segment.timestamp - prevEnd) > pauseThreshold
-            }
-
-            // Pause after: gap between this segment end and next segment start
-            let pauseAfter: Bool
-            if i == segments.count - 1 {
-                pauseAfter = true
-            } else {
-                let thisEnd = segment.timestamp + segment.duration
-                pauseAfter = (segments[i + 1].timestamp - thisEnd) > pauseThreshold
-            }
-
-            // Sentence boundary: long pause from previous word
-            let isStartOfSentence: Bool
-            if i == 0 {
-                isStartOfSentence = true
-            } else {
-                let prevEnd = segments[i - 1].timestamp + segments[i - 1].duration
-                isStartOfSentence = (segment.timestamp - prevEnd) > 0.8
-            }
-
-            if FillerWordList.isFillerWord(
-                word,
-                previousWord: prev,
-                nextWord: next,
-                pauseBefore: pauseBefore,
-                pauseAfter: pauseAfter,
-                isStartOfSentence: isStartOfSentence
-            ) {
-                fillerIndices.insert(i)
-            }
-        }
-
-        // Second pass: detect multi-word filler phrases ("you know", "I mean", etc.)
-        if segments.count >= 2 {
-            for i in 0..<(segments.count - 1) {
-                if FillerWordList.isFillerPhrase(segments[i].substring, segments[i + 1].substring) {
-                    fillerIndices.insert(i)
-                    fillerIndices.insert(i + 1)
-                }
-            }
-        }
-
-        fillerCount = fillerIndices.count
+        let fillerCount = FillerDetectionPipeline.countFillers(
+            words: words,
+            timestamps: timestamps,
+            durations: durations
+        )
 
         // Track when the last word ended (segment timestamp + duration)
         if let lastSegment = segments.last {

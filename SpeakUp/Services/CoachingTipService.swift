@@ -6,6 +6,24 @@ struct CoachingTip: Identifiable {
     let title: String
     let message: String
     let category: TipCategory
+    let teachingPoint: String?
+    let suggestedDrillMode: String?
+
+    init(
+        icon: String,
+        title: String,
+        message: String,
+        category: TipCategory,
+        teachingPoint: String? = nil,
+        suggestedDrillMode: String? = nil
+    ) {
+        self.icon = icon
+        self.title = title
+        self.message = message
+        self.category = category
+        self.teachingPoint = teachingPoint
+        self.suggestedDrillMode = suggestedDrillMode
+    }
 
     enum TipCategory {
         case pace
@@ -41,28 +59,36 @@ enum CoachingTipService {
                 icon: "tortoise.fill",
                 title: "Slow Down",
                 message: "You spoke at \(Int(wpm)) WPM. Aim for 130-170 WPM for clarity.",
-                category: .pace
+                category: .pace,
+                teachingPoint: "Research shows listeners retain more at 130-150 WPM. Try the 'pause and breathe' technique: after each key point, take a full breath before continuing.",
+                suggestedDrillMode: "paceControl"
             ))
         } else if wpm > 170 {
             tips.append(CoachingTip(
                 icon: "gauge.with.dots.needle.50percent",
                 title: "Slightly Fast",
                 message: "At \(Int(wpm)) WPM you're just above optimal. Ease off slightly to land in the 130-170 sweet spot.",
-                category: .pace
+                category: .pace,
+                teachingPoint: "Even slightly fast speech can reduce audience comprehension. Try deliberately slowing down at the start of each new idea to anchor your pace.",
+                suggestedDrillMode: "paceControl"
             ))
         } else if wpm < 115 && wpm > 0 {
             tips.append(CoachingTip(
                 icon: "hare.fill",
                 title: "Pick Up the Pace",
                 message: "At \(Int(wpm)) WPM, try speaking a bit faster for better engagement.",
-                category: .pace
+                category: .pace,
+                teachingPoint: "Too-slow speech can lose listeners' attention. Practice reading passages aloud at a brisk pace to build comfort with faster delivery.",
+                suggestedDrillMode: "paceControl"
             ))
         } else if wpm >= 115 && wpm < 130 {
             tips.append(CoachingTip(
                 icon: "figure.walk",
                 title: "A Bit More Energy",
                 message: "At \(Int(wpm)) WPM you're close to optimal. A touch more energy will bring you into the 130-170 range.",
-                category: .pace
+                category: .pace,
+                teachingPoint: "You're close to the ideal range. Try adding vocal energy and enthusiasm — this naturally increases pace without feeling rushed.",
+                suggestedDrillMode: "paceControl"
             ))
         }
 
@@ -72,14 +98,18 @@ enum CoachingTipService {
                 icon: "exclamationmark.bubble.fill",
                 title: "High Filler Usage",
                 message: "You used \"\(topFiller)\" \(topFillerCount) times. Practice replacing fillers with 1-second pauses.",
-                category: .fillers
+                category: .fillers,
+                teachingPoint: "Fillers signal uncertainty to listeners. Practice the 'silent pause' technique: when you feel an '\(topFiller)' coming, close your mouth and pause for 1 second instead.",
+                suggestedDrillMode: "fillerElimination"
             ))
         } else if fillerPct > 5 {
             tips.append(CoachingTip(
                 icon: "bubble.left.fill",
                 title: "Reduce Fillers",
                 message: "You said \"\(topFiller)\" \(topFillerCount) times. Try pausing silently instead.",
-                category: .fillers
+                category: .fillers,
+                teachingPoint: "Awareness is the first step. Record yourself in daily conversation and count fillers. Once you hear them, you'll naturally start replacing them with confident pauses.",
+                suggestedDrillMode: "fillerElimination"
             ))
         }
 
@@ -89,21 +119,27 @@ enum CoachingTipService {
                 icon: "pause.circle.fill",
                 title: "Add Strategic Pauses",
                 message: "You didn't pause at all. Strategic pauses are powerful for emphasis.",
-                category: .pauses
+                category: .pauses,
+                teachingPoint: "A 1-2 second pause after a key point gives your audience time to absorb the idea. Top speakers pause 3-5 times per minute.",
+                suggestedDrillMode: "pausePractice"
             ))
         } else if avgPause > 3 {
             tips.append(CoachingTip(
                 icon: "clock.fill",
                 title: "Shorten Pauses",
                 message: "Some pauses were over 3 seconds. Keep pauses under 2 seconds.",
-                category: .pauses
+                category: .pauses,
+                teachingPoint: "Long pauses can feel awkward. Practice the 'beat method': count one beat (about 1 second) in your head during pauses. This keeps them impactful without losing momentum.",
+                suggestedDrillMode: "pausePractice"
             ))
         } else if pauseQuality < 50 {
             tips.append(CoachingTip(
                 icon: "metronome.fill",
                 title: "Improve Pause Quality",
                 message: "Your pauses feel unnatural. Aim for 0.5-2 second pauses between ideas.",
-                category: .pauses
+                category: .pauses,
+                teachingPoint: "Natural pauses happen at the end of thoughts, not mid-sentence. Practice reading a paragraph and pausing only at periods and commas.",
+                suggestedDrillMode: "pausePractice"
             ))
         }
 
@@ -113,7 +149,8 @@ enum CoachingTipService {
                 icon: "waveform.badge.magnifyingglass",
                 title: "Work on Articulation",
                 message: "Slow down and focus on enunciating each word clearly.",
-                category: .clarity
+                category: .clarity,
+                teachingPoint: "Try tongue twisters before speaking to warm up. Focus on consonant endings — dropping final consonants is the most common clarity issue."
             ))
         }
 
@@ -123,7 +160,8 @@ enum CoachingTipService {
                 icon: "speaker.wave.3",
                 title: "Add Vocal Energy",
                 message: "Vary your volume and tone to keep listeners engaged. Try emphasizing key words.",
-                category: .delivery
+                category: .delivery,
+                teachingPoint: "Monotone delivery puts listeners to sleep. Practice the 'highlight' technique: pick one word per sentence to emphasize with slightly more volume and slower pace."
             ))
         }
 
@@ -134,14 +172,18 @@ enum CoachingTipService {
                     icon: "target",
                     title: "Stay on Topic",
                     message: "Your response drifted from the prompt. Try outlining 2-3 key points before speaking.",
-                    category: .relevance
+                    category: .relevance,
+                    teachingPoint: "Before speaking, mentally outline 2-3 key points. Use the PREP framework: Point, Reason, Example, Point. This keeps you focused.",
+                    suggestedDrillMode: "impromptuSprint"
                 ))
             } else {
                 tips.append(CoachingTip(
                     icon: "arrow.triangle.branch",
                     title: "Improve Coherence",
                     message: "Connect your ideas with transition words like \"however\", \"therefore\", or \"for example\".",
-                    category: .relevance
+                    category: .relevance,
+                    teachingPoint: "Use 'bridge phrases' between ideas: 'Building on that...', 'This connects to...', 'The key takeaway is...'. These signal logical progression to your listener.",
+                    suggestedDrillMode: "impromptuSprint"
                 ))
             }
         }
@@ -152,14 +194,16 @@ enum CoachingTipService {
                 icon: "star.fill",
                 title: "Great Session!",
                 message: "You scored \(overall)/100. Focus on consistency by practicing daily.",
-                category: .encouragement
+                category: .encouragement,
+                teachingPoint: "Consistency is what separates good speakers from great ones. Even 2 minutes of daily practice builds muscle memory for confident delivery."
             ))
         } else if overall < 40 && overall > 0 {
             tips.append(CoachingTip(
                 icon: "target",
                 title: "One Step at a Time",
                 message: "Focus on one thing first – try reducing your most common filler word.",
-                category: .encouragement
+                category: .encouragement,
+                teachingPoint: "Every great speaker started somewhere. Pick your weakest area and focus only on that for your next 3 sessions. Small wins compound into big improvements."
             ))
         }
 
@@ -169,7 +213,8 @@ enum CoachingTipService {
                 icon: "checkmark.circle.fill",
                 title: "Keep Practicing",
                 message: "Consistent practice is the key to improvement. Try another session!",
-                category: .encouragement
+                category: .encouragement,
+                teachingPoint: "You're building a habit — that's the hardest part. Each session strengthens your speaking confidence, even when the scores are already good."
             ))
         }
 

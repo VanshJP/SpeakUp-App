@@ -124,26 +124,19 @@ class WhisperService {
 
     /// Process WhisperKit result into our SpeechTranscriptionResult format with filler detection
     private func processWhisperResult(_ result: WhisperTranscriptionResult) -> SpeechTranscriptionResult {
-        var words: [TranscriptionWord] = []
-        var duration: TimeInterval = 0
-
-        // Pause threshold for context-aware detection
-        let pauseThreshold: TimeInterval = 0.3
-
         // Collect all word timings from all segments
-        var allWordTimings: [(word: String, start: Float, end: Float, probability: Float)] = []
+        var rawTimings: [RawWordTiming] = []
 
         for segment in result.segments {
-            // If word-level timings are available, use them
             if let wordTimings = segment.words {
                 for wordTiming in wordTimings {
                     let word = wordTiming.word.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                     if !word.isEmpty {
-                        allWordTimings.append((
+                        rawTimings.append(RawWordTiming(
                             word: word,
-                            start: wordTiming.start,
-                            end: wordTiming.end,
-                            probability: wordTiming.probability
+                            start: TimeInterval(wordTiming.start),
+                            end: TimeInterval(wordTiming.end),
+                            confidence: Double(wordTiming.probability)
                         ))
                     }
                 }
@@ -156,115 +149,28 @@ class WhisperService {
                 for (i, word) in segmentWords.enumerated() {
                     let start = segment.start + Float(i) * wordDuration
                     let end = start + wordDuration
-                    allWordTimings.append((
+                    rawTimings.append(RawWordTiming(
                         word: word.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines),
-                        start: start,
-                        end: end,
-                        probability: 1.0 - segment.noSpeechProb
+                        start: TimeInterval(start),
+                        end: TimeInterval(end),
+                        confidence: Double(1.0 - segment.noSpeechProb)
                     ))
                 }
             }
         }
 
-        // Sort all word timings by start time to ensure chronological order
-        // across segments which might occasionally be out of order or overlapping
-        allWordTimings.sort { $0.start < $1.start }
+        // Sort by start time to ensure chronological order across segments
+        rawTimings.sort { $0.start < $1.start }
 
-        // Process each word with context-aware filler detection
-        for (index, wordTiming) in allWordTimings.enumerated() {
-            let word = wordTiming.word
-            let start = TimeInterval(wordTiming.start)
-            let end = TimeInterval(wordTiming.end)
-            let confidence = Double(wordTiming.probability)
-
-            // Get previous and next words for context
-            let previousWord = index > 0 ? allWordTimings[index - 1].word : nil
-            let nextWord = index < allWordTimings.count - 1 ? allWordTimings[index + 1].word : nil
-
-            // Calculate pauses before and after this word
-            let pauseBefore: Bool
-            if index == 0 {
-                pauseBefore = start > pauseThreshold
-            } else {
-                let previousEnd = TimeInterval(allWordTimings[index - 1].end)
-                pauseBefore = (start - previousEnd) > pauseThreshold
-            }
-
-            let pauseAfter: Bool
-            if index == allWordTimings.count - 1 {
-                pauseAfter = true
-            } else {
-                let nextStart = TimeInterval(allWordTimings[index + 1].start)
-                pauseAfter = (nextStart - end) > pauseThreshold
-            }
-
-            // Detect sentence boundaries (long pause)
-            let isStartOfSentence: Bool
-            if index == 0 {
-                isStartOfSentence = true
-            } else {
-                let gapFromPrevious = start - TimeInterval(allWordTimings[index - 1].end)
-                isStartOfSentence = gapFromPrevious > 0.8
-            }
-
-            // Use context-aware filler detection
-            let isFiller = FillerWordList.isFillerWord(
-                word,
-                previousWord: previousWord,
-                nextWord: nextWord,
-                pauseBefore: pauseBefore,
-                pauseAfter: pauseAfter,
-                isStartOfSentence: isStartOfSentence
-            )
-
-            words.append(TranscriptionWord(
-                word: word,
-                start: start,
-                end: end,
-                confidence: confidence,
-                isFiller: isFiller
-            ))
-
-            duration = max(duration, end)
-        }
-
-        // Second pass: detect multi-word filler phrases
-        words = detectFillerPhrases(in: words)
+        // Run unified filler detection pipeline
+        let words = FillerDetectionPipeline.tagFillers(in: rawTimings)
+        let duration = rawTimings.last?.end ?? 0
 
         return SpeechTranscriptionResult(
             text: result.text,
             words: words,
             duration: duration
         )
-    }
-
-    /// Detect multi-word filler phrases like "you know", "I mean"
-    private func detectFillerPhrases(in words: [TranscriptionWord]) -> [TranscriptionWord] {
-        guard words.count >= 2 else { return words }
-
-        var result = words
-
-        for i in 0..<(result.count - 1) {
-            if FillerWordList.isFillerPhrase(result[i].word, result[i + 1].word) {
-                // Mark both words as fillers
-                result[i] = TranscriptionWord(
-                    word: result[i].word,
-                    start: result[i].start,
-                    end: result[i].end,
-                    confidence: result[i].confidence,
-                    isFiller: true
-                )
-                result[i + 1] = TranscriptionWord(
-                    word: result[i + 1].word,
-                    start: result[i + 1].start,
-                    end: result[i + 1].end,
-                    confidence: result[i + 1].confidence,
-                    isFiller: true
-                )
-            }
-        }
-
-        return result
     }
 
     // MARK: - Model Management

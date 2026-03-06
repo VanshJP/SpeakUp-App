@@ -71,6 +71,11 @@ struct RecordingDetailView: View {
                                 statsGrid(analysis)
                             }
 
+                            // WPM Over Time
+                            if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
+                                wpmChartSection(wpmData)
+                            }
+
                             // Playback Control
                             playbackControlSection(recording)
 
@@ -208,6 +213,7 @@ struct RecordingDetailView: View {
         }
         .task {
             await loadRecording()
+            populateWPMTimeSeriesIfNeeded()
             await transcribeIfNeeded()
         }
         .onDisappear {
@@ -589,6 +595,24 @@ struct RecordingDetailView: View {
         Rectangle()
             .fill(.quaternary)
             .frame(width: 0.5, height: 40)
+    }
+
+    // MARK: - WPM Chart Section
+
+    @ViewBuilder
+    private func wpmChartSection(_ wpmData: [WPMDataPoint]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Pace Over Time", systemImage: "chart.line.uptrend.xyaxis")
+                .font(.headline)
+
+            GlassCard {
+                WPMChartView(
+                    dataPoints: wpmData,
+                    targetWPM: userSettings.first?.targetWPM ?? 150,
+                    averageWPM: recording?.analysis?.wordsPerMinute ?? 0
+                )
+            }
+        }
     }
 
     // MARK: - Filler Words Section
@@ -988,6 +1012,20 @@ struct RecordingDetailView: View {
         } catch {
             print("Error loading recording: \(error)")
         }
+    }
+
+    private func populateWPMTimeSeriesIfNeeded() {
+        guard let recording,
+              let analysis = recording.analysis,
+              analysis.wpmTimeSeries == nil,
+              let words = recording.transcriptionWords,
+              words.count >= 2 else { return }
+
+        let wpmData = speechService.computeWPMTimeSeries(
+            words: words,
+            actualDuration: recording.actualDuration
+        )
+        recording.analysis?.wpmTimeSeries = wpmData
     }
 
     private func transcribeIfNeeded() async {

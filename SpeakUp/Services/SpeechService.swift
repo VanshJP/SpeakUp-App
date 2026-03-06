@@ -134,92 +134,24 @@ class SpeechService {
     private func processAppleTranscription(_ result: SFSpeechRecognitionResult) -> SpeechTranscriptionResult {
         let transcription = result.bestTranscription
         let segments = transcription.segments.sorted { $0.timestamp < $1.timestamp }
-        var words: [TranscriptionWord] = []
-        var duration: TimeInterval = 0
 
-        let pauseThreshold: TimeInterval = 0.3
-
-        for (index, segment) in segments.enumerated() {
-            let word = segment.substring
-            let start = segment.timestamp
-            let end = start + segment.duration
-            let confidence = Double(segment.confidence)
-
-            let previousWord = index > 0 ? segments[index - 1].substring : nil
-            let nextWord = index < segments.count - 1 ? segments[index + 1].substring : nil
-
-            let pauseBefore: Bool
-            if index == 0 {
-                pauseBefore = start > pauseThreshold
-            } else {
-                let previousEnd = segments[index - 1].timestamp + segments[index - 1].duration
-                pauseBefore = (start - previousEnd) > pauseThreshold
-            }
-
-            let pauseAfter: Bool
-            if index == segments.count - 1 {
-                pauseAfter = true
-            } else {
-                let nextStart = segments[index + 1].timestamp
-                pauseAfter = (nextStart - end) > pauseThreshold
-            }
-
-            let isStartOfSentence = index == 0 || (pauseBefore && (start - (segments[index - 1].timestamp + segments[index - 1].duration)) > 0.8)
-
-            let isFiller = FillerWordList.isFillerWord(
-                word,
-                previousWord: previousWord,
-                nextWord: nextWord,
-                pauseBefore: pauseBefore,
-                pauseAfter: pauseAfter,
-                isStartOfSentence: isStartOfSentence
+        let rawTimings = segments.map { segment in
+            RawWordTiming(
+                word: segment.substring,
+                start: segment.timestamp,
+                end: segment.timestamp + segment.duration,
+                confidence: Double(segment.confidence)
             )
-
-            words.append(TranscriptionWord(
-                word: word,
-                start: start,
-                end: end,
-                confidence: confidence,
-                isFiller: isFiller
-            ))
-
-            duration = max(duration, end)
         }
 
-        words = detectFillerPhrases(in: words)
+        let words = FillerDetectionPipeline.tagFillers(in: rawTimings)
+        let duration = rawTimings.last?.end ?? 0
 
         return SpeechTranscriptionResult(
             text: transcription.formattedString,
             words: words,
             duration: duration
         )
-    }
-
-    private func detectFillerPhrases(in words: [TranscriptionWord]) -> [TranscriptionWord] {
-        guard words.count >= 2 else { return words }
-
-        var result = words
-
-        for i in 0..<(result.count - 1) {
-            if FillerWordList.isFillerPhrase(result[i].word, result[i + 1].word) {
-                result[i] = TranscriptionWord(
-                    word: result[i].word,
-                    start: result[i].start,
-                    end: result[i].end,
-                    confidence: result[i].confidence,
-                    isFiller: true
-                )
-                result[i + 1] = TranscriptionWord(
-                    word: result[i + 1].word,
-                    start: result[i + 1].start,
-                    end: result[i + 1].end,
-                    confidence: result[i + 1].confidence,
-                    isFiller: true
-                )
-            }
-        }
-
-        return result
     }
     
     // MARK: - Analysis
@@ -263,6 +195,7 @@ class SpeechService {
             if trackPauses, previousEnd > 0 {
                 let gap = word.start - previousEnd
                 if gap > 0.4 {
+                    let cappedDuration = min(gap, 10.0)  // Cap at 10s — longer gaps are recording artifacts
                     // Context detection
                     let isTransition: Bool
                     if index > 0 {
@@ -271,8 +204,8 @@ class SpeechService {
                     } else {
                         isTransition = false
                     }
-                    
-                    pauseMetadata.append(PauseInfo(duration: gap, isTransition: isTransition, startTime: previousEnd))
+
+                    pauseMetadata.append(PauseInfo(duration: cappedDuration, isTransition: isTransition, startTime: previousEnd))
                 }
             }
             previousEnd = word.end
@@ -286,16 +219,53 @@ class SpeechService {
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
         let wordsPerMinute = actualDuration > 0 ? Double(totalWords) / (actualDuration / 60) : 0
 
-        // Confidence dampening for very short recordings (<10s)
-        let confidenceWeight = min(1.0, actualDuration / 10.0)
-        let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
         let pauses = pauseMetadata.map { $0.duration }
-        let averagePauseLength = pauses.isEmpty ? 0 : pauses.reduce(0, +) / Double(pauses.count)
+        // Use median to resist outlier skew from long recording gaps
+        let averagePauseLength: Double
+        if pauses.isEmpty {
+            averagePauseLength = 0
+        } else {
+            let sortedPauses = pauses.sorted()
+            let mid = sortedPauses.count / 2
+            if sortedPauses.count % 2 == 0 {
+                averagePauseLength = (sortedPauses[mid - 1] + sortedPauses[mid]) / 2.0
+            } else {
+                averagePauseLength = sortedPauses[mid]
+            }
+        }
 
-        // Run sub-analyses that were previously orphaned
+        // Count strategic vs hesitation pauses
+        let strategicPauseCount = pauseMetadata.filter { $0.isTransition }.count
+        let hesitationPauseCount = pauseMetadata.filter { !$0.isTransition && $0.duration > 1.2 }.count
+
+        // Run sub-analyses
         let volumeMetrics = !audioLevelSamples.isEmpty ? analyzeVolume(samples: audioLevelSamples) : nil
         let vocabComplexity = !sortedWords.isEmpty ? analyzeVocabComplexity(words: sortedWords) : nil
         let sentenceAnalysis = !sortedWords.isEmpty ? analyzeSentenceStructure(words: sortedWords, text: transcription.text) : nil
+
+        // Zero-score gate: no meaningful speech
+        let nonFillerWordCount = totalWords - totalFillers
+        if totalWords == 0 || nonFillerWordCount == 0 {
+            return SpeechAnalysis(
+                fillerWords: fillerWords,
+                totalWords: totalWords,
+                wordsPerMinute: 0,
+                pauseCount: pauses.count,
+                averagePauseLength: averagePauseLength,
+                strategicPauseCount: strategicPauseCount,
+                hesitationPauseCount: hesitationPauseCount,
+                clarity: 0,
+                speechScore: SpeechScore(overall: 0, subscores: SpeechSubscores(), trend: .stable),
+                vocabWordsUsed: [],
+                volumeMetrics: volumeMetrics,
+                sentenceAnalysis: sentenceAnalysis,
+                promptRelevanceScore: nil
+            )
+        }
+
+        // Confidence dampening for very short recordings (<10s)
+        let confidenceWeight = min(1.0, actualDuration / 10.0)
+        let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
 
         // Prompt relevance / coherence
         let relevanceScore: Int?
@@ -312,10 +282,6 @@ class SpeechService {
 
         // Detect vocab word usage (before subscores so we can feed it in)
         let vocabWordsUsed = detectVocabWords(in: transcription.text, vocabWords: vocabWords)
-
-        // Count strategic vs hesitation pauses
-        let strategicPauseCount = pauseMetadata.filter { $0.isTransition }.count
-        let hesitationPauseCount = pauseMetadata.filter { !$0.isTransition && $0.duration > 1.2 }.count
 
         // Calculate subscores
         let subscores = calculateSubscores(
@@ -345,7 +311,15 @@ class SpeechService {
             overallScore = min(overallScore, 40)
         }
 
+        // Gibberish gate: cap score for gibberish input
+        if PromptRelevanceService.isLikelyGibberish(transcript: transcription.text, words: sortedWords) {
+            overallScore = min(overallScore, 15)
+        }
+
         let clarity = Double(subscores.clarity)
+
+        // Compute WPM time series
+        let wpmTimeSeries = computeWPMTimeSeries(words: sortedWords, actualDuration: actualDuration)
 
         return SpeechAnalysis(
             fillerWords: fillerWords,
@@ -365,7 +339,8 @@ class SpeechService {
             volumeMetrics: volumeMetrics,
             vocabComplexity: vocabComplexity,
             sentenceAnalysis: sentenceAnalysis,
-            promptRelevanceScore: relevanceScore
+            promptRelevanceScore: relevanceScore,
+            wpmTimeSeries: wpmTimeSeries
         )
     }
 
@@ -588,6 +563,73 @@ class SpeechService {
         return max(0, min(100, Int(normalized)))
     }
     
+    // MARK: - WPM Time Series
+
+    func computeWPMTimeSeries(
+        words: [TranscriptionWord],
+        actualDuration: TimeInterval,
+        windowSize: TimeInterval = 5.0
+    ) -> [WPMDataPoint] {
+        guard !words.isEmpty, actualDuration > 0 else { return [] }
+
+        var dataPoints: [WPMDataPoint] = []
+        var bucketStart: TimeInterval = 0
+
+        while bucketStart < actualDuration {
+            let bucketEnd = min(bucketStart + windowSize, actualDuration)
+            let bucketDuration = bucketEnd - bucketStart
+
+            // Merge very short trailing buckets into previous to avoid WPM spikes
+            if bucketDuration < 2.5 && !dataPoints.isEmpty {
+                let prevPoint = dataPoints.removeLast()
+                let additionalWords = words.filter { $0.start >= bucketStart && $0.start < bucketEnd }.count
+                let totalWords = prevPoint.wordCount + additionalWords
+                let combinedDuration = (bucketStart - (prevPoint.timestamp - windowSize / 2.0)) + bucketDuration
+                let wpm = combinedDuration > 0 ? Double(totalWords) / (combinedDuration / 60.0) : 0
+                let timestamp = prevPoint.timestamp - windowSize / 2.0 + combinedDuration / 2.0
+
+                dataPoints.append(WPMDataPoint(
+                    timestamp: timestamp,
+                    wpm: wpm,
+                    wordCount: totalWords
+                ))
+                break
+            }
+
+            // Count words whose start falls within this bucket
+            let wordCount = words.filter { $0.start >= bucketStart && $0.start < bucketEnd }.count
+
+            // Compute WPM for this bucket
+            let wpm = bucketDuration > 0 ? Double(wordCount) / (bucketDuration / 60.0) : 0
+
+            // Timestamp is the midpoint of the bucket
+            let timestamp = bucketStart + bucketDuration / 2.0
+
+            dataPoints.append(WPMDataPoint(
+                timestamp: timestamp,
+                wpm: wpm,
+                wordCount: wordCount
+            ))
+
+            bucketStart += windowSize
+        }
+
+        // Smooth with a 3-point moving average to reduce jaggedness
+        if dataPoints.count >= 3 {
+            var smoothed = dataPoints
+            for i in 1..<(dataPoints.count - 1) {
+                smoothed[i] = WPMDataPoint(
+                    timestamp: dataPoints[i].timestamp,
+                    wpm: (dataPoints[i-1].wpm + dataPoints[i].wpm + dataPoints[i+1].wpm) / 3.0,
+                    wordCount: dataPoints[i].wordCount
+                )
+            }
+            dataPoints = smoothed
+        }
+
+        return dataPoints
+    }
+
     // MARK: - Volume Analysis
 
     func analyzeVolume(samples: [Float]) -> VolumeMetrics {
@@ -641,7 +683,7 @@ class SpeechService {
         let totalLength = cleaned.reduce(0) { $0 + $1.count }
         let avgLength = Double(totalLength) / Double(totalCount)
 
-        let longWords = cleaned.filter { $0.count >= 7 }
+        let longWords = cleaned.filter { $0.count >= 8 }
         let longWordCount = longWords.count
         let longWordRatio = Double(longWordCount) / Double(totalCount)
 
@@ -659,12 +701,17 @@ class SpeechService {
             .map { RepeatedPhrase(phrase: $0.key, count: $0.value) }
             .sorted { $0.count > $1.count }
 
-        // Composite score: 40% unique ratio + 30% long word ratio + 30% inverse repeated phrases
-        let uniqueComponent = min(1.0, uniqueRatio / 0.7) * 40 // 70% unique = full marks
-        let longComponent = min(1.0, longWordRatio / 0.2) * 30 // 20% long words = full marks
-        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 5.0)
-        let repeatComponent = (1.0 - repeatPenalty) * 30
-        let score = min(100, max(0, Int(uniqueComponent + longComponent + repeatComponent)))
+        // Composite score with realistic thresholds for conversational speech
+        let uniqueComponent = min(1.0, uniqueRatio / 0.55) * 35  // 55% unique = full (realistic for speech)
+        let longComponent = min(1.0, longWordRatio / 0.12) * 20  // 12% long words = full
+        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 7.0)  // 7 repeated phrases = full penalty
+        let repeatComponent = (1.0 - repeatPenalty) * 20
+
+        // Word diversity bonus: reward using words of varied lengths
+        let lengthBuckets = Set(cleaned.map { min($0.count, 10) })
+        let diversityScore = min(1.0, Double(lengthBuckets.count) / 6.0) * 25  // 6+ length buckets = full
+
+        let score = min(100, max(0, Int(uniqueComponent + longComponent + repeatComponent + diversityScore)))
 
         return VocabComplexity(
             uniqueWordCount: uniqueCount,
@@ -742,12 +789,33 @@ class SpeechService {
         let restartRatio = Double(restartCount) / Double(totalSentences)
         let runOnPenalty = sentences.filter { $0.count > 40 }.count
 
-        var score = 100
-        score -= Int(incompleteRatio * 30)
-        score -= Int(restartRatio * 30)
-        score -= runOnPenalty * 10
-        if avgLength < 5 { score -= 10 }
-        if avgLength > 30 { score -= 10 }
+        var score = 60  // Start at 60 base (neutral)
+
+        // Penalties (up to -40)
+        score -= Int(incompleteRatio * 20)
+        score -= Int(restartRatio * 20)
+        score -= min(20, runOnPenalty * 10)
+
+        // Rewards (up to +40)
+        // 1. Sentence variety: std dev of lengths between 3-12 is good (+10)
+        let lengthStdDev = standardDeviation(sentenceLengths.map { Double($0) })
+        if lengthStdDev >= 3 && lengthStdDev <= 12 { score += 10 }
+
+        // 2. Good average length: 8-25 words is ideal (+10)
+        if avgLength >= 8 && avgLength <= 25 { score += 10 }
+        else if avgLength >= 5 && avgLength <= 30 { score += 5 }
+
+        // 3. Transition words between sentences (+10)
+        let transitionCount = countTransitions(in: text)
+        score += min(10, transitionCount * 2)
+
+        // 4. Has opening AND closing sentence of reasonable length (+10)
+        if totalSentences >= 3 {
+            let firstLen = sentenceLengths[0]
+            let lastLen = sentenceLengths[totalSentences - 1]
+            if firstLen >= 5 && lastLen >= 5 { score += 10 }
+        }
+
         score = max(0, min(100, score))
 
         return SentenceAnalysis(
@@ -759,6 +827,20 @@ class SpeechService {
             structureScore: score,
             restartExamples: restartExamples
         )
+    }
+
+    // MARK: - Structure Helpers
+
+    private func countTransitions(in text: String) -> Int {
+        let lowered = text.lowercased()
+        return PromptRelevanceService.connectives.filter { lowered.contains($0) }.count
+    }
+
+    private func standardDeviation(_ values: [Double]) -> Double {
+        guard values.count >= 2 else { return 0 }
+        let mean = values.reduce(0, +) / Double(values.count)
+        let variance = values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count)
+        return sqrt(variance)
     }
 
     // MARK: - Vocab Word Detection
