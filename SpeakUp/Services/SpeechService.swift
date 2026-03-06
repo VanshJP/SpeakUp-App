@@ -229,6 +229,7 @@ class SpeechService {
         actualDuration: TimeInterval,
         vocabWords: [String] = [],
         audioLevelSamples: [Float] = [],
+        audioURL: URL? = nil,
         prompt: Prompt? = nil,
         targetWPM: Int = 150,
         trackFillerWords: Bool = true,
@@ -292,10 +293,32 @@ class SpeechService {
         let pauses = pauseMetadata.map { $0.duration }
         let averagePauseLength = pauses.isEmpty ? 0 : pauses.reduce(0, +) / Double(pauses.count)
 
-        // Run sub-analyses that were previously orphaned
+        // Run sub-analyses
         let volumeMetrics = !audioLevelSamples.isEmpty ? analyzeVolume(samples: audioLevelSamples) : nil
         let vocabComplexity = !sortedWords.isEmpty ? analyzeVocabComplexity(words: sortedWords) : nil
         let sentenceAnalysis = !sortedWords.isEmpty ? analyzeSentenceStructure(words: sortedWords, text: transcription.text) : nil
+
+        // NEW: Pitch/prosody analysis from audio file
+        let pitchMetrics: PitchMetrics?
+        if let audioURL {
+            pitchMetrics = PitchAnalysisService.analyze(audioURL: audioURL)
+        } else {
+            pitchMetrics = nil
+        }
+
+        // NEW: Speech rate variation analysis
+        let rateVariation = analyzeRateVariation(words: sortedWords, actualDuration: actualDuration)
+
+        // NEW: Emphasis detection
+        let emphasisMetrics = analyzeEmphasis(words: sortedWords, actualDuration: actualDuration)
+
+        // NEW: Energy arc analysis
+        let energyArc = !audioLevelSamples.isEmpty ?
+            analyzeEnergyArc(samples: audioLevelSamples, words: sortedWords, actualDuration: actualDuration) : nil
+
+        // NEW: Text quality analysis (hedge words, power words, rhetorical devices)
+        let textQuality = !transcription.text.isEmpty ?
+            TextAnalysisService.analyze(text: transcription.text, totalWords: totalWords) : nil
 
         // Prompt relevance / coherence
         let relevanceScore: Int?
@@ -335,7 +358,12 @@ class SpeechService {
             relevanceScore: relevanceScore,
             contentDensity: contentDensity,
             vocabWordsUsed: vocabWordsUsed,
-            pauseMetadata: pauseMetadata
+            pauseMetadata: pauseMetadata,
+            pitchMetrics: pitchMetrics,
+            rateVariation: rateVariation,
+            emphasisMetrics: emphasisMetrics,
+            energyArc: energyArc,
+            textQuality: textQuality
         )
 
         var overallScore = calculateOverallScore(subscores: subscores)
@@ -365,7 +393,12 @@ class SpeechService {
             volumeMetrics: volumeMetrics,
             vocabComplexity: vocabComplexity,
             sentenceAnalysis: sentenceAnalysis,
-            promptRelevanceScore: relevanceScore
+            promptRelevanceScore: relevanceScore,
+            pitchMetrics: pitchMetrics,
+            rateVariation: rateVariation,
+            emphasisMetrics: emphasisMetrics,
+            energyArc: energyArc,
+            textQuality: textQuality
         )
     }
 
@@ -414,9 +447,15 @@ class SpeechService {
         relevanceScore: Int? = nil,
         contentDensity: Int = 50,
         vocabWordsUsed: [VocabWordUsage] = [],
-        pauseMetadata: [PauseInfo] = []
+        pauseMetadata: [PauseInfo] = [],
+        pitchMetrics: PitchMetrics? = nil,
+        rateVariation: RateVariationMetrics? = nil,
+        emphasisMetrics: EmphasisMetrics? = nil,
+        energyArc: EnergyArcMetrics? = nil,
+        textQuality: TextQualityMetrics? = nil
     ) -> SpeechSubscores {
         // Clarity score — based on transcription confidence + word duration consistency
+        // Enhanced: hedge words reduce perceived clarity
         let clarityScore: Int
         let confidences = words.compactMap { $0.confidence }
         if !confidences.isEmpty {
@@ -430,35 +469,62 @@ class SpeechService {
                 let meanDur = durations.reduce(0, +) / Double(durations.count)
                 let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
                 let cv = meanDur > 0 ? sqrt(variance) / meanDur : 1.0 // coefficient of variation
-                // CV of 0.3-0.5 is typical; lower = more consistent
                 durationComponent = max(0, min(100, (1.0 - cv) * 100))
             } else {
-                durationComponent = 50 // neutral when insufficient data
+                durationComponent = 50
             }
 
-            let rawClarity = confidenceComponent * 0.65 + durationComponent * 0.35
+            // Hedge word penalty: high hedge ratio undermines clarity/authority
+            let hedgePenalty: Double
+            if let tq = textQuality {
+                // hedgeWordRatio of 0.05 = 5% hedges → ~15pt penalty
+                hedgePenalty = min(25, tq.hedgeWordRatio * 500)
+            } else {
+                hedgePenalty = 0
+            }
+
+            let rawClarity = confidenceComponent * 0.55 + durationComponent * 0.30 + (100 - hedgePenalty) * 0.15
             clarityScore = max(0, min(100, Int(rawClarity * confidenceWeight + 50 * (1 - confidenceWeight))))
         } else {
-            // Fallback when no confidence data: use inverse filler ratio
             let raw = 100 - (fillerRatio * 300)
             clarityScore = max(0, min(100, Int(raw * confidenceWeight + 50 * (1 - confidenceWeight))))
         }
 
         // Pace score: Gaussian centered on user's targetWPM
+        // Enhanced: rate variation rewards dynamic pacing, penalizes monotone rate
         let optimalWPM = Double(targetWPM)
         let sigma = 45.0
         let deviation = wordsPerMinute - optimalWPM
-        let rawPaceScore = 100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))
+        let basePaceScore = 100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))
+
+        let rateVariationBonus: Double
+        if let rv = rateVariation {
+            // CV between 0.15-0.35 is ideal (purposeful variation without chaos)
+            // variationScore is already 0-100
+            rateVariationBonus = Double(rv.rateVariationScore) * 0.20 // up to +20 bonus
+        } else {
+            rateVariationBonus = 0
+        }
+
+        let rawPaceScore = basePaceScore * 0.80 + rateVariationBonus
         let paceScore = max(0, min(100, Int(rawPaceScore * confidenceWeight + 50 * (1 - confidenceWeight))))
 
-        // Filler usage score — dampen for short recordings
-        let rawFillerScore = (1 - fillerRatio * 5) * 100
+        // Filler usage score — enhanced with hedge word awareness
+        // Hedge words are "verbal fillers" that undermine authority ("kind of", "I think")
+        let hedgeAdjustment: Double
+        if let tq = textQuality {
+            hedgeAdjustment = min(0.03, tq.hedgeWordRatio * 0.5) // counts as extra filler load
+        } else {
+            hedgeAdjustment = 0
+        }
+        let effectiveFillerRatio = fillerRatio + hedgeAdjustment
+        let rawFillerScore = (1 - effectiveFillerRatio * 5) * 100
         let fillerScore = max(0, min(100, Int(rawFillerScore * confidenceWeight + 50 * (1 - confidenceWeight))))
 
         // Pause quality score
         let pauseScore: Int
         if !trackPauses {
-            pauseScore = 50 // Neutral when tracking is off
+            pauseScore = 50
         } else {
             let rawPauseScore = calculatePauseScore(
                 metadata: pauseMetadata,
@@ -471,32 +537,108 @@ class SpeechService {
         }
 
         // Delivery score: volume energy + vocal variation + content density
+        // Enhanced with emphasis and energy arc analysis
         let deliveryScore: Int?
         if let vol = volumeMetrics {
-            let energyComponent = Double(vol.energyScore) * 0.35
-            let variationComponent = Double(vol.monotoneScore) * 0.35
-            let densityComponent = Double(contentDensity) * 0.30
-            deliveryScore = max(0, min(100, Int(energyComponent + variationComponent + densityComponent)))
+            let energyComponent = Double(vol.energyScore) * 0.25
+            let variationComponent = Double(vol.monotoneScore) * 0.25
+            let densityComponent = Double(contentDensity) * 0.15
+
+            // Emphasis: speakers who emphasize key words score higher on delivery
+            let emphasisComponent: Double
+            if let em = emphasisMetrics {
+                // emphasisPerMinute of 3-8 is ideal for engaged delivery
+                let idealEmphasis = min(1.0, em.emphasisPerMinute / 5.0)
+                emphasisComponent = idealEmphasis * 100.0 * 0.15
+            } else {
+                emphasisComponent = 50.0 * 0.15 // neutral
+            }
+
+            // Energy arc: strong opening and closing with sustained middle is ideal
+            let arcComponent: Double
+            if let arc = energyArc {
+                arcComponent = Double(arc.arcScore) * 0.20
+            } else {
+                arcComponent = 50.0 * 0.20 // neutral
+            }
+
+            let rawDelivery = energyComponent + variationComponent + densityComponent + emphasisComponent + arcComponent
+            deliveryScore = max(0, min(100, Int(rawDelivery)))
         } else {
             deliveryScore = nil
         }
 
-        // Vocabulary score — boost when user's word bank words are used
-        var vocabularyScore = vocabComplexity?.complexityScore
-        if let base = vocabularyScore, !vocabWordsUsed.isEmpty {
-            let totalUsed = vocabWordsUsed.reduce(0) { $0 + $1.count }
-            let bonus = min(15, totalUsed * 5) // up to +15 for 3+ vocab word uses
-            vocabularyScore = min(100, base + bonus)
+        // Vocal Variety subscore (NEW) — combines pitch variation, volume dynamics, rate variation
+        // This is a core differentiator: monotone speech is the #1 audience engagement killer
+        let vocalVarietyScore: Int?
+        if pitchMetrics != nil || volumeMetrics != nil || rateVariation != nil {
+            var components: [Double] = []
+            var weights: [Double] = []
+
+            // Pitch variation: 45% weight — F0 range and variation are the strongest prosody signals
+            if let pm = pitchMetrics {
+                components.append(Double(pm.pitchVariationScore))
+                weights.append(0.45)
+            }
+
+            // Volume dynamics: 25% weight — monotone volume = disengaged audience
+            if let vol = volumeMetrics {
+                components.append(Double(vol.monotoneScore))
+                weights.append(0.25)
+            }
+
+            // Rate variation: 30% weight — varying pace keeps attention
+            if let rv = rateVariation {
+                components.append(Double(rv.rateVariationScore))
+                weights.append(0.30)
+            }
+
+            if !components.isEmpty {
+                let totalW = weights.reduce(0, +)
+                let weightedSum = zip(components, weights).reduce(0.0) { $0 + $1.0 * $1.1 }
+                let normalized = weightedSum / totalW
+                vocalVarietyScore = max(0, min(100, Int(normalized * confidenceWeight + 50 * (1 - confidenceWeight))))
+            } else {
+                vocalVarietyScore = nil
+            }
+        } else {
+            vocalVarietyScore = nil
         }
 
-        // Structure score
-        let structureScore = sentenceAnalysis?.structureScore
+        // Vocabulary score — enhanced with power words and text quality metrics
+        var vocabularyScore = vocabComplexity?.complexityScore
+        if let base = vocabularyScore {
+            // Boost for user's word bank usage
+            if !vocabWordsUsed.isEmpty {
+                let totalUsed = vocabWordsUsed.reduce(0) { $0 + $1.count }
+                let vocabBonus = min(15, totalUsed * 5)
+                vocabularyScore = min(100, base + vocabBonus)
+            }
+            // Boost for power words (action verbs, vivid language)
+            if let tq = textQuality {
+                // Scale power word count relative to total words for a ratio-like bonus
+                let powerRatio = totalWords > 0 ? Double(tq.powerWordCount) / Double(totalWords) : 0
+                let powerBonus = min(10, Int(powerRatio * 200)) // up to +10 for 5%+ power words
+                vocabularyScore = min(100, (vocabularyScore ?? base) + powerBonus)
+            }
+        }
+
+        // Structure score — enhanced with rhetorical devices and transition quality
+        var structureScore = sentenceAnalysis?.structureScore
+        if let base = structureScore, let tq = textQuality {
+            // Rhetorical devices (tricolon, anaphora, contrast) demonstrate sophisticated structure
+            let rhetoricBonus = min(12, tq.rhetoricalDeviceCount * 4)
+            // Good transition variety demonstrates organized thought flow
+            let transitionBonus = min(8, Int(Double(tq.transitionVariety) * 0.8))
+            structureScore = min(100, base + rhetoricBonus + transitionBonus)
+        }
 
         return SpeechSubscores(
             clarity: clarityScore,
             pace: paceScore,
             fillerUsage: fillerScore,
             pauseQuality: pauseScore,
+            vocalVariety: vocalVarietyScore,
             delivery: deliveryScore,
             vocabulary: vocabularyScore,
             structure: structureScore,
@@ -558,32 +700,48 @@ class SpeechService {
     }
 
     private func calculateOverallScore(subscores: SpeechSubscores) -> Int {
-        // Weight distribution (totals 100% when all subscores present)
-        var weighted = Double(subscores.clarity) * 0.15 +
-                       Double(subscores.pace) * 0.18 +
-                       Double(subscores.fillerUsage) * 0.15 +
-                       Double(subscores.pauseQuality) * 0.13
+        // Revised weight distribution reflecting speech science research:
+        // - Vocal Variety (16%): strongest predictor of audience engagement (Rosenberg & Hirschberg)
+        // - Pace (14%): rate control is fundamental to comprehension
+        // - Clarity (12%): articulation and confidence in delivery
+        // - Filler (12%): filler word avoidance signals preparation and confidence
+        // - Delivery (12%): energy, emphasis, and arc show intentional performance
+        // - Pause (10%): strategic silence is a power tool
+        // - Vocabulary (8%): word choice and complexity
+        // - Structure (8%): organization and rhetorical devices
+        // - Relevance (8%): staying on topic / coherence
 
-        var totalWeight = 0.61
+        // Core subscores (always present)
+        var weighted = Double(subscores.clarity) * 0.12 +
+                       Double(subscores.pace) * 0.14 +
+                       Double(subscores.fillerUsage) * 0.12 +
+                       Double(subscores.pauseQuality) * 0.10
 
+        var totalWeight = 0.48
+
+        // Optional subscores — weight redistributes when absent
+        if let vocalVariety = subscores.vocalVariety {
+            weighted += Double(vocalVariety) * 0.16
+            totalWeight += 0.16
+        }
         if let delivery = subscores.delivery {
-            weighted += Double(delivery) * 0.13
-            totalWeight += 0.13
+            weighted += Double(delivery) * 0.12
+            totalWeight += 0.12
         }
         if let vocabulary = subscores.vocabulary {
-            weighted += Double(vocabulary) * 0.09
-            totalWeight += 0.09
+            weighted += Double(vocabulary) * 0.08
+            totalWeight += 0.08
         }
         if let structure = subscores.structure {
-            weighted += Double(structure) * 0.05
-            totalWeight += 0.05
+            weighted += Double(structure) * 0.08
+            totalWeight += 0.08
         }
         if let relevance = subscores.relevance {
-            weighted += Double(relevance) * 0.10
-            totalWeight += 0.10
+            weighted += Double(relevance) * 0.08
+            totalWeight += 0.08
         }
 
-        // Normalize by actual weight used (handles nil subscores)
+        // Normalize by actual weight used (handles nil subscores gracefully)
         let normalized = weighted / totalWeight
         return max(0, min(100, Int(normalized)))
     }
@@ -854,6 +1012,198 @@ class SpeechService {
                 isVocabWord: true
             )
         }
+    }
+
+    // MARK: - Rate Variation Analysis
+
+    /// Analyze speech rate variation using rolling windows over word timestamps.
+    /// Measures dynamic pacing — good speakers vary pace for emphasis and engagement.
+    func analyzeRateVariation(words: [TranscriptionWord], actualDuration: TimeInterval) -> RateVariationMetrics {
+        guard words.count >= 10, actualDuration > 5 else { return RateVariationMetrics() }
+
+        let windowSize: TimeInterval = 10.0 // 10-second rolling windows
+        let hopSize: TimeInterval = 5.0     // 5-second hop
+        var windowedWPMs: [Double] = []
+
+        var windowStart: TimeInterval = 0
+        while windowStart + windowSize <= actualDuration {
+            let windowEnd = windowStart + windowSize
+            let wordsInWindow = words.filter { $0.start >= windowStart && $0.start < windowEnd && !$0.isFiller }
+            let wpm = Double(wordsInWindow.count) / (windowSize / 60.0)
+            if wpm > 0 {
+                windowedWPMs.append(wpm)
+            }
+            windowStart += hopSize
+        }
+
+        guard windowedWPMs.count >= 2 else { return RateVariationMetrics() }
+
+        let mean = windowedWPMs.reduce(0, +) / Double(windowedWPMs.count)
+        let variance = windowedWPMs.reduce(0.0) { $0 + pow($1 - mean, 2) } / Double(windowedWPMs.count)
+        let stddev = sqrt(variance)
+        let cv = mean > 0 ? stddev / mean : 0
+        let rateRange = (windowedWPMs.max() ?? 0) - (windowedWPMs.min() ?? 0)
+
+        // Articulation rate: WPM excluding pauses (time spent actually speaking)
+        let totalSpeechTime = words.reduce(0.0) { $0 + $1.duration }
+        let articulationRate = totalSpeechTime > 0 ? Double(words.count) / (totalSpeechTime / 60.0) : 0
+
+        // Rate variation score:
+        // CV of 0.10-0.25 is healthy variation. Below 0.05 = monotone pace. Above 0.35 = erratic.
+        let variationScore: Int
+        if cv < 0.03 {
+            variationScore = 20 // Nearly no variation — robotic
+        } else if cv < 0.08 {
+            variationScore = 40 + Int(cv * 400) // Some variation
+        } else if cv <= 0.25 {
+            variationScore = min(100, 60 + Int((cv - 0.08) * 235)) // Healthy dynamic range
+        } else if cv <= 0.35 {
+            variationScore = max(50, 100 - Int((cv - 0.25) * 300)) // Getting erratic
+        } else {
+            variationScore = max(20, 50 - Int((cv - 0.35) * 200)) // Too erratic
+        }
+
+        return RateVariationMetrics(
+            rateCV: cv,
+            articulationRate: articulationRate,
+            rateRange: rateRange,
+            windowedWPMs: windowedWPMs,
+            rateVariationScore: variationScore
+        )
+    }
+
+    // MARK: - Emphasis Detection
+
+    /// Detect emphasized words where multiple prosodic cues align:
+    /// longer duration + surrounding pauses + contextually prominent position.
+    func analyzeEmphasis(words: [TranscriptionWord], actualDuration: TimeInterval) -> EmphasisMetrics {
+        guard words.count >= 5, actualDuration > 0 else { return EmphasisMetrics() }
+
+        let nonFillerWords = words.filter { !$0.isFiller }
+        guard nonFillerWords.count >= 3 else { return EmphasisMetrics() }
+
+        // Compute mean and stddev of word durations
+        let durations = nonFillerWords.map { $0.duration }.filter { $0 > 0 }
+        guard !durations.isEmpty else { return EmphasisMetrics() }
+        let meanDur = durations.reduce(0, +) / Double(durations.count)
+        let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
+        let stdDur = sqrt(variance)
+        let emphasisThreshold = meanDur + stdDur * 1.2 // Words 1.2 stddev above mean
+
+        var emphasisPositions: [Double] = [] // Normalized position (0-1) in speech
+
+        for (index, word) in words.enumerated() {
+            guard !word.isFiller, word.duration > emphasisThreshold else { continue }
+
+            // Check for surrounding pauses (at least one side)
+            let pauseBefore: Bool
+            if index > 0 {
+                pauseBefore = (word.start - words[index - 1].end) > 0.2
+            } else {
+                pauseBefore = true
+            }
+
+            let pauseAfter: Bool
+            if index < words.count - 1 {
+                pauseAfter = (words[index + 1].start - word.end) > 0.2
+            } else {
+                pauseAfter = true
+            }
+
+            if pauseBefore || pauseAfter {
+                let normalizedPos = word.start / actualDuration
+                emphasisPositions.append(normalizedPos)
+            }
+        }
+
+        let emphasisCount = emphasisPositions.count
+        let emphasisPerMinute = actualDuration > 0 ? Double(emphasisCount) / (actualDuration / 60.0) : 0
+
+        // Distribution score: well-distributed emphasis across the speech
+        let distributionScore: Int
+        if emphasisCount <= 1 {
+            distributionScore = 30
+        } else {
+            // Divide speech into 4 quarters, check how many have at least one emphasis
+            let quartiles = [0.0..<0.25, 0.25..<0.5, 0.5..<0.75, 0.75..<1.01]
+            let quartersWithEmphasis = quartiles.filter { range in
+                emphasisPositions.contains { range.contains($0) }
+            }.count
+            distributionScore = min(100, quartersWithEmphasis * 25)
+        }
+
+        return EmphasisMetrics(
+            emphasisCount: emphasisCount,
+            emphasisPerMinute: emphasisPerMinute,
+            distributionScore: distributionScore
+        )
+    }
+
+    // MARK: - Energy Arc Analysis
+
+    /// Analyze the energy contour of a speech divided into thirds.
+    /// Good speakers have dynamic energy structure (opening hooks, building climax, strong close).
+    func analyzeEnergyArc(samples: [Float], words: [TranscriptionWord], actualDuration: TimeInterval) -> EnergyArcMetrics {
+        guard !samples.isEmpty, actualDuration > 5 else { return EnergyArcMetrics() }
+
+        let thirdSize = samples.count / 3
+        guard thirdSize > 0 else { return EnergyArcMetrics() }
+
+        func averageEnergy(_ slice: ArraySlice<Float>) -> Double {
+            guard !slice.isEmpty else { return 0 }
+            // Convert dB to linear, average, then normalize
+            let linear = slice.map { pow(10, Double($0) / 20.0) }
+            return linear.reduce(0, +) / Double(linear.count)
+        }
+
+        let opening = averageEnergy(samples[0..<thirdSize])
+        let body = averageEnergy(samples[thirdSize..<(thirdSize * 2)])
+        let closing = averageEnergy(samples[(thirdSize * 2)...])
+
+        // Normalize to 0-1 range
+        let maxEnergy = max(opening, body, closing, 0.001)
+        let normOpening = opening / maxEnergy
+        let normBody = body / maxEnergy
+        let normClosing = closing / maxEnergy
+
+        // Climax detection: is there a clear peak in any section?
+        let hasClimax = max(normOpening, normBody, normClosing) > 0.85 &&
+                         min(normOpening, normBody, normClosing) < 0.7
+
+        // Arc score: rewards dynamic energy structure
+        var arcScore = 50 // base
+
+        // Reward strong openings (hook the audience)
+        if normOpening > 0.7 { arcScore += 10 }
+
+        // Reward strong closings (end with impact)
+        if normClosing > 0.7 { arcScore += 15 }
+
+        // Reward climax (energy builds somewhere)
+        if hasClimax { arcScore += 10 }
+
+        // Penalize completely flat energy
+        let energyRange = max(normOpening, normBody, normClosing) - min(normOpening, normBody, normClosing)
+        if energyRange < 0.1 {
+            arcScore -= 15 // Monotone energy
+        } else if energyRange > 0.2 {
+            arcScore += 10 // Good dynamic range
+        }
+
+        // Penalize trailing off (closing much weaker than opening)
+        if normClosing < normOpening * 0.5 {
+            arcScore -= 10
+        }
+
+        arcScore = max(0, min(100, arcScore))
+
+        return EnergyArcMetrics(
+            openingEnergy: normOpening,
+            bodyEnergy: normBody,
+            closingEnergy: normClosing,
+            hasClimax: hasClimax,
+            arcScore: arcScore
+        )
     }
 
     // MARK: - Trend Calculation
