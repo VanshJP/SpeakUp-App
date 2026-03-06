@@ -1031,6 +1031,7 @@ struct RecordingDetailView: View {
                 actualDuration: recording.actualDuration,
                 vocabWords: vocabWords,
                 audioLevelSamples: recording.audioLevelSamples ?? [],
+                audioURL: audioURL,
                 prompt: recording.prompt,
                 targetWPM: settings?.targetWPM ?? 150,
                 trackFillerWords: settings?.trackFillerWords ?? true,

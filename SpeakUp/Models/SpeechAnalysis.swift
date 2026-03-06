@@ -156,6 +156,111 @@ struct SentenceAnalysis: Codable {
     }
 }
 
+// MARK: - Pitch / Prosody Metrics
+
+struct PitchMetrics: Codable {
+    var f0Mean: Float        // Mean fundamental frequency (Hz)
+    var f0StdDev: Float      // Standard deviation of F0 (Hz)
+    var f0Min: Float         // Minimum voiced F0 (Hz)
+    var f0Max: Float         // Maximum voiced F0 (Hz)
+    var f0RangeSemitones: Float // Range in semitones (perceptually uniform)
+    var pitchVariationScore: Int // 0-100, higher = more expressive variety
+    var declinationRate: Float // Semitones per second of overall pitch trend
+    var f0Contour: [Float]?  // Sampled F0 values for visualization (nil when stripped)
+
+    init(
+        f0Mean: Float = 0, f0StdDev: Float = 0,
+        f0Min: Float = 0, f0Max: Float = 0,
+        f0RangeSemitones: Float = 0, pitchVariationScore: Int = 0,
+        declinationRate: Float = 0, f0Contour: [Float]? = nil
+    ) {
+        self.f0Mean = f0Mean; self.f0StdDev = f0StdDev
+        self.f0Min = f0Min; self.f0Max = f0Max
+        self.f0RangeSemitones = f0RangeSemitones
+        self.pitchVariationScore = pitchVariationScore
+        self.declinationRate = declinationRate
+        self.f0Contour = f0Contour
+    }
+}
+
+// MARK: - Rate Variation Metrics
+
+struct RateVariationMetrics: Codable {
+    var rateCV: Double              // Coefficient of variation of windowed WPM
+    var articulationRate: Double    // WPM excluding pauses
+    var rateRange: Double           // Max windowed WPM minus min
+    var windowedWPMs: [Double]?     // Per-window WPM values (nil when stripped)
+    var rateVariationScore: Int     // 0-100, higher = healthier dynamic variation
+
+    init(
+        rateCV: Double = 0, articulationRate: Double = 0,
+        rateRange: Double = 0, windowedWPMs: [Double]? = nil,
+        rateVariationScore: Int = 50
+    ) {
+        self.rateCV = rateCV; self.articulationRate = articulationRate
+        self.rateRange = rateRange; self.windowedWPMs = windowedWPMs
+        self.rateVariationScore = rateVariationScore
+    }
+}
+
+// MARK: - Emphasis Metrics
+
+struct EmphasisMetrics: Codable {
+    var emphasisCount: Int          // Number of detected emphasized words
+    var emphasisPerMinute: Double   // Emphasis frequency
+    var distributionScore: Int      // 0-100, higher = well-distributed emphasis
+
+    init(emphasisCount: Int = 0, emphasisPerMinute: Double = 0, distributionScore: Int = 50) {
+        self.emphasisCount = emphasisCount
+        self.emphasisPerMinute = emphasisPerMinute
+        self.distributionScore = distributionScore
+    }
+}
+
+// MARK: - Energy Arc Metrics
+
+struct EnergyArcMetrics: Codable {
+    var openingEnergy: Double   // Normalized energy in first third (0-1)
+    var bodyEnergy: Double      // Normalized energy in middle third (0-1)
+    var closingEnergy: Double   // Normalized energy in final third (0-1)
+    var hasClimax: Bool         // Whether a clear energy peak was detected
+    var arcScore: Int           // 0-100, rewards dynamic energy structure
+
+    init(
+        openingEnergy: Double = 0, bodyEnergy: Double = 0,
+        closingEnergy: Double = 0, hasClimax: Bool = false, arcScore: Int = 50
+    ) {
+        self.openingEnergy = openingEnergy; self.bodyEnergy = bodyEnergy
+        self.closingEnergy = closingEnergy; self.hasClimax = hasClimax
+        self.arcScore = arcScore
+    }
+}
+
+// MARK: - Text Quality Metrics
+
+struct TextQualityMetrics: Codable {
+    var hedgeWordCount: Int
+    var hedgeWordRatio: Double      // Hedge words / total words
+    var powerWordCount: Int
+    var rhetoricalDeviceCount: Int  // Tricolon + anaphora + contrast
+    var transitionVariety: Int      // Unique transition/connective words used
+    var authorityScore: Int         // 0-100, penalizes hedges, rewards power words
+    var craftScore: Int             // 0-100, rewards rhetorical devices + transitions
+
+    init(
+        hedgeWordCount: Int = 0, hedgeWordRatio: Double = 0,
+        powerWordCount: Int = 0, rhetoricalDeviceCount: Int = 0,
+        transitionVariety: Int = 0, authorityScore: Int = 50,
+        craftScore: Int = 50
+    ) {
+        self.hedgeWordCount = hedgeWordCount; self.hedgeWordRatio = hedgeWordRatio
+        self.powerWordCount = powerWordCount
+        self.rhetoricalDeviceCount = rhetoricalDeviceCount
+        self.transitionVariety = transitionVariety
+        self.authorityScore = authorityScore; self.craftScore = craftScore
+    }
+}
+
 // MARK: - Speech Analysis
 
 struct SpeechAnalysis: Codable {
@@ -173,6 +278,12 @@ struct SpeechAnalysis: Codable {
     var vocabComplexity: VocabComplexity?
     var sentenceAnalysis: SentenceAnalysis?
     var promptRelevanceScore: Int?
+    // New advanced metrics
+    var pitchMetrics: PitchMetrics?
+    var rateVariation: RateVariationMetrics?
+    var emphasisMetrics: EmphasisMetrics?
+    var energyArc: EnergyArcMetrics?
+    var textQuality: TextQualityMetrics?
 
     init(
         fillerWords: [FillerWord] = [],
@@ -188,7 +299,12 @@ struct SpeechAnalysis: Codable {
         volumeMetrics: VolumeMetrics? = nil,
         vocabComplexity: VocabComplexity? = nil,
         sentenceAnalysis: SentenceAnalysis? = nil,
-        promptRelevanceScore: Int? = nil
+        promptRelevanceScore: Int? = nil,
+        pitchMetrics: PitchMetrics? = nil,
+        rateVariation: RateVariationMetrics? = nil,
+        emphasisMetrics: EmphasisMetrics? = nil,
+        energyArc: EnergyArcMetrics? = nil,
+        textQuality: TextQualityMetrics? = nil
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
@@ -204,6 +320,11 @@ struct SpeechAnalysis: Codable {
         self.vocabComplexity = vocabComplexity
         self.sentenceAnalysis = sentenceAnalysis
         self.promptRelevanceScore = promptRelevanceScore
+        self.pitchMetrics = pitchMetrics
+        self.rateVariation = rateVariation
+        self.emphasisMetrics = emphasisMetrics
+        self.energyArc = energyArc
+        self.textQuality = textQuality
     }
 
     // Custom Decodable to handle missing fields in existing data
@@ -227,6 +348,11 @@ struct SpeechAnalysis: Codable {
         vocabComplexity = nil
         sentenceAnalysis = nil
         promptRelevanceScore = nil
+        pitchMetrics = nil
+        rateVariation = nil
+        emphasisMetrics = nil
+        energyArc = nil
+        textQuality = nil
     }
 
     var totalFillerCount: Int {
@@ -262,13 +388,14 @@ struct SpeechScore: Codable {
 }
 
 struct SpeechSubscores: Codable {
-    var clarity: Int      // 0-100: Based on filler word frequency
-    var pace: Int         // 0-100: Based on WPM (optimal ~targetWPM)
-    var fillerUsage: Int  // 0-100: Inverse of filler word ratio
+    var clarity: Int      // 0-100: Based on transcription confidence + articulation
+    var pace: Int         // 0-100: Based on WPM + rate variation
+    var fillerUsage: Int  // 0-100: Inverse of filler + hedge word ratio
     var pauseQuality: Int // 0-100: Natural vs awkward pauses
-    var delivery: Int?    // 0-100: Volume energy + vocal variation + content density
-    var vocabulary: Int?  // 0-100: From VocabComplexity.complexityScore
-    var structure: Int?   // 0-100: From SentenceAnalysis.structureScore
+    var vocalVariety: Int? // 0-100: Pitch (F0) variation + volume variation (NEW)
+    var delivery: Int?    // 0-100: Energy arc + emphasis + volume energy
+    var vocabulary: Int?  // 0-100: Complexity + power words
+    var structure: Int?   // 0-100: Sentence structure + rhetorical devices + transitions
     var relevance: Int?   // 0-100: Prompt relevance or coherence (nil when unavailable)
 
     init(
@@ -276,6 +403,7 @@ struct SpeechSubscores: Codable {
         pace: Int = 0,
         fillerUsage: Int = 0,
         pauseQuality: Int = 0,
+        vocalVariety: Int? = nil,
         delivery: Int? = nil,
         vocabulary: Int? = nil,
         structure: Int? = nil,
@@ -285,6 +413,7 @@ struct SpeechSubscores: Codable {
         self.pace = pace
         self.fillerUsage = fillerUsage
         self.pauseQuality = pauseQuality
+        self.vocalVariety = vocalVariety
         self.delivery = delivery
         self.vocabulary = vocabulary
         self.structure = structure
@@ -297,6 +426,7 @@ struct SpeechSubscores: Codable {
         pace = try container.decode(Int.self, forKey: .pace)
         fillerUsage = try container.decode(Int.self, forKey: .fillerUsage)
         pauseQuality = try container.decode(Int.self, forKey: .pauseQuality)
+        vocalVariety = try? container.decodeIfPresent(Int.self, forKey: .vocalVariety)
         delivery = try? container.decodeIfPresent(Int.self, forKey: .delivery)
         vocabulary = try? container.decodeIfPresent(Int.self, forKey: .vocabulary)
         structure = try? container.decodeIfPresent(Int.self, forKey: .structure)
