@@ -316,7 +316,8 @@ class SpeechService {
             rateVariation: rateVariation,
             emphasisMetrics: emphasisMetrics,
             energyArc: energyArc,
-            textQuality: textQuality
+            textQuality: textQuality,
+            audioLevelSamples: audioLevelSamples
         )
 
         var overallScore = calculateOverallScore(subscores: subscores)
@@ -414,7 +415,8 @@ class SpeechService {
         rateVariation: RateVariationMetrics? = nil,
         emphasisMetrics: EmphasisMetrics? = nil,
         energyArc: EnergyArcMetrics? = nil,
-        textQuality: TextQualityMetrics? = nil
+        textQuality: TextQualityMetrics? = nil,
+        audioLevelSamples: [Float] = []
     ) -> SpeechSubscores {
         // Clarity score — enhanced with hedge word penalty
         let clarityScore: Int
@@ -518,7 +520,7 @@ class SpeechService {
             deliveryScore = nil
         }
 
-        // Vocal Variety subscore — pitch + volume dynamics + rate variation
+        // Vocal Variety subscore — pitch + volume dynamics + rate variation + cross-signal correlation
         let vocalVarietyScore: Int?
         if pitchMetrics != nil || volumeMetrics != nil || rateVariation != nil {
             var components: [Double] = []
@@ -526,7 +528,7 @@ class SpeechService {
 
             if let pm = pitchMetrics {
                 components.append(Double(pm.pitchVariationScore))
-                weights.append(0.45)
+                weights.append(0.40)  // Pitch is primary signal for vocal variety
             }
             if let vol = volumeMetrics {
                 components.append(Double(vol.monotoneScore))
@@ -534,7 +536,17 @@ class SpeechService {
             }
             if let rv = rateVariation {
                 components.append(Double(rv.rateVariationScore))
-                weights.append(0.30)
+                weights.append(0.15)  // Reduced: pace variation is weakly correlated with vocal variety
+            }
+
+            // Cross-signal correlation: engaging speakers modulate pitch and energy together
+            if let pm = pitchMetrics, let contour = pm.f0Contour, !audioLevelSamples.isEmpty {
+                let correlationScore = PitchAnalysisService.pitchEnergyCorrelation(
+                    pitchContour: contour,
+                    audioLevelSamples: audioLevelSamples
+                )
+                components.append(Double(correlationScore))
+                weights.append(0.20)
             }
 
             if !components.isEmpty {
@@ -549,17 +561,17 @@ class SpeechService {
             vocalVarietyScore = nil
         }
 
-        // Vocabulary score — enhanced with power word bonus
+        // Vocabulary score — capped bonuses to prevent inflation
         var vocabularyScore = vocabComplexity?.complexityScore
         if let base = vocabularyScore {
             if !vocabWordsUsed.isEmpty {
                 let totalUsed = vocabWordsUsed.reduce(0) { $0 + $1.count }
-                let vocabBonus = min(15, totalUsed * 5)
+                let vocabBonus = min(8, totalUsed * 3)  // Capped at +8 (down from +15)
                 vocabularyScore = min(100, base + vocabBonus)
             }
             if let tq = textQuality {
                 let powerRatio = totalWords > 0 ? Double(tq.powerWordCount) / Double(totalWords) : 0
-                let powerBonus = min(10, Int(powerRatio * 200))
+                let powerBonus = min(5, Int(powerRatio * 150))  // Capped at +5 (down from +10)
                 vocabularyScore = min(100, (vocabularyScore ?? base) + powerBonus)
             }
         }
@@ -639,33 +651,34 @@ class SpeechService {
     }
 
     private func calculateOverallScore(subscores: SpeechSubscores) -> Int {
-        // Revised weights (speech science: Rosenberg & Hirschberg, NCA, Toastmasters)
+        // Rebalanced weights: redistributed from Pace/Delivery to Vocab/Structure/Relevance
+        // so all visible subscores contribute meaningfully.
         var weighted = Double(subscores.clarity) * 0.12 +
-                       Double(subscores.pace) * 0.14 +
+                       Double(subscores.pace) * 0.12 +
                        Double(subscores.fillerUsage) * 0.12 +
                        Double(subscores.pauseQuality) * 0.10
 
-        var totalWeight = 0.48
+        var totalWeight = 0.46
 
         if let vocalVariety = subscores.vocalVariety {
-            weighted += Double(vocalVariety) * 0.16
-            totalWeight += 0.16
+            weighted += Double(vocalVariety) * 0.14
+            totalWeight += 0.14
         }
         if let delivery = subscores.delivery {
-            weighted += Double(delivery) * 0.12
-            totalWeight += 0.12
+            weighted += Double(delivery) * 0.10
+            totalWeight += 0.10
         }
         if let vocabulary = subscores.vocabulary {
-            weighted += Double(vocabulary) * 0.08
-            totalWeight += 0.08
+            weighted += Double(vocabulary) * 0.10
+            totalWeight += 0.10
         }
         if let structure = subscores.structure {
-            weighted += Double(structure) * 0.08
-            totalWeight += 0.08
+            weighted += Double(structure) * 0.10
+            totalWeight += 0.10
         }
         if let relevance = subscores.relevance {
-            weighted += Double(relevance) * 0.08
-            totalWeight += 0.08
+            weighted += Double(relevance) * 0.10
+            totalWeight += 0.10
         }
 
         let normalized = weighted / totalWeight
@@ -753,12 +766,38 @@ class SpeechService {
         let highIdx = min(sorted.count - 1, Int(Double(sorted.count) * 0.95))
         let dynamicRange = sorted[highIdx] - sorted[lowIdx]
 
-        // Monotone score: based on standard deviation — higher variation = higher score
-        let mean = Double(average)
-        let variance = samples.reduce(0.0) { $0 + pow(Double($1) - mean, 2) } / Double(samples.count)
-        let stddev = sqrt(variance)
-        // stddev of 5-15 dB is good variation for speech
-        let monotoneScore = min(100, max(0, Int(stddev * 10)))
+        // Monotone score: convert dB to linear energy, exclude silence, use CV
+        // Raw dB values from AVAudioRecorder are typically -160 to 0.
+        // Silence threshold: anything below -40 dB is not speech.
+        let speechSamples = samples.filter { $0 > -40 }
+        let monotoneScore: Int
+        if speechSamples.count >= 4 {
+            // Convert dB to linear amplitude for meaningful variation measurement
+            let linearSamples = speechSamples.map { pow(10.0, Double($0) / 20.0) }
+            let linMean = linearSamples.reduce(0, +) / Double(linearSamples.count)
+            guard linMean > 1e-6 else {
+                return VolumeMetrics(averageLevel: average, peakLevel: peak,
+                                     dynamicRange: dynamicRange, monotoneScore: 10,
+                                     energyScore: 0, levelSamples: samples)
+            }
+            let linVariance = linearSamples.reduce(0.0) { $0 + pow($1 - linMean, 2) } / Double(linearSamples.count)
+            let cv = sqrt(linVariance) / linMean  // Coefficient of variation
+
+            // Map CV to score with calibrated thresholds:
+            // CV < 0.15 → monotone (20-40), 0.15-0.35 → moderate (40-70),
+            // 0.35-0.60 → good (70-90), > 0.60 → excellent (90-100)
+            if cv < 0.15 {
+                monotoneScore = 20 + Int(cv / 0.15 * 20)
+            } else if cv < 0.35 {
+                monotoneScore = 40 + Int((cv - 0.15) / 0.20 * 30)
+            } else if cv < 0.60 {
+                monotoneScore = 70 + Int((cv - 0.35) / 0.25 * 20)
+            } else {
+                monotoneScore = min(100, 90 + Int((cv - 0.60) / 0.40 * 10))
+            }
+        } else {
+            monotoneScore = 30 // Not enough speech samples
+        }
 
         // Energy score: based on average level relative to -40dB baseline
         // -40dB is quiet, 0dB is max; typical speech is -20 to -5 dB
@@ -810,15 +849,15 @@ class SpeechService {
             .map { RepeatedPhrase(phrase: $0.key, count: $0.value) }
             .sorted { $0.count > $1.count }
 
-        // Composite score with realistic thresholds for conversational speech
-        let uniqueComponent = min(1.0, uniqueRatio / 0.55) * 35  // 55% unique = full (realistic for speech)
-        let longComponent = min(1.0, longWordRatio / 0.12) * 20  // 12% long words = full
-        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 7.0)  // 7 repeated phrases = full penalty
+        // Composite score with calibrated thresholds for conversational speech
+        let uniqueComponent = min(1.0, uniqueRatio / 0.65) * 35  // 65% unique = full (raised from 0.55)
+        let longComponent = min(1.0, longWordRatio / 0.15) * 20  // 15% long words = full (raised from 0.12)
+        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 5.0)  // 5 repeated phrases = full penalty (stricter)
         let repeatComponent = (1.0 - repeatPenalty) * 20
 
         // Word diversity bonus: reward using words of varied lengths
         let lengthBuckets = Set(cleaned.map { min($0.count, 10) })
-        let diversityScore = min(1.0, Double(lengthBuckets.count) / 6.0) * 25  // 6+ length buckets = full
+        let diversityScore = min(1.0, Double(lengthBuckets.count) / 7.0) * 25  // 7+ length buckets = full (raised from 6)
 
         let score = min(100, max(0, Int(uniqueComponent + longComponent + repeatComponent + diversityScore)))
 

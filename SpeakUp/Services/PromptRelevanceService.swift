@@ -53,7 +53,8 @@ enum PromptRelevanceService {
     }
 
     /// Compute a coherence score for free-practice sessions (no prompt).
-    /// Uses sentence flow + topic drift + structural connectives (0-100).
+    /// Multi-signal approach: entity continuity, sentence flow, sliding window
+    /// topic drift, weighted discourse markers, and structural progression.
     static func coherenceScore(transcript: String) -> Int? {
         let sentences = splitIntoSentences(transcript)
         guard sentences.count >= 2 else { return nil }
@@ -69,11 +70,26 @@ enum PromptRelevanceService {
             return min(30, Int(avgSentenceWordCount * 10))
         }
 
-        let sentenceFlowScore = computeSentenceFlowScore(sentences: sentences)
-        let topicDriftScore = computeTopicDriftScore(sentences: sentences)
-        let connectiveScore = computeStructuralConnectives(transcript: transcript)
+        // Signal 1: Entity continuity (25%) — do sentences reference the same subjects?
+        let entityScore = computeEntityContinuity(sentences: sentences)
 
-        let raw = sentenceFlowScore * 0.50 + topicDriftScore * 0.30 + connectiveScore * 0.20
+        // Signal 2: Adjacent sentence semantic similarity (20%) — with stricter thresholds
+        let sentenceFlowScore = computeSentenceFlowScore(sentences: sentences)
+
+        // Signal 3: Sliding window topic drift (20%) — catches mid-speech tangents
+        let topicDriftScore = computeSlidingWindowDrift(sentences: sentences)
+
+        // Signal 4: Weighted discourse markers (15%) — quality over quantity
+        let connectiveScore = computeWeightedConnectives(sentences: sentences)
+
+        // Signal 5: Structural progression (20%) — intro/body/conclusion arc
+        let progressionScore = computeStructuralProgression(sentences: sentences)
+
+        let raw = entityScore * 0.25 +
+                  sentenceFlowScore * 0.20 +
+                  topicDriftScore * 0.20 +
+                  connectiveScore * 0.15 +
+                  progressionScore * 0.20
         return max(0, min(100, Int(raw * 100)))
     }
 
@@ -216,9 +232,60 @@ enum PromptRelevanceService {
         return min(1.0, (totalSim / Double(counted)) * 2.5)
     }
 
-    // MARK: - Coherence: Sentence Flow Score
+    // MARK: - Coherence Signal 1: Entity Continuity
 
-    /// Measures semantic similarity between adjacent sentences using sentence-level embeddings.
+    /// Tracks nouns and named entities across sentences.
+    /// Score = fraction of sentences that share at least one entity with the previous sentence.
+    private static func computeEntityContinuity(sentences: [String]) -> Double {
+        guard sentences.count >= 2 else { return 1.0 }
+
+        let tagger = NLTagger(tagSchemes: [.lexicalClass, .nameType])
+        let entityTags: Set<NLTag> = [.noun, .personalName, .placeName, .organizationName]
+        // Pronouns indicate back-reference to prior entities
+        let pronouns: Set<String> = [
+            "he", "she", "it", "they", "him", "her", "them", "his", "hers",
+            "its", "their", "this", "that", "these", "those", "who", "which"
+        ]
+
+        // Extract entities per sentence
+        var sentenceEntities: [Set<String>] = []
+        for sentence in sentences {
+            tagger.string = sentence
+            var entities = Set<String>()
+            tagger.enumerateTags(in: sentence.startIndex..<sentence.endIndex, unit: .word, scheme: .lexicalClass) { tag, range in
+                let word = String(sentence[range]).lowercased().trimmingCharacters(in: .punctuationCharacters)
+                guard word.count >= 2 else { return true }
+                if let tag, entityTags.contains(tag) {
+                    entities.insert(word)
+                } else if pronouns.contains(word) {
+                    entities.insert("__pronoun__")  // Marker: pronoun references prior entity
+                }
+                return true
+            }
+            sentenceEntities.append(entities)
+        }
+
+        // Score: % of sentences that share entities with prior sentence or use pronouns
+        var continuityCount = 0
+        for i in 1..<sentenceEntities.count {
+            let prev = sentenceEntities[i - 1]
+            let curr = sentenceEntities[i]
+            let sharedEntities = prev.intersection(curr).subtracting(["__pronoun__"])
+            let hasPronounRef = curr.contains("__pronoun__") && !prev.isEmpty
+            if !sharedEntities.isEmpty || hasPronounRef {
+                continuityCount += 1
+            }
+        }
+
+        let ratio = Double(continuityCount) / Double(sentences.count - 1)
+        // Map: 0% shared = 0.1, 50% = 0.5, 80%+ = 0.9+
+        return min(1.0, ratio * 1.15 + 0.1)
+    }
+
+    // MARK: - Coherence Signal 2: Sentence Flow (stricter thresholds)
+
+    /// Measures semantic similarity between adjacent sentences.
+    /// Uses stricter non-linear mapping than before.
     private static func computeSentenceFlowScore(sentences: [String]) -> Double {
         guard sentences.count >= 2 else { return 1.0 }
 
@@ -233,14 +300,24 @@ enum PromptRelevanceService {
                 guard sentenceEmbedding.contains(current), sentenceEmbedding.contains(next) else { continue }
 
                 let distance = sentenceEmbedding.distance(between: current, and: next)
-                let sim = max(0, 1.0 - distance)
+                // Stricter non-linear mapping:
+                // distance 0.0-0.5 = high similarity (0.7-1.0)
+                // distance 0.5-1.0 = moderate (0.3-0.7)
+                // distance 1.0-1.5 = low (0.0-0.3)
+                let sim: Double
+                if distance < 0.5 {
+                    sim = 0.7 + (0.5 - distance) * 0.6
+                } else if distance < 1.0 {
+                    sim = 0.3 + (1.0 - distance) * 0.8
+                } else {
+                    sim = max(0, 0.3 - (distance - 1.0) * 0.6)
+                }
                 totalSim += sim
                 pairs += 1
             }
 
             if pairs > 0 {
-                let avgSim = totalSim / Double(pairs)
-                return min(1.0, avgSim * 1.8)
+                return totalSim / Double(pairs)
             }
         }
 
@@ -248,46 +325,152 @@ enum PromptRelevanceService {
         return computeTopicConsistencyWordLevel(sentences: sentences)
     }
 
-    // MARK: - Coherence: Topic Drift Score
+    // MARK: - Coherence Signal 3: Sliding Window Topic Drift
 
-    /// Measures how much the topic drifts from beginning to end.
-    private static func computeTopicDriftScore(sentences: [String]) -> Double {
-        guard sentences.count >= 3 else { return 0.8 } // Short speeches don't drift much
+    /// Checks every 3-sentence window for topic drift instead of just first/last/middle.
+    private static func computeSlidingWindowDrift(sentences: [String]) -> Double {
+        guard sentences.count >= 3 else { return 0.8 }
 
-        // Try sentence embeddings
-        if let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english) {
-            let first = sentences[0]
-            let last = sentences[sentences.count - 1]
-            let middleIdx = sentences.count / 2
-            let middle = sentences[middleIdx]
+        let sentenceKeywords = sentences.map { Set(extractContentWords(from: $0)) }
+        let windowSize = 3
+        var driftViolations = 0
+        var totalWindows = 0
 
-            var maxDrift = 0.0
+        for i in 0...(sentences.count - windowSize) {
+            let windowSets = sentenceKeywords[i..<(i + windowSize)]
+            totalWindows += 1
 
-            if sentenceEmbedding.contains(first) {
-                if sentenceEmbedding.contains(last) {
-                    let d = sentenceEmbedding.distance(between: first, and: last)
-                    maxDrift = max(maxDrift, d)
-                }
-                if sentenceEmbedding.contains(middle) {
-                    let d = sentenceEmbedding.distance(between: first, and: middle)
-                    maxDrift = max(maxDrift, d)
+            // Check if all sentences in window share any content words
+            var allKeywords = Set<String>()
+            var pairwiseOverlap = 0
+            let windowArray = Array(windowSets)
+
+            for j in 0..<windowArray.count {
+                allKeywords.formUnion(windowArray[j])
+                if j > 0 {
+                    let shared = windowArray[j - 1].intersection(windowArray[j])
+                    if !shared.isEmpty { pairwiseOverlap += 1 }
                 }
             }
 
-            if maxDrift > 0 {
-                return max(0, 1.0 - maxDrift * 0.8)
+            // Violation: no pairwise overlap in the window = topic jump
+            if pairwiseOverlap == 0 && !allKeywords.isEmpty {
+                driftViolations += 1
             }
         }
 
-        // Fallback: use word-level Jaccard between first and last sentence
-        let firstWords = Set(extractContentWords(from: sentences[0]))
-        let lastWords = Set(extractContentWords(from: sentences[sentences.count - 1]))
-        guard !firstWords.isEmpty || !lastWords.isEmpty else { return 0.5 }
-        let union = firstWords.union(lastWords)
-        guard !union.isEmpty else { return 0.5 }
-        let intersection = firstWords.intersection(lastWords)
-        let jaccard = Double(intersection.count) / Double(union.count)
-        return min(1.0, jaccard * 3.0)
+        // Also use sentence embeddings if available for stronger drift detection
+        if let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english) {
+            for i in 0...(sentences.count - windowSize) {
+                let first = sentences[i]
+                let last = sentences[i + windowSize - 1]
+                guard sentenceEmbedding.contains(first), sentenceEmbedding.contains(last) else { continue }
+                let dist = sentenceEmbedding.distance(between: first, and: last)
+                if dist > 1.4 { // Very different topics within a 3-sentence window
+                    driftViolations += 1
+                }
+            }
+        }
+
+        guard totalWindows > 0 else { return 0.8 }
+        // Deduplicate: cap violations at totalWindows
+        let cappedViolations = min(driftViolations, totalWindows)
+        let ratio = Double(cappedViolations) / Double(totalWindows)
+        return max(0, 1.0 - ratio)
+    }
+
+    // MARK: - Coherence Signal 4: Weighted Discourse Markers
+
+    /// Scores connectives by category weight and sentence-boundary position.
+    private static func computeWeightedConnectives(sentences: [String]) -> Double {
+        let totalWordCount = sentences.reduce(0) { $0 + $1.split(separator: " ").count }
+        guard totalWordCount >= 10 else { return 0.5 }
+
+        // Categories with semantic weights
+        let logicalConnectives: Set<String> = ["therefore", "because", "consequently", "thus", "hence", "accordingly"]
+        let contrastConnectives: Set<String> = ["however", "although", "nevertheless", "on the other hand", "in contrast"]
+        let additiveConnectives: Set<String> = ["also", "furthermore", "moreover", "in addition", "additionally"]
+        let sequencingConnectives: Set<String> = ["first", "second", "third", "finally", "next", "then"]
+        let commonConnectives: Set<String> = ["and", "but", "so", "yet", "while"]
+
+        var weightedScore = 0.0
+        var uniqueCategories = Set<String>()
+
+        for sentence in sentences {
+            let lowered = sentence.lowercased()
+            // Get first 4 words for sentence-boundary detection
+            let firstWords = lowered.split(separator: " ").prefix(4).joined(separator: " ")
+
+            func checkCategory(_ name: String, _ connectives: Set<String>, weight: Double) {
+                for conn in connectives {
+                    if firstWords.contains(conn) {
+                        // Full weight: connective at sentence start
+                        weightedScore += weight
+                        uniqueCategories.insert(name)
+                    } else if lowered.contains(conn) {
+                        // Reduced weight: connective mid-sentence
+                        weightedScore += weight * 0.3
+                        uniqueCategories.insert(name)
+                    }
+                }
+            }
+
+            checkCategory("logical", logicalConnectives, weight: 3.0)
+            checkCategory("contrast", contrastConnectives, weight: 2.0)
+            checkCategory("additive", additiveConnectives, weight: 2.0)
+            checkCategory("sequence", sequencingConnectives, weight: 2.5)
+            checkCategory("common", commonConnectives, weight: 0.5)
+        }
+
+        // Category variety bonus (using 3+ categories shows structured thinking)
+        let varietyBonus = min(0.3, Double(uniqueCategories.count) * 0.08)
+        // Normalize weighted score (target: ~8.0 for well-structured speech)
+        let normalizedScore = min(1.0, weightedScore / 10.0)
+
+        return min(1.0, normalizedScore * 0.7 + varietyBonus + 0.1)
+    }
+
+    // MARK: - Coherence Signal 5: Structural Progression
+
+    /// Checks if the speech has an intro→body→conclusion arc.
+    private static func computeStructuralProgression(sentences: [String]) -> Double {
+        guard sentences.count >= 3 else { return 0.5 }
+
+        var score = 0.5  // Base: neutral
+
+        // 1. Opening sentence is substantial (>5 words) = has a topic statement
+        let openingWords = sentences[0].split(separator: " ").count
+        if openingWords >= 5 { score += 0.1 }
+
+        // 2. Closing sentence is substantial = has a conclusion/summary
+        let closingWords = sentences[sentences.count - 1].split(separator: " ").count
+        if closingWords >= 5 { score += 0.1 }
+
+        // 3. Body sentences (middle) are longer than opening/closing on average
+        // = depth/elaboration in the body
+        if sentences.count >= 5 {
+            let bodyRange = 1..<(sentences.count - 1)
+            let bodyLengths = sentences[bodyRange].map { $0.split(separator: " ").count }
+            let avgBody = Double(bodyLengths.reduce(0, +)) / Double(bodyLengths.count)
+            if avgBody > Double(openingWords) * 0.8 { score += 0.1 }
+        }
+
+        // 4. Sentence length variety (not all same length = more natural)
+        let lengths = sentences.map { Double($0.split(separator: " ").count) }
+        let avgLen = lengths.reduce(0, +) / Double(lengths.count)
+        let lengthVariance = lengths.reduce(0.0) { $0 + pow($1 - avgLen, 2) } / Double(lengths.count)
+        let lengthCV = avgLen > 0 ? sqrt(lengthVariance) / avgLen : 0
+        if lengthCV > 0.3 && lengthCV < 1.0 { score += 0.1 }  // Good variety
+
+        // 5. Last sentence references topics from first sentence (circular closure)
+        let firstKeywords = Set(extractContentWords(from: sentences[0]))
+        let lastKeywords = Set(extractContentWords(from: sentences[sentences.count - 1]))
+        if !firstKeywords.isEmpty && !lastKeywords.isEmpty {
+            let overlap = firstKeywords.intersection(lastKeywords)
+            if !overlap.isEmpty { score += 0.1 }
+        }
+
+        return min(1.0, max(0, score))
     }
 
     // MARK: - Word-Level Topic Consistency (fallback)
@@ -333,7 +516,7 @@ enum PromptRelevanceService {
 
         guard pairs > 0 else { return 0.5 }
         let avgSim = totalSimilarity / Double(pairs)
-        return min(1.0, avgSim * 1.5)
+        return min(1.0, avgSim * 1.2)  // Stricter scaling (was 1.5)
     }
 
     private static func computeJaccardConsistency(sentences: [String]) -> Double {
@@ -353,34 +536,7 @@ enum PromptRelevanceService {
         }
 
         guard pairs > 0 else { return 0.5 }
-        return min(1.0, (totalOverlap / Double(pairs)) * 3.0)
-    }
-
-    // MARK: - Structural Connectives
-
-    private static func computeStructuralConnectives(transcript: String) -> Double {
-        let text = transcript.lowercased()
-        let words = text.split(separator: " ")
-        guard words.count >= 10 else { return 0.5 }
-
-        var foundConnectives = Set<String>()
-        var totalFound = 0
-
-        for connective in connectives {
-            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: connective))\\b"
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-                let matchCount = regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
-                if matchCount > 0 {
-                    foundConnectives.insert(connective)
-                    totalFound += matchCount
-                }
-            }
-        }
-
-        let varietyScore = min(1.0, Double(foundConnectives.count) / 6.0)
-        let frequencyScore = min(1.0, Double(totalFound) / 8.0)
-
-        return (varietyScore * 0.7) + (frequencyScore * 0.3)
+        return min(1.0, (totalOverlap / Double(pairs)) * 2.5)  // Stricter (was 3.0)
     }
 
     // MARK: - Sentence Splitting
