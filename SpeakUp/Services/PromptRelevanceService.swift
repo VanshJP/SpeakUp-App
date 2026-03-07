@@ -40,12 +40,12 @@ enum PromptRelevanceService {
             raw = min(1.0, raw + bonus)
         }
 
-        // Floor: a coherent speech of reasonable length given a prompt
-        // should score at least 40
+        // Floor: a coherent speech of substantial length given a prompt
+        // should score at least 30
         let transcriptWords = transcript.split(separator: " ").count
-        if transcriptWords >= 30, raw < 0.40 {
-            if let coherence, coherence > 40 {
-                raw = max(raw, 0.40)
+        if transcriptWords >= 50, raw < 0.30 {
+            if let coherence, coherence > 65 {
+                raw = max(raw, 0.30)
             }
         }
 

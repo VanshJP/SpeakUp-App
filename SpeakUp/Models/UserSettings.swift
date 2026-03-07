@@ -57,6 +57,17 @@ final class UserSettings {
     var sessionFeedbackEnabled: Bool = true
     var customFeedbackQuestions: [FeedbackQuestion] = []
 
+    // Score Weights
+    var clarityWeight: Double = 0.12
+    var paceWeight: Double = 0.12
+    var fillerWeight: Double = 0.12
+    var pauseWeight: Double = 0.10
+    var vocalVarietyWeight: Double = 0.14
+    var deliveryWeight: Double = 0.10
+    var vocabularyWeight: Double = 0.10
+    var structureWeight: Double = 0.10
+    var relevanceWeight: Double = 0.10
+
     init(
         id: UUID = UUID(),
         defaultDuration: Int = 60,

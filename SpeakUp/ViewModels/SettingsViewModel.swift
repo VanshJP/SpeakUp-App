@@ -57,6 +57,26 @@ class SettingsViewModel {
         DefaultFeedbackQuestions.questions + customFeedbackQuestions
     }
 
+    // Local state - Score Weights
+    var clarityWeight: Double = 0.12
+    var paceWeight: Double = 0.12
+    var fillerWeight: Double = 0.12
+    var pauseWeight: Double = 0.10
+    var vocalVarietyWeight: Double = 0.14
+    var deliveryWeight: Double = 0.10
+    var vocabularyWeight: Double = 0.10
+    var structureWeight: Double = 0.10
+    var relevanceWeight: Double = 0.10
+
+    var hasCustomWeights: Bool {
+        let d = ScoreWeights.defaults
+        return clarityWeight != d.clarity || paceWeight != d.pace ||
+               fillerWeight != d.filler || pauseWeight != d.pause ||
+               vocalVarietyWeight != d.vocalVariety || deliveryWeight != d.delivery ||
+               vocabularyWeight != d.vocabulary || structureWeight != d.structure ||
+               relevanceWeight != d.relevance
+    }
+
     // Local state - Word Bank
     var vocabWords: [String] = []
     var newVocabWord: String = ""
@@ -150,6 +170,17 @@ class SettingsViewModel {
         // Session Feedback
         sessionFeedbackEnabled = settings.sessionFeedbackEnabled
         customFeedbackQuestions = settings.customFeedbackQuestions
+
+        // Score Weights
+        clarityWeight = settings.clarityWeight
+        paceWeight = settings.paceWeight
+        fillerWeight = settings.fillerWeight
+        pauseWeight = settings.pauseWeight
+        vocalVarietyWeight = settings.vocalVarietyWeight
+        deliveryWeight = settings.deliveryWeight
+        vocabularyWeight = settings.vocabularyWeight
+        structureWeight = settings.structureWeight
+        relevanceWeight = settings.relevanceWeight
     }
     
     @MainActor
@@ -195,6 +226,17 @@ class SettingsViewModel {
         // Session Feedback
         settings.sessionFeedbackEnabled = sessionFeedbackEnabled
         settings.customFeedbackQuestions = customFeedbackQuestions
+
+        // Score Weights
+        settings.clarityWeight = clarityWeight
+        settings.paceWeight = paceWeight
+        settings.fillerWeight = fillerWeight
+        settings.pauseWeight = pauseWeight
+        settings.vocalVarietyWeight = vocalVarietyWeight
+        settings.deliveryWeight = deliveryWeight
+        settings.vocabularyWeight = vocabularyWeight
+        settings.structureWeight = structureWeight
+        settings.relevanceWeight = relevanceWeight
 
         do {
             try context.save()
@@ -347,12 +389,39 @@ class SettingsViewModel {
         settings.sessionFeedbackEnabled = true
         settings.customFeedbackQuestions = []
 
+        // Score Weights
+        let defaults = ScoreWeights.defaults
+        settings.clarityWeight = defaults.clarity
+        settings.paceWeight = defaults.pace
+        settings.fillerWeight = defaults.filler
+        settings.pauseWeight = defaults.pause
+        settings.vocalVarietyWeight = defaults.vocalVariety
+        settings.deliveryWeight = defaults.delivery
+        settings.vocabularyWeight = defaults.vocabulary
+        settings.structureWeight = defaults.structure
+        settings.relevanceWeight = defaults.relevance
+
         do {
             try context.save()
             syncLocalState()
         } catch {
             print("Error resetting settings: \(error)")
         }
+    }
+
+    @MainActor
+    func resetWeightsToDefaults() {
+        let defaults = ScoreWeights.defaults
+        clarityWeight = defaults.clarity
+        paceWeight = defaults.pace
+        fillerWeight = defaults.filler
+        pauseWeight = defaults.pause
+        vocalVarietyWeight = defaults.vocalVariety
+        deliveryWeight = defaults.delivery
+        vocabularyWeight = defaults.vocabulary
+        structureWeight = defaults.structure
+        relevanceWeight = defaults.relevance
+        Task { await saveSettings() }
     }
     
     @MainActor

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(xcodebuild:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(xcrun simctl:*)"
     ]
   }
 }

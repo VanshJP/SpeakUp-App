@@ -34,15 +34,23 @@ enum SpeakUpSchemaV4: VersionedSchema {
     }
 }
 
+enum SpeakUpSchemaV5: VersionedSchema {
+    static var versionIdentifier = Schema.Version(5, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self]
+    }
+}
+
 // MARK: - Migration Plan
 
 enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self]
+        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV4]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5]
     }
 
     static let migrateV1toV2 = MigrationStage.lightweight(
@@ -58,5 +66,10 @@ enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static let migrateV3toV4 = MigrationStage.lightweight(
         fromVersion: SpeakUpSchemaV3.self,
         toVersion: SpeakUpSchemaV4.self
+    )
+
+    static let migrateV4toV5 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV4.self,
+        toVersion: SpeakUpSchemaV5.self
     )
 }

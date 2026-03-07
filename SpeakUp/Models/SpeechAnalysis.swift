@@ -167,12 +167,14 @@ struct PitchMetrics: Codable {
     var pitchVariationScore: Int // 0-100
     var declinationRate: Float
     var f0Contour: [Float]?
+    var voicedFrameRatio: Float // Ratio of voiced frames to total frames (articulation quality)
 
     init(
         f0Mean: Float = 0, f0StdDev: Float = 0,
         f0Min: Float = 0, f0Max: Float = 0,
         f0RangeSemitones: Float = 0, pitchVariationScore: Int = 0,
-        declinationRate: Float = 0, f0Contour: [Float]? = nil
+        declinationRate: Float = 0, f0Contour: [Float]? = nil,
+        voicedFrameRatio: Float = 0
     ) {
         self.f0Mean = f0Mean; self.f0StdDev = f0StdDev
         self.f0Min = f0Min; self.f0Max = f0Max
@@ -180,6 +182,20 @@ struct PitchMetrics: Codable {
         self.pitchVariationScore = pitchVariationScore
         self.declinationRate = declinationRate
         self.f0Contour = f0Contour
+        self.voicedFrameRatio = voicedFrameRatio
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        f0Mean = try container.decode(Float.self, forKey: .f0Mean)
+        f0StdDev = try container.decode(Float.self, forKey: .f0StdDev)
+        f0Min = try container.decode(Float.self, forKey: .f0Min)
+        f0Max = try container.decode(Float.self, forKey: .f0Max)
+        f0RangeSemitones = try container.decode(Float.self, forKey: .f0RangeSemitones)
+        pitchVariationScore = try container.decode(Int.self, forKey: .pitchVariationScore)
+        declinationRate = try container.decode(Float.self, forKey: .declinationRate)
+        f0Contour = (try? container.decodeIfPresent([Float].self, forKey: .f0Contour))
+        voicedFrameRatio = (try? container.decodeIfPresent(Float.self, forKey: .voicedFrameRatio)) ?? 0
     }
 }
 
@@ -369,6 +385,7 @@ struct SpeechAnalysis: Codable {
 
         // SwiftData's internal decoder throws EXC_BREAKPOINT (uncatchable trap)
         // when decoding these from older data, so we skip decoding entirely.
+        // New recordings will have these fields populated fresh by SpeechService.
         volumeMetrics = nil
         vocabComplexity = nil
         sentenceAnalysis = nil
@@ -457,6 +474,39 @@ struct SpeechSubscores: Codable {
         vocabulary = try? container.decodeIfPresent(Int.self, forKey: .vocabulary)
         structure = try? container.decodeIfPresent(Int.self, forKey: .structure)
         relevance = try? container.decodeIfPresent(Int.self, forKey: .relevance)
+    }
+}
+
+// MARK: - Score Weights
+
+struct ScoreWeights {
+    var clarity: Double = 0.12
+    var pace: Double = 0.12
+    var filler: Double = 0.12
+    var pause: Double = 0.10
+    var vocalVariety: Double = 0.14
+    var delivery: Double = 0.10
+    var vocabulary: Double = 0.10
+    var structure: Double = 0.10
+    var relevance: Double = 0.10
+
+    static let defaults = ScoreWeights()
+
+    /// Returns a copy with all weights normalized to sum to exactly 1.0
+    var normalized: ScoreWeights {
+        let total = clarity + pace + filler + pause + vocalVariety + delivery + vocabulary + structure + relevance
+        guard total > 0 else { return .defaults }
+        return ScoreWeights(
+            clarity: clarity / total,
+            pace: pace / total,
+            filler: filler / total,
+            pause: pause / total,
+            vocalVariety: vocalVariety / total,
+            delivery: delivery / total,
+            vocabulary: vocabulary / total,
+            structure: structure / total,
+            relevance: relevance / total
+        )
     }
 }
 

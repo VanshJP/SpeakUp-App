@@ -24,6 +24,7 @@ struct RecordingDetailView: View {
     @State private var showingListenBackEncouragement = false
     @State private var exportService = ExportService()
     @State private var pendingFeedback = false
+    @State private var showingScoreWeights = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -242,6 +243,11 @@ struct RecordingDetailView: View {
             }
         } message: {
             Text("This action cannot be undone.")
+        }
+        .sheet(isPresented: $showingScoreWeights) {
+            NavigationStack {
+                ScoreWeightsView()
+            }
         }
         .onChange(of: showingShareSheet) { _, show in
             if show, let recording {
@@ -528,8 +534,19 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func subscoresSection(_ analysis: SpeechAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Score Breakdown", systemImage: "chart.bar.fill")
-                .font(.headline)
+            HStack {
+                Label("Score Breakdown", systemImage: "chart.bar.fill")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showingScoreWeights = true
+                } label: {
+                    Image(systemName: "info.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
 
             GlassCard {
                 VStack(spacing: 16) {
@@ -1300,8 +1317,6 @@ struct RecordingDetailView: View {
             recording.isProcessing = false
         }
 
-        try? await Task.sleep(for: .milliseconds(300))
-
         do {
             let result = try await speechService.transcribe(audioURL: audioURL)
 
@@ -1309,6 +1324,20 @@ struct RecordingDetailView: View {
             let settingsDescriptor = FetchDescriptor<UserSettings>()
             let settings = (try? modelContext.fetch(settingsDescriptor))?.first
             let vocabWords = settings?.vocabWords ?? []
+
+            // Build score weights from user settings
+            var weights = ScoreWeights.defaults
+            if let s = settings {
+                weights.clarity = s.clarityWeight
+                weights.pace = s.paceWeight
+                weights.filler = s.fillerWeight
+                weights.pause = s.pauseWeight
+                weights.vocalVariety = s.vocalVarietyWeight
+                weights.delivery = s.deliveryWeight
+                weights.vocabulary = s.vocabularyWeight
+                weights.structure = s.structureWeight
+                weights.relevance = s.relevanceWeight
+            }
 
             let analysis = speechService.analyze(
                 transcription: result,
@@ -1319,7 +1348,8 @@ struct RecordingDetailView: View {
                 prompt: recording.prompt,
                 targetWPM: settings?.targetWPM ?? 150,
                 trackFillerWords: settings?.trackFillerWords ?? true,
-                trackPauses: settings?.trackPauses ?? true
+                trackPauses: settings?.trackPauses ?? true,
+                scoreWeights: weights
             )
 
             recording.transcriptionText = result.text

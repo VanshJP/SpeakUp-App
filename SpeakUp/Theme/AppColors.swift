@@ -4,8 +4,7 @@ enum AppColors {
     // MARK: - Primary Colors
     
     /// Muted Teal - Primary brand color
-    static let primary = Color("Primary", bundle: nil)
-    static let primaryFallback = Color(red: 0.051, green: 0.518, blue: 0.533) // #0D8488
+    static let primary = Color(red: 0.051, green: 0.518, blue: 0.533) // #0D8488
     
     /// Warm Gray - Accent color
     static let accent = Color(red: 0.392, green: 0.455, blue: 0.545) // #64748B

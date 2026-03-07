@@ -239,10 +239,39 @@ struct SettingsView: View {
                         .tint(.teal)
                     }
                     .frame(minHeight: 60)
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    NavigationLink {
+                        ScoreWeightsView()
+                    } label: {
+                        HStack {
+                            Label("Score Weights", systemImage: "slider.horizontal.3")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if viewModel.hasCustomWeights {
+                                Text("Custom")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.teal)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background {
+                                        Capsule().fill(.teal.opacity(0.15))
+                                    }
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(minHeight: 40)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
-            Text("Analyze your speech patterns for pauses and filler words. Target pace sets the ideal WPM for your pace score (default 150).")
+            Text("Analyze your speech patterns for pauses and filler words. Target pace sets the ideal WPM for your pace score (default 150). Score weights let you customize how each metric contributes to your overall score.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)

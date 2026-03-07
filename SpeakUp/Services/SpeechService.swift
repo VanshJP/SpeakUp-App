@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import NaturalLanguage
 
 @Observable
 class SpeechService {
@@ -165,7 +166,8 @@ class SpeechService {
         prompt: Prompt? = nil,
         targetWPM: Int = 150,
         trackFillerWords: Bool = true,
-        trackPauses: Bool = true
+        trackPauses: Bool = true,
+        scoreWeights: ScoreWeights = .defaults
     ) -> SpeechAnalysis {
         // Sort words by start time to ensure accurate pause detection
         // Whisper/Apple Speech results are usually sorted but segments can sometimes overlap or be out of order
@@ -247,7 +249,12 @@ class SpeechService {
         // Advanced analyses
         let pitchMetrics: PitchMetrics? = audioURL != nil ? PitchAnalysisService.analyze(audioURL: audioURL!) : nil
         let rateVariation = analyzeRateVariation(words: sortedWords, actualDuration: actualDuration)
-        let emphasisMetrics = analyzeEmphasis(words: sortedWords, actualDuration: actualDuration)
+        let emphasisMetrics = analyzeEmphasis(
+            words: sortedWords,
+            actualDuration: actualDuration,
+            pitchContour: pitchMetrics?.f0Contour,
+            audioLevelSamples: audioLevelSamples
+        )
         let energyArc = !audioLevelSamples.isEmpty ?
             analyzeEnergyArc(samples: audioLevelSamples, words: sortedWords, actualDuration: actualDuration) : nil
         let textQuality = !transcription.text.isEmpty ?
@@ -273,8 +280,6 @@ class SpeechService {
             )
         }
 
-        // Confidence dampening for very short recordings (<10s)
-        let confidenceWeight = min(1.0, actualDuration / 10.0)
         let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
 
         // Prompt relevance / coherence
@@ -300,7 +305,6 @@ class SpeechService {
             pauseCount: pauses.count,
             averagePauseLength: averagePauseLength,
             totalWords: totalWords,
-            confidenceWeight: confidenceWeight,
             targetWPM: targetWPM,
             trackPauses: trackPauses,
             actualDuration: actualDuration,
@@ -320,7 +324,7 @@ class SpeechService {
             audioLevelSamples: audioLevelSamples
         )
 
-        var overallScore = calculateOverallScore(subscores: subscores)
+        var overallScore = calculateOverallScore(subscores: subscores, weights: scoreWeights)
 
         // Substance gate: very short recordings get capped
         if totalWords < 20 && actualDuration < 15 {
@@ -399,7 +403,6 @@ class SpeechService {
         pauseCount: Int,
         averagePauseLength: TimeInterval,
         totalWords: Int,
-        confidenceWeight: Double = 1.0,
         targetWPM: Int = 150,
         trackPauses: Bool = true,
         actualDuration: TimeInterval = 60,
@@ -418,12 +421,25 @@ class SpeechService {
         textQuality: TextQualityMetrics? = nil,
         audioLevelSamples: [Float] = []
     ) -> SpeechSubscores {
-        // Clarity score — enhanced with hedge word penalty
+        // Score ceiling for short recordings (replaces center-biased dampening)
+        let scoreCeiling = min(100, 40 + Int(actualDuration * 6))
+
+        // Clarity score — voiced frame ratio (articulation quality) + duration consistency + hedge penalty
         let clarityScore: Int
-        let confidences = words.compactMap { $0.confidence }
-        if !confidences.isEmpty {
-            let avgConfidence = confidences.reduce(0, +) / Double(confidences.count)
-            let confidenceComponent = avgConfidence * 100
+        do {
+            let articulationComponent: Double
+            if let pm = pitchMetrics, pm.voicedFrameRatio > 0 {
+                // voicedFrameRatio: 0.3-0.7 is typical for speech. Map to 0-100.
+                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 150))
+            } else {
+                // Fallback to word confidence when pitch data unavailable
+                let confidences = words.compactMap { $0.confidence }
+                if !confidences.isEmpty {
+                    articulationComponent = (confidences.reduce(0, +) / Double(confidences.count)) * 100
+                } else {
+                    articulationComponent = 50
+                }
+            }
 
             let durations = words.map { $0.duration }.filter { $0 > 0 }
             let durationComponent: Double
@@ -436,7 +452,6 @@ class SpeechService {
                 durationComponent = 50
             }
 
-            // Hedge word penalty: undermines perceived clarity/authority
             let hedgePenalty: Double
             if let tq = textQuality {
                 hedgePenalty = min(25, tq.hedgeWordRatio * 500)
@@ -444,11 +459,8 @@ class SpeechService {
                 hedgePenalty = 0
             }
 
-            let rawClarity = confidenceComponent * 0.55 + durationComponent * 0.30 + (100 - hedgePenalty) * 0.15
-            clarityScore = max(0, min(100, Int(rawClarity * confidenceWeight + 50 * (1 - confidenceWeight))))
-        } else {
-            let raw = 100 - (fillerRatio * 300)
-            clarityScore = max(0, min(100, Int(raw * confidenceWeight + 50 * (1 - confidenceWeight))))
+            let rawClarity = articulationComponent * 0.55 + durationComponent * 0.30 + (100 - hedgePenalty) * 0.15
+            clarityScore = min(Int(rawClarity), scoreCeiling)
         }
 
         // Pace score — enhanced with rate variation bonus
@@ -464,9 +476,9 @@ class SpeechService {
             rateVariationBonus = 0
         }
         let rawPaceScore = basePaceScore * 0.80 + rateVariationBonus
-        let paceScore = max(0, min(100, Int(rawPaceScore * confidenceWeight + 50 * (1 - confidenceWeight))))
+        let paceScore = min(max(0, min(100, Int(rawPaceScore))), scoreCeiling)
 
-        // Filler usage score — enhanced with hedge word awareness
+        // Filler usage score — logarithmic curve (less punitive than linear)
         let hedgeAdjustment: Double
         if let tq = textQuality {
             hedgeAdjustment = min(0.03, tq.hedgeWordRatio * 0.5)
@@ -474,8 +486,8 @@ class SpeechService {
             hedgeAdjustment = 0
         }
         let effectiveFillerRatio = fillerRatio + hedgeAdjustment
-        let rawFillerScore = (1 - effectiveFillerRatio * 5) * 100
-        let fillerScore = max(0, min(100, Int(rawFillerScore * confidenceWeight + 50 * (1 - confidenceWeight))))
+        let rawFillerScore = 100.0 * max(0, 1.0 - log2(1.0 + effectiveFillerRatio * 20.0))
+        let fillerScore = min(max(0, min(100, Int(rawFillerScore))), scoreCeiling)
 
         // Pause quality score
         let pauseScore: Int
@@ -489,7 +501,7 @@ class SpeechService {
                 targetWPM: Double(targetWPM),
                 actualDuration: actualDuration
             )
-            pauseScore = max(0, min(100, Int(Double(rawPauseScore) * confidenceWeight + 50 * (1 - confidenceWeight))))
+            pauseScore = min(max(0, min(100, rawPauseScore)), scoreCeiling)
         }
 
         // Delivery score — enhanced with emphasis and energy arc
@@ -553,7 +565,7 @@ class SpeechService {
                 let totalW = weights.reduce(0, +)
                 let weightedSum = zip(components, weights).reduce(0.0) { $0 + $1.0 * $1.1 }
                 let normalized = weightedSum / totalW
-                vocalVarietyScore = max(0, min(100, Int(normalized * confidenceWeight + 50 * (1 - confidenceWeight))))
+                vocalVarietyScore = min(max(0, min(100, Int(normalized))), scoreCeiling)
             } else {
                 vocalVarietyScore = nil
             }
@@ -650,41 +662,41 @@ class SpeechService {
         return max(0, min(100, Int(score)))
     }
 
-    private func calculateOverallScore(subscores: SpeechSubscores) -> Int {
-        // Rebalanced weights: redistributed from Pace/Delivery to Vocab/Structure/Relevance
-        // so all visible subscores contribute meaningfully.
-        var weighted = Double(subscores.clarity) * 0.12 +
-                       Double(subscores.pace) * 0.12 +
-                       Double(subscores.fillerUsage) * 0.12 +
-                       Double(subscores.pauseQuality) * 0.10
+    private func calculateOverallScore(subscores: SpeechSubscores, weights: ScoreWeights = .defaults) -> Int {
+        let w = weights.normalized
+        var weighted = Double(subscores.clarity) * w.clarity +
+                       Double(subscores.pace) * w.pace +
+                       Double(subscores.fillerUsage) * w.filler +
+                       Double(subscores.pauseQuality) * w.pause
 
-        var totalWeight = 0.46
+        var totalWeight = w.clarity + w.pace + w.filler + w.pause
 
         if let vocalVariety = subscores.vocalVariety {
-            weighted += Double(vocalVariety) * 0.14
-            totalWeight += 0.14
+            weighted += Double(vocalVariety) * w.vocalVariety
+            totalWeight += w.vocalVariety
         }
         if let delivery = subscores.delivery {
-            weighted += Double(delivery) * 0.10
-            totalWeight += 0.10
+            weighted += Double(delivery) * w.delivery
+            totalWeight += w.delivery
         }
         if let vocabulary = subscores.vocabulary {
-            weighted += Double(vocabulary) * 0.10
-            totalWeight += 0.10
+            weighted += Double(vocabulary) * w.vocabulary
+            totalWeight += w.vocabulary
         }
         if let structure = subscores.structure {
-            weighted += Double(structure) * 0.10
-            totalWeight += 0.10
+            weighted += Double(structure) * w.structure
+            totalWeight += w.structure
         }
         if let relevance = subscores.relevance {
-            weighted += Double(relevance) * 0.10
-            totalWeight += 0.10
+            weighted += Double(relevance) * w.relevance
+            totalWeight += w.relevance
         }
 
-        let normalized = weighted / totalWeight
-        return max(0, min(100, Int(normalized)))
+        guard totalWeight > 0 else { return 0 }
+        let score = weighted / totalWeight
+        return max(0, min(100, Int(score)))
     }
-    
+
     // MARK: - WPM Time Series
 
     func computeWPMTimeSeries(
@@ -849,17 +861,47 @@ class SpeechService {
             .map { RepeatedPhrase(phrase: $0.key, count: $0.value) }
             .sorted { $0.count > $1.count }
 
+        // Word rarity via NLEmbedding: measure distance from common words
+        let rarityComponent: Double
+        if let embedding = NLEmbedding.wordEmbedding(for: .english) {
+            let commonWords = ["the", "is", "have", "that", "good", "make", "go", "see", "know", "take"]
+            let uniqueList = Array(uniqueWords)
+            var totalRarity = 0.0
+            var countedWords = 0
+            for word in uniqueList {
+                guard embedding.contains(word), word.count >= 3 else { continue }
+                var minDist = 2.0
+                for common in commonWords {
+                    guard embedding.contains(common) else { continue }
+                    let dist = embedding.distance(between: word, and: common)
+                    minDist = min(minDist, dist)
+                }
+                // Distance 0-2; higher = rarer. Map: 0.5=common, 1.0=moderate, 1.5+=rare
+                totalRarity += max(0, minDist - 0.3)
+                countedWords += 1
+            }
+            if countedWords > 0 {
+                let avgRarity = totalRarity / Double(countedWords)
+                rarityComponent = min(1.0, avgRarity / 1.0) * 20
+            } else {
+                // Fallback to length-based
+                rarityComponent = min(1.0, longWordRatio / 0.15) * 20
+            }
+        } else {
+            // Fallback to length-based when NLEmbedding unavailable
+            rarityComponent = min(1.0, longWordRatio / 0.15) * 20
+        }
+
         // Composite score with calibrated thresholds for conversational speech
-        let uniqueComponent = min(1.0, uniqueRatio / 0.65) * 35  // 65% unique = full (raised from 0.55)
-        let longComponent = min(1.0, longWordRatio / 0.15) * 20  // 15% long words = full (raised from 0.12)
-        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 5.0)  // 5 repeated phrases = full penalty (stricter)
+        let uniqueComponent = min(1.0, uniqueRatio / 0.65) * 35
+        let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 5.0)
         let repeatComponent = (1.0 - repeatPenalty) * 20
 
         // Word diversity bonus: reward using words of varied lengths
         let lengthBuckets = Set(cleaned.map { min($0.count, 10) })
-        let diversityScore = min(1.0, Double(lengthBuckets.count) / 7.0) * 25  // 7+ length buckets = full (raised from 6)
+        let diversityScore = min(1.0, Double(lengthBuckets.count) / 7.0) * 25
 
-        let score = min(100, max(0, Int(uniqueComponent + longComponent + repeatComponent + diversityScore)))
+        let score = min(100, max(0, Int(uniqueComponent + rarityComponent + repeatComponent + diversityScore)))
 
         return VocabComplexity(
             uniqueWordCount: uniqueCount,
@@ -953,11 +995,7 @@ class SpeechService {
         if avgLength >= 8 && avgLength <= 25 { score += 10 }
         else if avgLength >= 5 && avgLength <= 30 { score += 5 }
 
-        // 3. Transition words between sentences (+10)
-        let transitionCount = countTransitions(in: text)
-        score += min(10, transitionCount * 2)
-
-        // 4. Has opening AND closing sentence of reasonable length (+10)
+        // 3. Has opening AND closing sentence of reasonable length (+10)
         if totalSentences >= 3 {
             let firstLen = sentenceLengths[0]
             let lastLen = sentenceLengths[totalSentences - 1]
@@ -978,11 +1016,6 @@ class SpeechService {
     }
 
     // MARK: - Structure Helpers
-
-    private func countTransitions(in text: String) -> Int {
-        let lowered = text.lowercased()
-        return PromptRelevanceService.connectives.filter { lowered.contains($0) }.count
-    }
 
     private func standardDeviation(_ values: [Double]) -> Double {
         guard values.count >= 2 else { return 0 }
@@ -1115,18 +1148,10 @@ class SpeechService {
         let totalSpeechTime = words.reduce(0.0) { $0 + $1.duration }
         let articulationRate = totalSpeechTime > 0 ? Double(words.count) / (totalSpeechTime / 60.0) : 0
 
-        let variationScore: Int
-        if cv < 0.03 {
-            variationScore = 20
-        } else if cv < 0.08 {
-            variationScore = 40 + Int(cv * 400)
-        } else if cv <= 0.25 {
-            variationScore = min(100, 60 + Int((cv - 0.08) * 235))
-        } else if cv <= 0.35 {
-            variationScore = max(50, 100 - Int((cv - 0.25) * 300))
-        } else {
-            variationScore = max(20, 50 - Int((cv - 0.35) * 200))
-        }
+        // Smooth Gaussian: ideal CV ~0.15, sigma=0.08
+        let idealCV = 0.15
+        let sigmaCv = 0.08
+        let variationScore = max(0, min(100, 15 + Int(85.0 * exp(-pow(cv - idealCV, 2) / (2 * sigmaCv * sigmaCv)))))
 
         return RateVariationMetrics(
             rateCV: cv,
@@ -1139,29 +1164,73 @@ class SpeechService {
 
     // MARK: - Emphasis Detection
 
-    func analyzeEmphasis(words: [TranscriptionWord], actualDuration: TimeInterval) -> EmphasisMetrics {
+    func analyzeEmphasis(
+        words: [TranscriptionWord],
+        actualDuration: TimeInterval,
+        pitchContour: [Float]? = nil,
+        audioLevelSamples: [Float] = []
+    ) -> EmphasisMetrics {
         guard words.count >= 5, actualDuration > 0 else { return EmphasisMetrics() }
 
         let nonFillerWords = words.filter { !$0.isFiller }
         guard nonFillerWords.count >= 3 else { return EmphasisMetrics() }
 
-        let durations = nonFillerWords.map { $0.duration }.filter { $0 > 0 }
-        guard !durations.isEmpty else { return EmphasisMetrics() }
-        let meanDur = durations.reduce(0, +) / Double(durations.count)
-        let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
-        let stdDur = sqrt(variance)
-        let emphasisThreshold = meanDur + stdDur * 1.2
-
         var emphasisPositions: [Double] = []
 
-        for (index, word) in words.enumerated() {
-            guard !word.isFiller, word.duration > emphasisThreshold else { continue }
+        // Signal-based emphasis detection when pitch/volume data available
+        let useSignalDetection = pitchContour != nil && !audioLevelSamples.isEmpty
+        if useSignalDetection, let contour = pitchContour, !audioLevelSamples.isEmpty {
+            // Build moving averages for pitch and volume
+            let pitchWindowSize = max(1, contour.count / 20)
+            let volWindowSize = max(1, audioLevelSamples.count / 20)
 
-            let pauseBefore = index > 0 ? (word.start - words[index - 1].end) > 0.2 : true
-            let pauseAfter = index < words.count - 1 ? (words[index + 1].start - word.end) > 0.2 : true
+            for word in nonFillerWords {
+                let wordMidpoint = word.start + word.duration / 2.0
+                let normalizedPos = wordMidpoint / actualDuration
 
-            if pauseBefore || pauseAfter {
-                emphasisPositions.append(word.start / actualDuration)
+                // Map word position to contour/level indices
+                let pitchIdx = min(contour.count - 1, max(0, Int(normalizedPos * Double(contour.count))))
+                let volIdx = min(audioLevelSamples.count - 1, max(0, Int(normalizedPos * Double(audioLevelSamples.count))))
+
+                // Local moving average for pitch
+                let pitchStart = max(0, pitchIdx - pitchWindowSize)
+                let pitchEnd = min(contour.count, pitchIdx + pitchWindowSize + 1)
+                let pitchSlice = contour[pitchStart..<pitchEnd]
+                let pitchLocalAvg = pitchSlice.reduce(Float(0), +) / Float(pitchSlice.count)
+
+                // Local moving average for volume
+                let volStart = max(0, volIdx - volWindowSize)
+                let volEnd = min(audioLevelSamples.count, volIdx + volWindowSize + 1)
+                let volSlice = audioLevelSamples[volStart..<volEnd]
+                let volLocalAvg = volSlice.reduce(Float(0), +) / Float(volSlice.count)
+
+                let pitchSpike = pitchLocalAvg > 0 ? contour[pitchIdx] / pitchLocalAvg : 1.0
+                let volSpike = volLocalAvg < -60 ? Float(1.0) : audioLevelSamples[volIdx] / volLocalAvg
+
+                if pitchSpike > 1.2 && volSpike > 1.2 {
+                    emphasisPositions.append(normalizedPos)
+                }
+            }
+        }
+
+        // Fallback: duration-based emphasis detection
+        if emphasisPositions.isEmpty {
+            let durations = nonFillerWords.map { $0.duration }.filter { $0 > 0 }
+            guard !durations.isEmpty else { return EmphasisMetrics() }
+            let meanDur = durations.reduce(0, +) / Double(durations.count)
+            let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
+            let stdDur = sqrt(variance)
+            let emphasisThreshold = meanDur + stdDur * 1.2
+
+            for (index, word) in words.enumerated() {
+                guard !word.isFiller, word.duration > emphasisThreshold else { continue }
+
+                let pauseBefore = index > 0 ? (word.start - words[index - 1].end) > 0.2 : true
+                let pauseAfter = index < words.count - 1 ? (words[index + 1].start - word.end) > 0.2 : true
+
+                if pauseBefore || pauseAfter {
+                    emphasisPositions.append(word.start / actualDuration)
+                }
             }
         }
 
@@ -1191,39 +1260,72 @@ class SpeechService {
     func analyzeEnergyArc(samples: [Float], words: [TranscriptionWord], actualDuration: TimeInterval) -> EnergyArcMetrics {
         guard !samples.isEmpty, actualDuration > 5 else { return EnergyArcMetrics() }
 
-        let thirdSize = samples.count / 3
-        guard thirdSize > 0 else { return EnergyArcMetrics() }
-
-        func averageEnergy(_ slice: ArraySlice<Float>) -> Double {
-            guard !slice.isEmpty else { return 0 }
-            let linear = slice.map { pow(10, Double($0) / 20.0) }
-            return linear.reduce(0, +) / Double(linear.count)
+        // Smooth samples with a moving average to reduce noise
+        let smoothWindowSize = max(1, samples.count / 20)
+        let smoothed: [Float] = (0..<samples.count).map { i in
+            let start = max(0, i - smoothWindowSize / 2)
+            let end = min(samples.count, i + smoothWindowSize / 2 + 1)
+            let slice = samples[start..<end]
+            return slice.reduce(Float(0), +) / Float(slice.count)
         }
 
-        let opening = averageEnergy(samples[0..<thirdSize])
-        let body = averageEnergy(samples[thirdSize..<(thirdSize * 2)])
-        let closing = averageEnergy(samples[(thirdSize * 2)...])
+        // Convert to linear energy for analysis
+        let linearEnergy = smoothed.map { pow(10.0, Double($0) / 20.0) }
+        guard !linearEnergy.isEmpty else { return EnergyArcMetrics() }
+
+        // Find actual peak position
+        let peakIdx = linearEnergy.enumerated().max(by: { $0.element < $1.element })?.offset ?? 0
+        let peakPosition = Double(peakIdx) / Double(linearEnergy.count) // 0.0-1.0
+
+        // Opening/body/closing energy (thirds for reporting)
+        let thirdSize = max(1, linearEnergy.count / 3)
+        let opening = linearEnergy[0..<thirdSize].reduce(0, +) / Double(thirdSize)
+        let body = linearEnergy[thirdSize..<min(thirdSize * 2, linearEnergy.count)].reduce(0, +) / Double(thirdSize)
+        let closingSlice = linearEnergy[min(thirdSize * 2, linearEnergy.count)...]
+        let closing = closingSlice.isEmpty ? 0 : closingSlice.reduce(0, +) / Double(closingSlice.count)
 
         let maxEnergy = max(opening, body, closing, 0.001)
         let normOpening = opening / maxEnergy
         let normBody = body / maxEnergy
         let normClosing = closing / maxEnergy
 
-        let hasClimax = max(normOpening, normBody, normClosing) > 0.85 &&
-                         min(normOpening, normBody, normClosing) < 0.7
+        // Peak detection: is there a clear peak?
+        let peakValue = linearEnergy.max() ?? 0
+        let avgValue = linearEnergy.reduce(0, +) / Double(linearEnergy.count)
+        let hasClearPeak = peakValue > avgValue * 1.3
 
-        var arcScore = 50
-        if normOpening > 0.7 { arcScore += 10 }
-        if normClosing > 0.7 { arcScore += 15 }
-        if hasClimax { arcScore += 10 }
+        // Build-up to peak: energy before peak should generally increase
+        let prePeak = Array(linearEnergy[0..<max(1, peakIdx)])
+        let prePeakFirstHalf: Double
+        let prePeakSecondHalf: Double
+        if prePeak.count >= 2 {
+            let halfIdx = prePeak.count / 2
+            let firstSlice = prePeak[0..<halfIdx]
+            let secondSlice = prePeak[halfIdx...]
+            prePeakFirstHalf = firstSlice.reduce(0.0, +) / Double(max(1, firstSlice.count))
+            prePeakSecondHalf = secondSlice.reduce(0.0, +) / Double(max(1, secondSlice.count))
+        } else {
+            prePeakFirstHalf = avgValue
+            prePeakSecondHalf = avgValue
+        }
+        let hasBuildUp = prePeakSecondHalf > prePeakFirstHalf * 0.9
 
-        let energyRange = max(normOpening, normBody, normClosing) - min(normOpening, normBody, normClosing)
-        if energyRange < 0.1 { arcScore -= 15 }
-        else if energyRange > 0.2 { arcScore += 10 }
+        // Resolution after peak: energy should settle but not collapse
+        let postPeakStartIdx = min(peakIdx + 1, linearEnergy.count)
+        let postPeak = Array(linearEnergy[postPeakStartIdx...])
+        let lastPostPeak = postPeak.last ?? 0
+        let hasResolution = !postPeak.isEmpty && lastPostPeak > peakValue * 0.3
 
-        if normClosing < normOpening * 0.5 { arcScore -= 10 }
+        var arcScore = 40 // Base
+        if hasClearPeak { arcScore += 15 }
+        if hasBuildUp { arcScore += 15 }
+        if hasResolution { arcScore += 10 }
+        if normOpening > 0.6 { arcScore += 10 } // Strong opening
+        if normClosing > 0.5 { arcScore += 10 } // Strong finish
 
         arcScore = max(0, min(100, arcScore))
+
+        let hasClimax = hasClearPeak && peakPosition > 0.3 && peakPosition < 0.85
 
         return EnergyArcMetrics(
             openingEnergy: normOpening,

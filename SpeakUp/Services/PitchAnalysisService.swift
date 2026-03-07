@@ -34,9 +34,11 @@ enum PitchAnalysisService {
         guard maxLag > minLag, data.count > windowSize else { return nil }
 
         var f0Values: [Float] = []
+        var totalFrames = 0
 
         var offset = 0
         while offset + windowSize <= data.count {
+            totalFrames += 1
             let window = Array(data[offset..<(offset + windowSize)])
             if let f0 = estimateF0(window: window, sampleRate: sr, minLag: minLag, maxLag: maxLag) {
                 f0Values.append(f0)
@@ -45,6 +47,8 @@ enum PitchAnalysisService {
         }
 
         guard f0Values.count >= 5 else { return nil }
+
+        let voicedFrameRatio = totalFrames > 0 ? Float(f0Values.count) / Float(totalFrames) : 0
 
         // Octave error correction: if consecutive F0 jumps by ~2x or ~0.5x, correct it
         var corrected = f0Values
@@ -104,7 +108,8 @@ enum PitchAnalysisService {
             f0RangeSemitones: rangeSemitones,
             pitchVariationScore: pitchVariationScore,
             declinationRate: declinationRate,
-            f0Contour: contour
+            f0Contour: contour,
+            voicedFrameRatio: voicedFrameRatio
         )
     }
 

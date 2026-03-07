@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var showingPromptWheel = false
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
+    @State private var pendingRecordingNavigation: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
     @State private var socialChallengeService = SocialChallengeService()
@@ -146,20 +147,23 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
-        .fullScreenCover(isPresented: $showingRecording) {
+        .fullScreenCover(isPresented: $showingRecording, onDismiss: {
+            if let id = pendingRecordingNavigation {
+                selectedRecordingId = id
+                pendingRecordingNavigation = nil
+            }
+        }) {
             RecordingView(
                 prompt: recordingPrompt,
                 duration: recordingDuration,
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
                 onComplete: { recording in
+                    pendingRecordingNavigation = recording.id.uuidString
+                    selectedTab = .history
                     showingRecording = false
                     Task {
                         await achievementService.checkAchievements(context: modelContext)
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        selectedRecordingId = recording.id.uuidString
-                        selectedTab = .history
                     }
                 },
                 onCancel: {
