@@ -23,11 +23,13 @@ struct ContentView: View {
     @State private var showingConfidenceTools = false
     @State private var showingBeforeAfter = false
     @State private var showingJournalExport = false
-    @State private var showingCurriculum = false
+    @State private var showingAchievements = false
+    @State private var showingWordBank = false
 
     // Recording parameters to pass
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
+    @State private var recordingGoalId: UUID?
 
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
@@ -68,16 +70,15 @@ struct ContentView: View {
                                 showingConfidenceTools = true
                             },
                             onShowCurriculum: {
-                                showingCurriculum = true
+                                selectedTab = .learn
+                            },
+                            onShowAchievements: {
+                                showingAchievements = true
+                            },
+                            onShowWordBank: {
+                                showingWordBank = true
                             }
                         )
-                        .sheet(isPresented: $showingCurriculum) {
-                            NavigationStack {
-                                CurriculumView()
-                            }
-                            .presentationDetents([.large])
-                            .presentationDragIndicator(.visible)
-                        }
                     }
                 }
 
@@ -113,9 +114,9 @@ struct ContentView: View {
                     }
                 }
 
-                Tab("Awards", systemImage: "trophy.fill", value: .achievements) {
+                Tab("Learn", systemImage: "book.fill", value: .learn) {
                     NavigationStack {
-                        AchievementGalleryView()
+                        CurriculumView()
                     }
                 }
 
@@ -134,6 +135,7 @@ struct ContentView: View {
                     duration: recordingDuration,
                     countdownDuration: countdownDuration,
                     countdownStyle: countdownStyle,
+                    selectedGoalId: $recordingGoalId,
                     onComplete: {
                         showingCountdown = false
                         showingRecording = true
@@ -158,6 +160,7 @@ struct ContentView: View {
                 duration: recordingDuration,
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
+                goalId: recordingGoalId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     selectedTab = .history
@@ -203,6 +206,20 @@ struct ContentView: View {
             ConfidenceToolsView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingAchievements) {
+            NavigationStack {
+                AchievementGalleryView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingWordBank) {
+            NavigationStack {
+                WordBankView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingBeforeAfter) {
             BeforeAfterReplayView()
@@ -295,7 +312,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case today
     case prompts
     case history
-    case achievements
+    case learn
     case settings
 
     var id: String { rawValue }
@@ -305,7 +322,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: return "Today"
         case .prompts: return "Prompts"
         case .history: return "History"
-        case .achievements: return "Awards"
+        case .learn: return "Learn"
         case .settings: return "Settings"
         }
     }
@@ -315,7 +332,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: return "mic.badge.plus"
         case .prompts: return "text.bubble"
         case .history: return "clock"
-        case .achievements: return "trophy"
+        case .learn: return "book"
         case .settings: return "gearshape"
         }
     }
@@ -325,7 +342,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .today: return "mic.badge.plus"
         case .prompts: return "text.bubble.fill"
         case .history: return "clock.fill"
-        case .achievements: return "trophy.fill"
+        case .learn: return "book.fill"
         case .settings: return "gearshape.fill"
         }
     }

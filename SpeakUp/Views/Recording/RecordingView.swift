@@ -3,16 +3,25 @@ import SwiftData
 
 struct RecordingView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var userSettings: [UserSettings]
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
     @State private var showFrameworkPicker = false
+    @State private var showingVocabOverlay = false
+    @Query private var goals: [UserGoal]
 
     let prompt: Prompt?
     let duration: RecordingDuration
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
     var countdownStyle: CountdownStyle = .countUp
+    var goalId: UUID? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
+
+    private var selectedGoal: UserGoal? {
+        guard let goalId else { return nil }
+        return goals.first { $0.id == goalId }
+    }
 
     var body: some View {
         ZStack {
@@ -35,6 +44,17 @@ struct RecordingView: View {
                 bottomControls
             }
             .padding()
+
+            // Vocab words floating overlay
+            if showingVocabOverlay, let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
+                VocabOverlayPanel(words: vocabWords) {
+                    withAnimation(.spring(response: 0.3)) {
+                        showingVocabOverlay = false
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(2)
+            }
         }
         .ignoresSafeArea()
         .task {
@@ -45,6 +65,14 @@ struct RecordingView: View {
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle
             )
+            viewModel.goalId = goalId
+            if let settings = userSettings.first {
+                viewModel.fillerConfig = FillerWordConfig(
+                    customFillers: Set(settings.customFillerWords),
+                    customContextFillers: Set(settings.customContextFillerWords),
+                    removedDefaults: Set(settings.removedDefaultFillers)
+                )
+            }
             await viewModel.checkPermissions()
             // Auto-start recording after countdown
             if !viewModel.isRecording {
@@ -123,6 +151,47 @@ struct RecordingView: View {
                             Circle()
                                 .fill(.ultraThinMaterial)
                         }
+                }
+
+                // Goal badge (if goal selected)
+                if let goal = selectedGoal {
+                    HStack(spacing: 4) {
+                        Image(systemName: goal.type.iconName)
+                            .font(.caption2.weight(.semibold))
+                        Text(goal.title)
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(.teal)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Capsule()
+                                    .strokeBorder(.teal.opacity(0.3), lineWidth: 0.5)
+                            }
+                    }
+                }
+
+                // Vocab overlay button (only if user has vocab words)
+                if let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
+                    Button {
+                        Haptics.light()
+                        withAnimation(.spring(response: 0.3)) {
+                            showingVocabOverlay.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "character.book.closed")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(showingVocabOverlay ? .teal : .white)
+                            .frame(width: 36, height: 36)
+                            .background {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                            }
+                    }
                 }
 
                 // Voice activity indicator (top right)
@@ -352,6 +421,77 @@ private struct WaveformBar: View {
     }
 }
 
+// MARK: - Vocab Overlay Panel
+
+struct VocabOverlayPanel: View {
+    let words: [String]
+    let onDismiss: () -> Void
+
+    @State private var autoHideTask: Task<Void, Never>?
+
+    var body: some View {
+        VStack {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("Your Words", systemImage: "character.book.closed")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.teal)
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+
+                FlowLayout(spacing: 6) {
+                    ForEach(words, id: \.self) { word in
+                        Text(word)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background {
+                                Capsule()
+                                    .fill(.teal.opacity(0.2))
+                                    .overlay {
+                                        Capsule()
+                                            .strokeBorder(.teal.opacity(0.3), lineWidth: 0.5)
+                                    }
+                            }
+                    }
+                }
+            }
+            .padding(14)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                    }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 110)
+
+            Spacer()
+        }
+        .onTapGesture { onDismiss() }
+        .onAppear {
+            autoHideTask = Task {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled else { return }
+                await MainActor.run { onDismiss() }
+            }
+        }
+        .onDisappear {
+            autoHideTask?.cancel()
+        }
+    }
+}
+
 #Preview {
     RecordingView(
         prompt: nil,
@@ -359,5 +499,5 @@ private struct WaveformBar: View {
         onComplete: { _ in },
         onCancel: {}
     )
-    .modelContainer(for: [Recording.self, Prompt.self], inMemory: true)
+    .modelContainer(for: [Recording.self, Prompt.self, UserSettings.self], inMemory: true)
 }

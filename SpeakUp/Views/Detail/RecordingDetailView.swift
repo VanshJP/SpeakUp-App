@@ -19,18 +19,23 @@ struct RecordingDetailView: View {
     @State private var scoreCardImage: UIImage?
     @State private var showingScoreCardPreview = false
     @State private var animateScore = false
+    @State private var selectedDetailTab: DetailTab = .analysis
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
     @State private var exportService = ExportService()
     @State private var pendingFeedback = false
     @State private var showingScoreWeights = false
+    @State private var showingFeedbackSheet = false
+    @State private var llmInsight: String?
+    @State private var isEnhancingCoherence = false
 
     @Query private var userSettings: [UserSettings]
 
     // Services
     @Environment(AudioService.self) private var audioService
     @Environment(SpeechService.self) private var speechService
+    @Environment(LLMService.self) private var llmService
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -59,96 +64,47 @@ struct RecordingDetailView: View {
                 } else {
                     ScrollView(.vertical) {
                         VStack(spacing: 20) {
-                            // Prompt Header
+                            // Always visible: Prompt + Score + Stats + Playback
                             promptHeader(recording)
 
-                            // Score Card - Hero element
                             if let analysis = recording.analysis {
                                 heroScoreSection(analysis)
-                            }
-
-                            // Stats Grid
-                            if let analysis = recording.analysis {
                                 statsGrid(analysis)
                             }
 
-                            // WPM Over Time
+                            // Goal progress (if recording has goalId)
+                            if recording.goalId != nil {
+                                goalProgressCard(recording)
+                            }
+
                             if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
                                 wpmChartSection(wpmData)
                             }
 
-                            // Playback Control
                             playbackControlSection(recording)
 
-                            // Transcript
-                            if let words = recording.transcriptionWords, !words.isEmpty {
-                                transcriptSectionWithHighlights(words)
-                            } else if let text = recording.transcriptionText, !text.isEmpty {
-                                transcriptSection(text)
-                            }
-
-                            // Filler Words
-                            if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
-                                fillerWordsSection(analysis.fillerWords)
-                            }
-
-                            // Detailed Scores
-                            if let analysis = recording.analysis {
-                                subscoresSection(analysis)
-                            }
-
-                            // Pause Breakdown
-                            if let analysis = recording.analysis {
-                                pauseAnalysisSection(analysis)
-                            }
-
-                            // Volume & Energy
-                            if let volume = recording.analysis?.volumeMetrics {
-                                volumeSection(volume)
-                            }
-
-                            // Vocabulary Complexity
-                            if let vocab = recording.analysis?.vocabComplexity {
-                                vocabComplexitySection(vocab)
-                            }
-
-                            // Sentence Structure
-                            if let sentence = recording.analysis?.sentenceAnalysis {
-                                sentenceAnalysisSection(sentence)
-                            }
-
-                            // Vocal Variety (Pitch + Rate + Emphasis)
-                            if let analysis = recording.analysis,
-                               analysis.speechScore.subscores.vocalVariety != nil {
-                                vocalVarietySection(analysis)
-                            }
-
-                            // Language Quality
-                            if let textQuality = recording.analysis?.textQuality {
-                                textQualitySection(textQuality)
-                            }
-
-                            // Energy Arc
-                            if let energyArc = recording.analysis?.energyArc {
-                                energyArcSection(energyArc)
-                            }
-
-                            // Coaching Tips
-                            if let analysis = recording.analysis {
-                                CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
-                            }
-
-                            // Self-Assessment
-                            if let feedback = recording.sessionFeedback {
-                                selfAssessmentSection(feedback)
-                            }
-
-                            // Share CTA
+                            // Segmented tab picker
                             if recording.analysis != nil {
-                                shareCTASection(recording)
+                                Picker("Detail", selection: $selectedDetailTab) {
+                                    ForEach(DetailTab.allCases, id: \.self) { tab in
+                                        Text(tab.rawValue).tag(tab)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal, 4)
                             }
 
-                            // Actions
+                            // Tab content
+                            switch selectedDetailTab {
+                            case .analysis:
+                                analysisTabContent(recording)
+                            case .transcript:
+                                transcriptTabContent(recording)
+                            case .coaching:
+                                coachingTabContent(recording)
+                            }
+
+                            // Actions (always at bottom)
                             actionsSection(recording)
                         }
                         .padding()
@@ -232,6 +188,9 @@ struct RecordingDetailView: View {
             await loadRecording()
             populateWPMTimeSeriesIfNeeded()
             await transcribeIfNeeded()
+
+            // Post-analysis: enhance coherence with LLM if available
+            await enhanceCoherenceIfNeeded()
         }
         .onDisappear {
             audioService.stop()
@@ -265,6 +224,18 @@ struct RecordingDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showingListenBackEncouragement)
+    .sheet(isPresented: $showingFeedbackSheet) {
+        NavigationStack {
+            SessionFeedbackSheet(
+                questions: feedbackQuestionsForAnalyzing,
+                onSubmit: { feedback in
+                    recording?.sessionFeedback = feedback
+                    try? modelContext.save()
+                    showingFeedbackSheet = false
+                }
+            )
+        }
+    }
     }
 
     // MARK: - Hero Score Section
@@ -321,61 +292,6 @@ struct RecordingDetailView: View {
         }
     }
 
-    // MARK: - Pause Analysis Section
-
-    @ViewBuilder
-    private func pauseAnalysisSection(_ analysis: SpeechAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Pause Analysis", systemImage: "pause.circle.fill")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 14) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Strategic Pauses")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 6) {
-                                Text("\(analysis.strategicPauseCount)")
-                                    .font(.title3.weight(.semibold))
-                                Text("for emphasis")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Hesitations")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 6) {
-                                Text("\(analysis.hesitationPauseCount)")
-                                    .font(.title3.weight(.semibold))
-                                    .foregroundStyle(analysis.hesitationPauseCount > 3 ? .orange : .primary)
-                                Text("mid-sentence")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    
-                    if analysis.averagePauseLength > 0 {
-                        HStack {
-                            Text("Average pause")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(String(format: "%.1f seconds", analysis.averagePauseLength))
-                                .font(.caption.weight(.medium))
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     // MARK: - Prompt Header
 
@@ -525,59 +441,6 @@ struct RecordingDetailView: View {
                     }
                 }
                 .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // MARK: - Subscores Section
-
-    @ViewBuilder
-    private func subscoresSection(_ analysis: SpeechAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Score Breakdown", systemImage: "chart.bar.fill")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    showingScoreWeights = true
-                } label: {
-                    Image(systemName: "info.circle.fill")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-
-            GlassCard {
-                VStack(spacing: 16) {
-                    // Core scores
-                    SubscoreRow(title: "Clarity", score: analysis.speechScore.subscores.clarity, icon: "waveform")
-                    SubscoreRow(title: "Pace", score: analysis.speechScore.subscores.pace, icon: "speedometer")
-                    SubscoreRow(title: "Filler Usage", score: analysis.speechScore.subscores.fillerUsage, icon: "text.badge.minus")
-                    SubscoreRow(title: "Pauses", score: analysis.speechScore.subscores.pauseQuality, icon: "pause.circle")
-                    
-                    // Extended scores (if available)
-                    if let vocalVariety = analysis.speechScore.subscores.vocalVariety {
-                        SubscoreRow(title: "Vocal Variety", score: vocalVariety, icon: "waveform.path.ecg")
-                    }
-                    if let delivery = analysis.speechScore.subscores.delivery {
-                        SubscoreRow(title: "Delivery", score: delivery, icon: "speaker.wave.3")
-                    }
-                    if let vocabulary = analysis.speechScore.subscores.vocabulary {
-                        SubscoreRow(title: "Vocabulary", score: vocabulary, icon: "textformat.abc")
-                    }
-                    if let structure = analysis.speechScore.subscores.structure {
-                        SubscoreRow(title: "Structure", score: structure, icon: "list.bullet.indent")
-                    }
-                    if let relevance = analysis.speechScore.subscores.relevance {
-                        let isRelevanceScore = analysis.promptRelevanceScore != nil && recording?.prompt != nil
-                        SubscoreRow(
-                            title: isRelevanceScore ? "Relevance" : "Coherence",
-                            score: relevance,
-                            icon: isRelevanceScore ? "target" : "arrow.triangle.branch"
-                        )
-                    }
-                }
             }
         }
     }
@@ -819,359 +682,149 @@ struct RecordingDetailView: View {
         .padding(.top, 12)
     }
 
-    // MARK: - Volume Section
+
+    // MARK: - Tab Content
 
     @ViewBuilder
-    private func volumeSection(_ volume: VolumeMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Volume & Energy", systemImage: "speaker.wave.3.fill")
-                .font(.headline)
+    private func analysisTabContent(_ recording: Recording) -> some View {
+        DetailAnalysisTab(recording: recording, showingScoreWeights: $showingScoreWeights)
+    }
 
-            GlassCard {
-                VStack(spacing: 16) {
-                    SubscoreRow(title: "Energy Level", score: volume.energyScore, icon: "bolt.fill")
-                    SubscoreRow(title: "Volume Dynamics", score: volume.monotoneScore, icon: "waveform.path.ecg")
-                }
-            }
+    @ViewBuilder
+    private func transcriptTabContent(_ recording: Recording) -> some View {
+        if let words = recording.transcriptionWords, !words.isEmpty {
+            transcriptSectionWithHighlights(words)
+        } else if let text = recording.transcriptionText, !text.isEmpty {
+            transcriptSection(text)
         }
-    }
 
-    // MARK: - Vocab Complexity Section
-
-    @ViewBuilder
-    private func vocabComplexitySection(_ vocab: VocabComplexity) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Vocabulary", systemImage: "textformat.abc")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 14) {
-                    SubscoreRow(title: "Complexity", score: vocab.complexityScore, icon: "textformat.abc")
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Unique words")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(vocab.uniqueWordCount) (\(Int(vocab.uniqueWordRatio * 100))%)")
-                                .font(.subheadline.weight(.medium))
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Avg word length")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(String(format: "%.1f chars", vocab.averageWordLength))
-                                .font(.subheadline.weight(.medium))
-                        }
-                    }
-
-                    if !vocab.repeatedPhrases.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Repeated phrases")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            ForEach(vocab.repeatedPhrases.prefix(3), id: \.phrase) { phrase in
-                                HStack {
-                                    Text("\"\(phrase.phrase)\"")
-                                        .font(.caption)
-                                    Spacer()
-                                    Text("\(phrase.count)×")
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Sentence Analysis Section
-
-    @ViewBuilder
-    private func sentenceAnalysisSection(_ sentence: SentenceAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Sentence Structure", systemImage: "text.alignleft")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 14) {
-                    SubscoreRow(title: "Structure Score", score: sentence.structureScore, icon: "text.alignleft")
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Sentences")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(sentence.totalSentences)")
-                                .font(.subheadline.weight(.medium))
-                        }
-                        Spacer()
-                        VStack(alignment: .center, spacing: 2) {
-                            Text("Restarts")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(sentence.restartCount)")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(sentence.restartCount > 3 ? .orange : .primary)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Incomplete")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(sentence.incompleteSentences)")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(sentence.incompleteSentences > 2 ? .orange : .primary)
-                        }
-                    }
-
-                    if !sentence.restartExamples.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Example restarts")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            ForEach(sentence.restartExamples.prefix(2), id: \.self) { example in
-                                Text("\"\(example)\"")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Vocal Variety Section
-
-    @ViewBuilder
-    private func vocalVarietySection(_ analysis: SpeechAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Vocal Variety", systemImage: "waveform.path.ecg")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 14) {
-                    if let vv = analysis.speechScore.subscores.vocalVariety {
-                        SubscoreRow(title: "Overall Variety", score: vv, icon: "waveform.path.ecg")
-                    }
-
-                    // Pitch metrics
-                    if let pitch = analysis.pitchMetrics {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Pitch Range")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(String(format: "%.1f semitones", pitch.f0RangeSemitones))
-                                    .font(.subheadline.weight(.medium))
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Avg Pitch")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(String(format: "%.0f Hz", pitch.f0Mean))
-                                    .font(.subheadline.weight(.medium))
-                            }
-                        }
-
-                        SubscoreRow(title: "Pitch Variation", score: pitch.pitchVariationScore, icon: "music.note")
-                    }
-
-                    // Rate variation
-                    if let rv = analysis.rateVariation, rv.rateCV > 0 {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Rate Range")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(String(format: "%.0f WPM spread", rv.rateRange))
-                                    .font(.subheadline.weight(.medium))
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Articulation Rate")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(String(format: "%.0f WPM", rv.articulationRate))
-                                    .font(.subheadline.weight(.medium))
-                            }
-                        }
-
-                        SubscoreRow(title: "Rate Variation", score: rv.rateVariationScore, icon: "speedometer")
-                    }
-
-                    // Emphasis
-                    if let em = analysis.emphasisMetrics, em.emphasisCount > 0 {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Emphasis Points")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text("\(em.emphasisCount)")
-                                    .font(.subheadline.weight(.medium))
-                            }
-                            Spacer()
-                            VStack(alignment: .center, spacing: 2) {
-                                Text("Per Minute")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(String(format: "%.1f", em.emphasisPerMinute))
-                                    .font(.subheadline.weight(.medium))
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Distribution")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(emphasisDistributionLabel(em.distributionScore))
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(AppColors.scoreColor(for: em.distributionScore))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func emphasisDistributionLabel(_ score: Int) -> String {
-        if score >= 75 { return "Well Spread" }
-        if score >= 50 { return "Moderate" }
-        return "Clustered"
-    }
-
-    // MARK: - Text Quality Section
-
-    @ViewBuilder
-    private func textQualitySection(_ tq: TextQualityMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Language Quality", systemImage: "text.magnifyingglass")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 14) {
-                    SubscoreRow(title: "Authority", score: tq.authorityScore, icon: "shield.checkered")
-                    SubscoreRow(title: "Craft", score: tq.craftScore, icon: "paintbrush.pointed")
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Power Words")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 4) {
-                                Text("\(tq.powerWordCount)")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.green)
-                                Text("used")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Hedge Words")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 4) {
-                                Text("\(tq.hedgeWordCount)")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(tq.hedgeWordCount > 5 ? .orange : .primary)
-                                Text("found")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Rhetorical Devices")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(tq.rhetoricalDeviceCount)")
-                                .font(.subheadline.weight(.medium))
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Transition Variety")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(tq.transitionVariety) types")
-                                .font(.subheadline.weight(.medium))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Energy Arc Section
-
-    @ViewBuilder
-    private func energyArcSection(_ arc: EnergyArcMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Energy Arc", systemImage: "chart.line.uptrend.xyaxis")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 14) {
-                    SubscoreRow(title: "Arc Score", score: arc.arcScore, icon: "chart.line.uptrend.xyaxis")
-
-                    // Visual energy bars
-                    HStack(spacing: 12) {
-                        energyBar(label: "Opening", value: arc.openingEnergy)
-                        energyBar(label: "Body", value: arc.bodyEnergy)
-                        energyBar(label: "Closing", value: arc.closingEnergy)
-                    }
-                    .frame(height: 80)
-
-                    if arc.hasClimax {
-                        HStack(spacing: 6) {
-                            Image(systemName: "star.fill")
-                                .font(.caption)
-                                .foregroundStyle(.yellow)
-                            Text("Dynamic range detected — your energy builds and releases effectively")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
+        if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
+            fillerWordsSection(analysis.fillerWords)
         }
     }
 
     @ViewBuilder
-    private func energyBar(label: String, value: Double) -> some View {
-        VStack(spacing: 6) {
-            GeometryReader { geometry in
-                VStack {
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.teal.opacity(0.4), Color.teal],
-                                startPoint: .bottom,
-                                endPoint: .top
+    private func coachingTabContent(_ recording: Recording) -> some View {
+        if let analysis = recording.analysis {
+            // AI Insights — available when on-device LLM is ready OR FoundationModels (iOS 26+)
+            if llmService.isAvailable {
+                aiInsightsSection(recording)
+            }
+
+            CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
+        }
+
+        if let feedback = recording.sessionFeedback {
+            selfAssessmentSection(feedback)
+        } else if userSettings.first?.sessionFeedbackEnabled ?? false {
+            reflectionPromptCard
+        }
+
+        if recording.analysis != nil {
+            shareCTASection(recording)
+        }
+    }
+
+    // MARK: - AI Insights Section
+
+    @ViewBuilder
+    private func aiInsightsSection(_ recording: Recording) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Label("AI Insights", systemImage: "apple.intelligence")
+                    .font(.headline)
+
+                Text("AI")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.purple, .blue],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                        )
-                        .frame(height: max(4, geometry.size.height * CGFloat(value)))
-                }
+                    }
+
+                Spacer()
             }
 
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            if llmService.isGenerating {
+                GlassCard {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .tint(.teal)
+                        Text("Generating personalized insights...")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
+            } else if let insight = llmInsight {
+                GlassCard(tint: .purple.opacity(0.05)) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(insight)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else {
+                GlassButton(title: "Generate AI Coaching", icon: "sparkles", style: .secondary, fullWidth: true) {
+                    Haptics.medium()
+                    Task {
+                        guard let analysis = recording.analysis else { return }
+                        let transcript = recording.transcriptionText ?? ""
+                        llmInsight = await llmService.generateCoachingInsight(
+                            from: analysis,
+                            transcript: transcript
+                        )
+                    }
+                }
+            }
+        }
+    }
 
-            Text("\(Int(value * 100))%")
-                .font(.caption.weight(.medium).monospacedDigit())
+    // MARK: - Reflection Prompt Card
+
+    private var reflectionPromptCard: some View {
+        FeaturedGlassCard(gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]) {
+            VStack(spacing: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.message.fill")
+                        .font(.title2)
+                        .foregroundStyle(.teal)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("How did you feel?")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Reflect on this session to track your growth")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                GlassButton(title: "Answer Quick Questions", icon: "pencil.line", style: .primary, fullWidth: true) {
+                    Haptics.medium()
+                    showingFeedbackSheet = true
+                }
+            }
+        }
+    }
+
+    // MARK: - Goal Progress Card
+
+    @ViewBuilder
+    private func goalProgressCard(_ recording: Recording) -> some View {
+        if let goalId = recording.goalId {
+            GoalProgressBadge(goalId: goalId)
         }
     }
 
@@ -1318,12 +971,19 @@ struct RecordingDetailView: View {
         }
 
         do {
-            let result = try await speechService.transcribe(audioURL: audioURL)
-
             // Fetch settings for analysis configuration
             let settingsDescriptor = FetchDescriptor<UserSettings>()
             let settings = (try? modelContext.fetch(settingsDescriptor))?.first
             let vocabWords = settings?.vocabWords ?? []
+
+            // Build filler config from user settings
+            let fillerConfig = FillerWordConfig(
+                customFillers: Set(settings?.customFillerWords ?? []),
+                customContextFillers: Set(settings?.customContextFillerWords ?? []),
+                removedDefaults: Set(settings?.removedDefaultFillers ?? [])
+            )
+
+            let result = try await speechService.transcribe(audioURL: audioURL, fillerConfig: fillerConfig)
 
             // Build score weights from user settings
             var weights = ScoreWeights.defaults
@@ -1362,6 +1022,40 @@ struct RecordingDetailView: View {
         } catch {
             print("Transcription error: \(error)")
         }
+    }
+
+    private func enhanceCoherenceIfNeeded() async {
+        guard let recording,
+              var analysis = recording.analysis,
+              let transcript = recording.transcriptionText,
+              llmService.isAvailable else { return }
+
+        isEnhancingCoherence = true
+        defer { isEnhancingCoherence = false }
+
+        // Build score weights from user settings
+        var weights = ScoreWeights.defaults
+        if let s = userSettings.first {
+            weights.clarity = s.clarityWeight
+            weights.pace = s.paceWeight
+            weights.filler = s.fillerWeight
+            weights.pause = s.pauseWeight
+            weights.vocalVariety = s.vocalVarietyWeight
+            weights.delivery = s.deliveryWeight
+            weights.vocabulary = s.vocabularyWeight
+            weights.structure = s.structureWeight
+            weights.relevance = s.relevanceWeight
+        }
+
+        await speechService.enhanceCoherenceWithLLM(
+            analysis: &analysis,
+            transcript: transcript,
+            llmService: llmService,
+            scoreWeights: weights
+        )
+
+        recording.analysis = analysis
+        try? modelContext.save()
     }
 
     private func togglePlayback(_ recording: Recording) {
@@ -1601,6 +1295,241 @@ struct FlowLayout: Layout {
         }
 
         return (CGSize(width: totalWidth, height: totalHeight), positions)
+    }
+}
+
+// MARK: - Detail Tab Enum
+
+enum DetailTab: String, CaseIterable {
+    case analysis = "Analysis"
+    case transcript = "Transcript"
+    case coaching = "Coaching"
+}
+
+// MARK: - Session Feedback Sheet
+
+struct SessionFeedbackSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let questions: [FeedbackQuestion]
+    let onSubmit: (SessionFeedback) -> Void
+
+    @State private var scaleAnswers: [UUID: Int] = [:]
+    @State private var boolAnswers: [UUID: Bool] = [:]
+
+    private var allQuestionsAnswered: Bool {
+        questions.allSatisfy { q in
+            q.type == .scale ? scaleAnswers[q.id] != nil : boolAnswers[q.id] != nil
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            AppBackground(style: .subtle)
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(spacing: 6) {
+                        Image(systemName: "checkmark.message.fill")
+                            .font(.largeTitle)
+                            .foregroundStyle(.teal)
+
+                        Text("Quick Self-Check")
+                            .font(.title3.weight(.bold))
+
+                        Text("How did you feel about this session?")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+
+                    ForEach(Array(questions.enumerated()), id: \.element.id) { index, question in
+                        GlassCard {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text(question.text)
+                                    .font(.headline)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if question.type == .scale {
+                                    sheetScaleInput(questionId: question.id)
+                                } else {
+                                    sheetYesNoInput(questionId: question.id)
+                                }
+                            }
+                        }
+                    }
+
+                    if allQuestionsAnswered {
+                        GlassButton(title: "Submit", icon: "checkmark.circle", style: .primary, fullWidth: true) {
+                            submitFeedback()
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding()
+            }
+            .scrollIndicators(.hidden)
+        }
+        .navigationTitle("Self-Assessment")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sheetScaleInput(questionId: UUID) -> some View {
+        let selected = scaleAnswers[questionId]
+        let labels = ["Very Poor", "Poor", "Okay", "Good", "Excellent"]
+        let icons = ["face.dashed", "face.smiling.inverse", "face.smiling", "hand.thumbsup", "star.fill"]
+
+        HStack(spacing: 0) {
+            ForEach(1...5, id: \.self) { value in
+                let isSelected = selected == value
+                let scoreColor = AppColors.scoreColor(for: value * 20)
+
+                Button {
+                    Haptics.selection()
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                        scaleAnswers[questionId] = value
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        ZStack {
+                            Circle()
+                                .fill(isSelected ? scoreColor.opacity(0.2) : Color.white.opacity(0.06))
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(
+                                            isSelected ? scoreColor.opacity(0.6) : Color.white.opacity(0.1),
+                                            lineWidth: isSelected ? 2 : 1
+                                        )
+                                }
+
+                            Image(systemName: icons[value - 1])
+                                .font(.system(size: isSelected ? 20 : 16))
+                                .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
+                        }
+                        .frame(width: 48, height: 48)
+                        .scaleEffect(isSelected ? 1.1 : 1.0)
+
+                        Text(labels[value - 1])
+                            .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                            .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sheetYesNoInput(questionId: UUID) -> some View {
+        let selected = boolAnswers[questionId]
+
+        HStack(spacing: 12) {
+            yesNoOption(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success, isSelected: selected == true, questionId: questionId)
+            yesNoOption(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning, isSelected: selected == false, questionId: questionId)
+        }
+    }
+
+    private func yesNoOption(label: String, icon: String, value: Bool, tint: Color, isSelected: Bool, questionId: UUID) -> some View {
+        Button {
+            Haptics.selection()
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                boolAnswers[questionId] = value
+            }
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 28))
+                    .foregroundStyle(isSelected ? tint : .white.opacity(0.3))
+
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.5))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? tint.opacity(0.15) : Color.white.opacity(0.04))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(
+                                isSelected ? tint.opacity(0.5) : Color.white.opacity(0.08),
+                                lineWidth: isSelected ? 1.5 : 1
+                            )
+                    }
+            }
+            .scaleEffect(isSelected ? 1.02 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func submitFeedback() {
+        let answers: [FeedbackAnswer] = questions.map { question in
+            FeedbackAnswer(
+                questionId: question.id,
+                questionText: question.text,
+                type: question.type,
+                scaleValue: question.type == .scale ? scaleAnswers[question.id] : nil,
+                boolValue: question.type == .yesNo ? boolAnswers[question.id] : nil
+            )
+        }
+        Haptics.success()
+        onSubmit(SessionFeedback(answers: answers))
+    }
+}
+
+// MARK: - Goal Progress Badge
+
+struct GoalProgressBadge: View {
+    let goalId: UUID
+
+    @Query private var goals: [UserGoal]
+
+    private var goal: UserGoal? {
+        goals.first { $0.id == goalId }
+    }
+
+    var body: some View {
+        if let goal {
+            GlassCard(tint: .teal.opacity(0.08)) {
+                HStack(spacing: 12) {
+                    Image(systemName: goal.type.iconName)
+                        .font(.title3)
+                        .foregroundStyle(.teal)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(goal.title)
+                            .font(.subheadline.weight(.medium))
+                        Text("\(goal.progressPercentage)% complete")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.08), lineWidth: 3)
+                        Circle()
+                            .trim(from: 0, to: goal.progress)
+                            .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    }
+                    .frame(width: 32, height: 32)
+                }
+            }
+        }
     }
 }
 

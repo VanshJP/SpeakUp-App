@@ -35,7 +35,7 @@ struct AnalyzingView: View {
         if isModelLoading {
             return "Preparing Speech Engine..."
         } else if analysisReady && shouldShowFeedback {
-            return "Analysis Complete!"
+            return "Before you see your results..."
         } else {
             return stages[progressStage]
         }
@@ -45,7 +45,7 @@ struct AnalyzingView: View {
         if isModelLoading {
             return "Loading the AI model for first-time use"
         } else if analysisReady && shouldShowFeedback {
-            return "Answer below or skip to see your results"
+            return "How did you feel about that session?"
         } else {
             return "Sit tight — we're crunching the numbers"
         }
@@ -85,6 +85,7 @@ struct AnalyzingView: View {
                     }
 
                     if shouldShowFeedback {
+                        feedbackBanner
                         allQuestionsCard
                     } else {
                         AnalyzingProgressDots(stage: progressStage)
@@ -114,6 +115,39 @@ struct AnalyzingView: View {
         .task { await animatePulse() }
         .task { await cycleTips() }
         .task { await cycleStages() }
+    }
+
+    // MARK: - Feedback Banner
+
+    private var feedbackBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.title3)
+                .foregroundStyle(.white)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Analysis complete!")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                Text("Take a moment to reflect before viewing results")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+        }
+        .transition(.scale(scale: 0.95).combined(with: .opacity))
     }
 
     // MARK: - All Questions Card
@@ -188,11 +222,15 @@ struct AnalyzingView: View {
                     }
                     onFeedbackCompleted?()
                 } label: {
-                    Text("Skip")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                    HStack(spacing: 4) {
+                        Text("Skip to Results")
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
 

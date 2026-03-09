@@ -84,6 +84,56 @@ class SettingsViewModel {
     var showingAddVocabWord: Bool = false
     private var vocabErrorDismissID = 0
 
+    // Local state - Filler Words
+    var customFillerWords: [String] = []
+    var customContextFillerWords: [String] = []
+    var removedDefaultFillers: [String] = []
+    var newFillerWord: String = ""
+    var fillerWordError: String? = nil
+    private var fillerErrorDismissID = 0
+
+    /// All active filler words (defaults minus removed + custom), sorted.
+    var activeFillerWords: [(word: String, isCustom: Bool, isContextDependent: Bool)] {
+        let removed = Set(removedDefaultFillers)
+
+        var result: [(word: String, isCustom: Bool, isContextDependent: Bool)] = []
+
+        // Default unconditional fillers (not removed)
+        for word in FillerWordList.unconditionalFillers where !removed.contains(word) {
+            result.append((word: word, isCustom: false, isContextDependent: false))
+        }
+
+        // Default context-dependent fillers (not removed)
+        for word in FillerWordList.contextDependentFillers where !removed.contains(word) {
+            result.append((word: word, isCustom: false, isContextDependent: true))
+        }
+
+        // Custom always-detected fillers
+        for word in customFillerWords {
+            result.append((word: word, isCustom: true, isContextDependent: false))
+        }
+
+        // Custom context-dependent fillers
+        for word in customContextFillerWords {
+            result.append((word: word, isCustom: true, isContextDependent: true))
+        }
+
+        return result.sorted { $0.word < $1.word }
+    }
+
+    var hasFillerCustomizations: Bool {
+        !customFillerWords.isEmpty || !customContextFillerWords.isEmpty || !removedDefaultFillers.isEmpty
+    }
+
+    /// Build a FillerWordConfig from current state.
+    var fillerWordConfig: FillerWordConfig {
+        FillerWordConfig(
+            customFillers: Set(customFillerWords),
+            customContextFillers: Set(customContextFillerWords),
+            removedDefaults: Set(removedDefaultFillers)
+        )
+    }
+
     private var modelContext: ModelContext?
     private var hasConfigured = false
     var isSyncing = false
@@ -160,6 +210,11 @@ class SettingsViewModel {
         // Word Bank
         vocabWords = settings.vocabWords
 
+        // Filler Words
+        customFillerWords = settings.customFillerWords
+        customContextFillerWords = settings.customContextFillerWords
+        removedDefaultFillers = settings.removedDefaultFillers
+
         // Haptic Coaching
         hapticCoachingEnabled = settings.hapticCoachingEnabled
 
@@ -215,6 +270,11 @@ class SettingsViewModel {
 
         // Word Bank
         settings.vocabWords = vocabWords
+
+        // Filler Words
+        settings.customFillerWords = customFillerWords
+        settings.customContextFillerWords = customContextFillerWords
+        settings.removedDefaultFillers = removedDefaultFillers
 
         // Haptic Coaching
         settings.hapticCoachingEnabled = hapticCoachingEnabled
@@ -324,6 +384,91 @@ class SettingsViewModel {
         Task { await saveSettings() }
     }
 
+    // MARK: - Filler Words
+
+    @MainActor
+    func addCustomFiller(isContextDependent: Bool = false) {
+        fillerWordError = nil
+        let trimmed = newFillerWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else {
+            newFillerWord = ""
+            return
+        }
+        // Already a default filler?
+        if FillerWordList.unconditionalFillers.contains(trimmed) || FillerWordList.contextDependentFillers.contains(trimmed) {
+            // If it was removed, restore it instead
+            if removedDefaultFillers.contains(trimmed) {
+                restoreDefaultFiller(trimmed)
+                newFillerWord = ""
+                return
+            }
+            showFillerError("Already a default filler word")
+            return
+        }
+        guard !customFillerWords.contains(trimmed), !customContextFillerWords.contains(trimmed) else {
+            showFillerError("Already in your custom fillers")
+            return
+        }
+        guard !vocabWords.contains(trimmed) else {
+            showFillerError("This word is in your Word Bank")
+            return
+        }
+        if isContextDependent {
+            customContextFillerWords.append(trimmed)
+        } else {
+            customFillerWords.append(trimmed)
+        }
+        newFillerWord = ""
+        Haptics.success()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func removeFillerWord(_ word: String) {
+        let lowered = word.lowercased()
+        if customFillerWords.contains(lowered) {
+            customFillerWords.removeAll { $0 == lowered }
+        } else if customContextFillerWords.contains(lowered) {
+            customContextFillerWords.removeAll { $0 == lowered }
+        } else {
+            // Default filler — add to removed list
+            if !removedDefaultFillers.contains(lowered) {
+                removedDefaultFillers.append(lowered)
+            }
+        }
+        Haptics.light()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func restoreDefaultFiller(_ word: String) {
+        removedDefaultFillers.removeAll { $0 == word.lowercased() }
+        Haptics.success()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func resetFillersToDefaults() {
+        customFillerWords = []
+        customContextFillerWords = []
+        removedDefaultFillers = []
+        Haptics.success()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    private func showFillerError(_ message: String) {
+        Haptics.warning()
+        fillerWordError = message
+        fillerErrorDismissID += 1
+        let currentID = fillerErrorDismissID
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard currentID == fillerErrorDismissID else { return }
+            fillerWordError = nil
+        }
+    }
+
     // MARK: - Feedback Questions
 
     @MainActor
@@ -350,6 +495,8 @@ class SettingsViewModel {
         let lowered = word.lowercased()
         return FillerWordList.isFillerWord(lowered)
             || FillerWordList.contextDependentFillers.contains(lowered)
+            || customFillerWords.contains(lowered)
+            || customContextFillerWords.contains(lowered)
     }
 
     private func isRealWord(_ word: String) -> Bool {
@@ -385,6 +532,9 @@ class SettingsViewModel {
         settings.countdownStyle = 0
         settings.timerEndBehavior = 0
         settings.vocabWords = []
+        settings.customFillerWords = []
+        settings.customContextFillerWords = []
+        settings.removedDefaultFillers = []
         settings.chirpSoundEnabled = true
         settings.sessionFeedbackEnabled = true
         settings.customFeedbackQuestions = []
@@ -463,11 +613,17 @@ class SettingsViewModel {
                 context.delete(item)
             }
 
-            // Clear word bank from settings
+            // Clear word bank and filler customizations from settings
             if let settings {
                 settings.vocabWords = []
+                settings.customFillerWords = []
+                settings.customContextFillerWords = []
+                settings.removedDefaultFillers = []
             }
             vocabWords = []
+            customFillerWords = []
+            customContextFillerWords = []
+            removedDefaultFillers = []
 
             try context.save()
         } catch {

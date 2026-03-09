@@ -1,5 +1,34 @@
 import Foundation
 
+// MARK: - Filler Word Config
+
+/// User-customizable filler word configuration.
+struct FillerWordConfig: Sendable {
+    let customFillers: Set<String>        // user-added always-detected fillers
+    let customContextFillers: Set<String> // user-added context-dependent fillers (pauseBefore && pauseAfter)
+    let removedDefaults: Set<String>      // default fillers the user disabled
+
+    static let `default` = FillerWordConfig(customFillers: [], customContextFillers: [], removedDefaults: [])
+
+    /// All fillers that should actually be detected, given user customizations.
+    var effectiveUnconditionalFillers: Set<String> {
+        FillerWordList.unconditionalFillers
+            .subtracting(removedDefaults)
+            .union(customFillers)
+    }
+
+    var effectiveContextDependentFillers: Set<String> {
+        FillerWordList.contextDependentFillers
+            .subtracting(removedDefaults)
+            .union(customContextFillers)
+    }
+
+    /// Combined active fillers (unconditional + context-dependent, minus removed).
+    var allDefaultFillers: Set<String> {
+        FillerWordList.unconditionalFillers.union(FillerWordList.contextDependentFillers)
+    }
+}
+
 // MARK: - Filler Words List
 
 struct FillerWordList {
@@ -303,5 +332,79 @@ struct FillerWordList {
             }
         }
         return result
+    }
+
+    // MARK: - Config-Aware Detection
+
+    /// Simple check with user config — for context-dependent custom fillers, defaults to false (needs context).
+    static func isFillerWord(_ word: String, config: FillerWordConfig) -> Bool {
+        let lowercased = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        let collapsed = collapseRepeatedChars(lowercased)
+
+        // Removed by user — never match
+        if config.removedDefaults.contains(lowercased) || config.removedDefaults.contains(collapsed) {
+            return false
+        }
+
+        // Custom always-detected fillers
+        if config.customFillers.contains(lowercased) || config.customFillers.contains(collapsed) {
+            return true
+        }
+
+        // Unconditional defaults
+        if unconditionalFillers.contains(lowercased) || unconditionalFillers.contains(collapsed) {
+            return true
+        }
+
+        // Custom context fillers — false without context (same as default context-dependent behavior)
+        return false
+    }
+
+    /// Context-aware filler detection with user config.
+    static func isFillerWord(
+        _ word: String,
+        previousWord: String?,
+        nextWord: String?,
+        pauseBefore: Bool,
+        pauseAfter: Bool,
+        isStartOfSentence: Bool = false,
+        config: FillerWordConfig
+    ) -> Bool {
+        let w = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        let collapsed = collapseRepeatedChars(w)
+
+        // Removed by user — never match
+        if config.removedDefaults.contains(w) || config.removedDefaults.contains(collapsed) {
+            return false
+        }
+
+        // Custom always-detected fillers
+        if config.customFillers.contains(w) || config.customFillers.contains(collapsed) {
+            return true
+        }
+
+        // Unconditional defaults
+        if unconditionalFillers.contains(w) || unconditionalFillers.contains(collapsed) {
+            return true
+        }
+
+        // Custom context-dependent fillers — use simple pause rule
+        if config.customContextFillers.contains(w) || config.customContextFillers.contains(collapsed) {
+            return pauseBefore && pauseAfter
+        }
+
+        // Default context-dependent (only if not removed)
+        if contextDependentFillers.contains(w) {
+            return isContextualFiller(
+                word: w,
+                prev: previousWord?.lowercased().trimmingCharacters(in: .punctuationCharacters),
+                next: nextWord?.lowercased().trimmingCharacters(in: .punctuationCharacters),
+                pauseBefore: pauseBefore,
+                pauseAfter: pauseAfter,
+                isStartOfSentence: isStartOfSentence
+            )
+        }
+
+        return false
     }
 }

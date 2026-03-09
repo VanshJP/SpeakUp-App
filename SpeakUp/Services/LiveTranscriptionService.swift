@@ -7,6 +7,7 @@ class LiveTranscriptionService {
     var liveFillerCount = 0
     var liveWordCount = 0
     var isActive = false
+    var fillerConfig: FillerWordConfig = .default
 
     /// Timestamp (relative to recognition start) when the last spoken word ended.
     /// Used to detect sentence boundaries for graceful recording stop.
@@ -114,7 +115,8 @@ class LiveTranscriptionService {
         let fillerCount = FillerDetectionPipeline.countFillers(
             words: words,
             timestamps: timestamps,
-            durations: durations
+            durations: durations,
+            config: fillerConfig
         )
 
         // Track when the last word ended (segment timestamp + duration)

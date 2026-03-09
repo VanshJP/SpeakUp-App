@@ -8,6 +8,8 @@ struct TodayView: View {
     @State private var curriculumViewModel = CurriculumViewModel()
     @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
 
+    @Query private var achievements: [Achievement]
+
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowWheel: () -> Void
     var onShowGoals: () -> Void
@@ -15,6 +17,8 @@ struct TodayView: View {
     var onShowDrills: () -> Void
     var onShowConfidence: () -> Void
     var onShowCurriculum: () -> Void
+    var onShowAchievements: () -> Void = {}
+    var onShowWordBank: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -42,6 +46,9 @@ struct TodayView: View {
                             onTap: { onShowCurriculum() }
                         )
                     }
+
+                    // Achievements Banner
+                    achievementsBanner
 
                     // Practice Tools 2x2 Grid
                     practiceToolsGrid
@@ -160,25 +167,58 @@ struct TodayView: View {
         return "Nice momentum! Keep showing up."
     }
 
+    // MARK: - Achievements Banner
+
+    private var achievementsBanner: some View {
+        let unlocked = achievements.filter(\.isUnlocked).count
+        let total = achievements.count
+
+        return Button { onShowAchievements() } label: {
+            GlassCard(tint: .yellow.opacity(0.06), padding: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "trophy.fill")
+                        .font(.title3)
+                        .foregroundStyle(.yellow)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Achievements")
+                            .font(.subheadline.weight(.semibold))
+                        Text("\(unlocked) of \(total) unlocked")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Start Button Section
 
     private var startButtonSection: some View {
-        VStack(spacing: 12) {
+        HStack(spacing: 12) {
             Button {
+                Haptics.medium()
                 onStartRecording(
                     viewModel.todaysPrompt,
                     viewModel.selectedDuration
                 )
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                    Text("Start Session")
-                        .font(.headline.weight(.semibold))
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("With Prompt")
+                        .font(.subheadline.weight(.semibold))
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
+                .padding(.vertical, 16)
                 .background {
                     Capsule()
                         .fill(
@@ -188,8 +228,7 @@ struct TodayView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .shadow(color: .teal.opacity(0.5), radius: 16, y: 4)
-                        .shadow(color: .cyan.opacity(0.2), radius: 30, y: 8)
+                        .shadow(color: .teal.opacity(0.4), radius: 12, y: 3)
                 }
                 .overlay {
                     Capsule()
@@ -206,25 +245,44 @@ struct TodayView: View {
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: 12) {
-                GlassButton(
-                    title: "Free Practice",
-                    icon: "waveform",
-                    style: .secondary,
-                    fullWidth: true
-                ) {
-                    onStartRecording(nil, viewModel.selectedDuration)
+            Button {
+                Haptics.medium()
+                onStartRecording(nil, viewModel.selectedDuration)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Free Practice")
+                        .font(.subheadline.weight(.semibold))
                 }
-
-                GlassButton(
-                    title: "Spin Wheel",
-                    icon: "circle.grid.3x3.fill",
-                    style: .secondary,
-                    fullWidth: true
-                ) {
-                    onShowWheel()
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.teal.opacity(0.9), Color.cyan.opacity(0.75), Color.teal.opacity(0.85)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: .teal.opacity(0.3), radius: 10, y: 3)
                 }
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.3), .white.opacity(0.08), .clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+                .clipShape(Capsule())
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -276,8 +334,11 @@ struct TodayView: View {
             toolbarStripButton(icon: "heart.fill", label: "Calm", color: .pink) {
                 onShowConfidence()
             }
-            toolbarStripButton(icon: "book.fill", label: "Learn", color: .purple) {
-                onShowCurriculum()
+            toolbarStripButton(icon: "circle.grid.3x3.fill", label: "Wheel", color: .purple) {
+                onShowWheel()
+            }
+            toolbarStripButton(icon: "character.book.closed", label: "Vocab", color: .green) {
+                onShowWordBank()
             }
         }
         .padding(.vertical, 4)
@@ -337,11 +398,11 @@ struct TodayView: View {
                 ) { onShowConfidence() }
 
                 PracticeToolCard(
-                    icon: "book.fill",
-                    title: "Curriculum",
-                    subtitle: "Guided learning path",
+                    icon: "target",
+                    title: "Goals",
+                    subtitle: "Track your goals",
                     color: .purple
-                ) { onShowCurriculum() }
+                ) { onShowGoals() }
             }
         }
     }
@@ -778,9 +839,11 @@ struct PracticeToolCard: View {
             onShowWarmUps: {},
             onShowDrills: {},
             onShowConfidence: {},
-            onShowCurriculum: {}
+            onShowCurriculum: {},
+            onShowAchievements: {},
+            onShowWordBank: {}
         )
     }
-    .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
+    .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self], inMemory: true)
 }
 

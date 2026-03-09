@@ -6,6 +6,7 @@ struct SpeakUpApp: App {
     // Shared services – injected via .environment() so views don't recreate them
     @State private var speechService = SpeechService()
     @State private var audioService = AudioService()
+    @State private var llmService = LLMService()
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -58,6 +59,7 @@ struct SpeakUpApp: App {
                 .preferredColorScheme(.dark)
                 .environment(speechService)
                 .environment(audioService)
+                .environment(llmService)
                 .task {
                     await seedPromptsIfNeeded()
                     await ensureSettingsExist()

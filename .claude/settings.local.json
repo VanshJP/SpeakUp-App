@@ -3,7 +3,9 @@
     "allow": [
       "Bash(xcodebuild:*)",
       "WebSearch",
-      "Bash(xcrun simctl:*)"
+      "Bash(xcrun simctl:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)"
     ]
   }
 }

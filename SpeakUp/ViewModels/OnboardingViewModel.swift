@@ -37,15 +37,7 @@ class OnboardingViewModel {
         isRequestingPermission = true
         defer { isRequestingPermission = false }
 
-        if #available(iOS 17.0, *) {
-            hasMicPermission = await AVAudioApplication.requestRecordPermission()
-        } else {
-            hasMicPermission = await withCheckedContinuation { continuation in
-                AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
-        }
+        hasMicPermission = await AVAudioApplication.requestRecordPermission()
 
         if hasMicPermission {
             Haptics.success()
@@ -53,11 +45,7 @@ class OnboardingViewModel {
     }
 
     func checkMicPermission() {
-        if #available(iOS 17.0, *) {
-            hasMicPermission = AVAudioApplication.shared.recordPermission == .granted
-        } else {
-            hasMicPermission = AVAudioSession.sharedInstance().recordPermission == .granted
-        }
+        hasMicPermission = AVAudioApplication.shared.recordPermission == .granted
     }
 
     // MARK: - Notification Permission

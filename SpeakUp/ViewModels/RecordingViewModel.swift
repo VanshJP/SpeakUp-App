@@ -15,6 +15,7 @@ class RecordingViewModel {
     var recordingDuration: TimeInterval = 0
     var targetDuration: RecordingDuration = .sixty
     var prompt: Prompt?
+    var goalId: UUID?
 
     // Timer
     var remainingTime: TimeInterval = 60
@@ -49,6 +50,9 @@ class RecordingViewModel {
 
     // Live filler counter
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
+
+    // Filler word config (set before recording starts)
+    var fillerConfig: FillerWordConfig = .default
 
     private var timer: Timer?
     private var audioLevelTimer: Timer?
@@ -95,6 +99,7 @@ class RecordingViewModel {
             startAudioLevelMonitoring()
 
             // Start live filler counting (after recorder is active so session is ready)
+            liveTranscriptionService.fillerConfig = fillerConfig
             let authorized = await liveTranscriptionService.requestAuthorization()
             if authorized {
                 liveTranscriptionService.start()
@@ -132,7 +137,8 @@ class RecordingViewModel {
             actualDuration: actualDuration,
             mediaType: .audio,
             audioURL: url,
-            isProcessing: true // Will be transcribed
+            isProcessing: true, // Will be transcribed
+            goalId: goalId
         )
 
         context.insert(recording)

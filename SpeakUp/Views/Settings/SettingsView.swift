@@ -3,907 +3,266 @@ import SwiftData
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(LLMService.self) private var llmService
     @State private var viewModel = SettingsViewModel()
-    @State private var showingCategories = false
-    @State private var isWordBankExpanded = false
-    @State private var isWordInputFocused = false
-    @State private var showingAddPrompt = false
 
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
-                .ignoresSafeArea(.keyboard)
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 20) {
-                        recordingDefaultsSection
-                        analysisFeaturesSection
-                        sessionFeedbackSection
-                        vocabWordBankSection
-                            .id("wordBank")
-                        promptSettingsSection
-                        reminderSection
-                        dataManagementSection
-                        aboutSection
-                    }
-                    .padding()
+            ScrollView {
+                VStack(spacing: 16) {
+                    settingsMenuCard
                 }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: isWordInputFocused) { _, focused in
-                    if focused {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            proxy.scrollTo("wordBankInput", anchor: .center)
-                        }
-                    }
-                }
+                .padding()
             }
+            .scrollIndicators(.hidden)
         }
         .navigationTitle("Settings")
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)
         }
-        .modifier(SettingsChangeModifiers(viewModel: viewModel))
-        .alert("Reset Settings?", isPresented: $viewModel.showingResetConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Reset", role: .destructive) {
-                Task { await viewModel.resetSettings() }
+    }
+
+    // MARK: - Menu Card
+
+    private var settingsMenuCard: some View {
+        GlassCard {
+            VStack(spacing: 0) {
+                settingsLink(
+                    icon: "slider.horizontal.3",
+                    iconColor: .teal,
+                    title: "Session Defaults",
+                    subtitle: viewModel.defaultDuration.displayName + ", " + viewModel.countdownDuration.displayName + " countdown"
+                ) {
+                    SessionDefaultsView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "waveform.badge.magnifyingglass",
+                    iconColor: .blue,
+                    title: "Analysis",
+                    subtitle: "Target: \(viewModel.targetWPM) WPM"
+                ) {
+                    AnalysisSettingsView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "character.book.closed",
+                    iconColor: .green,
+                    title: "Words",
+                    subtitle: wordsSubtitle
+                ) {
+                    WordBankView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "bubble.left.and.text.bubble.right",
+                    iconColor: .purple,
+                    title: "Session Feedback",
+                    subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
+                ) {
+                    FeedbackSettingsView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "text.quote",
+                    iconColor: .orange,
+                    title: "Prompts",
+                    subtitle: "\(viewModel.enabledPromptCategories.count) categories"
+                ) {
+                    PromptSettingsView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "bell.fill",
+                    iconColor: .yellow,
+                    title: "Reminders",
+                    subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
+                ) {
+                    ReminderSettingsView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "cpu",
+                    iconColor: .purple,
+                    title: "AI Features",
+                    subtitle: aiModelSubtitle
+                ) {
+                    AIModelSettingsView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "externaldrive.fill",
+                    iconColor: .gray,
+                    title: "Data Management",
+                    subtitle: nil
+                ) {
+                    DataManagementView()
+                }
+
+                divider
+
+                settingsLink(
+                    icon: "info.circle",
+                    iconColor: .secondary,
+                    title: "About",
+                    subtitle: "v\(viewModel.appVersion) (\(viewModel.buildNumber))"
+                ) {
+                    AboutSettingsView()
+                }
             }
-        } message: {
-            Text("This will reset all settings to their default values.")
-        }
-        .alert("Clear All Data?", isPresented: $viewModel.showingClearDataConfirmation) {
-            TextField("Type \"I acknowledge\"", text: $viewModel.clearDataAcknowledgement)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-            Button("Cancel", role: .cancel) {
-                viewModel.clearDataAcknowledgement = ""
-            }
-            Button("Clear Data", role: .destructive) {
-                Task { await viewModel.clearAllData() }
-                viewModel.clearDataAcknowledgement = ""
-            }
-            .disabled(viewModel.clearDataAcknowledgement.trimmingCharacters(in: .whitespaces).lowercased() != "i acknowledge")
-        } message: {
-            Text("This will permanently delete all your recordings, goals, achievements, and curriculum progress. Type \"I acknowledge\" to confirm.")
         }
     }
 
-    // MARK: - Recording Defaults Section
+    // MARK: - Helpers
 
-    private var recordingDefaultsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Session Defaults", systemImage: "slider.horizontal.3")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    HStack {
-                        Label("Default Duration", systemImage: "clock")
-                            .font(.subheadline)
-                        Spacer()
-                        Picker("", selection: $viewModel.defaultDuration) {
-                            ForEach(RecordingDuration.allCases) { duration in
-                                Text(duration.displayName).tag(duration)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.teal)
-                    }
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    HStack {
-                        Label("Countdown Timer", systemImage: "timer")
-                            .font(.subheadline)
-                        Spacer()
-                        Picker("", selection: $viewModel.countdownDuration) {
-                            ForEach(CountdownDuration.allCases) { duration in
-                                Text(duration.displayName).tag(duration)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.teal)
-                    }
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    HStack {
-                        Label("Countdown Style", systemImage: "arrow.up.arrow.down")
-                            .font(.subheadline)
-                        Spacer()
-                        Picker("", selection: $viewModel.countdownStyle) {
-                            ForEach(CountdownStyle.allCases) { style in
-                                Text(style.displayName).tag(style)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.teal)
-                    }
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    HStack {
-                        Label("When Timer Ends", systemImage: "flag.checkered")
-                            .font(.subheadline)
-                        Spacer()
-                        Picker("", selection: $viewModel.timerEndBehavior) {
-                            ForEach(TimerEndBehavior.allCases) { behavior in
-                                Text(behavior.displayName).tag(behavior)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.teal)
-                    }
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Toggle(isOn: $viewModel.hapticCoachingEnabled) {
-                        Label("Haptic Coaching", systemImage: "hand.tap")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Toggle(isOn: $viewModel.chirpSoundEnabled) {
-                        Label("Audio Cues", systemImage: "speaker.wave.2")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Stepper(value: $viewModel.weeklyGoalSessions, in: 1...14) {
-                        HStack {
-                            Label("Weekly Goal", systemImage: "target")
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(viewModel.weeklyGoalSessions) sessions")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(minHeight: 40)
-                }
-            }
-
-            Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-        }
+    private var divider: some View {
+        Divider().padding(.vertical, 4)
     }
 
-    // MARK: - Analysis Features Section
-
-    private var analysisFeaturesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Analysis", systemImage: "waveform.badge.magnifyingglass")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    Toggle(isOn: $viewModel.trackPauses) {
-                        Label("Track Pauses", systemImage: "pause.circle")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Toggle(isOn: $viewModel.trackFillerWords) {
-                        Label("Track Filler Words", systemImage: "text.bubble")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    VStack(spacing: 8) {
-                        HStack {
-                            Label("Target Pace", systemImage: "speedometer")
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(viewModel.targetWPM) WPM")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.teal)
-                        }
-
-                        Slider(
-                            value: Binding(
-                                get: { Double(viewModel.targetWPM) },
-                                set: { viewModel.targetWPM = Int($0) }
-                            ),
-                            in: 100...200,
-                            step: 5
-                        )
-                        .tint(.teal)
-                    }
-                    .frame(minHeight: 60)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    NavigationLink {
-                        ScoreWeightsView()
-                    } label: {
-                        HStack {
-                            Label("Score Weights", systemImage: "slider.horizontal.3")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            if viewModel.hasCustomWeights {
-                                Text("Custom")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.teal)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background {
-                                        Capsule().fill(.teal.opacity(0.15))
-                                    }
-                            }
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(minHeight: 40)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Text("Analyze your speech patterns for pauses and filler words. Target pace sets the ideal WPM for your pace score (default 150). Score weights let you customize how each metric contributes to your overall score.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+    private var wordsSubtitle: String {
+        var parts: [String] = []
+        if viewModel.vocabWords.count > 0 {
+            parts.append("\(viewModel.vocabWords.count) vocab")
         }
+        if viewModel.hasFillerCustomizations {
+            parts.append("fillers customized")
+        }
+        return parts.isEmpty ? "Vocab & filler words" : parts.joined(separator: ", ")
     }
 
-    // MARK: - Word Bank Section
-
-    private var vocabWordBankSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Word Bank", systemImage: "character.book.closed")
-                .font(.headline)
-
-            GlassCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    if viewModel.vocabWords.isEmpty {
-                        wordBankEmptyState
-                    } else {
-                        FlowLayout(spacing: 6) {
-                            ForEach(viewModel.vocabWords, id: \.self) { word in
-                                wordBankChip(word)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    wordBankInputField
-                        .id("wordBankInput")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if let error = viewModel.vocabWordError {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.caption2)
-                    Text(error)
-                        .font(.caption)
-                }
-                .foregroundStyle(.red)
-                .padding(.horizontal, 4)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            Text("Words you want to use more often. They'll be detected and tracked in your recordings.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-        }
-        .animation(.easeOut(duration: 0.2), value: viewModel.vocabWordError)
-        .animation(.spring(duration: 0.25), value: viewModel.vocabWords)
+    private var aiModelSubtitle: String {
+        llmService.isAvailable ? "Available" : "Not available"
     }
 
-    private var wordBankEmptyState: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "character.book.closed")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.15))
-
-            Text("No words yet")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.3))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+    private var reminderTimeString: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return "Daily at " + formatter.string(from: viewModel.reminderTime)
     }
 
-    private func wordBankChip(_ word: String) -> some View {
-        HStack(spacing: 5) {
-            Text(word)
-                .font(.caption.weight(.medium))
+    private func settingsLink<Destination: View>(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        subtitle: String?,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundStyle(iconColor)
+                    .frame(width: 28)
 
-            Button {
-                Haptics.light()
-                withAnimation(.spring(duration: 0.25)) {
-                    viewModel.removeVocabWord(word)
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background {
-            Capsule()
-                .fill(.teal.opacity(0.15))
-                .overlay {
-                    Capsule()
-                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
-                }
-        }
-        .transition(.scale.combined(with: .opacity))
-    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
 
-    private var wordBankInputField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.teal)
-
-            PersistentTextField(
-                placeholder: "Add a word...",
-                text: $viewModel.newVocabWord,
-                isFocused: $isWordInputFocused,
-                onSubmit: { viewModel.addVocabWord() }
-            )
-            .frame(height: 22)
-
-            if !viewModel.newVocabWord.isEmpty {
-                Button {
-                    viewModel.newVocabWord = ""
-                    viewModel.vocabWordError = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.3))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background {
-            Capsule()
-                .fill(.white.opacity(0.06))
-                .overlay {
-                    Capsule()
-                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
-                }
-        }
-    }
-
-    // MARK: - Session Feedback Section
-
-    private var sessionFeedbackSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Session Feedback", systemImage: "bubble.left.and.text.bubble.right")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    Toggle(isOn: $viewModel.sessionFeedbackEnabled) {
-                        Label("Ask After Recording", systemImage: "checkmark.message")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    if viewModel.sessionFeedbackEnabled {
-                        Divider()
-                            .padding(.vertical, 8)
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Questions")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-
-                            ForEach(viewModel.activeFeedbackQuestions) { question in
-                                HStack(spacing: 10) {
-                                    Image(systemName: question.type == .scale ? "star.fill" : "hand.thumbsup.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.teal)
-                                        .frame(width: 16)
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(question.text)
-                                            .font(.subheadline)
-                                        Text(question.type == .scale ? "1-5 Scale" : "Yes / No")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    if viewModel.customFeedbackQuestions.contains(where: { $0.id == question.id }) {
-                                        Button {
-                                            viewModel.removeFeedbackQuestion(question)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.caption)
-                                                .foregroundStyle(.white.opacity(0.3))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        }
-
-                        Divider()
-                            .padding(.vertical, 8)
-
-                        Button {
-                            Haptics.light()
-                            viewModel.showingAddFeedbackQuestion = true
-                        } label: {
-                            HStack {
-                                Label("Add Custom Question", systemImage: "plus.circle")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .frame(minHeight: 40)
-                        }
-                        .buttonStyle(.plain)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-
-            Text("Quick self-assessment questions shown while your speech is being analyzed.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+            .padding(.vertical, 6)
         }
-        .sheet(isPresented: $viewModel.showingAddFeedbackQuestion) {
-            addFeedbackQuestionSheet
-        }
+        .buttonStyle(.plain)
     }
+}
 
-    private var addFeedbackQuestionSheet: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground(style: .subtle)
+// MARK: - About Settings View
 
+struct AboutSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel = SettingsViewModel()
+
+    var body: some View {
+        ZStack {
+            AppBackground(style: .subtle)
+
+            ScrollView {
                 VStack(spacing: 20) {
                     GlassCard {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Question Text")
-                                .font(.subheadline.weight(.medium))
-
-                            TextField("e.g. How confident did you feel?", text: $viewModel.newFeedbackQuestionText)
-                                .textFieldStyle(.plain)
-                                .padding(12)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(.white.opacity(0.06))
-                                }
-
-                            Text("Answer Type")
-                                .font(.subheadline.weight(.medium))
-
-                            Picker("Type", selection: $viewModel.newFeedbackQuestionType) {
-                                Text("1-5 Scale").tag(FeedbackQuestionType.scale)
-                                Text("Yes / No").tag(FeedbackQuestionType.yesNo)
+                        VStack(spacing: 0) {
+                            HStack {
+                                Label("Version", systemImage: "info.circle")
+                                    .font(.subheadline)
+                                Spacer()
+                                Text("\(viewModel.appVersion) (\(viewModel.buildNumber))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
-                            .pickerStyle(.segmented)
+                            .frame(minHeight: 40)
+
+                            Divider().padding(.vertical, 8)
+
+                            Link(destination: URL(string: "mailto:vansh@trygoldfinch.com")!) {
+                                HStack {
+                                    Label("Send Feedback", systemImage: "envelope")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .frame(minHeight: 40)
+                            }
+
+                            Divider().padding(.vertical, 8)
+
+                            NavigationLink {
+                                JournalExportView()
+                            } label: {
+                                HStack {
+                                    Label("Export Progress Journal", systemImage: "doc.richtext")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .frame(minHeight: 40)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-
-                    GlassButton(title: "Add Question", icon: "plus", style: .primary) {
-                        viewModel.addFeedbackQuestion()
-                    }
-                    .disabled(viewModel.newFeedbackQuestionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                    Spacer()
                 }
                 .padding()
             }
-            .navigationTitle("New Question")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        viewModel.newFeedbackQuestionText = ""
-                        viewModel.showingAddFeedbackQuestion = false
-                    }
-                }
-            }
+            .scrollIndicators(.hidden)
         }
-        .presentationDetents([.medium])
-    }
-
-    // MARK: - Prompt Settings Section
-
-    private var promptSettingsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Prompts", systemImage: "text.quote")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    Button {
-                        showingAddPrompt = true
-                    } label: {
-                        HStack {
-                            Label("Add Custom Prompt", systemImage: "plus.circle")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(minHeight: 40)
-                    }
-                    .buttonStyle(.plain)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Toggle(isOn: $viewModel.hideAnsweredPrompts) {
-                        Label("Hide Answered Prompts", systemImage: "checkmark.circle")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    // Categories expandable
-                    Button {
-                        Haptics.light()
-                        withAnimation(.spring(duration: 0.3)) {
-                            showingCategories.toggle()
-                        }
-                    } label: {
-                        HStack {
-                            Label("Prompt Categories", systemImage: "folder")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-
-                            Spacer()
-
-                            Text("\(viewModel.enabledPromptCategories.count) selected")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(showingCategories ? 90 : 0))
-                        }
-                        .frame(minHeight: 40)
-                    }
-                    .buttonStyle(.plain)
-
-                    if showingCategories {
-                        VStack(spacing: 0) {
-                            ForEach(Array(PromptCategory.allCases.enumerated()), id: \.element) { index, category in
-                                Divider()
-                                    .padding(.vertical, 6)
-
-                                Button {
-                                    Haptics.selection()
-                                    viewModel.toggleCategory(category)
-                                } label: {
-                                    HStack {
-                                        Image(systemName: category.iconName)
-                                            .foregroundStyle(category.color)
-                                            .frame(width: 24)
-
-                                        Text(category.displayName)
-                                            .font(.subheadline)
-                                            .foregroundStyle(.primary)
-
-                                        Spacer()
-
-                                        if viewModel.isCategoryEnabled(category) {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(.teal)
-                                        } else {
-                                            Image(systemName: "circle")
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                    }
-                                    .scaleEffect(showingCategories ? 1.05 : 1.0)
-                                    .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showingCategories)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.top, 4)
-                        .transition(.opacity)
-                    }
-                }
-            }
-
-            Text("Browse, search, and manage all prompts. Add your own custom prompts to practice with.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-        }
-        .sheet(isPresented: $showingAddPrompt) {
-            AddPromptView()
-        }
-    }
-
-    // MARK: - Reminder Section
-
-    private var reminderSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Reminders", systemImage: "bell.fill")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    Toggle(isOn: $viewModel.dailyReminderEnabled) {
-                        Label("Daily Reminder", systemImage: "bell.fill")
-                            .font(.subheadline)
-                    }
-                    .tint(.teal)
-                    .frame(minHeight: 40)
-
-                    if viewModel.dailyReminderEnabled {
-                        Divider()
-                            .padding(.vertical, 8)
-
-                        HStack {
-                            Label("Reminder Time", systemImage: "clock")
-                                .font(.subheadline)
-                            Spacer()
-                            DatePicker(
-                                "",
-                                selection: $viewModel.reminderTime,
-                                displayedComponents: .hourAndMinute
-                            )
-                            .labelsHidden()
-                            .tint(.teal)
-                        }
-                        .frame(minHeight: 40)
-                    }
-                }
-            }
-
-            Text("Get a daily notification to practice your speaking skills.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-        }
-    }
-
-    // MARK: - Data Management Section
-
-    private var dataManagementSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Data", systemImage: "externaldrive.fill")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    Button {
-                        Haptics.warning()
-                        viewModel.showingResetConfirmation = true
-                    } label: {
-                        HStack {
-                            Label("Reset Settings", systemImage: "arrow.counterclockwise")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(minHeight: 40)
-                    }
-                    .buttonStyle(.plain)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Button {
-                        Haptics.warning()
-                        viewModel.showingClearDataConfirmation = true
-                    } label: {
-                        HStack {
-                            Label("Clear All Data", systemImage: "trash")
-                                .font(.subheadline)
-                                .foregroundStyle(.red)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(minHeight: 40)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Text("Your recordings and progress are stored locally on this device.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-        }
-    }
-
-    // MARK: - About Section
-
-    private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("About", systemImage: "info.circle")
-                .font(.headline)
-
-            GlassCard {
-                VStack(spacing: 0) {
-                    HStack {
-                        Label("Version", systemImage: "info.circle")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(viewModel.appVersion) (\(viewModel.buildNumber))")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(minHeight: 40)
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    Link(destination: URL(string: "mailto:vansh@trygoldfinch.com")!) {
-                        HStack {
-                            Label("Send Feedback", systemImage: "envelope")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(minHeight: 40)
-                    }
-
-                    Divider()
-                        .padding(.vertical, 8)
-
-                    NavigationLink {
-                        JournalExportView()
-                    } label: {
-                        HStack {
-                            Label("Export Progress Journal", systemImage: "doc.richtext")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(minHeight: 40)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Settings Change Modifiers
-
-struct SettingsChangeModifiers: ViewModifier {
-    @Bindable var viewModel: SettingsViewModel
-
-    func body(content: Content) -> some View {
-        content
-            .modifier(SettingsChangeModifiersA(viewModel: viewModel))
-            .modifier(SettingsChangeModifiersB(viewModel: viewModel))
-    }
-}
-
-private struct SettingsChangeModifiersA: ViewModifier {
-    @Bindable var viewModel: SettingsViewModel
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: viewModel.defaultDuration) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.dailyReminderEnabled) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.reminderTime) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.weeklyGoalSessions) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.trackPauses) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.trackFillerWords) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.targetWPM) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-    }
-}
-
-private struct SettingsChangeModifiersB: ViewModifier {
-    @Bindable var viewModel: SettingsViewModel
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: viewModel.countdownDuration) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.countdownStyle) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.timerEndBehavior) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.hapticCoachingEnabled) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.chirpSoundEnabled) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.hideAnsweredPrompts) { _, _ in
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.sessionFeedbackEnabled) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
+        .navigationTitle("About")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { viewModel.configure(with: modelContext) }
     }
 }
 
@@ -913,4 +272,3 @@ private struct SettingsChangeModifiersB: ViewModifier {
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }
-

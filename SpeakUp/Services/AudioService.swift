@@ -42,15 +42,7 @@ class AudioService: NSObject {
             try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
             try recordingSession?.setActive(true)
             
-            if #available(iOS 17.0, *) {
-                hasPermission = await AVAudioApplication.requestRecordPermission()
-            } else {
-                hasPermission = await withCheckedContinuation { continuation in
-                    recordingSession?.requestRecordPermission { granted in
-                        continuation.resume(returning: granted)
-                    }
-                }
-            }
+            hasPermission = await AVAudioApplication.requestRecordPermission()
             
             return hasPermission
         } catch {

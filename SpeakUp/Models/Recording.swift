@@ -21,6 +21,7 @@ final class Recording {
     var drillMode: String?
     var frameworkUsed: String?
     var sessionFeedback: SessionFeedback?
+    var goalId: UUID?
     @Transient var audioLevelSamples: [Float]? = nil
 
     init(
@@ -41,7 +42,8 @@ final class Recording {
         customTitle: String? = nil,
         drillMode: String? = nil,
         frameworkUsed: String? = nil,
-        audioLevelSamples: [Float]? = nil
+        audioLevelSamples: [Float]? = nil,
+        goalId: UUID? = nil
     ) {
         self.id = id
         self.date = date
@@ -61,6 +63,7 @@ final class Recording {
         self.drillMode = drillMode
         self.frameworkUsed = frameworkUsed
         self.audioLevelSamples = audioLevelSamples
+        self.goalId = goalId
     }
 
     /// Display title: custom title, prompt text, or fallback

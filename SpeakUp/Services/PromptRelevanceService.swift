@@ -52,6 +52,22 @@ enum PromptRelevanceService {
         return max(0, min(100, Int(raw * 100)))
     }
 
+    /// LLM-enhanced coherence scoring: blends semantic LLM evaluation (60%) with
+    /// rule-based structural analysis (40%) for robust scoring.
+    static func coherenceScore(transcript: String, llmService: LLMService?) async -> Int? {
+        let ruleBasedScore = coherenceScore(transcript: transcript)
+
+        if let llm = llmService, llm.isAvailable {
+            if let llmResult = await llm.evaluateCoherence(transcript: transcript) {
+                let ruleBase = Double(ruleBasedScore ?? 50)
+                let blended = Double(llmResult.score) * 0.6 + ruleBase * 0.4
+                return max(0, min(100, Int(blended)))
+            }
+        }
+
+        return ruleBasedScore
+    }
+
     /// Compute a coherence score for free-practice sessions (no prompt).
     /// Multi-signal approach: entity continuity, sentence flow, sliding window
     /// topic drift, weighted discourse markers, and structural progression.

@@ -33,10 +33,13 @@ enum FillerDetectionPipeline {
 
     // MARK: - Full Pipeline (returns TranscriptionWord array)
 
-    /// Tag fillers in the given word timings.
-    /// Computes pause/context for each word, runs `FillerWordList` context-aware detection,
-    /// then detects multi-word filler phrases in a second pass.
+    /// Tag fillers in the given word timings (no config — backward compat).
     static func tagFillers(in words: [RawWordTiming]) -> [TranscriptionWord] {
+        tagFillers(in: words, config: .default)
+    }
+
+    /// Tag fillers in the given word timings with user config.
+    static func tagFillers(in words: [RawWordTiming], config: FillerWordConfig) -> [TranscriptionWord] {
         guard !words.isEmpty else { return [] }
 
         var result: [TranscriptionWord] = []
@@ -55,7 +58,8 @@ enum FillerDetectionPipeline {
                 nextWord: nextWord,
                 pauseBefore: pauseBefore,
                 pauseAfter: pauseAfter,
-                isStartOfSentence: isStartOfSentence
+                isStartOfSentence: isStartOfSentence,
+                config: config
             )
 
             result.append(TranscriptionWord(
@@ -75,9 +79,13 @@ enum FillerDetectionPipeline {
 
     // MARK: - Lightweight Count-Only (for LiveTranscriptionService)
 
-    /// Count fillers without creating TranscriptionWord objects.
-    /// Returns the set of indices that are fillers (single-word + phrase).
+    /// Count fillers without creating TranscriptionWord objects (no config — backward compat).
     static func countFillers(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) -> Int {
+        countFillers(words: words, timestamps: timestamps, durations: durations, config: .default)
+    }
+
+    /// Count fillers with user config.
+    static func countFillers(words: [String], timestamps: [TimeInterval], durations: [TimeInterval], config: FillerWordConfig) -> Int {
         guard words.count == timestamps.count, words.count == durations.count, !words.isEmpty else { return 0 }
 
         var fillerIndices = Set<Int>()
@@ -122,7 +130,8 @@ enum FillerDetectionPipeline {
                 nextWord: next,
                 pauseBefore: pauseBefore,
                 pauseAfter: pauseAfter,
-                isStartOfSentence: isStartOfSentence
+                isStartOfSentence: isStartOfSentence,
+                config: config
             ) {
                 fillerIndices.insert(i)
             }

@@ -57,6 +57,11 @@ final class UserSettings {
     var sessionFeedbackEnabled: Bool = true
     var customFeedbackQuestions: [FeedbackQuestion] = []
 
+    // Filler Word Customization
+    var customFillerWords: [String] = []              // user-added always-detected fillers
+    var customContextFillerWords: [String] = []       // user-added context-dependent fillers
+    var removedDefaultFillers: [String] = []          // default fillers the user disabled
+
     // Score Weights
     var clarityWeight: Double = 0.12
     var paceWeight: Double = 0.12

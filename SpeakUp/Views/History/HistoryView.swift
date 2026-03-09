@@ -62,6 +62,11 @@ struct HistoryView: View {
                     streakSection
                     vocabUsageSection
 
+                    // Progress Charts link
+                    if analyzedRecordings.count >= 2 {
+                        progressChartsCard
+                    }
+
                     if viewModel.recordings.count >= 5 {
                         progressReplayBanner
                     }
@@ -321,6 +326,39 @@ struct HistoryView: View {
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Progress Charts Card
+
+    private var progressChartsCard: some View {
+        NavigationLink {
+            ProgressChartsView()
+        } label: {
+            FeaturedGlassCard(gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]) {
+                HStack(spacing: 14) {
+                    Image(systemName: "chart.xyaxis.line")
+                        .font(.title2)
+                        .foregroundStyle(.teal)
+                        .frame(width: 32)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Progress Charts")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("View score trends, pace, fillers & more")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -690,19 +728,34 @@ struct RecordingRow: View {
         } else {
             GlassCard(padding: 12) {
                 HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.teal.opacity(0.15), .cyan.opacity(0.08)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                    // Mini score ring
+                    if let score = recording.analysis?.speechScore.overall {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.08), lineWidth: 3)
+                                .frame(width: 40, height: 40)
+                            Circle()
+                                .trim(from: 0, to: CGFloat(score) / 100)
+                                .stroke(
+                                    AppColors.scoreColor(for: score),
+                                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
                                 )
+                                .frame(width: 40, height: 40)
+                                .rotationEffect(.degrees(-90))
+                            Text("\(score)")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppColors.scoreColor(for: score))
+                        }
+                    } else if recording.isProcessing {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .frame(width: 40, height: 40)
+                    } else {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(
+                                (PromptCategory(rawValue: recording.prompt?.category ?? "")?.color ?? .teal)
                             )
-                            .frame(width: 44, height: 44)
-
-                        Image(systemName: recording.mediaType.iconName)
-                            .foregroundStyle(.teal)
+                            .frame(width: 4, height: 40)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -761,23 +814,8 @@ struct RecordingRow: View {
 
                     Spacer()
 
-                    if let score = recording.analysis?.speechScore.overall {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(score)")
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(AppColors.scoreColor(for: score))
-
-                            Text("score")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if recording.isProcessing {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.tertiary)
-                    }
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.tertiary)
                 }
             }
         }

@@ -51,7 +51,7 @@ class SpeechService {
 
     // MARK: - Transcription
 
-    func transcribe(audioURL: URL) async throws -> SpeechTranscriptionResult {
+    func transcribe(audioURL: URL, fillerConfig: FillerWordConfig = .default) async throws -> SpeechTranscriptionResult {
         isTranscribing = true
         transcriptionProgress = 0
 
@@ -60,12 +60,13 @@ class SpeechService {
             transcriptionProgress = 1.0
         }
 
+        let result: SpeechTranscriptionResult
+
         do {
             // Use WhisperKit for accurate filler word detection
-            let result = try await whisperService.transcribe(audioURL: audioURL)
+            result = try await whisperService.transcribe(audioURL: audioURL)
             transcriptionProgress = whisperService.transcriptionProgress
             transcriptionEngine = "WhisperKit"
-            return result
         } catch {
             print("⚠️ WhisperKit failed: \(error). Retrying model load...")
 
@@ -74,16 +75,26 @@ class SpeechService {
             await whisperService.loadModel(modelVariant: "base")
 
             do {
-                let result = try await whisperService.transcribe(audioURL: audioURL)
+                let retryResult = try await whisperService.transcribe(audioURL: audioURL)
                 transcriptionEngine = "WhisperKit (retry)"
                 print("✅ WhisperKit retry succeeded")
-                return result
+                result = retryResult
             } catch {
                 print("⚠️ WhisperKit retry failed: \(error). Falling back to Apple Speech (filler words may not be detected).")
                 transcriptionEngine = "Apple Speech (fallback)"
-                return try await transcribeWithAppleSpeech(audioURL: audioURL)
+                result = try await transcribeWithAppleSpeech(audioURL: audioURL)
             }
         }
+
+        // Re-tag fillers with user config if customized
+        if fillerConfig.customFillers.isEmpty && fillerConfig.removedDefaults.isEmpty {
+            return result
+        }
+        let rawTimings = result.words.map { w in
+            RawWordTiming(word: w.word, start: w.start, end: w.end, confidence: w.confidence ?? 1.0)
+        }
+        let retagged = FillerDetectionPipeline.tagFillers(in: rawTimings, config: fillerConfig)
+        return SpeechTranscriptionResult(text: result.text, words: retagged, duration: result.duration)
     }
 
     /// Fallback transcription using Apple's SFSpeechRecognizer
@@ -429,15 +440,16 @@ class SpeechService {
         do {
             let articulationComponent: Double
             if let pm = pitchMetrics, pm.voicedFrameRatio > 0 {
-                // voicedFrameRatio: 0.3-0.7 is typical for speech. Map to 0-100.
-                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 150))
+                // voicedFrameRatio: 0.3-0.7 is typical for speech.
+                // Gentler mapping: ratio 0.35 → ~60, 0.5 → ~75, 0.65 → ~90
+                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 120 + 18))
             } else {
                 // Fallback to word confidence when pitch data unavailable
                 let confidences = words.compactMap { $0.confidence }
                 if !confidences.isEmpty {
                     articulationComponent = (confidences.reduce(0, +) / Double(confidences.count)) * 100
                 } else {
-                    articulationComponent = 50
+                    articulationComponent = 55
                 }
             }
 
@@ -447,14 +459,15 @@ class SpeechService {
                 let meanDur = durations.reduce(0, +) / Double(durations.count)
                 let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
                 let cv = meanDur > 0 ? sqrt(variance) / meanDur : 1.0
-                durationComponent = max(0, min(100, (1.0 - cv) * 100))
+                // Softer curve: natural speech CV ~0.4-0.6 now scores 55-75 instead of 40-60
+                durationComponent = max(0, min(100, (1.0 - cv * 0.75) * 100))
             } else {
-                durationComponent = 50
+                durationComponent = 55
             }
 
             let hedgePenalty: Double
             if let tq = textQuality {
-                hedgePenalty = min(25, tq.hedgeWordRatio * 500)
+                hedgePenalty = min(20, tq.hedgeWordRatio * 400)
             } else {
                 hedgePenalty = 0
             }
@@ -695,6 +708,35 @@ class SpeechService {
         guard totalWeight > 0 else { return 0 }
         let score = weighted / totalWeight
         return max(0, min(100, Int(score)))
+    }
+
+    // MARK: - LLM Coherence Enhancement
+
+    /// Post-analysis step: re-evaluate coherence with LLM blending and recalculate overall score.
+    /// Call this after the synchronous analyze() returns, when an on-device LLM is available.
+    func enhanceCoherenceWithLLM(
+        analysis: inout SpeechAnalysis,
+        transcript: String,
+        llmService: LLMService,
+        scoreWeights: ScoreWeights = .defaults
+    ) async {
+        guard llmService.isAvailable, transcript.count >= 50 else { return }
+
+        if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
+            transcript: transcript,
+            llmService: llmService
+        ) {
+            // Update the relevance subscore with the blended value
+            analysis.promptRelevanceScore = enhancedCoherence
+            analysis.speechScore.subscores.relevance = enhancedCoherence
+
+            // Recalculate overall score with updated subscore
+            let newOverall = calculateOverallScore(
+                subscores: analysis.speechScore.subscores,
+                weights: scoreWeights
+            )
+            analysis.speechScore.overall = newOverall
+        }
     }
 
     // MARK: - WPM Time Series

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Combine
 
 struct CountdownOverlayView: View {
@@ -8,6 +9,10 @@ struct CountdownOverlayView: View {
     let countdownStyle: CountdownStyle
     let onComplete: () -> Void
     let onCancel: () -> Void
+    @Binding var selectedGoalId: UUID?
+
+    @Query(filter: #Predicate<UserGoal> { !$0.isCompleted })
+    private var activeGoals: [UserGoal]
 
     @State private var elapsedSeconds: Int = 0
     @State private var isPulsing: Bool = false
@@ -34,6 +39,7 @@ struct CountdownOverlayView: View {
         duration: RecordingDuration,
         countdownDuration: Int = 15,
         countdownStyle: CountdownStyle = .countDown,
+        selectedGoalId: Binding<UUID?> = .constant(nil),
         onComplete: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -41,6 +47,7 @@ struct CountdownOverlayView: View {
         self.duration = duration
         self.countdownDuration = countdownDuration
         self.countdownStyle = countdownStyle
+        self._selectedGoalId = selectedGoalId
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
@@ -61,6 +68,11 @@ struct CountdownOverlayView: View {
                     Spacer()
                 }
                 .padding(.top, 100)
+
+                // Goal picker (if active goals exist)
+                if !activeGoals.isEmpty {
+                    goalPickerSection
+                }
 
                 Spacer()
 
@@ -220,6 +232,70 @@ struct CountdownOverlayView: View {
         }
     }
     
+    // MARK: - Goal Picker
+
+    private var goalPickerSection: some View {
+        VStack(spacing: 8) {
+            Text("What are you focusing on?")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.6))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    // "None" option
+                    Button {
+                        Haptics.selection()
+                        selectedGoalId = nil
+                    } label: {
+                        Text("Skip")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(selectedGoalId == nil ? .white : .white.opacity(0.5))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background {
+                                Capsule()
+                                    .fill(selectedGoalId == nil ? Color.teal.opacity(0.3) : Color.white.opacity(0.08))
+                                    .overlay {
+                                        Capsule()
+                                            .strokeBorder(selectedGoalId == nil ? Color.teal.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                                    }
+                            }
+                    }
+                    .buttonStyle(.plain)
+
+                    ForEach(activeGoals) { goal in
+                        let isSelected = selectedGoalId == goal.id
+                        Button {
+                            Haptics.selection()
+                            selectedGoalId = isSelected ? nil : goal.id
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: goal.type.iconName)
+                                    .font(.caption2)
+                                Text(goal.title)
+                                    .font(.caption.weight(.medium))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background {
+                                Capsule()
+                                    .fill(isSelected ? Color.teal.opacity(0.3) : Color.white.opacity(0.08))
+                                    .overlay {
+                                        Capsule()
+                                            .strokeBorder(isSelected ? Color.teal.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                                    }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+
     // MARK: - Helpers
     
     private var progress: Double {
