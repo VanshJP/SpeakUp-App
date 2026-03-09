@@ -706,7 +706,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func coachingTabContent(_ recording: Recording) -> some View {
         if let analysis = recording.analysis {
-            // AI Insights — available when on-device LLM is ready OR FoundationModels (iOS 26+)
+            // AI Insights — available when Apple Intelligence or local LLM is ready
             if llmService.isAvailable {
                 aiInsightsSection(recording)
             }
@@ -729,12 +729,17 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func aiInsightsSection(_ recording: Recording) -> some View {
+        let isAppleIntelligence = llmService.activeBackend == .appleIntelligence
+
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Label("AI Insights", systemImage: "apple.intelligence")
-                    .font(.headline)
+                Label(
+                    "AI Insights",
+                    systemImage: isAppleIntelligence ? "apple.intelligence" : "cpu"
+                )
+                .font(.headline)
 
-                Text("AI")
+                Text(isAppleIntelligence ? "AI" : LocalLLMService.modelDisplayName)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -743,7 +748,9 @@ struct RecordingDetailView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [.purple, .blue],
+                                    colors: isAppleIntelligence
+                                        ? [.purple, .blue]
+                                        : [.cyan, .teal],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )

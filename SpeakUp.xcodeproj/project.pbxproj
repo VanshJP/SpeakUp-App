@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000022F290002005C1EB3 /* WhisperKit */; };
+		BB1100032F4D0003005C1EB3 /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = BB1100022F4D0002005C1EB3 /* llama */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,8 +40,9 @@
 		BBCE3ADC2F285A2B005C1EB3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
+		files = (
 				BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */,
+				BB1100032F4D0003005C1EB3 /* llama in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,8 +84,9 @@
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
 			);
 			name = SpeakUp;
-			packageProductDependencies = (
+		packageProductDependencies = (
 				BB0000022F290002005C1EB3 /* WhisperKit */,
+				BB1100022F4D0002005C1EB3 /* llama */,
 			);
 			productName = SpeakUp;
 			productReference = BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */;
@@ -113,8 +116,9 @@
 			);
 			mainGroup = BBCE3AD62F285A2B005C1EB3;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
+		packageReferences = (
 				BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBCE3AE02F285A2B005C1EB3 /* Products */;
@@ -385,6 +389,14 @@
 				minimumVersion = 0.9.0;
 			};
 		};
+		BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mattt/llama.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7972.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -392,6 +404,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
+		};
+		BB1100022F4D0002005C1EB3 /* llama */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */;
+			productName = llama;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

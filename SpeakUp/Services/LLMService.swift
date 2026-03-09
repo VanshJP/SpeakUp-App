@@ -10,19 +10,104 @@ struct CoherenceResult {
     let reason: String
 }
 
+enum LLMBackend: Equatable {
+    case appleIntelligence
+    case localLLM
+    case none
+}
+
 // MARK: - LLMService
 
 @MainActor @Observable
 final class LLMService {
     var isGenerating = false
 
-    var isAvailable: Bool {
+    /// Local on-device LLM for devices without Apple Intelligence.
+    let localLLM = LocalLLMService()
+
+    // MARK: - Availability
+
+    var appleIntelligenceAvailable: Bool {
         SystemLanguageModel.default.isAvailable
+    }
+
+    /// True when any LLM backend is ready to generate.
+    var isAvailable: Bool {
+        appleIntelligenceAvailable || localLLM.isModelReady
+    }
+
+    /// The backend that will be used for the next generation request.
+    var activeBackend: LLMBackend {
+        if appleIntelligenceAvailable { return .appleIntelligence }
+        if localLLM.isModelReady { return .localLLM }
+        return .none
+    }
+
+    // MARK: - Local Model Management (pass-through)
+
+    func downloadLocalModel() async {
+        await localLLM.downloadModel()
+    }
+
+    func loadLocalModel() async {
+        await localLLM.loadModel()
+    }
+
+    func unloadLocalModel() {
+        localLLM.unloadModel()
+    }
+
+    func deleteLocalModel() {
+        localLLM.deleteModel()
+    }
+
+    /// Download and immediately load the local model.
+    func setupLocalModel() async {
+        await localLLM.downloadModel()
+        await localLLM.loadModel()
     }
 
     // MARK: - Coherence Evaluation
 
     func evaluateCoherence(transcript: String) async -> CoherenceResult? {
+        // Prefer Apple Intelligence when available
+        if appleIntelligenceAvailable {
+            return await evaluateCoherenceWithAppleIntelligence(transcript: transcript)
+        }
+
+        // Fall back to local LLM
+        if localLLM.isModelReady {
+            return await localLLM.evaluateCoherence(transcript: transcript)
+        }
+
+        return nil
+    }
+
+    // MARK: - Coaching Tips
+
+    func generateCoachingInsight(
+        from analysis: SpeechAnalysis,
+        transcript: String
+    ) async -> String? {
+        isGenerating = true
+        defer { isGenerating = false }
+
+        // Prefer Apple Intelligence
+        if appleIntelligenceAvailable {
+            return await generateCoachingWithAppleIntelligence(analysis: analysis, transcript: transcript)
+        }
+
+        // Fall back to local LLM
+        if localLLM.isModelReady {
+            return await localLLM.generateCoachingInsight(from: analysis, transcript: transcript)
+        }
+
+        return nil
+    }
+
+    // MARK: - Apple Intelligence Backend
+
+    private func evaluateCoherenceWithAppleIntelligence(transcript: String) async -> CoherenceResult? {
         let truncated = String(transcript.prefix(800))
 
         let systemPrompt = """
@@ -36,7 +121,7 @@ final class LLMService {
 
         let userPrompt = "Evaluate the coherence of this speech transcript:\n\n\(truncated)"
 
-        guard let output = await generate(prompt: userPrompt, systemPrompt: systemPrompt) else {
+        guard let output = await generateWithAppleIntelligence(prompt: userPrompt, systemPrompt: systemPrompt) else {
             return nil
         }
 
@@ -50,15 +135,10 @@ final class LLMService {
         return CoherenceResult(score: score, topicFocus: "", logicalFlow: "", reason: "")
     }
 
-    // MARK: - Coaching Tips
-
-    func generateCoachingInsight(
-        from analysis: SpeechAnalysis,
+    private func generateCoachingWithAppleIntelligence(
+        analysis: SpeechAnalysis,
         transcript: String
     ) async -> String? {
-        isGenerating = true
-        defer { isGenerating = false }
-
         let model = SystemLanguageModel.default
         guard model.isAvailable else { return nil }
 
@@ -77,9 +157,7 @@ final class LLMService {
         }
     }
 
-    // MARK: - Private
-
-    private func generate(prompt: String, systemPrompt: String) async -> String? {
+    private func generateWithAppleIntelligence(prompt: String, systemPrompt: String) async -> String? {
         let model = SystemLanguageModel.default
         guard model.isAvailable else { return nil }
 
@@ -98,6 +176,8 @@ final class LLMService {
             return nil
         }
     }
+
+    // MARK: - Parsing
 
     private static func parseCoherenceResult(_ output: String) -> CoherenceResult? {
         let lines = output.components(separatedBy: "\n")

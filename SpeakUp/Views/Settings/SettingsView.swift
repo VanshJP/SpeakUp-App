@@ -148,7 +148,14 @@ struct SettingsView: View {
     }
 
     private var aiModelSubtitle: String {
-        llmService.isAvailable ? "Available" : "Not available"
+        switch llmService.activeBackend {
+        case .appleIntelligence:
+            return "Apple Intelligence"
+        case .localLLM:
+            return LocalLLMService.modelDisplayName
+        case .none:
+            return "Not available"
+        }
     }
 
     private var reminderTimeString: String {
