@@ -52,15 +52,32 @@ enum PromptRelevanceService {
         return max(0, min(100, Int(raw * 100)))
     }
 
-    /// LLM-enhanced coherence scoring: blends semantic LLM evaluation (60%) with
-    /// rule-based structural analysis (40%) for robust scoring.
-    static func coherenceScore(transcript: String, llmService: LLMService?) async -> Int? {
+    /// LLM-enhanced coherence scoring with backend-aware blend ratios.
+    /// Apple Intelligence: 60% LLM / 40% rule-based (higher model confidence).
+    /// Local 0.5B model: 40% LLM / 60% rule-based (smaller model, let rules dominate).
+    static func coherenceScore(
+        transcript: String,
+        llmService: LLMService?,
+        promptText: String? = nil
+    ) async -> Int? {
         let ruleBasedScore = coherenceScore(transcript: transcript)
 
         if let llm = llmService, llm.isAvailable {
-            if let llmResult = await llm.evaluateCoherence(transcript: transcript) {
+            if let llmResult = await llm.evaluateCoherence(transcript: transcript, promptText: promptText) {
                 let ruleBase = Double(ruleBasedScore ?? 50)
-                let blended = Double(llmResult.score) * 0.6 + ruleBase * 0.4
+
+                // Backend-aware blending: trust larger models more
+                let llmWeight: Double
+                switch llm.activeBackend {
+                case .appleIntelligence:
+                    llmWeight = 0.60
+                case .localLLM:
+                    llmWeight = 0.40
+                case .none:
+                    llmWeight = 0.0
+                }
+
+                let blended = Double(llmResult.score) * llmWeight + ruleBase * (1.0 - llmWeight)
                 return max(0, min(100, Int(blended)))
             }
         }

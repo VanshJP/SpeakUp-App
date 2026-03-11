@@ -1,16 +1,17 @@
 import Foundation
 import FoundationModels
+import os.log
 
 // MARK: - Types
 
-struct CoherenceResult {
+struct CoherenceResult: Sendable {
     let score: Int
     let topicFocus: String
     let logicalFlow: String
     let reason: String
 }
 
-enum LLMBackend: Equatable {
+enum LLMBackend: Equatable, Sendable {
     case appleIntelligence
     case localLLM
     case none
@@ -24,6 +25,34 @@ final class LLMService {
 
     /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
+
+    nonisolated(unsafe) private var memoryPressureSource: DispatchSourceMemoryPressure?
+
+    init() {
+        setupMemoryPressureMonitor()
+    }
+
+    deinit {
+        memoryPressureSource?.cancel()
+    }
+
+    // MARK: - Memory Pressure
+
+    private func setupMemoryPressureMonitor() {
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .global(qos: .utility)
+        )
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            print("[LLMService] Memory pressure detected — unloading local LLM")
+            Task { @MainActor in
+                self.localLLM.unloadModel()
+            }
+        }
+        source.resume()
+        memoryPressureSource = source
+    }
 
     // MARK: - Availability
 
@@ -67,17 +96,27 @@ final class LLMService {
         await localLLM.loadModel()
     }
 
+    /// Loads the local model if it's downloaded but not yet loaded.
+    func loadLocalModelIfNeeded() async {
+        guard !appleIntelligenceAvailable,
+              localLLM.isModelDownloaded,
+              !localLLM.isModelReady else { return }
+        // Avoid re-loading if already loading
+        if case .loading = localLLM.modelState { return }
+        await localLLM.loadModel()
+    }
+
     // MARK: - Coherence Evaluation
 
-    func evaluateCoherence(transcript: String) async -> CoherenceResult? {
+    func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {
         // Prefer Apple Intelligence when available
         if appleIntelligenceAvailable {
-            return await evaluateCoherenceWithAppleIntelligence(transcript: transcript)
+            return await evaluateCoherenceWithAppleIntelligence(transcript: transcript, promptText: promptText)
         }
 
         // Fall back to local LLM
         if localLLM.isModelReady {
-            return await localLLM.evaluateCoherence(transcript: transcript)
+            return await localLLM.evaluateCoherence(transcript: transcript, promptText: promptText)
         }
 
         return nil
@@ -105,21 +144,59 @@ final class LLMService {
         return nil
     }
 
+    // MARK: - Transcript Quality Evaluation
+
+    func evaluateTranscriptQuality(transcript: String) async -> (structure: Int, vocabulary: Int)? {
+        // Prefer Apple Intelligence
+        if appleIntelligenceAvailable {
+            return await evaluateTranscriptQualityWithAppleIntelligence(transcript: transcript)
+        }
+
+        // Fall back to local LLM
+        if localLLM.isModelReady {
+            return await localLLM.evaluateTranscriptQuality(transcript: transcript)
+        }
+
+        return nil
+    }
+
     // MARK: - Apple Intelligence Backend
 
-    private func evaluateCoherenceWithAppleIntelligence(transcript: String) async -> CoherenceResult? {
+    private func evaluateCoherenceWithAppleIntelligence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {
         let truncated = String(transcript.prefix(800))
 
-        let systemPrompt = """
-        You are a speech coherence evaluator. Score the coherence of the given transcript \
-        on a 0-100 scale. Output EXACTLY in this format with no other text:
-        SCORE: <number>
-        TOPIC_FOCUS: <one sentence>
-        LOGICAL_FLOW: <one sentence>
-        REASON: <one sentence>
-        """
+        let systemPrompt: String
+        let userPrompt: String
 
-        let userPrompt = "Evaluate the coherence of this speech transcript:\n\n\(truncated)"
+        if let promptText, !promptText.isEmpty {
+            systemPrompt = """
+            You are a speech evaluator. Score this speech 0-100 based on:
+            1. Prompt relevance — Does the speech address the given topic?
+            2. Logical flow — Are ideas connected with transitions?
+            3. Completeness — Does it have an opening, body, and conclusion?
+            4. Fluency — Are sentences well-formed and clear?
+            Output EXACTLY in this format with no other text:
+            SCORE: <number>
+            TOPIC_FOCUS: <one sentence>
+            LOGICAL_FLOW: <one sentence>
+            REASON: <one sentence>
+            """
+            userPrompt = "Prompt: \(promptText)\n\nSpeech transcript:\n\(truncated)"
+        } else {
+            systemPrompt = """
+            You are a speech coherence evaluator. Score this speech 0-100 based on:
+            1. Internal consistency — Do sentences relate to each other?
+            2. Logical flow — Are ideas connected and ordered logically?
+            3. Topical focus — Does the speaker stay on one thread or ramble?
+            4. Fluency — Are sentences well-formed and clear?
+            Output EXACTLY in this format with no other text:
+            SCORE: <number>
+            TOPIC_FOCUS: <one sentence>
+            LOGICAL_FLOW: <one sentence>
+            REASON: <one sentence>
+            """
+            userPrompt = "Evaluate the coherence of this speech transcript:\n\n\(truncated)"
+        }
 
         guard let output = await generateWithAppleIntelligence(prompt: userPrompt, systemPrompt: systemPrompt) else {
             return nil
@@ -133,6 +210,42 @@ final class LLMService {
         let numbers = output.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap { Int($0) }
         let score = numbers.first(where: { $0 >= 0 && $0 <= 100 }) ?? 50
         return CoherenceResult(score: score, topicFocus: "", logicalFlow: "", reason: "")
+    }
+
+    private func evaluateTranscriptQualityWithAppleIntelligence(transcript: String) async -> (structure: Int, vocabulary: Int)? {
+        let truncated = String(transcript.prefix(800))
+
+        let systemPrompt = """
+        You are a speech evaluator. Rate this transcript on two dimensions, each 0-100:
+        STRUCTURE: Are sentences complete? Is there logical progression? Are ideas organized?
+        VOCABULARY: Is word choice varied and specific? Does the speaker use precise language?
+        Output EXACTLY in this format with no other text:
+        STRUCTURE: <number>
+        VOCABULARY: <number>
+        """
+
+        let userPrompt = "Rate this speech transcript:\n\n\(truncated)"
+
+        guard let output = await generateWithAppleIntelligence(prompt: userPrompt, systemPrompt: systemPrompt) else {
+            return nil
+        }
+
+        // Parse STRUCTURE and VOCABULARY lines
+        var structure: Int?
+        var vocabulary: Int?
+        for line in output.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.uppercased().hasPrefix("STRUCTURE:") {
+                let value = trimmed.dropFirst(10).trimmingCharacters(in: .whitespaces)
+                structure = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
+            } else if trimmed.uppercased().hasPrefix("VOCABULARY:") {
+                let value = trimmed.dropFirst(11).trimmingCharacters(in: .whitespaces)
+                vocabulary = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
+            }
+        }
+
+        guard let s = structure, let v = vocabulary else { return nil }
+        return (structure: max(0, min(100, s)), vocabulary: max(0, min(100, v)))
     }
 
     private func generateCoachingWithAppleIntelligence(

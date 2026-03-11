@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BB1100032F4D0003005C1EB3 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = BB1100022F4D0002005C1EB3 /* LlamaSwift */; };
 		BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000022F290002005C1EB3 /* WhisperKit */; };
-		BB1100032F4D0003005C1EB3 /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = BB1100022F4D0002005C1EB3 /* llama */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,19 +40,27 @@
 		BBCE3ADC2F285A2B005C1EB3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-		files = (
+			files = (
 				BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */,
-				BB1100032F4D0003005C1EB3 /* llama in Frameworks */,
+				BB1100032F4D0003005C1EB3 /* LlamaSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BB49FAB32F5F5CD300D298F1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		BBCE3AD62F285A2B005C1EB3 = {
 			isa = PBXGroup;
 			children = (
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
+				BB49FAB32F5F5CD300D298F1 /* Frameworks */,
 				BBCE3AE02F285A2B005C1EB3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,9 +92,9 @@
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
 			);
 			name = SpeakUp;
-		packageProductDependencies = (
+			packageProductDependencies = (
 				BB0000022F290002005C1EB3 /* WhisperKit */,
-				BB1100022F4D0002005C1EB3 /* llama */,
+				BB1100022F4D0002005C1EB3 /* LlamaSwift */,
 			);
 			productName = SpeakUp;
 			productReference = BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */;
@@ -116,7 +124,7 @@
 			);
 			mainGroup = BBCE3AD62F285A2B005C1EB3;
 			minimizedProjectReferenceProxies = 1;
-		packageReferences = (
+			packageReferences = (
 				BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */,
 			);
@@ -287,14 +295,14 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUp/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "To speak into and get the user recording of the session";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says (this is NOT collected)";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore;
@@ -330,14 +338,14 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUp/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "To speak into and get the user recording of the session";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says (this is NOT collected)";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore;
@@ -405,10 +413,10 @@
 			package = BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
 		};
-		BB1100022F4D0002005C1EB3 /* llama */ = {
+		BB1100022F4D0002005C1EB3 /* LlamaSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */;
-			productName = llama;
+			productName = LlamaSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

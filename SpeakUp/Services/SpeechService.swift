@@ -710,33 +710,70 @@ class SpeechService {
         return max(0, min(100, Int(score)))
     }
 
-    // MARK: - LLM Coherence Enhancement
+    // MARK: - LLM Enhancement
 
-    /// Post-analysis step: re-evaluate coherence with LLM blending and recalculate overall score.
-    /// Call this after the synchronous analyze() returns, when an on-device LLM is available.
+    /// Post-analysis step: re-evaluate coherence with LLM blending, enhance structure/vocabulary
+    /// with transcript quality evaluation, and recalculate overall score.
+    /// `promptText` enables prompt-aware coherence scoring for prompted sessions.
+    func enhanceWithLLM(
+        analysis: inout SpeechAnalysis,
+        transcript: String,
+        llmService: LLMService,
+        promptText: String? = nil,
+        scoreWeights: ScoreWeights = .defaults
+    ) async {
+        guard llmService.isAvailable, transcript.count >= 50 else { return }
+
+        // 1. Enhanced coherence scoring (prompt-aware)
+        if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
+            transcript: transcript,
+            llmService: llmService,
+            promptText: promptText
+        ) {
+            analysis.promptRelevanceScore = enhancedCoherence
+            analysis.speechScore.subscores.relevance = enhancedCoherence
+        }
+
+        // 2. Transcript quality evaluation (structure + vocabulary)
+        if let quality = await llmService.evaluateTranscriptQuality(transcript: transcript) {
+            // Blend LLM scores with existing rule-based subscores.
+            // Backend-aware: Apple Intelligence gets 40% LLM weight, local model gets 30%.
+            let llmWeight: Double = llmService.activeBackend == .appleIntelligence ? 0.40 : 0.30
+            let ruleWeight = 1.0 - llmWeight
+
+            if let existingStructure = analysis.speechScore.subscores.structure {
+                let blended = Double(quality.structure) * llmWeight + Double(existingStructure) * ruleWeight
+                analysis.speechScore.subscores.structure = max(0, min(100, Int(blended)))
+            }
+
+            if let existingVocab = analysis.speechScore.subscores.vocabulary {
+                let blended = Double(quality.vocabulary) * llmWeight + Double(existingVocab) * ruleWeight
+                analysis.speechScore.subscores.vocabulary = max(0, min(100, Int(blended)))
+            }
+        }
+
+        // 3. Recalculate overall score with all updated subscores
+        let newOverall = calculateOverallScore(
+            subscores: analysis.speechScore.subscores,
+            weights: scoreWeights
+        )
+        analysis.speechScore.overall = newOverall
+    }
+
+    /// Legacy alias — callers that don't have prompt context can use this.
     func enhanceCoherenceWithLLM(
         analysis: inout SpeechAnalysis,
         transcript: String,
         llmService: LLMService,
         scoreWeights: ScoreWeights = .defaults
     ) async {
-        guard llmService.isAvailable, transcript.count >= 50 else { return }
-
-        if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
+        await enhanceWithLLM(
+            analysis: &analysis,
             transcript: transcript,
-            llmService: llmService
-        ) {
-            // Update the relevance subscore with the blended value
-            analysis.promptRelevanceScore = enhancedCoherence
-            analysis.speechScore.subscores.relevance = enhancedCoherence
-
-            // Recalculate overall score with updated subscore
-            let newOverall = calculateOverallScore(
-                subscores: analysis.speechScore.subscores,
-                weights: scoreWeights
-            )
-            analysis.speechScore.overall = newOverall
-        }
+            llmService: llmService,
+            promptText: nil,
+            scoreWeights: scoreWeights
+        )
     }
 
     // MARK: - WPM Time Series

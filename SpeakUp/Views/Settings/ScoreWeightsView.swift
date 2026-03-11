@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct ScoreWeightsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
     @State private var showingResetConfirmation = false
     @State private var didSave = false
 
@@ -70,7 +69,7 @@ struct ScoreWeightsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
-            viewModel.configure(with: modelContext)
+            syncDraftFromViewModel()
         }
         .onChange(of: viewModel.isLoading) { _, isLoading in
             if !isLoading {

@@ -36,7 +36,7 @@ struct SettingsView: View {
                     title: "Session Defaults",
                     subtitle: viewModel.defaultDuration.displayName + ", " + viewModel.countdownDuration.displayName + " countdown"
                 ) {
-                    SessionDefaultsView()
+                    SessionDefaultsView(viewModel: viewModel)
                 }
 
                 divider
@@ -47,7 +47,7 @@ struct SettingsView: View {
                     title: "Analysis",
                     subtitle: "Target: \(viewModel.targetWPM) WPM"
                 ) {
-                    AnalysisSettingsView()
+                    AnalysisSettingsView(viewModel: viewModel)
                 }
 
                 divider
@@ -58,7 +58,7 @@ struct SettingsView: View {
                     title: "Words",
                     subtitle: wordsSubtitle
                 ) {
-                    WordBankView()
+                    WordBankView(viewModel: viewModel)
                 }
 
                 divider
@@ -69,7 +69,7 @@ struct SettingsView: View {
                     title: "Session Feedback",
                     subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
                 ) {
-                    FeedbackSettingsView()
+                    FeedbackSettingsView(viewModel: viewModel)
                 }
 
                 divider
@@ -80,7 +80,7 @@ struct SettingsView: View {
                     title: "Prompts",
                     subtitle: "\(viewModel.enabledPromptCategories.count) categories"
                 ) {
-                    PromptSettingsView()
+                    PromptSettingsView(viewModel: viewModel)
                 }
 
                 divider
@@ -91,7 +91,7 @@ struct SettingsView: View {
                     title: "Reminders",
                     subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
                 ) {
-                    ReminderSettingsView()
+                    ReminderSettingsView(viewModel: viewModel)
                 }
 
                 divider
@@ -113,7 +113,7 @@ struct SettingsView: View {
                     title: "Data Management",
                     subtitle: nil
                 ) {
-                    DataManagementView()
+                    DataManagementView(viewModel: viewModel)
                 }
 
                 divider
@@ -207,8 +207,8 @@ struct SettingsView: View {
 // MARK: - About Settings View
 
 struct AboutSettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
+    private let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"
 
     var body: some View {
         ZStack {
@@ -222,7 +222,7 @@ struct AboutSettingsView: View {
                                 Label("Version", systemImage: "info.circle")
                                     .font(.subheadline)
                                 Spacer()
-                                Text("\(viewModel.appVersion) (\(viewModel.buildNumber))")
+                                Text("\(appVersion) (\(buildNumber))")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -269,7 +269,6 @@ struct AboutSettingsView: View {
         }
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
     }
 }
 

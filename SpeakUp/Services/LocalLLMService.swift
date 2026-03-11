@@ -1,5 +1,5 @@
 import Foundation
-import llama
+import LlamaSwift
 
 // MARK: - Types
 
@@ -9,6 +9,7 @@ enum LocalLLMError: LocalizedError {
     case failedToLoadModel
     case failedToCreateContext
     case generationFailed
+    case insufficientMemory
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +18,7 @@ enum LocalLLMError: LocalizedError {
         case .failedToLoadModel: return "Failed to load LLM model"
         case .failedToCreateContext: return "Failed to create inference context"
         case .generationFailed: return "Text generation failed"
+        case .insufficientMemory: return "Insufficient memory for LLM inference"
         }
     }
 }
@@ -32,15 +34,18 @@ enum LocalModelState: Equatable {
 
 // MARK: - LocalLLMService
 
-@Observable
+@MainActor @Observable
 final class LocalLLMService {
 
     // MARK: - Configuration
 
     static let modelFileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-    static let modelDownloadURL = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf")!
+    static let modelDownloadURL: URL? = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf")
     static let modelDisplayName = "Qwen 2.5 (0.5B)"
     static let approximateModelSize = "~400 MB"
+
+    /// Minimum available memory (bytes) required before running inference.
+    private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
 
     // MARK: - State
 
@@ -60,11 +65,14 @@ final class LocalLLMService {
 
     nonisolated private let engine = LLMInferenceEngine()
     private var downloadTask: Task<Void, Never>?
+    private var unloadTimer: Timer?
 
     // MARK: - Model File Management
 
     private static var modelsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("LocalLLM", isDirectory: true)
+        }
         let dir = appSupport.appendingPathComponent("LocalLLM", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
@@ -88,6 +96,14 @@ final class LocalLLMService {
         }
     }
 
+    // MARK: - Memory Check
+
+    /// Returns true if sufficient memory is available for LLM inference.
+    nonisolated static func hasSufficientMemory() -> Bool {
+        let available = os_proc_available_memory()
+        return available > minimumMemoryForInference
+    }
+
     // MARK: - Download
 
     func downloadModel() async {
@@ -96,11 +112,16 @@ final class LocalLLMService {
             return
         }
 
+        guard let downloadURL = Self.modelDownloadURL else {
+            modelState = .error("Invalid download URL")
+            return
+        }
+
         modelState = .downloading(progress: 0)
         downloadProgress = 0
 
         do {
-            let tempURL = try await downloadWithProgress(url: Self.modelDownloadURL)
+            let tempURL = try await downloadWithProgress(url: downloadURL)
 
             // Move to final location
             let dest = Self.modelFilePath
@@ -155,35 +176,98 @@ final class LocalLLMService {
         modelState = .notDownloaded
     }
 
+    // MARK: - Auto-Unload Timer
+
+    /// Resets the auto-unload timer. Call after each inference to reclaim memory after inactivity.
+    private func resetUnloadTimer() {
+        unloadTimer?.invalidate()
+        unloadTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            if self.isModelReady {
+                print("[LocalLLM] Auto-unloading after 60s of inactivity")
+                self.unloadModel()
+            }
+        }
+    }
+
     // MARK: - Generation
 
-    func generate(prompt: String, systemPrompt: String, maxTokens: Int = 256) async -> String? {
+    func generate(prompt: String, systemPrompt: String, maxTokens: Int = 256, temperature: Float = 0.3) async -> String? {
         guard engine.isLoaded else { return nil }
+
+        // Pre-inference memory check
+        guard Self.hasSufficientMemory() else {
+            print("[LocalLLM] Insufficient memory for inference, skipping")
+            return nil
+        }
 
         let formatted = Self.formatChatPrompt(systemPrompt: systemPrompt, userPrompt: prompt)
 
-        return await Task.detached(priority: .userInitiated) { [engine] in
-            return engine.generate(prompt: formatted, maxTokens: maxTokens)
+        let result = await Task.detached(priority: .userInitiated) { [engine] in
+            return engine.generate(prompt: formatted, maxTokens: maxTokens, temperature: temperature)
         }.value
+
+        resetUnloadTimer()
+        return result
     }
 
     // MARK: - Coherence Evaluation
 
-    func evaluateCoherence(transcript: String) async -> CoherenceResult? {
+    /// Evaluate speech coherence with prompt-aware scoring.
+    /// When `promptText` is provided, the rubric emphasises prompt relevance.
+    /// For free-practice (nil prompt), the rubric focuses on internal consistency.
+    func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {
         let truncated = String(transcript.prefix(800))
 
-        let systemPrompt = """
-        You are a speech coherence evaluator. Score the coherence of the given transcript \
-        on a 0-100 scale. Output EXACTLY in this format with no other text:
-        SCORE: <number>
-        TOPIC_FOCUS: <one sentence>
-        LOGICAL_FLOW: <one sentence>
-        REASON: <one sentence>
-        """
+        let systemPrompt: String
+        let userPrompt: String
 
-        let userPrompt = "Evaluate the coherence of this speech transcript:\n\n\(truncated)"
+        if let promptText, !promptText.isEmpty {
+            // --- Prompt-based session ---
+            systemPrompt = """
+            You are a speech evaluator. Score this speech 0-100 based on four criteria:
+            1. Prompt relevance — Does the speech address the given topic?
+            2. Logical flow — Are ideas connected with transitions?
+            3. Completeness — Does it have an opening, body, and conclusion?
+            4. Fluency — Are sentences well-formed and clear?
+            Reply EXACTLY in this format:
+            SCORE: <number>
+            TOPIC_FOCUS: <one sentence>
+            LOGICAL_FLOW: <one sentence>
+            REASON: <one sentence>
+            Example:
+            SCORE: 72
+            TOPIC_FOCUS: The speaker mostly addressed the prompt but drifted mid-speech.
+            LOGICAL_FLOW: Ideas were connected but lacked clear transitions.
+            REASON: Good opening, weak conclusion.
+            """
 
-        guard let output = await generate(prompt: userPrompt, systemPrompt: systemPrompt) else {
+            userPrompt = "Prompt: \(promptText)\n\nSpeech transcript:\n\(truncated)"
+        } else {
+            // --- Free-practice session ---
+            systemPrompt = """
+            You are a speech evaluator. Score this speech 0-100 based on four criteria:
+            1. Internal consistency — Do sentences relate to each other?
+            2. Logical flow — Are ideas connected and ordered logically?
+            3. Topical focus — Does the speaker stay on one thread or ramble?
+            4. Fluency — Are sentences well-formed and clear?
+            Reply EXACTLY in this format:
+            SCORE: <number>
+            TOPIC_FOCUS: <one sentence>
+            LOGICAL_FLOW: <one sentence>
+            REASON: <one sentence>
+            Example:
+            SCORE: 65
+            TOPIC_FOCUS: The speaker stayed on one main idea throughout.
+            LOGICAL_FLOW: Some jumps between ideas without transitions.
+            REASON: Decent structure but the ending trailed off.
+            """
+
+            userPrompt = "Evaluate the coherence of this speech:\n\n\(truncated)"
+        }
+
+        // Near-deterministic temperature for reliable scoring
+        guard let output = await generate(prompt: userPrompt, systemPrompt: systemPrompt, maxTokens: 64, temperature: 0.05) else {
             return nil
         }
 
@@ -204,15 +288,83 @@ final class LocalLLMService {
         transcript: String
     ) async -> String? {
         let systemPrompt = """
-        You are a supportive speech coach. Analyze the speaker's performance and provide \
-        2-3 specific, actionable coaching tips. Be encouraging but honest. Focus on the \
-        most impactful areas for improvement. Keep each tip to 1-2 sentences. \
-        Format: Start each tip on a new line with a bullet point (•).
+        You are an expert public-speaking coach. Your job is to help speakers \
+        improve their delivery, clarity, and confidence.
+        Speech-science context you MUST use when relevant:
+        - Optimal pace: 130-170 words per minute. Above 185 is rushing. Below 115 is dragging.
+        - Filler words (um, uh, like, you know) above 5% of total words hurt credibility.
+        - Strategic pauses of 1-2 seconds after key points improve audience retention.
+        - Vocal variety (pitch + volume changes) keeps listeners engaged.
+        Rules:
+        - Give exactly 2-3 tips. Each tip MUST be a specific, actionable exercise.
+        - Reference the speaker's actual numbers (WPM, filler count, scores).
+        - Start each tip on a new line with •.
+        - Keep each tip to 1-2 sentences. Be encouraging but honest.
         """
 
         let prompt = Self.buildCoachingPrompt(from: analysis, transcript: transcript)
 
-        return await generate(prompt: prompt, systemPrompt: systemPrompt, maxTokens: 350)
+        // Slightly higher temperature for more natural coaching language
+        return await generate(prompt: prompt, systemPrompt: systemPrompt, maxTokens: 300, temperature: 0.4)
+    }
+
+    // MARK: - Transcript Quality Evaluation
+
+    /// Evaluates transcript quality for structure and vocabulary richness.
+    /// Returns a tuple of (structureScore, vocabularyScore) each 0-100, or nil on failure.
+    func evaluateTranscriptQuality(transcript: String) async -> (structure: Int, vocabulary: Int)? {
+        let truncated = String(transcript.prefix(800))
+
+        let systemPrompt = """
+        You are a speech evaluator. Rate this transcript on two dimensions, each 0-100:
+        STRUCTURE: Are sentences complete? Is there a logical progression? \
+        Are ideas organized (not rambling)?
+        VOCABULARY: Is the word choice varied and specific? Does the speaker \
+        use precise language rather than vague filler phrases?
+        Reply EXACTLY in this format with no other text:
+        STRUCTURE: <number>
+        VOCABULARY: <number>
+        Example:
+        STRUCTURE: 68
+        VOCABULARY: 55
+        """
+
+        let userPrompt = "Rate this speech transcript:\n\n\(truncated)"
+
+        guard let output = await generate(prompt: userPrompt, systemPrompt: systemPrompt, maxTokens: 32, temperature: 0.1) else {
+            return nil
+        }
+
+        return Self.parseTranscriptQualityResult(output)
+    }
+
+    // MARK: - Transcript Quality Parsing
+
+    private static func parseTranscriptQualityResult(_ output: String) -> (structure: Int, vocabulary: Int)? {
+        var structure: Int?
+        var vocabulary: Int?
+
+        for line in output.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.uppercased().hasPrefix("STRUCTURE:") {
+                let value = trimmed.dropFirst(10).trimmingCharacters(in: .whitespaces)
+                structure = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
+            } else if trimmed.uppercased().hasPrefix("VOCABULARY:") {
+                let value = trimmed.dropFirst(11).trimmingCharacters(in: .whitespaces)
+                vocabulary = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
+            }
+        }
+
+        guard let s = structure, let v = vocabulary else {
+            // Fallback: try to extract any two numbers
+            let nums = output.components(separatedBy: CharacterSet.decimalDigits.inverted)
+                .compactMap { Int($0) }
+                .filter { $0 >= 0 && $0 <= 100 }
+            guard nums.count >= 2 else { return nil }
+            return (structure: nums[0], vocabulary: nums[1])
+        }
+
+        return (structure: max(0, min(100, s)), vocabulary: max(0, min(100, v)))
     }
 
     // MARK: - Chat Template (Qwen2.5)
@@ -375,15 +527,26 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
 /// runs on a background thread via the internal serial lock.
 nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
-    private var model: OpaquePointer?   // llama_model *
-    private var ctx: OpaquePointer?     // llama_context *
-    private var smpl: OpaquePointer?    // llama_sampler *
+    private var model: OpaquePointer?                       // llama_model *
+    private var ctx: OpaquePointer?                         // llama_context *
+    private var smpl: UnsafeMutablePointer<llama_sampler>?  // llama_sampler *
     private let lock = NSLock()
+
+    /// Set to true to request early exit from the generate loop.
+    private var _cancelled = false
 
     var isLoaded: Bool {
         lock.lock()
         defer { lock.unlock() }
         return model != nil && ctx != nil
+    }
+
+    // MARK: - Cancellation
+
+    func cancel() {
+        lock.lock()
+        _cancelled = true
+        lock.unlock()
     }
 
     // MARK: - Load
@@ -392,7 +555,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        // Clean up any previous state
+        // Clean up any previous state (including backend)
         freeResources()
 
         llama_backend_init()
@@ -409,10 +572,10 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         }
         model = loadedModel
 
-        // Create context
+        // Create context — 1024 tokens is sufficient for our short prompts
         var cparams = llama_context_default_params()
-        cparams.n_ctx = 2048
-        let threadCount = UInt32(max(2, min(4, ProcessInfo.processInfo.processorCount - 2)))
+        cparams.n_ctx = 1024
+        let threadCount = Int32(max(2, min(4, ProcessInfo.processInfo.processorCount - 2)))
         cparams.n_threads = threadCount
         cparams.n_threads_batch = threadCount
 
@@ -441,39 +604,50 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     // MARK: - Generate
 
-    func generate(prompt: String, maxTokens: Int) -> String? {
+    func generate(prompt: String, maxTokens: Int, temperature: Float = 0.3) -> String? {
         lock.lock()
-        defer { lock.unlock() }
+        _cancelled = false
 
-        guard let model, let ctx, let smpl else { return nil }
+        guard let model, let ctx, let smpl else {
+            lock.unlock()
+            return nil
+        }
 
         // 1. Tokenize the prompt
         let tokens = tokenize(text: prompt, model: model)
         guard !tokens.isEmpty else {
             print("[LocalLLM] Tokenization produced no tokens")
+            lock.unlock()
             return nil
         }
 
         // 2. Clear KV cache for fresh generation
-        llama_kv_cache_clear(ctx)
+        llama_memory_clear(llama_get_memory(ctx), false)
 
         // 3. Decode prompt tokens
         var tokensCopy = tokens
         let promptBatch = llama_batch_get_one(&tokensCopy, Int32(tokens.count))
         guard llama_decode(ctx, promptBatch) == 0 else {
             print("[LocalLLM] Failed to decode prompt")
+            lock.unlock()
             return nil
         }
 
         // 4. Generate tokens
         var result = ""
 
-        for _ in 0..<maxTokens {
+        for i in 0..<maxTokens {
+            // Check cancellation every ~10 tokens
+            if i % 10 == 0 && _cancelled {
+                print("[LocalLLM] Generation cancelled")
+                break
+            }
+
             // Sample the next token
             let newToken = llama_sampler_sample(smpl, ctx, -1)
 
             // Check for end-of-generation
-            if llama_token_is_eog(model, newToken) { break }
+            if llama_token_is_eog(llama_model_get_vocab(model), newToken) { break }
 
             // Decode token to text
             if let piece = tokenToPiece(token: newToken, model: model) {
@@ -491,6 +665,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
         // Reset sampler state for next generation
         llama_sampler_reset(smpl)
+        lock.unlock()
 
         return result.isEmpty ? nil : result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -504,7 +679,9 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
     }
 
     deinit {
+        lock.lock()
         freeResources()
+        lock.unlock()
     }
 
     // MARK: - Private Helpers
@@ -525,8 +702,9 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         let maxTokens = Int32(utf8.count / 2 + 128)
         var tokens = [llama_token](repeating: 0, count: Int(maxTokens))
 
+        let vocab = llama_model_get_vocab(model)
         let nTokens = llama_tokenize(
-            model,
+            vocab,
             text,
             Int32(utf8.count),
             &tokens,
@@ -541,7 +719,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     private func tokenToPiece(token: llama_token, model: OpaquePointer) -> String? {
         var buf = [CChar](repeating: 0, count: 256)
-        let n = llama_token_to_piece(model, token, &buf, Int32(buf.count), 0, false)
+        let n = llama_token_to_piece(llama_model_get_vocab(model), token, &buf, Int32(buf.count), 0, false)
         guard n > 0 else { return nil }
 
         // Create a null-terminated buffer for String(cString:)

@@ -5,7 +5,14 @@
       "WebSearch",
       "Bash(xcrun simctl:*)",
       "Bash(grep:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(rm -rf ~/Library/Developer/Xcode/DerivedData/SpeakUp-*)",
+      "Read(//Users/vanshpatel/Library/Caches/org.swift.swiftpm/repositories/**)",
+      "Bash(python3:*)",
+      "Bash(do:*)",
+      "Bash(find:*)",
+      "Bash(otool:*)",
+      "Bash(find /Users/vanshpatel/SpeakUp -type f \\\\\\( -name \"*.mlmodel\" -o -name \"*.gguf\" -o -name \"*.mlpackage\" -o -name \"*model*\" \\\\\\) 2>/dev/null | head -20)"
     ]
   }
 }
