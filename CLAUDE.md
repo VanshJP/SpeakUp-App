@@ -20,10 +20,10 @@ xcrun simctl boot "iPhone 16" 2>/dev/null || true
 
 # Install & launch
 xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/SpeakUp-*/Build/Products/Debug-iphonesimulator/SpeakUp.app
-xcrun simctl launch booted com.vansh.speakup
+xcrun simctl launch booted com.vansh.SpeakUpMore
 
 # Terminate
-xcrun simctl terminate booted com.vansh.speakup
+xcrun simctl terminate booted com.vansh.SpeakUpMore
 ```
 
 ## UI Testing Loop (use this whenever verifying visual changes)

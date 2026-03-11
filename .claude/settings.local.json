@@ -12,7 +12,8 @@
       "Bash(do:*)",
       "Bash(find:*)",
       "Bash(otool:*)",
-      "Bash(find /Users/vanshpatel/SpeakUp -type f \\\\\\( -name \"*.mlmodel\" -o -name \"*.gguf\" -o -name \"*.mlpackage\" -o -name \"*model*\" \\\\\\) 2>/dev/null | head -20)"
+      "Bash(find /Users/vanshpatel/SpeakUp -type f \\\\\\( -name \"*.mlmodel\" -o -name \"*.gguf\" -o -name \"*.mlpackage\" -o -name \"*model*\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(find /Users/vanshpatel/SpeakUp -name \"*.entitlements\" -type f 2>/dev/null | xargs cat 2>/dev/null)"
     ]
   }
 }

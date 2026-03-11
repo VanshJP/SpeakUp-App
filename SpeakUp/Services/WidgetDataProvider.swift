@@ -25,6 +25,20 @@ enum WidgetDataProvider {
         defaults?.set(score, forKey: "lastScore")
     }
 
+    static func updateWeeklyProgress(sessionCount: Int, goalSessions: Int, averageScore: Int, practiceMinutes: Int) {
+        defaults?.set(sessionCount, forKey: "weeklySessionCount")
+        defaults?.set(goalSessions, forKey: "weeklyGoalSessions")
+        defaults?.set(averageScore, forKey: "weeklyAverageScore")
+        defaults?.set(practiceMinutes, forKey: "weeklyPracticeMinutes")
+    }
+
+    static func updateDailyChallenge(title: String, description: String, icon: String, isCompleted: Bool) {
+        defaults?.set(title, forKey: "dailyChallengeTitle")
+        defaults?.set(description, forKey: "dailyChallengeDescription")
+        defaults?.set(icon, forKey: "dailyChallengeIcon")
+        defaults?.set(isCompleted, forKey: "dailyChallengeCompleted")
+    }
+
     // MARK: - Read (from widget)
 
     static var currentStreak: Int {
@@ -45,5 +59,37 @@ enum WidgetDataProvider {
 
     static var lastScore: Int {
         defaults?.integer(forKey: "lastScore") ?? 0
+    }
+
+    static var weeklySessionCount: Int {
+        defaults?.integer(forKey: "weeklySessionCount") ?? 0
+    }
+
+    static var weeklyGoalSessions: Int {
+        defaults?.integer(forKey: "weeklyGoalSessions") ?? 5
+    }
+
+    static var weeklyAverageScore: Int {
+        defaults?.integer(forKey: "weeklyAverageScore") ?? 0
+    }
+
+    static var weeklyPracticeMinutes: Int {
+        defaults?.integer(forKey: "weeklyPracticeMinutes") ?? 0
+    }
+
+    static var dailyChallengeTitle: String {
+        defaults?.string(forKey: "dailyChallengeTitle") ?? "Open app for today's challenge"
+    }
+
+    static var dailyChallengeDescription: String {
+        defaults?.string(forKey: "dailyChallengeDescription") ?? ""
+    }
+
+    static var dailyChallengeIcon: String {
+        defaults?.string(forKey: "dailyChallengeIcon") ?? "target"
+    }
+
+    static var dailyChallengeCompleted: Bool {
+        defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
     }
 }
