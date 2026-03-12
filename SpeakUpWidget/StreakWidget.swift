@@ -4,54 +4,111 @@ import SwiftUI
 struct StreakEntry: TimelineEntry {
     let date: Date
     let streak: Int
+    let hasPracticedToday: Bool
 }
 
 struct StreakProvider: TimelineProvider {
     func placeholder(in context: Context) -> StreakEntry {
-        StreakEntry(date: .now, streak: 5)
+        StreakEntry(date: .now, streak: 5, hasPracticedToday: true)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (StreakEntry) -> Void) {
-        completion(StreakEntry(date: .now, streak: WidgetDataProvider.currentStreak))
+        completion(StreakEntry(
+            date: .now,
+            streak: WidgetDataProvider.currentStreak,
+            hasPracticedToday: WidgetDataProvider.hasPracticedToday
+        ))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<StreakEntry>) -> Void) {
-        let entry = StreakEntry(date: .now, streak: WidgetDataProvider.currentStreak)
-        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        let entry = StreakEntry(
+            date: .now,
+            streak: WidgetDataProvider.currentStreak,
+            hasPracticedToday: WidgetDataProvider.hasPracticedToday
+        )
+        // Refresh hourly when streak is at risk
+        let hours = (entry.streak > 0 && !entry.hasPracticedToday) ? 1 : 2
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: hours, to: .now) ?? .now
         completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
 }
 
+// MARK: - Widget View
+
 struct StreakWidgetView: View {
     let entry: StreakEntry
 
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(.orange.opacity(0.15))
-                    .frame(width: 50, height: 50)
-                    .shadow(color: .orange.opacity(0.2), radius: 6)
-                
-                Image(systemName: "flame.fill")
-                    .font(.title2)
-                    .foregroundStyle(.orange)
-                    .shadow(color: .orange.opacity(0.5), radius: 8)
-            }
+    private var isAtRisk: Bool {
+        entry.streak > 0 && !entry.hasPracticedToday
+    }
 
-            VStack(spacing: 0) {
+    private var urgency: Urgency {
+        guard isAtRisk else { return .none }
+        let hour = Calendar.current.component(.hour, from: entry.date)
+        if hour >= 20 { return .critical }
+        if hour >= 17 { return .high }
+        if hour >= 12 { return .moderate }
+        return .low
+    }
+
+    private var accentColor: Color {
+        switch urgency {
+        case .critical: return .red
+        case .high:     return Color(red: 1.0, green: 0.4, blue: 0.2)
+        default:        return .orange
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(accentColor.opacity(isAtRisk ? 0.25 : 0.15))
+                        .frame(width: 50, height: 50)
+                        .shadow(color: accentColor.opacity(isAtRisk ? 0.4 : 0.2), radius: isAtRisk ? 10 : 6)
+
+                    Image(systemName: "flame.fill")
+                        .font(.title2)
+                        .foregroundStyle(isAtRisk ? .red : accentColor)
+                        .shadow(color: (isAtRisk ? Color.red : accentColor).opacity(0.5), radius: 8)
+                }
+
                 Text("\(entry.streak)")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("day streak")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.orange.opacity(0.8))
+                if isAtRisk {
+                    Text(urgencyMessage)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(accentColor)
+                        .lineLimit(1)
+                } else {
+                    Text(entry.streak == 0 ? "Start a streak!" : "day streak")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.orange.opacity(0.8))
+                }
             }
         }
         .widgetURL(URL(string: "speakup://record"))
     }
+
+     private var urgencyMessage: String {
+        switch urgency {
+        case .low:      return "Don't lose it!"
+        case .moderate: return "Lock in today!"
+        case .high:     return "Streak fading!"
+        case .critical: return "Last chance!"
+        case .none:     return "day streak"
+        }
+    }
 }
+
+private enum Urgency {
+    case none, low, moderate, high, critical
+}
+
+// MARK: - Widget Configuration
 
 struct StreakWidget: Widget {
     let kind = "StreakWidget"
@@ -64,7 +121,7 @@ struct StreakWidget: Widget {
                     ZStack {
                         Color(red: 0.051, green: 0.071, blue: 0.165)
                         LinearGradient(
-                            colors: [.orange.opacity(0.2), .clear],
+                            colors: [accentGradientColor(entry).opacity(0.2), .clear],
                             startPoint: .topTrailing,
                             endPoint: .bottomLeading
                         )
@@ -75,4 +132,26 @@ struct StreakWidget: Widget {
         .description("Your current practice streak.")
         .supportedFamilies([.systemSmall])
     }
+
+    private func accentGradientColor(_ entry: StreakEntry) -> Color {
+        let isAtRisk = entry.streak > 0 && !entry.hasPracticedToday
+        guard isAtRisk else { return .orange }
+        let hour = Calendar.current.component(.hour, from: entry.date)
+        if hour >= 20 { return .red }
+        return .orange
+    }
 }
+
+//
+//#Preview("Safe", as: .systemSmall) {
+//    StreakWidget()
+//} timeline: {
+//    StreakEntry(date: .now, streak: 7, hasPracticedToday: true)
+//}
+
+#Preview("At Risk", as: .systemSmall) {
+    StreakWidget()
+} timeline: {
+    StreakEntry(date: .now, streak: 7, hasPracticedToday: false)
+}
+

@@ -59,6 +59,10 @@ enum WidgetDataProvider {
         defaults?.removeObject(forKey: "eventReadinessScore")
     }
 
+    static func updateLastPracticeDate(_ date: Date) {
+        defaults?.set(date.timeIntervalSince1970, forKey: "lastPracticeDate")
+    }
+
     // MARK: - Read (from widget)
 
     static var currentStreak: Int {

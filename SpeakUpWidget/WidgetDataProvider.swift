@@ -132,4 +132,15 @@ enum WidgetDataProvider {
     static var eventReadinessScore: Int {
         defaults?.integer(forKey: "eventReadinessScore") ?? 0
     }
+
+    // Streak tracking
+    static var lastPracticeDate: Date? {
+        guard let interval = defaults?.object(forKey: "lastPracticeDate") as? Double else { return nil }
+        return Date(timeIntervalSince1970: interval)
+    }
+
+    static var hasPracticedToday: Bool {
+        guard let lastDate = lastPracticeDate else { return false }
+        return Calendar.current.isDateInToday(lastDate)
+    }
 }

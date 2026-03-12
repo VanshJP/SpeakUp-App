@@ -84,6 +84,11 @@ class TodayViewModel {
             )
         }
 
+        // Track last practice date for streak-at-risk widget
+        if let latestRecording = userStats.scoreHistory.first {
+            WidgetDataProvider.updateLastPracticeDate(latestRecording.date)
+        }
+
         // Skill mastery
         updateSkillWidgetData()
 
