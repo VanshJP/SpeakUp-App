@@ -17,6 +17,10 @@ struct ContentView: View {
     @State private var socialChallengeService = SocialChallengeService()
     @State private var showingChallengeAccept = false
 
+    // Event prep sheets
+    @State private var showingEventPrep = false
+    @State private var showingCreateEvent = false
+
     // New feature sheets
     @State private var showingWarmUps = false
     @State private var showingDrills = false
@@ -31,6 +35,7 @@ struct ContentView: View {
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
+    @State private var recordingEventId: UUID?
 
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
@@ -47,7 +52,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
-                Tab("Today", systemImage: "mic.badge.plus", value: .today) {
+                Tab("Today", systemImage: selectedTab == .today ? AppTab.today.selectedIcon : AppTab.today.icon, value: .today) {
                     NavigationStack {
                         TodayView(
                             onStartRecording: { prompt, duration in
@@ -78,12 +83,15 @@ struct ContentView: View {
                             },
                             onShowWordBank: {
                                 showingWordBank = true
+                            },
+                            onShowEventPrep: {
+                                showingEventPrep = true
                             }
                         )
                     }
                 }
 
-                Tab("Prompts", systemImage: "text.bubble.fill", value: .prompts) {
+                Tab("Prompts", systemImage: selectedTab == .prompts ? AppTab.prompts.selectedIcon : AppTab.prompts.icon, value: .prompts) {
                     NavigationStack {
                         AllPromptsView(onSelectPrompt: { prompt in
                             recordingPrompt = prompt
@@ -93,7 +101,7 @@ struct ContentView: View {
                     }
                 }
 
-                Tab("History", systemImage: "clock.fill", value: .history) {
+                Tab("History", systemImage: selectedTab == .history ? AppTab.history.selectedIcon : AppTab.history.icon, value: .history) {
                     NavigationStack {
                         HistoryView(
                             onSelectRecording: { recordingId in
@@ -115,20 +123,20 @@ struct ContentView: View {
                     }
                 }
 
-                Tab("Learn", systemImage: "book.fill", value: .learn) {
+                Tab("Learn", systemImage: selectedTab == .learn ? AppTab.learn.selectedIcon : AppTab.learn.icon, value: .learn) {
                     NavigationStack {
                         CurriculumView()
                     }
                 }
 
-                Tab("Settings", systemImage: "gearshape.fill", value: .settings) {
+                Tab("Settings", systemImage: selectedTab == .settings ? AppTab.settings.selectedIcon : AppTab.settings.icon, value: .settings) {
                     NavigationStack {
                         SettingsView()
                     }
                 }
             }
-            .tint(.teal)
-
+             .tint(.white)
+            
             // Countdown Overlay
             if showingCountdown {
                 CountdownOverlayView(
@@ -162,6 +170,7 @@ struct ContentView: View {
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
                 goalId: recordingGoalId,
+                eventId: recordingEventId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     selectedTab = .history
@@ -229,6 +238,13 @@ struct ContentView: View {
             NavigationStack {
                 JournalExportView()
             }
+        }
+        .sheet(isPresented: $showingEventPrep) {
+            NavigationStack {
+                EventListView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -341,7 +357,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     var selectedIcon: String {
         switch self {
-        case .today: return "mic.badge.plus"
+        case .today: return "mic.badge.plus.fill"
         case .prompts: return "text.bubble.fill"
         case .history: return "clock.fill"
         case .learn: return "book.fill"
@@ -353,5 +369,5 @@ enum AppTab: String, CaseIterable, Identifiable {
 #Preview {
     ContentView()
         .modelContainer(
-            for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
+            for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, SpeakingEvent.self, EventPrepTask.self], inMemory: true)
 }

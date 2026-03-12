@@ -32,6 +32,13 @@ enum WidgetDataProvider {
         defaults?.set(practiceMinutes, forKey: "weeklyPracticeMinutes")
     }
 
+    static func updateSkillMastery(clarity: Int, pace: Int, filler: Int, pause: Int) {
+        defaults?.set(clarity, forKey: "skillClarity")
+        defaults?.set(pace, forKey: "skillPace")
+        defaults?.set(filler, forKey: "skillFiller")
+        defaults?.set(pause, forKey: "skillPause")
+    }
+
     static func updateDailyChallenge(title: String, description: String, icon: String, isCompleted: Bool) {
         defaults?.set(title, forKey: "dailyChallengeTitle")
         defaults?.set(description, forKey: "dailyChallengeDescription")
@@ -77,6 +84,26 @@ enum WidgetDataProvider {
         defaults?.integer(forKey: "weeklyPracticeMinutes") ?? 0
     }
 
+    static var weeklyImprovementRate: Int {
+        defaults?.integer(forKey: "weeklyImprovementRate") ?? 0
+    }
+
+    static var skillClarity: Int {
+        defaults?.integer(forKey: "skillClarity") ?? 0
+    }
+
+    static var skillPace: Int {
+        defaults?.integer(forKey: "skillPace") ?? 0
+    }
+
+    static var skillFiller: Int {
+        defaults?.integer(forKey: "skillFiller") ?? 0
+    }
+
+    static var skillPause: Int {
+        defaults?.integer(forKey: "skillPause") ?? 0
+    }
+
     static var dailyChallengeTitle: String {
         defaults?.string(forKey: "dailyChallengeTitle") ?? "Open app for today's challenge"
     }
@@ -91,5 +118,18 @@ enum WidgetDataProvider {
 
     static var dailyChallengeCompleted: Bool {
         defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
+    }
+
+    // Event countdown
+    static var eventTitle: String {
+        defaults?.string(forKey: "eventTitle") ?? "No event"
+    }
+
+    static var eventDaysRemaining: Int {
+        defaults?.integer(forKey: "eventDaysRemaining") ?? 0
+    }
+
+    static var eventReadinessScore: Int {
+        defaults?.integer(forKey: "eventReadinessScore") ?? 0
     }
 }

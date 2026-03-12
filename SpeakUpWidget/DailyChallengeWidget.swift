@@ -44,30 +44,40 @@ struct DailyChallengeWidgetView: View {
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
+                let color: Color = entry.isCompleted ? .green : .teal
+                
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 50, height: 50)
+                
                 Image(systemName: entry.icon)
-                    .font(.system(size: 28))
-                    .foregroundStyle(entry.isCompleted ? .green : .teal)
+                    .font(.system(size: 24))
+                    .foregroundStyle(color)
+                    .shadow(color: color.opacity(0.5), radius: 6)
 
                 if entry.isCompleted {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(.green)
                         .background(Circle().fill(.white).padding(2))
-                        .offset(x: 14, y: -12)
+                        .offset(x: 18, y: -18)
                 }
             }
 
-            Text(entry.title)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .foregroundStyle(.primary)
+            VStack(spacing: 2) {
+                Text(entry.title)
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+                    .foregroundStyle(.white)
 
-            Text(entry.description)
-                .font(.caption2)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                Text(entry.description)
+                    .font(.system(size: 10))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .padding(8)
         .widgetURL(URL(string: "speakup://record"))
     }
 }
@@ -78,7 +88,17 @@ struct DailyChallengeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: DailyChallengeProvider()) { entry in
             DailyChallengeWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .environment(\.colorScheme, .dark)
+                .containerBackground(for: .widget) {
+                    ZStack {
+                        Color(red: 0.051, green: 0.071, blue: 0.165)
+                        LinearGradient(
+                            colors: [.green.opacity(0.15), .teal.opacity(0.15), .clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
+                }
         }
         .configurationDisplayName("Daily Challenge")
         .description("See today's speaking challenge.")

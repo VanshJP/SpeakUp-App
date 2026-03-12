@@ -26,26 +26,35 @@ struct QuickPracticeWidgetView: View {
     let entry: QuickPracticeEntry
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             ZStack(alignment: .topTrailing) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.teal)
+                ZStack {
+                    Circle()
+                        .fill(.teal.opacity(0.15))
+                        .frame(width: 64, height: 64)
+                        .shadow(color: .teal.opacity(0.2), radius: 8)
+                    
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.teal)
+                        .shadow(color: .teal.opacity(0.5), radius: 6)
+                }
 
                 if entry.lastScore > 0 {
                     Text("\(entry.lastScore)")
-                        .font(.caption2.weight(.bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
                         .background(scoreColor(for: entry.lastScore), in: Capsule())
-                        .offset(x: 14, y: -4)
+                        .shadow(color: scoreColor(for: entry.lastScore).opacity(0.4), radius: 4)
+                        .offset(x: 10, y: -4)
                 }
             }
 
             Text("Practice Now")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
         }
         .widgetURL(URL(string: "speakup://record"))
     }
@@ -66,7 +75,17 @@ struct QuickPracticeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuickPracticeProvider()) { entry in
             QuickPracticeWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .environment(\.colorScheme, .dark)
+                .containerBackground(for: .widget) {
+                    ZStack {
+                        Color(red: 0.051, green: 0.071, blue: 0.165)
+                        LinearGradient(
+                            colors: [.teal.opacity(0.2), .clear],
+                            startPoint: .topTrailing,
+                            endPoint: .bottomLeading
+                        )
+                    }
+                }
         }
         .configurationDisplayName("Quick Practice")
         .description("Jump straight into a practice session.")
