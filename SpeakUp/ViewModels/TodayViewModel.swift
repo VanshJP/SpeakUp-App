@@ -84,7 +84,41 @@ class TodayViewModel {
             )
         }
 
+        // Skill mastery
+        updateSkillWidgetData()
+
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func updateSkillWidgetData() {
+        guard let context = modelContext else { return }
+        let descriptor = FetchDescriptor<Recording>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        
+        do {
+            let recordings = try context.fetch(descriptor).prefix(5)
+            let scores = recordings.compactMap { $0.analysis?.speechScore.subscores }
+            
+            guard !scores.isEmpty else {
+                WidgetDataProvider.updateSkillMastery(clarity: 0, pace: 0, filler: 0, pause: 0)
+                return
+            }
+            
+            let avgClarity = scores.map(\.clarity).reduce(0, +) / scores.count
+            let avgPace = scores.map(\.pace).reduce(0, +) / scores.count
+            let avgFiller = scores.map(\.fillerUsage).reduce(0, +) / scores.count
+            let avgPause = scores.map(\.pauseQuality).reduce(0, +) / scores.count
+            
+            WidgetDataProvider.updateSkillMastery(
+                clarity: avgClarity,
+                pace: avgPace,
+                filler: avgFiller,
+                pause: avgPause
+            )
+        } catch {
+            print("Error updating skill widget data: \(error)")
+        }
     }
 
     private func scheduleStreakNotificationIfNeeded() async {

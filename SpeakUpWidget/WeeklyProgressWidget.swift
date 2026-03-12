@@ -42,10 +42,12 @@ struct WeeklyProgressWidgetView: View {
     let entry: WeeklyProgressEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
                 Image(systemName: "waveform.path.ecg")
+                    .font(.caption)
                     .foregroundStyle(.teal)
+                    .shadow(color: .teal.opacity(0.5), radius: 4)
                 Text("Weekly Progress")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.teal)
@@ -53,22 +55,33 @@ struct WeeklyProgressWidgetView: View {
             }
 
             // Sessions progress
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(entry.sessionCount) / \(entry.goalSessions) sessions")
-                    .font(.subheadline.weight(.medium))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("\(entry.sessionCount) / \(entry.goalSessions) sessions")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("\(Int(Double(entry.sessionCount) / Double(max(entry.goalSessions, 1)) * 100))%")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.teal)
+                }
+                
                 ProgressView(value: Double(entry.sessionCount), total: Double(max(entry.goalSessions, 1)))
                     .tint(.teal)
+                    .scaleEffect(x: 1, y: 1.5, anchor: .center)
             }
 
             HStack(spacing: 16) {
                 // Average score
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Avg Score")
-                        .font(.caption2)
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
                     Text("\(entry.averageScore)")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(scoreColor(for: entry.averageScore))
+                        .shadow(color: scoreColor(for: entry.averageScore).opacity(0.4), radius: 4)
                 }
 
                 Spacer()
@@ -76,11 +89,12 @@ struct WeeklyProgressWidgetView: View {
                 // Practice minutes
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Practice")
-                        .font(.caption2)
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
                     Text("\(entry.practiceMinutes) min")
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                 }
             }
         }
@@ -104,7 +118,17 @@ struct WeeklyProgressWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: WeeklyProgressProvider()) { entry in
             WeeklyProgressWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .environment(\.colorScheme, .dark)
+                .containerBackground(for: .widget) {
+                    ZStack {
+                        Color(red: 0.051, green: 0.071, blue: 0.165)
+                        LinearGradient(
+                            colors: [.teal.opacity(0.2), .clear],
+                            startPoint: .topTrailing,
+                            endPoint: .bottomLeading
+                        )
+                    }
+                }
         }
         .configurationDisplayName("Weekly Progress")
         .description("Track your weekly practice sessions and scores.")

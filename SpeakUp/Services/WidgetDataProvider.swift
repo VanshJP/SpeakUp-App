@@ -25,11 +25,19 @@ enum WidgetDataProvider {
         defaults?.set(score, forKey: "lastScore")
     }
 
-    static func updateWeeklyProgress(sessionCount: Int, goalSessions: Int, averageScore: Int, practiceMinutes: Int) {
+    static func updateWeeklyProgress(sessionCount: Int, goalSessions: Int, averageScore: Int, practiceMinutes: Int, improvementRate: Int = 0) {
         defaults?.set(sessionCount, forKey: "weeklySessionCount")
         defaults?.set(goalSessions, forKey: "weeklyGoalSessions")
         defaults?.set(averageScore, forKey: "weeklyAverageScore")
         defaults?.set(practiceMinutes, forKey: "weeklyPracticeMinutes")
+        defaults?.set(improvementRate, forKey: "weeklyImprovementRate")
+    }
+
+    static func updateSkillMastery(clarity: Int, pace: Int, filler: Int, pause: Int) {
+        defaults?.set(clarity, forKey: "skillClarity")
+        defaults?.set(pace, forKey: "skillPace")
+        defaults?.set(filler, forKey: "skillFiller")
+        defaults?.set(pause, forKey: "skillPause")
     }
 
     static func updateDailyChallenge(title: String, description: String, icon: String, isCompleted: Bool) {
@@ -37,6 +45,18 @@ enum WidgetDataProvider {
         defaults?.set(description, forKey: "dailyChallengeDescription")
         defaults?.set(icon, forKey: "dailyChallengeIcon")
         defaults?.set(isCompleted, forKey: "dailyChallengeCompleted")
+    }
+
+    static func updateEventCountdown(title: String, daysRemaining: Int, readinessScore: Int) {
+        defaults?.set(title, forKey: "eventTitle")
+        defaults?.set(daysRemaining, forKey: "eventDaysRemaining")
+        defaults?.set(readinessScore, forKey: "eventReadinessScore")
+    }
+
+    static func clearEventCountdown() {
+        defaults?.removeObject(forKey: "eventTitle")
+        defaults?.removeObject(forKey: "eventDaysRemaining")
+        defaults?.removeObject(forKey: "eventReadinessScore")
     }
 
     // MARK: - Read (from widget)
@@ -91,5 +111,18 @@ enum WidgetDataProvider {
 
     static var dailyChallengeCompleted: Bool {
         defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
+    }
+
+    // Event countdown
+    static var eventTitle: String {
+        defaults?.string(forKey: "eventTitle") ?? "No event"
+    }
+
+    static var eventDaysRemaining: Int {
+        defaults?.integer(forKey: "eventDaysRemaining") ?? 0
+    }
+
+    static var eventReadinessScore: Int {
+        defaults?.integer(forKey: "eventReadinessScore") ?? 0
     }
 }

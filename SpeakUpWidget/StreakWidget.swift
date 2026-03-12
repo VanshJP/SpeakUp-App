@@ -26,18 +26,28 @@ struct StreakWidgetView: View {
     let entry: StreakEntry
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "flame.fill")
-                .font(.title)
-                .foregroundStyle(.orange)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(.orange.opacity(0.15))
+                    .frame(width: 50, height: 50)
+                    .shadow(color: .orange.opacity(0.2), radius: 6)
+                
+                Image(systemName: "flame.fill")
+                    .font(.title2)
+                    .foregroundStyle(.orange)
+                    .shadow(color: .orange.opacity(0.5), radius: 8)
+            }
 
-            Text("\(entry.streak)")
-                .font(.title.weight(.bold))
-                .foregroundStyle(.primary)
+            VStack(spacing: 0) {
+                Text("\(entry.streak)")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
 
-            Text("day streak")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                Text("day streak")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.orange.opacity(0.8))
+            }
         }
         .widgetURL(URL(string: "speakup://record"))
     }
@@ -49,7 +59,17 @@ struct StreakWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: StreakProvider()) { entry in
             StreakWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .environment(\.colorScheme, .dark)
+                .containerBackground(for: .widget) {
+                    ZStack {
+                        Color(red: 0.051, green: 0.071, blue: 0.165)
+                        LinearGradient(
+                            colors: [.orange.opacity(0.2), .clear],
+                            startPoint: .topTrailing,
+                            endPoint: .bottomLeading
+                        )
+                    }
+                }
         }
         .configurationDisplayName("Streak")
         .description("Your current practice streak.")
