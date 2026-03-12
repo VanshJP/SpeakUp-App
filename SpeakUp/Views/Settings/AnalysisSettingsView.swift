@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct AnalysisSettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         ZStack {
@@ -56,7 +55,7 @@ struct AnalysisSettingsView: View {
                             Divider().padding(.vertical, 8)
 
                             NavigationLink {
-                                ScoreWeightsView()
+                                ScoreWeightsView(viewModel: viewModel)
                             } label: {
                                 HStack {
                                     Label("Score Weights", systemImage: "slider.horizontal.3")
@@ -92,7 +91,6 @@ struct AnalysisSettingsView: View {
         }
         .navigationTitle("Analysis")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
         .onChange(of: viewModel.trackPauses) { _, _ in
             guard !viewModel.isSyncing else { return }
             Task { await viewModel.saveSettings() }

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 @Observable
 class TodayViewModel {
@@ -62,6 +63,28 @@ class TodayViewModel {
         if let lastScore = userStats.scoreHistory.first?.score {
             WidgetDataProvider.updateLastScore(lastScore)
         }
+
+        // Weekly progress
+        let recentScores = userStats.scoreHistory.map(\.score)
+        let avgScore = recentScores.isEmpty ? 0 : recentScores.reduce(0, +) / recentScores.count
+        WidgetDataProvider.updateWeeklyProgress(
+            sessionCount: userStats.weeklySessionCount,
+            goalSessions: userStats.weeklyGoalSessions,
+            averageScore: avgScore,
+            practiceMinutes: Int(weeklyProgress?.totalMinutes ?? 0)
+        )
+
+        // Daily challenge
+        if let challenge = dailyChallenge {
+            WidgetDataProvider.updateDailyChallenge(
+                title: challenge.title,
+                description: challenge.description,
+                icon: challenge.icon,
+                isCompleted: challenge.isCompleted
+            )
+        }
+
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func scheduleStreakNotificationIfNeeded() async {

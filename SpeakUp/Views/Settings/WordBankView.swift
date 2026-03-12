@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct WordBankView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
     @State private var selectedTab = 0
     @State private var isWordInputFocused = false
     @State private var isFillerInputFocused = false
@@ -42,9 +41,6 @@ struct WordBankView: View {
         }
         .navigationTitle("Words")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            viewModel.configure(with: modelContext)
-        }
     }
 
     // MARK: - Word Bank Tab

@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showingJournalExport = false
     @State private var showingAchievements = false
     @State private var showingWordBank = false
+    @State private var settingsViewModel = SettingsViewModel()
 
     // Recording parameters to pass
     @State private var recordingPrompt: Prompt?
@@ -216,7 +217,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingWordBank) {
             NavigationStack {
-                WordBankView()
+                WordBankView(viewModel: settingsViewModel)
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -241,6 +242,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            settingsViewModel.configure(with: modelContext)
             if userSettings.first?.hasCompletedOnboarding != true {
                 showOnboarding = true
             }

@@ -69,6 +69,10 @@ struct SpeakUpApp: App {
                     Task.detached(priority: .background) {
                         await speechService.preloadModel()
                     }
+                    // Auto-load local LLM if downloaded and Apple Intelligence unavailable
+                    Task(priority: .background) {
+                        await llmService.loadLocalModelIfNeeded()
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)

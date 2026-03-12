@@ -26,9 +26,11 @@ struct RecordingDetailView: View {
     @State private var exportService = ExportService()
     @State private var pendingFeedback = false
     @State private var showingScoreWeights = false
+    @State private var settingsViewModel = SettingsViewModel()
     @State private var showingFeedbackSheet = false
     @State private var llmInsight: String?
     @State private var isEnhancingCoherence = false
+    @State private var transcriptionFailed = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -43,24 +45,49 @@ struct RecordingDetailView: View {
 
             if let recording {
                 if recording.isProcessing || isTranscribing || (!speechService.isModelLoaded && recording.analysis == nil) || pendingFeedback {
-                    // Full-page analyzing experience
-                    AnalyzingView(
-                        recording: recording,
-                        isModelLoading: !speechService.isModelLoaded,
-                        feedbackEnabled: userSettings.first?.sessionFeedbackEnabled ?? false,
-                        feedbackQuestions: feedbackQuestionsForAnalyzing,
-                        existingFeedback: recording.sessionFeedback,
-                        onFeedbackSubmitted: { feedback in
-                            recording.sessionFeedback = feedback
-                            try? modelContext.save()
-                        },
-                        onFeedbackCompleted: {
-                            withAnimation(.spring(response: 0.3)) {
-                                pendingFeedback = false
+                    if transcriptionFailed {
+                        // Transcription failed — show retry instead of infinite spinner
+                        VStack(spacing: 20) {
+                            Spacer()
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 40))
+                                .foregroundStyle(AppColors.warning)
+                            Text("Analysis Unavailable")
+                                .font(.title3.bold())
+                                .foregroundStyle(.white)
+                            Text("Transcription could not be completed.\nThe speech model may still be loading.")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                            GlassButton(title: "Retry Analysis", icon: "arrow.clockwise", style: .primary) {
+                                retryTranscription()
                             }
-                        },
-                        analysisReady: recording.analysis != nil
-                    )
+                            GlassButton(title: "Go Back", icon: "chevron.left", style: .secondary) {
+                                dismiss()
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 40)
+                    } else {
+                        // Full-page analyzing experience
+                        AnalyzingView(
+                            recording: recording,
+                            isModelLoading: !speechService.isModelLoaded,
+                            feedbackEnabled: userSettings.first?.sessionFeedbackEnabled ?? false,
+                            feedbackQuestions: feedbackQuestionsForAnalyzing,
+                            existingFeedback: recording.sessionFeedback,
+                            onFeedbackSubmitted: { feedback in
+                                recording.sessionFeedback = feedback
+                                try? modelContext.save()
+                            },
+                            onFeedbackCompleted: {
+                                withAnimation(.spring(response: 0.3)) {
+                                    pendingFeedback = false
+                                }
+                            },
+                            analysisReady: recording.analysis != nil
+                        )
+                    }
                 } else {
                     ScrollView(.vertical) {
                         VStack(spacing: 20) {
@@ -185,6 +212,7 @@ struct RecordingDetailView: View {
             }
         }
         .task {
+            settingsViewModel.configure(with: modelContext)
             await loadRecording()
             populateWPMTimeSeriesIfNeeded()
             await transcribeIfNeeded()
@@ -205,7 +233,7 @@ struct RecordingDetailView: View {
         }
         .sheet(isPresented: $showingScoreWeights) {
             NavigationStack {
-                ScoreWeightsView()
+                ScoreWeightsView(viewModel: settingsViewModel)
             }
         }
         .onChange(of: showingShareSheet) { _, show in
@@ -706,7 +734,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func coachingTabContent(_ recording: Recording) -> some View {
         if let analysis = recording.analysis {
-            // AI Insights — available when on-device LLM is ready OR FoundationModels (iOS 26+)
+            // AI Insights — available when Apple Intelligence or local LLM is ready
             if llmService.isAvailable {
                 aiInsightsSection(recording)
             }
@@ -729,12 +757,17 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func aiInsightsSection(_ recording: Recording) -> some View {
+        let isAppleIntelligence = llmService.activeBackend == .appleIntelligence
+
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
-                Label("AI Insights", systemImage: "apple.intelligence")
-                    .font(.headline)
+                Label(
+                    "AI Insights",
+                    systemImage: isAppleIntelligence ? "apple.intelligence" : "cpu"
+                )
+                .font(.headline)
 
-                Text("AI")
+                Text(isAppleIntelligence ? "AI" : LocalLLMService.modelDisplayName)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -743,7 +776,9 @@ struct RecordingDetailView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [.purple, .blue],
+                                    colors: isAppleIntelligence
+                                        ? [.purple, .blue]
+                                        : [.cyan, .teal],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -925,6 +960,15 @@ struct RecordingDetailView: View {
         do {
             let recordings = try modelContext.fetch(descriptor)
             recording = recordings.first
+
+            // Reset stale isProcessing flag — if the app crashed mid-transcription,
+            // this flag stays true in SwiftData but no task is actually running.
+            // Clear it so the view doesn't get stuck on the AnalyzingView spinner.
+            // transcribeIfNeeded() will re-process if analysis is still nil.
+            if let recording, recording.isProcessing {
+                recording.isProcessing = false
+                try? modelContext.save()
+            }
         } catch {
             print("Error loading recording: \(error)")
         }
@@ -953,6 +997,7 @@ struct RecordingDetailView: View {
         }
 
         guard FileManager.default.fileExists(atPath: audioURL.path) else {
+            transcriptionFailed = true
             return
         }
 
@@ -1021,14 +1066,33 @@ struct RecordingDetailView: View {
             try modelContext.save()
         } catch {
             print("Transcription error: \(error)")
+            transcriptionFailed = true
+        }
+    }
+
+    private func retryTranscription() {
+        transcriptionFailed = false
+        Task {
+            await transcribeIfNeeded()
+            await enhanceCoherenceIfNeeded()
         }
     }
 
     private func enhanceCoherenceIfNeeded() async {
         guard let recording,
               var analysis = recording.analysis,
-              let transcript = recording.transcriptionText,
-              llmService.isAvailable else { return }
+              let transcript = recording.transcriptionText else { return }
+
+        // If model is downloaded but not loaded, kick off loading in background
+        // but don't block this task waiting for it
+        if !llmService.isAvailable && llmService.localLLM.isModelDownloaded {
+            Task {
+                await llmService.loadLocalModelIfNeeded()
+            }
+            return
+        }
+
+        guard llmService.isAvailable else { return }
 
         isEnhancingCoherence = true
         defer { isEnhancingCoherence = false }
@@ -1047,15 +1111,31 @@ struct RecordingDetailView: View {
             weights.relevance = s.relevanceWeight
         }
 
-        await speechService.enhanceCoherenceWithLLM(
+        // Pass prompt text for prompt-aware coherence scoring
+        let promptText = recording.prompt?.text
+
+        await speechService.enhanceWithLLM(
             analysis: &analysis,
             transcript: transcript,
             llmService: llmService,
+            promptText: promptText,
             scoreWeights: weights
         )
 
+        // Guard against view dismissal during async inference
+        guard !Task.isCancelled else { return }
+
         recording.analysis = analysis
         try? modelContext.save()
+
+        // Auto-generate coaching insight so it's ready on the coaching tab
+        guard !Task.isCancelled else { return }
+        if llmInsight == nil {
+            llmInsight = await llmService.generateCoachingInsight(
+                from: analysis,
+                transcript: transcript
+            )
+        }
     }
 
     private func togglePlayback(_ recording: Recording) {

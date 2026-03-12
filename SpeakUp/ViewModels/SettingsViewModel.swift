@@ -3,7 +3,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-@Observable
+@MainActor @Observable
 class SettingsViewModel {
     var settings: UserSettings?
     var isLoading = true
@@ -143,12 +143,11 @@ class SettingsViewModel {
         guard !hasConfigured else { return }
         hasConfigured = true
         self.modelContext = context
-        Task { @MainActor in
+        Task {
             await loadSettings()
         }
     }
-    
-    @MainActor
+
     func loadSettings() async {
         isLoading = true
         defer { isLoading = false }

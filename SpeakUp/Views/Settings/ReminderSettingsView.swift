@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct ReminderSettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         ZStack {
@@ -51,7 +50,6 @@ struct ReminderSettingsView: View {
         }
         .navigationTitle("Reminders")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
         .onChange(of: viewModel.dailyReminderEnabled) { _, _ in
             guard !viewModel.isSyncing else { return }
             Task { await viewModel.saveSettings() }

@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct DataManagementView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         ZStack {
@@ -62,7 +61,6 @@ struct DataManagementView: View {
         }
         .navigationTitle("Data Management")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
         .alert("Reset Settings?", isPresented: $viewModel.showingResetConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) {

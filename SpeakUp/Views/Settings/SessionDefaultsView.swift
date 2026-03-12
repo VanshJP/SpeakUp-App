@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct SessionDefaultsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         ZStack {
@@ -104,7 +103,6 @@ struct SessionDefaultsView: View {
         }
         .navigationTitle("Session Defaults")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
         .modifier(SessionDefaultsChangeModifiers(viewModel: viewModel))
     }
 

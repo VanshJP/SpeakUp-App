@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct PromptSettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
     @State private var showingCategories = false
     @State private var showingAddPrompt = false
 
@@ -111,7 +110,6 @@ struct PromptSettingsView: View {
         }
         .navigationTitle("Prompts")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
         .onChange(of: viewModel.hideAnsweredPrompts) { _, _ in
             Task { await viewModel.saveSettings() }
         }

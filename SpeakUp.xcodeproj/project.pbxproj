@@ -7,14 +7,52 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BB1100032F4D0003005C1EB3 /* LlamaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = BB1100022F4D0002005C1EB3 /* LlamaSwift */; };
+		BB20805E2F61F09800D509F0 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB20805D2F61F09800D509F0 /* WidgetKit.framework */; };
+		BB2080602F61F09800D509F0 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB20805F2F61F09800D509F0 /* SwiftUI.framework */; };
+		BB20806F2F61F09900D509F0 /* SpeakUpWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000022F290002005C1EB3 /* WhisperKit */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		BB20806D2F61F09900D509F0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BBCE3AD72F285A2B005C1EB3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB20805B2F61F09800D509F0;
+			remoteInfo = SpeakUpWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB2080702F61F09900D509F0 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BB20806F2F61F09900D509F0 /* SpeakUpWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpeakUpWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB20805D2F61F09800D509F0 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		BB20805F2F61F09800D509F0 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpeakUp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BB2080742F61F09900D509F0 /* Exceptions for "SpeakUpWidget" folder in "SpeakUpWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */;
+		};
 		BB91A0972F28674F00F0313C /* Exceptions for "SpeakUp" folder in "SpeakUp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -25,6 +63,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		BB2080612F61F09800D509F0 /* SpeakUpWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BB2080742F61F09900D509F0 /* Exceptions for "SpeakUpWidget" folder in "SpeakUpWidgetExtension" target */,
+			);
+			path = SpeakUpWidget;
+			sourceTree = "<group>";
+		};
 		BBCE3AE12F285A2B005C1EB3 /* SpeakUp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -36,21 +82,42 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		BB2080592F61F09800D509F0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB2080602F61F09800D509F0 /* SwiftUI.framework in Frameworks */,
+				BB20805E2F61F09800D509F0 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BBCE3ADC2F285A2B005C1EB3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				BB73500E2F36E930002E0A2B /* WhisperKit in Frameworks */,
+				BB1100032F4D0003005C1EB3 /* LlamaSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BB49FAB32F5F5CD300D298F1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BB20805D2F61F09800D509F0 /* WidgetKit.framework */,
+				BB20805F2F61F09800D509F0 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		BBCE3AD62F285A2B005C1EB3 = {
 			isa = PBXGroup;
 			children = (
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
+				BB2080612F61F09800D509F0 /* SpeakUpWidget */,
+				BB49FAB32F5F5CD300D298F1 /* Frameworks */,
 				BBCE3AE02F285A2B005C1EB3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -59,6 +126,7 @@
 			isa = PBXGroup;
 			children = (
 				BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */,
+				BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -66,6 +134,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB2080732F61F09900D509F0 /* Build configuration list for PBXNativeTarget "SpeakUpWidgetExtension" */;
+			buildPhases = (
+				BB2080582F61F09800D509F0 /* Sources */,
+				BB2080592F61F09800D509F0 /* Frameworks */,
+				BB20805A2F61F09800D509F0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BB2080612F61F09800D509F0 /* SpeakUpWidget */,
+			);
+			name = SpeakUpWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = SpeakUpWidgetExtension;
+			productReference = BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		BBCE3ADE2F285A2B005C1EB3 /* SpeakUp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BBCE3AEA2F285A2C005C1EB3 /* Build configuration list for PBXNativeTarget "SpeakUp" */;
@@ -73,10 +163,12 @@
 				BBCE3ADB2F285A2B005C1EB3 /* Sources */,
 				BBCE3ADC2F285A2B005C1EB3 /* Frameworks */,
 				BBCE3ADD2F285A2B005C1EB3 /* Resources */,
+				BB2080702F61F09900D509F0 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BB20806E2F61F09900D509F0 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
@@ -84,6 +176,7 @@
 			name = SpeakUp;
 			packageProductDependencies = (
 				BB0000022F290002005C1EB3 /* WhisperKit */,
+				BB1100022F4D0002005C1EB3 /* LlamaSwift */,
 			);
 			productName = SpeakUp;
 			productReference = BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */;
@@ -96,9 +189,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2620;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					BB20805B2F61F09800D509F0 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					BBCE3ADE2F285A2B005C1EB3 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -115,6 +211,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BBCE3AE02F285A2B005C1EB3 /* Products */;
@@ -122,11 +219,19 @@
 			projectRoot = "";
 			targets = (
 				BBCE3ADE2F285A2B005C1EB3 /* SpeakUp */,
+				BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		BB20805A2F61F09800D509F0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BBCE3ADD2F285A2B005C1EB3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,6 +242,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		BB2080582F61F09800D509F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BBCE3ADB2F285A2B005C1EB3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -146,7 +258,84 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		BB20806E2F61F09900D509F0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */;
+			targetProxy = BB20806D2F61F09900D509F0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		BB2080712F61F09900D509F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = SpeakUpWidget/SpeakUpWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F9MZJ6MU5W;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SpeakUpWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SpeakUpWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore.SpeakUpWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BB2080722F61F09900D509F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = SpeakUpWidget/SpeakUpWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F9MZJ6MU5W;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SpeakUpWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SpeakUpWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore.SpeakUpWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		BBCE3AE82F285A2C005C1EB3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -283,14 +472,14 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUp/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "To speak into and get the user recording of the session";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says (this is NOT collected)";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore;
@@ -306,7 +495,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -326,14 +515,14 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUp/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "To speak into and get the user recording of the session";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says (this is NOT collected)";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore;
@@ -349,13 +538,22 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		BB2080732F61F09900D509F0 /* Build configuration list for PBXNativeTarget "SpeakUpWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB2080712F61F09900D509F0 /* Debug */,
+				BB2080722F61F09900D509F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BBCE3ADA2F285A2B005C1EB3 /* Build configuration list for PBXProject "SpeakUp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -385,6 +583,14 @@
 				minimumVersion = 0.9.0;
 			};
 		};
+		BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mattt/llama.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7972.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -392,6 +598,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB0000012F290001005C1EB3 /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
+		};
+		BB1100022F4D0002005C1EB3 /* LlamaSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB1100012F4D0001005C1EB3 /* XCRemoteSwiftPackageReference "llama.swift" */;
+			productName = LlamaSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -2,8 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct FeedbackSettingsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = SettingsViewModel()
+    @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         ZStack {
@@ -92,7 +91,6 @@ struct FeedbackSettingsView: View {
         }
         .navigationTitle("Session Feedback")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { viewModel.configure(with: modelContext) }
         .onChange(of: viewModel.sessionFeedbackEnabled) { _, _ in
             guard !viewModel.isSyncing else { return }
             Task { await viewModel.saveSettings() }
