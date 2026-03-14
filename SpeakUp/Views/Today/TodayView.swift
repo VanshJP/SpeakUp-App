@@ -19,6 +19,8 @@ struct TodayView: View {
     var onShowCurriculum: () -> Void
     var onShowAchievements: () -> Void = {}
     var onShowWordBank: () -> Void = {}
+    var onShowEvents: () -> Void = {}
+    var onShowReadAloud: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -340,6 +342,9 @@ struct TodayView: View {
             toolbarStripButton(icon: "character.book.closed", label: "Vocab", color: .green) {
                 onShowWordBank()
             }
+            toolbarStripButton(icon: "calendar.badge.plus", label: "Events", color: .cyan) {
+                onShowEvents()
+            }
         }
         .padding(.vertical, 4)
         .background {
@@ -403,6 +408,20 @@ struct TodayView: View {
                     subtitle: "Track your goals",
                     color: .purple
                 ) { onShowGoals() }
+
+                PracticeToolCard(
+                    icon: "calendar.badge.plus",
+                    title: "Events",
+                    subtitle: "Prepare for speaking events",
+                    color: .cyan
+                ) { onShowEvents() }
+
+                PracticeToolCard(
+                    icon: "text.book.closed",
+                    title: "Read Aloud",
+                    subtitle: "Practice reading clarity",
+                    color: .indigo
+                ) { onShowReadAloud() }
 
             }
         }
@@ -842,7 +861,9 @@ struct PracticeToolCard: View {
             onShowConfidence: {},
             onShowCurriculum: {},
             onShowAchievements: {},
-            onShowWordBank: {}
+            onShowWordBank: {},
+            onShowEvents: {},
+            onShowReadAloud: {}
         )
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self], inMemory: true)

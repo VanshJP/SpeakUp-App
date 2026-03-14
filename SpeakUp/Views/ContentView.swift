@@ -25,6 +25,8 @@ struct ContentView: View {
     @State private var showingJournalExport = false
     @State private var showingAchievements = false
     @State private var showingWordBank = false
+    @State private var showingEvents = false
+    @State private var showingReadAloud = false
     @State private var settingsViewModel = SettingsViewModel()
 
     // Recording parameters to pass
@@ -78,6 +80,12 @@ struct ContentView: View {
                     },
                     onShowWordBank: {
                         showingWordBank = true
+                    },
+                    onShowEvents: {
+                        showingEvents = true
+                    },
+                    onShowReadAloud: {
+                        showingReadAloud = true
                     }
                 )
             }
@@ -231,6 +239,16 @@ struct ContentView: View {
             NavigationStack {
                 JournalExportView()
             }
+        }
+        .sheet(isPresented: $showingEvents) {
+            EventListView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .onOpenURL { url in
             handleDeepLink(url)

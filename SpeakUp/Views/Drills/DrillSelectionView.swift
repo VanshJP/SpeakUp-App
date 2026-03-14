@@ -8,6 +8,7 @@ struct DrillSelectionView: View {
     @State private var showingSession = false
     @State private var showingCountdown = false
     @State private var selectedDrillMode: DrillMode?
+    @State private var showingReadAloud = false
 
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -58,6 +59,36 @@ struct DrillSelectionView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+
+                            // Read Aloud drill card
+                            Button {
+                                showingReadAloud = true
+                            } label: {
+                                GlassCard {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "text.book.closed")
+                                            .font(.largeTitle)
+                                            .foregroundStyle(.indigo)
+
+                                        Text("Read Aloud")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.primary)
+
+                                        Text("Read text out loud — real-time accuracy tracking")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.center)
+                                            .lineLimit(2)
+
+                                        Text("Clarity")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(.indigo)
+                                    }
+                                    .padding(.vertical, 4)
+                                    .frame(maxWidth: .infinity, minHeight: 140, maxHeight: 140)
+                                }
+                            }
+                            .buttonStyle(.plain)
                         }
                         .padding(.horizontal)
                     }
@@ -102,6 +133,9 @@ struct DrillSelectionView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: showingCountdown)
+            .sheet(isPresented: $showingReadAloud) {
+                ReadAloudSelectionView()
+            }
         }
     }
 }
