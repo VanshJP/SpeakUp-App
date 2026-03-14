@@ -16,7 +16,6 @@ class RecordingViewModel {
     var targetDuration: RecordingDuration = .sixty
     var prompt: Prompt?
     var goalId: UUID?
-    var eventId: UUID?
 
     // Timer
     var remainingTime: TimeInterval = 60
@@ -139,8 +138,7 @@ class RecordingViewModel {
             mediaType: .audio,
             audioURL: url,
             isProcessing: true, // Will be transcribed
-            goalId: goalId,
-            eventId: eventId
+            goalId: goalId
         )
 
         context.insert(recording)

@@ -6,7 +6,6 @@ struct TodayView: View {
     @State private var viewModel = TodayViewModel()
     @State private var weakAreaService = WeakAreaService()
     @State private var curriculumViewModel = CurriculumViewModel()
-    @State private var eventPrepViewModel = EventPrepViewModel()
     @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
 
     @Query private var achievements: [Achievement]
@@ -20,7 +19,6 @@ struct TodayView: View {
     var onShowCurriculum: () -> Void
     var onShowAchievements: () -> Void = {}
     var onShowWordBank: () -> Void = {}
-    var onShowEventPrep: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -37,15 +35,6 @@ struct TodayView: View {
 
                     // Prominent Start Button
                     startButtonSection
-
-                    // Event Countdown (if upcoming event)
-                    if let event = eventPrepViewModel.selectedEvent {
-                        EventCountdownCard(
-                            event: event,
-                            nextTaskTitle: eventPrepViewModel.nextTask?.title,
-                            onTap: { onShowEventPrep() }
-                        )
-                    }
 
                     // Quick-access toolbar strip
                     toolbarStrip
@@ -105,8 +94,6 @@ struct TodayView: View {
         .onAppear {
             viewModel.configure(with: modelContext)
             curriculumViewModel.loadProgress(context: modelContext)
-            eventPrepViewModel.configure(with: modelContext)
-            eventPrepViewModel.loadNearestEvent()
         }
         .task {
             weakAreaService.analyze(recordings: Array(recordings))
@@ -417,12 +404,6 @@ struct TodayView: View {
                     color: .purple
                 ) { onShowGoals() }
 
-                PracticeToolCard(
-                    icon: "calendar.badge.clock",
-                    title: "Event Prep",
-                    subtitle: "Prepare for a speech",
-                    color: .teal
-                ) { onShowEventPrep() }
             }
         }
     }
@@ -861,8 +842,7 @@ struct PracticeToolCard: View {
             onShowConfidence: {},
             onShowCurriculum: {},
             onShowAchievements: {},
-            onShowWordBank: {},
-            onShowEventPrep: {}
+            onShowWordBank: {}
         )
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self], inMemory: true)

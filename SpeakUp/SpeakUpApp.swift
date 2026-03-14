@@ -20,6 +20,7 @@ struct SpeakUpApp: App {
             CurriculumProgress.self,
             SpeakingEvent.self,
             EventPrepTask.self,
+            RecordingGroup.self,
         ])
 
         let modelConfiguration = ModelConfiguration(

@@ -120,19 +120,6 @@ enum WidgetDataProvider {
         defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
     }
 
-    // Event countdown
-    static var eventTitle: String {
-        defaults?.string(forKey: "eventTitle") ?? "No event"
-    }
-
-    static var eventDaysRemaining: Int {
-        defaults?.integer(forKey: "eventDaysRemaining") ?? 0
-    }
-
-    static var eventReadinessScore: Int {
-        defaults?.integer(forKey: "eventReadinessScore") ?? 0
-    }
-
     // Streak tracking
     static var lastPracticeDate: Date? {
         guard let interval = defaults?.object(forKey: "lastPracticeDate") as? Double else { return nil }

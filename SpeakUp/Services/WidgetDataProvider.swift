@@ -47,18 +47,6 @@ enum WidgetDataProvider {
         defaults?.set(isCompleted, forKey: "dailyChallengeCompleted")
     }
 
-    static func updateEventCountdown(title: String, daysRemaining: Int, readinessScore: Int) {
-        defaults?.set(title, forKey: "eventTitle")
-        defaults?.set(daysRemaining, forKey: "eventDaysRemaining")
-        defaults?.set(readinessScore, forKey: "eventReadinessScore")
-    }
-
-    static func clearEventCountdown() {
-        defaults?.removeObject(forKey: "eventTitle")
-        defaults?.removeObject(forKey: "eventDaysRemaining")
-        defaults?.removeObject(forKey: "eventReadinessScore")
-    }
-
     static func updateLastPracticeDate(_ date: Date) {
         defaults?.set(date.timeIntervalSince1970, forKey: "lastPracticeDate")
     }
@@ -117,16 +105,4 @@ enum WidgetDataProvider {
         defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
     }
 
-    // Event countdown
-    static var eventTitle: String {
-        defaults?.string(forKey: "eventTitle") ?? "No event"
-    }
-
-    static var eventDaysRemaining: Int {
-        defaults?.integer(forKey: "eventDaysRemaining") ?? 0
-    }
-
-    static var eventReadinessScore: Int {
-        defaults?.integer(forKey: "eventReadinessScore") ?? 0
-    }
 }

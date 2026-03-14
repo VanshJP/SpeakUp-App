@@ -17,11 +17,7 @@ struct ContentView: View {
     @State private var socialChallengeService = SocialChallengeService()
     @State private var showingChallengeAccept = false
 
-    // Event prep sheets
-    @State private var showingEventPrep = false
-    @State private var showingCreateEvent = false
-
-    // New feature sheets
+    // Feature sheets
     @State private var showingWarmUps = false
     @State private var showingDrills = false
     @State private var showingConfidenceTools = false
@@ -35,7 +31,6 @@ struct ContentView: View {
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
-    @State private var recordingEventId: UUID?
 
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
@@ -48,90 +43,89 @@ struct ContentView: View {
     private var timerEndBehavior: TimerEndBehavior {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
-
+    
+    @ViewBuilder
+    private func tabContent(for tab: AppTab) -> some View {
+        switch tab {
+        case .today:
+            NavigationStack {
+                TodayView(
+                    onStartRecording: { prompt, duration in
+                        recordingPrompt = prompt
+                        recordingDuration = duration
+                        showingCountdown = true
+                    },
+                    onShowWheel: {
+                        showingPromptWheel = true
+                    },
+                    onShowGoals: {
+                        showingGoals = true
+                    },
+                    onShowWarmUps: {
+                        showingWarmUps = true
+                    },
+                    onShowDrills: {
+                        showingDrills = true
+                    },
+                    onShowConfidence: {
+                        showingConfidenceTools = true
+                    },
+                    onShowCurriculum: {
+                        selectedTab = .learn
+                    },
+                    onShowAchievements: {
+                        showingAchievements = true
+                    },
+                    onShowWordBank: {
+                        showingWordBank = true
+                    }
+                )
+            }
+        case .prompts:
+            NavigationStack {
+                AllPromptsView(onSelectPrompt: { prompt in
+                    recordingPrompt = prompt
+                    recordingDuration = .sixty
+                    showingCountdown = true
+                })
+            }
+        case .history:
+            NavigationStack {
+                HistoryView(
+                    onSelectRecording: { recordingId in
+                        selectedRecordingId = recordingId
+                    },
+                    onShowBeforeAfter: {
+                        showingBeforeAfter = true
+                    },
+                    onShowJournalExport: {
+                        showingJournalExport = true
+                    }
+                )
+                .navigationDestination(item: $selectedRecordingId) { recordingId in
+                    RecordingDetailView(recordingId: recordingId)
+                        .onDisappear {
+                            selectedRecordingId = nil
+                        }
+                }
+            }
+        case .learn:
+            NavigationStack {
+                CurriculumView()
+            }
+        case .settings:
+            NavigationStack {
+                SettingsView()
+            }
+        }
+    }
+    
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
-                Tab("Today", systemImage: selectedTab == .today ? AppTab.today.selectedIcon : AppTab.today.icon, value: .today) {
-                    NavigationStack {
-                        TodayView(
-                            onStartRecording: { prompt, duration in
-                                recordingPrompt = prompt
-                                recordingDuration = duration
-                                showingCountdown = true
-                            },
-                            onShowWheel: {
-                                showingPromptWheel = true
-                            },
-                            onShowGoals: {
-                                showingGoals = true
-                            },
-                            onShowWarmUps: {
-                                showingWarmUps = true
-                            },
-                            onShowDrills: {
-                                showingDrills = true
-                            },
-                            onShowConfidence: {
-                                showingConfidenceTools = true
-                            },
-                            onShowCurriculum: {
-                                selectedTab = .learn
-                            },
-                            onShowAchievements: {
-                                showingAchievements = true
-                            },
-                            onShowWordBank: {
-                                showingWordBank = true
-                            },
-                            onShowEventPrep: {
-                                showingEventPrep = true
-                            }
-                        )
-                    }
-                }
-
-                Tab("Prompts", systemImage: selectedTab == .prompts ? AppTab.prompts.selectedIcon : AppTab.prompts.icon, value: .prompts) {
-                    NavigationStack {
-                        AllPromptsView(onSelectPrompt: { prompt in
-                            recordingPrompt = prompt
-                            recordingDuration = .sixty
-                            showingCountdown = true
-                        })
-                    }
-                }
-
-                Tab("History", systemImage: selectedTab == .history ? AppTab.history.selectedIcon : AppTab.history.icon, value: .history) {
-                    NavigationStack {
-                        HistoryView(
-                            onSelectRecording: { recordingId in
-                                selectedRecordingId = recordingId
-                            },
-                            onShowBeforeAfter: {
-                                showingBeforeAfter = true
-                            },
-                            onShowJournalExport: {
-                                showingJournalExport = true
-                            }
-                        )
-                        .navigationDestination(item: $selectedRecordingId) { recordingId in
-                            RecordingDetailView(recordingId: recordingId)
-                                .onDisappear {
-                                    selectedRecordingId = nil
-                                }
-                        }
-                    }
-                }
-
-                Tab("Learn", systemImage: selectedTab == .learn ? AppTab.learn.selectedIcon : AppTab.learn.icon, value: .learn) {
-                    NavigationStack {
-                        CurriculumView()
-                    }
-                }
-
-                Tab("Settings", systemImage: selectedTab == .settings ? AppTab.settings.selectedIcon : AppTab.settings.icon, value: .settings) {
-                    NavigationStack {
-                        SettingsView()
+                ForEach(AppTab.allCases) { tab in
+                    Tab(tab.title, systemImage: tab.icon, value: tab) {
+                        tabContent(for: tab)
                     }
                 }
             }
@@ -170,7 +164,6 @@ struct ContentView: View {
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
                 goalId: recordingGoalId,
-                eventId: recordingEventId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     selectedTab = .history
@@ -238,13 +231,6 @@ struct ContentView: View {
             NavigationStack {
                 JournalExportView()
             }
-        }
-        .sheet(isPresented: $showingEventPrep) {
-            NavigationStack {
-                EventListView()
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -354,20 +340,11 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .settings: return "gearshape"
         }
     }
-
-    var selectedIcon: String {
-        switch self {
-        case .today: return "mic.badge.plus.fill"
-        case .prompts: return "text.bubble.fill"
-        case .history: return "clock.fill"
-        case .learn: return "book.fill"
-        case .settings: return "gearshape.fill"
-        }
-    }
 }
 
 #Preview {
     ContentView()
         .modelContainer(
-            for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, SpeakingEvent.self, EventPrepTask.self], inMemory: true)
+            for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }
+

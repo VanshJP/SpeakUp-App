@@ -78,7 +78,7 @@ struct WordBankView: View {
                     .foregroundStyle(.teal)
 
                 PersistentTextField(
-                    placeholder: "Add a word...",
+                    hint: "Add a word...",
                     text: $viewModel.newVocabWord,
                     isFocused: $isWordInputFocused,
                     onSubmit: { viewModel.addVocabWord() }
@@ -228,7 +228,7 @@ struct WordBankView: View {
                         .foregroundStyle(.orange)
 
                     PersistentTextField(
-                        placeholder: "Add custom filler...",
+                        hint: "Add custom filler...",
                         text: $viewModel.newFillerWord,
                         isFocused: $isFillerInputFocused,
                         onSubmit: { viewModel.addCustomFiller(isContextDependent: newFillerIsContextDependent) }

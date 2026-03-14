@@ -5,14 +5,14 @@ import UIKit
 /// Standard SwiftUI TextField always dismisses the keyboard on submit — this wraps
 /// UITextField to intercept the return key without resigning first responder.
 struct PersistentTextField: UIViewRepresentable {
-    var placeholder: String
+    var hint: String
     @Binding var text: String
     @Binding var isFocused: Bool
     var onSubmit: () -> Void
 
     func makeUIView(context: Context) -> UITextField {
         let field = UITextField()
-        field.placeholder = placeholder
+        field.placeholder = hint
         field.font = .preferredFont(forTextStyle: .subheadline)
         field.textColor = .white
         field.tintColor = .systemTeal
@@ -22,7 +22,7 @@ struct PersistentTextField: UIViewRepresentable {
         field.delegate = context.coordinator
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.attributedPlaceholder = NSAttributedString(
-            string: placeholder,
+            string: hint,
             attributes: [.foregroundColor: UIColor.white.withAlphaComponent(0.3)]
         )
         field.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)

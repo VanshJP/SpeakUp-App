@@ -863,7 +863,7 @@ class SpeechService {
         let speechSamples = samples.filter { $0 > -40 }
         let monotoneScore: Int
         if speechSamples.count >= 4 {
-            // Convert dB to linear amplitude for meaningful variation measurement
+            // Convert dB to linear volume for meaningful variation measurement
             let linearSamples = speechSamples.map { pow(10.0, Double($0) / 20.0) }
             let linMean = linearSamples.reduce(0, +) / Double(linearSamples.count)
             guard linMean > 1e-6 else {

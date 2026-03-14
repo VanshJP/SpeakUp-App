@@ -15,7 +15,6 @@ struct RecordingView: View {
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
-    var eventId: UUID? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
@@ -67,7 +66,6 @@ struct RecordingView: View {
                 countdownStyle: countdownStyle
             )
             viewModel.goalId = goalId
-            viewModel.eventId = eventId
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
                     customFillers: Set(settings.customFillerWords),
