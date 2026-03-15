@@ -316,7 +316,46 @@ struct RecordingDetailView: View {
                     }
                 }
                 .frame(height: 8)
+
+                if let textQuality = analysis.textQuality {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Language quality signals")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 8) {
+                            scoreSignalChip(
+                                title: "Conciseness",
+                                score: textQuality.concisenessScore,
+                                icon: "scissors"
+                            )
+                            scoreSignalChip(
+                                title: "Engagement",
+                                score: textQuality.engagementScore,
+                                icon: "person.3.sequence"
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func scoreSignalChip(title: String, score: Int, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text("\(title) \(score)")
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(AppColors.scoreColor(for: score))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background {
+            Capsule()
+                .fill(AppColors.scoreColor(for: score).opacity(0.15))
         }
     }
 
