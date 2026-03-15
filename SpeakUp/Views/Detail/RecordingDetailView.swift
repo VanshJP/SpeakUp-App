@@ -31,6 +31,8 @@ struct RecordingDetailView: View {
     @State private var llmInsight: String?
     @State private var isEnhancingCoherence = false
     @State private var transcriptionFailed = false
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var isPlaybackDockVisible = true
 
     @Query private var userSettings: [UserSettings]
 
@@ -89,59 +91,77 @@ struct RecordingDetailView: View {
                         )
                     }
                 } else {
-                    ScrollView(.vertical) {
-                        VStack(spacing: 20) {
-                            // Always visible: Prompt + Score + Stats + Playback
-                            promptHeader(recording)
+                    ZStack(alignment: .bottom) {
+                        ScrollView(.vertical) {
+                            VStack(spacing: 20) {
+                                scrollOffsetReader
 
-                            if let analysis = recording.analysis {
-                                heroScoreSection(analysis)
-                                statsGrid(analysis)
-                            }
+                                // Always visible: Prompt + Score + Stats
+                                promptHeader(recording)
 
-                            // Goal progress (if recording has goalId)
-                            if recording.goalId != nil {
-                                goalProgressCard(recording)
-                            }
-
-                            if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
-                                wpmChartSection(wpmData)
-                            }
-
-                            playbackControlSection(recording)
-
-                            // Segmented tab picker
-                            if recording.analysis != nil {
-                                Picker("Detail", selection: $selectedDetailTab) {
-                                    ForEach(DetailTab.allCases, id: \.self) { tab in
-                                        Text(tab.rawValue).tag(tab)
-                                    }
+                                if let analysis = recording.analysis {
+                                    heroScoreSection(analysis)
+                                    statsGrid(analysis)
                                 }
-                                .pickerStyle(.segmented)
-                                .padding(.horizontal, 4)
-                            }
 
-                            // Tab content
-                            switch selectedDetailTab {
-                            case .analysis:
-                                analysisTabContent(recording)
-                            case .transcript:
-                                transcriptTabContent(recording)
-                            case .coaching:
-                                coachingTabContent(recording)
-                            }
+                                // Goal progress (if recording has goalId)
+                                if recording.goalId != nil {
+                                    goalProgressCard(recording)
+                                }
 
-                            // Actions (always at bottom)
-                            actionsSection(recording)
+                                if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
+                                    wpmChartSection(wpmData)
+                                }
+
+                                // Segmented tab picker
+                                if recording.analysis != nil {
+                                    Picker("Detail", selection: $selectedDetailTab) {
+                                        ForEach(DetailTab.allCases, id: \.self) { tab in
+                                            Text(tab.rawValue).tag(tab)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .padding(.horizontal, 4)
+                                }
+
+                                // Tab content
+                                switch selectedDetailTab {
+                                case .analysis:
+                                    analysisTabContent(recording)
+                                case .transcript:
+                                    transcriptTabContent(recording)
+                                case .coaching:
+                                    coachingTabContent(recording)
+                                }
+
+                                // Actions (always at bottom)
+                                actionsSection(recording)
+                            }
+                            .padding()
+                            .padding(.bottom, 120)
                         }
-                        .padding()
+                        .scrollIndicators(.hidden)
+                        .scrollBounceBehavior(.basedOnSize)
+                        .contentMargins(.horizontal, 0)
+                        .coordinateSpace(name: "recording_detail_scroll")
+                        .onPreferenceChange(RecordingDetailScrollOffsetPreferenceKey.self) { offset in
+                            updatePlaybackDockVisibility(with: offset)
+                        }
+
+                        if hasPlayableMedia(recording) {
+                            playbackControlSection(recording)
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 10)
+                                .offset(y: isPlaybackDockVisible ? 0 : 130)
+                                .opacity(isPlaybackDockVisible ? 1 : 0)
+                                .animation(.spring(response: 0.30, dampingFraction: 0.88), value: isPlaybackDockVisible)
+                        }
                     }
-                    .scrollIndicators(.hidden)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .contentMargins(.horizontal, 0)
                     .onAppear {
                         generateWaveformHeights()
                         initializePlayback(recording)
+                        isPlaybackDockVisible = true
+                        lastScrollOffset = 0
                     }
                     .task {
                         // Delay score animation
@@ -444,7 +464,7 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func playbackControlSection(_ recording: Recording) -> some View {
-        GlassCard {
+        GlassCard(tint: AppColors.glassTintPrimary) {
             VStack(spacing: 14) {
                 // Waveform with timestamps
                 HStack(spacing: 10) {
@@ -510,6 +530,17 @@ struct RecordingDetailView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private var scrollOffsetReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .preference(
+                    key: RecordingDetailScrollOffsetPreferenceKey.self,
+                    value: proxy.frame(in: .named("recording_detail_scroll")).minY
+                )
+        }
+        .frame(height: 0)
     }
 
     // MARK: - Processing Section (moved to AnalyzingView)
@@ -1239,6 +1270,42 @@ struct RecordingDetailView: View {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func hasPlayableMedia(_ recording: Recording) -> Bool {
+        (recording.audioURL ?? recording.videoURL) != nil
+    }
+
+    private func updatePlaybackDockVisibility(with offset: CGFloat) {
+        if lastScrollOffset == 0 {
+            lastScrollOffset = offset
+            return
+        }
+
+        let delta = offset - lastScrollOffset
+        if abs(delta) < 4 { return }
+
+        if delta < 0 {
+            // User is scrolling down the content.
+            isPlaybackDockVisible = false
+        } else {
+            // User is scrolling back up.
+            isPlaybackDockVisible = true
+        }
+
+        if offset >= -16 {
+            isPlaybackDockVisible = true
+        }
+
+        lastScrollOffset = offset
+    }
+}
+
+private struct RecordingDetailScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

@@ -67,6 +67,7 @@ class EventPrepService {
                 audienceSize: audienceSize
             )
             tasks.append(contentsOf: milestoneTasks(daysRemaining: daysRemaining))
+            let dailyBudget = dailyBudgetMinutes(for: phase, maxDailyMinutes: event.maxDailyPracticeMinutes)
 
             var seen = Set<String>()
             tasks = tasks
@@ -82,7 +83,21 @@ class EventPrepService {
                 }
             let dailyCap = daysRemaining <= 7 ? 4 : 3
 
-            for taskInfo in tasks.prefix(dailyCap) {
+            var selected: [TaskInfo] = []
+            var consumedMinutes = 0
+            for task in tasks.prefix(dailyCap) {
+                if selected.isEmpty {
+                    selected.append(task)
+                    consumedMinutes += task.estimatedMinutes
+                    continue
+                }
+                if consumedMinutes + task.estimatedMinutes <= dailyBudget {
+                    selected.append(task)
+                    consumedMinutes += task.estimatedMinutes
+                }
+            }
+
+            for taskInfo in selected {
                 let task = EventPrepTask(
                     eventId: event.id,
                     scheduledDate: date,
@@ -91,7 +106,8 @@ class EventPrepService {
                     taskDescription: taskInfo.description,
                     targetSectionIndex: taskInfo.sectionIndex,
                     drillMode: taskInfo.type.associatedDrillMode,
-                    priority: taskInfo.priority
+                    priority: taskInfo.priority,
+                    estimatedMinutes: taskInfo.estimatedMinutes
                 )
                 context.insert(task)
             }
@@ -149,6 +165,7 @@ class EventPrepService {
         let description: String
         var sectionIndex: Int? = nil
         var priority: Int = 2
+        var estimatedMinutes: Int = 10
     }
 
     private func tasksForPhase(
@@ -164,30 +181,30 @@ class EventPrepService {
             var tasks: [TaskInfo] = []
             if day == 0 {
                 tasks.append(
-                    TaskInfo(type: .scriptReview, title: "Review your script", description: "Read through your script to get familiar with the content.", priority: 1)
+                    TaskInfo(type: .scriptReview, title: "Review your script", description: "Read through your script to get familiar with the content.", priority: 1, estimatedMinutes: 8)
                 )
             }
             if day % 4 == 0 {
                 tasks.append(
-                    TaskInfo(type: .scriptRevision, title: "Refine your script", description: "Tighten language, simplify transitions, and cut weak phrases before your next rehearsal.", priority: 1)
+                    TaskInfo(type: .scriptRevision, title: "Refine your script", description: "Tighten language, simplify transitions, and cut weak phrases before your next rehearsal.", priority: 1, estimatedMinutes: 15)
                 )
             }
             tasks.append(
-                TaskInfo(type: .warmUp, title: sessionType.primaryWarmUpTitle, description: "Start with a \(sessionType.primaryWarmUpTitle.lowercased()) before practicing.", priority: 3)
+                TaskInfo(type: .warmUp, title: sessionType.primaryWarmUpTitle, description: "Start with a \(sessionType.primaryWarmUpTitle.lowercased()) before practicing.", priority: 3, estimatedMinutes: 6)
             )
             tasks.append(
-                TaskInfo(type: .sectionPractice, title: "Practice a section", description: "Pick one section and rehearse it a few times with cleaner pauses.", sectionIndex: day % max(1, (hasSections ? 3 : 1)), priority: 2)
+                TaskInfo(type: .sectionPractice, title: "Practice a section", description: "Pick one section and rehearse it a few times with cleaner pauses.", sectionIndex: day % max(1, (hasSections ? 3 : 1)), priority: 2, estimatedMinutes: 12)
             )
             return tasks
 
         case .building:
             let drillTypes = sessionType.primaryDrillTaskTypes
             var tasks: [TaskInfo] = [
-                TaskInfo(type: .fullRehearsal, title: "Full run-through", description: "Practice your entire speech from start to finish.", priority: 1),
+                TaskInfo(type: .fullRehearsal, title: "Full run-through", description: "Practice your entire speech from start to finish.", priority: 1, estimatedMinutes: 20),
             ]
             if day % 3 == 0 {
                 tasks.append(
-                    TaskInfo(type: .scriptRevision, title: "Revision checkpoint", description: "Update your script based on your latest rehearsal notes and lock improvements.", priority: 1)
+                    TaskInfo(type: .scriptRevision, title: "Revision checkpoint", description: "Update your script based on your latest rehearsal notes and lock improvements.", priority: 1, estimatedMinutes: 18)
                 )
             }
             let drillType = drillTypes[day % drillTypes.count]
@@ -199,14 +216,15 @@ class EventPrepService {
             case .readAloudDrill: drillDescription = "Read a passage aloud focusing on clarity and pace."
             default: drillDescription = "Complete a focused drill to sharpen your skills."
             }
-            tasks.append(TaskInfo(type: drillType, title: drillType.displayName, description: drillDescription, priority: 3))
+            tasks.append(TaskInfo(type: drillType, title: drillType.displayName, description: drillDescription, priority: 3, estimatedMinutes: 10))
             if daysRemaining <= 21 && day % 4 == 0 {
                 tasks.append(
                     TaskInfo(
                         type: .audienceSimulation,
                         title: "Audience simulation",
                         description: "Do one run as if you're speaking to \(audienceDescriptor(audienceSize)) and keep your delivery intentional.",
-                        priority: 2
+                        priority: 2,
+                        estimatedMinutes: 18
                     )
                 )
             }
@@ -214,8 +232,8 @@ class EventPrepService {
 
         case .performance:
             var tasks: [TaskInfo] = [
-                TaskInfo(type: .fullRehearsal, title: "Final rehearsal", description: "Full run-through as if it's the real event.", priority: 1),
-                TaskInfo(type: .confidenceExercise, title: "Confidence exercise", description: sessionType.primaryConfidenceDescription, priority: 2),
+                TaskInfo(type: .fullRehearsal, title: "Final rehearsal", description: "Full run-through as if it's the real event.", priority: 1, estimatedMinutes: 25),
+                TaskInfo(type: .confidenceExercise, title: "Confidence exercise", description: sessionType.primaryConfidenceDescription, priority: 2, estimatedMinutes: 10),
             ]
             if daysRemaining <= 3 {
                 tasks.append(
@@ -223,12 +241,13 @@ class EventPrepService {
                         type: .audienceSimulation,
                         title: "Pressure simulation",
                         description: "Rehearse with \(audienceDescriptor(audienceSize)) pressure, strict timing, and a confident opening.",
-                        priority: 1
+                        priority: 1,
+                        estimatedMinutes: 20
                     )
                 )
             }
             if day == 0 || sessionType.hasDeadline || daysRemaining <= 1 {
-                tasks.append(TaskInfo(type: .dayOfPrep, title: "Day-of prep", description: "Quick breathing exercise and final script review.", priority: 1))
+                tasks.append(TaskInfo(type: .dayOfPrep, title: "Day-of prep", description: "Quick breathing exercise and final script review.", priority: 1, estimatedMinutes: 12))
             }
             return tasks
         }
@@ -251,7 +270,8 @@ class EventPrepService {
                     type: .scriptRevision,
                     title: "Milestone: narrative lock",
                     description: "Lock your opening, core message, and close so future practice focuses on delivery.",
-                    priority: 1
+                    priority: 1,
+                    estimatedMinutes: 20
                 )
             ]
         case 14:
@@ -260,7 +280,8 @@ class EventPrepService {
                     type: .audienceSimulation,
                     title: "Milestone: first pressure run",
                     description: "Run your talk once at full intensity with strict timing and minimal pauses.",
-                    priority: 1
+                    priority: 1,
+                    estimatedMinutes: 25
                 )
             ]
         case 7:
@@ -269,7 +290,8 @@ class EventPrepService {
                     type: .fullRehearsal,
                     title: "Milestone: full dress rehearsal",
                     description: "Deliver your full talk in one take and note final script edits.",
-                    priority: 1
+                    priority: 1,
+                    estimatedMinutes: 30
                 )
             ]
         case 3:
@@ -278,7 +300,8 @@ class EventPrepService {
                     type: .scriptRevision,
                     title: "Milestone: freeze script",
                     description: "Freeze your final version and focus only on pace, pauses, and confidence.",
-                    priority: 1
+                    priority: 1,
+                    estimatedMinutes: 15
                 )
             ]
         case 1:
@@ -287,7 +310,8 @@ class EventPrepService {
                     type: .dayOfPrep,
                     title: "Milestone: event eve prep",
                     description: "Light warm-up, one confident run-through, then rest your voice.",
-                    priority: 1
+                    priority: 1,
+                    estimatedMinutes: 15
                 )
             ]
         default:
@@ -302,5 +326,17 @@ class EventPrepService {
         if audienceSize >= 1000 { return "a big room" }
         if audienceSize >= 100 { return "a packed room" }
         return "a small room"
+    }
+
+    private func dailyBudgetMinutes(for phase: EventPrepPhase, maxDailyMinutes: Int) -> Int {
+        let capped = max(10, min(180, maxDailyMinutes))
+        switch phase {
+        case .foundation:
+            return max(10, Int(Double(capped) * 0.30))
+        case .building:
+            return max(15, Int(Double(capped) * 0.65))
+        case .performance:
+            return capped
+        }
     }
 }

@@ -47,6 +47,7 @@ class ReadAloudService {
 
     private var referenceWords: [String] = []
     private var normalizedReference: [String] = []
+    private var lastProcessedTranscript: String = ""
 
     private var audioEngine: AVAudioEngine?
     private var recognizer: SFSpeechRecognizer?
@@ -78,6 +79,7 @@ class ReadAloudService {
         matchedWordCount = 0
         mismatchedWordCount = 0
         errorMessage = nil
+        lastProcessedTranscript = ""
     }
 
     // MARK: - Start Listening
@@ -151,34 +153,60 @@ class ReadAloudService {
         // appears as segment "quant" then later corrects). formattedString gives the
         // recognizer's best word-boundary output, and re-evaluating on every callback
         // lets earlier partial mis-splits self-correct as more audio arrives.
-        let spokenWords = result.bestTranscription.formattedString
+        let transcript = result.bestTranscription.formattedString
+        guard transcript != lastProcessedTranscript else { return }
+        lastProcessedTranscript = transcript
+
+        let spokenWords = transcript
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
 
+        let computed = computeWordStates(from: spokenWords)
+
         Task { @MainActor in
-            var newStates = Array(repeating: WordMatchState.upcoming, count: self.referenceWords.count)
-            var refIndex = 0
-            var matched = 0
-            var mismatched = 0
+            if self.wordStates != computed.states {
+                self.wordStates = computed.states
+            }
+            if self.currentWordIndex != computed.refIndex {
+                self.currentWordIndex = computed.refIndex
+            }
+            if self.matchedWordCount != computed.matched {
+                self.matchedWordCount = computed.matched
+            }
+            if self.mismatchedWordCount != computed.mismatched {
+                self.mismatchedWordCount = computed.mismatched
+            }
 
-            for spokenWord in spokenWords {
-                guard refIndex < self.referenceWords.count else { break }
+            // Check if passage is complete
+            if computed.refIndex >= self.referenceWords.count {
+                self.stop()
+            }
+        }
+    }
 
-                let spokenNorm = Self.normalize(spokenWord)
-                let expectedNorm = self.normalizedReference[refIndex]
+    private func computeWordStates(from spokenWords: [String]) -> (states: [WordMatchState], refIndex: Int, matched: Int, mismatched: Int) {
+        var newStates = Array(repeating: WordMatchState.upcoming, count: referenceWords.count)
+        var refIndex = 0
+        var matched = 0
+        var mismatched = 0
 
-                if spokenNorm == expectedNorm {
-                    newStates[refIndex] = .matched
-                    matched += 1
-                    refIndex += 1
-                } else {
-                    // Check if the spoken word matches a word slightly ahead (user skipped a word)
-                    let lookAhead = min(refIndex + 3, self.referenceWords.count)
-                    var foundAhead = false
+        for spokenWord in spokenWords {
+            guard refIndex < referenceWords.count else { break }
 
+            let spokenNorm = Self.normalize(spokenWord)
+            let expectedNorm = normalizedReference[refIndex]
+
+            if spokenNorm == expectedNorm {
+                newStates[refIndex] = .matched
+                matched += 1
+                refIndex += 1
+            } else {
+                let lookAhead = min(refIndex + 3, referenceWords.count)
+                var foundAhead = false
+
+                if lookAhead > refIndex + 1 {
                     for i in (refIndex + 1)..<lookAhead {
-                        if spokenNorm == self.normalizedReference[i] {
-                            // Mark skipped words
+                        if spokenNorm == normalizedReference[i] {
                             for j in refIndex..<i {
                                 newStates[j] = .skipped
                                 mismatched += 1
@@ -190,30 +218,21 @@ class ReadAloudService {
                             break
                         }
                     }
+                }
 
-                    if !foundAhead {
-                        newStates[refIndex] = .mismatched(spoken: spokenWord)
-                        mismatched += 1
-                        refIndex += 1
-                    }
+                if !foundAhead {
+                    newStates[refIndex] = .mismatched(spoken: spokenWord)
+                    mismatched += 1
+                    refIndex += 1
                 }
             }
-
-            // Mark current word
-            if refIndex < newStates.count {
-                newStates[refIndex] = .current
-            }
-
-            self.wordStates = newStates
-            self.currentWordIndex = refIndex
-            self.matchedWordCount = matched
-            self.mismatchedWordCount = mismatched
-
-            // Check if passage is complete
-            if refIndex >= self.referenceWords.count {
-                self.stop()
-            }
         }
+
+        if refIndex < newStates.count {
+            newStates[refIndex] = .current
+        }
+
+        return (newStates, refIndex, matched, mismatched)
     }
 
     // MARK: - Scoring

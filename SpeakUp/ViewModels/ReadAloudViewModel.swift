@@ -31,13 +31,18 @@ struct ReadAloudResult {
 class ReadAloudViewModel {
     let service = ReadAloudService()
 
-    var selectedDifficulty: ReadAloudDifficulty?
-    var selectedCategory: ReadAloudCategory?
+    var selectedDifficulty: ReadAloudDifficulty? {
+        didSet { applyFilters() }
+    }
+    var selectedCategory: ReadAloudCategory? {
+        didSet { applyFilters() }
+    }
     var sessionState: ReadAloudSessionState = .idle
     var selectedPassage: ReadAloudPassage?
     var result: ReadAloudResult?
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
+    private(set) var filteredPassages: [ReadAloudPassage] = DefaultReadAloudPassages.all
 
     private var startTime: Date?
     private var timer: Timer?
@@ -45,7 +50,15 @@ class ReadAloudViewModel {
     // MARK: - Filtered Passages
 
     var passages: [ReadAloudPassage] {
-        DefaultReadAloudPassages.all.filter { passage in
+        filteredPassages
+    }
+
+    init() {
+        applyFilters()
+    }
+
+    private func applyFilters() {
+        filteredPassages = DefaultReadAloudPassages.all.filter { passage in
             if let difficulty = selectedDifficulty, passage.difficulty != difficulty {
                 return false
             }
@@ -135,7 +148,7 @@ class ReadAloudViewModel {
 
     private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let start = self.startTime else { return }
                 self.elapsedTime = Date().timeIntervalSince(start)

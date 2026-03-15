@@ -15,6 +15,7 @@ final class EventPrepTask {
     var completedDate: Date?
     var linkedRecordingId: UUID?
     var priority: Int
+    var estimatedMinutes: Int = 10
 
     init(
         id: UUID = UUID(),
@@ -28,7 +29,8 @@ final class EventPrepTask {
         isCompleted: Bool = false,
         completedDate: Date? = nil,
         linkedRecordingId: UUID? = nil,
-        priority: Int = 2
+        priority: Int = 2,
+        estimatedMinutes: Int = 10
     ) {
         self.id = id
         self.eventId = eventId
@@ -42,6 +44,7 @@ final class EventPrepTask {
         self.completedDate = completedDate
         self.linkedRecordingId = linkedRecordingId
         self.priority = priority
+        self.estimatedMinutes = max(3, estimatedMinutes)
     }
 
     var type: EventPrepTaskType {

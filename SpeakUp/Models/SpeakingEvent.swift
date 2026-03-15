@@ -237,6 +237,7 @@ final class SpeakingEvent {
     var title: String
     var eventDate: Date
     var expectedDurationMinutes: Int
+    var maxDailyPracticeMinutes: Int = 45
     var audienceType: String?
     var audienceSize: Int?
     var venue: String?
@@ -260,6 +261,7 @@ final class SpeakingEvent {
         title: String,
         eventDate: Date,
         expectedDurationMinutes: Int,
+        maxDailyPracticeMinutes: Int = 45,
         audienceType: String? = nil,
         audienceSize: Int? = nil,
         venue: String? = nil,
@@ -282,6 +284,7 @@ final class SpeakingEvent {
         self.title = title
         self.eventDate = eventDate
         self.expectedDurationMinutes = expectedDurationMinutes
+        self.maxDailyPracticeMinutes = max(10, maxDailyPracticeMinutes)
         self.audienceType = audienceType
         self.audienceSize = audienceSize
         self.venue = venue
@@ -353,6 +356,14 @@ final class SpeakingEvent {
         if audienceSize < 200 { return "Room / workshop" }
         if audienceSize < 5000 { return "Large venue" }
         return "Mass audience"
+    }
+
+    var phasePracticeTargets: (foundation: Int, building: Int, performance: Int) {
+        let maxDaily = max(10, maxDailyPracticeMinutes)
+        let foundation = max(10, Int(Double(maxDaily) * 0.25))
+        let building = max(15, Int(Double(maxDaily) * 0.6))
+        let performance = max(20, maxDaily)
+        return (foundation, building, performance)
     }
 }
 

@@ -8,6 +8,7 @@ struct CreateEventView: View {
     @State private var title = ""
     @State private var eventDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     @State private var selectedDuration: Int = 5
+    @State private var maxDailyPracticeMinutes = 45
     @State private var audienceType: AudienceType?
     @State private var audienceSizeText = ""
     @State private var venue = ""
@@ -169,6 +170,30 @@ struct CreateEventView: View {
                     }
                 }
 
+                // Daily time commitment
+                GlassCard(padding: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Max Daily Practice Near Event")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        HStack {
+                            Text("\(maxDailyPracticeMinutes) min/day")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text("Foundation ~\(max(10, Int(Double(maxDailyPracticeMinutes) * 0.30))) min")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Slider(value: Binding(
+                            get: { Double(maxDailyPracticeMinutes) },
+                            set: { maxDailyPracticeMinutes = Int($0.rounded()) }
+                        ), in: 10...120, step: 5)
+                        .tint(AppColors.primary)
+                    }
+                }
+
                 // Audience & Venue
                 if selectedType.showsAudience {
                     GlassCard(padding: 12) {
@@ -282,6 +307,7 @@ struct CreateEventView: View {
                             sessionType: selectedType,
                             eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
                             expectedDurationMinutes: selectedDuration,
+                            maxDailyPracticeMinutes: maxDailyPracticeMinutes,
                             audienceType: audienceType,
                             audienceSize: parsedAudienceSize,
                             venue: venue.isEmpty ? nil : venue,
@@ -302,6 +328,7 @@ struct CreateEventView: View {
                             sessionType: selectedType,
                             eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
                             expectedDurationMinutes: selectedDuration,
+                            maxDailyPracticeMinutes: maxDailyPracticeMinutes,
                             audienceType: audienceType,
                             audienceSize: parsedAudienceSize,
                             venue: venue.isEmpty ? nil : venue,

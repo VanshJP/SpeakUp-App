@@ -7,6 +7,7 @@ struct ReadAloudSessionView: View {
     @State private var showingResult = false
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
+    @State private var lastAutoScrolledWordIndex = 0
 
     var body: some View {
         ZStack {
@@ -29,9 +30,9 @@ struct ReadAloudSessionView: View {
                             .padding(.vertical, 24)
                     }
                     .onChange(of: viewModel.currentWordIndex) { _, newIndex in
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            proxy.scrollTo("word_\(max(0, newIndex - 3))", anchor: .center)
-                        }
+                        guard abs(newIndex - lastAutoScrolledWordIndex) >= 2 else { return }
+                        proxy.scrollTo("word_\(max(0, newIndex - 3))", anchor: .center)
+                        lastAutoScrolledWordIndex = newIndex
                     }
                 }
 
@@ -46,6 +47,7 @@ struct ReadAloudSessionView: View {
         .ignoresSafeArea()
         .task {
             await viewModel.startSession(passage: passage)
+            lastAutoScrolledWordIndex = 0
         }
         .onDisappear {
             if viewModel.sessionState == .listening {

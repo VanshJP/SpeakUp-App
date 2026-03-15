@@ -18,6 +18,7 @@ class EventViewModel {
     var isCreating = false
 
     private var modelContext: ModelContext?
+    private var notificationRefreshTask: Task<Void, Never>?
 
     func configure(with context: ModelContext) {
         self.modelContext = context
@@ -51,6 +52,7 @@ class EventViewModel {
         sessionType: SessionType,
         eventDate: Date,
         expectedDurationMinutes: Int,
+        maxDailyPracticeMinutes: Int = 45,
         audienceType: AudienceType? = nil,
         audienceSize: Int? = nil,
         venue: String? = nil,
@@ -83,6 +85,7 @@ class EventViewModel {
             title: title,
             eventDate: eventDate,
             expectedDurationMinutes: expectedDurationMinutes,
+            maxDailyPracticeMinutes: maxDailyPracticeMinutes,
             audienceType: audienceType?.rawValue,
             audienceSize: audienceSize,
             venue: venue,
@@ -100,9 +103,9 @@ class EventViewModel {
         do {
             try context.save()
             loadEvents()
-
-            // Generate prep tasks
-            prepService.generateTasks(for: event, context: context)
+            Task { @MainActor in
+                prepService.generateTasks(for: event, context: context)
+            }
 
             return event
         } catch {
@@ -193,10 +196,7 @@ class EventViewModel {
         prepTasks = prepService.fetchTasks(for: event.id, context: context)
         timelineDays = buildTimelineDays(from: prepTasks)
         updateReadinessScore(for: event)
-
-        Task {
-            await notificationService.refreshEventNotifications(tasks: prepTasks)
-        }
+        scheduleNotificationRefresh(tasks: prepTasks)
     }
 
     func completeTask(_ task: EventPrepTask, recordingId: UUID? = nil) {
@@ -214,7 +214,8 @@ class EventViewModel {
         var score = 0.0
 
         // Practice count factor (up to 40 points)
-        let practiceTarget = max(3, event.daysRemaining)
+        // Cap target so long-horizon events don't look permanently "behind."
+        let practiceTarget = min(10, max(3, event.daysRemaining / 3))
         let practiceRatio = min(1.0, Double(event.totalPracticeCount) / Double(practiceTarget))
         score += practiceRatio * 40
 
@@ -323,6 +324,17 @@ class EventViewModel {
 
         return milestones.reversed()
     }
+
+    private func scheduleNotificationRefresh(tasks: [EventPrepTask]) {
+        notificationRefreshTask?.cancel()
+        let tasksSnapshot = tasks
+        notificationRefreshTask = Task(priority: .utility) {
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            await notificationService.checkPermission()
+            await notificationService.refreshEventNotifications(tasks: tasksSnapshot)
+        }
+    }
 }
 
 struct EventTimelineDay: Identifiable {
@@ -338,6 +350,10 @@ struct EventTimelineDay: Identifiable {
     var completionRatio: Double {
         guard !tasks.isEmpty else { return 0 }
         return Double(completedCount) / Double(tasks.count)
+    }
+
+    var estimatedMinutes: Int {
+        tasks.reduce(0) { $0 + $1.estimatedMinutes }
     }
 
     var hasOverdueTasks: Bool {

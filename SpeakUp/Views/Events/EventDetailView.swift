@@ -371,6 +371,12 @@ struct EventDetailView: View {
                             .foregroundStyle(.secondary)
                         Text("\(completedPrepCount) of \(viewModel.prepTasks.count) tasks done")
                             .font(.subheadline.weight(.semibold))
+                        Text("Target near event: \(event.maxDailyPracticeMinutes) min/day")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Foundation ~\(event.phasePracticeTargets.foundation)m · Building ~\(event.phasePracticeTargets.building)m · Performance ~\(event.phasePracticeTargets.performance)m")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -397,6 +403,13 @@ struct EventDetailView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background { Capsule().fill(.ultraThinMaterial) }
+
+                            Text("~\(day.estimatedMinutes)m")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background { Capsule().fill(AppColors.primary.opacity(0.16)) }
                         }
 
                         ForEach(day.tasks) { task in
@@ -427,6 +440,9 @@ struct EventDetailView: View {
                                                 .font(.caption2.weight(.semibold))
                                                 .foregroundStyle(.red)
                                         }
+                                        Text("~\(task.estimatedMinutes)m")
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(AppColors.primary)
                                         Text(priorityLabel(for: task.priority))
                                             .font(.caption2.weight(.medium))
                                             .foregroundStyle(.secondary)
@@ -588,6 +604,9 @@ struct EventDetailView: View {
                     Divider()
                     GlassInfoRow(label: "Audience", value: audience, icon: "person.2")
                 }
+
+                Divider()
+                GlassInfoRow(label: "Daily Practice Capacity", value: "\(event.maxDailyPracticeMinutes) min", icon: "timer")
 
                 if let audienceSize = event.audienceSize, audienceSize > 0 {
                     Divider()
