@@ -66,6 +66,7 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
     case scriptReview
     case impromptuVariation
     case dayOfPrep
+    case readAloudDrill
 
     var id: String { rawValue }
 
@@ -81,6 +82,7 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
         case .scriptReview: return "Script Review"
         case .impromptuVariation: return "Impromptu Variation"
         case .dayOfPrep: return "Day-of Prep"
+        case .readAloudDrill: return "Read Aloud Drill"
         }
     }
 
@@ -96,6 +98,7 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
         case .scriptReview: return "eye.fill"
         case .impromptuVariation: return "bolt.circle.fill"
         case .dayOfPrep: return "star.fill"
+        case .readAloudDrill: return "text.book.closed"
         }
     }
 
@@ -111,6 +114,7 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
         case .scriptReview: return "indigo"
         case .impromptuVariation: return "red"
         case .dayOfPrep: return "yellow"
+        case .readAloudDrill: return "indigo"
         }
     }
 
@@ -123,7 +127,7 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
 
     var opensDrill: Bool {
         switch self {
-        case .fillerDrill, .paceDrill, .pauseDrill: return true
+        case .fillerDrill, .paceDrill, .pauseDrill, .readAloudDrill: return true
         default: return false
         }
     }

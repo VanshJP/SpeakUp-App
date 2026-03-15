@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import SwiftData
 
 // MARK: - Session Type
@@ -23,6 +24,18 @@ enum SessionType: String, CaseIterable, Identifiable {
         case .voiceOver: return "waveform.and.mic"
         case .speech: return "podium"
         case .practice: return "figure.mind.and.body"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .presentation: return AppColors.info
+        case .shortVideo: return .pink
+        case .longVideo: return .purple
+        case .podcast: return AppColors.warning
+        case .voiceOver: return .cyan
+        case .speech: return AppColors.primary
+        case .practice: return AppColors.accent
         }
     }
 
@@ -99,6 +112,123 @@ enum SessionType: String, CaseIterable, Identifiable {
     var showsAudience: Bool {
         self != .practice && self != .voiceOver
     }
+
+    // MARK: - Type-Specific Configuration
+
+    var recommendedTools: [RecommendedTool] {
+        switch self {
+        case .presentation:
+            return [
+                RecommendedTool(name: "Pause Practice", icon: "pause.circle", color: .purple, tip: "Let key points land with deliberate pauses", action: .drill(.pausePractice)),
+                RecommendedTool(name: "Read Aloud", icon: "text.book.closed", color: .indigo, tip: "Practice PREP/STAR frameworks out loud", action: .readAloud),
+                RecommendedTool(name: "Confidence", icon: "heart.fill", color: .pink, tip: "Visualize commanding the room", action: .confidence),
+                RecommendedTool(name: "Filler Drill", icon: "xmark.circle", color: .orange, tip: "Eliminate filler words under pressure", action: .drill(.fillerElimination)),
+                RecommendedTool(name: "Breathing", icon: "wind", color: .cyan, tip: "Calm your nerves before presenting", action: .warmUp),
+            ]
+        case .shortVideo:
+            return [
+                RecommendedTool(name: "Pace Control", icon: "speedometer", color: .blue, tip: "Hit your timing for short-form content", action: .drill(.paceControl)),
+                RecommendedTool(name: "Filler Drill", icon: "xmark.circle", color: .orange, tip: "Every filler costs precious seconds", action: .drill(.fillerElimination)),
+                RecommendedTool(name: "Read Aloud", icon: "text.book.closed", color: .indigo, tip: "Nail your script delivery", action: .readAloud),
+                RecommendedTool(name: "Articulation", icon: "mouth", color: .cyan, tip: "Crisp articulation for the mic", action: .warmUp),
+            ]
+        case .longVideo:
+            return [
+                RecommendedTool(name: "Pace Control", icon: "speedometer", color: .blue, tip: "Vary your pace to keep viewers engaged", action: .drill(.paceControl)),
+                RecommendedTool(name: "Filler Drill", icon: "xmark.circle", color: .orange, tip: "Stay clean across a longer runtime", action: .drill(.fillerElimination)),
+                RecommendedTool(name: "Pause Practice", icon: "pause.circle", color: .purple, tip: "Use pauses to structure long content", action: .drill(.pausePractice)),
+                RecommendedTool(name: "Vocal Warm-Up", icon: "waveform", color: .cyan, tip: "Protect your voice for extended sessions", action: .warmUp),
+            ]
+        case .podcast:
+            return [
+                RecommendedTool(name: "Pace Control", icon: "speedometer", color: .blue, tip: "Find a conversational rhythm", action: .drill(.paceControl)),
+                RecommendedTool(name: "Vocal Warm-Up", icon: "waveform", color: .cyan, tip: "Your voice IS the product", action: .warmUp),
+                RecommendedTool(name: "Read Aloud", icon: "text.book.closed", color: .indigo, tip: "Practice reading show notes smoothly", action: .readAloud),
+            ]
+        case .voiceOver:
+            return [
+                RecommendedTool(name: "Read Aloud", icon: "text.book.closed", color: .indigo, tip: "Match your delivery to the visuals", action: .readAloud),
+                RecommendedTool(name: "Pace Control", icon: "speedometer", color: .blue, tip: "Keep a steady, measured pace", action: .drill(.paceControl)),
+                RecommendedTool(name: "Articulation", icon: "mouth", color: .cyan, tip: "Every syllable matters for VO", action: .warmUp),
+            ]
+        case .speech:
+            return [
+                RecommendedTool(name: "Pause Practice", icon: "pause.circle", color: .purple, tip: "Connect with your audience through pauses", action: .drill(.pausePractice)),
+                RecommendedTool(name: "Confidence", icon: "heart.fill", color: .pink, tip: "Own the stage with confidence", action: .confidence),
+                RecommendedTool(name: "Filler Drill", icon: "xmark.circle", color: .orange, tip: "Speak with purpose, not fillers", action: .drill(.fillerElimination)),
+                RecommendedTool(name: "Breathing", icon: "wind", color: .cyan, tip: "Ground yourself before you speak", action: .warmUp),
+            ]
+        case .practice:
+            return [
+                RecommendedTool(name: "Filler Drill", icon: "xmark.circle", color: .orange, tip: "Quick reps to sharpen your speech", action: .drill(.fillerElimination)),
+                RecommendedTool(name: "Pace Control", icon: "speedometer", color: .blue, tip: "Experiment with different paces", action: .drill(.paceControl)),
+                RecommendedTool(name: "Impromptu", icon: "bolt.circle", color: .red, tip: "Think on your feet", action: .drill(.impromptuSprint)),
+            ]
+        }
+    }
+
+    var coachingTip: String {
+        switch self {
+        case .presentation: return "Focus on deliberate pauses to let key points land with your audience"
+        case .shortVideo: return "Every second counts — nail your timing and cut the fillers"
+        case .longVideo: return "Vary your pace to keep viewers engaged over a longer runtime"
+        case .podcast: return "Your voice IS the product — warm up your vocals and nail your pacing"
+        case .voiceOver: return "Clarity is king — articulate every syllable to match your visuals"
+        case .speech: return "Connect with your audience through pauses and purposeful structure"
+        case .practice: return "Experiment freely — try different drills and find your edge"
+        }
+    }
+
+    var primaryDrillTaskTypes: [EventPrepTaskType] {
+        switch self {
+        case .presentation: return [.pauseDrill, .fillerDrill]
+        case .shortVideo: return [.paceDrill, .fillerDrill]
+        case .longVideo: return [.paceDrill, .fillerDrill]
+        case .podcast: return [.paceDrill, .readAloudDrill]
+        case .voiceOver: return [.readAloudDrill, .paceDrill]
+        case .speech: return [.pauseDrill, .fillerDrill]
+        case .practice: return [.fillerDrill, .paceDrill]
+        }
+    }
+
+    var primaryWarmUpTitle: String {
+        switch self {
+        case .presentation, .speech: return "Breathing warm-up"
+        case .shortVideo, .voiceOver: return "Articulation warm-up"
+        case .longVideo, .podcast: return "Vocal warm-up"
+        case .practice: return "Quick warm-up"
+        }
+    }
+
+    var primaryConfidenceDescription: String {
+        switch self {
+        case .presentation, .speech: return "Visualize delivering your talk with confidence"
+        case .shortVideo, .longVideo, .podcast, .voiceOver: return "A calming exercise to settle your nerves"
+        case .practice: return "Build confidence through positive affirmations"
+        }
+    }
+}
+
+// MARK: - Tool Action
+
+enum ToolAction {
+    case drill(DrillMode)
+    case readAloud
+    case warmUp
+    case confidence
+    case teleprompter
+    case script
+}
+
+// MARK: - Recommended Tool
+
+struct RecommendedTool: Identifiable {
+    let id = UUID()
+    let name: String
+    let icon: String
+    let color: Color
+    let tip: String
+    let action: ToolAction
 }
 
 @Model

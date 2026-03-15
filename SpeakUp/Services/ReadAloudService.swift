@@ -53,8 +53,6 @@ class ReadAloudService {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
 
-    /// Tracks the last processed segment count to avoid reprocessing.
-    private var lastProcessedSegmentCount = 0
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -79,7 +77,6 @@ class ReadAloudService {
         currentWordIndex = 0
         matchedWordCount = 0
         mismatchedWordCount = 0
-        lastProcessedSegmentCount = 0
         errorMessage = nil
     }
 
@@ -149,63 +146,71 @@ class ReadAloudService {
     // MARK: - Process Recognition Result
 
     private func processResult(_ result: SFSpeechRecognitionResult) {
-        let segments = result.bestTranscription.segments
-        let segmentCount = segments.count
-        guard segmentCount > lastProcessedSegmentCount else { return }
-
-        // Process only new segments since last update
-        let newSegments = Array(segments[lastProcessedSegmentCount...])
-        lastProcessedSegmentCount = segmentCount
+        // Use formattedString split into words instead of segments.
+        // Segments can split words mid-utterance in partial results (e.g. "quantum"
+        // appears as segment "quant" then later corrects). formattedString gives the
+        // recognizer's best word-boundary output, and re-evaluating on every callback
+        // lets earlier partial mis-splits self-correct as more audio arrives.
+        let spokenWords = result.bestTranscription.formattedString
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
 
         Task { @MainActor in
-            for segment in newSegments {
-                guard self.currentWordIndex < self.referenceWords.count else { break }
+            var newStates = Array(repeating: WordMatchState.upcoming, count: self.referenceWords.count)
+            var refIndex = 0
+            var matched = 0
+            var mismatched = 0
 
-                let spokenNorm = Self.normalize(segment.substring)
-                let expectedNorm = self.normalizedReference[self.currentWordIndex]
+            for spokenWord in spokenWords {
+                guard refIndex < self.referenceWords.count else { break }
+
+                let spokenNorm = Self.normalize(spokenWord)
+                let expectedNorm = self.normalizedReference[refIndex]
 
                 if spokenNorm == expectedNorm {
-                    self.wordStates[self.currentWordIndex] = .matched
-                    self.matchedWordCount += 1
-                    self.currentWordIndex += 1
+                    newStates[refIndex] = .matched
+                    matched += 1
+                    refIndex += 1
                 } else {
                     // Check if the spoken word matches a word slightly ahead (user skipped a word)
-                    let lookAhead = min(self.currentWordIndex + 3, self.referenceWords.count)
+                    let lookAhead = min(refIndex + 3, self.referenceWords.count)
                     var foundAhead = false
 
-                    for i in (self.currentWordIndex + 1)..<lookAhead {
+                    for i in (refIndex + 1)..<lookAhead {
                         if spokenNorm == self.normalizedReference[i] {
                             // Mark skipped words
-                            for j in self.currentWordIndex..<i {
-                                self.wordStates[j] = .skipped
-                                self.mismatchedWordCount += 1
+                            for j in refIndex..<i {
+                                newStates[j] = .skipped
+                                mismatched += 1
                             }
-                            self.wordStates[i] = .matched
-                            self.matchedWordCount += 1
-                            self.currentWordIndex = i + 1
+                            newStates[i] = .matched
+                            matched += 1
+                            refIndex = i + 1
                             foundAhead = true
                             break
                         }
                     }
 
                     if !foundAhead {
-                        self.wordStates[self.currentWordIndex] = .mismatched(spoken: segment.substring)
-                        self.mismatchedWordCount += 1
-                        self.currentWordIndex += 1
+                        newStates[refIndex] = .mismatched(spoken: spokenWord)
+                        mismatched += 1
+                        refIndex += 1
                     }
                 }
             }
 
             // Mark current word
-            if self.currentWordIndex < self.wordStates.count {
-                // Only set current if it's still upcoming
-                if self.wordStates[self.currentWordIndex] == .upcoming {
-                    self.wordStates[self.currentWordIndex] = .current
-                }
+            if refIndex < newStates.count {
+                newStates[refIndex] = .current
             }
 
+            self.wordStates = newStates
+            self.currentWordIndex = refIndex
+            self.matchedWordCount = matched
+            self.mismatchedWordCount = mismatched
+
             // Check if passage is complete
-            if self.currentWordIndex >= self.referenceWords.count {
+            if refIndex >= self.referenceWords.count {
                 self.stop()
             }
         }

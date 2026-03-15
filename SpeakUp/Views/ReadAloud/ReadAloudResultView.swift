@@ -5,6 +5,9 @@ struct ReadAloudResultView: View {
     let onRetry: () -> Void
     let onDone: () -> Void
 
+    @State private var selectedWord: WordDetail?
+    @State private var pronunciationService = PronunciationService()
+
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
@@ -103,6 +106,9 @@ struct ReadAloudResultView: View {
                 .padding(.horizontal, 20)
             }
         }
+        .sheet(item: $selectedWord) { detail in
+            WordDetailSheet(detail: detail, pronunciationService: pronunciationService)
+        }
     }
 
     // MARK: - Word Review
@@ -118,10 +124,29 @@ struct ReadAloudResultView: View {
                         Text(word)
                             .font(.system(size: 16))
                             .foregroundStyle(reviewWordColor(for: index))
+                            .underline(isWordTappable(at: index) && isWordHighlighted(at: index))
                             .padding(.vertical, 1)
+                            .onTapGesture {
+                                guard isWordTappable(at: index) else { return }
+                                Haptics.light()
+                                selectedWord = WordDetail(
+                                    word: word,
+                                    index: index,
+                                    state: result.wordStates[index]
+                                )
+                            }
                     }
                 }
             }
+
+            // Hint
+            HStack(spacing: 6) {
+                Image(systemName: "hand.tap")
+                    .foregroundStyle(AppColors.primary)
+                Text("Tap a word for pronunciation & definition")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
 
             // Legend
             HStack(spacing: 16) {
@@ -131,6 +156,22 @@ struct ReadAloudResultView: View {
                 legendItem(color: .white.opacity(0.4), label: "Not reached")
             }
             .font(.caption2)
+        }
+    }
+
+    private func isWordTappable(at index: Int) -> Bool {
+        guard index < result.wordStates.count else { return false }
+        switch result.wordStates[index] {
+        case .matched, .mismatched, .skipped: return true
+        case .upcoming, .current: return false
+        }
+    }
+
+    private func isWordHighlighted(at index: Int) -> Bool {
+        guard index < result.wordStates.count else { return false }
+        switch result.wordStates[index] {
+        case .mismatched, .skipped: return true
+        default: return false
         }
     }
 

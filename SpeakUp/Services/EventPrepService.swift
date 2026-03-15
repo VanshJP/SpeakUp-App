@@ -127,25 +127,31 @@ class EventPrepService {
                 ]
             }
             return [
-                TaskInfo(type: .warmUp, title: "Vocal warm-up", description: "Start with a quick vocal warm-up before practicing.", priority: 3),
+                TaskInfo(type: .warmUp, title: sessionType.primaryWarmUpTitle, description: "Start with a \(sessionType.primaryWarmUpTitle.lowercased()) before practicing.", priority: 3),
                 TaskInfo(type: .sectionPractice, title: "Practice a section", description: "Pick one section and rehearse it a few times.", sectionIndex: day % max(1, (hasSections ? 3 : 1)), priority: 2),
             ]
 
         case .building:
+            let drillTypes = sessionType.primaryDrillTaskTypes
             var tasks: [TaskInfo] = [
                 TaskInfo(type: .fullRehearsal, title: "Full run-through", description: "Practice your entire speech from start to finish.", priority: 1),
             ]
-            if day % 2 == 0 {
-                tasks.append(TaskInfo(type: .fillerDrill, title: "Filler elimination drill", description: "Spend 15 seconds speaking with zero fillers.", priority: 3))
-            } else {
-                tasks.append(TaskInfo(type: .paceDrill, title: "Pace control drill", description: "Practice speaking at your target pace.", priority: 3))
+            let drillType = drillTypes[day % drillTypes.count]
+            let drillDescription: String
+            switch drillType {
+            case .fillerDrill: drillDescription = "Spend 15 seconds speaking with zero fillers."
+            case .paceDrill: drillDescription = "Practice speaking at your target pace."
+            case .pauseDrill: drillDescription = "Practice deliberate pauses at natural break points."
+            case .readAloudDrill: drillDescription = "Read a passage aloud focusing on clarity and pace."
+            default: drillDescription = "Complete a focused drill to sharpen your skills."
             }
+            tasks.append(TaskInfo(type: drillType, title: drillType.displayName, description: drillDescription, priority: 3))
             return tasks
 
         case .performance:
             var tasks: [TaskInfo] = [
                 TaskInfo(type: .fullRehearsal, title: "Final rehearsal", description: "Full run-through as if it's the real event.", priority: 1),
-                TaskInfo(type: .confidenceExercise, title: "Confidence exercise", description: "A calming exercise to build confidence.", priority: 2),
+                TaskInfo(type: .confidenceExercise, title: "Confidence exercise", description: sessionType.primaryConfidenceDescription, priority: 2),
             ]
             if day == 0 || sessionType.hasDeadline {
                 tasks.append(TaskInfo(type: .dayOfPrep, title: "Day-of prep", description: "Quick breathing exercise and final script review.", priority: 1))

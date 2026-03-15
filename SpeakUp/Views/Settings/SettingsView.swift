@@ -28,113 +28,91 @@ struct SettingsView: View {
     // MARK: - Menu Card
 
     private var settingsMenuCard: some View {
-        GlassCard {
-            VStack(spacing: 0) {
-                settingsLink(
-                    icon: "slider.horizontal.3",
-                    iconColor: .teal,
-                    title: "Session Defaults",
-                    subtitle: viewModel.defaultDuration.displayName + ", " + viewModel.countdownDuration.displayName + " countdown"
-                ) {
-                    SessionDefaultsView(viewModel: viewModel)
-                }
+        VStack(spacing: 12) {
+            settingsLink(
+                icon: "slider.horizontal.3",
+                iconColor: .teal,
+                title: "Session Defaults",
+                subtitle: viewModel.defaultDuration.displayName + ", " + viewModel.countdownDuration.displayName + " countdown"
+            ) {
+                SessionDefaultsView(viewModel: viewModel)
+            }
 
-                divider
+            settingsLink(
+                icon: "waveform.badge.magnifyingglass",
+                iconColor: .blue,
+                title: "Analysis",
+                subtitle: "Target: \(viewModel.targetWPM) WPM"
+            ) {
+                AnalysisSettingsView(viewModel: viewModel)
+            }
 
-                settingsLink(
-                    icon: "waveform.badge.magnifyingglass",
-                    iconColor: .blue,
-                    title: "Analysis",
-                    subtitle: "Target: \(viewModel.targetWPM) WPM"
-                ) {
-                    AnalysisSettingsView(viewModel: viewModel)
-                }
+            settingsLink(
+                icon: "character.book.closed",
+                iconColor: .green,
+                title: "Words",
+                subtitle: wordsSubtitle
+            ) {
+                WordBankView(viewModel: viewModel)
+            }
 
-                divider
+            settingsLink(
+                icon: "bubble.left.and.text.bubble.right",
+                iconColor: .purple,
+                title: "Session Feedback",
+                subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
+            ) {
+                FeedbackSettingsView(viewModel: viewModel)
+            }
 
-                settingsLink(
-                    icon: "character.book.closed",
-                    iconColor: .green,
-                    title: "Words",
-                    subtitle: wordsSubtitle
-                ) {
-                    WordBankView(viewModel: viewModel)
-                }
+            settingsLink(
+                icon: "text.quote",
+                iconColor: .orange,
+                title: "Prompts",
+                subtitle: "\(viewModel.enabledPromptCategories.count) categories"
+            ) {
+                PromptSettingsView(viewModel: viewModel)
+            }
 
-                divider
+            settingsLink(
+                icon: "bell.fill",
+                iconColor: .yellow,
+                title: "Reminders",
+                subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
+            ) {
+                ReminderSettingsView(viewModel: viewModel)
+            }
 
-                settingsLink(
-                    icon: "bubble.left.and.text.bubble.right",
-                    iconColor: .purple,
-                    title: "Session Feedback",
-                    subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
-                ) {
-                    FeedbackSettingsView(viewModel: viewModel)
-                }
+            settingsLink(
+                icon: "cpu",
+                iconColor: .purple,
+                title: "AI Features",
+                subtitle: aiModelSubtitle
+            ) {
+                AIModelSettingsView()
+            }
 
-                divider
+            settingsLink(
+                icon: "externaldrive.fill",
+                iconColor: .gray,
+                title: "Data Management",
+                subtitle: "Export, reset, or manage data"
+            ) {
+                DataManagementView(viewModel: viewModel)
+            }
 
-                settingsLink(
-                    icon: "text.quote",
-                    iconColor: .orange,
-                    title: "Prompts",
-                    subtitle: "\(viewModel.enabledPromptCategories.count) categories"
-                ) {
-                    PromptSettingsView(viewModel: viewModel)
-                }
-
-                divider
-
-                settingsLink(
-                    icon: "bell.fill",
-                    iconColor: .yellow,
-                    title: "Reminders",
-                    subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
-                ) {
-                    ReminderSettingsView(viewModel: viewModel)
-                }
-
-                divider
-
-                settingsLink(
-                    icon: "cpu",
-                    iconColor: .purple,
-                    title: "AI Features",
-                    subtitle: aiModelSubtitle
-                ) {
-                    AIModelSettingsView()
-                }
-
-                divider
-
-                settingsLink(
-                    icon: "externaldrive.fill",
-                    iconColor: .gray,
-                    title: "Data Management",
-                    subtitle: nil
-                ) {
-                    DataManagementView(viewModel: viewModel)
-                }
-
-                divider
-
-                settingsLink(
-                    icon: "info.circle",
-                    iconColor: .secondary,
-                    title: "About",
-                    subtitle: "v\(viewModel.appVersion) (\(viewModel.buildNumber))"
-                ) {
-                    AboutSettingsView()
-                }
+            settingsLink(
+                icon: "info.circle",
+                iconColor: .secondary,
+                title: "About",
+                subtitle: "v\(viewModel.appVersion) (\(viewModel.buildNumber))"
+            ) {
+                AboutSettingsView()
             }
         }
     }
 
     // MARK: - Helpers
-
-    private var divider: some View {
-        Divider().padding(.vertical, 4)
-    }
 
     private var wordsSubtitle: String {
         var parts: [String] = []
@@ -174,31 +152,39 @@ struct SettingsView: View {
         NavigationLink {
             destination()
         } label: {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.body)
-                    .foregroundStyle(iconColor)
-                    .frame(width: 28)
+            GlassCard(padding: 14) {
+                HStack(spacing: 14) {
+                    Image(systemName: icon)
+                        .font(.body)
+                        .foregroundStyle(iconColor)
+                        .frame(width: 28)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
 
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        if let subtitle {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        } else {
+                            Text(" ")
+                                .font(.caption)
+                                .opacity(0)
+                        }
                     }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
     }
@@ -215,53 +201,51 @@ struct AboutSettingsView: View {
             AppBackground(style: .subtle)
 
             ScrollView {
-                VStack(spacing: 20) {
-                    GlassCard {
-                        VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    GlassCard(padding: 14) {
+                        HStack {
+                            Label("Version", systemImage: "info.circle")
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            Text("\(appVersion) (\(buildNumber))")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(minHeight: 32)
+                    }
+
+                    Link(destination: URL(string: "mailto:vansh@trygoldfinch.com")!) {
+                        GlassCard(padding: 14) {
                             HStack {
-                                Label("Version", systemImage: "info.circle")
-                                    .font(.subheadline)
+                                Label("Send Feedback", systemImage: "envelope")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.primary)
                                 Spacer()
-                                Text("\(appVersion) (\(buildNumber))")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
-                            .frame(minHeight: 40)
-
-                            Divider().padding(.vertical, 8)
-
-                            Link(destination: URL(string: "mailto:vansh@trygoldfinch.com")!) {
-                                HStack {
-                                    Label("Send Feedback", systemImage: "envelope")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 40)
-                            }
-
-                            Divider().padding(.vertical, 8)
-
-                            NavigationLink {
-                                JournalExportView()
-                            } label: {
-                                HStack {
-                                    Label("Export Progress Journal", systemImage: "doc.richtext")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 40)
-                            }
-                            .buttonStyle(.plain)
+                            .frame(minHeight: 32)
                         }
                     }
+
+                    NavigationLink {
+                        JournalExportView()
+                    } label: {
+                        GlassCard(padding: 14) {
+                            HStack {
+                                Label("Export Progress Journal", systemImage: "doc.richtext")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .frame(minHeight: 32)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding()
             }

@@ -4,11 +4,21 @@ import SwiftData
 struct EventDetailView: View {
     let event: SpeakingEvent
     @Bindable var viewModel: EventViewModel
+    var onStartPractice: ((SpeakingEvent) -> Void)?
     @Environment(\.modelContext) private var modelContext
+
+    @Query private var userSettings: [UserSettings]
 
     @State private var showingScriptEditor = false
     @State private var showingTeleprompter = false
     @State private var showingDeleteConfirm = false
+    @State private var showingWarmUps = false
+    @State private var showingConfidenceTools = false
+    @State private var showingReadAloud = false
+    @State private var showingDrillSession = false
+    @State private var showingDrillCountdown = false
+    @State private var selectedDrillMode: DrillMode?
+    @State private var drillViewModel = DrillViewModel()
 
     var body: some View {
         ZStack {
@@ -19,6 +29,9 @@ struct EventDetailView: View {
                     // Countdown header
                     countdownHeader
 
+                    // Coaching tip
+                    coachingTipCard
+
                     // Readiness score
                     if event.totalPracticeCount > 0 {
                         readinessCard
@@ -26,6 +39,9 @@ struct EventDetailView: View {
 
                     // Quick actions
                     quickActions
+
+                    // Recommended tools
+                    recommendedToolsSection
 
                     // Script section
                     if event.scriptText != nil {
@@ -67,10 +83,50 @@ struct EventDetailView: View {
                 TeleprompterView(
                     scriptText: script,
                     speed: event.teleprompterSpeed,
-                    fontSize: event.teleprompterFontSize
+                    fontSize: event.teleprompterFontSize,
+                    onSettingsChanged: { newSpeed, newFontSize in
+                        event.teleprompterSpeed = newSpeed
+                        event.teleprompterFontSize = newFontSize
+                        try? modelContext.save()
+                    }
                 )
             }
         }
+        .sheet(isPresented: $showingWarmUps) {
+            WarmUpListView()
+        }
+        .sheet(isPresented: $showingConfidenceTools) {
+            ConfidenceToolsView()
+        }
+        .sheet(isPresented: $showingReadAloud) {
+            ReadAloudSelectionView()
+        }
+        .fullScreenCover(isPresented: $showingDrillSession) {
+            DrillSessionView(viewModel: drillViewModel)
+        }
+        .overlay {
+            if showingDrillCountdown {
+                CountdownOverlayView(
+                    prompt: nil,
+                    duration: .thirty,
+                    countdownDuration: userSettings.first?.countdownDuration ?? 15,
+                    countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
+                    onComplete: {
+                        showingDrillCountdown = false
+                        if let mode = selectedDrillMode {
+                            drillViewModel.startDrill(mode: mode)
+                            showingDrillSession = true
+                        }
+                    },
+                    onCancel: {
+                        showingDrillCountdown = false
+                        selectedDrillMode = nil
+                    }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showingDrillCountdown)
         .alert("Delete Event", isPresented: $showingDeleteConfirm) {
             Button("Delete", role: .destructive) {
                 viewModel.deleteEvent(event)
@@ -89,7 +145,7 @@ struct EventDetailView: View {
                 HStack {
                     Image(systemName: event.resolvedSessionType.icon)
                         .font(.title2)
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
 
                     Text(event.resolvedSessionType.rawValue)
                         .font(.subheadline.weight(.medium))
@@ -101,8 +157,8 @@ struct EventDetailView: View {
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background { Capsule().fill(Color.teal.opacity(0.2)) }
-                        .foregroundStyle(.teal)
+                        .background { Capsule().fill(AppColors.primary.opacity(0.2)) }
+                        .foregroundStyle(AppColors.primary)
                 }
 
                 Text(event.daysRemainingText)
@@ -122,6 +178,22 @@ struct EventDetailView: View {
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Coaching Tip Card
+
+    private var coachingTipCard: some View {
+        GlassCard(tint: AppColors.glassTintPrimary) {
+            HStack(spacing: 12) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.title3)
+                    .foregroundStyle(.yellow)
+
+                Text(event.resolvedSessionType.coachingTip)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -157,19 +229,84 @@ struct EventDetailView: View {
     // MARK: - Quick Actions
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
-            if event.scriptText != nil {
-                GlassButton(title: "Script", icon: "doc.text", style: .secondary, size: .small) {
-                    showingScriptEditor = true
-                }
-                GlassButton(title: "Teleprompter", icon: "text.alignleft", style: .secondary, size: .small) {
-                    showingTeleprompter = true
-                }
-            } else {
-                GlassButton(title: "Add Script", icon: "doc.badge.plus", style: .secondary, size: .small) {
-                    showingScriptEditor = true
+        VStack(spacing: 12) {
+            if let onStartPractice {
+                GlassButton(title: "Practice", icon: "mic.fill", style: .primary) {
+                    Haptics.medium()
+                    onStartPractice(event)
                 }
             }
+
+            HStack(spacing: 12) {
+                if event.scriptText != nil {
+                    GlassButton(title: "Script", icon: "doc.text", style: .secondary, size: .small) {
+                        showingScriptEditor = true
+                    }
+                    GlassButton(title: "Teleprompter", icon: "text.alignleft", style: .secondary, size: .small) {
+                        showingTeleprompter = true
+                    }
+                } else {
+                    GlassButton(title: "Add Script", icon: "doc.badge.plus", style: .secondary, size: .small) {
+                        showingScriptEditor = true
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Recommended Tools
+
+    private var recommendedToolsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Recommended for \(event.resolvedSessionType.rawValue)", icon: "star.fill")
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(event.resolvedSessionType.recommendedTools) { tool in
+                        Button {
+                            Haptics.medium()
+                            launchTool(tool.action)
+                        } label: {
+                            GlassCard(padding: 12) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Image(systemName: tool.icon)
+                                        .font(.title2)
+                                        .foregroundStyle(tool.color)
+
+                                    Text(tool.name)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white)
+
+                                    Text(tool.tip)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                .frame(width: 110, alignment: .leading)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func launchTool(_ action: ToolAction) {
+        switch action {
+        case .drill(let mode):
+            selectedDrillMode = mode
+            showingDrillCountdown = true
+        case .readAloud:
+            showingReadAloud = true
+        case .warmUp:
+            showingWarmUps = true
+        case .confidence:
+            showingConfidenceTools = true
+        case .teleprompter:
+            showingTeleprompter = true
+        case .script:
+            showingScriptEditor = true
         }
     }
 
@@ -278,7 +415,7 @@ struct EventDetailView: View {
                 GlassCard(padding: 12) {
                     HStack(spacing: 12) {
                         Image(systemName: "mic.fill")
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recording.displayTitle)

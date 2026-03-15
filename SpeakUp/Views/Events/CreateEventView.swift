@@ -26,7 +26,7 @@ struct CreateEventView: View {
                         HStack(spacing: 8) {
                             ForEach(0..<3) { i in
                                 Capsule()
-                                    .fill(i <= step ? Color.teal : Color.white.opacity(0.15))
+                                    .fill(i <= step ? AppColors.primary : Color.white.opacity(0.15))
                                     .frame(height: 4)
                             }
                         }
@@ -72,11 +72,11 @@ struct CreateEventView: View {
                         selectedType = type
                         selectedDuration = type.defaultDurationMinutes
                     } label: {
-                        GlassCard(tint: selectedType == type ? Color.teal.opacity(0.15) : nil, accentBorder: selectedType == type ? .teal : nil) {
+                        GlassCard(tint: selectedType == type ? AppColors.primary.opacity(0.15) : nil, accentBorder: selectedType == type ? AppColors.primary : nil) {
                             VStack(spacing: 10) {
                                 Image(systemName: type.icon)
                                     .font(.title2)
-                                    .foregroundStyle(selectedType == type ? .teal : .secondary)
+                                    .foregroundStyle(selectedType == type ? AppColors.primary : .secondary)
 
                                 Text(type.rawValue)
                                     .font(.caption.weight(.semibold))
@@ -125,7 +125,7 @@ struct CreateEventView: View {
                             Label("Open-ended (no deadline)", systemImage: "infinity")
                                 .font(.subheadline)
                         }
-                        .tint(.teal)
+                        .tint(AppColors.primary)
 
                         if !isOpenEnded {
                             DatePicker("Event Date", selection: $eventDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
@@ -155,7 +155,7 @@ struct CreateEventView: View {
                                             .padding(.vertical, 8)
                                             .background {
                                                 if selectedDuration == minutes {
-                                                    Capsule().fill(Color.teal)
+                                                    Capsule().fill(AppColors.primary)
                                                 } else {
                                                     Capsule().fill(.ultraThinMaterial)
                                                 }
@@ -190,7 +190,7 @@ struct CreateEventView: View {
                                                 .padding(.vertical, 6)
                                                 .background {
                                                     if audienceType == type {
-                                                        Capsule().fill(Color.teal)
+                                                        Capsule().fill(AppColors.primary)
                                                     } else {
                                                         Capsule().fill(.ultraThinMaterial)
                                                     }
@@ -262,35 +262,41 @@ struct CreateEventView: View {
             }
 
             VStack(spacing: 12) {
-                GlassButton(title: "Create Event", icon: "checkmark", style: .primary) {
+                GlassButton(title: "Create Event", icon: "checkmark", style: .primary, isLoading: viewModel.isCreating) {
                     Haptics.success()
-                    let _ = viewModel.createEvent(
-                        title: title,
-                        sessionType: selectedType,
-                        eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
-                        expectedDurationMinutes: selectedDuration,
-                        audienceType: audienceType,
-                        venue: venue.isEmpty ? nil : venue,
-                        notes: notes.isEmpty ? nil : notes,
-                        scriptText: scriptText.isEmpty ? nil : scriptText,
-                        isOpenEnded: isOpenEnded
-                    )
-                    dismiss()
+                    Task {
+                        let _ = await viewModel.createEvent(
+                            title: title,
+                            sessionType: selectedType,
+                            eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
+                            expectedDurationMinutes: selectedDuration,
+                            audienceType: audienceType,
+                            venue: venue.isEmpty ? nil : venue,
+                            notes: notes.isEmpty ? nil : notes,
+                            scriptText: scriptText.isEmpty ? nil : scriptText,
+                            isOpenEnded: isOpenEnded
+                        )
+                        dismiss()
+                    }
                 }
+                .disabled(viewModel.isCreating)
 
-                GlassButton(title: "Skip Script", icon: "forward.fill", style: .ghost) {
+                GlassButton(title: "Skip Script", icon: "forward.fill", style: .ghost, isLoading: viewModel.isCreating) {
                     Haptics.light()
-                    let _ = viewModel.createEvent(
-                        title: title,
-                        sessionType: selectedType,
-                        eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
-                        expectedDurationMinutes: selectedDuration,
-                        audienceType: audienceType,
-                        venue: venue.isEmpty ? nil : venue,
-                        isOpenEnded: isOpenEnded
-                    )
-                    dismiss()
+                    Task {
+                        let _ = await viewModel.createEvent(
+                            title: title,
+                            sessionType: selectedType,
+                            eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
+                            expectedDurationMinutes: selectedDuration,
+                            audienceType: audienceType,
+                            venue: venue.isEmpty ? nil : venue,
+                            isOpenEnded: isOpenEnded
+                        )
+                        dismiss()
+                    }
                 }
+                .disabled(viewModel.isCreating)
             }
             .padding(.horizontal, 20)
         }

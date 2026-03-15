@@ -5,6 +5,8 @@ struct ReadAloudSessionView: View {
     let passage: ReadAloudPassage
     @Environment(\.dismiss) private var dismiss
     @State private var showingResult = false
+    @State private var selectedWord: WordDetail?
+    @State private var pronunciationService = PronunciationService()
 
     var body: some View {
         ZStack {
@@ -66,6 +68,13 @@ struct ReadAloudSessionView: View {
                     dismiss()
                 })
             }
+        }
+        .sheet(item: $selectedWord) { detail in
+            WordDetailSheet(
+                detail: detail,
+                pronunciationService: pronunciationService,
+                micActive: viewModel.isListening
+            )
         }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") {
@@ -160,9 +169,11 @@ struct ReadAloudSessionView: View {
 
         return WrappingHStack(alignment: .leading, spacing: 6, lineSpacing: 12) {
             ForEach(Array(words.enumerated()), id: \.offset) { index, word in
+                let state = index < states.count ? states[index] : WordMatchState.upcoming
                 Text(word)
                     .font(.system(size: 22, weight: wordWeight(for: index), design: .default))
-                    .foregroundStyle(wordColor(for: index, state: index < states.count ? states[index] : .upcoming))
+                    .foregroundStyle(wordColor(for: index, state: state))
+                    .underline(isProcessedHighlight(state))
                     .padding(.vertical, 2)
                     .padding(.horizontal, 2)
                     .background {
@@ -170,6 +181,11 @@ struct ReadAloudSessionView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.teal.opacity(0.2))
                         }
+                    }
+                    .onTapGesture {
+                        guard isProcessed(state) else { return }
+                        Haptics.light()
+                        selectedWord = WordDetail(word: word, index: index, state: state)
                     }
                     .id("word_\(index)")
             }
@@ -189,6 +205,20 @@ struct ReadAloudSessionView: View {
         case .matched: return .green
         case .mismatched: return .red
         case .skipped: return .orange
+        }
+    }
+
+    private func isProcessed(_ state: WordMatchState) -> Bool {
+        switch state {
+        case .matched, .mismatched, .skipped: return true
+        case .upcoming, .current: return false
+        }
+    }
+
+    private func isProcessedHighlight(_ state: WordMatchState) -> Bool {
+        switch state {
+        case .mismatched, .skipped: return true
+        default: return false
         }
     }
 

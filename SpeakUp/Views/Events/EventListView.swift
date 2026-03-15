@@ -7,6 +7,7 @@ struct EventListView: View {
     @State private var viewModel = EventViewModel()
     @State private var showingCreateEvent = false
     @State private var selectedEvent: SpeakingEvent?
+    var onStartPractice: ((SpeakingEvent) -> Void)?
 
     var body: some View {
         NavigationStack {
@@ -83,7 +84,7 @@ struct EventListView: View {
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                     }
                 }
             }
@@ -91,7 +92,7 @@ struct EventListView: View {
                 CreateEventView(viewModel: viewModel)
             }
             .navigationDestination(item: $selectedEvent) { event in
-                EventDetailView(event: event, viewModel: viewModel)
+                EventDetailView(event: event, viewModel: viewModel, onStartPractice: onStartPractice)
             }
             .onAppear {
                 viewModel.configure(with: modelContext)
@@ -171,15 +172,7 @@ struct EventCard: View {
     }
 
     private var sessionTypeColor: Color {
-        switch event.resolvedSessionType {
-        case .presentation: return .blue
-        case .shortVideo: return .pink
-        case .longVideo: return .purple
-        case .podcast: return .orange
-        case .voiceOver: return .cyan
-        case .speech: return .teal
-        case .practice: return .gray
-        }
+        event.resolvedSessionType.color
     }
 
     private var daysColor: Color {

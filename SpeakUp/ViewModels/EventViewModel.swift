@@ -12,6 +12,7 @@ class EventViewModel {
     var prepTasks: [EventPrepTask] = []
     var errorMessage: String?
     var showArchived = false
+    var isCreating = false
 
     private var modelContext: ModelContext?
 
@@ -52,8 +53,11 @@ class EventViewModel {
         notes: String? = nil,
         scriptText: String? = nil,
         isOpenEnded: Bool = false
-    ) -> SpeakingEvent? {
+    ) async -> SpeakingEvent? {
         guard let context = modelContext else { return nil }
+
+        isCreating = true
+        defer { isCreating = false }
 
         var sections: [ScriptSection]? = nil
         var versions: [ScriptVersion]? = nil

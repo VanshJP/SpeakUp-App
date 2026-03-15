@@ -50,7 +50,7 @@ struct ScriptEditorView: View {
                             }
                             .padding(.horizontal)
 
-                            GlassButton(title: "Save as Version \(nextVersion)", icon: "square.and.arrow.down", style: .primary) {
+                            GlassButton(title: event.currentVersionNumber == 0 ? "Save Script" : "Save as Version \(nextVersion)", icon: "square.and.arrow.down", style: .primary) {
                                 Haptics.success()
                                 viewModel.saveNewScriptVersion(
                                     for: event,
@@ -70,7 +70,7 @@ struct ScriptEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                 }
             }
             .onAppear {
@@ -142,7 +142,7 @@ struct ScriptEditorView: View {
                                                 showingVersionHistory = false
                                             }
                                             .font(.caption.weight(.medium))
-                                            .foregroundStyle(.teal)
+                                            .foregroundStyle(AppColors.primary)
                                         }
                                     }
                                 }

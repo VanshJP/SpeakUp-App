@@ -30,6 +30,8 @@ struct HistoryView: View {
         case .recent:
             let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
             recordings = recordings.filter { $0.date >= weekAgo }
+        case .events:
+            recordings = recordings.filter { $0.eventId != nil }
         }
 
         if !searchText.isEmpty {
@@ -451,6 +453,7 @@ struct HistoryView: View {
         case .favorites: return viewModel.recordings.filter(\.isFavorite).count
         case .highScore: return viewModel.recordings.filter { ($0.analysis?.speechScore.overall ?? 0) >= 80 }.count
         case .recent: return nil
+        case .events: return viewModel.recordings.filter { $0.eventId != nil }.count
         }
     }
 
@@ -517,7 +520,7 @@ struct HistoryView: View {
 // MARK: - History Filter
 
 enum HistoryFilter: String, CaseIterable, Identifiable {
-    case all, favorites, highScore, recent
+    case all, favorites, highScore, recent, events
 
     var id: String { rawValue }
 
@@ -527,6 +530,7 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         case .favorites: return "Favorites"
         case .highScore: return "High Score"
         case .recent: return "This Week"
+        case .events: return "Events"
         }
     }
 
@@ -536,6 +540,7 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         case .favorites: return "heart.fill"
         case .highScore: return "star.fill"
         case .recent: return "clock"
+        case .events: return "calendar"
         }
     }
 }
@@ -771,16 +776,34 @@ struct RecordingRow: View {
                             }
                         }
 
-                        if let category = recording.prompt?.category {
-                            Text(category)
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(PromptCategory(rawValue: category)?.color ?? .teal)
+                        HStack(spacing: 6) {
+                            if let category = recording.prompt?.category {
+                                Text(category)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(PromptCategory(rawValue: category)?.color ?? .teal)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background {
+                                        Capsule()
+                                            .fill((PromptCategory(rawValue: category)?.color ?? .teal).opacity(0.15))
+                                    }
+                            }
+
+                            if recording.eventId != nil {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 8))
+                                    Text("Event")
+                                        .font(.caption2.weight(.medium))
+                                }
+                                .foregroundStyle(AppColors.primary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background {
                                     Capsule()
-                                        .fill((PromptCategory(rawValue: category)?.color ?? .teal).opacity(0.15))
+                                        .fill(AppColors.primary.opacity(0.15))
                                 }
+                            }
                         }
 
                         HStack(spacing: 6) {
