@@ -406,7 +406,7 @@ This is a **native iOS project** requiring **Xcode 26.2+ on macOS 26+**. Cursor 
 swiftlint lint
 
 # Lint a specific file
-swiftlint lint --path SpeakUp/Views/Today/TodayView.swift
+swiftlint lint SpeakUp/Views/Today/TodayView.swift
 
 # Syntax-check all Swift files (no iOS SDK needed)
 find . -name "*.swift" -not -path "./.build/*" | xargs -I{} swiftc -parse {}
