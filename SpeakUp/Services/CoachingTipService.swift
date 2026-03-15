@@ -30,6 +30,7 @@ struct CoachingTip: Identifiable {
         case fillers
         case pauses
         case clarity
+        case structure
         case delivery
         case relevance
         case encouragement
@@ -48,6 +49,7 @@ enum CoachingTipService {
         let clarity = analysis.speechScore.subscores.clarity
         let pauseCount = analysis.pauseCount
         let avgPause = analysis.averagePauseLength
+        let textQuality = analysis.textQuality
 
         // Top filler word name
         let topFiller = analysis.fillerWords.first?.word ?? "um"
@@ -151,6 +153,29 @@ enum CoachingTipService {
                 message: "Slow down and focus on enunciating each word clearly.",
                 category: .clarity,
                 teachingPoint: "Try tongue twisters before speaking to warm up. Focus on consonant endings — dropping final consonants is the most common clarity issue."
+            ))
+        }
+
+        // --- Structure / Conciseness ---
+        if let textQuality, textQuality.concisenessScore < 55 {
+            tips.append(CoachingTip(
+                icon: "scissors",
+                title: "Tighten Your Message",
+                message: "Your phrasing can be more concise. Replace weak phrases with direct statements.",
+                category: .structure,
+                teachingPoint: "Use the one-breath rule: if a sentence cannot be spoken clearly in one breath, split it. Replace phrases like 'at the end of the day' with a direct claim.",
+                suggestedDrillMode: "impromptuSprint"
+            ))
+        }
+
+        if let textQuality, textQuality.engagementScore < 55 {
+            tips.append(CoachingTip(
+                icon: "person.3.sequence.fill",
+                title: "Increase Audience Engagement",
+                message: "Add more audience hooks like rhetorical questions and clear takeaways.",
+                category: .structure,
+                teachingPoint: "Try this structure: Hook question -> key point -> concrete example -> clear takeaway. Engagement rises when listeners know why each section matters.",
+                suggestedDrillMode: "pausePractice"
             ))
         }
 

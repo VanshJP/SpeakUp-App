@@ -376,6 +376,8 @@ struct DetailAnalysisTab: View {
                 VStack(spacing: 14) {
                     SubscoreRow(title: "Authority", score: tq.authorityScore, icon: "shield.checkered")
                     SubscoreRow(title: "Craft", score: tq.craftScore, icon: "paintbrush.pointed")
+                    SubscoreRow(title: "Conciseness", score: tq.concisenessScore, icon: "scissors")
+                    SubscoreRow(title: "Engagement", score: tq.engagementScore, icon: "person.3.sequence")
 
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -409,6 +411,34 @@ struct DetailAnalysisTab: View {
 
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
+                            Text("Weak Phrases")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(tq.weakPhraseCount)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(tq.weakPhraseCount > 3 ? .orange : .primary)
+                        }
+                        Spacer()
+                        VStack(alignment: .center, spacing: 2) {
+                            Text("Repeated Starts")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(tq.repeatedSentenceStartCount)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(tq.repeatedSentenceStartCount > 1 ? .orange : .primary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Questions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(tq.rhetoricalQuestionCount)")
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text("Rhetorical Devices")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -423,6 +453,16 @@ struct DetailAnalysisTab: View {
                             Text("\(tq.transitionVariety) types")
                                 .font(.subheadline.weight(.medium))
                         }
+                    }
+
+                    HStack {
+                        Text("Calls to Action")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(tq.callToActionCount)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(tq.callToActionCount > 0 ? .green : .secondary)
                     }
                 }
             }

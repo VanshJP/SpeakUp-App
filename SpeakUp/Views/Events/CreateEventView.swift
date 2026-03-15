@@ -9,6 +9,7 @@ struct CreateEventView: View {
     @State private var eventDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     @State private var selectedDuration: Int = 5
     @State private var audienceType: AudienceType?
+    @State private var audienceSizeText = ""
     @State private var venue = ""
     @State private var notes = ""
     @State private var scriptText = ""
@@ -171,7 +172,7 @@ struct CreateEventView: View {
                 // Audience & Venue
                 if selectedType.showsAudience {
                     GlassCard(padding: 12) {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 10) {
                             Text("Audience")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.secondary)
@@ -199,6 +200,17 @@ struct CreateEventView: View {
                                         .buttonStyle(.plain)
                                     }
                                 }
+                            }
+
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Audience Size (optional)")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                TextField("e.g. 25, 500, 100000", text: $audienceSizeText)
+                                    .textFieldStyle(.plain)
+                                    .keyboardType(.numberPad)
                             }
                         }
                     }
@@ -271,6 +283,7 @@ struct CreateEventView: View {
                             eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
                             expectedDurationMinutes: selectedDuration,
                             audienceType: audienceType,
+                            audienceSize: parsedAudienceSize,
                             venue: venue.isEmpty ? nil : venue,
                             notes: notes.isEmpty ? nil : notes,
                             scriptText: scriptText.isEmpty ? nil : scriptText,
@@ -290,6 +303,7 @@ struct CreateEventView: View {
                             eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
                             expectedDurationMinutes: selectedDuration,
                             audienceType: audienceType,
+                            audienceSize: parsedAudienceSize,
                             venue: venue.isEmpty ? nil : venue,
                             isOpenEnded: isOpenEnded
                         )
@@ -300,5 +314,11 @@ struct CreateEventView: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+
+    private var parsedAudienceSize: Int? {
+        let digits = audienceSizeText.filter(\.isNumber)
+        guard let value = Int(digits), value > 0 else { return nil }
+        return value
     }
 }

@@ -238,6 +238,7 @@ final class SpeakingEvent {
     var eventDate: Date
     var expectedDurationMinutes: Int
     var audienceType: String?
+    var audienceSize: Int?
     var venue: String?
     var notes: String?
     var scriptText: String?
@@ -260,6 +261,7 @@ final class SpeakingEvent {
         eventDate: Date,
         expectedDurationMinutes: Int,
         audienceType: String? = nil,
+        audienceSize: Int? = nil,
         venue: String? = nil,
         notes: String? = nil,
         scriptText: String? = nil,
@@ -281,6 +283,7 @@ final class SpeakingEvent {
         self.eventDate = eventDate
         self.expectedDurationMinutes = expectedDurationMinutes
         self.audienceType = audienceType
+        self.audienceSize = audienceSize
         self.venue = venue
         self.notes = notes
         self.scriptText = scriptText
@@ -342,6 +345,14 @@ final class SpeakingEvent {
         if days == 0 { return "Today!" }
         if days == 1 { return "Tomorrow" }
         return "\(days) days to go"
+    }
+
+    var audienceScaleLabel: String {
+        guard let audienceSize, audienceSize > 0 else { return "Not set" }
+        if audienceSize < 20 { return "Small group" }
+        if audienceSize < 200 { return "Room / workshop" }
+        if audienceSize < 5000 { return "Large venue" }
+        return "Mass audience"
     }
 }
 

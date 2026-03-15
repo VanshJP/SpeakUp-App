@@ -5,11 +5,14 @@ import SwiftData
 @MainActor @Observable
 class EventViewModel {
     let prepService = EventPrepService()
+    let notificationService = NotificationService()
 
     var events: [SpeakingEvent] = []
     var selectedEvent: SpeakingEvent?
     var linkedRecordings: [Recording] = []
     var prepTasks: [EventPrepTask] = []
+    var timelineDays: [EventTimelineDay] = []
+    var revisionMilestones: [ScriptRevisionMilestone] = []
     var errorMessage: String?
     var showArchived = false
     var isCreating = false
@@ -49,6 +52,7 @@ class EventViewModel {
         eventDate: Date,
         expectedDurationMinutes: Int,
         audienceType: AudienceType? = nil,
+        audienceSize: Int? = nil,
         venue: String? = nil,
         notes: String? = nil,
         scriptText: String? = nil,
@@ -80,6 +84,7 @@ class EventViewModel {
             eventDate: eventDate,
             expectedDurationMinutes: expectedDurationMinutes,
             audienceType: audienceType?.rawValue,
+            audienceSize: audienceSize,
             venue: venue,
             notes: notes,
             scriptText: scriptText,
@@ -152,6 +157,11 @@ class EventViewModel {
         event.scriptSections = sections
 
         try? modelContext?.save()
+        if let context = modelContext {
+            prepService.generateTasks(for: event, context: context)
+            loadPrepTasks(for: event)
+        }
+        revisionMilestones = buildRevisionMilestones(for: event)
     }
 
     // MARK: - Recordings
@@ -173,6 +183,7 @@ class EventViewModel {
 
         // Update readiness score
         updateReadinessScore(for: event)
+        revisionMilestones = buildRevisionMilestones(for: event)
     }
 
     // MARK: - Prep Tasks
@@ -180,6 +191,12 @@ class EventViewModel {
     func loadPrepTasks(for event: SpeakingEvent) {
         guard let context = modelContext else { return }
         prepTasks = prepService.fetchTasks(for: event.id, context: context)
+        timelineDays = buildTimelineDays(from: prepTasks)
+        updateReadinessScore(for: event)
+
+        Task {
+            await notificationService.refreshEventNotifications(tasks: prepTasks)
+        }
     }
 
     func completeTask(_ task: EventPrepTask, recordingId: UUID? = nil) {
@@ -187,6 +204,7 @@ class EventViewModel {
         prepService.completeTask(task, recordingId: recordingId, context: context)
         if let event = selectedEvent {
             loadPrepTasks(for: event)
+            revisionMilestones = buildRevisionMilestones(for: event)
         }
     }
 
@@ -246,4 +264,100 @@ class EventViewModel {
             )
         }
     }
+
+    // MARK: - Timeline Builders
+
+    private func buildTimelineDays(from tasks: [EventPrepTask]) -> [EventTimelineDay] {
+        let grouped = Dictionary(grouping: tasks) { task in
+            Calendar.current.startOfDay(for: task.scheduledDate)
+        }
+
+        return grouped.keys
+            .sorted()
+            .map { date in
+                let dayTasks = (grouped[date] ?? [])
+                    .sorted { lhs, rhs in
+                        if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+                        return lhs.title < rhs.title
+                    }
+                return EventTimelineDay(date: date, tasks: dayTasks)
+            }
+    }
+
+    private func buildRevisionMilestones(for event: SpeakingEvent) -> [ScriptRevisionMilestone] {
+        guard let versions = event.scriptVersions, !versions.isEmpty else { return [] }
+
+        let sortedVersions = versions.sorted { $0.versionNumber < $1.versionNumber }
+        var previousBestScore: Int?
+        var milestones: [ScriptRevisionMilestone] = []
+
+        for (index, version) in sortedVersions.enumerated() {
+            let nextVersionDate = index < sortedVersions.count - 1 ? sortedVersions[index + 1].createdDate : Date.distantFuture
+            let recordingsForVersion = linkedRecordings.filter { recording in
+                recording.date >= version.createdDate && recording.date < nextVersionDate
+            }
+            let bestScore = recordingsForVersion.compactMap { $0.analysis?.speechScore.overall }.max()
+            let delta: Int?
+            if let bestScore, let previousBestScore {
+                delta = bestScore - previousBestScore
+            } else {
+                delta = nil
+            }
+            if let bestScore {
+                previousBestScore = bestScore
+            }
+
+            milestones.append(
+                ScriptRevisionMilestone(
+                    versionId: version.id,
+                    versionNumber: version.versionNumber,
+                    createdDate: version.createdDate,
+                    wordCount: version.wordCount,
+                    changeNote: version.changeNote,
+                    practiceCount: recordingsForVersion.count,
+                    bestScore: bestScore,
+                    scoreDeltaFromPrevious: delta
+                )
+            )
+        }
+
+        return milestones.reversed()
+    }
+}
+
+struct EventTimelineDay: Identifiable {
+    let date: Date
+    let tasks: [EventPrepTask]
+
+    var id: Date { date }
+
+    var completedCount: Int {
+        tasks.filter(\.isCompleted).count
+    }
+
+    var completionRatio: Double {
+        guard !tasks.isEmpty else { return 0 }
+        return Double(completedCount) / Double(tasks.count)
+    }
+
+    var hasOverdueTasks: Bool {
+        tasks.contains { $0.isOverdue }
+    }
+
+    var isToday: Bool {
+        Calendar.current.isDateInToday(date)
+    }
+}
+
+struct ScriptRevisionMilestone: Identifiable {
+    let versionId: UUID
+    let versionNumber: Int
+    let createdDate: Date
+    let wordCount: Int
+    let changeNote: String?
+    let practiceCount: Int
+    let bestScore: Int?
+    let scoreDeltaFromPrevious: Int?
+
+    var id: UUID { versionId }
 }
