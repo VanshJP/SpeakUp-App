@@ -25,12 +25,15 @@ struct ContentView: View {
     @State private var showingJournalExport = false
     @State private var showingAchievements = false
     @State private var showingWordBank = false
+    @State private var showingEvents = false
+    @State private var showingReadAloud = false
     @State private var settingsViewModel = SettingsViewModel()
 
     // Recording parameters to pass
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
+    @State private var recordingEventId: UUID?
 
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
@@ -78,6 +81,12 @@ struct ContentView: View {
                     },
                     onShowWordBank: {
                         showingWordBank = true
+                    },
+                    onShowEvents: {
+                        showingEvents = true
+                    },
+                    onShowReadAloud: {
+                        showingReadAloud = true
                     }
                 )
             }
@@ -153,6 +162,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .fullScreenCover(isPresented: $showingRecording, onDismiss: {
+            recordingEventId = nil
             if let id = pendingRecordingNavigation {
                 selectedRecordingId = id
                 pendingRecordingNavigation = nil
@@ -164,6 +174,7 @@ struct ContentView: View {
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
                 goalId: recordingGoalId,
+                eventId: recordingEventId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     selectedTab = .history
@@ -231,6 +242,27 @@ struct ContentView: View {
             NavigationStack {
                 JournalExportView()
             }
+        }
+        .sheet(isPresented: $showingEvents) {
+            EventListView(onStartPractice: { event in
+                recordingEventId = event.id
+                let targetSeconds = event.expectedDurationMinutes * 60
+                recordingDuration = RecordingDuration.allCases.min(by: {
+                    abs($0.rawValue - targetSeconds) < abs($1.rawValue - targetSeconds)
+                }) ?? .sixty
+                recordingPrompt = nil
+                showingEvents = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showingCountdown = true
+                }
+            })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .onOpenURL { url in
             handleDeepLink(url)

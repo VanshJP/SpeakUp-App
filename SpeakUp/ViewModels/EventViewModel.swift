@@ -1,0 +1,249 @@
+import Foundation
+import SwiftUI
+import SwiftData
+
+@MainActor @Observable
+class EventViewModel {
+    let prepService = EventPrepService()
+
+    var events: [SpeakingEvent] = []
+    var selectedEvent: SpeakingEvent?
+    var linkedRecordings: [Recording] = []
+    var prepTasks: [EventPrepTask] = []
+    var errorMessage: String?
+    var showArchived = false
+    var isCreating = false
+
+    private var modelContext: ModelContext?
+
+    func configure(with context: ModelContext) {
+        self.modelContext = context
+        loadEvents()
+    }
+
+    // MARK: - Load
+
+    func loadEvents() {
+        guard let context = modelContext else { return }
+        let showArchived = self.showArchived
+        let descriptor = FetchDescriptor<SpeakingEvent>(
+            predicate: showArchived ? nil : #Predicate { !$0.isArchived },
+            sortBy: [SortDescriptor(\.eventDate)]
+        )
+        events = (try? context.fetch(descriptor)) ?? []
+    }
+
+    var upcomingEvents: [SpeakingEvent] {
+        events.filter { !$0.isPast && !$0.isArchived }
+    }
+
+    var pastEvents: [SpeakingEvent] {
+        events.filter { $0.isPast || $0.isArchived }
+    }
+
+    // MARK: - Create
+
+    func createEvent(
+        title: String,
+        sessionType: SessionType,
+        eventDate: Date,
+        expectedDurationMinutes: Int,
+        audienceType: AudienceType? = nil,
+        venue: String? = nil,
+        notes: String? = nil,
+        scriptText: String? = nil,
+        isOpenEnded: Bool = false
+    ) async -> SpeakingEvent? {
+        guard let context = modelContext else { return nil }
+
+        isCreating = true
+        defer { isCreating = false }
+
+        var sections: [ScriptSection]? = nil
+        var versions: [ScriptVersion]? = nil
+
+        if let script = scriptText, !script.isEmpty {
+            let sectionList = splitIntoSections(script)
+            sections = sectionList
+
+            let version = ScriptVersion(
+                versionNumber: 1,
+                scriptText: script,
+                scriptSections: sectionList,
+                changeNote: "Initial version"
+            )
+            versions = [version]
+        }
+
+        let event = SpeakingEvent(
+            title: title,
+            eventDate: eventDate,
+            expectedDurationMinutes: expectedDurationMinutes,
+            audienceType: audienceType?.rawValue,
+            venue: venue,
+            notes: notes,
+            scriptText: scriptText,
+            scriptSections: sections,
+            sessionType: sessionType.rawValue,
+            isOpenEnded: isOpenEnded,
+            expectedDurationSeconds: expectedDurationMinutes * 60,
+            scriptVersions: versions
+        )
+
+        context.insert(event)
+
+        do {
+            try context.save()
+            loadEvents()
+
+            // Generate prep tasks
+            prepService.generateTasks(for: event, context: context)
+
+            return event
+        } catch {
+            errorMessage = "Failed to create event: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    // MARK: - Update
+
+    func archiveEvent(_ event: SpeakingEvent) {
+        event.isArchived = true
+        try? modelContext?.save()
+        loadEvents()
+    }
+
+    func deleteEvent(_ event: SpeakingEvent) {
+        guard let context = modelContext else { return }
+        // Delete associated prep tasks
+        let eventId = event.id
+        let taskDescriptor = FetchDescriptor<EventPrepTask>(
+            predicate: #Predicate { $0.eventId == eventId }
+        )
+        if let tasks = try? context.fetch(taskDescriptor) {
+            for task in tasks { context.delete(task) }
+        }
+        context.delete(event)
+        try? context.save()
+        loadEvents()
+    }
+
+    // MARK: - Script Versions
+
+    func saveNewScriptVersion(for event: SpeakingEvent, scriptText: String, changeNote: String?) {
+        let sections = splitIntoSections(scriptText)
+        let nextVersion = (event.currentVersionNumber) + 1
+
+        let version = ScriptVersion(
+            versionNumber: nextVersion,
+            scriptText: scriptText,
+            scriptSections: sections,
+            changeNote: changeNote
+        )
+
+        if event.scriptVersions == nil {
+            event.scriptVersions = [version]
+        } else {
+            event.scriptVersions?.append(version)
+        }
+
+        event.scriptText = scriptText
+        event.scriptSections = sections
+
+        try? modelContext?.save()
+    }
+
+    // MARK: - Recordings
+
+    func loadLinkedRecordings(for event: SpeakingEvent) {
+        guard let context = modelContext else { return }
+        let eventId = event.id
+        let descriptor = FetchDescriptor<Recording>(
+            predicate: #Predicate { $0.eventId == eventId },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        linkedRecordings = (try? context.fetch(descriptor)) ?? []
+
+        // Update practice count
+        event.totalPracticeCount = linkedRecordings.count
+        if let latest = linkedRecordings.first {
+            event.lastPracticeDate = latest.date
+        }
+
+        // Update readiness score
+        updateReadinessScore(for: event)
+    }
+
+    // MARK: - Prep Tasks
+
+    func loadPrepTasks(for event: SpeakingEvent) {
+        guard let context = modelContext else { return }
+        prepTasks = prepService.fetchTasks(for: event.id, context: context)
+    }
+
+    func completeTask(_ task: EventPrepTask, recordingId: UUID? = nil) {
+        guard let context = modelContext else { return }
+        prepService.completeTask(task, recordingId: recordingId, context: context)
+        if let event = selectedEvent {
+            loadPrepTasks(for: event)
+        }
+    }
+
+    // MARK: - Readiness Score
+
+    private func updateReadinessScore(for event: SpeakingEvent) {
+        var score = 0.0
+
+        // Practice count factor (up to 40 points)
+        let practiceTarget = max(3, event.daysRemaining)
+        let practiceRatio = min(1.0, Double(event.totalPracticeCount) / Double(practiceTarget))
+        score += practiceRatio * 40
+
+        // Section mastery factor (up to 30 points)
+        if let sections = event.scriptSections, !sections.isEmpty {
+            let avgMastery = Double(sections.reduce(0) { $0 + $1.masteryScore }) / Double(sections.count)
+            score += (avgMastery / 100.0) * 30
+        } else {
+            score += 15 // No sections = partial credit
+        }
+
+        // Completed tasks factor (up to 30 points)
+        let completedTasks = prepTasks.filter(\.isCompleted).count
+        let totalTasks = max(1, prepTasks.count)
+        score += (Double(completedTasks) / Double(totalTasks)) * 30
+
+        event.readinessScore = min(100, Int(score))
+        try? modelContext?.save()
+    }
+
+    // MARK: - Helpers
+
+    private func splitIntoSections(_ text: String) -> [ScriptSection] {
+        let paragraphs = text.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        if paragraphs.count <= 1 {
+            let wordCount = text.split(separator: " ").count
+            return [
+                ScriptSection(
+                    index: 0,
+                    title: "Full Script",
+                    text: text,
+                    wordCount: wordCount,
+                    targetDurationSeconds: max(10, wordCount * 60 / 150) // ~150 WPM
+                )
+            ]
+        }
+
+        return paragraphs.enumerated().map { index, paragraph in
+            let wordCount = paragraph.split(separator: " ").count
+            return ScriptSection(
+                index: index,
+                title: "Section \(index + 1)",
+                text: paragraph.trimmingCharacters(in: .whitespacesAndNewlines),
+                wordCount: wordCount,
+                targetDurationSeconds: max(10, wordCount * 60 / 150)
+            )
+        }
+    }
+}
