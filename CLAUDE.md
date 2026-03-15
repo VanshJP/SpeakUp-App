@@ -377,3 +377,49 @@ greenlight guidelines search "privacy"     # Search Apple guidelines
 
 **Greenlight** is built by [Revyl](https://revyl.com) — the mobile reliability platform.
 Catch more than rejections. Catch bugs before your users do.
+
+## Cursor Cloud specific instructions
+
+### Environment constraints
+
+This is a **native iOS project** requiring **Xcode 26.2+ on macOS 26+**. Cursor Cloud VMs run Linux, so **building, running the iOS Simulator, and full compilation are not possible**. There are no backend services — the entire app runs on-device.
+
+### What works on the Cloud VM
+
+| Tool | Command | Purpose |
+|------|---------|---------|
+| **SwiftLint** | `swiftlint lint` | Lint all Swift files (installed at `/usr/local/bin/swiftlint`) |
+| **Swift syntax check** | `swiftc -parse <file.swift>` | Validate Swift syntax without iOS SDK (all 155 files pass) |
+| **Swift toolchain** | `swift --version` | Swift 6.2.4 at `/opt/swift/usr/bin/swift` (PATH configured in `~/.bashrc`) |
+
+### What does NOT work on the Cloud VM
+
+- `xcodebuild` — not available (requires macOS + Xcode)
+- iOS Simulator (`xcrun simctl`) — not available
+- Full type checking (`swiftc -typecheck`) — fails on iOS framework imports (SwiftUI, SwiftData, AVFoundation, etc.)
+- SPM package resolution via Xcode — no `Package.swift` at root; dependencies are Xcode-managed
+
+### Lint and validation commands
+
+```bash
+# Lint the entire project
+swiftlint lint
+
+# Lint a specific file
+swiftlint lint --path SpeakUp/Views/Today/TodayView.swift
+
+# Syntax-check all Swift files (no iOS SDK needed)
+find . -name "*.swift" -not -path "./.build/*" | xargs -I{} swiftc -parse {}
+```
+
+### No automated test targets
+
+The Xcode project has zero unit test or UI test targets. Testing is manual via the iOS Simulator (requires macOS).
+
+### Key project notes
+
+- Only external dependencies: **WhisperKit** (SPM) and **LlamaSwift** (SPM), resolved via Xcode's built-in SPM
+- Deployment target: **iOS 26.0** — uses `FoundationModels`, Liquid Glass APIs
+- No CI/CD configuration, no Fastlane, no GitHub Actions
+- App Group: `group.com.speakup.shared` (shared between app + widget extension)
+- Build and run instructions are in `CLAUDE.md` (for macOS environments)
