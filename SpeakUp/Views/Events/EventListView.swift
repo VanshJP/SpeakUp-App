@@ -130,6 +130,15 @@ struct EventCard: View {
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(sessionTypeColor)
 
+                        if let audienceSize = event.audienceSize, audienceSize > 0 {
+                            Text("•")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text("\(audienceSize.formatted()) audience")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
                         if !event.isOpenEnded {
                             Text("•")
                                 .font(.caption2)

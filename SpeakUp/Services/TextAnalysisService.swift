@@ -13,12 +13,18 @@ enum TextAnalysisService {
 
         let lowered = text.lowercased()
         let words = lowered.split(separator: " ").map { String($0).trimmingCharacters(in: .punctuationCharacters) }
+        let sentences = splitSentences(lowered)
 
         let hedgeCount = countHedgeWords(in: words)
         let hedgeRatio = Double(hedgeCount) / Double(totalWords)
         let powerCount = countPowerWords(in: words)
         let rhetoricalCount = countRhetoricalDevices(text: lowered, words: words)
         let transitionVariety = countTransitionVariety(in: lowered)
+        let weakPhraseCount = countWeakPhrases(in: lowered)
+        let weakPhraseRatio = Double(weakPhraseCount) / Double(max(1, totalWords))
+        let repeatedSentenceStartCount = countRepeatedSentenceStarts(in: sentences)
+        let rhetoricalQuestionCount = countRhetoricalQuestions(in: lowered, sentences: sentences)
+        let callToActionCount = countCallsToAction(in: lowered)
 
         let hedgePenalty = min(30, hedgeCount * 3)
         let powerBonus = min(30, powerCount * 5)
@@ -26,7 +32,18 @@ enum TextAnalysisService {
 
         let deviceBonus = min(30, rhetoricalCount * 10)
         let transitionBonus = min(30, transitionVariety * 5)
-        let craftScore = max(0, min(100, 40 + deviceBonus + transitionBonus))
+        let engagementBonus = min(20, rhetoricalQuestionCount * 6) + min(12, callToActionCount * 4)
+        let craftScore = max(0, min(100, 35 + deviceBonus + transitionBonus + engagementBonus))
+
+        let weakPhrasePenalty = min(35, weakPhraseCount * 4)
+        let repeatedStartPenalty = min(25, repeatedSentenceStartCount * 6)
+        let longSentencePenalty = min(15, countLongSentences(in: sentences) * 3)
+        let concisenessScore = max(0, min(100, 85 - weakPhrasePenalty - repeatedStartPenalty - longSentencePenalty))
+
+        let bridgeBonus = min(20, transitionVariety * 2)
+        let questionBonus = min(25, rhetoricalQuestionCount * 8)
+        let ctaBonus = min(20, callToActionCount * 10)
+        let engagementScore = max(0, min(100, 35 + bridgeBonus + questionBonus + ctaBonus))
 
         return TextQualityMetrics(
             hedgeWordCount: hedgeCount,
@@ -34,8 +51,15 @@ enum TextAnalysisService {
             powerWordCount: powerCount,
             rhetoricalDeviceCount: rhetoricalCount,
             transitionVariety: transitionVariety,
+            weakPhraseCount: weakPhraseCount,
+            weakPhraseRatio: weakPhraseRatio,
+            repeatedSentenceStartCount: repeatedSentenceStartCount,
+            rhetoricalQuestionCount: rhetoricalQuestionCount,
+            callToActionCount: callToActionCount,
             authorityScore: authorityScore,
-            craftScore: craftScore
+            craftScore: craftScore,
+            concisenessScore: concisenessScore,
+            engagementScore: engagementScore
         )
     }
 
@@ -161,6 +185,105 @@ enum TextAnalysisService {
             }
         }
         return found.count
+    }
+
+    // MARK: - Conciseness and Engagement
+
+    private static let weakPhrases: [String] = [
+        "at the end of the day",
+        "it is important to note",
+        "needless to say",
+        "for all intents and purposes",
+        "in order to",
+        "kind of",
+        "sort of",
+        "basically",
+        "actually",
+        "literally"
+    ]
+
+    private static func countWeakPhrases(in text: String) -> Int {
+        weakPhrases.reduce(0) { partial, phrase in
+            partial + countOccurrences(of: phrase, in: text)
+        }
+    }
+
+    private static func countRepeatedSentenceStarts(in sentences: [String]) -> Int {
+        guard sentences.count >= 2 else { return 0 }
+
+        var repeated = 0
+        var previousStart = ""
+        var runLength = 1
+
+        for sentence in sentences {
+            let start = firstNWords(sentence, n: 2)
+            guard !start.isEmpty else { continue }
+
+            if start == previousStart {
+                runLength += 1
+            } else {
+                if runLength >= 3 {
+                    repeated += (runLength - 2)
+                }
+                runLength = 1
+                previousStart = start
+            }
+        }
+
+        if runLength >= 3 {
+            repeated += (runLength - 2)
+        }
+        return repeated
+    }
+
+    private static func countRhetoricalQuestions(in text: String, sentences: [String]) -> Int {
+        let explicitQuestionMarks = text.filter { $0 == "?" }.count
+        if explicitQuestionMarks > 0 {
+            return explicitQuestionMarks
+        }
+
+        let questionStarts = [
+            "what", "why", "how", "when", "where", "who",
+            "are", "is", "can", "could", "should", "would", "do", "does", "did"
+        ]
+
+        return sentences.reduce(0) { partial, sentence in
+            let first = firstNWords(sentence, n: 1)
+            return partial + (questionStarts.contains(first) ? 1 : 0)
+        }
+    }
+
+    private static let callToActionPhrases: [String] = [
+        "let's",
+        "you should",
+        "i challenge you",
+        "take action",
+        "start today",
+        "remember this",
+        "the key takeaway",
+        "next step"
+    ]
+
+    private static func countCallsToAction(in text: String) -> Int {
+        callToActionPhrases.reduce(0) { partial, phrase in
+            partial + countOccurrences(of: phrase, in: text)
+        }
+    }
+
+    private static func countLongSentences(in sentences: [String]) -> Int {
+        sentences.filter { sentence in
+            sentence.split(separator: " ").count >= 28
+        }.count
+    }
+
+    private static func countOccurrences(of phrase: String, in text: String) -> Int {
+        var total = 0
+        var searchRange = text.startIndex..<text.endIndex
+        while let range = text.range(of: phrase, range: searchRange) {
+            total += 1
+            searchRange = range.upperBound..<text.endIndex
+        }
+        return total
     }
 
     // MARK: - Helpers

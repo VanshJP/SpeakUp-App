@@ -173,7 +173,7 @@ struct JournalExportView: View {
         let withAchievements = includeAchievements
         let achievementsList = achievements
 
-        Task.detached {
+        Task {
             let service = JournalExportService()
             let data = service.generatePDF(
                 recordings: recordings,
@@ -182,30 +182,28 @@ struct JournalExportView: View {
                 achievements: achievementsList
             )
 
-            await MainActor.run {
-                guard let data else {
-                    errorMessage = "Failed to generate PDF."
-                    isExporting = false
-                    return
-                }
+            guard let data else {
+                errorMessage = "Failed to generate PDF."
+                isExporting = false
+                return
+            }
 
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                let dateString = formatter.string(from: Date())
-                let fileName = "SpeakUp-Journal-\(dateString).pdf"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            let dateString = formatter.string(from: Date())
+            let fileName = "SpeakUp-Journal-\(dateString).pdf"
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
-                do {
-                    try data.write(to: tempURL)
-                    pdfURL = tempURL
-                    isExporting = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        showingShare = true
-                    }
-                } catch {
-                    errorMessage = "Could not save PDF: \(error.localizedDescription)"
-                    isExporting = false
+            do {
+                try data.write(to: tempURL)
+                pdfURL = tempURL
+                isExporting = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showingShare = true
                 }
+            } catch {
+                errorMessage = "Could not save PDF: \(error.localizedDescription)"
+                isExporting = false
             }
         }
     }

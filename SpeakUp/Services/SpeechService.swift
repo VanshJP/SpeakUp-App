@@ -472,7 +472,17 @@ class SpeechService {
                 hedgePenalty = 0
             }
 
-            let rawClarity = articulationComponent * 0.55 + durationComponent * 0.30 + (100 - hedgePenalty) * 0.15
+            let authorityComponent: Double
+            if let tq = textQuality {
+                authorityComponent = Double(tq.authorityScore)
+            } else {
+                authorityComponent = 55
+            }
+
+            let rawClarity = articulationComponent * 0.50 +
+                durationComponent * 0.25 +
+                (100 - hedgePenalty) * 0.10 +
+                authorityComponent * 0.15
             clarityScore = min(Int(rawClarity), scoreCeiling)
         }
 
@@ -493,12 +503,15 @@ class SpeechService {
 
         // Filler usage score — logarithmic curve (less punitive than linear)
         let hedgeAdjustment: Double
+        let weakPhraseAdjustment: Double
         if let tq = textQuality {
             hedgeAdjustment = min(0.03, tq.hedgeWordRatio * 0.5)
+            weakPhraseAdjustment = min(0.04, tq.weakPhraseRatio * 0.9)
         } else {
             hedgeAdjustment = 0
+            weakPhraseAdjustment = 0
         }
-        let effectiveFillerRatio = fillerRatio + hedgeAdjustment
+        let effectiveFillerRatio = fillerRatio + hedgeAdjustment + weakPhraseAdjustment
         let rawFillerScore = 100.0 * max(0, 1.0 - log2(1.0 + effectiveFillerRatio * 20.0))
         let fillerScore = min(max(0, min(100, Int(rawFillerScore))), scoreCeiling)
 
@@ -522,7 +535,7 @@ class SpeechService {
         if let vol = volumeMetrics {
             let energyComponent = Double(vol.energyScore) * 0.25
             let variationComponent = Double(vol.monotoneScore) * 0.25
-            let densityComponent = Double(contentDensity) * 0.15
+            let densityComponent = Double(contentDensity) * 0.10
 
             let emphasisComponent: Double
             if let em = emphasisMetrics {
@@ -539,7 +552,19 @@ class SpeechService {
                 arcComponent = 50.0 * 0.20
             }
 
-            let rawDelivery = energyComponent + variationComponent + densityComponent + emphasisComponent + arcComponent
+            let engagementComponent: Double
+            if let tq = textQuality {
+                engagementComponent = Double(tq.engagementScore) * 0.05
+            } else {
+                engagementComponent = 50.0 * 0.05
+            }
+
+            let rawDelivery = energyComponent +
+                variationComponent +
+                densityComponent +
+                emphasisComponent +
+                arcComponent +
+                engagementComponent
             deliveryScore = max(0, min(100, Int(rawDelivery)))
         } else {
             deliveryScore = nil
@@ -606,7 +631,9 @@ class SpeechService {
         if let base = structureScore, let tq = textQuality {
             let rhetoricBonus = min(12, tq.rhetoricalDeviceCount * 4)
             let transitionBonus = min(8, Int(Double(tq.transitionVariety) * 0.8))
-            structureScore = min(100, base + rhetoricBonus + transitionBonus)
+            let concisenessAdjustment = Int((Double(tq.concisenessScore) - 50.0) * 0.20)
+            let engagementAdjustment = Int((Double(tq.engagementScore) - 50.0) * 0.15)
+            structureScore = max(0, min(100, base + rhetoricBonus + transitionBonus + concisenessAdjustment + engagementAdjustment))
         }
 
         return SpeechSubscores(

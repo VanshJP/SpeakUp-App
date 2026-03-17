@@ -48,8 +48,13 @@ struct EventDetailView: View {
                         scriptSection
                     }
 
-                    // Prep tasks
-                    if !viewModel.prepTasks.isEmpty {
+                    // Script revision progress
+                    if !viewModel.revisionMilestones.isEmpty {
+                        revisionProgressSection
+                    }
+
+                    // Prep timeline
+                    if !viewModel.timelineDays.isEmpty {
                         prepTasksSection
                     }
 
@@ -355,49 +360,198 @@ struct EventDetailView: View {
 
     private var prepTasksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Prep Tasks", systemImage: "checklist")
+            Label("Prep Timeline", systemImage: "calendar.badge.clock")
                 .font(.headline)
 
-            let todayTasks = viewModel.prepTasks.filter { Calendar.current.isDateInToday($0.scheduledDate) || $0.isOverdue }
+            GlassCard(tint: AppColors.glassTintPrimary) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Timeline Completion")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(completedPrepCount) of \(viewModel.prepTasks.count) tasks done")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Target near event: \(event.maxDailyPracticeMinutes) min/day")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Foundation ~\(event.phasePracticeTargets.foundation)m · Building ~\(event.phasePracticeTargets.building)m · Performance ~\(event.phasePracticeTargets.performance)m")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
 
-            ForEach(todayTasks) { task in
-                GlassCard(padding: 12) {
-                    HStack(spacing: 12) {
-                        Button {
-                            Haptics.success()
-                            viewModel.completeTask(task)
-                        } label: {
-                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(.title3)
-                                .foregroundStyle(task.isCompleted ? .green : .secondary)
+                    Spacer()
+
+                    Text("\(Int(prepCompletionRatio * 100))%")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppColors.scoreColor(for: Int(prepCompletionRatio * 100)))
+                }
+            }
+
+            ForEach(visibleTimelineDays) { day in
+                GlassCard(tint: day.hasOverdueTasks ? AppColors.glassTintWarning.opacity(0.3) : nil, padding: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(dayLabel(for: day.date, isToday: day.isToday))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(day.hasOverdueTasks ? AppColors.warning : .white)
+
+                            Spacer()
+
+                            Text("\(day.completedCount)/\(day.tasks.count)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background { Capsule().fill(.ultraThinMaterial) }
+
+                            Text("~\(day.estimatedMinutes)m")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background { Capsule().fill(AppColors.primary.opacity(0.16)) }
                         }
 
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(task.title)
-                                .font(.subheadline.weight(.medium))
-                                .strikethrough(task.isCompleted)
-                                .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                        ForEach(day.tasks) { task in
+                            HStack(spacing: 12) {
+                                Button {
+                                    Haptics.success()
+                                    viewModel.completeTask(task)
+                                } label: {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.title3)
+                                        .foregroundStyle(task.isCompleted ? .green : .secondary)
+                                }
 
-                            Text(task.taskDescription)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(task.title)
+                                        .font(.subheadline.weight(.medium))
+                                        .strikethrough(task.isCompleted)
+                                        .foregroundStyle(task.isCompleted ? .secondary : .primary)
+
+                                    Text(task.taskDescription)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+
+                                    HStack(spacing: 6) {
+                                        if task.isOverdue {
+                                            Text("Overdue")
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(.red)
+                                        }
+                                        Text("~\(task.estimatedMinutes)m")
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(AppColors.primary)
+                                        Text(priorityLabel(for: task.priority))
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                Image(systemName: task.type.icon)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Revision Progress
+
+    private var revisionProgressSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Revision Loop", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
+                .font(.headline)
+
+            ForEach(viewModel.revisionMilestones.prefix(4)) { milestone in
+                GlassCard(padding: 12) {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text("v\(milestone.versionNumber)")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(AppColors.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background { Capsule().fill(AppColors.primary.opacity(0.18)) }
+                                Text(milestone.createdDate.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Text(milestone.changeNote ?? "Script revision checkpoint")
+                                .font(.subheadline.weight(.medium))
                                 .lineLimit(2)
 
-                            if task.isOverdue {
-                                Text("Overdue")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.red)
-                            }
+                            Text("\(milestone.wordCount) words · \(milestone.practiceCount) practice run\(milestone.practiceCount == 1 ? "" : "s")")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
 
                         Spacer()
 
-                        Image(systemName: task.type.icon)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .trailing, spacing: 4) {
+                            if let score = milestone.bestScore {
+                                Text("\(score)")
+                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppColors.scoreColor(for: score))
+                            } else {
+                                Text("--")
+                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if let delta = milestone.scoreDeltaFromPrevious {
+                                Text(delta >= 0 ? "+\(delta)" : "\(delta)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(delta >= 0 ? .green : .orange)
+                            } else {
+                                Text("Baseline")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private var visibleTimelineDays: [EventTimelineDay] {
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let overdueOrToday = viewModel.timelineDays.filter { $0.date <= startOfToday }
+        let upcoming = viewModel.timelineDays.filter { $0.date > startOfToday }
+        let recent = Array(overdueOrToday.suffix(2))
+        let next = Array(upcoming.prefix(7))
+        return recent + next
+    }
+
+    private var completedPrepCount: Int {
+        viewModel.prepTasks.filter(\.isCompleted).count
+    }
+
+    private var prepCompletionRatio: Double {
+        guard !viewModel.prepTasks.isEmpty else { return 0 }
+        return Double(completedPrepCount) / Double(viewModel.prepTasks.count)
+    }
+
+    private func dayLabel(for date: Date, isToday: Bool) -> String {
+        if isToday { return "Today" }
+        if Calendar.current.isDateInTomorrow(date) { return "Tomorrow" }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func priorityLabel(for priority: Int) -> String {
+        switch priority {
+        case ..<2: return "High priority"
+        case 2: return "Medium priority"
+        default: return "Low priority"
         }
     }
 
@@ -449,6 +603,18 @@ struct EventDetailView: View {
                 if let audience = event.audienceType {
                     Divider()
                     GlassInfoRow(label: "Audience", value: audience, icon: "person.2")
+                }
+
+                Divider()
+                GlassInfoRow(label: "Daily Practice Capacity", value: "\(event.maxDailyPracticeMinutes) min", icon: "timer")
+
+                if let audienceSize = event.audienceSize, audienceSize > 0 {
+                    Divider()
+                    GlassInfoRow(
+                        label: "Audience Size",
+                        value: "\(audienceSize.formatted()) (\(event.audienceScaleLabel))",
+                        icon: "person.3"
+                    )
                 }
 
                 if let venue = event.venue, !venue.isEmpty {

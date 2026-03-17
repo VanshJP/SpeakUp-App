@@ -102,11 +102,8 @@ struct WordDetailSheet: View {
             HStack(spacing: 6) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)
-                Text("You said: ")
-                    .foregroundStyle(.secondary) +
-                Text(spoken)
-                    .foregroundStyle(.red)
-                    .bold()
+                Text("You said: \(Text(spoken).bold().foregroundStyle(.red))")
+                    .foregroundStyle(.secondary)
             }
             .font(.subheadline)
 

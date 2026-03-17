@@ -15,6 +15,7 @@ final class EventPrepTask {
     var completedDate: Date?
     var linkedRecordingId: UUID?
     var priority: Int
+    var estimatedMinutes: Int = 10
 
     init(
         id: UUID = UUID(),
@@ -28,7 +29,8 @@ final class EventPrepTask {
         isCompleted: Bool = false,
         completedDate: Date? = nil,
         linkedRecordingId: UUID? = nil,
-        priority: Int = 2
+        priority: Int = 2,
+        estimatedMinutes: Int = 10
     ) {
         self.id = id
         self.eventId = eventId
@@ -42,6 +44,7 @@ final class EventPrepTask {
         self.completedDate = completedDate
         self.linkedRecordingId = linkedRecordingId
         self.priority = priority
+        self.estimatedMinutes = max(3, estimatedMinutes)
     }
 
     var type: EventPrepTaskType {
@@ -58,6 +61,8 @@ final class EventPrepTask {
 enum EventPrepTaskType: String, CaseIterable, Identifiable {
     case fullRehearsal
     case sectionPractice
+    case scriptRevision
+    case audienceSimulation
     case fillerDrill
     case paceDrill
     case pauseDrill
@@ -74,6 +79,8 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
         switch self {
         case .fullRehearsal: return "Full Rehearsal"
         case .sectionPractice: return "Section Practice"
+        case .scriptRevision: return "Script Revision"
+        case .audienceSimulation: return "Audience Simulation"
         case .fillerDrill: return "Filler Drill"
         case .paceDrill: return "Pace Drill"
         case .pauseDrill: return "Pause Drill"
@@ -90,6 +97,8 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
         switch self {
         case .fullRehearsal: return "play.circle.fill"
         case .sectionPractice: return "doc.text.fill"
+        case .scriptRevision: return "pencil.and.list.clipboard"
+        case .audienceSimulation: return "person.3.sequence.fill"
         case .fillerDrill: return "xmark.circle.fill"
         case .paceDrill: return "speedometer"
         case .pauseDrill: return "pause.circle.fill"
@@ -106,6 +115,8 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
         switch self {
         case .fullRehearsal: return "teal"
         case .sectionPractice: return "blue"
+        case .scriptRevision: return "indigo"
+        case .audienceSimulation: return "purple"
         case .fillerDrill: return "orange"
         case .paceDrill: return "blue"
         case .pauseDrill: return "purple"
@@ -120,7 +131,7 @@ enum EventPrepTaskType: String, CaseIterable, Identifiable {
 
     var opensRecording: Bool {
         switch self {
-        case .fullRehearsal, .sectionPractice: return true
+        case .fullRehearsal, .sectionPractice, .audienceSimulation: return true
         default: return false
         }
     }

@@ -397,7 +397,7 @@ struct ScoreWeightsView: View {
             SubscoreDescription(
                 name: "Filler Usage", key: "filler", icon: "text.badge.minus",
                 measures: "How often you use filler words like 'um', 'uh', 'like', and 'you know'.",
-                howCalculated: "Uses a logarithmic curve so occasional fillers are okay, but frequent use lowers your score progressively."
+                howCalculated: "Uses a logarithmic curve so occasional fillers are okay, but frequent use and weak filler-like phrasing lower your score progressively."
             ),
             SubscoreDescription(
                 name: "Pauses", key: "pause", icon: "pause.circle",
@@ -412,7 +412,7 @@ struct ScoreWeightsView: View {
             SubscoreDescription(
                 name: "Delivery", key: "delivery", icon: "speaker.wave.3",
                 measures: "Your overall energy, emphasis on key points, and presentation arc from opening to close.",
-                howCalculated: "Weighs energy level, volume variation, content density, emphasis distribution, and energy arc shape."
+                howCalculated: "Weighs energy level, volume variation, content density, emphasis distribution, energy arc shape, and language engagement signals."
             ),
             SubscoreDescription(
                 name: "Vocabulary", key: "vocabulary", icon: "textformat.abc",
@@ -422,7 +422,7 @@ struct ScoreWeightsView: View {
             SubscoreDescription(
                 name: "Structure", key: "structure", icon: "list.bullet.indent",
                 measures: "Sentence organization, flow, and rhetorical quality of your speech.",
-                howCalculated: "Evaluates sentence variety, completeness, opening/closing strength, rhetorical devices, and transition usage."
+                howCalculated: "Evaluates sentence variety, completeness, rhetorical devices, transition usage, plus conciseness and audience engagement quality."
             ),
             SubscoreDescription(
                 name: "Relevance", key: "relevance", icon: "target",

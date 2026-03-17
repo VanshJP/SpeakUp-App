@@ -260,20 +260,61 @@ struct TextQualityMetrics: Codable {
     var powerWordCount: Int
     var rhetoricalDeviceCount: Int
     var transitionVariety: Int
+    var weakPhraseCount: Int
+    var weakPhraseRatio: Double
+    var repeatedSentenceStartCount: Int
+    var rhetoricalQuestionCount: Int
+    var callToActionCount: Int
     var authorityScore: Int // 0-100
     var craftScore: Int // 0-100
+    var concisenessScore: Int // 0-100
+    var engagementScore: Int // 0-100
 
     init(
         hedgeWordCount: Int = 0, hedgeWordRatio: Double = 0,
         powerWordCount: Int = 0, rhetoricalDeviceCount: Int = 0,
-        transitionVariety: Int = 0, authorityScore: Int = 50,
-        craftScore: Int = 50
+        transitionVariety: Int = 0,
+        weakPhraseCount: Int = 0,
+        weakPhraseRatio: Double = 0,
+        repeatedSentenceStartCount: Int = 0,
+        rhetoricalQuestionCount: Int = 0,
+        callToActionCount: Int = 0,
+        authorityScore: Int = 50,
+        craftScore: Int = 50,
+        concisenessScore: Int = 50,
+        engagementScore: Int = 50
     ) {
         self.hedgeWordCount = hedgeWordCount; self.hedgeWordRatio = hedgeWordRatio
         self.powerWordCount = powerWordCount
         self.rhetoricalDeviceCount = rhetoricalDeviceCount
         self.transitionVariety = transitionVariety
-        self.authorityScore = authorityScore; self.craftScore = craftScore
+        self.weakPhraseCount = weakPhraseCount
+        self.weakPhraseRatio = weakPhraseRatio
+        self.repeatedSentenceStartCount = repeatedSentenceStartCount
+        self.rhetoricalQuestionCount = rhetoricalQuestionCount
+        self.callToActionCount = callToActionCount
+        self.authorityScore = authorityScore
+        self.craftScore = craftScore
+        self.concisenessScore = concisenessScore
+        self.engagementScore = engagementScore
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hedgeWordCount = (try? container.decodeIfPresent(Int.self, forKey: .hedgeWordCount)) ?? 0
+        hedgeWordRatio = (try? container.decodeIfPresent(Double.self, forKey: .hedgeWordRatio)) ?? 0
+        powerWordCount = (try? container.decodeIfPresent(Int.self, forKey: .powerWordCount)) ?? 0
+        rhetoricalDeviceCount = (try? container.decodeIfPresent(Int.self, forKey: .rhetoricalDeviceCount)) ?? 0
+        transitionVariety = (try? container.decodeIfPresent(Int.self, forKey: .transitionVariety)) ?? 0
+        weakPhraseCount = (try? container.decodeIfPresent(Int.self, forKey: .weakPhraseCount)) ?? 0
+        weakPhraseRatio = (try? container.decodeIfPresent(Double.self, forKey: .weakPhraseRatio)) ?? 0
+        repeatedSentenceStartCount = (try? container.decodeIfPresent(Int.self, forKey: .repeatedSentenceStartCount)) ?? 0
+        rhetoricalQuestionCount = (try? container.decodeIfPresent(Int.self, forKey: .rhetoricalQuestionCount)) ?? 0
+        callToActionCount = (try? container.decodeIfPresent(Int.self, forKey: .callToActionCount)) ?? 0
+        authorityScore = (try? container.decodeIfPresent(Int.self, forKey: .authorityScore)) ?? 50
+        craftScore = (try? container.decodeIfPresent(Int.self, forKey: .craftScore)) ?? 50
+        concisenessScore = (try? container.decodeIfPresent(Int.self, forKey: .concisenessScore)) ?? 50
+        engagementScore = (try? container.decodeIfPresent(Int.self, forKey: .engagementScore)) ?? 50
     }
 }
 
@@ -490,7 +531,7 @@ struct ScoreWeights {
     var structure: Double = 0.10
     var relevance: Double = 0.10
 
-    static let defaults = ScoreWeights()
+    nonisolated static let defaults = ScoreWeights()
 
     /// Returns a copy with all weights normalized to sum to exactly 1.0
     var normalized: ScoreWeights {

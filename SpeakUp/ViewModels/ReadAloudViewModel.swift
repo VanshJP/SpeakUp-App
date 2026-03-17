@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Session State
 
-enum ReadAloudSessionState {
+enum ReadAloudSessionState: Sendable {
     case idle
     case listening
     case finished
@@ -31,21 +31,34 @@ struct ReadAloudResult {
 class ReadAloudViewModel {
     let service = ReadAloudService()
 
-    var selectedDifficulty: ReadAloudDifficulty?
-    var selectedCategory: ReadAloudCategory?
+    var selectedDifficulty: ReadAloudDifficulty? {
+        didSet { applyFilters() }
+    }
+    var selectedCategory: ReadAloudCategory? {
+        didSet { applyFilters() }
+    }
     var sessionState: ReadAloudSessionState = .idle
     var selectedPassage: ReadAloudPassage?
     var result: ReadAloudResult?
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
+    private(set) var filteredPassages: [ReadAloudPassage] = DefaultReadAloudPassages.all
 
     private var startTime: Date?
-    private var timer: Timer?
+    private var timerTask: Task<Void, Never>?
 
     // MARK: - Filtered Passages
 
     var passages: [ReadAloudPassage] {
-        DefaultReadAloudPassages.all.filter { passage in
+        filteredPassages
+    }
+
+    init() {
+        applyFilters()
+    }
+
+    private func applyFilters() {
+        filteredPassages = DefaultReadAloudPassages.all.filter { passage in
             if let difficulty = selectedDifficulty, passage.difficulty != difficulty {
                 return false
             }
@@ -134,10 +147,11 @@ class ReadAloudViewModel {
     // MARK: - Timer
 
     private func startTimer() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, let start = self.startTime else { return }
+        timerTask?.cancel()
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, let start = self.startTime else { continue }
                 self.elapsedTime = Date().timeIntervalSince(start)
 
                 // Auto-stop if service finished
@@ -149,8 +163,8 @@ class ReadAloudViewModel {
     }
 
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        timerTask?.cancel()
+        timerTask = nil
     }
 
     var formattedElapsedTime: String {
