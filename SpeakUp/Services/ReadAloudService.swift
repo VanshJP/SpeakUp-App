@@ -255,7 +255,13 @@ class ReadAloudService {
     // MARK: - Helpers
 
     static func normalize(_ word: String) -> String {
-        word.lowercased()
+        let lowered = word
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "'", with: "")
+
+        return lowered
             .trimmingCharacters(in: .punctuationCharacters)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

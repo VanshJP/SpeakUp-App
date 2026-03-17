@@ -13,16 +13,25 @@ class EventViewModel {
     var prepTasks: [EventPrepTask] = []
     var timelineDays: [EventTimelineDay] = []
     var revisionMilestones: [ScriptRevisionMilestone] = []
+    var scriptInsightsByRecordingId: [UUID: ScriptPracticeInsight] = [:]
     var errorMessage: String?
     var showArchived = false
     var isCreating = false
 
     private var modelContext: ModelContext?
+    private var configuredContextIdentifier: ObjectIdentifier?
     private var notificationRefreshTask: Task<Void, Never>?
+    private var lastTaskNotificationSignature: Int = 0
 
     func configure(with context: ModelContext) {
-        self.modelContext = context
-        loadEvents()
+        let contextIdentifier = ObjectIdentifier(context)
+        if configuredContextIdentifier != contextIdentifier {
+            self.modelContext = context
+            configuredContextIdentifier = contextIdentifier
+            loadEvents()
+        } else if events.isEmpty {
+            loadEvents()
+        }
     }
 
     // MARK: - Load
@@ -119,6 +128,9 @@ class EventViewModel {
     func archiveEvent(_ event: SpeakingEvent) {
         event.isArchived = true
         try? modelContext?.save()
+        if selectedEvent?.id == event.id {
+            scriptInsightsByRecordingId = [:]
+        }
         loadEvents()
     }
 
@@ -134,6 +146,14 @@ class EventViewModel {
         }
         context.delete(event)
         try? context.save()
+        if selectedEvent?.id == event.id {
+            selectedEvent = nil
+            linkedRecordings = []
+            prepTasks = []
+            timelineDays = []
+            revisionMilestones = []
+            scriptInsightsByRecordingId = [:]
+        }
         loadEvents()
     }
 
@@ -178,14 +198,26 @@ class EventViewModel {
         )
         linkedRecordings = (try? context.fetch(descriptor)) ?? []
 
-        // Update practice count
-        event.totalPracticeCount = linkedRecordings.count
-        if let latest = linkedRecordings.first {
-            event.lastPracticeDate = latest.date
+        var didMutateEvent = false
+        if event.totalPracticeCount != linkedRecordings.count {
+            event.totalPracticeCount = linkedRecordings.count
+            didMutateEvent = true
+        }
+        let newestPracticeDate = linkedRecordings.first?.date
+        if event.lastPracticeDate != newestPracticeDate {
+            event.lastPracticeDate = newestPracticeDate
+            didMutateEvent = true
         }
 
         // Update readiness score
-        updateReadinessScore(for: event)
+        if updateReadinessScore(for: event) {
+            didMutateEvent = true
+        }
+        if didMutateEvent {
+            try? modelContext?.save()
+        }
+
+        refreshScriptInsights(for: event)
         revisionMilestones = buildRevisionMilestones(for: event)
     }
 
@@ -195,7 +227,9 @@ class EventViewModel {
         guard let context = modelContext else { return }
         prepTasks = prepService.fetchTasks(for: event.id, context: context)
         timelineDays = buildTimelineDays(from: prepTasks)
-        updateReadinessScore(for: event)
+        if updateReadinessScore(for: event) {
+            try? modelContext?.save()
+        }
         scheduleNotificationRefresh(tasks: prepTasks)
     }
 
@@ -210,7 +244,8 @@ class EventViewModel {
 
     // MARK: - Readiness Score
 
-    private func updateReadinessScore(for event: SpeakingEvent) {
+    @discardableResult
+    private func updateReadinessScore(for event: SpeakingEvent) -> Bool {
         var score = 0.0
 
         // Practice count factor (up to 40 points)
@@ -232,8 +267,10 @@ class EventViewModel {
         let totalTasks = max(1, prepTasks.count)
         score += (Double(completedTasks) / Double(totalTasks)) * 30
 
-        event.readinessScore = min(100, Int(score))
-        try? modelContext?.save()
+        let nextScore = min(100, Int(score))
+        guard event.readinessScore != nextScore else { return false }
+        event.readinessScore = nextScore
+        return true
     }
 
     // MARK: - Helpers
@@ -326,6 +363,14 @@ class EventViewModel {
     }
 
     private func scheduleNotificationRefresh(tasks: [EventPrepTask]) {
+        let signature = tasks.reduce(into: 0) { partialResult, task in
+            partialResult ^= task.id.hashValue
+            partialResult ^= Int(task.scheduledDate.timeIntervalSince1970)
+            partialResult ^= task.isCompleted ? 1 : 0
+        }
+        guard signature != lastTaskNotificationSignature else { return }
+        lastTaskNotificationSignature = signature
+
         notificationRefreshTask?.cancel()
         let tasksSnapshot = tasks
         notificationRefreshTask = Task(priority: .utility) {
@@ -334,6 +379,22 @@ class EventViewModel {
             await notificationService.checkPermission()
             await notificationService.refreshEventNotifications(tasks: tasksSnapshot)
         }
+    }
+
+    private func refreshScriptInsights(for event: SpeakingEvent) {
+        guard let scriptText = event.scriptText, !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            scriptInsightsByRecordingId = [:]
+            return
+        }
+
+        var insights: [UUID: ScriptPracticeInsight] = [:]
+        for recording in linkedRecordings {
+            guard let transcript = recording.transcriptionText, !transcript.isEmpty else { continue }
+            if let insight = ScriptPracticeAnalyzer.analyze(script: scriptText, transcript: transcript) {
+                insights[recording.id] = insight
+            }
+        }
+        scriptInsightsByRecordingId = insights
     }
 }
 

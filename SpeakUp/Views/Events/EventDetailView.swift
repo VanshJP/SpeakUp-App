@@ -567,25 +567,48 @@ struct EventDetailView: View {
 
             ForEach(viewModel.linkedRecordings.prefix(5)) { recording in
                 GlassCard(padding: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "mic.fill")
-                            .foregroundStyle(AppColors.primary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mic.fill")
+                                .foregroundStyle(AppColors.primary)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(recording.displayTitle)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                            Text(recording.formattedDate)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(recording.displayTitle)
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(1)
+                                Text(recording.formattedDate)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if let score = recording.analysis?.speechScore.overall {
+                                Text("\(score)")
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppColors.scoreColor(for: score))
+                            }
                         }
 
-                        Spacer()
+                        if let scriptInsight = viewModel.scriptInsightsByRecordingId[recording.id] {
+                            HStack(spacing: 8) {
+                                Label("\(scriptInsight.adherenceScore)% script match", systemImage: "checkmark.seal")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(AppColors.scoreColor(for: scriptInsight.adherenceScore))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background {
+                                        Capsule()
+                                            .fill(AppColors.scoreColor(for: scriptInsight.adherenceScore).opacity(0.15))
+                                    }
 
-                        if let score = recording.analysis?.speechScore.overall {
-                            Text("\(score)")
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppColors.scoreColor(for: score))
+                                if !scriptInsight.missedKeywords.isEmpty {
+                                    Text("Missed: \(scriptInsight.missedKeywords.joined(separator: ", "))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
                         }
                     }
                 }

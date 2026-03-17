@@ -83,6 +83,9 @@ private struct ScoreCardView: View {
                         ShareSubscoreRow(label: "Pace", value: analysis.speechScore.subscores.pace, color: .green)
                         ShareSubscoreRow(label: "Fillers", value: analysis.speechScore.subscores.fillerUsage, color: .orange)
                         ShareSubscoreRow(label: "Pauses", value: analysis.speechScore.subscores.pauseQuality, color: .purple)
+                        if let vocalVariety = analysis.speechScore.subscores.vocalVariety {
+                            ShareSubscoreRow(label: "Vocal", value: vocalVariety, color: .mint)
+                        }
                         if let delivery = analysis.speechScore.subscores.delivery {
                             ShareSubscoreRow(label: "Delivery", value: delivery, color: .cyan)
                         }
