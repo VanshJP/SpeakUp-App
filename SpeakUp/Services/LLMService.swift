@@ -26,32 +26,31 @@ final class LLMService {
     /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
 
-    nonisolated private var memoryPressureSource: DispatchSourceMemoryPressure?
+    nonisolated private let memoryPressureSource: DispatchSourceMemoryPressure
 
     init() {
+        memoryPressureSource = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .global(qos: .utility)
+        )
         setupMemoryPressureMonitor()
     }
 
     deinit {
-        memoryPressureSource?.cancel()
+        memoryPressureSource.cancel()
     }
 
     // MARK: - Memory Pressure
 
     private func setupMemoryPressureMonitor() {
-        let source = DispatchSource.makeMemoryPressureSource(
-            eventMask: [.warning, .critical],
-            queue: .global(qos: .utility)
-        )
-        source.setEventHandler { [weak self] in
+        memoryPressureSource.setEventHandler { [weak self] in
             guard let self else { return }
             print("[LLMService] Memory pressure detected — unloading local LLM")
             Task { @MainActor in
                 self.localLLM.unloadModel()
             }
         }
-        source.resume()
-        memoryPressureSource = source
+        memoryPressureSource.resume()
     }
 
     // MARK: - Availability

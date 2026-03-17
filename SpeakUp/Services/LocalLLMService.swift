@@ -45,7 +45,7 @@ final class LocalLLMService {
     static let approximateModelSize = "~400 MB"
 
     /// Minimum available memory (bytes) required before running inference.
-    nonisolated(unsafe) private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
+    nonisolated private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
 
     // MARK: - State
 

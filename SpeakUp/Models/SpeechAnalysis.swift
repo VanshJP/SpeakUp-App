@@ -531,7 +531,7 @@ struct ScoreWeights {
     var structure: Double = 0.10
     var relevance: Double = 0.10
 
-    nonisolated(unsafe) static let defaults = ScoreWeights()
+    nonisolated static let defaults = ScoreWeights()
 
     /// Returns a copy with all weights normalized to sum to exactly 1.0
     var normalized: ScoreWeights {
