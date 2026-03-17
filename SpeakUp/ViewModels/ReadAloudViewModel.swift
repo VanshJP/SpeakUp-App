@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Session State
 
-enum ReadAloudSessionState {
+enum ReadAloudSessionState: Sendable {
     case idle
     case listening
     case finished
@@ -45,7 +45,7 @@ class ReadAloudViewModel {
     private(set) var filteredPassages: [ReadAloudPassage] = DefaultReadAloudPassages.all
 
     private var startTime: Date?
-    private var timer: Timer?
+    private var timerTask: Task<Void, Never>?
 
     // MARK: - Filtered Passages
 
@@ -147,21 +147,24 @@ class ReadAloudViewModel {
     // MARK: - Timer
 
     private func startTimer() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            guard let self, let start = self.startTime else { return }
-            self.elapsedTime = Date().timeIntervalSince(start)
+        timerTask?.cancel()
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, let start = self.startTime else { continue }
+                self.elapsedTime = Date().timeIntervalSince(start)
 
-            // Auto-stop if service finished
-            if self.service.isComplete && self.sessionState == .listening {
-                self.stopSession()
+                // Auto-stop if service finished
+                if self.service.isComplete && self.sessionState == .listening {
+                    self.stopSession()
+                }
             }
         }
     }
 
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        timerTask?.cancel()
+        timerTask = nil
     }
 
     var formattedElapsedTime: String {
