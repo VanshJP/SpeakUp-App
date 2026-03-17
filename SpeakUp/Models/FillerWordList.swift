@@ -8,7 +8,7 @@ struct FillerWordConfig: Sendable {
     let customContextFillers: Set<String> // user-added context-dependent fillers (pauseBefore && pauseAfter)
     let removedDefaults: Set<String>      // default fillers the user disabled
 
-    static let `default` = FillerWordConfig(customFillers: [], customContextFillers: [], removedDefaults: [])
+    nonisolated(unsafe) static let `default` = FillerWordConfig(customFillers: [], customContextFillers: [], removedDefaults: [])
 
     /// All fillers that should actually be detected, given user customizations.
     var effectiveUnconditionalFillers: Set<String> {

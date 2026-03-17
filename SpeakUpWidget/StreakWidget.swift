@@ -93,7 +93,7 @@ struct StreakWidgetView: View {
         .widgetURL(URL(string: "speakup://record"))
     }
 
-     private var urgencyMessage: String {
+    private var urgencyMessage: String {
         switch urgency {
         case .low:      return "Don't lose it!"
         case .moderate: return "Lock in today!"

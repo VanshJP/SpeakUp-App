@@ -149,14 +149,12 @@ class ReadAloudViewModel {
     private func startTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, let start = self.startTime else { return }
-                self.elapsedTime = Date().timeIntervalSince(start)
+            guard let self, let start = self.startTime else { return }
+            self.elapsedTime = Date().timeIntervalSince(start)
 
-                // Auto-stop if service finished
-                if self.service.isComplete && self.sessionState == .listening {
-                    self.stopSession()
-                }
+            // Auto-stop if service finished
+            if self.service.isComplete && self.sessionState == .listening {
+                self.stopSession()
             }
         }
     }

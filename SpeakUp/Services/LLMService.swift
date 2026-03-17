@@ -26,7 +26,7 @@ final class LLMService {
     /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
 
-    nonisolated(unsafe) private var memoryPressureSource: DispatchSourceMemoryPressure?
+    nonisolated private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     init() {
         setupMemoryPressureMonitor()

@@ -45,7 +45,7 @@ final class LocalLLMService {
     static let approximateModelSize = "~400 MB"
 
     /// Minimum available memory (bytes) required before running inference.
-    private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
+    nonisolated(unsafe) private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
 
     // MARK: - State
 
@@ -182,10 +182,12 @@ final class LocalLLMService {
     private func resetUnloadTimer() {
         unloadTimer?.invalidate()
         unloadTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            if self.isModelReady {
-                print("[LocalLLM] Auto-unloading after 60s of inactivity")
-                self.unloadModel()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.isModelReady {
+                    print("[LocalLLM] Auto-unloading after 60s of inactivity")
+                    self.unloadModel()
+                }
             }
         }
     }
@@ -647,7 +649,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             let newToken = llama_sampler_sample(smpl, ctx, -1)
 
             // Check for end-of-generation
-            if llama_token_is_eog(llama_model_get_vocab(model), newToken) { break }
+            if llama_vocab_is_eog(llama_model_get_vocab(model), newToken) { break }
 
             // Decode token to text
             if let piece = tokenToPiece(token: newToken, model: model) {
