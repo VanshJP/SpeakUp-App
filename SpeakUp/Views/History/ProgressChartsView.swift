@@ -382,10 +382,11 @@ struct SubscoreRadarView: View {
     }
 
     private struct RadarPoint: Identifiable {
-        let id = UUID()
         let label: String
         let value: Double
         let color: Color
+
+        var id: String { label }
     }
 
     private var radarPoints: [RadarPoint] {

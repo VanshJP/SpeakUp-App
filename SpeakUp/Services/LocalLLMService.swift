@@ -40,7 +40,12 @@ final class LocalLLMService {
     // MARK: - Configuration
 
     static let modelFileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-    static let modelDownloadURL: URL? = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf")
+    static let modelDownloadURL: URL = {
+        guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf") else {
+            preconditionFailure("Invalid static LocalLLM model URL")
+        }
+        return url
+    }()
     static let modelDisplayName = "Qwen 2.5 (0.5B)"
     static let approximateModelSize = "~400 MB"
 
@@ -112,16 +117,11 @@ final class LocalLLMService {
             return
         }
 
-        guard let downloadURL = Self.modelDownloadURL else {
-            modelState = .error("Invalid download URL")
-            return
-        }
-
         modelState = .downloading(progress: 0)
         downloadProgress = 0
 
         do {
-            let tempURL = try await downloadWithProgress(url: downloadURL)
+            let tempURL = try await downloadWithProgress(url: Self.modelDownloadURL)
 
             // Move to final location
             let dest = Self.modelFilePath

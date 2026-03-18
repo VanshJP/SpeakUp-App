@@ -22,6 +22,7 @@ private struct CoachingTipRow: View {
     @State private var isExpanded = false
 
     @ScaledMetric(relativeTo: .title3) private var iconWidth: CGFloat = 28
+    private var hasTeachingPoint: Bool { !tip.teachingPoint.isEmpty }
 
     var body: some View {
         GlassCard(tint: tintColor.opacity(0.1), padding: 12) {
@@ -52,7 +53,7 @@ private struct CoachingTipRow: View {
 
                         Spacer(minLength: 0)
 
-                        if tip.teachingPoint != nil {
+                        if hasTeachingPoint {
                             Image(systemName: "chevron.down")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
@@ -62,16 +63,16 @@ private struct CoachingTipRow: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(tip.teachingPoint == nil)
+                .disabled(!hasTeachingPoint)
 
                 // Expandable teaching point
-                if isExpanded, let teachingPoint = tip.teachingPoint {
+                if isExpanded, hasTeachingPoint {
                     VStack(alignment: .leading, spacing: 8) {
                         Rectangle()
                             .fill(.white.opacity(0.1))
                             .frame(height: 0.5)
 
-                        Text(teachingPoint)
+                        Text(tip.teachingPoint)
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)

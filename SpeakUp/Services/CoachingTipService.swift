@@ -1,20 +1,23 @@
 import Foundation
 
 struct CoachingTip: Identifiable {
-    let id = UUID()
     let icon: String
     let title: String
     let message: String
     let category: TipCategory
-    let teachingPoint: String?
+    let teachingPoint: String
     let suggestedDrillMode: String?
+
+    var id: String {
+        "\(category.id)|\(title)|\(message)|\(teachingPoint)|\(suggestedDrillMode ?? "")"
+    }
 
     init(
         icon: String,
         title: String,
         message: String,
         category: TipCategory,
-        teachingPoint: String? = nil,
+        teachingPoint: String = "",
         suggestedDrillMode: String? = nil
     ) {
         self.icon = icon
@@ -34,6 +37,19 @@ struct CoachingTip: Identifiable {
         case delivery
         case relevance
         case encouragement
+
+        var id: String {
+            switch self {
+            case .pace: return "pace"
+            case .fillers: return "fillers"
+            case .pauses: return "pauses"
+            case .clarity: return "clarity"
+            case .structure: return "structure"
+            case .delivery: return "delivery"
+            case .relevance: return "relevance"
+            case .encouragement: return "encouragement"
+            }
+        }
     }
 }
 

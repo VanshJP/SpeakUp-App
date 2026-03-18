@@ -218,17 +218,31 @@ enum ToolAction {
     case confidence
     case teleprompter
     case script
+
+    var identifier: String {
+        switch self {
+        case .drill(let mode): return "drill:\(mode.rawValue)"
+        case .readAloud: return "readAloud"
+        case .warmUp: return "warmUp"
+        case .confidence: return "confidence"
+        case .teleprompter: return "teleprompter"
+        case .script: return "script"
+        }
+    }
 }
 
 // MARK: - Recommended Tool
 
 struct RecommendedTool: Identifiable {
-    let id = UUID()
     let name: String
     let icon: String
     let color: Color
     let tip: String
     let action: ToolAction
+
+    var id: String {
+        "\(name)|\(icon)|\(action.identifier)"
+    }
 }
 
 @Model

@@ -612,7 +612,7 @@ struct EventDetailView: View {
                                     .foregroundStyle(.secondary)
                             }
 
-                            Text(milestone.changeNote ?? "Script revision checkpoint")
+                            Text(milestone.changeNote)
                                 .font(.subheadline.weight(.medium))
                                 .lineLimit(2)
 
@@ -894,8 +894,11 @@ struct EventDetailView: View {
 }
 
 private struct EventNotificationPreviewItem: Identifiable {
-    let id = UUID()
     let taskTitle: String
     let taskDescription: String
     let scheduledDate: Date
+
+    var id: String {
+        "\(taskTitle)|\(taskDescription)|\(scheduledDate.timeIntervalSince1970)"
+    }
 }

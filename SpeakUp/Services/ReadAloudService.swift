@@ -43,7 +43,6 @@ class ReadAloudService {
     var matchedWordCount: Int = 0
     var mismatchedWordCount: Int = 0
     var isListening = false
-    var errorMessage: String?
 
     private var referenceWords: [String] = []
     private var normalizedReference: [String] = []
@@ -78,7 +77,6 @@ class ReadAloudService {
         currentWordIndex = 0
         matchedWordCount = 0
         mismatchedWordCount = 0
-        errorMessage = nil
         lastProcessedTranscript = ""
     }
 

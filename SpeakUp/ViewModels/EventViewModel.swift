@@ -351,7 +351,7 @@ class EventViewModel {
                     versionNumber: version.versionNumber,
                     createdDate: version.createdDate,
                     wordCount: version.wordCount,
-                    changeNote: version.changeNote,
+                    changeNote: version.changeNote ?? "Script revision checkpoint",
                     practiceCount: recordingsForVersion.count,
                     bestScore: bestScore,
                     scoreDeltaFromPrevious: delta
@@ -431,7 +431,7 @@ struct ScriptRevisionMilestone: Identifiable {
     let versionNumber: Int
     let createdDate: Date
     let wordCount: Int
-    let changeNote: String?
+    let changeNote: String
     let practiceCount: Int
     let bestScore: Int?
     let scoreDeltaFromPrevious: Int?
