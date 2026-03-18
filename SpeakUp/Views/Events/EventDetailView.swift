@@ -4,7 +4,7 @@ import SwiftData
 struct EventDetailView: View {
     let event: SpeakingEvent
     @Bindable var viewModel: EventViewModel
-    var onStartPractice: ((SpeakingEvent) -> Void)?
+    var onStartPractice: ((SpeakingEvent, UUID?) -> Void)?
     @Environment(\.modelContext) private var modelContext
 
     @Query private var userSettings: [UserSettings]
@@ -19,6 +19,8 @@ struct EventDetailView: View {
     @State private var showingDrillCountdown = false
     @State private var selectedDrillMode: DrillMode?
     @State private var drillViewModel = DrillViewModel()
+    @State private var selectedPracticeVersionId: UUID?
+    @State private var showingNotificationSchedule = false
 
     var body: some View {
         ZStack {
@@ -58,6 +60,8 @@ struct EventDetailView: View {
                         prepTasksSection
                     }
 
+                    notificationPreviewSection
+
                     // Linked recordings
                     if !viewModel.linkedRecordings.isEmpty {
                         recordingsSection
@@ -79,6 +83,9 @@ struct EventDetailView: View {
             viewModel.selectedEvent = event
             viewModel.loadLinkedRecordings(for: event)
             viewModel.loadPrepTasks(for: event)
+            if selectedPracticeVersionId == nil {
+                selectedPracticeVersionId = event.currentScriptVersion?.id
+            }
         }
         .sheet(isPresented: $showingScriptEditor) {
             ScriptEditorView(event: event, viewModel: viewModel)
@@ -140,6 +147,38 @@ struct EventDetailView: View {
         } message: {
             Text("This will permanently delete the event and all prep tasks.")
         }
+        .sheet(isPresented: $showingNotificationSchedule) {
+            NavigationStack {
+                notificationScheduleView
+            }
+        }
+    }
+
+    private var scriptVersions: [ScriptVersion] {
+        (event.scriptVersions ?? []).sorted { $0.versionNumber > $1.versionNumber }
+    }
+
+    private var selectedPracticeVersion: ScriptVersion? {
+        guard let selectedPracticeVersionId else { return event.currentScriptVersion }
+        return scriptVersions.first { $0.id == selectedPracticeVersionId } ?? event.currentScriptVersion
+    }
+
+    private var nextScheduledNotifications: [EventNotificationPreviewItem] {
+        let now = Date()
+        return viewModel.prepTasks
+            .filter { !$0.isCompleted }
+            .compactMap { task in
+                var comps = Calendar.current.dateComponents([.year, .month, .day], from: task.scheduledDate)
+                comps.hour = 9
+                comps.minute = 0
+                guard let trigger = Calendar.current.date(from: comps), trigger > now else { return nil }
+                return EventNotificationPreviewItem(
+                    taskTitle: task.title,
+                    taskDescription: task.taskDescription,
+                    scheduledDate: trigger
+                )
+            }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
     }
 
     // MARK: - Countdown Header
@@ -238,7 +277,7 @@ struct EventDetailView: View {
             if let onStartPractice {
                 GlassButton(title: "Practice", icon: "mic.fill", style: .primary) {
                     Haptics.medium()
-                    onStartPractice(event)
+                    onStartPractice(event, selectedPracticeVersion?.id)
                 }
             }
 
@@ -254,6 +293,27 @@ struct EventDetailView: View {
                     GlassButton(title: "Add Script", icon: "doc.badge.plus", style: .secondary, size: .small) {
                         showingScriptEditor = true
                     }
+                }
+            }
+
+            if let selectedPracticeVersion {
+                HStack(spacing: 8) {
+                    Label(
+                        "Practice using v\(selectedPracticeVersion.versionNumber)",
+                        systemImage: "checkmark.seal"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.primary)
+                    Spacer()
+                    Text("\(selectedPracticeVersion.wordCount) words")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background {
+                    Capsule()
+                        .fill(AppColors.primary.opacity(0.15))
                 }
             }
         }
@@ -323,17 +383,84 @@ struct EventDetailView: View {
                 Label("Script", systemImage: "doc.text")
                     .font(.headline)
                 Spacer()
-                if event.currentVersionNumber > 0 {
-                    Text("v\(event.currentVersionNumber)")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background { Capsule().fill(.ultraThinMaterial) }
+                Button {
+                    showingScriptEditor = true
+                } label: {
+                    Label("New Version", systemImage: "plus")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background {
+                            Capsule()
+                                .fill(AppColors.primary.opacity(0.16))
+                        }
                 }
+                .buttonStyle(.plain)
             }
 
-            if let sections = event.scriptSections, !sections.isEmpty {
+            if !scriptVersions.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(scriptVersions, id: \.id) { version in
+                            let isSelected = selectedPracticeVersionId == version.id || (selectedPracticeVersionId == nil && version.id == event.currentScriptVersion?.id)
+                            Button {
+                                selectedPracticeVersionId = version.id
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("v\(version.versionNumber)")
+                                        .font(.caption.weight(.semibold))
+                                    Text("\(version.wordCount)w")
+                                        .font(.caption2)
+                                }
+                                .foregroundStyle(isSelected ? .white : .primary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background {
+                                    Capsule()
+                                        .fill(isSelected ? AppColors.primary : Color.white.opacity(0.08))
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+
+            if let selectedVersion = selectedPracticeVersion {
+                if let note = selectedVersion.changeNote, !note.isEmpty {
+                    GlassCard(padding: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "note.text")
+                                .foregroundStyle(.secondary)
+                            Text(note)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                }
+
+                ForEach(selectedVersion.scriptSections, id: \.id) { section in
+                    GlassCard(padding: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(section.title)
+                                    .font(.caption.weight(.semibold))
+                                Spacer()
+                                Text("\(section.wordCount) words")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(section.text)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(3)
+                        }
+                    }
+                }
+            } else if let sections = event.scriptSections, !sections.isEmpty {
                 ForEach(sections, id: \.id) { section in
                     GlassCard(padding: 12) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -485,7 +612,7 @@ struct EventDetailView: View {
                                     .foregroundStyle(.secondary)
                             }
 
-                            Text(milestone.changeNote ?? "Script revision checkpoint")
+                            Text(milestone.changeNote)
                                 .font(.subheadline.weight(.medium))
                                 .lineLimit(2)
 
@@ -555,6 +682,81 @@ struct EventDetailView: View {
         }
     }
 
+    // MARK: - Notification Preview
+
+    private var notificationPreviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Smart Reminders", systemImage: "bell.badge")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showingNotificationSchedule = true
+                } label: {
+                    Text("View all")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            GlassCard {
+                if nextScheduledNotifications.isEmpty {
+                    Text("No future reminder slots yet. Complete or regenerate prep tasks to build your reminder timeline.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(nextScheduledNotifications.prefix(3)) { item in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "bell")
+                                    .font(.caption)
+                                    .foregroundStyle(AppColors.primary)
+                                    .padding(.top, 2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.taskTitle)
+                                        .font(.caption.weight(.semibold))
+                                    Text(item.scheduledDate.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var notificationScheduleView: some View {
+        List {
+            if nextScheduledNotifications.isEmpty {
+                Text("No upcoming reminders scheduled.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(nextScheduledNotifications) { item in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.taskTitle)
+                            .font(.subheadline.weight(.semibold))
+                        Text(item.taskDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(item.scheduledDate.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .navigationTitle("Reminder Schedule")
+        .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .appBackground(.subtle)
+    }
+
     // MARK: - Recordings Section
 
     private var recordingsSection: some View {
@@ -567,30 +769,73 @@ struct EventDetailView: View {
 
             ForEach(viewModel.linkedRecordings.prefix(5)) { recording in
                 GlassCard(padding: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "mic.fill")
-                            .foregroundStyle(AppColors.primary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mic.fill")
+                                .foregroundStyle(AppColors.primary)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(recording.displayTitle)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                            Text(recording.formattedDate)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(recording.displayTitle)
+                                    .font(.subheadline.weight(.medium))
+                                    .lineLimit(1)
+                                Text(recording.formattedDate)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if let score = recording.analysis?.speechScore.overall {
+                                Text("\(score)")
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppColors.scoreColor(for: score))
+                            }
                         }
 
-                        Spacer()
+                        if let practicedVersion = practicedScriptVersionLabel(for: recording) {
+                            Text(practicedVersion)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background {
+                                    Capsule()
+                                        .fill(AppColors.primary.opacity(0.15))
+                                }
+                        }
 
-                        if let score = recording.analysis?.speechScore.overall {
-                            Text("\(score)")
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppColors.scoreColor(for: score))
+                        if let scriptInsight = viewModel.scriptInsightsByRecordingId[recording.id] {
+                            HStack(spacing: 8) {
+                                Label("\(scriptInsight.adherenceScore)% script match", systemImage: "checkmark.seal")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(AppColors.scoreColor(for: scriptInsight.adherenceScore))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background {
+                                        Capsule()
+                                            .fill(AppColors.scoreColor(for: scriptInsight.adherenceScore).opacity(0.15))
+                                    }
+
+                                if !scriptInsight.missedKeywords.isEmpty {
+                                    Text("Missed: \(scriptInsight.missedKeywords.joined(separator: ", "))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func practicedScriptVersionLabel(for recording: Recording) -> String? {
+        guard let versionId = recording.scriptVersionId,
+              let version = scriptVersions.first(where: { $0.id == versionId }) else {
+            return nil
+        }
+        return "Practiced with v\(version.versionNumber)"
     }
 
     // MARK: - Event Info Section
@@ -645,5 +890,15 @@ struct EventDetailView: View {
             }
         }
         .padding(.top, 8)
+    }
+}
+
+private struct EventNotificationPreviewItem: Identifiable {
+    let taskTitle: String
+    let taskDescription: String
+    let scheduledDate: Date
+
+    var id: String {
+        "\(taskTitle)|\(taskDescription)|\(scheduledDate.timeIntervalSince1970)"
     }
 }

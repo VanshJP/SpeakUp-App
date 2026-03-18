@@ -13,7 +13,7 @@ class OnboardingViewModel {
     var hasNotificationPermission = false
     var isRequestingNotificationPermission = false
 
-    let totalPages = 7
+    let totalPages = 8
 
     var isLastPage: Bool { currentPage == totalPages - 1 }
 

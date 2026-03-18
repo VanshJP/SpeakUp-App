@@ -7,7 +7,22 @@ struct EventListView: View {
     @State private var viewModel = EventViewModel()
     @State private var showingCreateEvent = false
     @State private var selectedEvent: SpeakingEvent?
-    var onStartPractice: ((SpeakingEvent) -> Void)?
+    @State private var searchText = ""
+    @State private var sortOption: EventSortOption = .soonest
+    var onStartPractice: ((SpeakingEvent, UUID?) -> Void)?
+
+    private var upcomingEvents: [SpeakingEvent] {
+        let filtered = viewModel.upcomingEvents.filter {
+            searchText.isEmpty || $0.title.localizedStandardContains(searchText)
+        }
+        return sortOption.sorted(filtered)
+    }
+
+    private var pastEvents: [SpeakingEvent] {
+        viewModel.pastEvents.filter {
+            searchText.isEmpty || $0.title.localizedStandardContains(searchText)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -16,6 +31,8 @@ struct EventListView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                        eventOrganizationControls
+
                         if viewModel.events.isEmpty {
                             EmptyStateCard(
                                 icon: "calendar.badge.plus",
@@ -27,12 +44,12 @@ struct EventListView: View {
                             .padding(.top, 40)
                         } else {
                             // Upcoming events
-                            if !viewModel.upcomingEvents.isEmpty {
+                            if !upcomingEvents.isEmpty {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Label("Upcoming", systemImage: "calendar")
                                         .font(.headline)
 
-                                    ForEach(viewModel.upcomingEvents) { event in
+                                    ForEach(upcomingEvents) { event in
                                         Button {
                                             selectedEvent = event
                                         } label: {
@@ -44,13 +61,13 @@ struct EventListView: View {
                             }
 
                             // Past events
-                            if !viewModel.pastEvents.isEmpty {
+                            if !pastEvents.isEmpty {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Label("Past", systemImage: "clock.arrow.circlepath")
                                         .font(.headline)
                                         .foregroundStyle(.secondary)
 
-                                    ForEach(viewModel.pastEvents) { event in
+                                    ForEach(pastEvents) { event in
                                         Button {
                                             selectedEvent = event
                                         } label: {
@@ -68,6 +85,7 @@ struct EventListView: View {
             }
             .navigationTitle("Events")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "Search events")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: {
@@ -82,7 +100,7 @@ struct EventListView: View {
                         Haptics.light()
                         showingCreateEvent = true
                     } label: {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus.circle")
                             .font(.title3)
                             .foregroundStyle(AppColors.primary)
                     }
@@ -97,6 +115,46 @@ struct EventListView: View {
             .onAppear {
                 viewModel.configure(with: modelContext)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var eventOrganizationControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Organize", systemImage: "slider.horizontal.3")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.25)) {
+                        viewModel.showArchived.toggle()
+                        viewModel.loadEvents()
+                    }
+                } label: {
+                    Text(viewModel.showArchived ? "Hide archived" : "Show archived")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(EventSortOption.allCases) { option in
+                        FilterChip(
+                            title: option.title,
+                            icon: option.icon,
+                            isSelected: sortOption == option
+                        ) {
+                            withAnimation(.spring(response: 0.25)) {
+                                sortOption = option
+                            }
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
         }
     }
 }
@@ -189,5 +247,50 @@ struct EventCard: View {
         if days <= 1 { return .red }
         if days <= 3 { return .orange }
         return .secondary
+    }
+}
+
+private enum EventSortOption: String, CaseIterable, Identifiable {
+    case soonest
+    case readiness
+    case sessions
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .soonest: return "Soonest"
+        case .readiness: return "Readiness"
+        case .sessions: return "Most Practiced"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .soonest: return "calendar"
+        case .readiness: return "chart.line.uptrend.xyaxis"
+        case .sessions: return "waveform"
+        }
+    }
+
+    func sorted(_ events: [SpeakingEvent]) -> [SpeakingEvent] {
+        switch self {
+        case .soonest:
+            return events.sorted { $0.eventDate < $1.eventDate }
+        case .readiness:
+            return events.sorted { lhs, rhs in
+                if lhs.readinessScore == rhs.readinessScore {
+                    return lhs.eventDate < rhs.eventDate
+                }
+                return lhs.readinessScore > rhs.readinessScore
+            }
+        case .sessions:
+            return events.sorted { lhs, rhs in
+                if lhs.totalPracticeCount == rhs.totalPracticeCount {
+                    return lhs.eventDate < rhs.eventDate
+                }
+                return lhs.totalPracticeCount > rhs.totalPracticeCount
+            }
+        }
     }
 }

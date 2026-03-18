@@ -31,8 +31,12 @@ struct RecordingDetailView: View {
     @State private var llmInsight: String?
     @State private var isEnhancingCoherence = false
     @State private var transcriptionFailed = false
-    @State private var lastScrollOffset: CGFloat = 0
-    @State private var isPlaybackDockVisible = true
+    @State private var playbackDrawerState: PlaybackDrawerState = .expanded
+    @State private var playbackDrawerDragOffset: CGFloat = 0
+    @State private var activePlaybackWordID: UUID?
+    @State private var orderedTranscriptWords: [TranscriptionWord] = []
+    @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
+    @State private var playbackWordCursor = 0
 
     @Query private var userSettings: [UserSettings]
 
@@ -91,77 +95,74 @@ struct RecordingDetailView: View {
                         )
                     }
                 } else {
-                    ZStack(alignment: .bottom) {
-                        ScrollView(.vertical) {
-                            VStack(spacing: 20) {
-                                scrollOffsetReader
+                    ScrollView(.vertical) {
+                        VStack(spacing: 20) {
+                            // Always visible: Prompt + Score + Stats
+                            promptHeader(recording)
 
-                                // Always visible: Prompt + Score + Stats
-                                promptHeader(recording)
-
-                                if let analysis = recording.analysis {
-                                    heroScoreSection(analysis)
-                                    statsGrid(analysis)
-                                }
-
-                                // Goal progress (if recording has goalId)
-                                if recording.goalId != nil {
-                                    goalProgressCard(recording)
-                                }
-
-                                if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
-                                    wpmChartSection(wpmData)
-                                }
-
-                                // Segmented tab picker
-                                if recording.analysis != nil {
-                                    Picker("Detail", selection: $selectedDetailTab) {
-                                        ForEach(DetailTab.allCases, id: \.self) { tab in
-                                            Text(tab.rawValue).tag(tab)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .padding(.horizontal, 4)
-                                }
-
-                                // Tab content
-                                switch selectedDetailTab {
-                                case .analysis:
-                                    analysisTabContent(recording)
-                                case .transcript:
-                                    transcriptTabContent(recording)
-                                case .coaching:
-                                    coachingTabContent(recording)
-                                }
-
-                                // Actions (always at bottom)
-                                actionsSection(recording)
+                            if let analysis = recording.analysis {
+                                heroScoreSection(analysis)
+                                statsGrid(analysis)
                             }
-                            .padding()
-                            .padding(.bottom, 120)
-                        }
-                        .scrollIndicators(.hidden)
-                        .scrollBounceBehavior(.basedOnSize)
-                        .contentMargins(.horizontal, 0)
-                        .coordinateSpace(name: "recording_detail_scroll")
-                        .onPreferenceChange(RecordingDetailScrollOffsetPreferenceKey.self) { offset in
-                            updatePlaybackDockVisibility(with: offset)
-                        }
 
+                            // Goal progress (if recording has goalId)
+                            if recording.goalId != nil {
+                                goalProgressCard(recording)
+                            }
+
+                            if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
+                                wpmChartSection(wpmData)
+                            }
+
+                            // Segmented tab picker
+                            if recording.analysis != nil {
+                                Picker("Detail", selection: $selectedDetailTab) {
+                                    ForEach(DetailTab.allCases, id: \.self) { tab in
+                                        Text(tab.rawValue).tag(tab)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal, 4)
+                            }
+
+                            // Tab content
+                            switch selectedDetailTab {
+                            case .analysis:
+                                analysisTabContent(recording)
+                            case .transcript:
+                                transcriptTabContent(recording)
+                            case .coaching:
+                                coachingTabContent(recording)
+                            }
+
+                            // Actions (always at bottom)
+                            actionsSection(recording)
+                        }
+                        .padding()
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .contentMargins(.horizontal, 0)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
                         if hasPlayableMedia(recording) {
-                            playbackControlSection(recording)
-                                .padding(.horizontal, 14)
-                                .padding(.bottom, 10)
-                                .offset(y: isPlaybackDockVisible ? 0 : 130)
-                                .opacity(isPlaybackDockVisible ? 1 : 0)
-                                .animation(.spring(response: 0.30, dampingFraction: 0.88), value: isPlaybackDockVisible)
+                            playbackDrawer(recording)
                         }
                     }
                     .onAppear {
-                        generateWaveformHeights()
-                        initializePlayback(recording)
-                        isPlaybackDockVisible = true
-                        lastScrollOffset = 0
+                        prepareDetailAssets(for: recording)
+                        playbackDrawerState = .expanded
+                        playbackDrawerDragOffset = 0
+                        updateActivePlaybackWord()
+                    }
+                    .onChange(of: audioService.playbackProgress) { _, _ in
+                        updateActivePlaybackWord()
+                    }
+                    .onChange(of: audioService.isPlaying) { _, isPlaying in
+                        if !isPlaying {
+                            activePlaybackWordID = nil
+                        } else {
+                            updateActivePlaybackWord()
+                        }
                     }
                     .task {
                         // Delay score animation
@@ -185,6 +186,7 @@ struct RecordingDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(alignment: .center, spacing: 12) {
@@ -290,75 +292,93 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func heroScoreSection(_ analysis: SpeechAnalysis) -> some View {
-        GlassCard {
-            VStack(spacing: 16) {
-                // Header row with score and trend
-                HStack(alignment: .center) {
-                    // Large score
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("\(animateScore ? analysis.speechScore.overall : 0)")
-                            .font(.system(size: 56, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppColors.scoreColor(for: analysis.speechScore.overall))
-                            .contentTransition(.numericText())
-                        
-                        Text("/100")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    
+        GlassCard(tint: AppColors.glassTintPrimary) {
+            VStack(spacing: 18) {
+                HStack {
+                    Label("SpeakUp Score", systemImage: "waveform.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
                     Spacer()
-                    
-                    // Trend badge
-                    HStack(spacing: 4) {
-                        Image(systemName: analysis.speechScore.trend.iconName)
-                        Text(analysis.speechScore.trend.rawValue.capitalized)
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(analysis.speechScore.trend.color)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background {
-                        Capsule()
-                            .fill(analysis.speechScore.trend.color.opacity(0.15))
-                    }
                 }
-                
-                // Progress bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.white.opacity(0.08))
-                        
-                        Capsule()
-                            .fill(AppColors.scoreColor(for: analysis.speechScore.overall))
-                            .frame(width: animateScore ? geometry.size.width * CGFloat(analysis.speechScore.overall) / 100 : 0)
+
+                HStack(spacing: 18) {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.12), lineWidth: 10)
+                            .frame(width: 112, height: 112)
+                        Circle()
+                            .trim(from: 0, to: animateScore ? Double(analysis.speechScore.overall) / 100 : 0)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        AppColors.scoreColor(for: analysis.speechScore.overall).opacity(0.55),
+                                        AppColors.scoreColor(for: analysis.speechScore.overall)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                            )
+                            .frame(width: 112, height: 112)
+                            .rotationEffect(.degrees(-90))
                             .animation(.easeOut(duration: 0.8), value: animateScore)
+
+                        VStack(spacing: 1) {
+                            Text("\(animateScore ? analysis.speechScore.overall : 0)")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppColors.scoreColor(for: analysis.speechScore.overall))
+                                .contentTransition(.numericText())
+                            Text("/100")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+
+                    VStack(spacing: 10) {
+                        scoreSnapshotRow(label: "Clarity", value: analysis.speechScore.subscores.clarity, color: .blue)
+                        scoreSnapshotRow(label: "Pace", value: analysis.speechScore.subscores.pace, color: .green)
+                        scoreSnapshotRow(label: "Fillers", value: analysis.speechScore.subscores.fillerUsage, color: .orange)
+                        scoreSnapshotRow(label: "Pauses", value: analysis.speechScore.subscores.pauseQuality, color: .purple)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(height: 8)
 
                 if let textQuality = analysis.textQuality {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Language quality signals")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        HStack(spacing: 8) {
-                            scoreSignalChip(
-                                title: "Conciseness",
-                                score: textQuality.concisenessScore,
-                                icon: "scissors"
-                            )
-                            scoreSignalChip(
-                                title: "Engagement",
-                                score: textQuality.engagementScore,
-                                icon: "person.3.sequence"
-                            )
-                        }
+                    HStack(spacing: 8) {
+                        scoreSignalChip(title: "Conciseness", score: textQuality.concisenessScore, icon: "scissors")
+                        scoreSignalChip(title: "Engagement", score: textQuality.engagementScore, icon: "person.3.sequence")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func scoreSnapshotRow(label: String, value: Int, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 54, alignment: .trailing)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [color.opacity(0.6), color],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 90 * CGFloat(value) / 100)
+            }
+            .frame(width: 90, height: 7)
+            Text("\(value)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(color)
+                .frame(width: 28, alignment: .leading)
         }
     }
 
@@ -384,7 +404,7 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func promptHeader(_ recording: Recording) -> some View {
-        GlassCard {
+        GlassCard(padding: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     if let prompt = recording.prompt {
@@ -399,9 +419,14 @@ struct RecordingDetailView: View {
 
                     Spacer()
 
-                    Text(recording.date.relativeFormatted)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(recording.date.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Text(recording.date.formatted(date: .omitted, time: .shortened))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary.opacity(0.85))
+                    }
                 }
 
                 if let prompt = recording.prompt {
@@ -464,83 +489,76 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func playbackControlSection(_ recording: Recording) -> some View {
-        GlassCard(tint: AppColors.glassTintPrimary) {
-            VStack(spacing: 14) {
-                // Waveform with timestamps
-                HStack(spacing: 10) {
-                    Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .leading)
+        VStack(spacing: 14) {
+            // Waveform with timestamps
+            HStack(spacing: 10) {
+                Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 40, alignment: .leading)
 
-                    GeometryReader { geometry in
-                        let barWidth: CGFloat = 3
-                        let spacing: CGFloat = 2
-                        let totalBarWidth = barWidth + spacing
-                        let barCount = max(1, Int(geometry.size.width / totalBarWidth))
-                        let width = geometry.size.width
+                GeometryReader { geometry in
+                    let barWidth: CGFloat = 3
+                    let spacing: CGFloat = 2
+                    let totalBarWidth = barWidth + spacing
+                    let barCount = max(1, Int(geometry.size.width / totalBarWidth))
+                    let width = geometry.size.width
 
-                        HStack(spacing: spacing) {
-                            ForEach(0..<barCount, id: \.self) { i in
-                                let progress = Double(i) / Double(barCount)
-                                let isPlayed = progress < audioService.playbackProgress
-                                let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
+                    HStack(spacing: spacing) {
+                        ForEach(0..<barCount, id: \.self) { i in
+                            let progress = Double(i) / Double(barCount)
+                            let isPlayed = progress < audioService.playbackProgress
+                            let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
 
-                                RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(isPlayed ? Color.teal : Color.white.opacity(0.2))
-                                    .frame(width: barWidth, height: height)
-                            }
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(isPlayed ? Color.teal : Color.white.opacity(0.2))
+                                .frame(width: barWidth, height: height)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    let progress = max(0, min(1, value.location.x / max(1, width)))
-                                    audioService.seek(to: progress)
-                                }
-                        )
                     }
-                    .frame(height: 32)
-
-                    Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        let progress = max(0, min(1, location.x / max(1, width)))
+                        audioService.seek(to: progress)
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { value in
+                                // Only seek on predominantly horizontal drags
+                                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                                let progress = max(0, min(1, value.location.x / max(1, width)))
+                                audioService.seek(to: progress)
+                            }
+                    )
                 }
+                .frame(height: 32)
 
-                // Play button
-                Button {
-                    togglePlayback(recording)
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.body.weight(.semibold))
-                        Text(audioService.isPlaying ? "Pause" : "Listen Back")
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background {
-                        Capsule()
-                            .fill(Color.teal)
-                    }
-                }
-                .buttonStyle(.plain)
+                Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 40, alignment: .trailing)
             }
-        }
-    }
 
-    private var scrollOffsetReader: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .preference(
-                    key: RecordingDetailScrollOffsetPreferenceKey.self,
-                    value: proxy.frame(in: .named("recording_detail_scroll")).minY
-                )
+            // Play button
+            Button {
+                togglePlayback(recording)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.body.weight(.semibold))
+                    Text(audioService.isPlaying ? "Pause" : "Listen Back")
+                        .font(.subheadline.weight(.medium))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background {
+                    Capsule()
+                        .fill(Color.teal)
+                }
+            }
+            .buttonStyle(.plain)
         }
-        .frame(height: 0)
     }
 
     // MARK: - Processing Section (moved to AnalyzingView)
@@ -553,30 +571,30 @@ struct RecordingDetailView: View {
             HStack(spacing: 0) {
                 PromptStatItem(
                     icon: "speedometer",
-                    value: "\(Int(analysis.wordsPerMinute)) wpm",
-                    label: "Speaking Pace",
+                    value: "\(Int(analysis.wordsPerMinute))",
+                    label: "WPM",
                     color: .cyan
                 )
 
-                detailStatDivider
+                statsGridDivider
 
                 PromptStatItem(
                     icon: "text.word.spacing",
                     value: "\(analysis.totalWords)",
-                    label: "Total Words",
+                    label: "Words",
                     color: .white
                 )
 
-                detailStatDivider
+                statsGridDivider
 
                 PromptStatItem(
                     icon: "exclamationmark.bubble",
                     value: "\(analysis.totalFillerCount)",
-                    label: "Filler Words",
+                    label: "Fillers",
                     color: analysis.totalFillerCount > 5 ? .orange : .green
                 )
 
-                detailStatDivider
+                statsGridDivider
 
                 PromptStatItem(
                     icon: "pause.circle",
@@ -588,7 +606,7 @@ struct RecordingDetailView: View {
         }
     }
 
-    private var detailStatDivider: some View {
+    private var statsGridDivider: some View {
         Rectangle()
             .fill(.quaternary)
             .frame(width: 0.5, height: 40)
@@ -707,7 +725,8 @@ struct RecordingDetailView: View {
                     HighlightedTranscriptView(
                         words: words,
                         showFillerHighlights: showFillerHighlights,
-                        showVocabHighlights: showVocabHighlights
+                        showVocabHighlights: showVocabHighlights,
+                        activePlaybackWordID: activePlaybackWordID
                     )
                     .frame(maxWidth: .infinity, alignment: .topLeading)
 
@@ -1001,19 +1020,87 @@ struct RecordingDetailView: View {
         return DefaultFeedbackQuestions.questions + custom
     }
 
-    private func generateWaveformHeights() {
-        guard waveformHeights.isEmpty else { return }
-        if let url = recording?.audioURL ?? recording?.videoURL {
-            waveformHeights = AudioWaveformGenerator.generate(from: url, binCount: 50)
-        } else {
-            waveformHeights = Array(repeating: CGFloat(20), count: 50)
+    private func prepareDetailAssets(for recording: Recording) {
+        prepareTranscriptPlaybackWords(from: recording)
+
+        guard waveformHeights.isEmpty || audioService.playbackDuration <= 0 else { return }
+        let mediaURL = recording.audioURL ?? recording.videoURL
+        let needsWaveform = waveformHeights.isEmpty
+        let existingHeights = waveformHeights
+
+        Task(priority: .utility) {
+            let prepared = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async {
+                    let generatedHeights: [CGFloat]
+                    if needsWaveform, let mediaURL {
+                        generatedHeights = AudioWaveformGenerator.generate(from: mediaURL, binCount: 50)
+                    } else {
+                        generatedHeights = existingHeights
+                    }
+
+                    continuation.resume(returning: generatedHeights)
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            if waveformHeights.isEmpty {
+                waveformHeights = prepared
+            }
+            if let mediaURL, audioService.playbackDuration <= 0 {
+                let asset = AVURLAsset(url: mediaURL)
+                if let duration = try? await asset.load(.duration) {
+                    let seconds = CMTimeGetSeconds(duration)
+                    if seconds.isFinite && seconds > 0 {
+                        audioService.playbackDuration = seconds
+                    }
+                }
+            }
+            updateActivePlaybackWord()
         }
     }
 
-    private func initializePlayback(_ recording: Recording) {
-        guard let url = recording.audioURL ?? recording.videoURL else { return }
-        if let duration = audioService.getAudioDuration(at: url) {
-            audioService.playbackDuration = duration
+    private func prepareTranscriptPlaybackWords(from recording: Recording) {
+        let words = (recording.transcriptionWords ?? [])
+            .filter { $0.end > $0.start }
+            .sorted { $0.start < $1.start }
+
+        orderedTranscriptWords = words
+        orderedTranscriptRanges = words.map { $0.start...$0.end }
+        playbackWordCursor = 0
+        activePlaybackWordID = nil
+    }
+
+    private func updateActivePlaybackWord() {
+        guard !orderedTranscriptWords.isEmpty else {
+            activePlaybackWordID = nil
+            return
+        }
+
+        if audioService.playbackDuration <= 0 {
+            activePlaybackWordID = nil
+            return
+        }
+
+        let currentTime = max(0, audioService.playbackProgress) * audioService.playbackDuration
+
+        while playbackWordCursor < orderedTranscriptRanges.count - 1 &&
+            currentTime > orderedTranscriptRanges[playbackWordCursor].upperBound {
+            playbackWordCursor += 1
+        }
+
+        while playbackWordCursor > 0 && currentTime < orderedTranscriptRanges[playbackWordCursor].lowerBound {
+            playbackWordCursor -= 1
+        }
+
+        guard playbackWordCursor < orderedTranscriptRanges.count else {
+            activePlaybackWordID = nil
+            return
+        }
+
+        if orderedTranscriptRanges[playbackWordCursor].contains(currentTime) {
+            activePlaybackWordID = orderedTranscriptWords[playbackWordCursor].id
+        } else {
+            activePlaybackWordID = nil
         }
     }
 
@@ -1051,11 +1138,22 @@ struct RecordingDetailView: View {
               let words = recording.transcriptionWords,
               words.count >= 2 else { return }
 
-        let wpmData = speechService.computeWPMTimeSeries(
-            words: words,
-            actualDuration: recording.actualDuration
-        )
-        recording.analysis?.wpmTimeSeries = wpmData
+        Task(priority: .utility) {
+            let wordsSnapshot = words
+            let durationSnapshot = recording.actualDuration
+            let wpmData = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async {
+                    let data = SpeechService().computeWPMTimeSeries(
+                        words: wordsSnapshot,
+                        actualDuration: durationSnapshot
+                    )
+                    continuation.resume(returning: data)
+                }
+            }
+            guard !Task.isCancelled else { return }
+            recording.analysis?.wpmTimeSeries = wpmData
+            try? modelContext.save()
+        }
     }
 
     private func transcribeIfNeeded() async {
@@ -1114,24 +1212,43 @@ struct RecordingDetailView: View {
                 weights.relevance = s.relevanceWeight
             }
 
-            let analysis = speechService.analyze(
-                transcription: result,
-                actualDuration: recording.actualDuration,
-                vocabWords: vocabWords,
-                audioLevelSamples: recording.audioLevelSamples ?? [],
-                audioURL: audioURL,
-                prompt: recording.prompt,
-                targetWPM: settings?.targetWPM ?? 150,
-                trackFillerWords: settings?.trackFillerWords ?? true,
-                trackPauses: settings?.trackPauses ?? true,
-                scoreWeights: weights
-            )
+            let resultSnapshot = result
+            let actualDuration = recording.actualDuration
+            let audioLevelSamples = recording.audioLevelSamples ?? []
+            let promptText = recording.prompt?.text
+            let targetWPM = settings?.targetWPM ?? 150
+            let trackFillerWords = settings?.trackFillerWords ?? true
+            let trackPauses = settings?.trackPauses ?? true
+            let vocabWordsSnapshot = vocabWords
+            let weightSnapshot = weights
+
+            let computed = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let analyzer = SpeechService()
+                    let analysis = analyzer.analyze(
+                        transcription: resultSnapshot,
+                        actualDuration: actualDuration,
+                        vocabWords: vocabWordsSnapshot,
+                        audioLevelSamples: audioLevelSamples,
+                        audioURL: audioURL,
+                        promptText: promptText,
+                        targetWPM: targetWPM,
+                        trackFillerWords: trackFillerWords,
+                        trackPauses: trackPauses,
+                        scoreWeights: weightSnapshot
+                    )
+                    let markedWords = analyzer.markVocabWordsInTranscription(
+                        resultSnapshot.words,
+                        vocabWords: vocabWordsSnapshot
+                    )
+                    continuation.resume(returning: (analysis, markedWords))
+                }
+            }
 
             recording.transcriptionText = result.text
-            recording.transcriptionWords = speechService.markVocabWordsInTranscription(
-                result.words, vocabWords: vocabWords
-            )
-            recording.analysis = analysis
+            recording.transcriptionWords = computed.1
+            recording.analysis = computed.0
+            prepareTranscriptPlaybackWords(from: recording)
 
             try modelContext.save()
         } catch {
@@ -1219,7 +1336,9 @@ struct RecordingDetailView: View {
                 return
             }
             Task {
+                playbackDrawerState = .expanded
                 try? await audioService.play(url: url)
+                updateActivePlaybackWord()
             }
         }
     }
@@ -1232,7 +1351,9 @@ struct RecordingDetailView: View {
         }
         guard let recording, let url = recording.audioURL ?? recording.videoURL else { return }
         Task {
+            playbackDrawerState = .expanded
             try? await audioService.play(url: url)
+            updateActivePlaybackWord()
         }
     }
 
@@ -1276,36 +1397,138 @@ struct RecordingDetailView: View {
         (recording.audioURL ?? recording.videoURL) != nil
     }
 
-    private func updatePlaybackDockVisibility(with offset: CGFloat) {
-        if lastScrollOffset == 0 {
-            lastScrollOffset = offset
-            return
+    @ViewBuilder
+    private func playbackDrawer(_ recording: Recording) -> some View {
+        VStack(spacing: 0) {
+            if playbackDrawerState != .hidden {
+                VStack(spacing: 8) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.35))
+                        .frame(width: 40, height: 4)
+                        .padding(.top, 8)
+
+                    if playbackDrawerState == .expanded {
+                        playbackControlSection(recording)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if playbackDrawerState == .collapsed {
+                        collapsedPlaybackBar(recording)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 10)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .background(
+                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea(edges: .bottom)
+                )
+                .overlay(alignment: .top) {
+                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                        .stroke(.white.opacity(0.12), lineWidth: 0.5)
+                        .ignoresSafeArea(edges: .bottom)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                // Hidden: show a small pull-up tab to restore the drawer
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        playbackDrawerState = .collapsed
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.up")
+                            .font(.caption2.weight(.bold))
+                        Image(systemName: "waveform")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .ignoresSafeArea(edges: .bottom)
+        .contentShape(Rectangle())
+        .animation(.spring(response: 0.30, dampingFraction: 0.86), value: playbackDrawerState)
+        .offset(y: playbackDrawerDragOffset)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { value in
+                    let translation = value.translation.height
+                    // Only handle predominantly vertical drags
+                    guard abs(translation) > abs(value.translation.width) else { return }
+                    if playbackDrawerState == .expanded || playbackDrawerState == .collapsed {
+                        playbackDrawerDragOffset = max(0, translation)
+                    }
+                    if playbackDrawerState == .collapsed && translation < 0 {
+                        playbackDrawerDragOffset = min(0, translation)
+                    }
+                }
+                .onEnded { value in
+                    let translation = value.translation.height
+                    let velocity = value.predictedEndTranslation.height
 
-        let delta = offset - lastScrollOffset
-        if abs(delta) < 4 { return }
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
+                        playbackDrawerDragOffset = 0
 
-        if delta < 0 {
-            // User is scrolling down the content.
-            isPlaybackDockVisible = false
-        } else {
-            // User is scrolling back up.
-            isPlaybackDockVisible = true
-        }
-
-        if offset >= -16 {
-            isPlaybackDockVisible = true
-        }
-
-        lastScrollOffset = offset
+                        if translation > 80 || velocity > 250 {
+                            // Swipe down — hide the drawer
+                            audioService.pause()
+                            playbackDrawerState = .hidden
+                        } else if playbackDrawerState == .expanded && translation > 40 {
+                            // Moderate swipe down from expanded — collapse
+                            playbackDrawerState = .collapsed
+                        } else if playbackDrawerState == .collapsed && translation < -35 {
+                            // Swipe up from collapsed — expand
+                            playbackDrawerState = .expanded
+                        }
+                    }
+                }
+        )
     }
-}
 
-private struct RecordingDetailScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    @ViewBuilder
+    private func collapsedPlaybackBar(_ recording: Recording) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.teal)
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+            Text(audioService.isPlaying ? "Now Playing" : "Playback")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Text(formatTime(audioService.playbackProgress * max(audioService.playbackDuration, recording.actualDuration)))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            Button {
+                togglePlayback(recording)
+            } label: {
+                Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(.teal))
+            }
+            .buttonStyle(.plain)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                playbackDrawerState = .expanded
+            }
+        }
     }
 }
 
@@ -1388,6 +1611,7 @@ struct HighlightedTranscriptView: View {
     let words: [TranscriptionWord]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
+    let activePlaybackWordID: UUID?
 
     var body: some View {
         FlowLayout(spacing: 4) {
@@ -1395,7 +1619,8 @@ struct HighlightedTranscriptView: View {
                 WordView(
                     word: word,
                     showFillerHighlight: showFillerHighlights && word.isFiller,
-                    showVocabHighlight: showVocabHighlights && word.isVocabWord
+                    showVocabHighlight: showVocabHighlights && word.isVocabWord,
+                    isActivePlaybackWord: activePlaybackWordID == word.id
                 )
             }
         }
@@ -1406,20 +1631,21 @@ struct WordView: View {
     let word: TranscriptionWord
     let showFillerHighlight: Bool
     let showVocabHighlight: Bool
+    let isActivePlaybackWord: Bool
 
-    private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
+    private var isHighlighted: Bool { isActivePlaybackWord || showFillerHighlight || showVocabHighlight }
     private var highlightColor: Color { showFillerHighlight ? .orange : .green }
 
     var body: some View {
         Text(word.word)
             .font(.body)
-            .foregroundStyle(isHighlighted ? highlightColor : .primary)
+            .foregroundStyle(isActivePlaybackWord ? .teal : (isHighlighted ? highlightColor : .primary))
             .padding(.horizontal, isHighlighted ? 4 : 0)
             .padding(.vertical, isHighlighted ? 2 : 0)
             .background {
                 if isHighlighted {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(highlightColor.opacity(0.2))
+                        .fill((isActivePlaybackWord ? Color.teal : highlightColor).opacity(0.2))
                 }
             }
     }
@@ -1490,6 +1716,12 @@ enum DetailTab: String, CaseIterable {
     case analysis = "Analysis"
     case transcript = "Transcript"
     case coaching = "Coaching"
+}
+
+private enum PlaybackDrawerState {
+    case expanded
+    case collapsed
+    case hidden
 }
 
 // MARK: - Session Feedback Sheet

@@ -16,6 +16,7 @@ struct RecordingView: View {
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
     var eventId: UUID? = nil
+    var scriptVersionId: UUID? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
@@ -68,6 +69,7 @@ struct RecordingView: View {
             )
             viewModel.goalId = goalId
             viewModel.eventId = eventId
+            viewModel.scriptVersionId = scriptVersionId
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
                     customFillers: Set(settings.customFillerWords),

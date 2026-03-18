@@ -5,6 +5,7 @@ import SwiftData
 @MainActor @Observable
 class HistoryViewModel {
     var recordings: [Recording] = []
+    var recordingCountByDay: [Date: Int] = [:]
     var weeklyActivity: [WeeklyActivity] = []
     var currentStreak: Int = 0
     var longestStreak: Int = 0
@@ -37,6 +38,9 @@ class HistoryViewModel {
         
         do {
             recordings = try context.fetch(descriptor)
+            recordingCountByDay = Dictionary(grouping: recordings) {
+                Calendar.current.startOfDay(for: $0.date)
+            }.mapValues(\.count)
         } catch {
             print("Error loading recordings: \(error)")
         }
@@ -152,6 +156,10 @@ class HistoryViewModel {
 
         // Remove from local array first so SwiftUI stops rendering it
         recordings.removeAll { $0.id == recording.id }
+        let day = Calendar.current.startOfDay(for: recording.date)
+        if let existing = recordingCountByDay[day] {
+            recordingCountByDay[day] = max(0, existing - 1)
+        }
 
         context.delete(recording)
 
@@ -175,8 +183,8 @@ class HistoryViewModel {
     // MARK: - Contribution Graph Helpers
     
     func activityLevel(for date: Date) -> Double {
-        let dayRecordings = recordings.filter { $0.date.isSameDay(as: date) }
-        let count = dayRecordings.count
+        let day = Calendar.current.startOfDay(for: date)
+        let count = recordingCountByDay[day] ?? 0
         
         switch count {
         case 0: return 0
@@ -188,6 +196,6 @@ class HistoryViewModel {
     }
     
     func recordingsForDate(_ date: Date) -> [Recording] {
-        recordings.filter { $0.date.isSameDay(as: date) }
+        recordings.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
     }
 }

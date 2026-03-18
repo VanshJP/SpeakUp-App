@@ -162,9 +162,28 @@ class WhisperService {
         // Sort by start time to ensure chronological order across segments
         rawTimings.sort { $0.start < $1.start }
 
+        // Stabilize timings for downstream playback word-highlighting.
+        // Whisper partial segments can occasionally emit tiny overlaps or zero-length words.
+        var normalizedTimings: [RawWordTiming] = []
+        normalizedTimings.reserveCapacity(rawTimings.count)
+        var lastEnd: TimeInterval = 0
+        for timing in rawTimings {
+            let clampedStart = max(lastEnd, timing.start)
+            let clampedEnd = max(clampedStart + 0.01, timing.end)
+            normalizedTimings.append(
+                RawWordTiming(
+                    word: timing.word,
+                    start: clampedStart,
+                    end: clampedEnd,
+                    confidence: timing.confidence
+                )
+            )
+            lastEnd = clampedEnd
+        }
+
         // Run unified filler detection pipeline
-        let words = FillerDetectionPipeline.tagFillers(in: rawTimings)
-        let duration = rawTimings.last?.end ?? 0
+        let words = FillerDetectionPipeline.tagFillers(in: normalizedTimings)
+        let duration = normalizedTimings.last?.end ?? 0
 
         return SpeechTranscriptionResult(
             text: result.text,

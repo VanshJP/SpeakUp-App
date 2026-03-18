@@ -60,50 +60,11 @@ struct AnalyzingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: shouldShowFeedback ? 20 : 24) {
-                    Spacer()
-                        .frame(height: shouldShowFeedback ? 8 : 20)
-
-                    WaveformOrb(
-                        phase: waveformPhase,
-                        pulseScale: pulseScale,
-                        showCheckmark: analysisReady && shouldShowFeedback
-                    )
-                    .scaleEffect(shouldShowFeedback ? 0.65 : 1.0)
-                    .frame(height: shouldShowFeedback ? 130 : 200)
-                    .animation(.spring(response: 0.4), value: shouldShowFeedback)
-
-                    VStack(spacing: 6) {
-                        Text(statusTitle)
-                            .font(.headline.weight(.semibold))
-                            .contentTransition(.numericText())
-
-                        Text(statusSubtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if shouldShowFeedback {
-                        feedbackBanner
-                        allQuestionsCard
-                    } else {
-                        AnalyzingProgressDots(stage: progressStage)
-
-                        MotivationalTipCard(
-                            tipIndex: currentTipIndex,
-                            isVisible: showTip
-                        )
-
-                        AnalyzingSkeletonPreview()
-                    }
-
-                    Spacer()
-                        .frame(height: shouldShowFeedback ? 16 : 40)
-                }
-                .padding(.horizontal, 20)
+            if shouldShowFeedback {
+                feedbackContent
+            } else {
+                progressContent
             }
-            .scrollIndicators(.hidden)
 
             if shouldShowFeedback {
                 feedbackBottomBar
@@ -115,6 +76,90 @@ struct AnalyzingView: View {
         .task { await animatePulse() }
         .task { await cycleTips() }
         .task { await cycleStages() }
+    }
+
+    private var progressContent: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                Spacer()
+                    .frame(height: 20)
+
+                WaveformOrb(
+                    phase: waveformPhase,
+                    pulseScale: pulseScale,
+                    showCheckmark: false
+                )
+                .frame(height: 200)
+
+                VStack(spacing: 6) {
+                    Text(statusTitle)
+                        .font(.headline.weight(.semibold))
+                        .contentTransition(.numericText())
+
+                    Text(statusSubtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                AnalyzingProgressDots(stage: progressStage)
+
+                MotivationalTipCard(
+                    tipIndex: currentTipIndex,
+                    isVisible: showTip
+                )
+
+                AnalyzingSkeletonPreview()
+
+                Spacer()
+                    .frame(height: 40)
+            }
+            .padding(.horizontal, 20)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var feedbackContent: some View {
+        Group {
+            if feedbackQuestions.count > 2 {
+                ScrollView {
+                    feedbackContentStack
+                }
+                .scrollIndicators(.hidden)
+            } else {
+                feedbackContentStack
+            }
+        }
+    }
+
+    private var feedbackContentStack: some View {
+        VStack(spacing: 14) {
+            Spacer()
+                .frame(height: 8)
+
+            WaveformOrb(
+                phase: waveformPhase,
+                pulseScale: pulseScale,
+                showCheckmark: analysisReady
+            )
+            .scaleEffect(0.58)
+            .frame(height: 94)
+
+            VStack(spacing: 4) {
+                Text(statusTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .contentTransition(.numericText())
+
+                Text(statusSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            feedbackBanner
+            allQuestionsCard
+
+            Spacer(minLength: 6)
+        }
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Feedback Banner
@@ -155,24 +200,24 @@ struct AnalyzingView: View {
     private var allQuestionsCard: some View {
         FeaturedGlassCard(
             gradientColors: [.teal.opacity(0.08), .cyan.opacity(0.04)],
-            padding: 24
+            padding: 16
         ) {
-            VStack(spacing: 24) {
+            VStack(spacing: 14) {
                 HStack {
                     Image(systemName: "checkmark.message")
                         .font(.body)
                         .foregroundStyle(.teal)
 
                     Text("Quick Self-Check")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.footnote.weight(.semibold))
 
                     Spacer()
                 }
 
                 ForEach(Array(feedbackQuestions.enumerated()), id: \.element.id) { index, question in
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text(question.text)
-                            .font(.headline)
+                            .font(.subheadline.weight(.semibold))
                             .fixedSize(horizontal: false, vertical: true)
 
                         if question.type == .scale {
@@ -201,6 +246,7 @@ struct AnalyzingView: View {
                     if index < feedbackQuestions.count - 1 {
                         Divider()
                             .overlay(Color.white.opacity(0.06))
+                            .padding(.vertical, 2)
                     }
                 }
             }
@@ -326,7 +372,7 @@ private struct ScaleInput: View {
     ]
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             HStack(spacing: 0) {
                 ForEach(1...5, id: \.self) { value in
                     let isSelected = selected == value
@@ -349,14 +395,14 @@ private struct ScaleInput: View {
                                     }
 
                                 Image(systemName: option.icon)
-                                    .font(.system(size: isSelected ? 20 : 16))
+                                    .font(.system(size: isSelected ? 18 : 14))
                                     .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
                             }
-                            .frame(width: 48, height: 48)
+                            .frame(width: 40, height: 40)
                             .scaleEffect(isSelected ? 1.1 : 1.0)
 
                             Text(option.label)
-                                .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                                .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
@@ -415,9 +461,21 @@ private struct YesNoInput: View {
     let onSelect: (Bool) -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            optionButton(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success)
-            optionButton(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning)
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                optionButton(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning)
+                optionButton(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success)
+            }
+
+            HStack {
+                Text("Needs work")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Strong")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -435,7 +493,7 @@ private struct YesNoInput: View {
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.5))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .padding(.vertical, 14)
             .background {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isSelected ? tint.opacity(0.15) : Color.white.opacity(0.04))

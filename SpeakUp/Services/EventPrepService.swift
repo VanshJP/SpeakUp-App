@@ -19,8 +19,6 @@ enum EventPrepError: LocalizedError {
 
 @Observable
 class EventPrepService {
-    var errorMessage: String?
-
     // MARK: - Generate Tasks
 
     func generateTasks(for event: SpeakingEvent, context: ModelContext) {

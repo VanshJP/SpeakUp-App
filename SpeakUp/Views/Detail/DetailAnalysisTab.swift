@@ -165,6 +165,17 @@ struct DetailAnalysisTab: View {
 
             GlassCard {
                 VStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What this means")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("Vocal variety blends pitch movement, pace changes, and emphasis so your delivery sounds dynamic instead of flat.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 2)
+
                     if let vv = analysis.speechScore.subscores.vocalVariety {
                         SubscoreRow(title: "Overall Variety", score: vv, icon: "waveform.path.ecg")
                     }
