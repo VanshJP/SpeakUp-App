@@ -17,6 +17,7 @@ class RecordingViewModel {
     var prompt: Prompt?
     var goalId: UUID?
     var eventId: UUID?
+    var scriptVersionId: UUID?
 
     // Timer
     var remainingTime: TimeInterval = 60
@@ -143,6 +144,7 @@ class RecordingViewModel {
         )
 
         recording.eventId = eventId
+        recording.scriptVersionId = scriptVersionId
 
         context.insert(recording)
 

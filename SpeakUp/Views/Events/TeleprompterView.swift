@@ -1,3 +1,4 @@
+import MediaPlayer
 import SwiftUI
 
 struct TeleprompterView: View {
@@ -16,6 +17,7 @@ struct TeleprompterView: View {
     @State private var viewHeight: CGFloat = 0
     @State private var lastTime: Date?
     @State private var manualDragOffset: CGFloat = 0
+    @State private var nowPlaying = TeleprompterNowPlayingController.shared
 
     private let basePixelsPerSecond: CGFloat = 30
 
@@ -34,6 +36,41 @@ struct TeleprompterView: View {
 
     private var maxScroll: CGFloat {
         max(0, contentHeight - viewHeight * 0.4)
+    }
+
+    private var progress: Double {
+        guard maxScroll > 0 else { return 0 }
+        return max(0, min(1, Double(scrollOffset / maxScroll)))
+    }
+
+    private var estimatedDuration: TimeInterval {
+        guard adjustedSpeed > 0 else { return 0 }
+        return TimeInterval(maxScroll / (CGFloat(adjustedSpeed) * basePixelsPerSecond))
+    }
+
+    private var elapsedEstimate: TimeInterval {
+        estimatedDuration * progress
+    }
+
+    private var speedDescriptor: String {
+        switch adjustedSpeed {
+        case ..<0.85: return "Slow and steady"
+        case 0.85..<1.2: return "Natural pace"
+        case 1.2..<1.7: return "Presentation pace"
+        default: return "Fast rehearsal"
+        }
+    }
+
+    private var estimatedWordsPerMinute: Int {
+        Int((110 * adjustedSpeed).rounded())
+    }
+
+    private var nowPlayingTitle: String {
+        let snippet = scriptText
+            .split(separator: " ")
+            .prefix(8)
+            .joined(separator: " ")
+        return snippet.isEmpty ? "Teleprompter Session" : snippet + "..."
     }
 
     var body: some View {
@@ -125,8 +162,31 @@ struct TeleprompterView: View {
                 showControls.toggle()
             }
         }
+        .onAppear {
+            nowPlaying.onTogglePlayPause = {
+                Task { @MainActor in
+                    toggleScrolling()
+                }
+            }
+            nowPlaying.onRestart = {
+                Task { @MainActor in
+                    resetTeleprompter()
+                }
+            }
+            updateNowPlayingOverlay()
+        }
+        .onChange(of: isScrolling) { _, _ in
+            updateNowPlayingOverlay()
+        }
+        .onChange(of: scrollOffset) { _, _ in
+            updateNowPlayingOverlay()
+        }
+        .onChange(of: adjustedSpeed) { _, _ in
+            updateNowPlayingOverlay()
+        }
         .onDisappear {
             onSettingsChanged?(adjustedSpeed, adjustedFontSize)
+            nowPlaying.clear()
         }
         .statusBarHidden(true)
     }
@@ -152,11 +212,7 @@ struct TeleprompterView: View {
                 // Reset button
                 GlassIconButton(icon: "arrow.counterclockwise") {
                     Haptics.light()
-                    isScrolling = false
-                    lastTime = nil
-                    withAnimation(.spring(response: 0.3)) {
-                        scrollOffset = 0
-                    }
+                    resetTeleprompter()
                 }
             }
             .padding(.horizontal, 20)
@@ -168,11 +224,7 @@ struct TeleprompterView: View {
             VStack(spacing: 16) {
                 // Play/Pause button
                 Button {
-                    Haptics.medium()
-                    isScrolling.toggle()
-                    if !isScrolling {
-                        lastTime = nil
-                    }
+                    toggleScrolling()
                 } label: {
                     Image(systemName: isScrolling ? "pause.fill" : "play.fill")
                         .font(.title2.weight(.semibold))
@@ -184,32 +236,70 @@ struct TeleprompterView: View {
                         }
                 }
 
-                // Speed control
-                HStack {
-                    Image(systemName: "tortoise")
-                        .foregroundStyle(.secondary)
-                    Slider(value: $adjustedSpeed, in: 0.5...3.0, step: 0.25)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Scroll Speed", systemImage: "speedometer")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Text("\(estimatedWordsPerMinute) wpm • \(String(format: "%.2fx", adjustedSpeed))")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(value: $adjustedSpeed, in: 0.5...3.0, step: 0.05)
                         .tint(AppColors.primary)
-                    Image(systemName: "hare")
-                        .foregroundStyle(.secondary)
-                    Text(String(format: "%.1fx", adjustedSpeed))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 40)
+
+                    HStack(spacing: 8) {
+                        ForEach([0.8, 1.0, 1.25, 1.5], id: \.self) { preset in
+                            Button {
+                                adjustedSpeed = preset
+                                Haptics.selection()
+                            } label: {
+                                Text(String(format: "%.2fx", preset))
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(abs(adjustedSpeed - preset) < 0.01 ? .white : .secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background {
+                                        Capsule()
+                                            .fill(abs(adjustedSpeed - preset) < 0.01 ? AppColors.primary.opacity(0.45) : Color.white.opacity(0.08))
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer()
+                    }
                 }
 
                 // Font size control
-                HStack {
-                    Image(systemName: "textformat.size.smaller")
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Text Size", systemImage: "textformat.size")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Text("\(Int(adjustedFontSize)) pt")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
                     Slider(value: $adjustedFontSize, in: 16...48, step: 2)
                         .tint(AppColors.primary)
-                    Image(systemName: "textformat.size.larger")
-                        .foregroundStyle(.secondary)
-                    Text("\(Int(adjustedFontSize))pt")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 40)
+                }
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(speedDescriptor)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("\(formatTime(elapsedEstimate)) elapsed • \(formatTime(max(0, estimatedDuration - elapsedEstimate))) left")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Label("Overlay active", systemImage: "rectangle.stack.badge.play")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(AppColors.primary)
                 }
             }
             .padding(.horizontal, 24)
@@ -222,5 +312,106 @@ struct TeleprompterView: View {
             .padding(.bottom, 40)
         }
         .transition(.opacity)
+    }
+
+    private func toggleScrolling() {
+        Haptics.medium()
+        isScrolling.toggle()
+        if !isScrolling {
+            lastTime = nil
+        }
+    }
+
+    private func resetTeleprompter() {
+        isScrolling = false
+        lastTime = nil
+        withAnimation(.spring(response: 0.3)) {
+            scrollOffset = 0
+        }
+    }
+
+    private func updateNowPlayingOverlay() {
+        nowPlaying.update(
+            title: nowPlayingTitle,
+            subtitle: "Teleprompter • \(speedDescriptor)",
+            elapsed: elapsedEstimate,
+            duration: max(estimatedDuration, 1),
+            speed: adjustedSpeed,
+            isPlaying: isScrolling
+        )
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let whole = max(0, Int(seconds.rounded()))
+        let mins = whole / 60
+        let secs = whole % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
+}
+
+@MainActor
+private final class TeleprompterNowPlayingController {
+    static let shared = TeleprompterNowPlayingController()
+
+    var onTogglePlayPause: (() -> Void)?
+    var onRestart: (() -> Void)?
+
+    private var didConfigureCommands = false
+
+    private init() {}
+
+    func update(
+        title: String,
+        subtitle: String,
+        elapsed: TimeInterval,
+        duration: TimeInterval,
+        speed: Double,
+        isPlaying: Bool
+    ) {
+        configureRemoteCommandsIfNeeded()
+
+        var info: [String: Any] = [:]
+        info[MPMediaItemPropertyTitle] = title
+        info[MPMediaItemPropertyArtist] = subtitle
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+        info[MPMediaItemPropertyPlaybackDuration] = duration
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? speed : 0
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    func clear() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        onTogglePlayPause = nil
+        onRestart = nil
+    }
+
+    private func configureRemoteCommandsIfNeeded() {
+        guard !didConfigureCommands else { return }
+
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.togglePlayPauseCommand.isEnabled = true
+        commandCenter.changePlaybackPositionCommand.isEnabled = false
+        commandCenter.nextTrackCommand.isEnabled = false
+        commandCenter.previousTrackCommand.isEnabled = false
+
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            self?.onTogglePlayPause?()
+            return .success
+        }
+
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            self?.onTogglePlayPause?()
+            return .success
+        }
+
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+            self?.onTogglePlayPause?()
+            return .success
+        }
+
+        didConfigureCommands = true
     }
 }
