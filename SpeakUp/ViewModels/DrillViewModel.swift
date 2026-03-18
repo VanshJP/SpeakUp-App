@@ -280,6 +280,7 @@ class DrillViewModel {
             passed: passed
         )
         isComplete = true
+        CurriculumActivitySignalStore.markDrillCompleted(mode.rawValue)
 
         if passed {
             Haptics.success()

@@ -228,6 +228,7 @@ class GoalsViewModel {
     @MainActor
     func loadGoals() async {
         guard let context = modelContext else { return }
+        GoalProgressService.refreshGoals(in: context)
         
         // Active goals
         let activeDescriptor = FetchDescriptor<UserGoal>(
