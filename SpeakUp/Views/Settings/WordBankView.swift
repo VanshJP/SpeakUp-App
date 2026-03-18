@@ -52,7 +52,7 @@ struct WordBankView: View {
                 Image(systemName: "character.book.closed.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
-                Text("Words you add here are highlighted in transcripts and tracked across recordings.")
+                Text("Words and names here are highlighted in transcripts and also bias Whisper transcription.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

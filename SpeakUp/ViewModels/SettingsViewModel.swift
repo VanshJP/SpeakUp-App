@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import SwiftData
-import UIKit
 
 @MainActor @Observable
 class SettingsViewModel {
@@ -83,6 +82,13 @@ class SettingsViewModel {
     var vocabWordError: String? = nil
     var showingAddVocabWord: Bool = false
     private var vocabErrorDismissID = 0
+
+    /// Terms used to bias Whisper toward names/domain words.
+    var whisperDictionaryWords: [String] {
+        vocabWords
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 
     // Local state - Filler Words
     var customFillerWords: [String] = []
@@ -335,12 +341,12 @@ class SettingsViewModel {
     @MainActor
     func addVocabWord() {
         vocabWordError = nil
-        let trimmed = newVocabWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmed = newVocabWord.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             newVocabWord = ""
             return
         }
-        guard !vocabWords.contains(trimmed) else {
+        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
             showVocabError("Already in your word bank")
             return
         }
@@ -348,8 +354,8 @@ class SettingsViewModel {
             showVocabError("That's a filler word — we track those separately")
             return
         }
-        guard isRealWord(trimmed) else {
-            showVocabError("Not a recognized word")
+        guard trimmed.count >= 2 else {
+            showVocabError("Use at least 2 characters")
             return
         }
         vocabWords.append(trimmed)
@@ -379,7 +385,7 @@ class SettingsViewModel {
 
     @MainActor
     func removeVocabWord(_ word: String) {
-        vocabWords.removeAll { $0 == word }
+        vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
         Task { await saveSettings() }
     }
 
@@ -498,19 +504,6 @@ class SettingsViewModel {
             || customContextFillerWords.contains(lowered)
     }
 
-    private func isRealWord(_ word: String) -> Bool {
-        let checker = UITextChecker()
-        let range = NSRange(location: 0, length: word.utf16.count)
-        let misspelled = checker.rangeOfMisspelledWord(
-            in: word,
-            range: range,
-            startingAt: 0,
-            wrap: false,
-            language: "en"
-        )
-        return misspelled.location == NSNotFound
-    }
-    
     @MainActor
     func resetSettings() async {
         guard let settings, let context = modelContext else { return }

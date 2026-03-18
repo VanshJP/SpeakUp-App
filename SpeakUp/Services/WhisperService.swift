@@ -58,8 +58,8 @@ class WhisperService {
 
     // MARK: - Transcription
 
-    /// Transcribe audio file with filler word detection
-    func transcribe(audioURL: URL) async throws -> SpeechTranscriptionResult {
+    /// Transcribe audio file with filler word detection and optional preferred terms.
+    func transcribe(audioURL: URL, preferredTerms: [String] = []) async throws -> SpeechTranscriptionResult {
         // Load model if not loaded
         if whisperKit == nil {
             await loadModel()
@@ -78,8 +78,9 @@ class WhisperService {
         }
 
         do {
-            // Tokenize the filler prompt to condition the model
-            let promptTokens = whisperKit.tokenizer?.encode(text: fillerPrompt).filter { $0 < 51865 } ?? []
+            // Tokenize prompt to condition the model toward fillers + user dictionary words.
+            let biasPrompt = buildBiasPrompt(preferredTerms: preferredTerms)
+            let promptTokens = whisperKit.tokenizer?.encode(text: biasPrompt).filter { $0 < 51865 } ?? []
             
             // Configure decoding options for filler word capture
             let options = DecodingOptions(
@@ -120,6 +121,17 @@ class WhisperService {
         } catch {
             throw WhisperServiceError.transcriptionFailed(error)
         }
+    }
+
+    private func buildBiasPrompt(preferredTerms: [String]) -> String {
+        let cleanedTerms = preferredTerms
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .uniquedPreservingOrder()
+
+        guard !cleanedTerms.isEmpty else { return fillerPrompt }
+        let dictionaryLine = "Preferred names and terms: \(cleanedTerms.joined(separator: ", "))."
+        return "\(fillerPrompt) \(dictionaryLine)"
     }
 
     /// Process WhisperKit result into our SpeechTranscriptionResult format with filler detection
@@ -227,5 +239,19 @@ enum WhisperServiceError: LocalizedError {
         case .transcriptionFailed(let error):
             return "Transcription failed: \(error.localizedDescription)"
         }
+    }
+}
+
+private extension Array where Element == String {
+    func uniquedPreservingOrder() -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+        for value in self {
+            let normalized = value.lowercased()
+            if seen.insert(normalized).inserted {
+                result.append(value)
+            }
+        }
+        return result
     }
 }

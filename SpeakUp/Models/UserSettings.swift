@@ -163,13 +163,14 @@ final class UserSettings {
     // MARK: - Word Bank Helpers
 
     func addVocabWord(_ word: String) {
-        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty, !vocabWords.contains(trimmed) else { return }
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         vocabWords.append(trimmed)
     }
 
     func removeVocabWord(_ word: String) {
-        vocabWords.removeAll { $0 == word }
+        vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
     }
 }
 
