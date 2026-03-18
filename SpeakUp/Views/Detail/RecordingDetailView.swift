@@ -517,9 +517,15 @@ struct RecordingDetailView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        let progress = max(0, min(1, location.x / max(1, width)))
+                        audioService.seek(to: progress)
+                    }
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        DragGesture(minimumDistance: 4)
                             .onChanged { value in
+                                // Only seek on predominantly horizontal drags
+                                guard abs(value.translation.width) > abs(value.translation.height) else { return }
                                 let progress = max(0, min(1, value.location.x / max(1, width)))
                                 audioService.seek(to: progress)
                             }
@@ -561,36 +567,49 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        let metrics: [(title: String, value: String, icon: String, color: Color)] = [
-            ("Speaking Pace", "\(Int(analysis.wordsPerMinute)) WPM", "speedometer", .cyan),
-            ("Total Words", "\(analysis.totalWords)", "text.word.spacing", .white),
-            ("Filler Words", "\(analysis.totalFillerCount)", "exclamationmark.bubble", analysis.totalFillerCount > 5 ? .orange : .green),
-            ("Pauses", "\(analysis.pauseCount)", "pause.circle", .green)
-        ]
+        GlassCard(padding: 14) {
+            HStack(spacing: 0) {
+                PromptStatItem(
+                    icon: "speedometer",
+                    value: "\(Int(analysis.wordsPerMinute))",
+                    label: "WPM",
+                    color: .cyan
+                )
 
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            ForEach(metrics.indices, id: \.self) { index in
-                let metric = metrics[index]
-                GlassCard(padding: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(systemName: metric.icon)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(metric.color)
-                            Spacer()
-                        }
+                statsGridDivider
 
-                        Text(metric.value)
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
+                PromptStatItem(
+                    icon: "text.word.spacing",
+                    value: "\(analysis.totalWords)",
+                    label: "Words",
+                    color: .white
+                )
 
-                        Text(metric.title)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                statsGridDivider
+
+                PromptStatItem(
+                    icon: "exclamationmark.bubble",
+                    value: "\(analysis.totalFillerCount)",
+                    label: "Fillers",
+                    color: analysis.totalFillerCount > 5 ? .orange : .green
+                )
+
+                statsGridDivider
+
+                PromptStatItem(
+                    icon: "pause.circle",
+                    value: "\(analysis.pauseCount)",
+                    label: "Pauses",
+                    color: .green
+                )
             }
         }
+    }
+
+    private var statsGridDivider: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(width: 0.5, height: 40)
     }
 
     // MARK: - WPM Chart Section
@@ -1019,25 +1038,22 @@ struct RecordingDetailView: View {
                         generatedHeights = existingHeights
                     }
 
-                    let mediaDuration: TimeInterval?
-                    if let mediaURL {
-                        let asset = AVURLAsset(url: mediaURL)
-                        let seconds = CMTimeGetSeconds(asset.duration)
-                        mediaDuration = seconds.isFinite && seconds > 0 ? seconds : nil
-                    } else {
-                        mediaDuration = nil
-                    }
-
-                    continuation.resume(returning: (generatedHeights, mediaDuration))
+                    continuation.resume(returning: generatedHeights)
                 }
             }
 
             guard !Task.isCancelled else { return }
             if waveformHeights.isEmpty {
-                waveformHeights = prepared.0
+                waveformHeights = prepared
             }
-            if let mediaDuration = prepared.1, audioService.playbackDuration <= 0 {
-                audioService.playbackDuration = mediaDuration
+            if let mediaURL, audioService.playbackDuration <= 0 {
+                let asset = AVURLAsset(url: mediaURL)
+                if let duration = try? await asset.load(.duration) {
+                    let seconds = CMTimeGetSeconds(duration)
+                    if seconds.isFinite && seconds > 0 {
+                        audioService.playbackDuration = seconds
+                    }
+                }
             }
             updateActivePlaybackWord()
         }
@@ -1199,7 +1215,7 @@ struct RecordingDetailView: View {
             let resultSnapshot = result
             let actualDuration = recording.actualDuration
             let audioLevelSamples = recording.audioLevelSamples ?? []
-            let prompt = recording.prompt
+            let promptText = recording.prompt?.text
             let targetWPM = settings?.targetWPM ?? 150
             let trackFillerWords = settings?.trackFillerWords ?? true
             let trackPauses = settings?.trackPauses ?? true
@@ -1215,7 +1231,7 @@ struct RecordingDetailView: View {
                         vocabWords: vocabWordsSnapshot,
                         audioLevelSamples: audioLevelSamples,
                         audioURL: audioURL,
-                        prompt: prompt,
+                        promptText: promptText,
                         targetWPM: targetWPM,
                         trackFillerWords: trackFillerWords,
                         trackPauses: trackPauses,
@@ -1384,58 +1400,94 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func playbackDrawer(_ recording: Recording) -> some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Capsule()
-                    .fill(Color.white.opacity(0.35))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 8)
+            if playbackDrawerState != .hidden {
+                VStack(spacing: 8) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.35))
+                        .frame(width: 40, height: 4)
+                        .padding(.top, 8)
 
-                if playbackDrawerState == .expanded {
-                    playbackControlSection(recording)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    collapsedPlaybackBar(recording)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-                        .transition(.opacity)
+                    if playbackDrawerState == .expanded {
+                        playbackControlSection(recording)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 12)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if playbackDrawerState == .collapsed {
+                        collapsedPlaybackBar(recording)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 10)
+                            .transition(.opacity)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .background(.ultraThinMaterial)
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(.white.opacity(0.12))
-                    .frame(height: 0.5)
+                .frame(maxWidth: .infinity)
+                .background(
+                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea(edges: .bottom)
+                )
+                .overlay(alignment: .top) {
+                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                        .stroke(.white.opacity(0.12), lineWidth: 0.5)
+                        .ignoresSafeArea(edges: .bottom)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                // Hidden: show a small pull-up tab to restore the drawer
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        playbackDrawerState = .collapsed
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.up")
+                            .font(.caption2.weight(.bold))
+                        Image(systemName: "waveform")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .background(Color.clear.ignoresSafeArea(edges: .bottom))
+        .ignoresSafeArea(edges: .bottom)
+        .contentShape(Rectangle())
         .animation(.spring(response: 0.30, dampingFraction: 0.86), value: playbackDrawerState)
         .offset(y: playbackDrawerDragOffset)
-        .gesture(
-            DragGesture(minimumDistance: 8)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
                 .onChanged { value in
                     let translation = value.translation.height
-                    if playbackDrawerState == .expanded {
+                    // Only handle predominantly vertical drags
+                    guard abs(translation) > abs(value.translation.width) else { return }
+                    if playbackDrawerState == .expanded || playbackDrawerState == .collapsed {
                         playbackDrawerDragOffset = max(0, translation)
-                    } else {
+                    }
+                    if playbackDrawerState == .collapsed && translation < 0 {
                         playbackDrawerDragOffset = min(0, translation)
                     }
                 }
                 .onEnded { value in
                     let translation = value.translation.height
-                    defer {
-                        withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
-                            playbackDrawerDragOffset = 0
-                        }
-                    }
+                    let velocity = value.predictedEndTranslation.height
 
                     withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
-                        if playbackDrawerState == .expanded && translation > 65 {
+                        playbackDrawerDragOffset = 0
+
+                        if translation > 80 || velocity > 250 {
+                            // Swipe down — hide the drawer
+                            audioService.pause()
+                            playbackDrawerState = .hidden
+                        } else if playbackDrawerState == .expanded && translation > 40 {
+                            // Moderate swipe down from expanded — collapse
                             playbackDrawerState = .collapsed
                         } else if playbackDrawerState == .collapsed && translation < -35 {
+                            // Swipe up from collapsed — expand
                             playbackDrawerState = .expanded
                         }
                     }
@@ -1471,6 +1523,7 @@ struct RecordingDetailView: View {
             }
             .buttonStyle(.plain)
         }
+        .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
                 playbackDrawerState = .expanded
@@ -1668,6 +1721,7 @@ enum DetailTab: String, CaseIterable {
 private enum PlaybackDrawerState {
     case expanded
     case collapsed
+    case hidden
 }
 
 // MARK: - Session Feedback Sheet

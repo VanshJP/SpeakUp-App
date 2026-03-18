@@ -174,7 +174,7 @@ class SpeechService {
         vocabWords: [String] = [],
         audioLevelSamples: [Float] = [],
         audioURL: URL? = nil,
-        prompt: Prompt? = nil,
+        promptText: String? = nil,
         targetWPM: Int = 150,
         trackFillerWords: Bool = true,
         trackPauses: Bool = true,
@@ -295,8 +295,8 @@ class SpeechService {
 
         // Prompt relevance / coherence
         let relevanceScore: Int?
-        if let prompt, totalWords >= 10 {
-            relevanceScore = PromptRelevanceService.score(promptText: prompt.text, transcript: transcription.text)
+        if let promptText, totalWords >= 10 {
+            relevanceScore = PromptRelevanceService.score(promptText: promptText, transcript: transcription.text)
         } else if totalWords >= 20 {
             relevanceScore = PromptRelevanceService.coherenceScore(transcript: transcription.text)
         } else {
