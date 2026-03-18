@@ -77,8 +77,8 @@ struct CreateEventView: View {
                     } label: {
                         GlassCard(
                             tint: selectedType == type ? AppColors.glassTintPrimary : nil,
-                            accentBorder: selectedType == type ? AppColors.primary : nil,
-                            padding: 12
+                            padding: 12,
+                            accentBorder: selectedType == type ? AppColors.primary : nil
                         ) {
                             VStack(spacing: 8) {
                                 Image(systemName: type.icon)
@@ -346,3 +346,4 @@ struct CreateEventView: View {
         return value
     }
 }
+

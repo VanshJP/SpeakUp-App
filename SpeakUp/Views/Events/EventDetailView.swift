@@ -400,64 +400,73 @@ struct EventDetailView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("\(completedPrepCount) / \(viewModel.prepTasks.count) completed")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(Int(prepCompletionRatio * 100))%")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(AppColors.scoreColor(for: Int(prepCompletionRatio * 100)))
-                        }
-
-                        ForEach(visibleFocusTasks) { task in
-                            HStack(spacing: 10) {
-                                Button {
-                                    Haptics.success()
-                                    viewModel.completeTask(task)
-                                } label: {
-                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .font(.body)
-                                        .foregroundStyle(task.isCompleted ? AppColors.success : .secondary)
-                                }
-                                .buttonStyle(.plain)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(task.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .strikethrough(task.isCompleted)
-                                        .foregroundStyle(task.isCompleted ? .secondary : .white)
-                                    Text(task.taskDescription)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                }
-
-                                Spacer()
-
-                                Text(task.scheduledDate.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if viewModel.prepTasks.count > 4 {
-                            Button {
-                                Haptics.light()
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showFullPrepTimeline.toggle()
-                                }
-                            } label: {
-                                Text(showFullPrepTimeline ? "Show less" : "Show full timeline")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(AppColors.primary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    todayFocusContent
                 }
             }
+        }
+    }
+
+    private var todayFocusContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(completedPrepCount) / \(viewModel.prepTasks.count) completed")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(prepCompletionRatio * 100))%")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(AppColors.scoreColor(for: Int(prepCompletionRatio * 100)))
+            }
+
+            ForEach(visibleFocusTasks) { task in
+                focusTaskRow(task)
+            }
+
+            if viewModel.prepTasks.count > 4 {
+                Button {
+                    Haptics.light()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showFullPrepTimeline.toggle()
+                    }
+                } label: {
+                    Text(showFullPrepTimeline ? "Show less" : "Show full timeline")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func focusTaskRow(_ task: EventPrepTask) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                Haptics.success()
+                viewModel.completeTask(task)
+            } label: {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.body)
+                    .foregroundStyle(task.isCompleted ? AppColors.success : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(.subheadline.weight(.semibold))
+                    .strikethrough(task.isCompleted)
+                    .foregroundStyle(task.isCompleted ? Color.secondary : Color.white)
+                Text(task.taskDescription)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Text(task.scheduledDate.formatted(date: .abbreviated, time: .omitted))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -486,7 +495,7 @@ struct EventDetailView: View {
                         Haptics.medium()
                         launchTool(tool.action)
                     } label: {
-                        GlassCard(padding: 12, tint: tool.color.opacity(0.08)) {
+                        GlassCard(tint: tool.color.opacity(0.08), padding: 12) {
                             VStack(alignment: .leading, spacing: 8) {
                                 Image(systemName: tool.icon)
                                     .font(.headline)

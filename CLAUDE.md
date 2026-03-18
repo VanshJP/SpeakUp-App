@@ -8,11 +8,9 @@ SpeakUp is a native iOS speech practice app built with SwiftUI and SwiftData. It
 
 ## Build & Run
 ```bash
-# Build for simulator
+# Build for simulator (use generic destination — avoids device-not-found errors)
 xcodebuild -project SpeakUp.xcodeproj -scheme SpeakUp \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -configuration Debug build 2>&1 | xcpretty || xcodebuild -project SpeakUp.xcodeproj -scheme SpeakUp \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'generic/platform=iOS Simulator' \
   -configuration Debug build
 
 # Boot simulator if needed
@@ -25,6 +23,10 @@ xcrun simctl launch booted com.vansh.SpeakUpMore
 # Terminate
 xcrun simctl terminate booted com.vansh.SpeakUpMore
 ```
+
+## Build Validation Strategy
+
+Xcode builds are slow. **Validate once after all changes are complete**, not after each individual edit. Batch all fixes together, then run a single build to confirm. Only iterate if the build reveals new errors.
 
 ## UI Testing Loop (use this whenever verifying visual changes)
 
