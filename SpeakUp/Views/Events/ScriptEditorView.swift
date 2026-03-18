@@ -16,24 +16,24 @@ struct ScriptEditorView: View {
                 AppBackground(style: .subtle)
 
                 VStack(spacing: 0) {
-                    // Stats bar
-                    HStack {
-                        Label("\(wordCount) words", systemImage: "text.word.spacing")
-                        Spacer()
-                        Label("\(sectionCount) section\(sectionCount == 1 ? "" : "s")", systemImage: "doc.text")
-                        Spacer()
-                        if event.currentVersionNumber > 0 {
-                            Button {
-                                showingVersionHistory = true
-                            } label: {
-                                Label("v\(event.currentVersionNumber)", systemImage: "clock.arrow.circlepath")
+                    FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent], cornerRadius: 0, padding: 14) {
+                        HStack(spacing: 12) {
+                            Label("\(wordCount) words", systemImage: "text.word.spacing")
+                            Label("\(sectionCount) section\(sectionCount == 1 ? "" : "s")", systemImage: "doc.text")
+                            Spacer()
+                            if event.currentVersionNumber > 0 {
+                                Button {
+                                    showingVersionHistory = true
+                                } label: {
+                                    Label("v\(event.currentVersionNumber)", systemImage: "clock.arrow.circlepath")
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(AppColors.primary)
                             }
                         }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
 
                     // Editor
                     GlassCard(tint: AppColors.glassTintPrimary.opacity(0.6), padding: 14) {
@@ -85,25 +85,26 @@ struct ScriptEditorView: View {
 
                     // Bottom bar
                     VStack(spacing: 12) {
-                        if hasChanges {
-                            GlassCard(padding: 10) {
-                                TextField("What changed? (optional)", text: $changeNote)
-                                    .font(.caption)
-                                    .textFieldStyle(.plain)
-                            }
-                            .padding(.horizontal)
-
-                            GlassButton(title: event.currentVersionNumber == 0 ? "Save Script" : "Save as Version \(nextVersion)", icon: "square.and.arrow.down", style: .primary) {
-                                Haptics.success()
-                                viewModel.saveNewScriptVersion(
-                                    for: event,
-                                    scriptText: scriptText,
-                                    changeNote: changeNote.isEmpty ? nil : changeNote
-                                )
-                                dismiss()
-                            }
-                            .padding(.horizontal, 20)
+                        GlassCard(padding: 10) {
+                            TextField("What changed? (optional)", text: $changeNote)
+                                .font(.caption)
+                                .textFieldStyle(.plain)
                         }
+                        .padding(.horizontal)
+                        .opacity(hasChanges ? 1 : 0.4)
+
+                        GlassButton(title: event.currentVersionNumber == 0 ? "Save Script" : "Save as Version \(nextVersion)", icon: "square.and.arrow.down", style: .primary) {
+                            Haptics.success()
+                            viewModel.saveNewScriptVersion(
+                                for: event,
+                                scriptText: scriptText,
+                                changeNote: changeNote.isEmpty ? nil : changeNote
+                            )
+                            dismiss()
+                        }
+                        .padding(.horizontal, 20)
+                        .disabled(!hasChanges)
+                        .opacity(hasChanges ? 1 : 0.5)
                     }
                     .padding(.vertical, 12)
                 }

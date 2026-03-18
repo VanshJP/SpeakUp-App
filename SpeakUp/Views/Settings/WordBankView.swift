@@ -5,6 +5,7 @@ struct WordBankView: View {
     @Bindable var viewModel: SettingsViewModel
     @State private var selectedTab = 0
     @State private var isWordInputFocused = false
+    @State private var isDictationInputFocused = false
     @State private var isFillerInputFocused = false
     @State private var newFillerIsContextDependent = false
 
@@ -16,8 +17,9 @@ struct WordBankView: View {
             VStack(spacing: 0) {
                 // Segmented picker
                 Picker("", selection: $selectedTab) {
-                    Text("Word Bank").tag(0)
-                    Text("Filler Words").tag(1)
+                    Text("Vocab").tag(0)
+                    Text("Dictation").tag(1)
+                    Text("Filler Words").tag(2)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -28,6 +30,8 @@ struct WordBankView: View {
                     VStack(spacing: 16) {
                         if selectedTab == 0 {
                             wordBankTab
+                        } else if selectedTab == 1 {
+                            dictationDictionaryTab
                         } else {
                             fillerWordsTab
                         }
@@ -52,7 +56,7 @@ struct WordBankView: View {
                 Image(systemName: "character.book.closed.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
-                Text("Words and names here are highlighted in transcripts and also bias Whisper transcription.")
+                Text("Tracked vocab is highlighted and counted in transcript analytics.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -67,6 +71,115 @@ struct WordBankView: View {
 
             // Word chips
             vocabWordsSection
+        }
+    }
+
+    // MARK: - Dictation Dictionary Tab
+
+    private var dictationDictionaryTab: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "waveform.and.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(AppColors.primary)
+                Text("Words and names here only bias Whisper transcription. They do not count as vocab usage.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
+            dictationInputField
+
+            if let error = viewModel.dictationWordError {
+                errorLabel(error)
+            }
+
+            dictationWordsSection
+        }
+    }
+
+    private var dictationInputField: some View {
+        GlassCard {
+            HStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.primary)
+
+                PersistentTextField(
+                    hint: "Add a name or phrase...",
+                    text: $viewModel.newDictationBiasWord,
+                    isFocused: $isDictationInputFocused,
+                    onSubmit: { viewModel.addDictationBiasWord() }
+                )
+                .frame(height: 22)
+
+                if !viewModel.newDictationBiasWord.isEmpty {
+                    Button {
+                        viewModel.newDictationBiasWord = ""
+                        viewModel.dictationWordError = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background {
+                Capsule()
+                    .fill(.white.opacity(0.06))
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var dictationWordsSection: some View {
+        if viewModel.dictationBiasWords.isEmpty {
+            GlassCard {
+                VStack(spacing: 12) {
+                    Image(systemName: "waveform.and.magnifyingglass")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.white.opacity(0.15))
+
+                    Text("No dictation terms yet")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.3))
+
+                    Text("Add names and terms Whisper should prioritize")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.2))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            }
+        } else {
+            GlassCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("\(viewModel.dictationBiasWords.count) dictation terms")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+
+                    FlowLayout(spacing: 6) {
+                        ForEach(viewModel.dictationBiasWords, id: \.self) { word in
+                            chipView(word, tint: AppColors.primary) {
+                                withAnimation(.spring(duration: 0.25)) {
+                                    viewModel.removeDictationBiasWord(word)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 

@@ -119,10 +119,13 @@ struct SettingsView: View {
         if viewModel.vocabWords.count > 0 {
             parts.append("\(viewModel.vocabWords.count) vocab")
         }
+        if viewModel.dictationBiasWords.count > 0 {
+            parts.append("\(viewModel.dictationBiasWords.count) dictation")
+        }
         if viewModel.hasFillerCustomizations {
             parts.append("fillers customized")
         }
-        return parts.isEmpty ? "Vocab & filler words" : parts.joined(separator: ", ")
+        return parts.isEmpty ? "Vocab, dictation, and filler words" : parts.joined(separator: ", ")
     }
 
     private var aiModelSubtitle: String {

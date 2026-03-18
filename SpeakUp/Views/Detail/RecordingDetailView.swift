@@ -891,18 +891,18 @@ struct RecordingDetailView: View {
                 }
             } else if let insight = llmInsight {
                 GlassCard(tint: .purple.opacity(0.05)) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let markdown = formattedAIInsight(insight) {
-                            Text(markdown)
+                    let blocks = formattedAIInsightBlocks(insight)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if blocks.isEmpty {
+                            Text(insight)
                                 .font(.subheadline)
                                 .foregroundStyle(.primary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
-                            Text(insight)
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                                aiInsightBlockView(block)
+                            }
                         }
                     }
                 }
@@ -1028,16 +1028,77 @@ struct RecordingDetailView: View {
         return DefaultFeedbackQuestions.questions + custom
     }
 
-    private func formattedAIInsight(_ insight: String) -> AttributedString? {
+    private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {
         let trimmed = insight.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty else { return [] }
+
+        let lines = trimmed
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        var blocks: [AIInsightBlock] = []
+        for line in lines where !line.isEmpty {
+            if let headingRange = line.range(of: #"^#{1,3}\s+"#, options: .regularExpression) {
+                let headingText = String(line[headingRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !headingText.isEmpty else { continue }
+                blocks.append(.heading(parseInlineMarkdown(headingText)))
+                continue
+            }
+
+            if let bulletPrefixRange = line.range(of: #"^(?:[-*•]|\d+[.)])\s+"#, options: .regularExpression) {
+                let bulletText = String(line[bulletPrefixRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !bulletText.isEmpty else { continue }
+                blocks.append(.bullet(parseInlineMarkdown(bulletText)))
+                continue
+            }
+
+            blocks.append(.paragraph(parseInlineMarkdown(line)))
+        }
+
+        return blocks
+    }
+
+    private func parseInlineMarkdown(_ text: String) -> AttributedString {
         do {
             return try AttributedString(
-                markdown: trimmed,
-                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+                markdown: text,
+                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnly)
             )
         } catch {
-            return nil
+            return AttributedString(text)
+        }
+    }
+
+    @ViewBuilder
+    private func aiInsightBlockView(_ block: AIInsightBlock) -> some View {
+        switch block {
+        case .heading(let heading):
+            Text(heading)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+        case .paragraph(let paragraph):
+            Text(paragraph)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+        case .bullet(let bullet):
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(AppColors.primary)
+                    .padding(.top, 6)
+
+                Text(bullet)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -1221,7 +1282,7 @@ struct RecordingDetailView: View {
             let settingsDescriptor = FetchDescriptor<UserSettings>()
             let settings = (try? modelContext.fetch(settingsDescriptor))?.first
             let vocabWords = settings?.vocabWords ?? []
-            let preferredTerms = vocabWords
+            let preferredTerms = settings?.dictationBiasWords ?? []
 
             // Build filler config from user settings
             let fillerConfig = FillerWordConfig(
@@ -1753,6 +1814,12 @@ private enum PlaybackDrawerState {
     case expanded
     case collapsed
     case hidden
+}
+
+private enum AIInsightBlock {
+    case heading(AttributedString)
+    case paragraph(AttributedString)
+    case bullet(AttributedString)
 }
 
 // MARK: - Session Feedback Sheet

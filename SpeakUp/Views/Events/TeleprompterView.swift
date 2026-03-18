@@ -2,25 +2,22 @@ import MediaPlayer
 import SwiftUI
 
 private enum TeleprompterWorkflowMode: String, CaseIterable, Identifiable {
-    case liveRehearsal
-    case prerecordAutoScroll
+    case preRecord
     case externalDisplay
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .liveRehearsal: return "Live"
-        case .prerecordAutoScroll: return "Pre-Record"
-        case .externalDisplay: return "External"
+        case .preRecord: return "Pre-Record"
+        case .externalDisplay: return "External Display"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .liveRehearsal: return "Manual + auto-scroll rehearsal"
-        case .prerecordAutoScroll: return "Auto-scroll, then jump into recording"
-        case .externalDisplay: return "Mirror to another display for recording"
+        case .preRecord: return "Auto-scroll script, then start recording"
+        case .externalDisplay: return "Mirror script to another display while recording"
         }
     }
 }
@@ -43,7 +40,7 @@ struct TeleprompterView: View {
     @State private var lastTime: Date?
     @State private var manualDragOffset: CGFloat = 0
     @State private var nowPlaying = TeleprompterNowPlayingController.shared
-    @State private var workflowMode: TeleprompterWorkflowMode = .prerecordAutoScroll
+    @State private var workflowMode: TeleprompterWorkflowMode = .preRecord
     @State private var prerecordCountdown = 0
 
     private let basePixelsPerSecond: CGFloat = 30
@@ -244,7 +241,7 @@ struct TeleprompterView: View {
 
                 Spacer()
 
-                Text("Teleprompter • \(workflowMode.title)")
+                Text("Teleprompter")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white.opacity(0.7))
 
@@ -263,6 +260,11 @@ struct TeleprompterView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
 
+            Text(workflowMode.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 24)
+
             Spacer()
 
             // Bottom controls
@@ -272,7 +274,7 @@ struct TeleprompterView: View {
                 } else {
                     // Play/Pause button
                     Button {
-                        if workflowMode == .prerecordAutoScroll && !isScrolling {
+                        if workflowMode == .preRecord && !isScrolling {
                             startPrerecordCountdown()
                         } else {
                             toggleScrolling()
@@ -355,7 +357,7 @@ struct TeleprompterView: View {
                         .foregroundStyle(AppColors.primary)
                 }
 
-                if workflowMode != .liveRehearsal {
+                if onStartRecording != nil {
                     GlassButton(title: "Start Recording", icon: "mic.fill", style: .primary, fullWidth: true) {
                         Haptics.heavy()
                         onStartRecording?()

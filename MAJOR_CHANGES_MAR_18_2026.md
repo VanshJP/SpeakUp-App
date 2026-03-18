@@ -87,3 +87,53 @@ This document summarizes the major product/engineering updates implemented for t
   - Warm-up exercise completion (`WarmUpViewModel`)
   - Read Aloud completion (`ReadAloudViewModel`)
 
+## 10) Follow-up Overhaul: Dictation vs Vocab + Event UX + AI Insight Formatting
+
+### Dictation Dictionary separated from Vocab Tracking
+
+- Added a dedicated `dictationBiasWords` field to `UserSettings` and matching helper methods.
+- Updated `SettingsViewModel` to maintain separate local state + validation flows for:
+  - `vocabWords` (analytics/highlighting)
+  - `dictationBiasWords` (Whisper bias only)
+- Updated `WordBankView` to include three explicit tabs:
+  - **Vocab**
+  - **Dictation**
+  - **Filler Words**
+- Updated transcription path in `RecordingDetailView`:
+  - `preferredTerms` now comes from `settings.dictationBiasWords`
+  - Vocab tracking remains based on `settings.vocabWords`
+
+### Event pages head-to-toe simplification pass
+
+- Reworked `EventListView` into a simpler flow:
+  - Added top summary metrics card
+  - Added segment filter (Upcoming / Past / All)
+  - Moved archive visibility into a lightweight inline control
+  - Removed high-friction sort-chip complexity
+- Rebuilt `CreateEventView` from a 3-step wizard into a single, scannable flow:
+  - Session type
+  - Essentials
+  - Optional context
+  - Script
+  - Create actions
+- Refocused `EventDetailView` on fewer high-value sections:
+  - Quick actions
+  - Editable plan details
+  - “Today Focus” task list with optional full timeline expansion
+  - Compact recommended tools grid
+  - Script-at-a-glance
+- Simplified `TeleprompterView` workflow modes to:
+  - **Pre-Record**
+  - **External Display**
+  - with clearer mode subtitles and recording handoff placement
+- Updated `ScriptEditorView` to a cleaner top-summary + save-first layout.
+
+### AI Insights markdown rendering cleanup
+
+- Replaced plain markdown-to-`Text` fallback with block-based rendering in `RecordingDetailView`.
+- Added line classification for:
+  - headings (`#`)
+  - bullets (`-`, `*`, `•`, numbered items)
+  - paragraphs
+- Bullets now render with consistent visual bullet rows and inline markdown parsing per line.
+

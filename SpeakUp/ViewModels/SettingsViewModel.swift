@@ -82,10 +82,14 @@ class SettingsViewModel {
     var vocabWordError: String? = nil
     var showingAddVocabWord: Bool = false
     private var vocabErrorDismissID = 0
+    var dictationBiasWords: [String] = []
+    var newDictationBiasWord: String = ""
+    var dictationWordError: String? = nil
+    private var dictationErrorDismissID = 0
 
     /// Terms used to bias Whisper toward names/domain words.
     var whisperDictionaryWords: [String] {
-        vocabWords
+        dictationBiasWords
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
@@ -214,6 +218,7 @@ class SettingsViewModel {
 
         // Word Bank
         vocabWords = settings.vocabWords
+        dictationBiasWords = settings.dictationBiasWords
 
         // Filler Words
         customFillerWords = settings.customFillerWords
@@ -275,6 +280,7 @@ class SettingsViewModel {
 
         // Word Bank
         settings.vocabWords = vocabWords
+        settings.dictationBiasWords = dictationBiasWords
 
         // Filler Words
         settings.customFillerWords = customFillerWords
@@ -389,6 +395,51 @@ class SettingsViewModel {
         Task { await saveSettings() }
     }
 
+    @MainActor
+    func addDictationBiasWord() {
+        dictationWordError = nil
+        let trimmed = newDictationBiasWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            newDictationBiasWord = ""
+            return
+        }
+        guard trimmed.count >= 2 else {
+            showDictationError("Use at least 2 characters")
+            return
+        }
+        guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            showDictationError("Already in your dictation dictionary")
+            return
+        }
+        guard !isFillerWord(trimmed) else {
+            showDictationError("That's a filler word — avoid biasing it")
+            return
+        }
+        dictationBiasWords.append(trimmed)
+        newDictationBiasWord = ""
+        Haptics.success()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    private func showDictationError(_ message: String) {
+        Haptics.warning()
+        dictationWordError = message
+        dictationErrorDismissID += 1
+        let currentID = dictationErrorDismissID
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard currentID == dictationErrorDismissID else { return }
+            dictationWordError = nil
+        }
+    }
+
+    @MainActor
+    func removeDictationBiasWord(_ word: String) {
+        dictationBiasWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
+        Task { await saveSettings() }
+    }
+
     // MARK: - Filler Words
 
     @MainActor
@@ -414,8 +465,12 @@ class SettingsViewModel {
             showFillerError("Already in your custom fillers")
             return
         }
-        guard !vocabWords.contains(trimmed) else {
+        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
             showFillerError("This word is in your Word Bank")
+            return
+        }
+        guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            showFillerError("This word is in your Dictation Dictionary")
             return
         }
         if isContextDependent {
@@ -524,6 +579,7 @@ class SettingsViewModel {
         settings.countdownStyle = 0
         settings.timerEndBehavior = 0
         settings.vocabWords = []
+        settings.dictationBiasWords = []
         settings.customFillerWords = []
         settings.customContextFillerWords = []
         settings.removedDefaultFillers = []
@@ -608,11 +664,13 @@ class SettingsViewModel {
             // Clear word bank and filler customizations from settings
             if let settings {
                 settings.vocabWords = []
+                settings.dictationBiasWords = []
                 settings.customFillerWords = []
                 settings.customContextFillerWords = []
                 settings.removedDefaultFillers = []
             }
             vocabWords = []
+            dictationBiasWords = []
             customFillerWords = []
             customContextFillerWords = []
             removedDefaultFillers = []

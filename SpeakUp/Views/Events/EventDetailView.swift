@@ -24,62 +24,27 @@ struct EventDetailView: View {
     @State private var draftEventDate = Date()
     @State private var draftExpectedDurationMinutes = 5
     @State private var draftDailyPracticeMinutes = 30
+    @State private var showFullPrepTimeline = false
 
     var body: some View {
         ZStack {
             AppBackground()
 
             ScrollView {
-                VStack(spacing: 20) {
-                    // Countdown header
+                VStack(spacing: 16) {
                     countdownHeader
-
-                    // Plan details
-                    logisticsEditorSection
-
-                    // Coaching tip
-                    coachingTipCard
-
-                    // Readiness score
-                    if event.totalPracticeCount > 0 {
-                        readinessCard
-                    }
-
-                    // Quick actions
                     quickActions
-
-                    // Recommended tools
-                    recommendedToolsSection
-
-                    // Script section
-                    if event.scriptText != nil {
-                        scriptSection
-                    }
-
-                    // Script revision progress
-                    if !viewModel.revisionMilestones.isEmpty {
-                        revisionProgressSection
-                    }
-
-                    // Prep timeline
-                    if !viewModel.timelineDays.isEmpty {
-                        prepTasksSection
-                    }
-
+                    logisticsEditorSection
+                    todayFocusSection
+                    recommendedToolsCompactSection
+                    if event.scriptText != nil { scriptAtAGlanceSection }
                     notificationPreviewSection
-
-                    // Linked recordings
-                    if !viewModel.linkedRecordings.isEmpty {
-                        recordingsSection
-                    }
-
-                    // Event info
+                    if !viewModel.linkedRecordings.isEmpty { recordingsSection }
                     eventInfoSection
-
-                    // Danger zone
                     dangerZone
                 }
-                .padding()
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
         }
         .navigationTitle(event.title)
@@ -197,7 +162,7 @@ struct EventDetailView: View {
     // MARK: - Countdown Header
 
     private var countdownHeader: some View {
-        FeaturedGlassCard(gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]) {
+        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
             VStack(spacing: 12) {
                 HStack {
                     Image(systemName: event.resolvedSessionType.icon)
@@ -231,6 +196,10 @@ struct EventDetailView: View {
                     Label("\(event.totalPracticeCount) practices", systemImage: "mic.fill")
                     if let last = event.lastPracticeDate {
                         Label("Last: \(last.formatted(date: .abbreviated, time: .omitted))", systemImage: "clock")
+                    }
+                    if event.totalPracticeCount > 0 {
+                        Label("Readiness \(event.readinessScore)%", systemImage: "chart.line.uptrend.xyaxis")
+                            .foregroundStyle(AppColors.scoreColor(for: event.readinessScore))
                     }
                 }
                 .font(.caption2)
@@ -413,6 +382,178 @@ struct EventDetailView: View {
                 .background {
                     Capsule()
                         .fill(AppColors.primary.opacity(0.15))
+                }
+            }
+        }
+    }
+
+    // MARK: - Today Focus
+
+    private var todayFocusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Today Focus", icon: "checklist")
+
+            GlassCard(tint: AppColors.glassTintPrimary.opacity(0.55)) {
+                if viewModel.prepTasks.isEmpty {
+                    Text("No prep tasks yet. Save plan details to regenerate your timeline.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("\(completedPrepCount) / \(viewModel.prepTasks.count) completed")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(Int(prepCompletionRatio * 100))%")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(AppColors.scoreColor(for: Int(prepCompletionRatio * 100)))
+                        }
+
+                        ForEach(visibleFocusTasks) { task in
+                            HStack(spacing: 10) {
+                                Button {
+                                    Haptics.success()
+                                    viewModel.completeTask(task)
+                                } label: {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.body)
+                                        .foregroundStyle(task.isCompleted ? AppColors.success : .secondary)
+                                }
+                                .buttonStyle(.plain)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(task.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .strikethrough(task.isCompleted)
+                                        .foregroundStyle(task.isCompleted ? .secondary : .white)
+                                    Text(task.taskDescription)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+
+                                Spacer()
+
+                                Text(task.scheduledDate.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if viewModel.prepTasks.count > 4 {
+                            Button {
+                                Haptics.light()
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showFullPrepTimeline.toggle()
+                                }
+                            } label: {
+                                Text(showFullPrepTimeline ? "Show less" : "Show full timeline")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AppColors.primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var visibleFocusTasks: [EventPrepTask] {
+        let sorted = viewModel.prepTasks.sorted { lhs, rhs in
+            if lhs.isCompleted != rhs.isCompleted {
+                return !lhs.isCompleted && rhs.isCompleted
+            }
+            return lhs.scheduledDate < rhs.scheduledDate
+        }
+        if showFullPrepTimeline {
+            return sorted
+        }
+        return Array(sorted.prefix(4))
+    }
+
+    // MARK: - Recommended Tools
+
+    private var recommendedToolsCompactSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Recommended Tools", icon: "star.fill")
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(event.resolvedSessionType.recommendedTools.prefix(4)) { tool in
+                    Button {
+                        Haptics.medium()
+                        launchTool(tool.action)
+                    } label: {
+                        GlassCard(padding: 12, tint: tool.color.opacity(0.08)) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(systemName: tool.icon)
+                                    .font(.headline)
+                                    .foregroundStyle(tool.color)
+                                Text(tool.name)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text(tool.tip)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: - Script At A Glance
+
+    private var scriptAtAGlanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Script", systemImage: "doc.text")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    showingScriptEditor = true
+                } label: {
+                    Text("Edit")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let selectedVersion = selectedPracticeVersion {
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Version \(selectedVersion.versionNumber)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                            Spacer()
+                            Text("\(selectedVersion.wordCount) words")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let firstSection = selectedVersion.scriptSections.first {
+                            Text(firstSection.text)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(4)
+                        }
+                    }
+                }
+            } else if let script = event.scriptText {
+                GlassCard {
+                    Text(script)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -942,15 +1083,13 @@ struct EventDetailView: View {
     private var eventInfoSection: some View {
         GlassCard {
             VStack(spacing: 12) {
-                GlassInfoRow(label: "Duration", value: "\(event.expectedDurationMinutes) min", icon: "clock")
-                Divider()
                 GlassInfoRow(
-                    label: "Event Date",
-                    value: event.eventDate.formatted(date: .abbreviated, time: .shortened),
-                    icon: "calendar"
+                    label: "Session Type",
+                    value: event.resolvedSessionType.rawValue,
+                    icon: event.resolvedSessionType.icon
                 )
 
-                if let audience = event.audienceType {
+                if let audience = event.audienceType, !audience.isEmpty {
                     Divider()
                     GlassInfoRow(label: "Audience", value: audience, icon: "person.2")
                 }
@@ -969,6 +1108,12 @@ struct EventDetailView: View {
                     GlassInfoRow(label: event.resolvedSessionType.venueLabel, value: venue, icon: "mappin")
                 }
 
+                Divider()
+                GlassInfoRow(
+                    label: "Target daily practice",
+                    value: "\(event.maxDailyPracticeMinutes) min/day",
+                    icon: "timer"
+                )
                 Divider()
                 GlassInfoRow(label: "Created", value: event.createdDate.formatted(date: .abbreviated, time: .omitted), icon: "calendar.badge.plus")
             }

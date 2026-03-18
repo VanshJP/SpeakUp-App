@@ -8,79 +8,74 @@ struct EventListView: View {
     @State private var showingCreateEvent = false
     @State private var selectedEvent: SpeakingEvent?
     @State private var searchText = ""
-    @State private var sortOption: EventSortOption = .soonest
+    @State private var selectedSection: EventListSection = .upcoming
     var onStartPractice: ((SpeakingEvent, UUID?) -> Void)?
 
     private var upcomingEvents: [SpeakingEvent] {
-        let filtered = viewModel.upcomingEvents.filter {
+        viewModel.upcomingEvents
+            .filter {
             searchText.isEmpty || $0.title.localizedStandardContains(searchText)
         }
-        return sortOption.sorted(filtered)
+            .sorted { $0.eventDate < $1.eventDate }
     }
 
     private var pastEvents: [SpeakingEvent] {
-        viewModel.pastEvents.filter {
+        viewModel.pastEvents
+            .filter {
             searchText.isEmpty || $0.title.localizedStandardContains(searchText)
+        }
+            .sorted { $0.eventDate > $1.eventDate }
+    }
+
+    private var visibleEvents: [SpeakingEvent] {
+        switch selectedSection {
+        case .upcoming:
+            return upcomingEvents
+        case .past:
+            return pastEvents
+        case .all:
+            return upcomingEvents + pastEvents
         }
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                AppBackground()
+                AppBackground(style: .primary)
 
                 ScrollView {
-                    VStack(spacing: 20) {
-                        eventOrganizationControls
+                    VStack(spacing: 16) {
+                        summaryCard
+                        sectionFilterCard
 
                         if viewModel.events.isEmpty {
-                            EmptyStateCard(
-                                icon: "calendar.badge.plus",
+                            emptyStateCard(
                                 title: "No Events Yet",
-                                message: "Create an event to start preparing for your next speaking opportunity.",
-                                buttonTitle: "Create Event",
-                                buttonAction: { showingCreateEvent = true }
+                                message: "Create one event and SpeakUp builds your prep path."
                             )
-                            .padding(.top, 40)
+                        } else if visibleEvents.isEmpty {
+                            emptyStateCard(
+                                title: "No Matches",
+                                message: searchText.isEmpty
+                                    ? "No events in this section yet."
+                                    : "Try a different search term."
+                            )
                         } else {
-                            // Upcoming events
-                            if !upcomingEvents.isEmpty {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Label("Upcoming", systemImage: "calendar")
-                                        .font(.headline)
-
-                                    ForEach(upcomingEvents) { event in
-                                        Button {
-                                            selectedEvent = event
-                                        } label: {
-                                            EventCard(event: event)
-                                        }
-                                        .buttonStyle(.plain)
+                            LazyVStack(alignment: .leading, spacing: 12) {
+                                ForEach(visibleEvents) { event in
+                                    Button {
+                                        selectedEvent = event
+                                    } label: {
+                                        EventCard(event: event)
+                                            .opacity(event.isPast ? 0.75 : 1.0)
                                     }
-                                }
-                            }
-
-                            // Past events
-                            if !pastEvents.isEmpty {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Label("Past", systemImage: "clock.arrow.circlepath")
-                                        .font(.headline)
-                                        .foregroundStyle(.secondary)
-
-                                    ForEach(pastEvents) { event in
-                                        Button {
-                                            selectedEvent = event
-                                        } label: {
-                                            EventCard(event: event)
-                                                .opacity(0.7)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
             }
             .navigationTitle("Events")
@@ -118,44 +113,102 @@ struct EventListView: View {
         }
     }
 
-    @ViewBuilder
-    private var eventOrganizationControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Organize", systemImage: "slider.horizontal.3")
+    private var summaryCard: some View {
+        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Your speaking pipeline")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    withAnimation(.spring(response: 0.25)) {
-                        viewModel.showArchived.toggle()
-                        viewModel.loadEvents()
-                    }
-                } label: {
-                    Text(viewModel.showArchived ? "Hide archived" : "Show archived")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(AppColors.primary)
-                }
-                .buttonStyle(.plain)
-            }
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(EventSortOption.allCases) { option in
-                        FilterChip(
-                            title: option.title,
-                            icon: option.icon,
-                            isSelected: sortOption == option
-                        ) {
-                            withAnimation(.spring(response: 0.25)) {
-                                sortOption = option
-                            }
-                        }
-                    }
+                HStack(spacing: 12) {
+                    metricPill(
+                        title: "Upcoming",
+                        value: "\(viewModel.upcomingEvents.count)",
+                        icon: "calendar",
+                        tint: AppColors.primary
+                    )
+                    metricPill(
+                        title: "Ready 80+",
+                        value: "\(viewModel.upcomingEvents.filter { $0.readinessScore >= 80 }.count)",
+                        icon: "checkmark.seal.fill",
+                        tint: AppColors.success
+                    )
+                    metricPill(
+                        title: "Past",
+                        value: "\(viewModel.pastEvents.count)",
+                        icon: "clock.arrow.circlepath",
+                        tint: AppColors.accent
+                    )
                 }
             }
-            .scrollIndicators(.hidden)
         }
+    }
+
+    private var sectionFilterCard: some View {
+        GlassCard(tint: AppColors.glassTintPrimary.opacity(0.65), padding: 12) {
+            VStack(spacing: 10) {
+                Picker("Section", selection: $selectedSection) {
+                    ForEach(EventListSection.allCases) { section in
+                        Text(section.title).tag(section)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                HStack {
+                    Text(viewModel.showArchived ? "Archived included" : "Archived hidden")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button {
+                        Haptics.light()
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.showArchived.toggle()
+                            viewModel.loadEvents()
+                        }
+                    } label: {
+                        Text(viewModel.showArchived ? "Hide archived" : "Show archived")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func metricPill(title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Text(value)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.white.opacity(0.06))
+        }
+    }
+
+    private func emptyStateCard(title: String, message: String) -> some View {
+        EmptyStateCard(
+            icon: "calendar.badge.plus",
+            title: title,
+            message: message,
+            buttonTitle: "Create Event",
+            buttonAction: { showingCreateEvent = true }
+        )
+        .padding(.top, 40)
     }
 }
 
@@ -180,7 +233,7 @@ struct EventCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(event.title)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
 
                     HStack(spacing: 8) {
@@ -244,53 +297,27 @@ struct EventCard: View {
 
     private var daysColor: Color {
         let days = event.daysRemaining
-        if days <= 1 { return .red }
-        if days <= 3 { return .orange }
-        return .secondary
+        if days <= 1 { return AppColors.error }
+        if days <= 3 { return AppColors.warning }
+        return AppColors.accent
     }
 }
 
-private enum EventSortOption: String, CaseIterable, Identifiable {
-    case soonest
-    case readiness
-    case sessions
+private enum EventListSection: String, CaseIterable, Identifiable {
+    case upcoming
+    case past
+    case all
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .soonest: return "Soonest"
-        case .readiness: return "Readiness"
-        case .sessions: return "Most Practiced"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .soonest: return "calendar"
-        case .readiness: return "chart.line.uptrend.xyaxis"
-        case .sessions: return "waveform"
-        }
-    }
-
-    func sorted(_ events: [SpeakingEvent]) -> [SpeakingEvent] {
-        switch self {
-        case .soonest:
-            return events.sorted { $0.eventDate < $1.eventDate }
-        case .readiness:
-            return events.sorted { lhs, rhs in
-                if lhs.readinessScore == rhs.readinessScore {
-                    return lhs.eventDate < rhs.eventDate
-                }
-                return lhs.readinessScore > rhs.readinessScore
-            }
-        case .sessions:
-            return events.sorted { lhs, rhs in
-                if lhs.totalPracticeCount == rhs.totalPracticeCount {
-                    return lhs.eventDate < rhs.eventDate
-                }
-                return lhs.totalPracticeCount > rhs.totalPracticeCount
-            }
+        case .upcoming:
+            return "Upcoming"
+        case .past:
+            return "Past"
+        case .all:
+            return "All"
         }
     }
 }
