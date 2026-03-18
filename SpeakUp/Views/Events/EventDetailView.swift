@@ -21,6 +21,9 @@ struct EventDetailView: View {
     @State private var drillViewModel = DrillViewModel()
     @State private var selectedPracticeVersionId: UUID?
     @State private var showingNotificationSchedule = false
+    @State private var draftEventDate = Date()
+    @State private var draftExpectedDurationMinutes = 5
+    @State private var draftDailyPracticeMinutes = 30
 
     var body: some View {
         ZStack {
@@ -30,6 +33,9 @@ struct EventDetailView: View {
                 VStack(spacing: 20) {
                     // Countdown header
                     countdownHeader
+
+                    // Plan details
+                    logisticsEditorSection
 
                     // Coaching tip
                     coachingTipCard
@@ -86,6 +92,9 @@ struct EventDetailView: View {
             if selectedPracticeVersionId == nil {
                 selectedPracticeVersionId = event.currentScriptVersion?.id
             }
+            draftEventDate = event.eventDate
+            draftExpectedDurationMinutes = event.expectedDurationMinutes
+            draftDailyPracticeMinutes = event.maxDailyPracticeMinutes
         }
         .sheet(isPresented: $showingScriptEditor) {
             ScriptEditorView(event: event, viewModel: viewModel)
@@ -96,6 +105,10 @@ struct EventDetailView: View {
                     scriptText: script,
                     speed: event.teleprompterSpeed,
                     fontSize: event.teleprompterFontSize,
+                    onStartRecording: {
+                        showingTeleprompter = false
+                        onStartPractice?(event, selectedPracticeVersion?.id)
+                    },
                     onSettingsChanged: { newSpeed, newFontSize in
                         event.teleprompterSpeed = newSpeed
                         event.teleprompterFontSize = newFontSize
@@ -238,6 +251,92 @@ struct EventDetailView: View {
                 Text(event.resolvedSessionType.coachingTip)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Logistics Editor
+
+    private var logisticsEditorSection: some View {
+        GlassCard(tint: AppColors.glassTintPrimary.opacity(0.7)) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label("Plan Details", systemImage: "slider.horizontal.3")
+                        .font(.headline)
+                    Spacer()
+                    if hasLogisticsChanges {
+                        Text("Unsaved")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(AppColors.warning)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background {
+                                Capsule().fill(AppColors.warning.opacity(0.16))
+                            }
+                    }
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(AppColors.primary)
+                        .padding(.top, 3)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Event Date")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        DatePicker(
+                            "",
+                            selection: $draftEventDate,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
+                        .tint(AppColors.primary)
+                    }
+                    Spacer()
+                }
+
+                Divider()
+
+                Stepper(value: $draftExpectedDurationMinutes, in: 1...180, step: 1) {
+                    HStack {
+                        Label("Duration", systemImage: "clock")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(draftExpectedDurationMinutes) min")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+
+                Divider()
+
+                Stepper(value: $draftDailyPracticeMinutes, in: 10...240, step: 5) {
+                    HStack {
+                        Label("Daily Practice Capacity", systemImage: "timer")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(draftDailyPracticeMinutes) min")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+
+                if hasLogisticsChanges {
+                    GlassButton(title: "Save Plan Details", icon: "checkmark.circle", style: .primary, size: .small) {
+                        Haptics.success()
+                        viewModel.updateEventLogistics(
+                            event,
+                            eventDate: draftEventDate,
+                            expectedDurationMinutes: draftExpectedDurationMinutes,
+                            maxDailyPracticeMinutes: draftDailyPracticeMinutes
+                        )
+                    }
+                } else {
+                    Text("Saving updates recalculates prep tasks and recommendation targets.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -844,14 +943,17 @@ struct EventDetailView: View {
         GlassCard {
             VStack(spacing: 12) {
                 GlassInfoRow(label: "Duration", value: "\(event.expectedDurationMinutes) min", icon: "clock")
+                Divider()
+                GlassInfoRow(
+                    label: "Event Date",
+                    value: event.eventDate.formatted(date: .abbreviated, time: .shortened),
+                    icon: "calendar"
+                )
 
                 if let audience = event.audienceType {
                     Divider()
                     GlassInfoRow(label: "Audience", value: audience, icon: "person.2")
                 }
-
-                Divider()
-                GlassInfoRow(label: "Daily Practice Capacity", value: "\(event.maxDailyPracticeMinutes) min", icon: "timer")
 
                 if let audienceSize = event.audienceSize, audienceSize > 0 {
                     Divider()
@@ -871,6 +973,13 @@ struct EventDetailView: View {
                 GlassInfoRow(label: "Created", value: event.createdDate.formatted(date: .abbreviated, time: .omitted), icon: "calendar.badge.plus")
             }
         }
+    }
+
+    private var hasLogisticsChanges: Bool {
+        let isDateChanged = abs(draftEventDate.timeIntervalSince(event.eventDate)) > 1
+        return isDateChanged ||
+            draftExpectedDurationMinutes != event.expectedDurationMinutes ||
+            draftDailyPracticeMinutes != event.maxDailyPracticeMinutes
     }
 
     // MARK: - Danger Zone

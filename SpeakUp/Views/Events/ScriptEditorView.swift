@@ -8,6 +8,7 @@ struct ScriptEditorView: View {
     @State private var scriptText: String = ""
     @State private var changeNote: String = ""
     @State private var showingVersionHistory = false
+    @FocusState private var isEditorFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -35,10 +36,52 @@ struct ScriptEditorView: View {
                     .padding(.vertical, 8)
 
                     // Editor
-                    TextEditor(text: $scriptText)
-                        .scrollContentBackground(.hidden)
-                        .font(.body)
-                        .padding(.horizontal)
+                    GlassCard(tint: AppColors.glassTintPrimary.opacity(0.6), padding: 14) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 8) {
+                                Image(systemName: isEditorFocused ? "keyboard.fill" : "pencil.line")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(isEditorFocused ? AppColors.primary : .secondary)
+                                Text(isEditorFocused ? "Editing script…" : "Tap anywhere below to edit")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(isEditorFocused ? AppColors.primary : .secondary)
+                                Spacer()
+                            }
+
+                            ZStack(alignment: .topLeading) {
+                                TextEditor(text: $scriptText)
+                                    .scrollContentBackground(.hidden)
+                                    .font(.body)
+                                    .focused($isEditorFocused)
+                                    .frame(minHeight: 300)
+
+                                if scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Draft your script here…")
+                                        .font(.body)
+                                        .foregroundStyle(.secondary.opacity(0.7))
+                                        .padding(.top, 8)
+                                        .padding(.leading, 5)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(.white.opacity(0.03))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .strokeBorder(
+                                                isEditorFocused
+                                                    ? AppColors.primary.opacity(0.65)
+                                                    : .white.opacity(0.12),
+                                                lineWidth: isEditorFocused ? 1.25 : 0.8
+                                            )
+                                    }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
 
                     // Bottom bar
                     VStack(spacing: 12) {

@@ -134,6 +134,35 @@ class EventViewModel {
         loadEvents()
     }
 
+    func updateEventLogistics(
+        _ event: SpeakingEvent,
+        eventDate: Date,
+        expectedDurationMinutes: Int,
+        maxDailyPracticeMinutes: Int
+    ) {
+        guard let context = modelContext else { return }
+
+        let sanitizedDuration = max(1, expectedDurationMinutes)
+        let sanitizedDailyCapacity = max(10, maxDailyPracticeMinutes)
+
+        let didChange =
+            event.eventDate != eventDate ||
+            event.expectedDurationMinutes != sanitizedDuration ||
+            event.maxDailyPracticeMinutes != sanitizedDailyCapacity
+
+        guard didChange else { return }
+
+        event.eventDate = eventDate
+        event.expectedDurationMinutes = sanitizedDuration
+        event.expectedDurationSeconds = sanitizedDuration * 60
+        event.maxDailyPracticeMinutes = sanitizedDailyCapacity
+
+        try? context.save()
+        prepService.generateTasks(for: event, context: context)
+        loadPrepTasks(for: event)
+        loadEvents()
+    }
+
     func deleteEvent(_ event: SpeakingEvent) {
         guard let context = modelContext else { return }
         // Delete associated prep tasks
