@@ -10,6 +10,7 @@ private enum OnboardingLayout {
 }
 
 struct OnboardingView: View {
+    @Environment(LLMService.self) private var llmService
     @State private var viewModel = OnboardingViewModel()
     var onComplete: () -> Void
 
@@ -26,11 +27,12 @@ struct OnboardingView: View {
                 TabView(selection: $viewModel.currentPage) {
                     welcomePage(heroHeight: heroHeight, topPadding: topPadding).tag(0)
                     analysisPage(heroHeight: heroHeight, topPadding: topPadding).tag(1)
-                    practiceToolkitPage(heroHeight: heroHeight, topPadding: topPadding).tag(2)
-                    curriculumPage(heroHeight: heroHeight, topPadding: topPadding).tag(3)
-                    trackProgressPage(heroHeight: heroHeight, topPadding: topPadding).tag(4)
-                    notificationPage(heroHeight: heroHeight, topPadding: topPadding).tag(5)
-                    micPermissionPage(heroHeight: heroHeight, topPadding: topPadding).tag(6)
+                    aiSetupPage(heroHeight: heroHeight, topPadding: topPadding).tag(2)
+                    practiceToolkitPage(heroHeight: heroHeight, topPadding: topPadding).tag(3)
+                    curriculumPage(heroHeight: heroHeight, topPadding: topPadding).tag(4)
+                    trackProgressPage(heroHeight: heroHeight, topPadding: topPadding).tag(5)
+                    notificationPage(heroHeight: heroHeight, topPadding: topPadding).tag(6)
+                    micPermissionPage(heroHeight: heroHeight, topPadding: topPadding).tag(7)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
 
@@ -212,11 +214,35 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Page 3: Practice Toolkit
+    // MARK: - Page 3: AI Setup
+
+    private func aiSetupPage(heroHeight: CGFloat, topPadding: CGFloat) -> some View {
+        onboardingPage(
+            pageIndex: 2,
+            title: "Choose Your AI Mode",
+            subtitle: "SpeakUp always works on-device. Extra AI quality is optional and transparent.",
+            heroHeight: heroHeight,
+            topPadding: topPadding
+        ) {
+            Image(systemName: llmService.appleIntelligenceAvailable ? "apple.intelligence" : "cpu")
+                .font(.system(size: heroHeight * 0.38))
+                .foregroundStyle(llmService.appleIntelligenceAvailable ? .purple : .teal)
+        } detail: {
+            VStack(spacing: 12) {
+                aiModeStatusCard
+                aiTransparencyCard
+                if !llmService.appleIntelligenceAvailable {
+                    aiLocalModelActionCard
+                }
+            }
+        }
+    }
+
+    // MARK: - Page 4: Practice Toolkit
 
     private func practiceToolkitPage(heroHeight: CGFloat, topPadding: CGFloat) -> some View {
         onboardingPage(
-            pageIndex: 2,
+            pageIndex: 3,
             title: "Practice Toolkit",
             subtitle: "Techniques for every scenario—from tongue twisters to impromptu speaking.",
             heroHeight: heroHeight,
@@ -240,11 +266,11 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Page 4: Curriculum
+    // MARK: - Page 5: Curriculum
 
     private func curriculumPage(heroHeight: CGFloat, topPadding: CGFloat) -> some View {
         onboardingPage(
-            pageIndex: 3,
+            pageIndex: 4,
             title: "Expert Pathway",
             subtitle: "A structured curriculum built to transform your speaking in just 4 weeks.",
             heroHeight: heroHeight,
@@ -273,11 +299,11 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Page 5: Track Progress
+    // MARK: - Page 6: Track Progress
 
     private func trackProgressPage(heroHeight: CGFloat, topPadding: CGFloat) -> some View {
         onboardingPage(
-            pageIndex: 4,
+            pageIndex: 5,
             title: "Your Growth",
             subtitle: "Watch your confidence soar with detailed progress tracking and streaks.",
             heroHeight: heroHeight,
@@ -300,11 +326,11 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Page 6: Notifications
+    // MARK: - Page 7: Notifications
 
     private func notificationPage(heroHeight: CGFloat, topPadding: CGFloat) -> some View {
         onboardingPage(
-            pageIndex: 5,
+            pageIndex: 6,
             title: viewModel.hasNotificationPermission ? "All Set!" : "Stay Inspired",
             subtitle: viewModel.hasNotificationPermission
                 ? "We'll keep you motivated with timely practice reminders."
@@ -348,11 +374,11 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Page 7: Mic Permission
+    // MARK: - Page 8: Mic Permission
 
     private func micPermissionPage(heroHeight: CGFloat, topPadding: CGFloat) -> some View {
         onboardingPage(
-            pageIndex: 6,
+            pageIndex: 7,
             title: viewModel.hasMicPermission ? "Ready to Go!" : "Voice Access",
             subtitle: viewModel.hasMicPermission
                 ? "The stage is yours. Let's start your first practice session."
@@ -394,6 +420,170 @@ struct OnboardingView: View {
             }
         }
     }
+
+    // MARK: - AI Setup Components
+
+    private var aiModeStatusCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: llmService.appleIntelligenceAvailable ? "apple.intelligence" : "cpu")
+                        .font(.title3)
+                        .foregroundStyle(llmService.appleIntelligenceAvailable ? .purple : .teal)
+                    Text("Current AI Mode")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Spacer()
+                    OnboardingAIModeBadge(
+                        text: aiModeLabel,
+                        tint: aiModeTint
+                    )
+                }
+
+                Text(aiModeDescription)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var aiTransparencyCard: some View {
+        GlassCard(tint: .teal.opacity(0.08)) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Why this matters", systemImage: "questionmark.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                OnboardingAIBullet(text: "Core scoring works with zero AI downloads.")
+                OnboardingAIBullet(text: "AI adds better semantic coherence and coaching quality.")
+                OnboardingAIBullet(text: "All processing stays on your device—nothing is sent to servers.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var aiLocalModelActionCard: some View {
+        GlassCard(tint: .cyan.opacity(0.08)) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Optional local model")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text(LocalLLMService.approximateModelSize)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.cyan)
+                }
+
+                Text("Download \(LocalLLMService.modelDisplayName) now to unlock stronger on-device AI on this iPhone.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                switch llmService.localLLM.modelState {
+                case .ready:
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                        Text("Local model ready")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+                    }
+                case .loading:
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .tint(.cyan)
+                        Text("Loading model...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .downloading(let progress):
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: progress)
+                            .tint(.cyan)
+                        Text("Downloading \(Int(progress * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                case .downloaded:
+                    GlassButton(
+                        title: "Load Model",
+                        icon: "play.fill",
+                        style: .secondary,
+                        size: .small,
+                        fullWidth: true
+                    ) {
+                        Task { await llmService.loadLocalModel() }
+                    }
+                case .error(let message):
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        GlassButton(
+                            title: "Retry Download",
+                            icon: "arrow.clockwise",
+                            style: .primary,
+                            size: .small,
+                            fullWidth: true
+                        ) {
+                            Task { await llmService.setupLocalModel() }
+                        }
+                    }
+                case .notDownloaded:
+                    GlassButton(
+                        title: "Download Local AI",
+                        icon: "arrow.down.circle",
+                        style: .primary,
+                        size: .small,
+                        fullWidth: true
+                    ) {
+                        Task { await llmService.setupLocalModel() }
+                    }
+                }
+            }
+        }
+    }
+
+    private var aiModeLabel: String {
+        if llmService.appleIntelligenceAvailable {
+            return "Apple Intelligence"
+        }
+        if llmService.localLLM.isModelReady {
+            return "Local LLM Active"
+        }
+        if llmService.localLLM.isModelDownloaded {
+            return "Local LLM Installed"
+        }
+        return "Rule-Based + Core AI"
+    }
+
+    private var aiModeTint: Color {
+        if llmService.appleIntelligenceAvailable {
+            return .purple
+        }
+        if llmService.localLLM.isModelReady {
+            return .green
+        }
+        if llmService.localLLM.isModelDownloaded {
+            return .orange
+        }
+        return .teal
+    }
+
+    private var aiModeDescription: String {
+        if llmService.appleIntelligenceAvailable {
+            return "Apple Intelligence is available on this device and will be used for advanced coherence and coaching signals."
+        }
+        if llmService.localLLM.isModelReady {
+            return "Your downloaded local model is active and will support enhanced scoring and coaching fully on-device."
+        }
+        if llmService.localLLM.isModelDownloaded {
+            return "Your local model is downloaded. We’ll load it automatically when needed to save memory."
+        }
+        return "You can keep using core speech scoring now, then optionally add a local model later in Settings."
+    }
 }
 
 // MARK: - Components
@@ -423,6 +613,37 @@ private struct StatusCard: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+}
+
+private struct OnboardingAIModeBadge: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(tint.opacity(0.9)))
+    }
+}
+
+private struct OnboardingAIBullet: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.teal)
+                .padding(.top, 1)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

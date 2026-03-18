@@ -201,7 +201,8 @@ Runs only when:
 Steps:
 1. Replace relevance with LLM-blended coherence.
 2. Blend structure and vocabulary with LLM transcript quality.
-3. Recompute overall score.
+3. Apply backend-aware stabilization caps (component + overall).
+4. Recompute overall score.
 
 Blend ratios for structure/vocabulary blend:
 - Apple Intelligence: LLM 40%, rule-based 60%
@@ -210,6 +211,18 @@ Blend ratios for structure/vocabulary blend:
 Prompt coherence blend inside `PromptRelevanceService`:
 - Apple Intelligence: LLM 60%, rules 40%
 - Local LLM: LLM 40%, rules 60%
+
+Stabilization caps in `SpeechService`:
+- Component cap (relevance/structure/vocabulary):
+  - Apple Intelligence: max ±16 points vs baseline
+  - Local LLM: max ±12 points vs baseline
+- Overall cap (final score vs baseline):
+  - Apple Intelligence: max ±10 points
+  - Local LLM: max ±7 points
+
+Rationale:
+- Keeps score movement predictable between no-AI / Apple Intelligence / local LLM scenarios.
+- Prevents abrupt score jumps from a single LLM pass while still allowing meaningful refinement.
 
 ## Settings constraints affecting score behavior
 - Target WPM slider: 100...200, step 5.

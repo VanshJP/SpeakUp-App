@@ -750,6 +750,22 @@ class SpeechService {
         scoreWeights: ScoreWeights = .defaults
     ) async {
         guard llmService.isAvailable, transcript.count >= 50 else { return }
+        let backend = llmService.activeBackend
+        let baselineSubscores = analysis.speechScore.subscores
+        let baselineOverall = analysis.speechScore.overall
+
+        let componentMaxDelta: Int
+        let overallMaxDelta: Int
+        switch backend {
+        case .appleIntelligence:
+            componentMaxDelta = 16
+            overallMaxDelta = 10
+        case .localLLM:
+            componentMaxDelta = 12
+            overallMaxDelta = 7
+        case .none:
+            return
+        }
 
         // 1. Enhanced coherence scoring (prompt-aware)
         if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
@@ -757,8 +773,13 @@ class SpeechService {
             llmService: llmService,
             promptText: promptText
         ) {
-            analysis.promptRelevanceScore = enhancedCoherence
-            analysis.speechScore.subscores.relevance = enhancedCoherence
+            let stabilized = stabilizedLLMScore(
+                baseline: baselineSubscores.relevance ?? analysis.promptRelevanceScore ?? 50,
+                candidate: enhancedCoherence,
+                maxDelta: componentMaxDelta
+            )
+            analysis.promptRelevanceScore = stabilized
+            analysis.speechScore.subscores.relevance = stabilized
         }
 
         // 2. Transcript quality evaluation (structure + vocabulary)
@@ -770,12 +791,20 @@ class SpeechService {
 
             if let existingStructure = analysis.speechScore.subscores.structure {
                 let blended = Double(quality.structure) * llmWeight + Double(existingStructure) * ruleWeight
-                analysis.speechScore.subscores.structure = max(0, min(100, Int(blended)))
+                analysis.speechScore.subscores.structure = stabilizedLLMScore(
+                    baseline: existingStructure,
+                    candidate: Int(blended.rounded()),
+                    maxDelta: componentMaxDelta
+                )
             }
 
             if let existingVocab = analysis.speechScore.subscores.vocabulary {
                 let blended = Double(quality.vocabulary) * llmWeight + Double(existingVocab) * ruleWeight
-                analysis.speechScore.subscores.vocabulary = max(0, min(100, Int(blended)))
+                analysis.speechScore.subscores.vocabulary = stabilizedLLMScore(
+                    baseline: existingVocab,
+                    candidate: Int(blended.rounded()),
+                    maxDelta: componentMaxDelta
+                )
             }
         }
 
@@ -784,7 +813,11 @@ class SpeechService {
             subscores: analysis.speechScore.subscores,
             weights: scoreWeights
         )
-        analysis.speechScore.overall = newOverall
+        analysis.speechScore.overall = stabilizedLLMScore(
+            baseline: baselineOverall,
+            candidate: newOverall,
+            maxDelta: overallMaxDelta
+        )
     }
 
     /// Legacy alias — callers that don't have prompt context can use this.
@@ -1456,6 +1489,15 @@ class SpeechService {
             return .declining
         }
         return .stable
+    }
+
+    // MARK: - LLM Score Stabilization
+
+    private func stabilizedLLMScore(baseline: Int, candidate: Int, maxDelta: Int) -> Int {
+        let boundedCandidate = max(0, min(100, candidate))
+        let delta = boundedCandidate - baseline
+        let clampedDelta = max(-maxDelta, min(maxDelta, delta))
+        return max(0, min(100, baseline + clampedDelta))
     }
 }
 
