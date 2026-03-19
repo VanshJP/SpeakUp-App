@@ -165,6 +165,8 @@ Key formulas:
 - `overall = clamp(weightedSum / sum(includedWeights), 0...100)`
 - Low-confidence acoustic sessions (noise/speaker overlap) apply reliability stabilization toward a neutral anchor before overall aggregation.
 - If no isolation reliability metrics are available, stabilization is bypassed (no neutral pull-down).
+- Speaker-isolation reliability is only applied when conversation/separation evidence exists (no solo-session penalty).
+- Stabilization uses a higher reliability floor to avoid collapsing strong performances toward the midline.
 
 ## Default weights (`ScoreWeights.defaults`)
 - clarity 0.18
@@ -217,8 +219,8 @@ Steps:
 4. Recompute overall score.
 
 Blend ratios for structure/vocabulary blend:
-- Apple Intelligence: LLM 40%, rule-based 60%
-- Local LLM: LLM 30%, rule-based 70%
+- Apple Intelligence: LLM 45%, rule-based 55%
+- Local LLM: LLM 40%, rule-based 60%
 
 Prompt coherence blend inside `PromptRelevanceService`:
 - Apple Intelligence: LLM 60%, rules 40%
@@ -226,11 +228,11 @@ Prompt coherence blend inside `PromptRelevanceService`:
 
 Stabilization caps in `SpeechService`:
 - Component cap (relevance/structure/vocabulary):
-  - Apple Intelligence: max ±16 points vs baseline
-  - Local LLM: max ±12 points vs baseline
+  - Apple Intelligence: max ±20 points vs baseline
+  - Local LLM: max ±16 points vs baseline
 - Overall cap (final score vs baseline):
-  - Apple Intelligence: max ±10 points
-  - Local LLM: max ±7 points
+  - Apple Intelligence: max ±14 points
+  - Local LLM: max ±10 points
 
 Rationale:
 - Keeps score movement predictable between no-AI / Apple Intelligence / local LLM scenarios.

@@ -461,7 +461,7 @@ class SpeechService {
     }
 
     private func applyReliabilityStabilization(score: Int, reliability: Double, neutralAnchor: Int) -> Int {
-        let clampedReliability = max(0.35, min(1.0, reliability))
+        let clampedReliability = max(0.55, min(1.0, reliability))
         let blended = Double(score) * clampedReliability + Double(neutralAnchor) * (1.0 - clampedReliability)
         return max(0, min(100, Int(blended.rounded())))
     }
@@ -471,10 +471,22 @@ class SpeechService {
         speakerIsolationMetrics: SpeakerIsolationMetrics?
     ) -> Double {
         let signalReliability = audioIsolationMetrics.map { metrics in
-            max(0.0, min(1.0, Double(metrics.residualNoiseScore) / 100.0))
+            let residual = max(0.0, min(1.0, Double(metrics.residualNoiseScore) / 100.0))
+            // Keep sessions near full reliability unless residual noise is clearly poor.
+            if residual >= 0.55 { return 1.0 }
+            return max(0.55, residual * 0.70 + 0.30)
         }
-        let speakerReliability = speakerIsolationMetrics.map { metrics in
-            max(0.0, min(1.0, Double(metrics.separationConfidence) / 100.0))
+        let speakerReliability = speakerIsolationMetrics.flatMap { metrics in
+            let hasAppliedSeparationEvidence =
+                metrics.conversationDetected ||
+                metrics.filteredOutWordCount >= 4 ||
+                metrics.speakerSwitchCount >= 2
+            guard hasAppliedSeparationEvidence else { return nil }
+
+            let confidence = max(0.0, min(1.0, Double(metrics.separationConfidence) / 100.0))
+            // Do not compress solo/near-solo sessions where speaker separation is not needed.
+            if confidence >= 0.65 { return 1.0 }
+            return max(0.55, confidence * 0.70 + 0.30)
         }
 
         switch (signalReliability, speakerReliability) {
@@ -545,15 +557,18 @@ class SpeechService {
             let articulationComponent: Double
             if let pm = pitchMetrics, pm.voicedFrameRatio > 0 {
                 // voicedFrameRatio: 0.3-0.7 is typical for speech.
-                // Softer mapping: ratio 0.35 → ~67, 0.5 → ~87, 0.65 → ~100
-                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 130 + 22))
+                // Less aggressive mapping so normal speech does not cluster around the mid-50s.
+                // ratio 0.25 → ~60, 0.45 → ~84, 0.58 → ~100
+                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 120 + 30))
             } else {
                 // Fallback to word confidence when pitch data unavailable
                 let confidences = words.compactMap { $0.confidence }
                 if !confidences.isEmpty {
-                    articulationComponent = (confidences.reduce(0, +) / Double(confidences.count)) * 100
+                    let averageConfidence = confidences.reduce(0, +) / Double(confidences.count)
+                    // Whisper/ASR confidences are often conservative; map to a wider clarity band.
+                    articulationComponent = min(100, max(35, averageConfidence * 110 + 8))
                 } else {
-                    articulationComponent = 55
+                    articulationComponent = 60
                 }
             }
 
@@ -891,11 +906,11 @@ class SpeechService {
         let overallMaxDelta: Int
         switch backend {
         case .appleIntelligence:
+            componentMaxDelta = 20
+            overallMaxDelta = 14
+        case .localLLM:
             componentMaxDelta = 16
             overallMaxDelta = 10
-        case .localLLM:
-            componentMaxDelta = 12
-            overallMaxDelta = 7
         case .none:
             return
         }
@@ -918,8 +933,8 @@ class SpeechService {
         // 2. Transcript quality evaluation (structure + vocabulary)
         if let quality = await llmService.evaluateTranscriptQuality(transcript: transcript) {
             // Blend LLM scores with existing rule-based subscores.
-            // Backend-aware: Apple Intelligence gets 40% LLM weight, local model gets 30%.
-            let llmWeight: Double = llmService.activeBackend == .appleIntelligence ? 0.40 : 0.30
+            // Increased blend so active models have a perceptible impact.
+            let llmWeight: Double = llmService.activeBackend == .appleIntelligence ? 0.45 : 0.40
             let ruleWeight = 1.0 - llmWeight
 
             if let existingStructure = analysis.speechScore.subscores.structure {

@@ -1366,16 +1366,21 @@ struct RecordingDetailView: View {
 
     private func enhanceCoherenceIfNeeded() async {
         guard let recording,
-              var analysis = recording.analysis,
-              let transcript = recording.transcriptionText else { return }
+              var analysis = recording.analysis else { return }
 
-        // If model is downloaded but not loaded, kick off loading in background
-        // but don't block this task waiting for it
+        let transcriptFromText = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let transcriptFromWords = recording.transcriptionWords?
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let transcript = (transcriptFromText?.isEmpty == false ? transcriptFromText : transcriptFromWords) ?? ""
+        guard !transcript.isEmpty else { return }
+
+        // If local model is downloaded, ensure it is actually loaded before we decide availability.
+        // Previously this returned early and skipped enhancement for the current session.
         if !llmService.isAvailable && llmService.localLLM.isModelDownloaded {
-            Task {
-                await llmService.loadLocalModelIfNeeded()
-            }
-            return
+            await llmService.loadLocalModelIfNeeded()
         }
 
         guard llmService.isAvailable else { return }
@@ -1399,14 +1404,13 @@ struct RecordingDetailView: View {
         recording.analysis = analysis
         try? modelContext.save()
 
-        // Auto-generate coaching insight so it's ready on the coaching tab
+        // Auto-generate coaching insight so it's ready on the coaching tab.
+        // Regenerate each time analysis is enhanced to avoid stale advice.
         guard !Task.isCancelled else { return }
-        if llmInsight == nil {
-            llmInsight = await llmService.generateCoachingInsight(
-                from: analysis,
-                transcript: transcript
-            )
-        }
+        llmInsight = await llmService.generateCoachingInsight(
+            from: analysis,
+            transcript: transcript
+        )
     }
 
     private func togglePlayback(_ recording: Recording) {
