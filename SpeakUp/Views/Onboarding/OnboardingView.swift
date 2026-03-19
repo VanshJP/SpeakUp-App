@@ -471,12 +471,12 @@ struct OnboardingView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                     Spacer()
-                    Text(LocalLLMService.approximateModelSize)
+                    Text(llmService.localLLM.approximateModelSize)
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.cyan)
                 }
 
-                Text("Download \(LocalLLMService.modelDisplayName) now to unlock stronger on-device AI on this iPhone.")
+                Text("Download \(llmService.localLLM.modelDisplayName) now to unlock stronger on-device AI on this iPhone.")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)

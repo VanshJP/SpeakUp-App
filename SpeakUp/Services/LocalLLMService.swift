@@ -39,23 +39,87 @@ final class LocalLLMService {
 
     // MARK: - Configuration
 
-    static let modelFileName = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-    static let modelDownloadURL: URL = {
-        guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf") else {
-            preconditionFailure("Invalid static LocalLLM model URL")
+    enum ModelProfile: String, CaseIterable, Identifiable {
+        case compact
+        case balanced
+        case quality
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .compact:
+                return "Qwen 2.5 (0.5B)"
+            case .balanced:
+                return "Qwen 2.5 (1.5B)"
+            case .quality:
+                return "Qwen 2.5 (3B)"
+            }
         }
-        return url
-    }()
-    static let modelDisplayName = "Qwen 2.5 (0.5B)"
-    static let approximateModelSize = "~400 MB"
+
+        var modelFileName: String {
+            switch self {
+            case .compact:
+                return "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+            case .balanced:
+                return "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+            case .quality:
+                return "qwen2.5-3b-instruct-q4_k_m.gguf"
+            }
+        }
+
+        var approximateModelSize: String {
+            switch self {
+            case .compact:
+                return "~400 MB"
+            case .balanced:
+                return "~1.1 GB"
+            case .quality:
+                return "~2.0 GB"
+            }
+        }
+
+        var minimumRecommendedMemoryBytes: UInt64 {
+            switch self {
+            case .compact:
+                return 500 * 1024 * 1024
+            case .balanced:
+                return 1_500 * 1024 * 1024
+            case .quality:
+                return 2_500 * 1024 * 1024
+            }
+        }
+
+        var downloadURL: URL {
+            switch self {
+            case .compact:
+                guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf") else {
+                    preconditionFailure("Invalid compact local model URL")
+                }
+                return url
+            case .balanced:
+                guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf") else {
+                    preconditionFailure("Invalid balanced local model URL")
+                }
+                return url
+            case .quality:
+                guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf") else {
+                    preconditionFailure("Invalid quality local model URL")
+                }
+                return url
+            }
+        }
+    }
 
     /// Minimum available memory (bytes) required before running inference.
     nonisolated private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
+    private static let selectedProfileDefaultsKey = "local_llm_selected_profile"
 
     // MARK: - State
 
     private(set) var modelState: LocalModelState = .notDownloaded
     private(set) var downloadProgress: Double = 0
+    private(set) var selectedProfile: ModelProfile
 
     var isModelReady: Bool {
         if case .ready = modelState { return true }
@@ -63,8 +127,13 @@ final class LocalLLMService {
     }
 
     var isModelDownloaded: Bool {
-        FileManager.default.fileExists(atPath: Self.modelFilePath.path)
+        FileManager.default.fileExists(atPath: Self.modelFilePath(for: selectedProfile).path)
     }
+
+    var modelDisplayName: String { selectedProfile.displayName }
+    var approximateModelSize: String { selectedProfile.approximateModelSize }
+    var availableProfiles: [ModelProfile] { ModelProfile.allCases }
+    var recommendedProfile: ModelProfile { Self.recommendedProfile(forAvailableMemory: os_proc_available_memory()) }
 
     // MARK: - Private
 
@@ -83,12 +152,13 @@ final class LocalLLMService {
         return dir
     }
 
-    static var modelFilePath: URL {
-        modelsDirectory.appendingPathComponent(modelFileName)
+    static func modelFilePath(for profile: ModelProfile) -> URL {
+        modelsDirectory.appendingPathComponent(profile.modelFileName)
     }
 
     var modelFileSize: String? {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: Self.modelFilePath.path),
+        let path = Self.modelFilePath(for: selectedProfile).path
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
               let size = attrs[.size] as? Int64 else { return nil }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
@@ -96,6 +166,13 @@ final class LocalLLMService {
     // MARK: - Initialization
 
     init() {
+        if let storedRaw = UserDefaults.standard.string(forKey: Self.selectedProfileDefaultsKey),
+           let storedProfile = ModelProfile(rawValue: storedRaw) {
+            selectedProfile = storedProfile
+        } else {
+            selectedProfile = Self.recommendedProfile(forAvailableMemory: os_proc_available_memory())
+        }
+
         if isModelDownloaded {
             modelState = .downloaded
         }
@@ -107,6 +184,32 @@ final class LocalLLMService {
     nonisolated static func hasSufficientMemory() -> Bool {
         let available = os_proc_available_memory()
         return available > minimumMemoryForInference
+    }
+
+    nonisolated static func recommendedProfile(forAvailableMemory memoryBytes: UInt64) -> ModelProfile {
+        if memoryBytes >= ModelProfile.quality.minimumRecommendedMemoryBytes {
+            return .quality
+        }
+        if memoryBytes >= ModelProfile.balanced.minimumRecommendedMemoryBytes {
+            return .balanced
+        }
+        return .compact
+    }
+
+    func selectProfile(_ profile: ModelProfile) {
+        guard selectedProfile != profile else { return }
+
+        if case .downloading = modelState {
+            cancelDownload()
+        }
+        if isModelReady {
+            unloadModel()
+        }
+
+        selectedProfile = profile
+        UserDefaults.standard.set(profile.rawValue, forKey: Self.selectedProfileDefaultsKey)
+        downloadProgress = 0
+        modelState = isModelDownloaded ? .downloaded : .notDownloaded
     }
 
     // MARK: - Download
@@ -121,10 +224,11 @@ final class LocalLLMService {
         downloadProgress = 0
 
         do {
-            let tempURL = try await downloadWithProgress(url: Self.modelDownloadURL)
+            let activeProfile = selectedProfile
+            let tempURL = try await downloadWithProgress(url: activeProfile.downloadURL)
 
             // Move to final location
-            let dest = Self.modelFilePath
+            let dest = Self.modelFilePath(for: activeProfile)
             if FileManager.default.fileExists(atPath: dest.path) {
                 try FileManager.default.removeItem(at: dest)
             }
@@ -157,7 +261,7 @@ final class LocalLLMService {
 
         modelState = .loading
 
-        let path = Self.modelFilePath.path
+        let path = Self.modelFilePath(for: selectedProfile).path
         let success = await Task.detached(priority: .userInitiated) { [engine] in
             return engine.load(modelPath: path)
         }.value
@@ -172,7 +276,7 @@ final class LocalLLMService {
 
     func deleteModel() {
         unloadModel()
-        try? FileManager.default.removeItem(at: Self.modelFilePath)
+        try? FileManager.default.removeItem(at: Self.modelFilePath(for: selectedProfile))
         modelState = .notDownloaded
     }
 

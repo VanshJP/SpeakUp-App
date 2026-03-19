@@ -133,7 +133,7 @@ struct SettingsView: View {
         case .appleIntelligence:
             return "Apple Intelligence"
         case .localLLM:
-            return LocalLLMService.modelDisplayName
+            return llmService.localLLM.modelDisplayName
         case .none:
             return "Not available"
         }

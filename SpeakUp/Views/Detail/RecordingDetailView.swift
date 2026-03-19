@@ -853,7 +853,7 @@ struct RecordingDetailView: View {
                 )
                 .font(.headline)
 
-                Text(isAppleIntelligence ? "AI" : LocalLLMService.modelDisplayName)
+                Text(isAppleIntelligence ? "AI" : llmService.localLLM.modelDisplayName)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
