@@ -67,7 +67,6 @@ class SpeechService {
         let isolationResult = SpeechIsolationService.preprocessIfBeneficial(audioURL: audioURL)
         let transcriptionURL = isolationResult?.processedAudioURL ?? audioURL
         let shouldCleanupProcessedFile = transcriptionURL != audioURL
-        var speakerIsolationMetrics: SpeakerIsolationMetrics?
 
         defer {
             if shouldCleanupProcessedFile {
@@ -118,7 +117,7 @@ class SpeechService {
             totalDuration: result.duration
         )
         finalWords = speakerLabeled.0
-        speakerIsolationMetrics = speakerLabeled.1
+        let speakerIsolationMetrics = speakerLabeled.1
 
         return SpeechTranscriptionResult(
             text: result.text,
@@ -297,7 +296,7 @@ class SpeechService {
         // Run sub-analyses
         let volumeMetrics = !audioLevelSamples.isEmpty ? analyzeVolume(samples: audioLevelSamples) : nil
         let vocabComplexity = !scoringWords.isEmpty ? analyzeVocabComplexity(words: scoringWords) : nil
-        let sentenceAnalysis = !scoringWords.isEmpty ? analyzeSentenceStructure(words: scoringWords, text: scoringText) : nil
+        let sentenceAnalysis = !scoringWords.isEmpty ? analyzeSentenceStructure(words: scoringWords) : nil
 
         // Advanced analyses
         let pitchMetrics: PitchMetrics? = audioURL != nil ? PitchAnalysisService.analyze(audioURL: audioURL!) : nil
@@ -348,7 +347,7 @@ class SpeechService {
         }
 
         // Content density
-        let contentDensity = contentDensityScore(words: scoringWords, totalFillers: totalFillers)
+        let contentDensity = contentDensityScore(words: scoringWords)
 
         // Detect vocab word usage (before subscores so we can feed it in)
         let vocabWordsUsed = detectVocabWords(in: scoringText, vocabWords: vocabWords)
@@ -357,8 +356,6 @@ class SpeechService {
         let subscores = calculateSubscores(
             wordsPerMinute: wordsPerMinute,
             fillerRatio: fillerRatio,
-            pauseCount: pauses.count,
-            averagePauseLength: averagePauseLength,
             totalWords: totalWords,
             targetWPM: targetWPM,
             trackPauses: trackPauses,
@@ -430,7 +427,7 @@ class SpeechService {
 
     // MARK: - Content Density
 
-    private func contentDensityScore(words: [TranscriptionWord], totalFillers: Int) -> Int {
+    private func contentDensityScore(words: [TranscriptionWord]) -> Int {
         let nonFillerWords = words.filter { !$0.isFiller }
         guard !nonFillerWords.isEmpty else { return 0 }
 
@@ -471,8 +468,6 @@ class SpeechService {
     private func calculateSubscores(
         wordsPerMinute: Double,
         fillerRatio: Double,
-        pauseCount: Int,
-        averagePauseLength: TimeInterval,
         totalWords: Int,
         targetWPM: Int = 150,
         trackPauses: Bool = true,
@@ -910,22 +905,6 @@ class SpeechService {
         )
     }
 
-    /// Legacy alias — callers that don't have prompt context can use this.
-    func enhanceCoherenceWithLLM(
-        analysis: inout SpeechAnalysis,
-        transcript: String,
-        llmService: LLMService,
-        scoreWeights: ScoreWeights = .defaults
-    ) async {
-        await enhanceWithLLM(
-            analysis: &analysis,
-            transcript: transcript,
-            llmService: llmService,
-            promptText: nil,
-            scoreWeights: scoreWeights
-        )
-    }
-
     // MARK: - WPM Time Series
 
     func computeWPMTimeSeries(
@@ -1145,7 +1124,7 @@ class SpeechService {
 
     // MARK: - Sentence Structure Analysis
 
-    func analyzeSentenceStructure(words: [TranscriptionWord], text: String) -> SentenceAnalysis {
+    func analyzeSentenceStructure(words: [TranscriptionWord]) -> SentenceAnalysis {
         guard !words.isEmpty else { return SentenceAnalysis() }
 
         // Split into sentences based on long pauses (>1.0s) or punctuation

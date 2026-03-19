@@ -17,7 +17,6 @@ struct RecordingDetailView: View {
     @State private var showVocabHighlights = true
     @State private var waveformHeights: [CGFloat] = []
     @State private var scoreCardImage: UIImage?
-    @State private var showingScoreCardPreview = false
     @State private var animateScore = false
     @State private var selectedDetailTab: DetailTab = .analysis
     @State private var isEditingTitle = false
@@ -29,14 +28,12 @@ struct RecordingDetailView: View {
     @State private var settingsViewModel = SettingsViewModel()
     @State private var showingFeedbackSheet = false
     @State private var llmInsight: String?
-    @State private var isEnhancingCoherence = false
     @State private var transcriptionFailed = false
     @State private var playbackDrawerState: PlaybackDrawerState = .expanded
     @State private var playbackDrawerDragOffset: CGFloat = 0
     @State private var activePlaybackWordID: UUID?
     @State private var orderedTranscriptWords: [TranscriptionWord] = []
     @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
-    @State private var playbackWordCursor = 0
 
     @Query private var userSettings: [UserSettings]
 
@@ -1028,6 +1025,21 @@ struct RecordingDetailView: View {
         return DefaultFeedbackQuestions.questions + custom
     }
 
+    private func scoreWeights(from settings: UserSettings?) -> ScoreWeights {
+        guard let settings else { return .defaults }
+        return ScoreWeights(
+            clarity: settings.clarityWeight,
+            pace: settings.paceWeight,
+            filler: settings.fillerWeight,
+            pause: settings.pauseWeight,
+            vocalVariety: settings.vocalVarietyWeight,
+            delivery: settings.deliveryWeight,
+            vocabulary: settings.vocabularyWeight,
+            structure: settings.structureWeight,
+            relevance: settings.relevanceWeight
+        )
+    }
+
     private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {
         let trimmed = insight.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -1148,7 +1160,6 @@ struct RecordingDetailView: View {
 
         orderedTranscriptWords = words
         orderedTranscriptRanges = words.map { $0.start...$0.end }
-        playbackWordCursor = 0
         activePlaybackWordID = nil
     }
 
@@ -1168,7 +1179,6 @@ struct RecordingDetailView: View {
             activePlaybackWordID = nil
             return
         }
-        playbackWordCursor = matchedIndex
         activePlaybackWordID = orderedTranscriptWords[matchedIndex].id
     }
 
@@ -1297,19 +1307,7 @@ struct RecordingDetailView: View {
                 preferredTerms: preferredTerms
             )
 
-            // Build score weights from user settings
-            var weights = ScoreWeights.defaults
-            if let s = settings {
-                weights.clarity = s.clarityWeight
-                weights.pace = s.paceWeight
-                weights.filler = s.fillerWeight
-                weights.pause = s.pauseWeight
-                weights.vocalVariety = s.vocalVarietyWeight
-                weights.delivery = s.deliveryWeight
-                weights.vocabulary = s.vocabularyWeight
-                weights.structure = s.structureWeight
-                weights.relevance = s.relevanceWeight
-            }
+            let weights = scoreWeights(from: settings)
 
             let resultSnapshot = result
             let actualDuration = recording.actualDuration
@@ -1382,22 +1380,7 @@ struct RecordingDetailView: View {
 
         guard llmService.isAvailable else { return }
 
-        isEnhancingCoherence = true
-        defer { isEnhancingCoherence = false }
-
-        // Build score weights from user settings
-        var weights = ScoreWeights.defaults
-        if let s = userSettings.first {
-            weights.clarity = s.clarityWeight
-            weights.pace = s.paceWeight
-            weights.filler = s.fillerWeight
-            weights.pause = s.pauseWeight
-            weights.vocalVariety = s.vocalVarietyWeight
-            weights.delivery = s.deliveryWeight
-            weights.vocabulary = s.vocabularyWeight
-            weights.structure = s.structureWeight
-            weights.relevance = s.relevanceWeight
-        }
+        let weights = scoreWeights(from: userSettings.first)
 
         // Pass prompt text for prompt-aware coherence scoring
         let promptText = recording.prompt?.text
