@@ -210,7 +210,7 @@ Includes early gibberish-like caps for fragmented text.
 ## LLM post-pass (`enhanceWithLLM`)
 Runs only when:
 - LLM available
-- transcript length >= 50 chars
+- transcript length >= 25 chars
 
 Steps:
 1. Replace relevance with LLM-blended coherence.

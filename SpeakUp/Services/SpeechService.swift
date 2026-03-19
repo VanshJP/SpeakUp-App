@@ -897,7 +897,7 @@ class SpeechService {
         promptText: String? = nil,
         scoreWeights: ScoreWeights = .defaults
     ) async {
-        guard llmService.isAvailable, transcript.count >= 50 else { return }
+        guard llmService.isAvailable, transcript.count >= 25 else { return }
         let backend = llmService.activeBackend
         let baselineSubscores = analysis.speechScore.subscores
         let baselineOverall = analysis.speechScore.overall
