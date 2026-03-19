@@ -44,7 +44,6 @@ struct DailyPromptWidgetView: View {
                 Image(systemName: "waveform.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.teal)
-                    .shadow(color: .teal.opacity(0.5), radius: 4)
                 Text("SpeakUp")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.teal)
@@ -93,16 +92,7 @@ struct DailyPromptWidget: Widget {
         StaticConfiguration(kind: kind, provider: DailyPromptProvider()) { entry in
             DailyPromptWidgetView(entry: entry)
                 .environment(\.colorScheme, .dark)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Color(red: 0.051, green: 0.071, blue: 0.165)
-                        LinearGradient(
-                            colors: [.teal.opacity(0.2), .clear],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    }
-                }
+                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
         }
         .configurationDisplayName("Daily Prompt")
         .description("See today's speaking prompt.")

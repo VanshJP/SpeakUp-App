@@ -32,12 +32,10 @@ struct QuickPracticeWidgetView: View {
                     Circle()
                         .fill(.teal.opacity(0.15))
                         .frame(width: 64, height: 64)
-                        .shadow(color: .teal.opacity(0.2), radius: 8)
-                    
+
                     Image(systemName: "mic.fill")
                         .font(.system(size: 32))
                         .foregroundStyle(.teal)
-                        .shadow(color: .teal.opacity(0.5), radius: 6)
                 }
 
                 if entry.lastScore > 0 {
@@ -47,7 +45,6 @@ struct QuickPracticeWidgetView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(scoreColor(for: entry.lastScore), in: Capsule())
-                        .shadow(color: scoreColor(for: entry.lastScore).opacity(0.4), radius: 4)
                         .offset(x: 10, y: -4)
                 }
             }
@@ -76,16 +73,7 @@ struct QuickPracticeWidget: Widget {
         StaticConfiguration(kind: kind, provider: QuickPracticeProvider()) { entry in
             QuickPracticeWidgetView(entry: entry)
                 .environment(\.colorScheme, .dark)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Color(red: 0.051, green: 0.071, blue: 0.165)
-                        LinearGradient(
-                            colors: [.teal.opacity(0.2), .clear],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    }
-                }
+                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
         }
         .configurationDisplayName("Quick Practice")
         .description("Jump straight into a practice session.")

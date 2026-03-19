@@ -87,7 +87,7 @@ struct EventListView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title3)
                             .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -187,12 +187,13 @@ struct EventListView: View {
                 Text(title)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             Text(value)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.white)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(10)
         .background {
             RoundedRectangle(cornerRadius: 12)
@@ -230,59 +231,64 @@ struct EventCard: View {
                         .foregroundStyle(sessionTypeColor)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(event.title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Text(event.resolvedSessionType.rawValue)
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(sessionTypeColor)
+
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+
+                        if !event.isOpenEnded {
+                            Text(event.daysRemainingText)
+                                .font(.caption2)
+                                .foregroundStyle(daysColor)
+                        } else {
+                            Text("Open-ended")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
 
                         if let audienceSize = event.audienceSize, audienceSize > 0 {
                             Text("•")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
-                            Text("\(audienceSize.formatted()) audience")
+                            Text("\(audienceSize.formatted())")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-
-                        if !event.isOpenEnded {
-                            Text("•")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Text(event.daysRemainingText)
-                                .font(.caption2)
-                                .foregroundStyle(daysColor)
-                        }
                     }
+                    .lineLimit(1)
 
-                    // Readiness bar
-                    if event.totalPracticeCount > 0 {
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.1))
+                    // Readiness bar (always show)
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.1))
+                            if event.totalPracticeCount > 0 {
                                 Capsule()
                                     .fill(AppColors.scoreGradient(for: event.readinessScore))
                                     .frame(width: geometry.size.width * CGFloat(event.readinessScore) / 100.0)
                             }
                         }
-                        .frame(height: 4)
                     }
+                    .frame(height: 4)
                 }
+                .frame(minHeight: 52, alignment: .center)
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 VStack(spacing: 4) {
-                    if event.totalPracticeCount > 0 {
-                        Text("\(event.readinessScore)%")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppColors.scoreColor(for: event.readinessScore))
-                    }
+                    Text(event.totalPracticeCount > 0 ? "\(event.readinessScore)%" : "New")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(event.totalPracticeCount > 0 ? AppColors.scoreColor(for: event.readinessScore) : .secondary)
                     Image(systemName: "chevron.right")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)

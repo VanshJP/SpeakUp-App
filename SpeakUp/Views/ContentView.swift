@@ -209,11 +209,9 @@ struct ContentView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingGoals) {
-            NavigationStack {
-                GoalsView()
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            GoalsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingWarmUps) {
             WarmUpListView()

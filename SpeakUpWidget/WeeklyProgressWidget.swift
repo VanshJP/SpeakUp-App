@@ -47,7 +47,6 @@ struct WeeklyProgressWidgetView: View {
                 Image(systemName: "waveform.path.ecg")
                     .font(.caption)
                     .foregroundStyle(.teal)
-                    .shadow(color: .teal.opacity(0.5), radius: 4)
                 Text("Weekly Progress")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.teal)
@@ -81,7 +80,6 @@ struct WeeklyProgressWidgetView: View {
                     Text("\(entry.averageScore)")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(scoreColor(for: entry.averageScore))
-                        .shadow(color: scoreColor(for: entry.averageScore).opacity(0.4), radius: 4)
                 }
 
                 Spacer()
@@ -119,16 +117,7 @@ struct WeeklyProgressWidget: Widget {
         StaticConfiguration(kind: kind, provider: WeeklyProgressProvider()) { entry in
             WeeklyProgressWidgetView(entry: entry)
                 .environment(\.colorScheme, .dark)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Color(red: 0.051, green: 0.071, blue: 0.165)
-                        LinearGradient(
-                            colors: [.teal.opacity(0.2), .clear],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    }
-                }
+                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
         }
         .configurationDisplayName("Weekly Progress")
         .description("Track your weekly practice sessions and scores.")

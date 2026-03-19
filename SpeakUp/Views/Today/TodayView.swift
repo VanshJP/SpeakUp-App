@@ -376,15 +376,14 @@ struct TodayView: View {
     // MARK: - Practice Tools 2x2 Grid
 
     private var practiceToolsGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Practice Tools", systemImage: "square.grid.2x2.fill")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Practice Tools", icon: "square.grid.2x2.fill")
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 PracticeToolCard(
                     icon: "wind",
                     title: "Warm Up",
-                    subtitle: "Breathing & vocal exercises",
+                    subtitle: "Breathing & vocal",
                     color: .blue
                 ) { onShowWarmUps() }
 
@@ -405,24 +404,23 @@ struct TodayView: View {
                 PracticeToolCard(
                     icon: "target",
                     title: "Goals",
-                    subtitle: "Track your goals",
+                    subtitle: "Track your progress",
                     color: .purple
                 ) { onShowGoals() }
 
                 PracticeToolCard(
                     icon: "calendar.badge.plus",
                     title: "Events",
-                    subtitle: "Prepare for speaking events",
+                    subtitle: "Event prep & practice",
                     color: .cyan
                 ) { onShowEvents() }
 
                 PracticeToolCard(
                     icon: "text.book.closed",
                     title: "Read Aloud",
-                    subtitle: "Practice reading clarity",
+                    subtitle: "Reading clarity",
                     color: .indigo
                 ) { onShowReadAloud() }
-
             }
         }
     }
