@@ -218,8 +218,11 @@ class SpeechService {
         let sortedWords = transcription.words.sorted { $0.start < $1.start }
 
         let primarySpeakerWords = sortedWords.filter(\.isPrimarySpeaker)
-        let minimumPrimaryWords = max(8, Int(Double(sortedWords.count) * 0.45))
-        let shouldUsePrimarySpeakerWords = primarySpeakerWords.count >= minimumPrimaryWords
+        let shouldUsePrimarySpeakerWords = shouldScoreUsingPrimarySpeakerWords(
+            totalWords: sortedWords.count,
+            primaryWordsCount: primarySpeakerWords.count,
+            speakerIsolationMetrics: speakerIsolationMetrics
+        )
         let scoringWords = shouldUsePrimarySpeakerWords ? primarySpeakerWords : sortedWords
         let effectiveSpeakerIsolationMetrics = speakerIsolationMetrics
         let scoringText = scoringWords.map(\.word).joined(separator: " ")
@@ -463,6 +466,50 @@ class SpeechService {
         return max(0, min(100, Int(blended.rounded())))
     }
 
+    private func combinedReliabilityScore(
+        audioIsolationMetrics: AudioIsolationMetrics?,
+        speakerIsolationMetrics: SpeakerIsolationMetrics?
+    ) -> Double {
+        let signalReliability = audioIsolationMetrics.map { metrics in
+            max(0.0, min(1.0, Double(metrics.residualNoiseScore) / 100.0))
+        }
+        let speakerReliability = speakerIsolationMetrics.map { metrics in
+            max(0.0, min(1.0, Double(metrics.separationConfidence) / 100.0))
+        }
+
+        switch (signalReliability, speakerReliability) {
+        case let (.some(signal), .some(speaker)):
+            return max(0.35, min(1.0, signal * 0.6 + speaker * 0.4))
+        case let (.some(signal), .none):
+            return max(0.35, min(1.0, signal))
+        case let (.none, .some(speaker)):
+            return max(0.35, min(1.0, speaker))
+        case (.none, .none):
+            // Do not dampen scores when no reliability signals were produced.
+            return 1.0
+        }
+    }
+
+    private func shouldScoreUsingPrimarySpeakerWords(
+        totalWords: Int,
+        primaryWordsCount: Int,
+        speakerIsolationMetrics: SpeakerIsolationMetrics?
+    ) -> Bool {
+        guard totalWords >= 12, let metrics = speakerIsolationMetrics else { return false }
+
+        let minimumPrimaryWords = max(8, Int(Double(totalWords) * 0.45))
+        guard primaryWordsCount >= minimumPrimaryWords else { return false }
+        guard metrics.separationConfidence >= 58 else { return false }
+        guard (0.45...0.92).contains(metrics.primarySpeakerWordRatio) else { return false }
+
+        let minimumFilteredOutWords = max(4, Int(Double(totalWords) * 0.15))
+        let hasConversationEvidence =
+            metrics.conversationDetected ||
+            (metrics.filteredOutWordCount >= minimumFilteredOutWords && metrics.speakerSwitchCount >= 2)
+
+        return hasConversationEvidence
+    }
+
     // MARK: - Subscore Calculation
 
     private func calculateSubscores(
@@ -589,9 +636,10 @@ class SpeechService {
             pauseScore = min(max(0, min(100, rawPauseScore)), scoreCeiling)
         }
 
-        let signalReliability = Double(audioIsolationMetrics?.residualNoiseScore ?? 70) / 100.0
-        let speakerReliability = Double(speakerIsolationMetrics?.separationConfidence ?? 70) / 100.0
-        let combinedReliability = max(0.35, min(1.0, signalReliability * 0.6 + speakerReliability * 0.4))
+        let combinedReliability = combinedReliabilityScore(
+            audioIsolationMetrics: audioIsolationMetrics,
+            speakerIsolationMetrics: speakerIsolationMetrics
+        )
         let neutralAnchor = 55
 
         let stabilizedClarity = applyReliabilityStabilization(

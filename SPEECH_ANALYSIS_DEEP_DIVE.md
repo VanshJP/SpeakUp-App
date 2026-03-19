@@ -38,7 +38,11 @@ Status: source-of-truth for current behavior.
 
 ## Preprocessing and core derived metrics
 - Words sorted by `start`.
-- If primary-speaker isolation confidence is sufficient, scoring operates on the primary-speaker stream.
+- Primary-speaker stream is used only when separation is strong and conversational evidence exists:
+  - enough retained primary words,
+  - separation confidence threshold,
+  - plausible primary-speaker ratio,
+  - and either conversation detection or enough filtered/switching evidence.
 - Pause detection: gap `> 0.4s`; pause duration cap `10.0s`.
 - Transition pause: previous token ends with `.`, `?`, or `!`.
 - `wordsPerMinute = totalWords / (effectiveSpeechDuration / 60)`.
@@ -160,6 +164,7 @@ Key formulas:
   - vocalVariety, delivery, vocabulary, structure, relevance
 - `overall = clamp(weightedSum / sum(includedWeights), 0...100)`
 - Low-confidence acoustic sessions (noise/speaker overlap) apply reliability stabilization toward a neutral anchor before overall aggregation.
+- If no isolation reliability metrics are available, stabilization is bypassed (no neutral pull-down).
 
 ## Default weights (`ScoreWeights.defaults`)
 - clarity 0.18
