@@ -1334,7 +1334,9 @@ struct RecordingDetailView: View {
                         targetWPM: targetWPM,
                         trackFillerWords: trackFillerWords,
                         trackPauses: trackPauses,
-                        scoreWeights: weightSnapshot
+                        scoreWeights: weightSnapshot,
+                        audioIsolationMetrics: resultSnapshot.audioIsolationMetrics,
+                        speakerIsolationMetrics: resultSnapshot.speakerIsolationMetrics
                     )
                     let markedWords = analyzer.markVocabWordsInTranscription(
                         resultSnapshot.words,

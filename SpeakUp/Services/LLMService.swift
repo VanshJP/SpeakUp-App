@@ -332,6 +332,8 @@ final class LLMService {
         You are a supportive speech coach. Analyze the speaker's performance and provide \
         2-3 specific, actionable coaching tips. Be encouraging but honest. Focus on the \
         most impactful areas for improvement. Keep each tip to 1-2 sentences. \
+        Never recommend adding filler words (e.g., "um", "uh", "like", "you know"), \
+        and never present verbal tics as a positive strategy. \
         Format: Start each tip on a new line with a bullet point (•).
         """
     }
@@ -346,6 +348,12 @@ final class LLMService {
         parts.append("- Total Words: \(analysis.totalWords)")
         parts.append("- Filler Words: \(analysis.totalFillerCount)")
         parts.append("- Pauses: \(analysis.pauseCount) (strategic: \(analysis.strategicPauseCount), hesitations: \(analysis.hesitationPauseCount))")
+        if let noise = analysis.audioIsolationMetrics {
+            parts.append("- Noise Isolation: residual \(noise.residualNoiseScore)/100, suppression +\(String(format: "%.1f", noise.suppressionDeltaDb)) dB")
+        }
+        if let speaker = analysis.speakerIsolationMetrics {
+            parts.append("- Speaker Isolation: confidence \(speaker.separationConfidence)/100, primary speaker ratio \(Int(speaker.primarySpeakerWordRatio * 100))%")
+        }
 
         let subscores = analysis.speechScore.subscores
         parts.append("- Clarity: \(subscores.clarity)/100")
@@ -395,6 +403,9 @@ final class LLMService {
         var seen: Set<String> = []
         var deduped: [String] = []
         for tip in bulletTips {
+            if containsDisallowedAdvice(tip) {
+                continue
+            }
             let key = tip
                 .lowercased()
                 .replacingOccurrences(of: #"[^a-z0-9\s]"#, with: "", options: .regularExpression)
@@ -408,9 +419,33 @@ final class LLMService {
         }
 
         if deduped.isEmpty {
-            return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return """
+            - Replace verbal fillers with short, intentional pauses at phrase boundaries.
+            - Keep your pace steady by finishing each sentence before starting the next idea.
+            - Emphasize one keyword per sentence to improve clarity and listener retention.
+            """
         }
 
         return deduped.map { "- \($0)" }.joined(separator: "\n")
+    }
+
+    private func containsDisallowedAdvice(_ tip: String) -> Bool {
+        let lowered = tip.lowercased()
+        let containsFillerTerm = lowered.range(
+            of: #"\b(um|uh|like|you know|i mean|basically)\b"#,
+            options: .regularExpression
+        ) != nil
+        let encouragesAction = lowered.range(
+            of: #"\b(use|add|include|say|insert|try)\b"#,
+            options: .regularExpression
+        ) != nil
+
+        if containsFillerTerm && encouragesAction {
+            return true
+        }
+        if lowered.contains("filler word") && lowered.contains("help") {
+            return true
+        }
+        return false
     }
 }

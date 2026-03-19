@@ -39,7 +39,12 @@ class AudioService: NSObject {
     
     func requestPermission() async -> Bool {
         do {
-            try recordingSession?.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            // voiceChat mode enables Apple's built-in near-field voice processing.
+            try recordingSession?.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [.defaultToSpeaker, .allowBluetooth]
+            )
             try recordingSession?.setActive(true)
             
             hasPermission = await AVAudioApplication.requestRecordPermission()
@@ -73,6 +78,11 @@ class AudioService: NSObject {
         ]
         
         do {
+            try recordingSession?.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [.defaultToSpeaker, .allowBluetooth]
+            )
             try recordingSession?.setActive(true)
 
             audioRecorder = try AVAudioRecorder(url: audioFilename, settings: settings)

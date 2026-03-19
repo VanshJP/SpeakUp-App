@@ -7,6 +7,8 @@ Status: source-of-truth for current behavior.
 - `SpeakUp/Services/SpeechService.swift`
 - `SpeakUp/Services/PromptRelevanceService.swift`
 - `SpeakUp/Services/TextAnalysisService.swift`
+- `SpeakUp/Services/SpeechIsolationService.swift`
+- `SpeakUp/Services/ConversationIsolationService.swift`
 - `SpeakUp/Models/SpeechAnalysis.swift`
 - Runtime wiring: `SpeakUp/Views/Detail/RecordingDetailView.swift`
 
@@ -14,11 +16,13 @@ Status: source-of-truth for current behavior.
 1. `RecordingDetailView.task`: load recording/settings.
 2. `transcribeIfNeeded()` only if `transcriptionText == nil && analysis == nil`.
 3. Transcription backend order:
+   - speech isolation preprocessing (high-pass + adaptive gate) when beneficial
    - WhisperKit
    - WhisperKit unload/reload retry
    - Apple Speech fallback (`addsPunctuation = false`)
-4. `SpeechService.analyze(...)` computes base analysis + subscores + overall.
-5. `enhanceCoherenceIfNeeded()` optionally runs LLM post-pass and recalculates overall.
+4. Conversation isolation pass labels likely primary-speaker words.
+5. `SpeechService.analyze(...)` computes base analysis + subscores + overall.
+6. `enhanceCoherenceIfNeeded()` optionally runs LLM post-pass and recalculates overall.
 
 ## Inputs to `SpeechService.analyze(...)`
 - Transcript (`text`, `[TranscriptionWord]`)
@@ -30,12 +34,14 @@ Status: source-of-truth for current behavior.
 - `targetWPM`
 - `trackFillerWords`, `trackPauses`
 - `ScoreWeights`
+- `audioIsolationMetrics`, `speakerIsolationMetrics`
 
 ## Preprocessing and core derived metrics
 - Words sorted by `start`.
+- If primary-speaker isolation confidence is sufficient, scoring operates on the primary-speaker stream.
 - Pause detection: gap `> 0.4s`; pause duration cap `10.0s`.
 - Transition pause: previous token ends with `.`, `?`, or `!`.
-- `wordsPerMinute = totalWords / (actualDuration / 60)`.
+- `wordsPerMinute = totalWords / (effectiveSpeechDuration / 60)`.
 - `averagePauseLength` uses median.
 - Optional analyzers:
   - volume metrics (requires `audioLevelSamples`)
@@ -153,17 +159,18 @@ Key formulas:
 - Include optional only when non-nil:
   - vocalVariety, delivery, vocabulary, structure, relevance
 - `overall = clamp(weightedSum / sum(includedWeights), 0...100)`
+- Low-confidence acoustic sessions (noise/speaker overlap) apply reliability stabilization toward a neutral anchor before overall aggregation.
 
 ## Default weights (`ScoreWeights.defaults`)
-- clarity 0.12
+- clarity 0.18
 - pace 0.12
-- filler 0.12
-- pause 0.10
-- vocalVariety 0.14
+- filler 0.14
+- pause 0.12
+- vocalVariety 0.12
 - delivery 0.10
-- vocabulary 0.10
-- structure 0.10
-- relevance 0.10
+- vocabulary 0.08
+- structure 0.08
+- relevance 0.06
 - If total weight `<= 0`: normalization falls back to defaults.
 
 ## Prompt relevance and coherence
@@ -234,6 +241,7 @@ Rationale:
 - `SpeechSubscores` has 9 dimensions: clarity, pace, fillerUsage, pauseQuality, vocalVariety, delivery, vocabulary, structure, relevance.
 - `SpeechAnalysis.init(from:)` intentionally nulls advanced fields for compatibility:
   - `volumeMetrics`, `vocabComplexity`, `sentenceAnalysis`, `promptRelevanceScore`, `wpmTimeSeries`, `pitchMetrics`, `rateVariation`, `emphasisMetrics`, `energyArc`, `textQuality`
+  - `audioIsolationMetrics`, `speakerIsolationMetrics`
 - `Recording.audioLevelSamples` is `@Transient` (not persisted).
 - Current recording save path does not persist sampled audio levels into saved `Recording`, so delivery/energy metrics may be absent post-hoc.
 

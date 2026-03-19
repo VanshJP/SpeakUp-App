@@ -66,10 +66,44 @@ enum CoachingTipService {
         let pauseCount = analysis.pauseCount
         let avgPause = analysis.averagePauseLength
         let textQuality = analysis.textQuality
+        let audioIsolation = analysis.audioIsolationMetrics
+        let speakerIsolation = analysis.speakerIsolationMetrics
+        let lowSignalReliability =
+            (audioIsolation?.residualNoiseScore ?? 70) < 45 ||
+            (speakerIsolation?.separationConfidence ?? 70) < 45
 
         // Top filler word name
         let topFiller = analysis.fillerWords.first?.word ?? "um"
         let topFillerCount = analysis.fillerWords.first?.count ?? 0
+
+        // --- Signal quality / conversation isolation ---
+        if let speakerIsolation, speakerIsolation.conversationDetected {
+            tips.append(CoachingTip(
+                icon: "person.2.wave.2.fill",
+                title: "Conversation Mode Detected",
+                message: "Detected multiple speakers. Your score is focused on your voice where separation confidence allowed.",
+                category: .clarity,
+                teachingPoint: "For strongest speaker separation, begin with a 5-second voice anchor and keep the mic near your mouth during group conversations."
+            ))
+        } else if let speakerIsolation, speakerIsolation.separationConfidence < 50 {
+            tips.append(CoachingTip(
+                icon: "person.crop.circle.badge.questionmark",
+                title: "Speaker Separation Is Uncertain",
+                message: "Your session may include overlapping voices. Keep the microphone close and avoid side talk when scoring yourself.",
+                category: .clarity,
+                teachingPoint: "Separation quality improves when your voice is consistently louder than nearby speakers by a small margin."
+            ))
+        }
+
+        if let audioIsolation, audioIsolation.residualNoiseScore < 45 {
+            tips.append(CoachingTip(
+                icon: "waveform.badge.exclamationmark",
+                title: "Background Noise Is High",
+                message: "Noise impacted transcript quality. A quieter space or headset mic will improve score accuracy.",
+                category: .clarity,
+                teachingPoint: "Noise suppression helps, but scoring is most stable when your voice clearly dominates ambient sound."
+            ))
+        }
 
         // --- Pace ---
         if wpm > 185 {
@@ -115,7 +149,9 @@ enum CoachingTipService {
             tips.append(CoachingTip(
                 icon: "exclamationmark.bubble.fill",
                 title: "High Filler Usage",
-                message: "You used \"\(topFiller)\" \(topFillerCount) times. Practice replacing fillers with 1-second pauses.",
+                message: lowSignalReliability
+                    ? "You may be using fillers (top: \"\(topFiller)\", \(topFillerCount)x), but audio conditions reduced certainty."
+                    : "You used \"\(topFiller)\" \(topFillerCount) times. Practice replacing fillers with 1-second pauses.",
                 category: .fillers,
                 teachingPoint: "Fillers signal uncertainty to listeners. Practice the 'silent pause' technique: when you feel an '\(topFiller)' coming, close your mouth and pause for 1 second instead.",
                 suggestedDrillMode: "fillerElimination"
@@ -124,7 +160,9 @@ enum CoachingTipService {
             tips.append(CoachingTip(
                 icon: "bubble.left.fill",
                 title: "Reduce Fillers",
-                message: "You said \"\(topFiller)\" \(topFillerCount) times. Try pausing silently instead.",
+                message: lowSignalReliability
+                    ? "Possible filler usage detected (\"\(topFiller)\" \(topFillerCount)x), though isolation confidence is limited."
+                    : "You said \"\(topFiller)\" \(topFillerCount) times. Try pausing silently instead.",
                 category: .fillers,
                 teachingPoint: "Awareness is the first step. Record yourself in daily conversation and count fillers. Once you hear them, you'll naturally start replacing them with confident pauses.",
                 suggestedDrillMode: "fillerElimination"

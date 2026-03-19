@@ -64,11 +64,22 @@ class SpeechService {
             transcriptionProgress = 1.0
         }
 
+        let isolationResult = SpeechIsolationService.preprocessIfBeneficial(audioURL: audioURL)
+        let transcriptionURL = isolationResult?.processedAudioURL ?? audioURL
+        let shouldCleanupProcessedFile = transcriptionURL != audioURL
+        var speakerIsolationMetrics: SpeakerIsolationMetrics?
+
+        defer {
+            if shouldCleanupProcessedFile {
+                try? FileManager.default.removeItem(at: transcriptionURL)
+            }
+        }
+
         let result: SpeechTranscriptionResult
 
         do {
             // Use WhisperKit for accurate filler word detection
-            result = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
+            result = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
             transcriptionProgress = whisperService.transcriptionProgress
             transcriptionEngine = "WhisperKit"
         } catch {
@@ -79,26 +90,43 @@ class SpeechService {
             await whisperService.loadModel(modelVariant: "base")
 
             do {
-                let retryResult = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
+                let retryResult = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
                 transcriptionEngine = "WhisperKit (retry)"
                 print("✅ WhisperKit retry succeeded")
                 result = retryResult
             } catch {
                 print("⚠️ WhisperKit retry failed: \(error). Falling back to Apple Speech (filler words may not be detected).")
                 transcriptionEngine = "Apple Speech (fallback)"
-                result = try await transcribeWithAppleSpeech(audioURL: audioURL)
+                result = try await transcribeWithAppleSpeech(audioURL: transcriptionURL)
             }
         }
 
-        // Re-tag fillers with user config if customized
+        let wordsAfterFillerRetagging: [TranscriptionWord]
         if fillerConfig.customFillers.isEmpty && fillerConfig.removedDefaults.isEmpty {
-            return result
+            wordsAfterFillerRetagging = result.words
+        } else {
+            let rawTimings = result.words.map { w in
+                RawWordTiming(word: w.word, start: w.start, end: w.end, confidence: w.confidence ?? 1.0)
+            }
+            wordsAfterFillerRetagging = FillerDetectionPipeline.tagFillers(in: rawTimings, config: fillerConfig)
         }
-        let rawTimings = result.words.map { w in
-            RawWordTiming(word: w.word, start: w.start, end: w.end, confidence: w.confidence ?? 1.0)
-        }
-        let retagged = FillerDetectionPipeline.tagFillers(in: rawTimings, config: fillerConfig)
-        return SpeechTranscriptionResult(text: result.text, words: retagged, duration: result.duration)
+
+        var finalWords = wordsAfterFillerRetagging
+        let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
+            words: finalWords,
+            audioURL: transcriptionURL,
+            totalDuration: result.duration
+        )
+        finalWords = speakerLabeled.0
+        speakerIsolationMetrics = speakerLabeled.1
+
+        return SpeechTranscriptionResult(
+            text: result.text,
+            words: finalWords,
+            duration: result.duration,
+            audioIsolationMetrics: isolationResult?.metrics,
+            speakerIsolationMetrics: speakerIsolationMetrics
+        )
     }
 
     /// Fallback transcription using Apple's SFSpeechRecognizer
@@ -182,12 +210,21 @@ class SpeechService {
         targetWPM: Int = 150,
         trackFillerWords: Bool = true,
         trackPauses: Bool = true,
-        scoreWeights: ScoreWeights = .defaults
+        scoreWeights: ScoreWeights = .defaults,
+        audioIsolationMetrics: AudioIsolationMetrics? = nil,
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
     ) -> SpeechAnalysis {
         // Sort words by start time to ensure accurate pause detection
         // Whisper/Apple Speech results are usually sorted but segments can sometimes overlap or be out of order
         let sortedWords = transcription.words.sorted { $0.start < $1.start }
-        
+
+        let primarySpeakerWords = sortedWords.filter(\.isPrimarySpeaker)
+        let minimumPrimaryWords = max(8, Int(Double(sortedWords.count) * 0.45))
+        let shouldUsePrimarySpeakerWords = primarySpeakerWords.count >= minimumPrimaryWords
+        let scoringWords = shouldUsePrimarySpeakerWords ? primarySpeakerWords : sortedWords
+        let effectiveSpeakerIsolationMetrics = speakerIsolationMetrics
+        let scoringText = scoringWords.map(\.word).joined(separator: " ")
+
         // Count filler words
         var fillerCounts: [String: (count: Int, timestamps: [TimeInterval])] = [:]
         var totalWords = 0
@@ -195,7 +232,7 @@ class SpeechService {
 
         var previousEnd: TimeInterval = 0
 
-        for (index, word) in sortedWords.enumerated() {
+        for (index, word) in scoringWords.enumerated() {
             totalWords += 1
 
             // Check for filler words (honor settings flag)
@@ -217,7 +254,7 @@ class SpeechService {
                     // Context detection
                     let isTransition: Bool
                     if index > 0 {
-                        let prevWord = sortedWords[index - 1].word
+                        let prevWord = scoringWords[index - 1].word
                         isTransition = prevWord.hasSuffix(".") || prevWord.hasSuffix("?") || prevWord.hasSuffix("!")
                     } else {
                         isTransition = false
@@ -235,7 +272,8 @@ class SpeechService {
         }.sorted { $0.count > $1.count }
 
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
-        let wordsPerMinute = actualDuration > 0 ? Double(totalWords) / (actualDuration / 60) : 0
+        let scoringDuration = effectiveSpeechDuration(words: scoringWords, fallback: actualDuration)
+        let wordsPerMinute = scoringDuration > 0 ? Double(totalWords) / (scoringDuration / 60) : 0
 
         let pauses = pauseMetadata.map { $0.duration }
         // Use median to resist outlier skew from long recording gaps
@@ -258,22 +296,22 @@ class SpeechService {
 
         // Run sub-analyses
         let volumeMetrics = !audioLevelSamples.isEmpty ? analyzeVolume(samples: audioLevelSamples) : nil
-        let vocabComplexity = !sortedWords.isEmpty ? analyzeVocabComplexity(words: sortedWords) : nil
-        let sentenceAnalysis = !sortedWords.isEmpty ? analyzeSentenceStructure(words: sortedWords, text: transcription.text) : nil
+        let vocabComplexity = !scoringWords.isEmpty ? analyzeVocabComplexity(words: scoringWords) : nil
+        let sentenceAnalysis = !scoringWords.isEmpty ? analyzeSentenceStructure(words: scoringWords, text: scoringText) : nil
 
         // Advanced analyses
         let pitchMetrics: PitchMetrics? = audioURL != nil ? PitchAnalysisService.analyze(audioURL: audioURL!) : nil
-        let rateVariation = analyzeRateVariation(words: sortedWords, actualDuration: actualDuration)
+        let rateVariation = analyzeRateVariation(words: scoringWords, actualDuration: scoringDuration)
         let emphasisMetrics = analyzeEmphasis(
-            words: sortedWords,
-            actualDuration: actualDuration,
+            words: scoringWords,
+            actualDuration: scoringDuration,
             pitchContour: pitchMetrics?.f0Contour,
             audioLevelSamples: audioLevelSamples
         )
         let energyArc = !audioLevelSamples.isEmpty ?
-            analyzeEnergyArc(samples: audioLevelSamples, words: sortedWords, actualDuration: actualDuration) : nil
-        let textQuality = !transcription.text.isEmpty ?
-            TextAnalysisService.analyze(text: transcription.text, totalWords: totalWords) : nil
+            analyzeEnergyArc(samples: audioLevelSamples, words: scoringWords, actualDuration: scoringDuration) : nil
+        let textQuality = !scoringText.isEmpty ?
+            TextAnalysisService.analyze(text: scoringText, totalWords: totalWords) : nil
 
         // Zero-score gate: no meaningful speech
         let nonFillerWordCount = totalWords - totalFillers
@@ -291,7 +329,9 @@ class SpeechService {
                 vocabWordsUsed: [],
                 volumeMetrics: volumeMetrics,
                 sentenceAnalysis: sentenceAnalysis,
-                promptRelevanceScore: nil
+                promptRelevanceScore: nil,
+                audioIsolationMetrics: audioIsolationMetrics,
+                speakerIsolationMetrics: effectiveSpeakerIsolationMetrics
             )
         }
 
@@ -300,18 +340,18 @@ class SpeechService {
         // Prompt relevance / coherence
         let relevanceScore: Int?
         if let promptText, totalWords >= 10 {
-            relevanceScore = PromptRelevanceService.score(promptText: promptText, transcript: transcription.text)
+            relevanceScore = PromptRelevanceService.score(promptText: promptText, transcript: scoringText)
         } else if totalWords >= 20 {
-            relevanceScore = PromptRelevanceService.coherenceScore(transcript: transcription.text)
+            relevanceScore = PromptRelevanceService.coherenceScore(transcript: scoringText)
         } else {
             relevanceScore = nil
         }
 
         // Content density
-        let contentDensity = contentDensityScore(words: sortedWords, totalFillers: totalFillers)
+        let contentDensity = contentDensityScore(words: scoringWords, totalFillers: totalFillers)
 
         // Detect vocab word usage (before subscores so we can feed it in)
-        let vocabWordsUsed = detectVocabWords(in: transcription.text, vocabWords: vocabWords)
+        let vocabWordsUsed = detectVocabWords(in: scoringText, vocabWords: vocabWords)
 
         // Calculate subscores
         let subscores = calculateSubscores(
@@ -323,7 +363,7 @@ class SpeechService {
             targetWPM: targetWPM,
             trackPauses: trackPauses,
             actualDuration: actualDuration,
-            words: sortedWords,
+            words: scoringWords,
             volumeMetrics: volumeMetrics,
             vocabComplexity: vocabComplexity,
             sentenceAnalysis: sentenceAnalysis,
@@ -336,7 +376,9 @@ class SpeechService {
             emphasisMetrics: emphasisMetrics,
             energyArc: energyArc,
             textQuality: textQuality,
-            audioLevelSamples: audioLevelSamples
+            audioLevelSamples: audioLevelSamples,
+            audioIsolationMetrics: audioIsolationMetrics,
+            speakerIsolationMetrics: effectiveSpeakerIsolationMetrics
         )
 
         var overallScore = calculateOverallScore(subscores: subscores, weights: scoreWeights)
@@ -347,14 +389,14 @@ class SpeechService {
         }
 
         // Gibberish gate: cap score for gibberish input
-        if PromptRelevanceService.isLikelyGibberish(transcript: transcription.text, words: sortedWords) {
+        if PromptRelevanceService.isLikelyGibberish(transcript: scoringText, words: scoringWords) {
             overallScore = min(overallScore, 15)
         }
 
         let clarity = Double(subscores.clarity)
 
         // Compute WPM time series
-        let wpmTimeSeries = computeWPMTimeSeries(words: sortedWords, actualDuration: actualDuration)
+        let wpmTimeSeries = computeWPMTimeSeries(words: scoringWords, actualDuration: scoringDuration)
 
         return SpeechAnalysis(
             fillerWords: fillerWords,
@@ -380,7 +422,9 @@ class SpeechService {
             rateVariation: rateVariation,
             emphasisMetrics: emphasisMetrics,
             energyArc: energyArc,
-            textQuality: textQuality
+            textQuality: textQuality,
+            audioIsolationMetrics: audioIsolationMetrics,
+            speakerIsolationMetrics: effectiveSpeakerIsolationMetrics
         )
     }
 
@@ -410,6 +454,18 @@ class SpeechService {
         "just", "also", "very", "too", "its", "all", "been", "being"
     ]
 
+    private func effectiveSpeechDuration(words: [TranscriptionWord], fallback: TimeInterval) -> TimeInterval {
+        guard let first = words.first, let last = words.last else { return fallback }
+        let activeWindow = max(0, last.end - first.start)
+        return max(activeWindow, min(fallback, 5.0))
+    }
+
+    private func applyReliabilityStabilization(score: Int, reliability: Double, neutralAnchor: Int) -> Int {
+        let clampedReliability = max(0.35, min(1.0, reliability))
+        let blended = Double(score) * clampedReliability + Double(neutralAnchor) * (1.0 - clampedReliability)
+        return max(0, min(100, Int(blended.rounded())))
+    }
+
     // MARK: - Subscore Calculation
 
     private func calculateSubscores(
@@ -434,7 +490,9 @@ class SpeechService {
         emphasisMetrics: EmphasisMetrics? = nil,
         energyArc: EnergyArcMetrics? = nil,
         textQuality: TextQualityMetrics? = nil,
-        audioLevelSamples: [Float] = []
+        audioLevelSamples: [Float] = [],
+        audioIsolationMetrics: AudioIsolationMetrics? = nil,
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
     ) -> SpeechSubscores {
         // Score ceiling for short recordings (replaces center-biased dampening)
         let scoreCeiling = min(100, 40 + Int(actualDuration * 6))
@@ -535,6 +593,32 @@ class SpeechService {
             )
             pauseScore = min(max(0, min(100, rawPauseScore)), scoreCeiling)
         }
+
+        let signalReliability = Double(audioIsolationMetrics?.residualNoiseScore ?? 70) / 100.0
+        let speakerReliability = Double(speakerIsolationMetrics?.separationConfidence ?? 70) / 100.0
+        let combinedReliability = max(0.35, min(1.0, signalReliability * 0.6 + speakerReliability * 0.4))
+        let neutralAnchor = 55
+
+        let stabilizedClarity = applyReliabilityStabilization(
+            score: clarityScore,
+            reliability: combinedReliability,
+            neutralAnchor: neutralAnchor
+        )
+        let stabilizedPace = applyReliabilityStabilization(
+            score: paceScore,
+            reliability: combinedReliability,
+            neutralAnchor: neutralAnchor
+        )
+        let stabilizedFiller = applyReliabilityStabilization(
+            score: fillerScore,
+            reliability: combinedReliability,
+            neutralAnchor: neutralAnchor
+        )
+        let stabilizedPause = applyReliabilityStabilization(
+            score: pauseScore,
+            reliability: combinedReliability,
+            neutralAnchor: neutralAnchor
+        )
 
         // Delivery score — enhanced with emphasis and energy arc
         let deliveryScore: Int?
@@ -643,10 +727,10 @@ class SpeechService {
         }
 
         return SpeechSubscores(
-            clarity: clarityScore,
-            pace: paceScore,
-            fillerUsage: fillerScore,
-            pauseQuality: pauseScore,
+            clarity: stabilizedClarity,
+            pace: stabilizedPace,
+            fillerUsage: stabilizedFiller,
+            pauseQuality: stabilizedPause,
             vocalVariety: vocalVarietyScore,
             delivery: deliveryScore,
             vocabulary: vocabularyScore,
@@ -1259,7 +1343,9 @@ class SpeechService {
                 end: word.end,
                 confidence: word.confidence,
                 isFiller: word.isFiller,
-                isVocabWord: true
+                isVocabWord: true,
+                isPrimarySpeaker: word.isPrimarySpeaker,
+                speakerConfidence: word.speakerConfidence
             )
         }
     }
@@ -1513,6 +1599,22 @@ struct SpeechTranscriptionResult {
     let text: String
     let words: [TranscriptionWord]
     let duration: TimeInterval
+    let audioIsolationMetrics: AudioIsolationMetrics?
+    let speakerIsolationMetrics: SpeakerIsolationMetrics?
+
+    init(
+        text: String,
+        words: [TranscriptionWord],
+        duration: TimeInterval,
+        audioIsolationMetrics: AudioIsolationMetrics? = nil,
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
+    ) {
+        self.text = text
+        self.words = words
+        self.duration = duration
+        self.audioIsolationMetrics = audioIsolationMetrics
+        self.speakerIsolationMetrics = speakerIsolationMetrics
+    }
 }
 
 struct PauseInfo {
