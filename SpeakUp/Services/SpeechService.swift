@@ -51,7 +51,11 @@ class SpeechService {
 
     // MARK: - Transcription
 
-    func transcribe(audioURL: URL, fillerConfig: FillerWordConfig = .default) async throws -> SpeechTranscriptionResult {
+    func transcribe(
+        audioURL: URL,
+        fillerConfig: FillerWordConfig = .default,
+        preferredTerms: [String] = []
+    ) async throws -> SpeechTranscriptionResult {
         isTranscribing = true
         transcriptionProgress = 0
 
@@ -64,7 +68,7 @@ class SpeechService {
 
         do {
             // Use WhisperKit for accurate filler word detection
-            result = try await whisperService.transcribe(audioURL: audioURL)
+            result = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
             transcriptionProgress = whisperService.transcriptionProgress
             transcriptionEngine = "WhisperKit"
         } catch {
@@ -75,7 +79,7 @@ class SpeechService {
             await whisperService.loadModel(modelVariant: "base")
 
             do {
-                let retryResult = try await whisperService.transcribe(audioURL: audioURL)
+                let retryResult = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
                 transcriptionEngine = "WhisperKit (retry)"
                 print("✅ WhisperKit retry succeeded")
                 result = retryResult
@@ -441,8 +445,8 @@ class SpeechService {
             let articulationComponent: Double
             if let pm = pitchMetrics, pm.voicedFrameRatio > 0 {
                 // voicedFrameRatio: 0.3-0.7 is typical for speech.
-                // Gentler mapping: ratio 0.35 → ~60, 0.5 → ~75, 0.65 → ~90
-                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 120 + 18))
+                // Softer mapping: ratio 0.35 → ~67, 0.5 → ~87, 0.65 → ~100
+                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 130 + 22))
             } else {
                 // Fallback to word confidence when pitch data unavailable
                 let confidences = words.compactMap { $0.confidence }
@@ -459,15 +463,15 @@ class SpeechService {
                 let meanDur = durations.reduce(0, +) / Double(durations.count)
                 let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
                 let cv = meanDur > 0 ? sqrt(variance) / meanDur : 1.0
-                // Softer curve: natural speech CV ~0.4-0.6 now scores 55-75 instead of 40-60
-                durationComponent = max(0, min(100, (1.0 - cv * 0.75) * 100))
+                // More forgiving curve: natural speech CV ~0.4-0.6 now scores ~64-76.
+                durationComponent = max(0, min(100, (1.0 - cv * 0.60) * 100))
             } else {
                 durationComponent = 55
             }
 
             let hedgePenalty: Double
             if let tq = textQuality {
-                hedgePenalty = min(20, tq.hedgeWordRatio * 400)
+                hedgePenalty = min(14, tq.hedgeWordRatio * 280)
             } else {
                 hedgePenalty = 0
             }
@@ -479,10 +483,12 @@ class SpeechService {
                 authorityComponent = 55
             }
 
-            let rawClarity = articulationComponent * 0.50 +
-                durationComponent * 0.25 +
-                (100 - hedgePenalty) * 0.10 +
-                authorityComponent * 0.15
+            let paceAlignmentBonus = max(0, 8 - abs(wordsPerMinute - Double(targetWPM)) / 10)
+            let rawClarity = articulationComponent * 0.52 +
+                durationComponent * 0.24 +
+                (100 - hedgePenalty) * 0.08 +
+                authorityComponent * 0.16 +
+                paceAlignmentBonus
             clarityScore = min(Int(rawClarity), scoreCeiling)
         }
 

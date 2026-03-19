@@ -891,11 +891,19 @@ struct RecordingDetailView: View {
                 }
             } else if let insight = llmInsight {
                 GlassCard(tint: .purple.opacity(0.05)) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(insight)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
+                    let blocks = formattedAIInsightBlocks(insight)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if blocks.isEmpty {
+                            Text(insight)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                                aiInsightBlockView(block)
+                            }
+                        }
                     }
                 }
             } else {
@@ -1020,6 +1028,80 @@ struct RecordingDetailView: View {
         return DefaultFeedbackQuestions.questions + custom
     }
 
+    private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {
+        let trimmed = insight.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let lines = trimmed
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        var blocks: [AIInsightBlock] = []
+        for line in lines where !line.isEmpty {
+            if let headingRange = line.range(of: #"^#{1,3}\s+"#, options: .regularExpression) {
+                let headingText = String(line[headingRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !headingText.isEmpty else { continue }
+                blocks.append(.heading(parseInlineMarkdown(headingText)))
+                continue
+            }
+
+            if let bulletPrefixRange = line.range(of: #"^(?:[-*•]|\d+[.)])\s+"#, options: .regularExpression) {
+                let bulletText = String(line[bulletPrefixRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !bulletText.isEmpty else { continue }
+                blocks.append(.bullet(parseInlineMarkdown(bulletText)))
+                continue
+            }
+
+            blocks.append(.paragraph(parseInlineMarkdown(line)))
+        }
+
+        return blocks
+    }
+
+    private func parseInlineMarkdown(_ text: String) -> AttributedString {
+        do {
+            return try AttributedString(
+                markdown: text,
+                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnly)
+            )
+        } catch {
+            return AttributedString(text)
+        }
+    }
+
+    @ViewBuilder
+    private func aiInsightBlockView(_ block: AIInsightBlock) -> some View {
+        switch block {
+        case .heading(let heading):
+            Text(heading)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+        case .paragraph(let paragraph):
+            Text(paragraph)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+        case .bullet(let bullet):
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(AppColors.primary)
+                    .padding(.top, 6)
+
+                Text(bullet)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private func prepareDetailAssets(for recording: Recording) {
         prepareTranscriptPlaybackWords(from: recording)
 
@@ -1082,26 +1164,38 @@ struct RecordingDetailView: View {
         }
 
         let currentTime = max(0, audioService.playbackProgress) * audioService.playbackDuration
-
-        while playbackWordCursor < orderedTranscriptRanges.count - 1 &&
-            currentTime > orderedTranscriptRanges[playbackWordCursor].upperBound {
-            playbackWordCursor += 1
-        }
-
-        while playbackWordCursor > 0 && currentTime < orderedTranscriptRanges[playbackWordCursor].lowerBound {
-            playbackWordCursor -= 1
-        }
-
-        guard playbackWordCursor < orderedTranscriptRanges.count else {
+        guard let matchedIndex = wordIndexForPlaybackTime(currentTime) else {
             activePlaybackWordID = nil
             return
         }
+        playbackWordCursor = matchedIndex
+        activePlaybackWordID = orderedTranscriptWords[matchedIndex].id
+    }
 
-        if orderedTranscriptRanges[playbackWordCursor].contains(currentTime) {
-            activePlaybackWordID = orderedTranscriptWords[playbackWordCursor].id
-        } else {
-            activePlaybackWordID = nil
+    private func wordIndexForPlaybackTime(_ time: TimeInterval) -> Int? {
+        guard !orderedTranscriptRanges.isEmpty else { return nil }
+        let toleranceBefore: TimeInterval = 0.08
+        let toleranceAfter: TimeInterval = 0.14
+
+        var low = 0
+        var high = orderedTranscriptRanges.count - 1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            let range = orderedTranscriptRanges[mid]
+
+            if time < range.lowerBound - toleranceBefore {
+                high = mid - 1
+            } else if time > range.upperBound + toleranceAfter {
+                low = mid + 1
+            } else {
+                return mid
+            }
         }
+
+        // During brief pauses between words, keep highlighting the latest spoken word.
+        let fallback = min(max(low - 1, 0), orderedTranscriptRanges.count - 1)
+        return orderedTranscriptRanges.indices.contains(fallback) ? fallback : nil
     }
 
     private func loadRecording() async {
@@ -1188,6 +1282,7 @@ struct RecordingDetailView: View {
             let settingsDescriptor = FetchDescriptor<UserSettings>()
             let settings = (try? modelContext.fetch(settingsDescriptor))?.first
             let vocabWords = settings?.vocabWords ?? []
+            let preferredTerms = settings?.dictationBiasWords ?? []
 
             // Build filler config from user settings
             let fillerConfig = FillerWordConfig(
@@ -1196,7 +1291,11 @@ struct RecordingDetailView: View {
                 removedDefaults: Set(settings?.removedDefaultFillers ?? [])
             )
 
-            let result = try await speechService.transcribe(audioURL: audioURL, fillerConfig: fillerConfig)
+            let result = try await speechService.transcribe(
+                audioURL: audioURL,
+                fillerConfig: fillerConfig,
+                preferredTerms: preferredTerms
+            )
 
             // Build score weights from user settings
             var weights = ScoreWeights.defaults
@@ -1466,10 +1565,7 @@ struct RecordingDetailView: View {
                     // Only handle predominantly vertical drags
                     guard abs(translation) > abs(value.translation.width) else { return }
                     if playbackDrawerState == .expanded || playbackDrawerState == .collapsed {
-                        playbackDrawerDragOffset = max(0, translation)
-                    }
-                    if playbackDrawerState == .collapsed && translation < 0 {
-                        playbackDrawerDragOffset = min(0, translation)
+                        playbackDrawerDragOffset = max(-56, min(56, translation))
                     }
                 }
                 .onEnded { value in
@@ -1479,14 +1575,10 @@ struct RecordingDetailView: View {
                     withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
                         playbackDrawerDragOffset = 0
 
-                        if translation > 80 || velocity > 250 {
-                            // Swipe down — hide the drawer
-                            audioService.pause()
-                            playbackDrawerState = .hidden
-                        } else if playbackDrawerState == .expanded && translation > 40 {
+                        if playbackDrawerState == .expanded && (translation > 34 || velocity > 180) {
                             // Moderate swipe down from expanded — collapse
                             playbackDrawerState = .collapsed
-                        } else if playbackDrawerState == .collapsed && translation < -35 {
+                        } else if playbackDrawerState == .collapsed && (translation < -30 || velocity < -170) {
                             // Swipe up from collapsed — expand
                             playbackDrawerState = .expanded
                         }
@@ -1722,6 +1814,12 @@ private enum PlaybackDrawerState {
     case expanded
     case collapsed
     case hidden
+}
+
+private enum AIInsightBlock {
+    case heading(AttributedString)
+    case paragraph(AttributedString)
+    case bullet(AttributedString)
 }
 
 // MARK: - Session Feedback Sheet

@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import SwiftData
-import UIKit
 
 @MainActor @Observable
 class SettingsViewModel {
@@ -83,6 +82,17 @@ class SettingsViewModel {
     var vocabWordError: String? = nil
     var showingAddVocabWord: Bool = false
     private var vocabErrorDismissID = 0
+    var dictationBiasWords: [String] = []
+    var newDictationBiasWord: String = ""
+    var dictationWordError: String? = nil
+    private var dictationErrorDismissID = 0
+
+    /// Terms used to bias Whisper toward names/domain words.
+    var whisperDictionaryWords: [String] {
+        dictationBiasWords
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 
     // Local state - Filler Words
     var customFillerWords: [String] = []
@@ -208,6 +218,7 @@ class SettingsViewModel {
 
         // Word Bank
         vocabWords = settings.vocabWords
+        dictationBiasWords = settings.dictationBiasWords
 
         // Filler Words
         customFillerWords = settings.customFillerWords
@@ -269,6 +280,7 @@ class SettingsViewModel {
 
         // Word Bank
         settings.vocabWords = vocabWords
+        settings.dictationBiasWords = dictationBiasWords
 
         // Filler Words
         settings.customFillerWords = customFillerWords
@@ -335,12 +347,12 @@ class SettingsViewModel {
     @MainActor
     func addVocabWord() {
         vocabWordError = nil
-        let trimmed = newVocabWord.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmed = newVocabWord.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             newVocabWord = ""
             return
         }
-        guard !vocabWords.contains(trimmed) else {
+        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
             showVocabError("Already in your word bank")
             return
         }
@@ -348,8 +360,8 @@ class SettingsViewModel {
             showVocabError("That's a filler word — we track those separately")
             return
         }
-        guard isRealWord(trimmed) else {
-            showVocabError("Not a recognized word")
+        guard trimmed.count >= 2 else {
+            showVocabError("Use at least 2 characters")
             return
         }
         vocabWords.append(trimmed)
@@ -379,7 +391,52 @@ class SettingsViewModel {
 
     @MainActor
     func removeVocabWord(_ word: String) {
-        vocabWords.removeAll { $0 == word }
+        vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    func addDictationBiasWord() {
+        dictationWordError = nil
+        let trimmed = newDictationBiasWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            newDictationBiasWord = ""
+            return
+        }
+        guard trimmed.count >= 2 else {
+            showDictationError("Use at least 2 characters")
+            return
+        }
+        guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            showDictationError("Already in your dictation dictionary")
+            return
+        }
+        guard !isFillerWord(trimmed) else {
+            showDictationError("That's a filler word — avoid biasing it")
+            return
+        }
+        dictationBiasWords.append(trimmed)
+        newDictationBiasWord = ""
+        Haptics.success()
+        Task { await saveSettings() }
+    }
+
+    @MainActor
+    private func showDictationError(_ message: String) {
+        Haptics.warning()
+        dictationWordError = message
+        dictationErrorDismissID += 1
+        let currentID = dictationErrorDismissID
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard currentID == dictationErrorDismissID else { return }
+            dictationWordError = nil
+        }
+    }
+
+    @MainActor
+    func removeDictationBiasWord(_ word: String) {
+        dictationBiasWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
         Task { await saveSettings() }
     }
 
@@ -408,8 +465,12 @@ class SettingsViewModel {
             showFillerError("Already in your custom fillers")
             return
         }
-        guard !vocabWords.contains(trimmed) else {
+        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
             showFillerError("This word is in your Word Bank")
+            return
+        }
+        guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            showFillerError("This word is in your Dictation Dictionary")
             return
         }
         if isContextDependent {
@@ -498,19 +559,6 @@ class SettingsViewModel {
             || customContextFillerWords.contains(lowered)
     }
 
-    private func isRealWord(_ word: String) -> Bool {
-        let checker = UITextChecker()
-        let range = NSRange(location: 0, length: word.utf16.count)
-        let misspelled = checker.rangeOfMisspelledWord(
-            in: word,
-            range: range,
-            startingAt: 0,
-            wrap: false,
-            language: "en"
-        )
-        return misspelled.location == NSNotFound
-    }
-    
     @MainActor
     func resetSettings() async {
         guard let settings, let context = modelContext else { return }
@@ -531,6 +579,7 @@ class SettingsViewModel {
         settings.countdownStyle = 0
         settings.timerEndBehavior = 0
         settings.vocabWords = []
+        settings.dictationBiasWords = []
         settings.customFillerWords = []
         settings.customContextFillerWords = []
         settings.removedDefaultFillers = []
@@ -615,11 +664,13 @@ class SettingsViewModel {
             // Clear word bank and filler customizations from settings
             if let settings {
                 settings.vocabWords = []
+                settings.dictationBiasWords = []
                 settings.customFillerWords = []
                 settings.customContextFillerWords = []
                 settings.removedDefaultFillers = []
             }
             vocabWords = []
+            dictationBiasWords = []
             customFillerWords = []
             customContextFillerWords = []
             removedDefaultFillers = []

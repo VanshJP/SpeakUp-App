@@ -128,6 +128,9 @@ class WarmUpViewModel {
             isComplete = true
             timer?.invalidate()
             timer = nil
+            if let exerciseId = currentExercise?.id {
+                CurriculumActivitySignalStore.markExerciseCompleted(exerciseId)
+            }
             Haptics.success()
         }
     }

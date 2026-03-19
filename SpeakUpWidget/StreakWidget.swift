@@ -66,12 +66,10 @@ struct StreakWidgetView: View {
                     Circle()
                         .fill(accentColor.opacity(isAtRisk ? 0.25 : 0.15))
                         .frame(width: 50, height: 50)
-                        .shadow(color: accentColor.opacity(isAtRisk ? 0.4 : 0.2), radius: isAtRisk ? 10 : 6)
 
                     Image(systemName: "flame.fill")
                         .font(.title2)
                         .foregroundStyle(isAtRisk ? .red : accentColor)
-                        .shadow(color: (isAtRisk ? Color.red : accentColor).opacity(0.5), radius: 8)
                 }
 
                 Text("\(entry.streak)")
@@ -117,28 +115,11 @@ struct StreakWidget: Widget {
         StaticConfiguration(kind: kind, provider: StreakProvider()) { entry in
             StreakWidgetView(entry: entry)
                 .environment(\.colorScheme, .dark)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Color(red: 0.051, green: 0.071, blue: 0.165)
-                        LinearGradient(
-                            colors: [accentGradientColor(entry).opacity(0.2), .clear],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    }
-                }
+                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
         }
         .configurationDisplayName("Streak")
         .description("Your current practice streak.")
         .supportedFamilies([.systemSmall])
-    }
-
-    private func accentGradientColor(_ entry: StreakEntry) -> Color {
-        let isAtRisk = entry.streak > 0 && !entry.hasPracticedToday
-        guard isAtRisk else { return .orange }
-        let hour = Calendar.current.component(.hour, from: entry.date)
-        if hour >= 20 { return .red }
-        return .orange
     }
 }
 

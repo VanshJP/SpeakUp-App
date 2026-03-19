@@ -132,12 +132,18 @@ final class LLMService {
 
         // Prefer Apple Intelligence
         if appleIntelligenceAvailable {
-            return await generateCoachingWithAppleIntelligence(analysis: analysis, transcript: transcript)
+            if let raw = await generateCoachingWithAppleIntelligence(analysis: analysis, transcript: transcript) {
+                return sanitizeCoachingInsight(raw)
+            }
+            return nil
         }
 
         // Fall back to local LLM
         if localLLM.isModelReady {
-            return await localLLM.generateCoachingInsight(from: analysis, transcript: transcript)
+            if let raw = await localLLM.generateCoachingInsight(from: analysis, transcript: transcript) {
+                return sanitizeCoachingInsight(raw)
+            }
+            return nil
         }
 
         return nil
@@ -366,5 +372,45 @@ final class LLMService {
         parts.append("Based on this performance, provide 2-3 specific coaching tips to help this speaker improve.")
 
         return parts.joined(separator: "\n")
+    }
+
+    private func sanitizeCoachingInsight(_ raw: String) -> String {
+        let lines = raw
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var bulletTips: [String] = []
+        for line in lines {
+            let stripped = line
+                .replacingOccurrences(of: #"^[\-\*\•\d\.\)\s]+"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !stripped.isEmpty else { continue }
+            bulletTips.append(stripped)
+        }
+
+        // Fallback: if model returned one paragraph, preserve it.
+        guard !bulletTips.isEmpty else { return raw.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        var seen: Set<String> = []
+        var deduped: [String] = []
+        for tip in bulletTips {
+            let key = tip
+                .lowercased()
+                .replacingOccurrences(of: #"[^a-z0-9\s]"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty else { continue }
+            if seen.insert(key).inserted {
+                deduped.append(tip)
+            }
+            if deduped.count == 3 { break }
+        }
+
+        if deduped.isEmpty {
+            return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return deduped.map { "- \($0)" }.joined(separator: "\n")
     }
 }

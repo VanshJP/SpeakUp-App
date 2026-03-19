@@ -21,59 +21,30 @@ struct EventDetailView: View {
     @State private var drillViewModel = DrillViewModel()
     @State private var selectedPracticeVersionId: UUID?
     @State private var showingNotificationSchedule = false
+    @State private var draftEventDate = Date()
+    @State private var draftExpectedDurationMinutes = 5
+    @State private var draftDailyPracticeMinutes = 30
+    @State private var showFullPrepTimeline = false
 
     var body: some View {
         ZStack {
             AppBackground()
 
             ScrollView {
-                VStack(spacing: 20) {
-                    // Countdown header
+                VStack(spacing: 16) {
                     countdownHeader
-
-                    // Coaching tip
-                    coachingTipCard
-
-                    // Readiness score
-                    if event.totalPracticeCount > 0 {
-                        readinessCard
-                    }
-
-                    // Quick actions
                     quickActions
-
-                    // Recommended tools
-                    recommendedToolsSection
-
-                    // Script section
-                    if event.scriptText != nil {
-                        scriptSection
-                    }
-
-                    // Script revision progress
-                    if !viewModel.revisionMilestones.isEmpty {
-                        revisionProgressSection
-                    }
-
-                    // Prep timeline
-                    if !viewModel.timelineDays.isEmpty {
-                        prepTasksSection
-                    }
-
+                    logisticsEditorSection
+                    todayFocusSection
+                    recommendedToolsCompactSection
+                    if event.scriptText != nil { scriptAtAGlanceSection }
                     notificationPreviewSection
-
-                    // Linked recordings
-                    if !viewModel.linkedRecordings.isEmpty {
-                        recordingsSection
-                    }
-
-                    // Event info
+                    if !viewModel.linkedRecordings.isEmpty { recordingsSection }
                     eventInfoSection
-
-                    // Danger zone
                     dangerZone
                 }
-                .padding()
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
         }
         .navigationTitle(event.title)
@@ -86,6 +57,9 @@ struct EventDetailView: View {
             if selectedPracticeVersionId == nil {
                 selectedPracticeVersionId = event.currentScriptVersion?.id
             }
+            draftEventDate = event.eventDate
+            draftExpectedDurationMinutes = event.expectedDurationMinutes
+            draftDailyPracticeMinutes = event.maxDailyPracticeMinutes
         }
         .sheet(isPresented: $showingScriptEditor) {
             ScriptEditorView(event: event, viewModel: viewModel)
@@ -96,6 +70,10 @@ struct EventDetailView: View {
                     scriptText: script,
                     speed: event.teleprompterSpeed,
                     fontSize: event.teleprompterFontSize,
+                    onStartRecording: {
+                        showingTeleprompter = false
+                        onStartPractice?(event, selectedPracticeVersion?.id)
+                    },
                     onSettingsChanged: { newSpeed, newFontSize in
                         event.teleprompterSpeed = newSpeed
                         event.teleprompterFontSize = newFontSize
@@ -184,7 +162,7 @@ struct EventDetailView: View {
     // MARK: - Countdown Header
 
     private var countdownHeader: some View {
-        FeaturedGlassCard(gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]) {
+        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
             VStack(spacing: 12) {
                 HStack {
                     Image(systemName: event.resolvedSessionType.icon)
@@ -219,6 +197,10 @@ struct EventDetailView: View {
                     if let last = event.lastPracticeDate {
                         Label("Last: \(last.formatted(date: .abbreviated, time: .omitted))", systemImage: "clock")
                     }
+                    if event.totalPracticeCount > 0 {
+                        Label("Readiness \(event.readinessScore)%", systemImage: "chart.line.uptrend.xyaxis")
+                            .foregroundStyle(AppColors.scoreColor(for: event.readinessScore))
+                    }
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -238,6 +220,92 @@ struct EventDetailView: View {
                 Text(event.resolvedSessionType.coachingTip)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Logistics Editor
+
+    private var logisticsEditorSection: some View {
+        GlassCard(tint: AppColors.glassTintPrimary.opacity(0.7)) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label("Plan Details", systemImage: "slider.horizontal.3")
+                        .font(.headline)
+                    Spacer()
+                    if hasLogisticsChanges {
+                        Text("Unsaved")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(AppColors.warning)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background {
+                                Capsule().fill(AppColors.warning.opacity(0.16))
+                            }
+                    }
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(AppColors.primary)
+                        .padding(.top, 3)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Event Date")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        DatePicker(
+                            "",
+                            selection: $draftEventDate,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
+                        .tint(AppColors.primary)
+                    }
+                    Spacer()
+                }
+
+                Divider()
+
+                Stepper(value: $draftExpectedDurationMinutes, in: 1...180, step: 1) {
+                    HStack {
+                        Label("Duration", systemImage: "clock")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(draftExpectedDurationMinutes) min")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+
+                Divider()
+
+                Stepper(value: $draftDailyPracticeMinutes, in: 10...240, step: 5) {
+                    HStack {
+                        Label("Daily Practice Capacity", systemImage: "timer")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(draftDailyPracticeMinutes) min")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+
+                if hasLogisticsChanges {
+                    GlassButton(title: "Save Plan Details", icon: "checkmark.circle", style: .primary, size: .small) {
+                        Haptics.success()
+                        viewModel.updateEventLogistics(
+                            event,
+                            eventDate: draftEventDate,
+                            expectedDurationMinutes: draftExpectedDurationMinutes,
+                            maxDailyPracticeMinutes: draftDailyPracticeMinutes
+                        )
+                    }
+                } else {
+                    Text("Saving updates recalculates prep tasks and recommendation targets.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -314,6 +382,187 @@ struct EventDetailView: View {
                 .background {
                     Capsule()
                         .fill(AppColors.primary.opacity(0.15))
+                }
+            }
+        }
+    }
+
+    // MARK: - Today Focus
+
+    private var todayFocusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Today Focus", icon: "checklist")
+
+            GlassCard(tint: AppColors.glassTintPrimary.opacity(0.55)) {
+                if viewModel.prepTasks.isEmpty {
+                    Text("No prep tasks yet. Save plan details to regenerate your timeline.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    todayFocusContent
+                }
+            }
+        }
+    }
+
+    private var todayFocusContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(completedPrepCount) / \(viewModel.prepTasks.count) completed")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(prepCompletionRatio * 100))%")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(AppColors.scoreColor(for: Int(prepCompletionRatio * 100)))
+            }
+
+            ForEach(visibleFocusTasks) { task in
+                focusTaskRow(task)
+            }
+
+            if viewModel.prepTasks.count > 4 {
+                Button {
+                    Haptics.light()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showFullPrepTimeline.toggle()
+                    }
+                } label: {
+                    Text(showFullPrepTimeline ? "Show less" : "Show full timeline")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func focusTaskRow(_ task: EventPrepTask) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                Haptics.success()
+                viewModel.completeTask(task)
+            } label: {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.body)
+                    .foregroundStyle(task.isCompleted ? AppColors.success : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(.subheadline.weight(.semibold))
+                    .strikethrough(task.isCompleted)
+                    .foregroundStyle(task.isCompleted ? Color.secondary : Color.white)
+                Text(task.taskDescription)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Text(task.scheduledDate.formatted(date: .abbreviated, time: .omitted))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var visibleFocusTasks: [EventPrepTask] {
+        let sorted = viewModel.prepTasks.sorted { lhs, rhs in
+            if lhs.isCompleted != rhs.isCompleted {
+                return !lhs.isCompleted && rhs.isCompleted
+            }
+            return lhs.scheduledDate < rhs.scheduledDate
+        }
+        if showFullPrepTimeline {
+            return sorted
+        }
+        return Array(sorted.prefix(4))
+    }
+
+    // MARK: - Recommended Tools
+
+    private var recommendedToolsCompactSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Recommended Tools", icon: "star.fill")
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(event.resolvedSessionType.recommendedTools.prefix(4)) { tool in
+                    Button {
+                        Haptics.medium()
+                        launchTool(tool.action)
+                    } label: {
+                        GlassCard(tint: tool.color.opacity(0.08), padding: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Image(systemName: tool.icon)
+                                    .font(.headline)
+                                    .foregroundStyle(tool.color)
+                                Text(tool.name)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text(tool.tip)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: - Script At A Glance
+
+    private var scriptAtAGlanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Script", systemImage: "doc.text")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    showingScriptEditor = true
+                } label: {
+                    Text("Edit")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let selectedVersion = selectedPracticeVersion {
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Version \(selectedVersion.versionNumber)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                            Spacer()
+                            Text("\(selectedVersion.wordCount) words")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let firstSection = selectedVersion.scriptSections.first {
+                            Text(firstSection.text)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(4)
+                        }
+                    }
+                }
+            } else if let script = event.scriptText {
+                GlassCard {
+                    Text(script)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -843,15 +1092,16 @@ struct EventDetailView: View {
     private var eventInfoSection: some View {
         GlassCard {
             VStack(spacing: 12) {
-                GlassInfoRow(label: "Duration", value: "\(event.expectedDurationMinutes) min", icon: "clock")
+                GlassInfoRow(
+                    label: "Session Type",
+                    value: event.resolvedSessionType.rawValue,
+                    icon: event.resolvedSessionType.icon
+                )
 
-                if let audience = event.audienceType {
+                if let audience = event.audienceType, !audience.isEmpty {
                     Divider()
                     GlassInfoRow(label: "Audience", value: audience, icon: "person.2")
                 }
-
-                Divider()
-                GlassInfoRow(label: "Daily Practice Capacity", value: "\(event.maxDailyPracticeMinutes) min", icon: "timer")
 
                 if let audienceSize = event.audienceSize, audienceSize > 0 {
                     Divider()
@@ -868,9 +1118,22 @@ struct EventDetailView: View {
                 }
 
                 Divider()
+                GlassInfoRow(
+                    label: "Target daily practice",
+                    value: "\(event.maxDailyPracticeMinutes) min/day",
+                    icon: "timer"
+                )
+                Divider()
                 GlassInfoRow(label: "Created", value: event.createdDate.formatted(date: .abbreviated, time: .omitted), icon: "calendar.badge.plus")
             }
         }
+    }
+
+    private var hasLogisticsChanges: Bool {
+        let isDateChanged = abs(draftEventDate.timeIntervalSince(event.eventDate)) > 1
+        return isDateChanged ||
+            draftExpectedDurationMinutes != event.expectedDurationMinutes ||
+            draftDailyPracticeMinutes != event.maxDailyPracticeMinutes
     }
 
     // MARK: - Danger Zone

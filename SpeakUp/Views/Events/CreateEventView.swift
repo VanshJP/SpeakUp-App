@@ -15,7 +15,6 @@ struct CreateEventView: View {
     @State private var notes = ""
     @State private var scriptText = ""
     @State private var isOpenEnded = false
-    @State private var step = 0
 
     var body: some View {
         NavigationStack {
@@ -23,186 +22,182 @@ struct CreateEventView: View {
                 AppBackground(style: .subtle)
 
                 ScrollView {
-                    VStack(spacing: 24) {
-                        // Step indicator
-                        HStack(spacing: 8) {
-                            ForEach(0..<3) { i in
-                                Capsule()
-                                    .fill(i <= step ? AppColors.primary : Color.white.opacity(0.15))
-                                    .frame(height: 4)
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        switch step {
-                        case 0: sessionTypeStep
-                        case 1: detailsStep
-                        case 2: scriptStep
-                        default: EmptyView()
-                        }
+                    VStack(spacing: 16) {
+                        introCard
+                        sessionTypeSection
+                        essentialsSection
+                        optionalContextSection
+                        scriptSection
+                        createActions
                     }
-                    .padding(.vertical)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
             }
             .navigationTitle("New Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        if step > 0 { step -= 1 } else { dismiss() }
-                    } label: {
-                        Image(systemName: step > 0 ? "chevron.left" : "xmark")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.white)
                     }
                 }
             }
         }
     }
 
-    // MARK: - Step 1: Session Type
+    // MARK: - Sections
 
-    private var sessionTypeStep: some View {
-        VStack(spacing: 16) {
-            Text("What are you preparing for?")
-                .font(.title3.weight(.semibold))
+    private var introCard: some View {
+        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent], padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Set one clear target")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("Pick your event type, deadline, and daily effort. Optional context can be added below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+    private var sessionTypeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("What are you preparing for?", icon: "sparkles")
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(SessionType.allCases) { type in
                     Button {
-                        Haptics.light()
+                        Haptics.selection()
                         selectedType = type
                         selectedDuration = type.defaultDurationMinutes
                     } label: {
-                        GlassCard(tint: selectedType == type ? AppColors.primary.opacity(0.15) : nil, accentBorder: selectedType == type ? AppColors.primary : nil) {
-                            VStack(spacing: 10) {
+                        GlassCard(
+                            tint: selectedType == type ? AppColors.glassTintPrimary : nil,
+                            padding: 12,
+                            accentBorder: selectedType == type ? AppColors.primary : nil
+                        ) {
+                            VStack(spacing: 8) {
                                 Image(systemName: type.icon)
-                                    .font(.title2)
+                                    .font(.headline)
                                     .foregroundStyle(selectedType == type ? AppColors.primary : .secondary)
-
                                 Text(type.rawValue)
                                     .font(.caption.weight(.semibold))
-                                    .foregroundStyle(selectedType == type ? .primary : .secondary)
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 80)
+                            .frame(maxWidth: .infinity, minHeight: 70)
                         }
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal)
-
-            GlassButton(title: "Next", icon: "arrow.right", style: .primary) {
-                Haptics.medium()
-                step = 1
-            }
-            .padding(.horizontal, 20)
         }
     }
 
-    // MARK: - Step 2: Details
+    private var essentialsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("Essentials", icon: "checkmark.seal")
 
-    private var detailsStep: some View {
-        VStack(spacing: 16) {
-            Text("Event Details")
-                .font(.title3.weight(.semibold))
-
-            VStack(spacing: 12) {
-                // Title
-                GlassCard(padding: 12) {
+            GlassCard(tint: AppColors.glassTintPrimary.opacity(0.65), padding: 14) {
+                VStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Title")
-                            .font(.caption.weight(.medium))
+                        Text("Event title")
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         TextField(selectedType.titlePlaceholder, text: $title)
                             .textFieldStyle(.plain)
                     }
-                }
 
-                // Date / Open-ended toggle
-                GlassCard(padding: 12) {
-                    VStack(spacing: 12) {
-                        Toggle(isOn: $isOpenEnded) {
-                            Label("Open-ended (no deadline)", systemImage: "infinity")
-                                .font(.subheadline)
-                        }
+                    Divider()
+
+                    Toggle(isOn: $isOpenEnded) {
+                        Label("Open-ended (no deadline)", systemImage: "infinity")
+                            .font(.subheadline)
+                    }
+                    .tint(AppColors.primary)
+
+                    if !isOpenEnded {
+                        DatePicker(
+                            "Event date",
+                            selection: $eventDate,
+                            in: Date()...,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .font(.subheadline)
                         .tint(AppColors.primary)
+                    }
 
-                        if !isOpenEnded {
-                            DatePicker("Event Date", selection: $eventDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                    Divider()
+
+                    Stepper(value: $selectedDuration, in: 1...180, step: 1) {
+                        HStack {
+                            Label("Expected speaking time", systemImage: "clock")
                                 .font(.subheadline)
+                            Spacer()
+                            Text("\(selectedDuration) min")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
                         }
                     }
-                }
 
-                // Duration
-                GlassCard(padding: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Expected Duration")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(selectedType.durationOptions, id: \.self) { minutes in
-                                    Button {
-                                        Haptics.selection()
-                                        selectedDuration = minutes
-                                    } label: {
-                                        Text("\(minutes) min")
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(selectedDuration == minutes ? .white : .primary)
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 8)
-                                            .background {
-                                                if selectedDuration == minutes {
-                                                    Capsule().fill(AppColors.primary)
-                                                } else {
-                                                    Capsule().fill(.ultraThinMaterial)
-                                                }
-                                            }
-                                    }
-                                    .buttonStyle(.plain)
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(selectedType.durationOptions, id: \.self) { minutes in
+                                Button {
+                                    Haptics.selection()
+                                    selectedDuration = minutes
+                                } label: {
+                                    Text("\(minutes)m")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(selectedDuration == minutes ? .white : .secondary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background {
+                                            Capsule()
+                                                .fill(selectedDuration == minutes ? AppColors.primary.opacity(0.8) : .white.opacity(0.08))
+                                        }
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
-                }
+                    .scrollIndicators(.hidden)
 
-                // Daily time commitment
-                GlassCard(padding: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Max Daily Practice Near Event")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
+                    Divider()
 
+                    Stepper(value: $maxDailyPracticeMinutes, in: 10...240, step: 5) {
                         HStack {
+                            Label("Daily practice capacity", systemImage: "timer")
+                                .font(.subheadline)
+                            Spacer()
                             Text("\(maxDailyPracticeMinutes) min/day")
                                 .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text("Foundation ~\(max(10, Int(Double(maxDailyPracticeMinutes) * 0.30))) min")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppColors.primary)
                         }
-
-                        Slider(value: Binding(
-                            get: { Double(maxDailyPracticeMinutes) },
-                            set: { maxDailyPracticeMinutes = Int($0.rounded()) }
-                        ), in: 10...120, step: 5)
-                        .tint(AppColors.primary)
                     }
                 }
+            }
+        }
+    }
 
-                // Audience & Venue
-                if selectedType.showsAudience {
-                    GlassCard(padding: 12) {
-                        VStack(alignment: .leading, spacing: 10) {
+    private var optionalContextSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("Optional context", icon: "text.badge.plus")
+
+            GlassCard(padding: 14) {
+                VStack(spacing: 12) {
+                    if selectedType.showsAudience {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("Audience")
-                                .font(.caption.weight(.medium))
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
 
-                            ScrollView(.horizontal, showsIndicators: false) {
+                            ScrollView(.horizontal) {
                                 HStack(spacing: 8) {
                                     ForEach(selectedType.suggestedAudienceTypes) { type in
                                         Button {
@@ -210,136 +205,139 @@ struct CreateEventView: View {
                                             audienceType = audienceType == type ? nil : type
                                         } label: {
                                             Text(type.rawValue)
-                                                .font(.caption.weight(.medium))
-                                                .foregroundStyle(audienceType == type ? .white : .primary)
-                                                .padding(.horizontal, 12)
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(audienceType == type ? .white : .secondary)
+                                                .padding(.horizontal, 10)
                                                 .padding(.vertical, 6)
                                                 .background {
-                                                    if audienceType == type {
-                                                        Capsule().fill(AppColors.primary)
-                                                    } else {
-                                                        Capsule().fill(.ultraThinMaterial)
-                                                    }
+                                                    Capsule()
+                                                        .fill(audienceType == type ? AppColors.primary.opacity(0.8) : .white.opacity(0.08))
                                                 }
                                         }
                                         .buttonStyle(.plain)
                                     }
                                 }
                             }
+                            .scrollIndicators(.hidden)
 
-                            Divider()
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Audience Size (optional)")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                TextField("e.g. 25, 500, 100000", text: $audienceSizeText)
-                                    .textFieldStyle(.plain)
-                                    .keyboardType(.numberPad)
-                            }
+                            TextField("Audience size (optional)", text: $audienceSizeText)
+                                .textFieldStyle(.plain)
+                                .keyboardType(.numberPad)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(.white.opacity(0.06))
+                                }
                         }
-                    }
-                }
 
-                if selectedType.showsVenue {
-                    GlassCard(padding: 12) {
+                        Divider()
+                    }
+
+                    if selectedType.showsVenue {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(selectedType.venueLabel)
-                                .font(.caption.weight(.medium))
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             TextField("Optional", text: $venue)
                                 .textFieldStyle(.plain)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(.white.opacity(0.06))
+                                }
                         }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("Optional context or constraints", text: $notes, axis: .vertical)
+                            .lineLimit(2...4)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(.white.opacity(0.06))
+                            }
                     }
                 }
             }
-            .padding(.horizontal)
-
-            GlassButton(title: "Next", icon: "arrow.right", style: .primary) {
-                Haptics.medium()
-                step = 2
-            }
-            .padding(.horizontal, 20)
-            .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-            .opacity(title.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
         }
     }
 
-    // MARK: - Step 3: Script
+    private var scriptSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("Script (optional)", icon: "doc.text")
 
-    private var scriptStep: some View {
-        VStack(spacing: 16) {
-            Text("Add a Script (Optional)")
-                .font(.title3.weight(.semibold))
+            GlassCard(tint: AppColors.glassTintAccent, padding: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextEditor(text: $scriptText)
+                        .frame(minHeight: 170)
+                        .scrollContentBackground(.hidden)
+                        .font(.body)
 
-            Text("Paste your script below. Separate paragraphs to create sections.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            GlassCard(padding: 12) {
-                TextEditor(text: $scriptText)
-                    .frame(minHeight: 200)
-                    .scrollContentBackground(.hidden)
-                    .font(.body)
-            }
-            .padding(.horizontal)
-
-            if !scriptText.isEmpty {
-                HStack {
-                    Label("\(scriptText.split(separator: " ").count) words", systemImage: "text.word.spacing")
-                    Spacer()
-                    let sectionCount = scriptText.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-                    Label("\(sectionCount) section\(sectionCount == 1 ? "" : "s")", systemImage: "doc.text")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 20)
-            }
-
-            VStack(spacing: 12) {
-                GlassButton(title: "Create Event", icon: "checkmark", style: .primary, isLoading: viewModel.isCreating) {
-                    Haptics.success()
-                    Task {
-                        let _ = await viewModel.createEvent(
-                            title: title,
-                            sessionType: selectedType,
-                            eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
-                            expectedDurationMinutes: selectedDuration,
-                            maxDailyPracticeMinutes: maxDailyPracticeMinutes,
-                            audienceType: audienceType,
-                            audienceSize: parsedAudienceSize,
-                            venue: venue.isEmpty ? nil : venue,
-                            notes: notes.isEmpty ? nil : notes,
-                            scriptText: scriptText.isEmpty ? nil : scriptText,
-                            isOpenEnded: isOpenEnded
-                        )
-                        dismiss()
+                    HStack {
+                        Label("\(scriptText.split(separator: " ").count) words", systemImage: "text.word.spacing")
+                        Spacer()
+                        let sectionCount = scriptText
+                            .components(separatedBy: "\n\n")
+                            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                            .count
+                        Label("\(sectionCount) sections", systemImage: "doc.text")
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .disabled(viewModel.isCreating)
+            }
+        }
+    }
 
-                GlassButton(title: "Skip Script", icon: "forward.fill", style: .ghost, isLoading: viewModel.isCreating) {
+    private var createActions: some View {
+        VStack(spacing: 10) {
+            GlassButton(
+                title: "Create Event",
+                icon: "checkmark",
+                style: .primary,
+                isLoading: viewModel.isCreating
+            ) {
+                Haptics.success()
+                createEvent(includeScript: !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .disabled(viewModel.isCreating || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity((viewModel.isCreating || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.5 : 1)
+
+            if !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                GlassButton(title: "Create Without Script", icon: "forward.fill", style: .ghost, isLoading: viewModel.isCreating) {
                     Haptics.light()
-                    Task {
-                        let _ = await viewModel.createEvent(
-                            title: title,
-                            sessionType: selectedType,
-                            eventDate: isOpenEnded ? Calendar.current.date(byAdding: .year, value: 10, to: Date())! : eventDate,
-                            expectedDurationMinutes: selectedDuration,
-                            maxDailyPracticeMinutes: maxDailyPracticeMinutes,
-                            audienceType: audienceType,
-                            audienceSize: parsedAudienceSize,
-                            venue: venue.isEmpty ? nil : venue,
-                            isOpenEnded: isOpenEnded
-                        )
-                        dismiss()
-                    }
+                    createEvent(includeScript: false)
                 }
                 .disabled(viewModel.isCreating)
             }
-            .padding(.horizontal, 20)
+        }
+    }
+
+    private func createEvent(includeScript: Bool) {
+        Task {
+            _ = await viewModel.createEvent(
+                title: title,
+                sessionType: selectedType,
+                eventDate: isOpenEnded
+                    ? Calendar.current.date(byAdding: .year, value: 10, to: Date()) ?? Date()
+                    : eventDate,
+                expectedDurationMinutes: selectedDuration,
+                maxDailyPracticeMinutes: maxDailyPracticeMinutes,
+                audienceType: audienceType,
+                audienceSize: parsedAudienceSize,
+                venue: venue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : venue,
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes,
+                scriptText: includeScript ? scriptText.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+                isOpenEnded: isOpenEnded
+            )
+            dismiss()
         }
     }
 
@@ -349,3 +347,4 @@ struct CreateEventView: View {
         return value
     }
 }
+

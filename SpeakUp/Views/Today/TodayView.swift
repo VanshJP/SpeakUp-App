@@ -377,14 +377,13 @@ struct TodayView: View {
 
     private var practiceToolsGrid: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Practice Tools", systemImage: "square.grid.2x2.fill")
-                .font(.headline)
+            GlassSectionHeader("Practice Tools", icon: "square.grid.2x2.fill")
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 PracticeToolCard(
                     icon: "wind",
                     title: "Warm Up",
-                    subtitle: "Breathing & vocal exercises",
+                    subtitle: "Breathing & vocal",
                     color: .blue
                 ) { onShowWarmUps() }
 
@@ -405,24 +404,23 @@ struct TodayView: View {
                 PracticeToolCard(
                     icon: "target",
                     title: "Goals",
-                    subtitle: "Track your goals",
+                    subtitle: "Track your progress",
                     color: .purple
                 ) { onShowGoals() }
 
                 PracticeToolCard(
                     icon: "calendar.badge.plus",
                     title: "Events",
-                    subtitle: "Prepare for speaking events",
+                    subtitle: "Event prep & practice",
                     color: .cyan
                 ) { onShowEvents() }
 
                 PracticeToolCard(
                     icon: "text.book.closed",
                     title: "Read Aloud",
-                    subtitle: "Practice reading clarity",
+                    subtitle: "Reading clarity",
                     color: .indigo
                 ) { onShowReadAloud() }
-
             }
         }
     }
@@ -821,29 +819,30 @@ struct PracticeToolCard: View {
 
     var body: some View {
         Button(action: action) {
-            GlassCard(tint: color.opacity(0.08)) {
-                VStack(alignment: .leading, spacing: 10) {
+            GlassCard(tint: color.opacity(0.08), padding: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     ZStack {
                         Circle()
                             .fill(color.opacity(0.15))
-                            .frame(width: 40, height: 40)
+                            .frame(width: 30, height: 30)
                         Image(systemName: icon)
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(color)
                     }
 
                     Text(title)
-                        .font(.subheadline.weight(.bold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
 
                     Text(subtitle)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: 120)
+                .frame(height: 92)
             }
         }
         .buttonStyle(.plain)

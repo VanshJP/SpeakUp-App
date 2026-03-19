@@ -53,7 +53,6 @@ struct DailyChallengeWidgetView: View {
                 Image(systemName: entry.icon)
                     .font(.system(size: 24))
                     .foregroundStyle(color)
-                    .shadow(color: color.opacity(0.5), radius: 6)
 
                 if entry.isCompleted {
                     Image(systemName: "checkmark.circle.fill")
@@ -89,16 +88,7 @@ struct DailyChallengeWidget: Widget {
         StaticConfiguration(kind: kind, provider: DailyChallengeProvider()) { entry in
             DailyChallengeWidgetView(entry: entry)
                 .environment(\.colorScheme, .dark)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Color(red: 0.051, green: 0.071, blue: 0.165)
-                        LinearGradient(
-                            colors: [.green.opacity(0.15), .teal.opacity(0.15), .clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    }
-                }
+                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
         }
         .configurationDisplayName("Daily Challenge")
         .description("See today's speaking challenge.")

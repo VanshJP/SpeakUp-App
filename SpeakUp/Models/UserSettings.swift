@@ -37,6 +37,7 @@ final class UserSettings {
 
     // Word Bank
     var vocabWords: [String] = []
+    var dictationBiasWords: [String] = []
 
     // Target Pace
     var targetWPM: Int = 150
@@ -94,7 +95,8 @@ final class UserSettings {
         countdownDuration: Int = 10,
         countdownStyle: Int = 0,
         timerEndBehavior: Int = 0,
-        vocabWords: [String] = []
+        vocabWords: [String] = [],
+        dictationBiasWords: [String] = []
     ) {
         self.id = id
         self.defaultDuration = defaultDuration
@@ -118,6 +120,7 @@ final class UserSettings {
         self.countdownStyle = countdownStyle
         self.timerEndBehavior = timerEndBehavior
         self.vocabWords = vocabWords
+        self.dictationBiasWords = dictationBiasWords
     }
     
     var dailyReminderTime: DateComponents {
@@ -163,13 +166,27 @@ final class UserSettings {
     // MARK: - Word Bank Helpers
 
     func addVocabWord(_ word: String) {
-        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty, !vocabWords.contains(trimmed) else { return }
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         vocabWords.append(trimmed)
     }
 
     func removeVocabWord(_ word: String) {
-        vocabWords.removeAll { $0 == word }
+        vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
+    }
+
+    // MARK: - Dictation Dictionary Helpers
+
+    func addDictationBiasWord(_ word: String) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+        dictationBiasWords.append(trimmed)
+    }
+
+    func removeDictationBiasWord(_ word: String) {
+        dictationBiasWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
     }
 }
 

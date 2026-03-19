@@ -114,6 +114,7 @@ class ReadAloudViewModel {
         )
 
         sessionState = .finished
+        CurriculumActivitySignalStore.markReadAloudCompleted()
         Haptics.success()
     }
 

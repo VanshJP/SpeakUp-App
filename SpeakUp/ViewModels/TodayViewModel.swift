@@ -263,6 +263,7 @@ class TodayViewModel {
     
     @MainActor
     private func loadActiveGoals(context: ModelContext) async {
+        GoalProgressService.refreshGoals(in: context)
         let descriptor = FetchDescriptor<UserGoal>(
             predicate: #Predicate { $0.isActive && !$0.isCompleted },
             sortBy: [SortDescriptor(\.deadline)]

@@ -63,18 +63,6 @@ struct StatsRingWidgetView: View {
     private var smallLayout: some View {
         VStack(spacing: 6) {
             ZStack {
-                // Ambient glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [scoreColor.opacity(0.25), Color.teal.opacity(0.08), .clear],
-                            center: .center,
-                            startRadius: 5,
-                            endRadius: 55
-                        )
-                    )
-                    .frame(width: 110, height: 110)
-
                 // Outer ring - Streak
                 WidgetRing(
                     progress: Double(min(entry.streak, streakTarget)) / Double(streakTarget),
@@ -123,17 +111,6 @@ struct StatsRingWidgetView: View {
         HStack(spacing: 16) {
             // Rings on the left
             ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [scoreColor.opacity(0.2), Color.teal.opacity(0.06), .clear],
-                            center: .center,
-                            startRadius: 5,
-                            endRadius: 65
-                        )
-                    )
-                    .frame(width: 130, height: 130)
-
                 WidgetRing(
                     progress: Double(min(entry.streak, streakTarget)) / Double(streakTarget),
                     color: .orange,
@@ -265,15 +242,7 @@ private struct WidgetRing: View {
 
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(
-                    AngularGradient(
-                        colors: [color.opacity(0.5), color],
-                        center: .center,
-                        startAngle: .degrees(0),
-                        endAngle: .degrees(360 * progress)
-                    ),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
     }
@@ -288,16 +257,7 @@ struct StatsRingWidget: Widget {
         StaticConfiguration(kind: kind, provider: StatsRingProvider()) { entry in
             StatsRingWidgetView(entry: entry)
                 .environment(\.colorScheme, .dark)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Color(red: 0.051, green: 0.071, blue: 0.165)
-                        LinearGradient(
-                            colors: [.teal.opacity(0.15), .clear],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    }
-                }
+                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
         }
         .configurationDisplayName("Stats Overview")
         .description("See your streak, sessions, score, and progress at a glance.")

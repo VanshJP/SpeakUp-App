@@ -1,10 +1,32 @@
 import MediaPlayer
 import SwiftUI
 
+private enum TeleprompterWorkflowMode: String, CaseIterable, Identifiable {
+    case preRecord
+    case externalDisplay
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .preRecord: return "Pre-Record"
+        case .externalDisplay: return "External Display"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .preRecord: return "Auto-scroll script, then start recording"
+        case .externalDisplay: return "Mirror script to another display while recording"
+        }
+    }
+}
+
 struct TeleprompterView: View {
     let scriptText: String
     var speed: Double = 1.0
     var fontSize: Double = 24.0
+    var onStartRecording: (() -> Void)?
     var onSettingsChanged: ((Double, Double) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
@@ -18,13 +40,22 @@ struct TeleprompterView: View {
     @State private var lastTime: Date?
     @State private var manualDragOffset: CGFloat = 0
     @State private var nowPlaying = TeleprompterNowPlayingController.shared
+    @State private var workflowMode: TeleprompterWorkflowMode = .preRecord
+    @State private var prerecordCountdown = 0
 
     private let basePixelsPerSecond: CGFloat = 30
 
-    init(scriptText: String, speed: Double = 1.0, fontSize: Double = 24.0, onSettingsChanged: ((Double, Double) -> Void)? = nil) {
+    init(
+        scriptText: String,
+        speed: Double = 1.0,
+        fontSize: Double = 24.0,
+        onStartRecording: (() -> Void)? = nil,
+        onSettingsChanged: ((Double, Double) -> Void)? = nil
+    ) {
         self.scriptText = scriptText
         self.speed = speed
         self.fontSize = fontSize
+        self.onStartRecording = onStartRecording
         self.onSettingsChanged = onSettingsChanged
         self._adjustedSpeed = State(initialValue: speed)
         self._adjustedFontSize = State(initialValue: fontSize)
@@ -156,6 +187,10 @@ struct TeleprompterView: View {
             if showControls {
                 controlsOverlay
             }
+
+            if prerecordCountdown > 0 {
+                countdownOverlay
+            }
         }
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -182,6 +217,9 @@ struct TeleprompterView: View {
             updateNowPlayingOverlay()
         }
         .onChange(of: adjustedSpeed) { _, _ in
+            updateNowPlayingOverlay()
+        }
+        .onChange(of: workflowMode) { _, _ in
             updateNowPlayingOverlay()
         }
         .onDisappear {
@@ -218,22 +256,39 @@ struct TeleprompterView: View {
             .padding(.horizontal, 20)
             .padding(.top, 60)
 
+            workflowModePicker
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+
+            Text(workflowMode.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 24)
+
             Spacer()
 
             // Bottom controls
             VStack(spacing: 16) {
-                // Play/Pause button
-                Button {
-                    toggleScrolling()
-                } label: {
-                    Image(systemName: isScrolling ? "pause.fill" : "play.fill")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background {
-                            Circle()
-                                .fill(AppColors.primary)
+                if workflowMode == .externalDisplay {
+                    externalDisplayHelp
+                } else {
+                    // Play/Pause button
+                    Button {
+                        if workflowMode == .preRecord && !isScrolling {
+                            startPrerecordCountdown()
+                        } else {
+                            toggleScrolling()
                         }
+                    } label: {
+                        Image(systemName: isScrolling ? "pause.fill" : "play.fill")
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
+                            .background {
+                                Circle()
+                                    .fill(AppColors.primary)
+                            }
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -301,6 +356,13 @@ struct TeleprompterView: View {
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(AppColors.primary)
                 }
+
+                if onStartRecording != nil {
+                    GlassButton(title: "Start Recording", icon: "mic.fill", style: .primary, fullWidth: true) {
+                        Haptics.heavy()
+                        onStartRecording?()
+                    }
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -314,11 +376,94 @@ struct TeleprompterView: View {
         .transition(.opacity)
     }
 
+    private var workflowModePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(TeleprompterWorkflowMode.allCases) { mode in
+                Button {
+                    Haptics.selection()
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        workflowMode = mode
+                        if mode == .externalDisplay {
+                            isScrolling = false
+                        }
+                    }
+                } label: {
+                    Text(mode.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(workflowMode == mode ? .white : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background {
+                            Capsule()
+                                .fill(workflowMode == mode ? AppColors.primary.opacity(0.55) : Color.white.opacity(0.08))
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+    }
+
+    private var externalDisplayHelp: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("External Display Mode", systemImage: "display.2")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+            Text("Use AirPlay or wired mirroring to place the script on another display. Keep this teleprompter visible there, then tap Start Recording to capture audio on your phone.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.white.opacity(0.06))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 0.6)
+                }
+        }
+    }
+
+    private var countdownOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+            VStack(spacing: 10) {
+                Text("Recording starts soon")
+                    .font(.headline)
+                Text("\(prerecordCountdown)")
+                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppColors.primary)
+            }
+            .foregroundStyle(.white)
+        }
+        .transition(.opacity)
+    }
+
     private func toggleScrolling() {
+        guard workflowMode != .externalDisplay else { return }
         Haptics.medium()
         isScrolling.toggle()
         if !isScrolling {
             lastTime = nil
+        }
+    }
+
+    private func startPrerecordCountdown() {
+        guard prerecordCountdown == 0 else { return }
+        Haptics.medium()
+        isScrolling = false
+        lastTime = nil
+
+        Task { @MainActor in
+            for remaining in stride(from: 3, through: 1, by: -1) {
+                prerecordCountdown = remaining
+                try? await Task.sleep(for: .seconds(1))
+            }
+            prerecordCountdown = 0
+            isScrolling = true
         }
     }
 
@@ -333,7 +478,7 @@ struct TeleprompterView: View {
     private func updateNowPlayingOverlay() {
         nowPlaying.update(
             title: nowPlayingTitle,
-            subtitle: "Teleprompter • \(speedDescriptor)",
+            subtitle: "Teleprompter • \(workflowMode.title) • \(speedDescriptor)",
             elapsed: elapsedEstimate,
             duration: max(estimatedDuration, 1),
             speed: adjustedSpeed,
