@@ -426,7 +426,7 @@ final class LLMService {
             if deduped.count == 3 { break }
         }
 
-        if deduped.isEmpty || !isInsightSpecificEnough(deduped, analysis: analysis, transcript: transcript) {
+        if deduped.isEmpty || !isInsightSpecificEnough(deduped, transcript: transcript) {
             return deterministicCoachingFallback(analysis: analysis, transcript: transcript)
         }
 
@@ -435,25 +435,16 @@ final class LLMService {
 
     private func isInsightSpecificEnough(
         _ tips: [String],
-        analysis: SpeechAnalysis,
         transcript: String
     ) -> Bool {
         let combined = tips.joined(separator: " ").lowercased()
         let hasNumericSignal = combined.range(of: #"\b\d+\b"#, options: .regularExpression) != nil
-        let metricValues = [
-            "\(analysis.speechScore.overall)",
-            "\(Int(analysis.wordsPerMinute))",
-            "\(analysis.totalFillerCount)",
-            "\(analysis.pauseCount)",
-            "\(analysis.speechScore.subscores.clarity)"
-        ]
-        let referencesKnownMetricValue = metricValues.contains { combined.contains($0) }
         let metricKeywords = [
             "wpm", "filler", "fillers", "pause", "pauses", "clarity", "pace",
             "score", "vocabulary", "structure", "relevance"
         ]
         let hasMetricKeyword = metricKeywords.contains { combined.contains($0) }
-        if hasMetricKeyword && (hasNumericSignal || referencesKnownMetricValue) {
+        if hasMetricKeyword && hasNumericSignal {
             return true
         }
 

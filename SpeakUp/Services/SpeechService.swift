@@ -9,9 +9,7 @@ class SpeechService {
     var isTranscribing = false
     var hasPermission = false
     var transcriptionProgress: Double = 0
-    var modelLoadProgress: Double = 0
     var isModelLoaded: Bool { whisperService.isModelLoaded }
-    var transcriptionEngine: String?
 
     // Transcription backend
     private let whisperService = WhisperService()
@@ -45,10 +43,6 @@ class SpeechService {
         return hasPermission
     }
 
-    var permissionStatus: SFSpeechRecognizerAuthorizationStatus {
-        SFSpeechRecognizer.authorizationStatus()
-    }
-
     // MARK: - Transcription
 
     func transcribe(
@@ -80,22 +74,15 @@ class SpeechService {
             // Use WhisperKit for accurate filler word detection
             result = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
             transcriptionProgress = whisperService.transcriptionProgress
-            transcriptionEngine = "WhisperKit"
         } catch {
-            print("⚠️ WhisperKit failed: \(error). Retrying model load...")
-
             // Retry once: unload and reload the model
             whisperService.unloadModel()
             await whisperService.loadModel(modelVariant: "base")
 
             do {
                 let retryResult = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
-                transcriptionEngine = "WhisperKit (retry)"
-                print("✅ WhisperKit retry succeeded")
                 result = retryResult
             } catch {
-                print("⚠️ WhisperKit retry failed: \(error). Falling back to Apple Speech (filler words may not be detected).")
-                transcriptionEngine = "Apple Speech (fallback)"
                 result = try await transcribeWithAppleSpeech(audioURL: transcriptionURL)
             }
         }
@@ -224,7 +211,6 @@ class SpeechService {
             speakerIsolationMetrics: speakerIsolationMetrics
         )
         let scoringWords = shouldUsePrimarySpeakerWords ? primarySpeakerWords : sortedWords
-        let effectiveSpeakerIsolationMetrics = speakerIsolationMetrics
         let scoringText = scoringWords.map(\.word).joined(separator: " ")
 
         // Count filler words
@@ -333,7 +319,7 @@ class SpeechService {
                 sentenceAnalysis: sentenceAnalysis,
                 promptRelevanceScore: nil,
                 audioIsolationMetrics: audioIsolationMetrics,
-                speakerIsolationMetrics: effectiveSpeakerIsolationMetrics
+                speakerIsolationMetrics: speakerIsolationMetrics
             )
         }
 
@@ -378,7 +364,7 @@ class SpeechService {
             textQuality: textQuality,
             audioLevelSamples: audioLevelSamples,
             audioIsolationMetrics: audioIsolationMetrics,
-            speakerIsolationMetrics: effectiveSpeakerIsolationMetrics
+            speakerIsolationMetrics: speakerIsolationMetrics
         )
 
         var overallScore = calculateOverallScore(subscores: subscores, weights: scoreWeights)
@@ -424,7 +410,7 @@ class SpeechService {
             energyArc: energyArc,
             textQuality: textQuality,
             audioIsolationMetrics: audioIsolationMetrics,
-            speakerIsolationMetrics: effectiveSpeakerIsolationMetrics
+            speakerIsolationMetrics: speakerIsolationMetrics
         )
     }
 

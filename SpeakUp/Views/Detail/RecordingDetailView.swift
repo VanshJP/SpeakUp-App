@@ -908,7 +908,7 @@ struct RecordingDetailView: View {
                     Haptics.medium()
                     Task {
                         guard let analysis = recording.analysis else { return }
-                        let transcript = recording.transcriptionText ?? ""
+                        let transcript = resolvedTranscript(for: recording)
                         llmInsight = await llmService.generateCoachingInsight(
                             from: analysis,
                             transcript: transcript
@@ -1038,6 +1038,20 @@ struct RecordingDetailView: View {
             structure: settings.structureWeight,
             relevance: settings.relevanceWeight
         )
+    }
+
+    private func resolvedTranscript(for recording: Recording) -> String {
+        let text = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let text, !text.isEmpty {
+            return text
+        }
+
+        let fallback = recording.transcriptionWords?
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallback ?? ""
     }
 
     private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {
@@ -1231,7 +1245,7 @@ struct RecordingDetailView: View {
                 try? modelContext.save()
             }
         } catch {
-            print("Error loading recording: \(error)")
+            recording = nil
         }
     }
 
@@ -1351,7 +1365,6 @@ struct RecordingDetailView: View {
 
             try modelContext.save()
         } catch {
-            print("Transcription error: \(error)")
             transcriptionFailed = true
         }
     }
@@ -1368,13 +1381,7 @@ struct RecordingDetailView: View {
         guard let recording,
               var analysis = recording.analysis else { return }
 
-        let transcriptFromText = recording.transcriptionText?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let transcriptFromWords = recording.transcriptionWords?
-            .map(\.word)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let transcript = (transcriptFromText?.isEmpty == false ? transcriptFromText : transcriptFromWords) ?? ""
+        let transcript = resolvedTranscript(for: recording)
         guard !transcript.isEmpty else { return }
 
         // If local model is downloaded, ensure it is actually loaded before we decide availability.
