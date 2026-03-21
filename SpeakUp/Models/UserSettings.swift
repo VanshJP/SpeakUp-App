@@ -63,6 +63,12 @@ final class UserSettings {
     var customContextFillerWords: [String] = []       // user-added context-dependent fillers
     var removedDefaultFillers: [String] = []          // default fillers the user disabled
 
+    // Voice Profile
+    var voiceProfileF0Hz: Double?
+    var voiceProfileEnergyDb: Double?
+    var voiceProfileSampleCount: Int = 0
+    var voiceProfileLastUpdated: Date?
+
     // Score Weights
     var clarityWeight: Double = 0.18
     var paceWeight: Double = 0.12

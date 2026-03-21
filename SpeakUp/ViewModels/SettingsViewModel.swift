@@ -8,6 +8,8 @@ class SettingsViewModel {
     var isLoading = true
     var showingResetConfirmation = false
     var showingClearDataConfirmation = false
+    var showingVoiceProfileResetConfirmation = false
+    var showingVoiceCalibration = false
     var clearDataAcknowledgement = ""
     
     // Local state for pickers - Recording Defaults
@@ -587,6 +589,12 @@ class SettingsViewModel {
         settings.sessionFeedbackEnabled = true
         settings.customFeedbackQuestions = []
 
+        // Voice Profile
+        settings.voiceProfileF0Hz = nil
+        settings.voiceProfileEnergyDb = nil
+        settings.voiceProfileSampleCount = 0
+        settings.voiceProfileLastUpdated = nil
+
         // Score Weights
         let defaults = ScoreWeights.defaults
         settings.clarityWeight = defaults.clarity
@@ -681,6 +689,36 @@ class SettingsViewModel {
         }
     }
     
+    // MARK: - Voice Profile
+
+    var voiceProfileSampleCount: Int {
+        settings?.voiceProfileSampleCount ?? 0
+    }
+
+    var voiceProfileLastUpdated: Date? {
+        settings?.voiceProfileLastUpdated
+    }
+
+    @MainActor
+    func resetVoiceProfile() {
+        guard let settings, let context = modelContext else { return }
+        settings.voiceProfileF0Hz = nil
+        settings.voiceProfileEnergyDb = nil
+        settings.voiceProfileSampleCount = 0
+        settings.voiceProfileLastUpdated = nil
+        try? context.save()
+    }
+
+    @MainActor
+    func saveCalibrationProfile(_ profile: VoiceProfile) {
+        guard let settings, let context = modelContext else { return }
+        settings.voiceProfileF0Hz = profile.f0Hz
+        settings.voiceProfileEnergyDb = profile.energyDb
+        settings.voiceProfileSampleCount = 1
+        settings.voiceProfileLastUpdated = Date()
+        try? context.save()
+    }
+
     // MARK: - Notification Helpers
     
     private func scheduleReminderNotification() async {

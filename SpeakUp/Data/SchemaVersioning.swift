@@ -82,15 +82,23 @@ enum SpeakUpSchemaV10: VersionedSchema {
     }
 }
 
+enum SpeakUpSchemaV11: VersionedSchema {
+    static var versionIdentifier = Schema.Version(11, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self, RecordingGroup.self]
+    }
+}
+
 // MARK: - Migration Plan
 
 enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self, SpeakUpSchemaV6.self, SpeakUpSchemaV7.self, SpeakUpSchemaV8.self, SpeakUpSchemaV9.self, SpeakUpSchemaV10.self]
+        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self, SpeakUpSchemaV6.self, SpeakUpSchemaV7.self, SpeakUpSchemaV8.self, SpeakUpSchemaV9.self, SpeakUpSchemaV10.self, SpeakUpSchemaV11.self]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, migrateV7toV8, migrateV8toV9, migrateV9toV10]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, migrateV7toV8, migrateV8toV9, migrateV9toV10, migrateV10toV11]
     }
 
     static let migrateV1toV2 = MigrationStage.lightweight(
@@ -136,5 +144,10 @@ enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static let migrateV9toV10 = MigrationStage.lightweight(
         fromVersion: SpeakUpSchemaV9.self,
         toVersion: SpeakUpSchemaV10.self
+    )
+
+    static let migrateV10toV11 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV10.self,
+        toVersion: SpeakUpSchemaV11.self
     )
 }

@@ -1,6 +1,29 @@
 import Foundation
 import AVFoundation
 
+// MARK: - Voice Profile Types
+
+struct VoiceProfile {
+    let f0Hz: Double
+    let energyDb: Double
+    let sampleCount: Int
+
+    var blendWeight: Double {
+        switch sampleCount {
+        case 0: return 0.0
+        case 1: return 0.3
+        case 2: return 0.5
+        default: return 0.7
+        }
+    }
+}
+
+struct VoiceProfileUpdate {
+    let sessionF0Hz: Double
+    let sessionEnergyDb: Double
+    let separationConfidence: Int
+}
+
 /// Heuristic single-speaker isolation for conversational recordings.
 /// Uses per-word acoustic similarity (pitch + energy) to the user's
 /// early-session voice profile and tags likely non-user words.
@@ -8,13 +31,21 @@ enum ConversationIsolationService {
     static func labelPrimarySpeaker(
         words: [TranscriptionWord],
         audioURL: URL,
-        totalDuration: TimeInterval
-    ) -> ([TranscriptionWord], SpeakerIsolationMetrics?) {
+        totalDuration: TimeInterval,
+        persistentProfile: VoiceProfile? = nil,
+        preloadedSamples: (samples: [Float], sampleRate: Double)? = nil
+    ) -> ([TranscriptionWord], SpeakerIsolationMetrics?, VoiceProfileUpdate?) {
         guard words.count >= 12, totalDuration >= 8 else {
-            return (words, nil)
+            return (words, nil, nil)
         }
-        guard let mono = loadMonoPCM(url: audioURL) else {
-            return (words, nil)
+        let mono: MonoPCM
+        if let preloaded = preloadedSamples {
+            mono = MonoPCM(samples: preloaded.samples, sampleRate: preloaded.sampleRate)
+        } else {
+            guard let loaded = loadMonoPCM(url: audioURL) else {
+                return (words, nil, nil)
+            }
+            mono = loaded
         }
 
         let sortedWords = words.enumerated().sorted { $0.element.start < $1.element.start }
@@ -31,10 +62,19 @@ enum ConversationIsolationService {
             .filter { pair in pair.0.start <= profileWindowEnd }
             .prefix(24))
 
-        let profileF0 = median(profileCandidates.compactMap { $0.1.f0Hz })
-        let profileEnergy = median(profileCandidates.map { $0.1.energyDb })
-        guard let profileF0, let profileEnergy else {
-            return (words, nil)
+        let sessionF0 = median(profileCandidates.compactMap { $0.1.f0Hz })
+        let sessionEnergy = median(profileCandidates.map { $0.1.energyDb })
+        guard let sessionF0, let sessionEnergy else {
+            return (words, nil, nil)
+        }
+
+        // Blend persistent profile with session profile
+        var profileF0 = sessionF0
+        var profileEnergy = sessionEnergy
+        if let persistent = persistentProfile, persistent.sampleCount > 0 {
+            let w = persistent.blendWeight
+            profileF0 = persistent.f0Hz * w + sessionF0 * (1.0 - w)
+            profileEnergy = persistent.energyDb * w + sessionEnergy * (1.0 - w)
         }
 
         var wordConfidence = [Double](repeating: 0.5, count: sortedWords.count)
@@ -141,7 +181,64 @@ enum ConversationIsolationService {
             conversationDetected: conversationDetected
         )
 
-        return (updated, metrics)
+        // Produce voice profile update from primary speaker's observed features
+        let profileUpdate: VoiceProfileUpdate?
+        if let aF0 = speakerAF0, let aEnergy = speakerAEnergy {
+            if shouldApplyIsolation || primaryRatio > 0.95 {
+                profileUpdate = VoiceProfileUpdate(
+                    sessionF0Hz: aF0,
+                    sessionEnergyDb: aEnergy,
+                    separationConfidence: confidence
+                )
+            } else {
+                profileUpdate = nil
+            }
+        } else {
+            profileUpdate = nil
+        }
+
+        return (updated, metrics, profileUpdate)
+    }
+
+    // MARK: - Voice Profile Extraction
+
+    /// Extract a baseline voice profile from a calibration audio recording.
+    /// Splits the audio into fixed-size windows and computes median F0/energy.
+    static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
+        guard let mono = loadMonoPCM(url: audioURL) else { return nil }
+
+        let windowDuration = 0.08 // 80ms windows
+        let windowSamples = Int(mono.sampleRate * windowDuration)
+        guard windowSamples > 0, mono.samples.count >= windowSamples * 3 else { return nil }
+
+        var f0Values: [Double] = []
+        var energyValues: [Double] = []
+
+        var offset = 0
+        while offset + windowSamples <= mono.samples.count {
+            let range = offset..<(offset + windowSamples)
+
+            var sumSq: Float = 0
+            for i in range { sumSq += mono.samples[i] * mono.samples[i] }
+            let rms = sqrt(max(1e-9, sumSq / Float(windowSamples)))
+            let energyDb = 20.0 * log10(Double(rms))
+
+            // Skip silence
+            if energyDb > -40.0 {
+                energyValues.append(energyDb)
+                if let f0 = estimateDominantF0(in: mono.samples, range: range, sampleRate: mono.sampleRate) {
+                    f0Values.append(f0)
+                }
+            }
+
+            offset += windowSamples
+        }
+
+        guard let medianF0 = median(f0Values), let medianEnergy = median(energyValues) else {
+            return nil
+        }
+
+        return VoiceProfile(f0Hz: medianF0, energyDb: medianEnergy, sampleCount: 1)
     }
 
     // MARK: - Acoustic Feature Extraction
@@ -160,31 +257,59 @@ enum ConversationIsolationService {
         let endIndex = min(samples.count, Int(word.end * sampleRate))
         let minWindow = max(1, Int(sampleRate * 0.04))
 
-        let slice: ArraySlice<Float>
+        let lo: Int
+        let hi: Int
         if endIndex > startIndex + minWindow {
-            slice = samples[startIndex..<endIndex]
+            lo = startIndex
+            hi = endIndex
         } else {
             let midpoint = max(0, min(samples.count - 1, (startIndex + endIndex) / 2))
             let half = minWindow / 2
-            let lo = max(0, midpoint - half)
-            let hi = min(samples.count, midpoint + half)
-            slice = samples[lo..<max(lo + 1, hi)]
+            lo = max(0, midpoint - half)
+            hi = min(samples.count, max(lo + 1, midpoint + half))
         }
 
-        let rms = sqrt(max(1e-9, slice.reduce(Float(0)) { $0 + ($1 * $1) } / Float(max(1, slice.count))))
+        // Energy from full-rate samples (cheap — single pass)
+        var sumSq: Float = 0
+        for i in lo..<hi { sumSq += samples[i] * samples[i] }
+        let rms = sqrt(max(1e-9, sumSq / Float(max(1, hi - lo))))
         let energyDb = 20.0 * log10(Double(rms))
-        let f0 = estimateDominantF0(in: Array(slice), sampleRate: sampleRate)
+
+        // F0 from downsampled slice (expensive autocorrelation — reduce sample count)
+        let f0 = estimateDominantF0(in: samples, range: lo..<hi, sampleRate: sampleRate)
         return WordAcousticFeatures(energyDb: energyDb, f0Hz: f0)
     }
 
-    private static func estimateDominantF0(in samples: [Float], sampleRate: Double) -> Double? {
-        let n = samples.count
-        guard n >= Int(sampleRate * 0.03) else { return nil }
+    /// Pitch detection via autocorrelation on a downsampled version of the signal.
+    /// Downsampling to ~4kHz reduces computation by ~100x for 44.1kHz audio while
+    /// preserving the 85-320Hz fundamental frequency range we care about.
+    private static func estimateDominantF0(in samples: [Float], range: Range<Int>, sampleRate: Double) -> Double? {
+        // Downsample to ~4kHz for F0 detection (Nyquist = 2kHz, well above 320Hz max F0)
+        let targetRate = 4000.0
+        let factor = max(1, Int(sampleRate / targetRate))
+        let effectiveRate = sampleRate / Double(factor)
+
+        let downsampled: [Float]
+        if factor > 1 {
+            var buf = [Float]()
+            buf.reserveCapacity((range.count + factor - 1) / factor)
+            var i = range.lowerBound
+            while i < range.upperBound {
+                buf.append(samples[i])
+                i += factor
+            }
+            downsampled = buf
+        } else {
+            downsampled = Array(samples[range])
+        }
+
+        let n = downsampled.count
+        guard n >= Int(effectiveRate * 0.03) else { return nil }
 
         let minF0 = 85.0
         let maxF0 = 320.0
-        let minLag = Int(sampleRate / maxF0)
-        let maxLag = min(n - 1, Int(sampleRate / minF0))
+        let minLag = Int(effectiveRate / maxF0)
+        let maxLag = min(n - 1, Int(effectiveRate / minF0))
         guard maxLag > minLag else { return nil }
 
         var bestLag = 0
@@ -199,8 +324,8 @@ enum ConversationIsolationService {
             var denB: Float = 0
 
             for i in 0..<overlap {
-                let a = samples[i]
-                let b = samples[i + lag]
+                let a = downsampled[i]
+                let b = downsampled[i + lag]
                 num += a * b
                 denA += a * a
                 denB += b * b
@@ -217,7 +342,7 @@ enum ConversationIsolationService {
         }
 
         guard bestLag > 0, bestCorr > 0.35 else { return nil }
-        return sampleRate / Double(bestLag)
+        return effectiveRate / Double(bestLag)
     }
 
     // MARK: - Utilities
@@ -241,12 +366,12 @@ enum ConversationIsolationService {
         return sorted[mid]
     }
 
-    private struct MonoPCM {
+    struct MonoPCM {
         let samples: [Float]
         let sampleRate: Double
     }
 
-    private static func loadMonoPCM(url: URL) -> MonoPCM? {
+    static func loadMonoPCM(url: URL) -> MonoPCM? {
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let sourceFormat = file.processingFormat
         let sampleRate = sourceFormat.sampleRate

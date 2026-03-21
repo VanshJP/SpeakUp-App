@@ -48,7 +48,8 @@ class SpeechService {
     func transcribe(
         audioURL: URL,
         fillerConfig: FillerWordConfig = .default,
-        preferredTerms: [String] = []
+        preferredTerms: [String] = [],
+        voiceProfile: VoiceProfile? = nil
     ) async throws -> SpeechTranscriptionResult {
         isTranscribing = true
         transcriptionProgress = 0
@@ -98,20 +99,26 @@ class SpeechService {
         }
 
         var finalWords = wordsAfterFillerRetagging
+        // Pre-load audio once for speaker isolation (avoids redundant file I/O)
+        let preloaded = ConversationIsolationService.loadMonoPCM(url: transcriptionURL)
         let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
             words: finalWords,
             audioURL: transcriptionURL,
-            totalDuration: result.duration
+            totalDuration: result.duration,
+            persistentProfile: voiceProfile,
+            preloadedSamples: preloaded.map { ($0.samples, $0.sampleRate) }
         )
         finalWords = speakerLabeled.0
         let speakerIsolationMetrics = speakerLabeled.1
+        let voiceProfileUpdate = speakerLabeled.2
 
         return SpeechTranscriptionResult(
             text: result.text,
             words: finalWords,
             duration: result.duration,
             audioIsolationMetrics: isolationResult?.metrics,
-            speakerIsolationMetrics: speakerIsolationMetrics
+            speakerIsolationMetrics: speakerIsolationMetrics,
+            voiceProfileUpdate: voiceProfileUpdate
         )
     }
 
@@ -462,7 +469,7 @@ class SpeechService {
             if residual >= 0.55 { return 1.0 }
             return max(0.55, residual * 0.70 + 0.30)
         }
-        let speakerReliability = speakerIsolationMetrics.flatMap { metrics in
+        let speakerReliability: Double? = speakerIsolationMetrics.flatMap { metrics -> Double? in
             let hasAppliedSeparationEvidence =
                 metrics.conversationDetected ||
                 metrics.filteredOutWordCount >= 4 ||
@@ -1629,19 +1636,22 @@ struct SpeechTranscriptionResult {
     let duration: TimeInterval
     let audioIsolationMetrics: AudioIsolationMetrics?
     let speakerIsolationMetrics: SpeakerIsolationMetrics?
+    let voiceProfileUpdate: VoiceProfileUpdate?
 
     init(
         text: String,
         words: [TranscriptionWord],
         duration: TimeInterval,
         audioIsolationMetrics: AudioIsolationMetrics? = nil,
-        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
+        voiceProfileUpdate: VoiceProfileUpdate? = nil
     ) {
         self.text = text
         self.words = words
         self.duration = duration
         self.audioIsolationMetrics = audioIsolationMetrics
         self.speakerIsolationMetrics = speakerIsolationMetrics
+        self.voiceProfileUpdate = voiceProfileUpdate
     }
 }
 

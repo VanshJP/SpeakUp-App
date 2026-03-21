@@ -287,11 +287,11 @@ final class LocalLLMService {
     /// Resets the auto-unload timer. Call after each inference to reclaim memory after inactivity.
     private func resetUnloadTimer() {
         unloadTimer?.invalidate()
-        unloadTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { [weak self] _ in
+        unloadTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if self.isModelReady {
-                    print("[LocalLLM] Auto-unloading after 60s of inactivity")
+                    print("[LocalLLM] Auto-unloading after 180s of inactivity")
                     self.unloadModel()
                 }
             }

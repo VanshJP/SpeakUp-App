@@ -1315,11 +1315,39 @@ struct RecordingDetailView: View {
                 removedDefaults: Set(settings?.removedDefaultFillers ?? [])
             )
 
-            let result = try await speechService.transcribe(
-                audioURL: audioURL,
-                fillerConfig: fillerConfig,
-                preferredTerms: preferredTerms
-            )
+            // Build persistent voice profile from settings
+            let voiceProfile: VoiceProfile? = {
+                guard let f0 = settings?.voiceProfileF0Hz,
+                      let energy = settings?.voiceProfileEnergyDb else { return nil }
+                return VoiceProfile(f0Hz: f0, energyDb: energy,
+                                    sampleCount: settings?.voiceProfileSampleCount ?? 0)
+            }()
+
+            // Free LLM memory before transcription to avoid competing with WhisperKit
+            if llmService.localLLM.isModelReady {
+                llmService.unloadLocalModel()
+            }
+
+            let result = try await withThrowingTaskGroup(of: SpeechTranscriptionResult.self) { group in
+                group.addTask {
+                    try await self.speechService.transcribe(
+                        audioURL: audioURL,
+                        fillerConfig: fillerConfig,
+                        preferredTerms: preferredTerms,
+                        voiceProfile: voiceProfile
+                    )
+                }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(90))
+                    throw SpeechServiceError.transcriptionFailed(
+                        NSError(domain: "SpeakUp", code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "Transcription timed out"])
+                    )
+                }
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
 
             let weights = scoreWeights(from: settings)
 
@@ -1364,6 +1392,26 @@ struct RecordingDetailView: View {
             prepareTranscriptPlaybackWords(from: recording)
 
             try modelContext.save()
+
+            // Update persistent voice profile via EMA
+            if let update = result.voiceProfileUpdate, let settings {
+                // Solo recordings are safe to learn from without high separation confidence.
+                // Only require confidence >= 50 when a conversation was detected.
+                let conversationDetected = result.speakerIsolationMetrics?.conversationDetected ?? false
+                if !conversationDetected || update.separationConfidence >= 50 {
+                    let alpha = 0.3
+                    if let existing = settings.voiceProfileF0Hz, settings.voiceProfileSampleCount > 0 {
+                        settings.voiceProfileF0Hz = existing * (1 - alpha) + update.sessionF0Hz * alpha
+                        settings.voiceProfileEnergyDb = (settings.voiceProfileEnergyDb ?? 0) * (1 - alpha) + update.sessionEnergyDb * alpha
+                    } else {
+                        settings.voiceProfileF0Hz = update.sessionF0Hz
+                        settings.voiceProfileEnergyDb = update.sessionEnergyDb
+                    }
+                    settings.voiceProfileSampleCount += 1
+                    settings.voiceProfileLastUpdated = Date()
+                    try? modelContext.save()
+                }
+            }
         } catch {
             transcriptionFailed = true
         }

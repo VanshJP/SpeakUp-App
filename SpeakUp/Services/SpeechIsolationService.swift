@@ -15,6 +15,10 @@ enum SpeechIsolationService {
         guard mono.samples.count > Int(mono.sampleRate * 1.5) else { return nil }
 
         let baselineSNR = estimateSNR(samples: mono.samples, sampleRate: mono.sampleRate)
+
+        // Skip processing if audio already has good signal quality
+        guard baselineSNR < 18.0 else { return nil }
+
         let highPassed = applyHighPassFilter(to: mono.samples)
         let gated = applyAdaptiveNoiseGate(to: highPassed, sampleRate: mono.sampleRate)
         let improvedSNR = estimateSNR(samples: gated, sampleRate: mono.sampleRate)
