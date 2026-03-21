@@ -59,8 +59,9 @@ Status: source-of-truth for current behavior.
 
 ## Hard gates and caps
 - Zero-score gate: if `totalWords == 0 || nonFillerWordCount == 0` -> overall `0`.
-- Substance gate: if `totalWords < 20 && actualDuration < 15` -> overall `min(overall, 40)`.
-- Gibberish gate: if likely gibberish -> overall `min(overall, 15)`.
+- **Substance gate (NEW):** `SpeechScoringEngine.applySubstanceMultiplier(overall, substanceScore)` — multiplicative gate (0.05x–1.0x multiplier). Replaces the old `min(overall, 40)` ceiling.
+- **Enhanced gibberish gate (NEW):** `SpeechScoringEngine.applyGibberishGate(score, gibberishConfidence)` — graduated cap (≤8 / ≤15 / ≤30) based on 5-signal confidence score. Replaces the old binary `isLikelyGibberish` check.
+- Legacy gibberish safety net: `PromptRelevanceService.isLikelyGibberish(...)` still runs as final safety net, now with 5 checks and threshold 3+ (was 3 checks, threshold 2+).
 - Subscore ceiling for short recordings:
   - `scoreCeiling = min(100, 40 + Int(actualDuration * 6))`
   - Applied to clarity, pace, fillerUsage, pauseQuality, vocalVariety.
@@ -82,6 +83,20 @@ Key formulas:
 - `concisenessScore = clamp(85 - weakPhrasePenalty - repeatedStartPenalty - longSentencePenalty)`
 - `engagementScore = clamp(35 + bridgeBonus + questionBonus + ctaBonus)`
 
+## Enhanced Metrics (`SpeechScoringEngine.computeEnhancedMetrics`)
+New research-backed metrics computed before subscores:
+- **Phonation Time Ratio (PTR):** voiced time / total duration. Benchmark: 0.55–0.75.
+- **Articulation Rate:** words/min during voiced time only. Benchmark: 120–180 WPM.
+- **Mean Length of Run (MLR):** avg words between pauses. Benchmark: MLR > 8 = fluent.
+- **MATTR:** Moving Average Type-Token Ratio (50-word window). Benchmark: 0.70+ = rich.
+- **Content Word Density:** unique content words per minute. Benchmark: 15–30/min.
+- **Substance Score (0–100):** composite of word count + duration + MATTR + density + MLR.
+- **Fluency Score (0–100):** composite of PTR + MLR + articulation rate.
+- **Lexical Sophistication Score (0–100):** MATTR + word length + NLEmbedding rarity.
+- **Gibberish Confidence (0–1):** 5-signal graduated confidence (0 = real, 1 = gibberish).
+
+All stored in `SpeechAnalysis.enhancedMetrics: EnhancedSpeechMetrics?`.
+
 ## Subscore formulas (`calculateSubscores`)
 
 ### 1) Clarity
@@ -100,7 +115,8 @@ Key formulas:
 
 ### 2) Pace
 - `base = 100 * exp(-(wpm-target)^2 / (2*45^2))`
-- `rawPace = base*0.80 + rateVariationScore*0.20`
+- **NEW:** `fluencyBlend = enhancedMetrics.fluencyScore * 0.15` (PTR + MLR + articulation rate)
+- `rawPace = base*0.65 + rateVariationScore*0.20 + fluencyBlend`
 - `pace = clamp(rawPace, 0...100)` then cap by `scoreCeiling`
 
 ### 3) Filler Usage
@@ -142,6 +158,9 @@ Key formulas:
 - Bonuses:
   - vocab bank: `min(8, totalUsed*3)`
   - power words: `min(5, Int(powerRatio*150))`
+- **NEW MATTR blend:** `vocabulary = base*0.60 + lexicalSophisticationScore*0.40`
+  - `lexicalSophisticationScore = MATTR*0.50 + wordLength*0.25 + NLEmbeddingRarity*0.25`
+  - Fallback: if no vocabComplexity, use lexicalSophisticationScore directly
 - Clamp `0...100`
 
 ### 8) Structure (optional)
@@ -167,6 +186,13 @@ Key formulas:
 - If no isolation reliability metrics are available, stabilization is bypassed (no neutral pull-down).
 - Speaker-isolation reliability is only applied when conversation/separation evidence exists (no solo-session penalty).
 - Stabilization uses a higher reliability floor to avoid collapsing strong performances toward the midline.
+
+**NEW post-aggregation gates (applied in order after calculateOverallScore):**
+1. `SpeechScoringEngine.applySubstanceMultiplier(overall, substanceScore)` — multiplicative gate
+2. `SpeechScoringEngine.applyGibberishGate(score, gibberishConfidence)` — graduated cap
+3. `PromptRelevanceService.isLikelyGibberish(...)` — legacy safety net (cap at 12)
+
+In `enhanceWithLLM`, substance multiplier and gibberish gate are re-applied after LLM recalculation to prevent LLM inflation of gibberish/empty speech scores.
 
 ## Default weights (`ScoreWeights.defaults`)
 - clarity 0.18
@@ -248,9 +274,10 @@ Rationale:
 - `SpeechSubscores` has 9 dimensions: clarity, pace, fillerUsage, pauseQuality, vocalVariety, delivery, vocabulary, structure, relevance.
 - `SpeechAnalysis.init(from:)` intentionally nulls advanced fields for compatibility:
   - `volumeMetrics`, `vocabComplexity`, `sentenceAnalysis`, `promptRelevanceScore`, `wpmTimeSeries`, `pitchMetrics`, `rateVariation`, `emphasisMetrics`, `energyArc`, `textQuality`
-  - `audioIsolationMetrics`, `speakerIsolationMetrics`
+  - `audioIsolationMetrics`, `speakerIsolationMetrics`, `enhancedMetrics` (NEW)
 - `Recording.audioLevelSamples` is `@Transient` (not persisted).
 - Current recording save path does not persist sampled audio levels into saved `Recording`, so delivery/energy metrics may be absent post-hoc.
+- `EnhancedSpeechMetrics` uses a custom `Decodable` init with `decodeIfPresent` for all fields, so older persisted data will decode to zero-value defaults without crashing.
 
 ## Claude usage notes
 - Treat this file as implementation contract, not product copy.
