@@ -1,3 +1,11 @@
+# SPEECH_SCORING_REBUILD_BLUEPRINT.md
+
+> **ARCHIVED** — This document describes the March 2026 isolation-aware rebuild.
+> The current authoritative architecture reference is `SPEECH_ANALYSIS_DEEP_DIVE.md`
+> and `SPEECH_SCORING_IMPROVEMENTS.md`.
+
+---
+
 # Speech Scoring Rebuild Blueprint
 
 This document captures the rebuild direction for SpeakUp's scoring stack so it can compete with high-end speech coaching apps.

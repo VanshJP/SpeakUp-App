@@ -403,10 +403,11 @@ class SpeechService {
             gibberishConfidence: enhancedMetrics.gibberishConfidence
         )
 
-        // Legacy compatibility: also apply old gibberish gate as a safety net
-        if PromptRelevanceService.isLikelyGibberish(transcript: scoringText, words: scoringWords) {
-            overallScore = min(overallScore, 12)
-        }
+        // NOTE: The legacy binary isLikelyGibberish gate has been removed.
+        // SpeechScoringEngine.applyGibberishGate uses a graduated 5-signal confidence
+        // score (0.0-1.0) which is strictly more accurate and less prone to false positives.
+        // PromptRelevanceService.isLikelyGibberish is retained as a standalone utility
+        // for other callers (e.g., UI pre-flight checks) but no longer gates scoring.
 
         let clarity = Double(subscores.clarity)
 
@@ -565,8 +566,10 @@ class SpeechService {
         speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
         enhancedMetrics: EnhancedSpeechMetrics? = nil
     ) -> SpeechSubscores {
-        // Score ceiling for short recordings (replaces center-biased dampening)
-        let scoreCeiling = min(100, 40 + Int(actualDuration * 6))
+        // NOTE: The old per-subscore scoreCeiling (40 + duration*6) has been removed.
+        // Short-speech penalty is now handled holistically by SpeechScoringEngine.applySubstanceMultiplier
+        // which applies a graduated multiplier to the final overall score. This prevents the
+        // ceiling from artificially compressing subscores while still penalizing short/empty speech.
 
         // Clarity score — voiced frame ratio (articulation quality) + duration consistency + hedge penalty
         let clarityScore: Int
@@ -621,7 +624,7 @@ class SpeechService {
                 (100 - hedgePenalty) * 0.08 +
                 authorityComponent * 0.16 +
                 paceAlignmentBonus
-            clarityScore = min(Int(rawClarity), scoreCeiling)
+            clarityScore = max(0, min(100, Int(rawClarity)))
         }
 
         // Pace score — enhanced with rate variation bonus and fluency (PTR/MLR/articulation rate)
@@ -646,7 +649,7 @@ class SpeechService {
             fluencyBlend = 0
         }
         let rawPaceScore = basePaceScore * 0.65 + rateVariationBonus + fluencyBlend
-        let paceScore = min(max(0, min(100, Int(rawPaceScore))), scoreCeiling)
+        let paceScore = max(0, min(100, Int(rawPaceScore)))
 
         // Filler usage score — logarithmic curve (less punitive than linear)
         let hedgeAdjustment: Double
@@ -660,7 +663,7 @@ class SpeechService {
         }
         let effectiveFillerRatio = fillerRatio + hedgeAdjustment + weakPhraseAdjustment
         let rawFillerScore = 100.0 * max(0, 1.0 - log2(1.0 + effectiveFillerRatio * 20.0))
-        let fillerScore = min(max(0, min(100, Int(rawFillerScore))), scoreCeiling)
+        let fillerScore = max(0, min(100, Int(rawFillerScore)))
 
         // Pause quality score
         let pauseScore: Int
@@ -674,7 +677,7 @@ class SpeechService {
                 targetWPM: Double(targetWPM),
                 actualDuration: actualDuration
             )
-            pauseScore = min(max(0, min(100, rawPauseScore)), scoreCeiling)
+            pauseScore = max(0, min(100, rawPauseScore))
         }
 
         let combinedReliability = combinedReliabilityScore(
@@ -777,7 +780,7 @@ class SpeechService {
                 let totalW = weights.reduce(0, +)
                 let weightedSum = zip(components, weights).reduce(0.0) { $0 + $1.0 * $1.1 }
                 let normalized = weightedSum / totalW
-                vocalVarietyScore = min(max(0, min(100, Int(normalized))), scoreCeiling)
+                vocalVarietyScore = max(0, min(100, Int(normalized)))
             } else {
                 vocalVarietyScore = nil
             }
@@ -1183,36 +1186,9 @@ class SpeechService {
             .map { RepeatedPhrase(phrase: $0.key, count: $0.value) }
             .sorted { $0.count > $1.count }
 
-        // Word rarity via NLEmbedding: measure distance from common words
-        let rarityComponent: Double
-        if let embedding = NLEmbedding.wordEmbedding(for: .english) {
-            let commonWords = ["the", "is", "have", "that", "good", "make", "go", "see", "know", "take"]
-            let uniqueList = Array(uniqueWords)
-            var totalRarity = 0.0
-            var countedWords = 0
-            for word in uniqueList {
-                guard embedding.contains(word), word.count >= 3 else { continue }
-                var minDist = 2.0
-                for common in commonWords {
-                    guard embedding.contains(common) else { continue }
-                    let dist = embedding.distance(between: word, and: common)
-                    minDist = min(minDist, dist)
-                }
-                // Distance 0-2; higher = rarer. Map: 0.5=common, 1.0=moderate, 1.5+=rare
-                totalRarity += max(0, minDist - 0.3)
-                countedWords += 1
-            }
-            if countedWords > 0 {
-                let avgRarity = totalRarity / Double(countedWords)
-                rarityComponent = min(1.0, avgRarity / 1.0) * 20
-            } else {
-                // Fallback to length-based
-                rarityComponent = min(1.0, longWordRatio / 0.15) * 20
-            }
-        } else {
-            // Fallback to length-based when NLEmbedding unavailable
-            rarityComponent = min(1.0, longWordRatio / 0.15) * 20
-        }
+        // Word rarity — delegate to SpeechScoringEngine.computeWordRarityScore to avoid
+        // duplicating the NLEmbedding lookup that already runs in the enhanced scoring pipeline.
+        let rarityComponent: Double = SpeechScoringEngine.computeWordRarityScore(words: Array(uniqueWords)) * 20.0
 
         // Composite score with calibrated thresholds for conversational speech
         let uniqueComponent = min(1.0, uniqueRatio / 0.65) * 35
@@ -1469,6 +1445,8 @@ class SpeechService {
         let cv = mean > 0 ? stddev / mean : 0
         let rateRange = (windowedWPMs.max() ?? 0) - (windowedWPMs.min() ?? 0)
 
+        // Note: SpeechScoringEngine also computes articulationRate for fluency scoring.
+        // This instance feeds RateVariationMetrics which is displayed in the Vocal Variety UI section.
         let totalSpeechTime = words.reduce(0.0) { $0 + $1.duration }
         let articulationRate = totalSpeechTime > 0 ? Double(words.count) / (totalSpeechTime / 60.0) : 0
 
