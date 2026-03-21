@@ -11,14 +11,27 @@ struct TranscriptionWord: Codable, Identifiable {
     var confidence: Double?
     var isFiller: Bool
     var isVocabWord: Bool
+    var isPrimarySpeaker: Bool
+    var speakerConfidence: Double?
 
-    init(word: String, start: TimeInterval, end: TimeInterval, confidence: Double? = nil, isFiller: Bool = false, isVocabWord: Bool = false) {
+    init(
+        word: String,
+        start: TimeInterval,
+        end: TimeInterval,
+        confidence: Double? = nil,
+        isFiller: Bool = false,
+        isVocabWord: Bool = false,
+        isPrimarySpeaker: Bool = true,
+        speakerConfidence: Double? = nil
+    ) {
         self.word = word
         self.start = start
         self.end = end
         self.confidence = confidence
         self.isFiller = isFiller
         self.isVocabWord = isVocabWord
+        self.isPrimarySpeaker = isPrimarySpeaker
+        self.speakerConfidence = speakerConfidence
     }
 
     init(from decoder: Decoder) throws {
@@ -30,6 +43,8 @@ struct TranscriptionWord: Codable, Identifiable {
         confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
         isFiller = try container.decodeIfPresent(Bool.self, forKey: .isFiller) ?? false
         isVocabWord = try container.decodeIfPresent(Bool.self, forKey: .isVocabWord) ?? false
+        isPrimarySpeaker = try container.decodeIfPresent(Bool.self, forKey: .isPrimarySpeaker) ?? true
+        speakerConfidence = try container.decodeIfPresent(Double.self, forKey: .speakerConfidence)
     }
 
     var duration: TimeInterval {
@@ -318,6 +333,52 @@ struct TextQualityMetrics: Codable {
     }
 }
 
+// MARK: - Audio / Speaker Isolation Metrics
+
+struct AudioIsolationMetrics: Codable {
+    var estimatedInputSNRDb: Double
+    var estimatedOutputSNRDb: Double
+    var suppressionDeltaDb: Double
+    var suppressionScore: Int // 0-100, higher = cleaner speech after preprocessing
+    var residualNoiseScore: Int // 0-100, higher = lower residual noise
+
+    init(
+        estimatedInputSNRDb: Double = 0,
+        estimatedOutputSNRDb: Double = 0,
+        suppressionDeltaDb: Double = 0,
+        suppressionScore: Int = 50,
+        residualNoiseScore: Int = 50
+    ) {
+        self.estimatedInputSNRDb = estimatedInputSNRDb
+        self.estimatedOutputSNRDb = estimatedOutputSNRDb
+        self.suppressionDeltaDb = suppressionDeltaDb
+        self.suppressionScore = suppressionScore
+        self.residualNoiseScore = residualNoiseScore
+    }
+}
+
+struct SpeakerIsolationMetrics: Codable {
+    var primarySpeakerWordRatio: Double // 0.0 - 1.0
+    var filteredOutWordCount: Int
+    var speakerSwitchCount: Int
+    var separationConfidence: Int // 0-100
+    var conversationDetected: Bool
+
+    init(
+        primarySpeakerWordRatio: Double = 1.0,
+        filteredOutWordCount: Int = 0,
+        speakerSwitchCount: Int = 0,
+        separationConfidence: Int = 50,
+        conversationDetected: Bool = false
+    ) {
+        self.primarySpeakerWordRatio = primarySpeakerWordRatio
+        self.filteredOutWordCount = filteredOutWordCount
+        self.speakerSwitchCount = speakerSwitchCount
+        self.separationConfidence = separationConfidence
+        self.conversationDetected = conversationDetected
+    }
+}
+
 // MARK: - WPM Data Point
 
 struct WPMDataPoint: Codable, Identifiable {
@@ -365,6 +426,8 @@ struct SpeechAnalysis: Codable {
     var emphasisMetrics: EmphasisMetrics?
     var energyArc: EnergyArcMetrics?
     var textQuality: TextQualityMetrics?
+    var audioIsolationMetrics: AudioIsolationMetrics?
+    var speakerIsolationMetrics: SpeakerIsolationMetrics?
 
     init(
         fillerWords: [FillerWord] = [],
@@ -386,7 +449,9 @@ struct SpeechAnalysis: Codable {
         rateVariation: RateVariationMetrics? = nil,
         emphasisMetrics: EmphasisMetrics? = nil,
         energyArc: EnergyArcMetrics? = nil,
-        textQuality: TextQualityMetrics? = nil
+        textQuality: TextQualityMetrics? = nil,
+        audioIsolationMetrics: AudioIsolationMetrics? = nil,
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
@@ -408,6 +473,8 @@ struct SpeechAnalysis: Codable {
         self.emphasisMetrics = emphasisMetrics
         self.energyArc = energyArc
         self.textQuality = textQuality
+        self.audioIsolationMetrics = audioIsolationMetrics
+        self.speakerIsolationMetrics = speakerIsolationMetrics
     }
 
     // Custom Decodable to handle missing fields in existing data
@@ -437,6 +504,8 @@ struct SpeechAnalysis: Codable {
         emphasisMetrics = nil
         energyArc = nil
         textQuality = nil
+        audioIsolationMetrics = nil
+        speakerIsolationMetrics = nil
     }
 
     var totalFillerCount: Int {
@@ -521,15 +590,15 @@ struct SpeechSubscores: Codable {
 // MARK: - Score Weights
 
 struct ScoreWeights {
-    var clarity: Double = 0.12
+    var clarity: Double = 0.18
     var pace: Double = 0.12
-    var filler: Double = 0.12
-    var pause: Double = 0.10
-    var vocalVariety: Double = 0.14
+    var filler: Double = 0.14
+    var pause: Double = 0.12
+    var vocalVariety: Double = 0.12
     var delivery: Double = 0.10
-    var vocabulary: Double = 0.10
-    var structure: Double = 0.10
-    var relevance: Double = 0.10
+    var vocabulary: Double = 0.08
+    var structure: Double = 0.08
+    var relevance: Double = 0.06
 
     nonisolated static let defaults = ScoreWeights()
 

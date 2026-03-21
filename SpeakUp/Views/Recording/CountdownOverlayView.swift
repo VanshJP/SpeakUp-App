@@ -56,49 +56,25 @@ struct CountdownOverlayView: View {
 
     var body: some View {
         ZStack {
-            // Fully opaque dark background to hide content behind
-            Color.black
-                .ignoresSafeArea()
+            AppBackground(style: .recording)
 
-            VStack(spacing: 24) {
-                // Top: Compact timer badge (lowered)
-                HStack {
-                    Spacer()
-                    compactTimer
-                    Spacer()
-                }
-                .padding(.top, 100)
-
-                // Goal picker (if active goals exist)
-                if !activeGoals.isEmpty {
-                    goalPickerSection
-                }
+            VStack(spacing: 20) {
+                countdownRing
+                    .padding(.top, 60)
 
                 Spacer()
 
-                // Center: Large prominent prompt card
                 if let prompt {
                     prominentPromptCard(prompt)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 20)
                 }
 
                 Spacer()
 
-                // Bottom: Cancel button
-                Button {
+                GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium) {
                     onCancel()
-                } label: {
-                    Text("Cancel")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 12)
-                        .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                        }
                 }
-                .padding(.bottom, 60)
+                .padding(.bottom, 50)
             }
         }
         .onReceive(timer) { _ in
@@ -118,180 +94,104 @@ struct CountdownOverlayView: View {
             }
         }
         .onAppear {
-            // Start pulsing animation
             withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                 isPulsing = true
+            }
+            if selectedGoalId == nil, let firstGoal = activeGoals.first {
+                selectedGoalId = firstGoal.id
             }
         }
     }
 
-    // MARK: - Compact Timer
+    // MARK: - Countdown Ring
 
-    private var compactTimer: some View {
+    private var countdownRing: some View {
         ZStack {
-            // Background glow
             Circle()
-                .fill(Color.cyan.opacity(0.15))
-                .frame(width: 100, height: 100)
-                .scaleEffect(isPulsing ? 1.1 : 1.0)
+                .fill(AppColors.primary.opacity(0.08))
+                .frame(width: 140, height: 140)
+                .scaleEffect(isPulsing ? 1.08 : 1.0)
 
-            // Progress ring
             Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: 4)
-                .frame(width: 80, height: 80)
+                .stroke(Color.white.opacity(0.08), lineWidth: 5)
+                .frame(width: 110, height: 110)
 
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(
                     LinearGradient(
-                        colors: [Color.cyan, Color.teal],
+                        colors: [AppColors.primary, .cyan],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    style: StrokeStyle(lineWidth: 5, lineCap: .round)
                 )
-                .frame(width: 80, height: 80)
+                .frame(width: 110, height: 110)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: progress)
 
-            // Timer number
-            Text("\(displayNumber)")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .contentTransition(.numericText())
-                .animation(.spring(duration: 0.3), value: displayNumber)
+            VStack(spacing: 2) {
+                Text("\(displayNumber)")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .animation(.spring(duration: 0.3), value: displayNumber)
+
+                Text("sec")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
         }
     }
-    
+
     // MARK: - Prominent Prompt Card
 
     private func prominentPromptCard(_ prompt: Prompt) -> some View {
-        VStack(spacing: 16) {
-            // Category + difficulty badges
-            HStack {
-                Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.9))
+        FeaturedGlassCard(
+            gradientColors: [AppColors.primary.opacity(0.12), Color.cyan.opacity(0.06)]
+        ) {
+            VStack(spacing: 16) {
+                HStack {
+                    Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.9))
 
-                Spacer()
+                    Spacer()
 
-                // Difficulty badge
-                Text(prompt.difficulty.displayName)
-                    .font(.caption.weight(.semibold))
+                    Text(prompt.difficulty.displayName)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background {
+                            Capsule()
+                                .fill(AppColors.difficultyColor(prompt.difficulty).opacity(0.3))
+                        }
+                        .foregroundStyle(AppColors.difficultyColor(prompt.difficulty))
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                        Text(duration.displayName)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.8))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background {
                         Capsule()
-                            .fill(AppColors.difficultyColor(prompt.difficulty).opacity(0.3))
-                    }
-                    .foregroundStyle(AppColors.difficultyColor(prompt.difficulty))
-
-                // Duration pill
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                    Text(duration.displayName)
-                }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.8))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background {
-                    Capsule()
-                        .fill(.white.opacity(0.15))
-                }
-            }
-
-            // Large prompt text (main focus)
-            Text(prompt.text)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-
-            // Instruction hint
-            Text("Read and prepare your response")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.top, 8)
-        }
-        .padding(24)
-        .background {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.3), Color.white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                }
-        }
-    }
-    
-    // MARK: - Goal Picker
-
-    private var goalPickerSection: some View {
-        VStack(spacing: 8) {
-            Text("What are you focusing on?")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.6))
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    // "None" option
-                    Button {
-                        Haptics.selection()
-                        selectedGoalId = nil
-                    } label: {
-                        Text("Skip")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(selectedGoalId == nil ? .white : .white.opacity(0.5))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background {
-                                Capsule()
-                                    .fill(selectedGoalId == nil ? Color.teal.opacity(0.3) : Color.white.opacity(0.08))
-                                    .overlay {
-                                        Capsule()
-                                            .strokeBorder(selectedGoalId == nil ? Color.teal.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
-                                    }
-                            }
-                    }
-                    .buttonStyle(.plain)
-
-                    ForEach(activeGoals) { goal in
-                        let isSelected = selectedGoalId == goal.id
-                        Button {
-                            Haptics.selection()
-                            selectedGoalId = isSelected ? nil : goal.id
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: goal.type.iconName)
-                                    .font(.caption2)
-                                Text(goal.title)
-                                    .font(.caption.weight(.medium))
-                                    .lineLimit(1)
-                            }
-                            .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background {
-                                Capsule()
-                                    .fill(isSelected ? Color.teal.opacity(0.3) : Color.white.opacity(0.08))
-                                    .overlay {
-                                        Capsule()
-                                            .strokeBorder(isSelected ? Color.teal.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
-                                    }
-                            }
-                        }
-                        .buttonStyle(.plain)
+                            .fill(.white.opacity(0.1))
                     }
                 }
-                .padding(.horizontal, 24)
+
+                Text(prompt.text)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+
+                Text("Read and prepare your response")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.top, 4)
             }
         }
     }

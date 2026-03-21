@@ -17,7 +17,6 @@ struct RecordingDetailView: View {
     @State private var showVocabHighlights = true
     @State private var waveformHeights: [CGFloat] = []
     @State private var scoreCardImage: UIImage?
-    @State private var showingScoreCardPreview = false
     @State private var animateScore = false
     @State private var selectedDetailTab: DetailTab = .analysis
     @State private var isEditingTitle = false
@@ -29,14 +28,12 @@ struct RecordingDetailView: View {
     @State private var settingsViewModel = SettingsViewModel()
     @State private var showingFeedbackSheet = false
     @State private var llmInsight: String?
-    @State private var isEnhancingCoherence = false
     @State private var transcriptionFailed = false
     @State private var playbackDrawerState: PlaybackDrawerState = .expanded
     @State private var playbackDrawerDragOffset: CGFloat = 0
     @State private var activePlaybackWordID: UUID?
     @State private var orderedTranscriptWords: [TranscriptionWord] = []
     @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
-    @State private var playbackWordCursor = 0
 
     @Query private var userSettings: [UserSettings]
 
@@ -856,7 +853,7 @@ struct RecordingDetailView: View {
                 )
                 .font(.headline)
 
-                Text(isAppleIntelligence ? "AI" : LocalLLMService.modelDisplayName)
+                Text(isAppleIntelligence ? "AI" : llmService.localLLM.modelDisplayName)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -911,7 +908,7 @@ struct RecordingDetailView: View {
                     Haptics.medium()
                     Task {
                         guard let analysis = recording.analysis else { return }
-                        let transcript = recording.transcriptionText ?? ""
+                        let transcript = resolvedTranscript(for: recording)
                         llmInsight = await llmService.generateCoachingInsight(
                             from: analysis,
                             transcript: transcript
@@ -1026,6 +1023,35 @@ struct RecordingDetailView: View {
     private var feedbackQuestionsForAnalyzing: [FeedbackQuestion] {
         let custom = userSettings.first?.customFeedbackQuestions ?? []
         return DefaultFeedbackQuestions.questions + custom
+    }
+
+    private func scoreWeights(from settings: UserSettings?) -> ScoreWeights {
+        guard let settings else { return .defaults }
+        return ScoreWeights(
+            clarity: settings.clarityWeight,
+            pace: settings.paceWeight,
+            filler: settings.fillerWeight,
+            pause: settings.pauseWeight,
+            vocalVariety: settings.vocalVarietyWeight,
+            delivery: settings.deliveryWeight,
+            vocabulary: settings.vocabularyWeight,
+            structure: settings.structureWeight,
+            relevance: settings.relevanceWeight
+        )
+    }
+
+    private func resolvedTranscript(for recording: Recording) -> String {
+        let text = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let text, !text.isEmpty {
+            return text
+        }
+
+        let fallback = recording.transcriptionWords?
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallback ?? ""
     }
 
     private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {
@@ -1148,7 +1174,6 @@ struct RecordingDetailView: View {
 
         orderedTranscriptWords = words
         orderedTranscriptRanges = words.map { $0.start...$0.end }
-        playbackWordCursor = 0
         activePlaybackWordID = nil
     }
 
@@ -1168,7 +1193,6 @@ struct RecordingDetailView: View {
             activePlaybackWordID = nil
             return
         }
-        playbackWordCursor = matchedIndex
         activePlaybackWordID = orderedTranscriptWords[matchedIndex].id
     }
 
@@ -1221,7 +1245,7 @@ struct RecordingDetailView: View {
                 try? modelContext.save()
             }
         } catch {
-            print("Error loading recording: \(error)")
+            recording = nil
         }
     }
 
@@ -1291,25 +1315,41 @@ struct RecordingDetailView: View {
                 removedDefaults: Set(settings?.removedDefaultFillers ?? [])
             )
 
-            let result = try await speechService.transcribe(
-                audioURL: audioURL,
-                fillerConfig: fillerConfig,
-                preferredTerms: preferredTerms
-            )
+            // Build persistent voice profile from settings
+            let voiceProfile: VoiceProfile? = {
+                guard let f0 = settings?.voiceProfileF0Hz,
+                      let energy = settings?.voiceProfileEnergyDb else { return nil }
+                return VoiceProfile(f0Hz: f0, energyDb: energy,
+                                    sampleCount: settings?.voiceProfileSampleCount ?? 0)
+            }()
 
-            // Build score weights from user settings
-            var weights = ScoreWeights.defaults
-            if let s = settings {
-                weights.clarity = s.clarityWeight
-                weights.pace = s.paceWeight
-                weights.filler = s.fillerWeight
-                weights.pause = s.pauseWeight
-                weights.vocalVariety = s.vocalVarietyWeight
-                weights.delivery = s.deliveryWeight
-                weights.vocabulary = s.vocabularyWeight
-                weights.structure = s.structureWeight
-                weights.relevance = s.relevanceWeight
+            // Free LLM memory before transcription to avoid competing with WhisperKit
+            if llmService.localLLM.isModelReady {
+                llmService.unloadLocalModel()
             }
+
+            let result = try await withThrowingTaskGroup(of: SpeechTranscriptionResult.self) { group in
+                group.addTask {
+                    try await self.speechService.transcribe(
+                        audioURL: audioURL,
+                        fillerConfig: fillerConfig,
+                        preferredTerms: preferredTerms,
+                        voiceProfile: voiceProfile
+                    )
+                }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(90))
+                    throw SpeechServiceError.transcriptionFailed(
+                        NSError(domain: "SpeakUp", code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "Transcription timed out"])
+                    )
+                }
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
+
+            let weights = scoreWeights(from: settings)
 
             let resultSnapshot = result
             let actualDuration = recording.actualDuration
@@ -1334,7 +1374,9 @@ struct RecordingDetailView: View {
                         targetWPM: targetWPM,
                         trackFillerWords: trackFillerWords,
                         trackPauses: trackPauses,
-                        scoreWeights: weightSnapshot
+                        scoreWeights: weightSnapshot,
+                        audioIsolationMetrics: resultSnapshot.audioIsolationMetrics,
+                        speakerIsolationMetrics: resultSnapshot.speakerIsolationMetrics
                     )
                     let markedWords = analyzer.markVocabWordsInTranscription(
                         resultSnapshot.words,
@@ -1350,8 +1392,27 @@ struct RecordingDetailView: View {
             prepareTranscriptPlaybackWords(from: recording)
 
             try modelContext.save()
+
+            // Update persistent voice profile via EMA
+            if let update = result.voiceProfileUpdate, let settings {
+                // Solo recordings are safe to learn from without high separation confidence.
+                // Only require confidence >= 50 when a conversation was detected.
+                let conversationDetected = result.speakerIsolationMetrics?.conversationDetected ?? false
+                if !conversationDetected || update.separationConfidence >= 50 {
+                    let alpha = 0.3
+                    if let existing = settings.voiceProfileF0Hz, settings.voiceProfileSampleCount > 0 {
+                        settings.voiceProfileF0Hz = existing * (1 - alpha) + update.sessionF0Hz * alpha
+                        settings.voiceProfileEnergyDb = (settings.voiceProfileEnergyDb ?? 0) * (1 - alpha) + update.sessionEnergyDb * alpha
+                    } else {
+                        settings.voiceProfileF0Hz = update.sessionF0Hz
+                        settings.voiceProfileEnergyDb = update.sessionEnergyDb
+                    }
+                    settings.voiceProfileSampleCount += 1
+                    settings.voiceProfileLastUpdated = Date()
+                    try? modelContext.save()
+                }
+            }
         } catch {
-            print("Transcription error: \(error)")
             transcriptionFailed = true
         }
     }
@@ -1366,36 +1427,20 @@ struct RecordingDetailView: View {
 
     private func enhanceCoherenceIfNeeded() async {
         guard let recording,
-              var analysis = recording.analysis,
-              let transcript = recording.transcriptionText else { return }
+              var analysis = recording.analysis else { return }
 
-        // If model is downloaded but not loaded, kick off loading in background
-        // but don't block this task waiting for it
+        let transcript = resolvedTranscript(for: recording)
+        guard !transcript.isEmpty else { return }
+
+        // If local model is downloaded, ensure it is actually loaded before we decide availability.
+        // Previously this returned early and skipped enhancement for the current session.
         if !llmService.isAvailable && llmService.localLLM.isModelDownloaded {
-            Task {
-                await llmService.loadLocalModelIfNeeded()
-            }
-            return
+            await llmService.loadLocalModelIfNeeded()
         }
 
         guard llmService.isAvailable else { return }
 
-        isEnhancingCoherence = true
-        defer { isEnhancingCoherence = false }
-
-        // Build score weights from user settings
-        var weights = ScoreWeights.defaults
-        if let s = userSettings.first {
-            weights.clarity = s.clarityWeight
-            weights.pace = s.paceWeight
-            weights.filler = s.fillerWeight
-            weights.pause = s.pauseWeight
-            weights.vocalVariety = s.vocalVarietyWeight
-            weights.delivery = s.deliveryWeight
-            weights.vocabulary = s.vocabularyWeight
-            weights.structure = s.structureWeight
-            weights.relevance = s.relevanceWeight
-        }
+        let weights = scoreWeights(from: userSettings.first)
 
         // Pass prompt text for prompt-aware coherence scoring
         let promptText = recording.prompt?.text
@@ -1414,14 +1459,13 @@ struct RecordingDetailView: View {
         recording.analysis = analysis
         try? modelContext.save()
 
-        // Auto-generate coaching insight so it's ready on the coaching tab
+        // Auto-generate coaching insight so it's ready on the coaching tab.
+        // Regenerate each time analysis is enhanced to avoid stale advice.
         guard !Task.isCancelled else { return }
-        if llmInsight == nil {
-            llmInsight = await llmService.generateCoachingInsight(
-                from: analysis,
-                transcript: transcript
-            )
-        }
+        llmInsight = await llmService.generateCoachingInsight(
+            from: analysis,
+            transcript: transcript
+        )
     }
 
     private func togglePlayback(_ recording: Recording) {

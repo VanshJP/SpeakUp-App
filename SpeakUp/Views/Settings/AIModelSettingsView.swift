@@ -80,7 +80,7 @@ struct AIModelSettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Local AI Model")
                             .font(.headline)
-                        Text("\(LocalLLMService.modelDisplayName) • \(LocalLLMService.approximateModelSize)")
+                        Text("\(llmService.localLLM.modelDisplayName) • \(llmService.localLLM.approximateModelSize)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -91,8 +91,10 @@ struct AIModelSettingsView: View {
                 }
 
                 // Description
+                modelTierSection
+
                 if !llmService.appleIntelligenceAvailable {
-                    Text("Download a compact on-device model to enable AI-powered coherence scoring and coaching tips on this device.")
+                    Text("Download your selected on-device model tier to enable AI-powered coherence scoring and coaching tips on this device.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -104,6 +106,42 @@ struct AIModelSettingsView: View {
                 // Actions based on state
                 localModelActions
             }
+        }
+    }
+
+    @ViewBuilder
+    private var modelTierSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Model Tier")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if llmService.localLLM.selectedProfile != llmService.localLLM.recommendedProfile {
+                    Text("Recommended: \(llmService.localLLM.recommendedProfile.displayName)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Picker(
+                "Model Tier",
+                selection: Binding(
+                    get: { llmService.localLLM.selectedProfile },
+                    set: { profile in
+                        Haptics.selection()
+                        llmService.localLLM.selectProfile(profile)
+                    }
+                )
+            ) {
+                ForEach(llmService.localLLM.availableProfiles) { profile in
+                    Text("\(profile.displayName) • \(profile.approximateModelSize)")
+                        .tag(profile)
+                }
+            }
+            .pickerStyle(.menu)
         }
     }
 

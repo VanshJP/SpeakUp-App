@@ -7,6 +7,8 @@ Status: source-of-truth for current behavior.
 - `SpeakUp/Services/SpeechService.swift`
 - `SpeakUp/Services/PromptRelevanceService.swift`
 - `SpeakUp/Services/TextAnalysisService.swift`
+- `SpeakUp/Services/SpeechIsolationService.swift`
+- `SpeakUp/Services/ConversationIsolationService.swift`
 - `SpeakUp/Models/SpeechAnalysis.swift`
 - Runtime wiring: `SpeakUp/Views/Detail/RecordingDetailView.swift`
 
@@ -14,11 +16,13 @@ Status: source-of-truth for current behavior.
 1. `RecordingDetailView.task`: load recording/settings.
 2. `transcribeIfNeeded()` only if `transcriptionText == nil && analysis == nil`.
 3. Transcription backend order:
+   - speech isolation preprocessing (high-pass + adaptive gate) when beneficial
    - WhisperKit
    - WhisperKit unload/reload retry
    - Apple Speech fallback (`addsPunctuation = false`)
-4. `SpeechService.analyze(...)` computes base analysis + subscores + overall.
-5. `enhanceCoherenceIfNeeded()` optionally runs LLM post-pass and recalculates overall.
+4. Conversation isolation pass labels likely primary-speaker words.
+5. `SpeechService.analyze(...)` computes base analysis + subscores + overall.
+6. `enhanceCoherenceIfNeeded()` optionally runs LLM post-pass and recalculates overall.
 
 ## Inputs to `SpeechService.analyze(...)`
 - Transcript (`text`, `[TranscriptionWord]`)
@@ -30,12 +34,18 @@ Status: source-of-truth for current behavior.
 - `targetWPM`
 - `trackFillerWords`, `trackPauses`
 - `ScoreWeights`
+- `audioIsolationMetrics`, `speakerIsolationMetrics`
 
 ## Preprocessing and core derived metrics
 - Words sorted by `start`.
+- Primary-speaker stream is used only when separation is strong and conversational evidence exists:
+  - enough retained primary words,
+  - separation confidence threshold,
+  - plausible primary-speaker ratio,
+  - and either conversation detection or enough filtered/switching evidence.
 - Pause detection: gap `> 0.4s`; pause duration cap `10.0s`.
 - Transition pause: previous token ends with `.`, `?`, or `!`.
-- `wordsPerMinute = totalWords / (actualDuration / 60)`.
+- `wordsPerMinute = totalWords / (effectiveSpeechDuration / 60)`.
 - `averagePauseLength` uses median.
 - Optional analyzers:
   - volume metrics (requires `audioLevelSamples`)
@@ -153,17 +163,21 @@ Key formulas:
 - Include optional only when non-nil:
   - vocalVariety, delivery, vocabulary, structure, relevance
 - `overall = clamp(weightedSum / sum(includedWeights), 0...100)`
+- Low-confidence acoustic sessions (noise/speaker overlap) apply reliability stabilization toward a neutral anchor before overall aggregation.
+- If no isolation reliability metrics are available, stabilization is bypassed (no neutral pull-down).
+- Speaker-isolation reliability is only applied when conversation/separation evidence exists (no solo-session penalty).
+- Stabilization uses a higher reliability floor to avoid collapsing strong performances toward the midline.
 
 ## Default weights (`ScoreWeights.defaults`)
-- clarity 0.12
+- clarity 0.18
 - pace 0.12
-- filler 0.12
-- pause 0.10
-- vocalVariety 0.14
+- filler 0.14
+- pause 0.12
+- vocalVariety 0.12
 - delivery 0.10
-- vocabulary 0.10
-- structure 0.10
-- relevance 0.10
+- vocabulary 0.08
+- structure 0.08
+- relevance 0.06
 - If total weight `<= 0`: normalization falls back to defaults.
 
 ## Prompt relevance and coherence
@@ -196,7 +210,7 @@ Includes early gibberish-like caps for fragmented text.
 ## LLM post-pass (`enhanceWithLLM`)
 Runs only when:
 - LLM available
-- transcript length >= 50 chars
+- transcript length >= 25 chars
 
 Steps:
 1. Replace relevance with LLM-blended coherence.
@@ -205,8 +219,8 @@ Steps:
 4. Recompute overall score.
 
 Blend ratios for structure/vocabulary blend:
-- Apple Intelligence: LLM 40%, rule-based 60%
-- Local LLM: LLM 30%, rule-based 70%
+- Apple Intelligence: LLM 45%, rule-based 55%
+- Local LLM: LLM 40%, rule-based 60%
 
 Prompt coherence blend inside `PromptRelevanceService`:
 - Apple Intelligence: LLM 60%, rules 40%
@@ -214,11 +228,11 @@ Prompt coherence blend inside `PromptRelevanceService`:
 
 Stabilization caps in `SpeechService`:
 - Component cap (relevance/structure/vocabulary):
-  - Apple Intelligence: max ±16 points vs baseline
-  - Local LLM: max ±12 points vs baseline
+  - Apple Intelligence: max ±20 points vs baseline
+  - Local LLM: max ±16 points vs baseline
 - Overall cap (final score vs baseline):
-  - Apple Intelligence: max ±10 points
-  - Local LLM: max ±7 points
+  - Apple Intelligence: max ±14 points
+  - Local LLM: max ±10 points
 
 Rationale:
 - Keeps score movement predictable between no-AI / Apple Intelligence / local LLM scenarios.
@@ -234,6 +248,7 @@ Rationale:
 - `SpeechSubscores` has 9 dimensions: clarity, pace, fillerUsage, pauseQuality, vocalVariety, delivery, vocabulary, structure, relevance.
 - `SpeechAnalysis.init(from:)` intentionally nulls advanced fields for compatibility:
   - `volumeMetrics`, `vocabComplexity`, `sentenceAnalysis`, `promptRelevanceScore`, `wpmTimeSeries`, `pitchMetrics`, `rateVariation`, `emphasisMetrics`, `energyArc`, `textQuality`
+  - `audioIsolationMetrics`, `speakerIsolationMetrics`
 - `Recording.audioLevelSamples` is `@Transient` (not persisted).
 - Current recording save path does not persist sampled audio levels into saved `Recording`, so delivery/energy metrics may be absent post-hoc.
 

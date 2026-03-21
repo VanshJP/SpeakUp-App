@@ -133,7 +133,7 @@ final class LLMService {
         // Prefer Apple Intelligence
         if appleIntelligenceAvailable {
             if let raw = await generateCoachingWithAppleIntelligence(analysis: analysis, transcript: transcript) {
-                return sanitizeCoachingInsight(raw)
+                return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript)
             }
             return nil
         }
@@ -141,7 +141,7 @@ final class LLMService {
         // Fall back to local LLM
         if localLLM.isModelReady {
             if let raw = await localLLM.generateCoachingInsight(from: analysis, transcript: transcript) {
-                return sanitizeCoachingInsight(raw)
+                return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript)
             }
             return nil
         }
@@ -332,6 +332,10 @@ final class LLMService {
         You are a supportive speech coach. Analyze the speaker's performance and provide \
         2-3 specific, actionable coaching tips. Be encouraging but honest. Focus on the \
         most impactful areas for improvement. Keep each tip to 1-2 sentences. \
+        Each tip must reference at least one concrete signal from the summary (numbered metric) \
+        or a short quoted phrase from the transcript excerpt. \
+        Never recommend adding filler words (e.g., "um", "uh", "like", "you know"), \
+        and never present verbal tics as a positive strategy. \
         Format: Start each tip on a new line with a bullet point (•).
         """
     }
@@ -346,6 +350,12 @@ final class LLMService {
         parts.append("- Total Words: \(analysis.totalWords)")
         parts.append("- Filler Words: \(analysis.totalFillerCount)")
         parts.append("- Pauses: \(analysis.pauseCount) (strategic: \(analysis.strategicPauseCount), hesitations: \(analysis.hesitationPauseCount))")
+        if let noise = analysis.audioIsolationMetrics {
+            parts.append("- Noise Isolation: residual \(noise.residualNoiseScore)/100, suppression +\(String(format: "%.1f", noise.suppressionDeltaDb)) dB")
+        }
+        if let speaker = analysis.speakerIsolationMetrics {
+            parts.append("- Speaker Isolation: confidence \(speaker.separationConfidence)/100, primary speaker ratio \(Int(speaker.primarySpeakerWordRatio * 100))%")
+        }
 
         let subscores = analysis.speechScore.subscores
         parts.append("- Clarity: \(subscores.clarity)/100")
@@ -370,11 +380,12 @@ final class LLMService {
         parts.append(truncatedTranscript)
         parts.append("")
         parts.append("Based on this performance, provide 2-3 specific coaching tips to help this speaker improve.")
+        parts.append("Every tip must mention either a numeric metric or a short quoted transcript phrase.")
 
         return parts.joined(separator: "\n")
     }
 
-    private func sanitizeCoachingInsight(_ raw: String) -> String {
+    private func sanitizeCoachingInsight(_ raw: String, analysis: SpeechAnalysis, transcript: String) -> String {
         let lines = raw
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -389,12 +400,20 @@ final class LLMService {
             bulletTips.append(stripped)
         }
 
-        // Fallback: if model returned one paragraph, preserve it.
-        guard !bulletTips.isEmpty else { return raw.trimmingCharacters(in: .whitespacesAndNewlines) }
+        // If model returned a paragraph without bullets, treat it as one tip.
+        if bulletTips.isEmpty {
+            let paragraph = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !paragraph.isEmpty {
+                bulletTips = [paragraph]
+            }
+        }
 
         var seen: Set<String> = []
         var deduped: [String] = []
         for tip in bulletTips {
+            if containsDisallowedAdvice(tip) {
+                continue
+            }
             let key = tip
                 .lowercased()
                 .replacingOccurrences(of: #"[^a-z0-9\s]"#, with: "", options: .regularExpression)
@@ -407,10 +426,88 @@ final class LLMService {
             if deduped.count == 3 { break }
         }
 
-        if deduped.isEmpty {
-            return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if deduped.isEmpty || !isInsightSpecificEnough(deduped, transcript: transcript) {
+            return deterministicCoachingFallback(analysis: analysis, transcript: transcript)
         }
 
         return deduped.map { "- \($0)" }.joined(separator: "\n")
+    }
+
+    private func isInsightSpecificEnough(
+        _ tips: [String],
+        transcript: String
+    ) -> Bool {
+        let combined = tips.joined(separator: " ").lowercased()
+        let hasNumericSignal = combined.range(of: #"\b\d+\b"#, options: .regularExpression) != nil
+        let metricKeywords = [
+            "wpm", "filler", "fillers", "pause", "pauses", "clarity", "pace",
+            "score", "vocabulary", "structure", "relevance"
+        ]
+        let hasMetricKeyword = metricKeywords.contains { combined.contains($0) }
+        if hasMetricKeyword && hasNumericSignal {
+            return true
+        }
+
+        let transcriptTokens = transcript
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count >= 5 }
+        guard !transcriptTokens.isEmpty else { return false }
+        let tokenSet = Set(transcriptTokens.prefix(24))
+        return tokenSet.contains { token in combined.contains(token) }
+    }
+
+    private func deterministicCoachingFallback(analysis: SpeechAnalysis, transcript: String) -> String {
+        let deterministicTips = CoachingTipService.generateTips(from: analysis).prefix(3)
+        var lines: [String] = []
+        lines.reserveCapacity(3)
+
+        let snippet = transcript
+            .split(whereSeparator: \.isNewline)
+            .first?
+            .split(separator: " ")
+            .prefix(8)
+            .joined(separator: " ") ?? ""
+        if !snippet.isEmpty {
+            lines.append("- In your transcript (\"\(snippet)...\"), tighten phrasing and land each point with a clear finish.")
+        }
+
+        for tip in deterministicTips {
+            let line = "- \(tip.message)"
+            if !lines.contains(line) {
+                lines.append(line)
+            }
+            if lines.count == 3 { break }
+        }
+
+        if lines.isEmpty {
+            lines = [
+                "- You are at \(Int(analysis.wordsPerMinute)) WPM; stay near 130-170 WPM by pausing briefly after each key point.",
+                "- You used \(analysis.totalFillerCount) fillers; replace each filler with a 1-second silent pause.",
+                "- Your clarity score is \(analysis.speechScore.subscores.clarity); slow the first sentence and over-enunciate consonant endings."
+            ]
+        }
+
+        return lines.prefix(3).joined(separator: "\n")
+    }
+
+    private func containsDisallowedAdvice(_ tip: String) -> Bool {
+        let lowered = tip.lowercased()
+        let containsFillerTerm = lowered.range(
+            of: #"\b(um|uh|like|you know|i mean|basically)\b"#,
+            options: .regularExpression
+        ) != nil
+        let encouragesAction = lowered.range(
+            of: #"\b(use|add|include|say|insert|try)\b"#,
+            options: .regularExpression
+        ) != nil
+
+        if containsFillerTerm && encouragesAction {
+            return true
+        }
+        if lowered.contains("filler word") && lowered.contains("help") {
+            return true
+        }
+        return false
     }
 }

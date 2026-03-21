@@ -63,16 +63,22 @@ final class UserSettings {
     var customContextFillerWords: [String] = []       // user-added context-dependent fillers
     var removedDefaultFillers: [String] = []          // default fillers the user disabled
 
+    // Voice Profile
+    var voiceProfileF0Hz: Double?
+    var voiceProfileEnergyDb: Double?
+    var voiceProfileSampleCount: Int = 0
+    var voiceProfileLastUpdated: Date?
+
     // Score Weights
-    var clarityWeight: Double = 0.12
+    var clarityWeight: Double = 0.18
     var paceWeight: Double = 0.12
-    var fillerWeight: Double = 0.12
-    var pauseWeight: Double = 0.10
-    var vocalVarietyWeight: Double = 0.14
+    var fillerWeight: Double = 0.14
+    var pauseWeight: Double = 0.12
+    var vocalVarietyWeight: Double = 0.12
     var deliveryWeight: Double = 0.10
-    var vocabularyWeight: Double = 0.10
-    var structureWeight: Double = 0.10
-    var relevanceWeight: Double = 0.10
+    var vocabularyWeight: Double = 0.08
+    var structureWeight: Double = 0.08
+    var relevanceWeight: Double = 0.06
 
     init(
         id: UUID = UUID(),

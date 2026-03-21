@@ -185,14 +185,20 @@ enum FillerDetectionPipeline {
                     start: result[i].start,
                     end: result[i].end,
                     confidence: result[i].confidence,
-                    isFiller: true
+                    isFiller: true,
+                    isVocabWord: result[i].isVocabWord,
+                    isPrimarySpeaker: result[i].isPrimarySpeaker,
+                    speakerConfidence: result[i].speakerConfidence
                 )
                 result[i + 1] = TranscriptionWord(
                     word: result[i + 1].word,
                     start: result[i + 1].start,
                     end: result[i + 1].end,
                     confidence: result[i + 1].confidence,
-                    isFiller: true
+                    isFiller: true,
+                    isVocabWord: result[i + 1].isVocabWord,
+                    isPrimarySpeaker: result[i + 1].isPrimarySpeaker,
+                    speakerConfidence: result[i + 1].speakerConfidence
                 )
             }
         }

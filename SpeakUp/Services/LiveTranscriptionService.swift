@@ -13,10 +13,6 @@ class LiveTranscriptionService {
     /// Used to detect sentence boundaries for graceful recording stop.
     var lastSegmentEndTime: TimeInterval = 0
 
-    /// Monotonic clock time when recognition started, used to convert
-    /// segment timestamps into elapsed-recording time.
-    private var recognitionStartTime: CFAbsoluteTime = 0
-
     private var audioEngine: AVAudioEngine?
     private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -50,7 +46,6 @@ class LiveTranscriptionService {
         liveFillerCount = 0
         liveWordCount = 0
         lastSegmentEndTime = 0
-        recognitionStartTime = CFAbsoluteTimeGetCurrent()
         isActive = true
 
         let inputNode = engine.inputNode
