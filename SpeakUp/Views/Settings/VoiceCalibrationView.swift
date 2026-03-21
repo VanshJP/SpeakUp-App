@@ -42,7 +42,6 @@ struct VoiceCalibrationView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         headerSection
-                        if phase == .ready { howItWorksCard }
                         passageCard
                         statusSection
                         actionButtons
@@ -92,34 +91,6 @@ struct VoiceCalibrationView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 8)
-    }
-
-    private var howItWorksCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("How it works", systemImage: "info.circle")
-                    .font(.caption.bold())
-                    .foregroundStyle(AppColors.primary)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    howItWorksRow(icon: "waveform", text: "Captures your unique pitch and vocal energy")
-                    howItWorksRow(icon: "person.2.fill", text: "Helps identify your voice in conversations with others")
-                    howItWorksRow(icon: "arrow.trianglehead.2.clockwise", text: "Improves automatically with every recording you make")
-                }
-            }
-        }
-    }
-
-    private func howItWorksRow(icon: String, text: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(AppColors.primary)
-                .frame(width: 20)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
     }
 
     private var passageCard: some View {

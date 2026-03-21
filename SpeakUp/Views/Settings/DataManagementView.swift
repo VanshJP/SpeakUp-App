@@ -9,27 +9,27 @@ struct DataManagementView: View {
             AppBackground(style: .subtle)
 
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     // MARK: - Voice Profile Card
-                    GlassCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Voice Profile", systemImage: "waveform.badge.person.crop")
-                                .font(.headline)
-                                .foregroundStyle(.white)
+                    GlassSectionHeader("Voice Profile", icon: "waveform.badge.person.crop")
 
+                    GlassCard(padding: 14) {
+                        VStack(spacing: 0) {
                             if viewModel.voiceProfileSampleCount > 0 {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 14) {
+                                    VStack(alignment: .leading, spacing: 2) {
                                         Text("Trained on \(viewModel.voiceProfileSampleCount) recording\(viewModel.voiceProfileSampleCount == 1 ? "" : "s")")
-                                            .font(.subheadline)
+                                            .font(.subheadline.weight(.medium))
                                             .foregroundStyle(.white)
                                         if let lastUpdated = viewModel.voiceProfileLastUpdated {
-                                            Text("Last updated \(Self.broadDateString(lastUpdated))")
+                                            Text("Updated \(Self.broadDateString(lastUpdated))")
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
+
                                     Spacer()
+
                                     Text(viewModel.voiceProfileSampleCount >= 3 ? "Reliable" : "Learning")
                                         .font(.caption.bold())
                                         .padding(.horizontal, 10)
@@ -40,15 +40,20 @@ struct DataManagementView: View {
                                         )
                                         .foregroundStyle(viewModel.voiceProfileSampleCount >= 3 ? AppColors.success : AppColors.warning)
                                 }
+                                .frame(minHeight: 40)
 
-                                Divider().padding(.vertical, 4)
+                                Divider().padding(.vertical, 6)
 
                                 Button {
                                     Haptics.medium()
                                     viewModel.showingVoiceCalibration = true
                                 } label: {
-                                    HStack {
-                                        Label("Recalibrate", systemImage: "mic.badge.plus")
+                                    HStack(spacing: 14) {
+                                        Image(systemName: "mic.badge.plus")
+                                            .font(.body)
+                                            .foregroundStyle(AppColors.primary)
+                                            .frame(width: 28)
+                                        Text("Recalibrate")
                                             .font(.subheadline)
                                             .foregroundStyle(.primary)
                                         Spacer()
@@ -60,12 +65,18 @@ struct DataManagementView: View {
                                 }
                                 .buttonStyle(.plain)
 
+                                Divider().padding(.vertical, 6)
+
                                 Button {
                                     Haptics.warning()
                                     viewModel.showingVoiceProfileResetConfirmation = true
                                 } label: {
-                                    HStack {
-                                        Label("Reset Voice Profile", systemImage: "arrow.counterclockwise")
+                                    HStack(spacing: 14) {
+                                        Image(systemName: "arrow.counterclockwise")
+                                            .font(.body)
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 28)
+                                        Text("Reset Voice Profile")
                                             .font(.subheadline)
                                             .foregroundStyle(.primary)
                                         Spacer()
@@ -77,26 +88,50 @@ struct DataManagementView: View {
                                 }
                                 .buttonStyle(.plain)
                             } else {
-                                Text("Calibrate your voice so SpeakUp can recognize you in conversations, or it will learn automatically as you record.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Calibrate your voice so SpeakUp can recognize you in conversations, or it will learn automatically as you record.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
 
-                                GlassButton(title: "Calibrate Voice", icon: "mic.badge.plus", style: .primary, size: .medium) {
-                                    Haptics.medium()
-                                    viewModel.showingVoiceCalibration = true
+                                    GlassButton(title: "Calibrate Voice", icon: "mic.badge.plus", style: .primary, size: .medium) {
+                                        Haptics.medium()
+                                        viewModel.showingVoiceCalibration = true
+                                    }
                                 }
                             }
                         }
                     }
 
-                    GlassCard {
+                    // MARK: - How It Works
+                    GlassCard(tint: AppColors.glassTintPrimary, padding: 14) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("How voice calibration works", systemImage: "info.circle")
+                                .font(.caption.bold())
+                                .foregroundStyle(AppColors.primary)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                howItWorksRow(icon: "waveform", text: "Captures your unique pitch and vocal energy")
+                                howItWorksRow(icon: "person.2.fill", text: "Helps identify your voice in conversations with others")
+                                howItWorksRow(icon: "arrow.trianglehead.2.clockwise", text: "Improves automatically with every recording you make")
+                            }
+                        }
+                    }
+
+                    // MARK: - Data Actions
+                    GlassSectionHeader("Data", icon: "externaldrive.fill")
+
+                    GlassCard(padding: 14) {
                         VStack(spacing: 0) {
                             Button {
                                 Haptics.warning()
                                 viewModel.showingResetConfirmation = true
                             } label: {
-                                HStack {
-                                    Label("Reset Settings", systemImage: "arrow.counterclockwise")
+                                HStack(spacing: 14) {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .font(.body)
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 28)
+                                    Text("Reset Settings")
                                         .font(.subheadline)
                                         .foregroundStyle(.primary)
                                     Spacer()
@@ -108,16 +143,20 @@ struct DataManagementView: View {
                             }
                             .buttonStyle(.plain)
 
-                            Divider().padding(.vertical, 8)
+                            Divider().padding(.vertical, 6)
 
                             Button {
                                 Haptics.warning()
                                 viewModel.showingClearDataConfirmation = true
                             } label: {
-                                HStack {
-                                    Label("Clear All Data", systemImage: "trash")
+                                HStack(spacing: 14) {
+                                    Image(systemName: "trash")
+                                        .font(.body)
+                                        .foregroundStyle(AppColors.error)
+                                        .frame(width: 28)
+                                    Text("Clear All Data")
                                         .font(.subheadline)
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(AppColors.error)
                                     Spacer()
                                     Image(systemName: "chevron.right")
                                         .font(.caption2)
@@ -175,6 +214,20 @@ struct DataManagementView: View {
             .disabled(viewModel.clearDataAcknowledgement.trimmingCharacters(in: .whitespaces).lowercased() != "i acknowledge")
         } message: {
             Text("This will permanently delete all your recordings, goals, achievements, and curriculum progress. Type \"I acknowledge\" to confirm.")
+        }
+    }
+
+    // MARK: - Subviews
+
+    private func howItWorksRow(icon: String, text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(AppColors.primary)
+                .frame(width: 20)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
