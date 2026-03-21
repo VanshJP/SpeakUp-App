@@ -428,6 +428,8 @@ struct SpeechAnalysis: Codable {
     var textQuality: TextQualityMetrics?
     var audioIsolationMetrics: AudioIsolationMetrics?
     var speakerIsolationMetrics: SpeakerIsolationMetrics?
+    /// Enhanced scoring metrics from SpeechScoringEngine (MATTR, PTR, MLR, substance, fluency)
+    var enhancedMetrics: EnhancedSpeechMetrics?
 
     init(
         fillerWords: [FillerWord] = [],
@@ -451,7 +453,8 @@ struct SpeechAnalysis: Codable {
         energyArc: EnergyArcMetrics? = nil,
         textQuality: TextQualityMetrics? = nil,
         audioIsolationMetrics: AudioIsolationMetrics? = nil,
-        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
+        enhancedMetrics: EnhancedSpeechMetrics? = nil
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
@@ -475,6 +478,7 @@ struct SpeechAnalysis: Codable {
         self.textQuality = textQuality
         self.audioIsolationMetrics = audioIsolationMetrics
         self.speakerIsolationMetrics = speakerIsolationMetrics
+        self.enhancedMetrics = enhancedMetrics
     }
 
     // Custom Decodable to handle missing fields in existing data
@@ -506,6 +510,7 @@ struct SpeechAnalysis: Codable {
         textQuality = nil
         audioIsolationMetrics = nil
         speakerIsolationMetrics = nil
+        enhancedMetrics = nil
     }
 
     var totalFillerCount: Int {

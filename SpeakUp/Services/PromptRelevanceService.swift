@@ -127,21 +127,32 @@ enum PromptRelevanceService {
     }
 
     /// Check if the transcript is likely gibberish.
+    /// This is a legacy safety-net check. The primary gibberish detection is now
+    /// performed by SpeechScoringEngine.detectGibberish(...) which uses 5 signals
+    /// and returns a graduated confidence score rather than a binary flag.
+    ///
+    /// This function is kept as a final safety net with a stricter threshold (>=2 checks).
     static func isLikelyGibberish(transcript: String, words: [TranscriptionWord]) -> Bool {
         guard !transcript.isEmpty else { return true }
 
+        // Absolute minimum: fewer than 4 words is always gibberish/empty
+        let wordList = transcript.split(separator: " ")
+        guard wordList.count >= 4 else { return true }
+
         var failedChecks = 0
 
-        // Check 1: Average word confidence < 0.3
+        // Check 1: Average word confidence < 0.25 (stricter than before)
         let confidences = words.compactMap { $0.confidence }
         if !confidences.isEmpty {
             let avgConfidence = confidences.reduce(0, +) / Double(confidences.count)
-            if avgConfidence < 0.3 {
+            if avgConfidence < 0.25 {
+                failedChecks += 2  // Strong signal — very low confidence
+            } else if avgConfidence < 0.35 {
                 failedChecks += 1
             }
         }
 
-        // Check 2: Ratio of real English words via NLTagger
+        // Check 2: Ratio of real English words via NLTagger (stricter threshold)
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
         tagger.string = transcript
         var totalTokens = 0
@@ -160,7 +171,9 @@ enum PromptRelevanceService {
 
         if totalTokens > 0 {
             let recognizedRatio = Double(recognizedTokens) / Double(totalTokens)
-            if recognizedRatio < 0.4 {
+            if recognizedRatio < 0.35 {
+                failedChecks += 2  // Strong signal
+            } else if recognizedRatio < 0.50 {
                 failedChecks += 1
             }
         }
@@ -172,7 +185,41 @@ enum PromptRelevanceService {
             failedChecks += 1
         }
 
-        return failedChecks >= 2
+        // Check 4: Extreme word repetition (one word > 35% of transcript)
+        var wordFreq: [String: Int] = [:]
+        for word in wordList {
+            let w = String(word).lowercased().trimmingCharacters(in: .punctuationCharacters)
+            if w.count >= 2 { wordFreq[w, default: 0] += 1 }
+        }
+        if let maxFreq = wordFreq.values.max() {
+            let repRatio = Double(maxFreq) / Double(wordList.count)
+            if repRatio > 0.40 {
+                failedChecks += 2  // Strong signal — one word dominates
+            } else if repRatio > 0.28 {
+                failedChecks += 1
+            }
+        }
+
+        // Check 5: Fewer than 3 unique content words
+        let contentTagger = NLTagger(tagSchemes: [.lexicalClass])
+        contentTagger.string = transcript
+        var uniqueContent = Set<String>()
+        let contentTags: Set<NLTag> = [.noun, .verb, .adjective, .adverb]
+        contentTagger.enumerateTags(in: transcript.startIndex..<transcript.endIndex,
+                                     unit: .word, scheme: .lexicalClass) { tag, range in
+            guard let tag, contentTags.contains(tag) else { return true }
+            let word = String(transcript[range]).lowercased()
+            if word.count >= 3 { uniqueContent.insert(word) }
+            return true
+        }
+        if uniqueContent.count < 3 {
+            failedChecks += 2
+        } else if uniqueContent.count < 5 {
+            failedChecks += 1
+        }
+
+        // Threshold: 3+ failed checks (was 2) to reduce false positives on real but short speech
+        return failedChecks >= 3
     }
 
     // MARK: - Content Word Extraction

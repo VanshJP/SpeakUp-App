@@ -348,6 +348,15 @@ class SpeechService {
         // Detect vocab word usage (before subscores so we can feed it in)
         let vocabWordsUsed = detectVocabWords(in: scoringText, vocabWords: vocabWords)
 
+        // ── Enhanced Scoring Engine ──────────────────────────────────────────────────
+        // Compute research-backed metrics: MATTR, PTR, MLR, substance, fluency, gibberish.
+        let enhancedMetrics = SpeechScoringEngine.computeEnhancedMetrics(
+            words: scoringWords,
+            scoringText: scoringText,
+            actualDuration: actualDuration,
+            pauseMetadata: pauseMetadata
+        )
+
         // Calculate subscores
         let subscores = calculateSubscores(
             wordsPerMinute: wordsPerMinute,
@@ -371,19 +380,32 @@ class SpeechService {
             textQuality: textQuality,
             audioLevelSamples: audioLevelSamples,
             audioIsolationMetrics: audioIsolationMetrics,
-            speakerIsolationMetrics: speakerIsolationMetrics
+            speakerIsolationMetrics: speakerIsolationMetrics,
+            enhancedMetrics: enhancedMetrics
         )
 
         var overallScore = calculateOverallScore(subscores: subscores, weights: scoreWeights)
 
-        // Substance gate: very short recordings get capped
-        if totalWords < 20 && actualDuration < 15 {
-            overallScore = min(overallScore, 40)
-        }
+        // ── Substance Gate (replaces simple word-count cap) ──────────────────────────
+        // Apply substance score as a MULTIPLIER, not just a ceiling.
+        // This ensures gibberish/near-empty speech collapses to near-zero regardless
+        // of how "fluent" the few words were.
+        overallScore = SpeechScoringEngine.applySubstanceMultiplier(
+            overallScore: overallScore,
+            substanceScore: enhancedMetrics.substanceScore
+        )
 
-        // Gibberish gate: cap score for gibberish input
+        // ── Enhanced Gibberish Gate ──────────────────────────────────────────────────
+        // Multi-signal gibberish detection replaces the old binary isLikelyGibberish check.
+        // Uses confidence score for graduated capping rather than a hard binary.
+        overallScore = SpeechScoringEngine.applyGibberishGate(
+            score: overallScore,
+            gibberishConfidence: enhancedMetrics.gibberishConfidence
+        )
+
+        // Legacy compatibility: also apply old gibberish gate as a safety net
         if PromptRelevanceService.isLikelyGibberish(transcript: scoringText, words: scoringWords) {
-            overallScore = min(overallScore, 15)
+            overallScore = min(overallScore, 12)
         }
 
         let clarity = Double(subscores.clarity)
@@ -417,7 +439,8 @@ class SpeechService {
             energyArc: energyArc,
             textQuality: textQuality,
             audioIsolationMetrics: audioIsolationMetrics,
-            speakerIsolationMetrics: speakerIsolationMetrics
+            speakerIsolationMetrics: speakerIsolationMetrics,
+            enhancedMetrics: enhancedMetrics
         )
     }
 
@@ -539,7 +562,8 @@ class SpeechService {
         textQuality: TextQualityMetrics? = nil,
         audioLevelSamples: [Float] = [],
         audioIsolationMetrics: AudioIsolationMetrics? = nil,
-        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
+        enhancedMetrics: EnhancedSpeechMetrics? = nil
     ) -> SpeechSubscores {
         // Score ceiling for short recordings (replaces center-biased dampening)
         let scoreCeiling = min(100, 40 + Int(actualDuration * 6))
@@ -600,7 +624,7 @@ class SpeechService {
             clarityScore = min(Int(rawClarity), scoreCeiling)
         }
 
-        // Pace score — enhanced with rate variation bonus
+        // Pace score — enhanced with rate variation bonus and fluency (PTR/MLR/articulation rate)
         let optimalWPM = Double(targetWPM)
         let sigma = 45.0
         let deviation = wordsPerMinute - optimalWPM
@@ -612,7 +636,16 @@ class SpeechService {
         } else {
             rateVariationBonus = 0
         }
-        let rawPaceScore = basePaceScore * 0.80 + rateVariationBonus
+        // Blend in fluency score (PTR + MLR + articulation rate) from SpeechScoringEngine.
+        // Research shows fluency is a stronger predictor of speech quality than WPM alone.
+        // Weight: 65% WPM-based pace, 20% rate variation, 15% fluency signal.
+        let fluencyBlend: Double
+        if let em = enhancedMetrics {
+            fluencyBlend = Double(em.fluencyScore) * 0.15
+        } else {
+            fluencyBlend = 0
+        }
+        let rawPaceScore = basePaceScore * 0.65 + rateVariationBonus + fluencyBlend
         let paceScore = min(max(0, min(100, Int(rawPaceScore))), scoreCeiling)
 
         // Filler usage score — logarithmic curve (less punitive than linear)
@@ -752,7 +785,7 @@ class SpeechService {
             vocalVarietyScore = nil
         }
 
-        // Vocabulary score — capped bonuses to prevent inflation
+        // Vocabulary score — enhanced with MATTR lexical diversity and word rarity
         var vocabularyScore = vocabComplexity?.complexityScore
         if let base = vocabularyScore {
             if !vocabWordsUsed.isEmpty {
@@ -765,6 +798,17 @@ class SpeechService {
                 let powerBonus = min(5, Int(powerRatio * 150))  // Capped at +5 (down from +10)
                 vocabularyScore = min(100, (vocabularyScore ?? base) + powerBonus)
             }
+            // MATTR bonus: blend in lexical sophistication from SpeechScoringEngine
+            // MATTR is length-invariant and more reliable than simple TTR
+            if let em = enhancedMetrics {
+                // Blend: 60% existing complexity, 40% MATTR-based lexical sophistication
+                let mattrBlended = Int(Double(vocabularyScore ?? base) * 0.60 +
+                                       Double(em.lexicalSophisticationScore) * 0.40)
+                vocabularyScore = max(0, min(100, mattrBlended))
+            }
+        } else if let em = enhancedMetrics, em.lexicalSophisticationScore > 0 {
+            // No vocabComplexity available — use lexical sophistication as fallback
+            vocabularyScore = em.lexicalSophisticationScore
         }
 
         // Structure score — enhanced with rhetorical devices + transition variety
@@ -950,10 +994,24 @@ class SpeechService {
         }
 
         // 3. Recalculate overall score with all updated subscores
-        let newOverall = calculateOverallScore(
+        var newOverall = calculateOverallScore(
             subscores: analysis.speechScore.subscores,
             weights: scoreWeights
         )
+
+        // 4. Re-apply substance multiplier after LLM enhancement
+        // This ensures LLM cannot inflate scores for gibberish/near-empty speech
+        if let em = analysis.enhancedMetrics {
+            newOverall = SpeechScoringEngine.applySubstanceMultiplier(
+                overallScore: newOverall,
+                substanceScore: em.substanceScore
+            )
+            newOverall = SpeechScoringEngine.applyGibberishGate(
+                score: newOverall,
+                gibberishConfidence: em.gibberishConfidence
+            )
+        }
+
         analysis.speechScore.overall = stabilizedLLMScore(
             baseline: baselineOverall,
             candidate: newOverall,
