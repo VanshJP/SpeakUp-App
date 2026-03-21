@@ -79,7 +79,7 @@ final class LocalLLMService {
             }
         }
 
-        var minimumRecommendedMemoryBytes: UInt64 {
+        var minimumRecommendedMemoryBytes: Int {
             switch self {
             case .compact:
                 return 500 * 1024 * 1024
@@ -112,7 +112,7 @@ final class LocalLLMService {
     }
 
     /// Minimum available memory (bytes) required before running inference.
-    nonisolated private static let minimumMemoryForInference: UInt64 = 200 * 1024 * 1024 // 200 MB
+    nonisolated private static let minimumMemoryForInference: Int = 200 * 1024 * 1024 // 200 MB
     private static let selectedProfileDefaultsKey = "local_llm_selected_profile"
 
     // MARK: - State
@@ -133,7 +133,9 @@ final class LocalLLMService {
     var modelDisplayName: String { selectedProfile.displayName }
     var approximateModelSize: String { selectedProfile.approximateModelSize }
     var availableProfiles: [ModelProfile] { ModelProfile.allCases }
-    var recommendedProfile: ModelProfile { Self.recommendedProfile(forAvailableMemory: os_proc_available_memory()) }
+    var recommendedProfile: ModelProfile {
+        Self.recommendedProfile(forAvailableMemory: Int(clamping: os_proc_available_memory()))
+    }
 
     // MARK: - Private
 
@@ -170,7 +172,7 @@ final class LocalLLMService {
            let storedProfile = ModelProfile(rawValue: storedRaw) {
             selectedProfile = storedProfile
         } else {
-            selectedProfile = Self.recommendedProfile(forAvailableMemory: os_proc_available_memory())
+            selectedProfile = Self.recommendedProfile(forAvailableMemory: Int(clamping: os_proc_available_memory()))
         }
 
         if isModelDownloaded {
@@ -182,11 +184,11 @@ final class LocalLLMService {
 
     /// Returns true if sufficient memory is available for LLM inference.
     nonisolated static func hasSufficientMemory() -> Bool {
-        let available = os_proc_available_memory()
+        let available = Int(clamping: os_proc_available_memory())
         return available > minimumMemoryForInference
     }
 
-    nonisolated static func recommendedProfile(forAvailableMemory memoryBytes: UInt64) -> ModelProfile {
+    nonisolated static func recommendedProfile(forAvailableMemory memoryBytes: Int) -> ModelProfile {
         if memoryBytes >= ModelProfile.quality.minimumRecommendedMemoryBytes {
             return .quality
         }
