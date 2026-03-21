@@ -28,6 +28,9 @@ struct DetailAnalysisTab: View {
             if let energyArc = analysis.energyArc {
                 energyArcSection(energyArc)
             }
+            if let em = analysis.enhancedMetrics {
+                enhancedMetricsSection(em)
+            }
         }
     }
 
@@ -509,6 +512,62 @@ struct DetailAnalysisTab: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - Enhanced Metrics Section (MATTR, PTR, MLR, Substance)
+
+    @ViewBuilder
+    private func enhancedMetricsSection(_ em: EnhancedSpeechMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Speech Depth", systemImage: "chart.bar.doc.horizontal")
+                .font(.headline)
+
+            GlassCard {
+                VStack(spacing: 14) {
+                    SubscoreRow(title: "Substance", score: em.substanceScore, icon: "text.word.spacing")
+                    SubscoreRow(title: "Fluency", score: em.fluencyScore, icon: "waveform.and.mic")
+                    SubscoreRow(title: "Lexical Sophistication", score: em.lexicalSophisticationScore, icon: "textformat.abc.dottedunderline")
+
+                    Divider()
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("MATTR")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(String(format: "%.2f", em.mattr))
+                                .font(.subheadline.weight(.medium))
+                        }
+                        Spacer()
+                        VStack(alignment: .center, spacing: 2) {
+                            Text("Phonation Ratio")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(String(format: "%.0f%%", em.phonationTimeRatio * 100))
+                                .font(.subheadline.weight(.medium))
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Mean Run")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(String(format: "%.1f wds", em.meanLengthOfRun))
+                                .font(.subheadline.weight(.medium))
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What these mean")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("MATTR measures vocabulary diversity (higher = more varied). Phonation Ratio is the fraction of time you were speaking (0.55-0.75 is ideal). Mean Run is average words between pauses (higher = more fluent).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }

@@ -233,6 +233,48 @@ enum CoachingTipService {
             ))
         }
 
+        // --- Substance & Fluency (from SpeechScoringEngine) ---
+        if let em = analysis.enhancedMetrics {
+            if em.substanceScore < 35 {
+                tips.append(CoachingTip(
+                    icon: "text.word.spacing",
+                    title: "Develop Your Response",
+                    message: "Your response was too short or lacked content depth. Aim for at least 30 seconds of substantive speech.",
+                    category: .structure,
+                    teachingPoint: "Use the PREP framework: Point → Reason → Example → Point. This naturally extends your response to a meaningful length while keeping it focused.",
+                    suggestedDrillMode: "impromptuSprint"
+                ))
+            } else if em.substanceScore < 60 {
+                tips.append(CoachingTip(
+                    icon: "text.word.spacing",
+                    title: "Add More Depth",
+                    message: "Your speech had some substance but could be more developed. Try adding a concrete example or expanding your main point.",
+                    category: .structure,
+                    teachingPoint: "For every claim you make, follow it with 'For example...' or 'This matters because...'. Adding one supporting detail per point significantly increases perceived depth.",
+                    suggestedDrillMode: "impromptuSprint"
+                ))
+            }
+            if em.phonationTimeRatio < 0.45 {
+                tips.append(CoachingTip(
+                    icon: "waveform.and.mic",
+                    title: "Reduce Dead Air",
+                    message: "You spent a lot of time pausing. Aim to be speaking 55-75% of your session time.",
+                    category: .pace,
+                    teachingPoint: "Excessive pausing often signals hesitation or searching for words. Practice 'thinking out loud' — bridge pauses with transitional phrases like 'What I mean is...' while you formulate your next thought.",
+                    suggestedDrillMode: "fillerFree"
+                ))
+            }
+            if em.meanLengthOfRun < 4.0 && analysis.totalWords > 20 {
+                tips.append(CoachingTip(
+                    icon: "pause.circle",
+                    title: "Speak in Longer Runs",
+                    message: "Your speech is fragmented — you pause very frequently. Try to complete full thoughts before pausing.",
+                    category: .pace,
+                    teachingPoint: "Fluent speakers average 7-12 words between pauses. Practice reading aloud and marking natural pause points at clause boundaries, not mid-phrase.",
+                    suggestedDrillMode: "pausePractice"
+                ))
+            }
+        }
         // --- Delivery ---
         if let delivery = analysis.speechScore.subscores.delivery, delivery < 50 {
             tips.append(CoachingTip(

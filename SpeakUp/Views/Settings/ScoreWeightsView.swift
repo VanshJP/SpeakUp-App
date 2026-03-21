@@ -135,7 +135,7 @@ struct ScoreWeightsView: View {
                 Label("How Your Score Works", systemImage: "function")
                     .font(.headline)
 
-                Text("Your overall speech score is a weighted average of 9 subscores. Each subscore measures a different aspect of your speaking. Adjust the weights below to focus your score on what matters most to you.")
+                Text("Your overall score is built in two stages. First, 9 subscores are combined using your weights. Then a Substance Gate multiplies the result based on speech length and content depth — so short or empty responses always score low regardless of weights.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -387,12 +387,12 @@ struct ScoreWeightsView: View {
             SubscoreDescription(
                 name: "Clarity", key: "clarity", icon: "waveform",
                 measures: "How clearly you articulate words. Clear pronunciation makes your message easier to understand.",
-                howCalculated: "Analyzes the ratio of clearly voiced audio frames, word duration consistency, and penalizes excessive hedge words."
+                howCalculated: "Combines voiced frame ratio (articulation quality), word duration consistency, ASR word confidence, hedge word penalty, and an authority score from language analysis."
             ),
             SubscoreDescription(
                 name: "Pace", key: "pace", icon: "speedometer",
-                measures: "Speaking speed relative to your target WPM. Too fast or too slow both reduce your score.",
-                howCalculated: "Compares your WPM to your target using a bell curve, with a bonus for natural rate variation."
+                measures: "Speaking speed and fluency. Optimal pace is conversational — not rushed or dragging.",
+                howCalculated: "Bell curve comparison to your target WPM (65%), blended with rate variation bonus (20%) and fluency signals: Phonation Time Ratio and Mean Length of Run (15%)."
             ),
             SubscoreDescription(
                 name: "Filler Usage", key: "filler", icon: "text.badge.minus",
@@ -417,7 +417,7 @@ struct ScoreWeightsView: View {
             SubscoreDescription(
                 name: "Vocabulary", key: "vocabulary", icon: "textformat.abc",
                 measures: "Word choice sophistication and diversity. Using varied, precise words improves this score.",
-                howCalculated: "Measures unique word ratio, word rarity (via language model), repetition penalty, and length diversity."
+                howCalculated: "Blends MATTR (Moving Average Type-Token Ratio, the academic standard for lexical diversity), word rarity via on-device language model, repetition penalty, and word length diversity. MATTR is length-invariant so longer speeches are not penalized."
             ),
             SubscoreDescription(
                 name: "Structure", key: "structure", icon: "list.bullet.indent",
