@@ -111,10 +111,18 @@ class SpeechService {
         finalWords = speakerLabeled.0
         let speakerIsolationMetrics = speakerLabeled.1
         let voiceProfileUpdate = speakerLabeled.2
+        let outputWords = isolatedPrimaryTranscriptWords(
+            from: finalWords,
+            metrics: speakerIsolationMetrics
+        )
+        let outputText = transcriptText(
+            from: outputWords,
+            fallback: result.text
+        )
 
         return SpeechTranscriptionResult(
-            text: result.text,
-            words: finalWords,
+            text: outputText,
+            words: outputWords,
             duration: result.duration,
             audioIsolationMetrics: isolationResult?.metrics,
             speakerIsolationMetrics: speakerIsolationMetrics,
@@ -537,6 +545,27 @@ class SpeechService {
             (metrics.filteredOutWordCount >= minimumFilteredOutWords && metrics.speakerSwitchCount >= 2)
 
         return hasConversationEvidence
+    }
+
+    private func isolatedPrimaryTranscriptWords(
+        from words: [TranscriptionWord],
+        metrics: SpeakerIsolationMetrics?
+    ) -> [TranscriptionWord] {
+        let primaryWords = words.filter(\.isPrimarySpeaker)
+        let shouldFilter = shouldScoreUsingPrimarySpeakerWords(
+            totalWords: words.count,
+            primaryWordsCount: primaryWords.count,
+            speakerIsolationMetrics: metrics
+        )
+        return shouldFilter ? primaryWords : words
+    }
+
+    private func transcriptText(from words: [TranscriptionWord], fallback: String) -> String {
+        let resolved = words
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return resolved.isEmpty ? fallback : resolved
     }
 
     // MARK: - Subscore Calculation

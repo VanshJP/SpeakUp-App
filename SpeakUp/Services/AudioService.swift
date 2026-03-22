@@ -36,13 +36,21 @@ class AudioService: NSObject {
     private func setupSession() {
         recordingSession = AVAudioSession.sharedInstance()
     }
+
+    private func preferredRecordingMode() -> AVAudioSession.Mode {
+        if #available(iOS 15.0, *) {
+            // Prefer dedicated voice-isolation DSP when supported by the current route/device.
+            return .voiceIsolation
+        }
+        return .voiceChat
+    }
     
     func requestPermission() async -> Bool {
         do {
-            // voiceChat mode enables Apple's built-in near-field voice processing.
+            // Prefer voice isolation to suppress far-field/background speakers.
             try recordingSession?.setCategory(
                 .playAndRecord,
-                mode: .voiceChat,
+                mode: preferredRecordingMode(),
                 options: [.defaultToSpeaker, .allowBluetooth]
             )
             try recordingSession?.setActive(true)
@@ -80,7 +88,7 @@ class AudioService: NSObject {
         do {
             try recordingSession?.setCategory(
                 .playAndRecord,
-                mode: .voiceChat,
+                mode: preferredRecordingMode(),
                 options: [.defaultToSpeaker, .allowBluetooth]
             )
             try recordingSession?.setActive(true)
