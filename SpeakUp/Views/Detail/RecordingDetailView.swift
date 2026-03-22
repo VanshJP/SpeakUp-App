@@ -1113,17 +1113,21 @@ struct RecordingDetailView: View {
     }
 
     private func resolvedTranscript(for recording: Recording) -> String {
-        let text = recording.transcriptionText?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let text, !text.isEmpty {
-            return text
-        }
-
-        let fallback = recording.transcriptionWords?
+        let wordsTranscript = recording.transcriptionWords?
             .map(\.word)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return fallback ?? ""
+        if let wordsTranscript, !wordsTranscript.isEmpty {
+            return wordsTranscript
+        }
+
+        let fallbackText = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fallbackText, !fallbackText.isEmpty {
+            return fallbackText
+        }
+
+        return ""
     }
 
     private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {

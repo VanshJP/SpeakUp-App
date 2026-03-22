@@ -418,12 +418,30 @@ class EventViewModel {
 
         var insights: [UUID: ScriptPracticeInsight] = [:]
         for recording in linkedRecordings {
-            guard let transcript = recording.transcriptionText, !transcript.isEmpty else { continue }
+            guard let transcript = resolvedTranscript(for: recording) else { continue }
             if let insight = ScriptPracticeAnalyzer.analyze(script: scriptText, transcript: transcript) {
                 insights[recording.id] = insight
             }
         }
         scriptInsightsByRecordingId = insights
+    }
+
+    private func resolvedTranscript(for recording: Recording) -> String? {
+        let wordsTranscript = recording.transcriptionWords?
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let wordsTranscript, !wordsTranscript.isEmpty {
+            return wordsTranscript
+        }
+
+        let fallbackText = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fallbackText, !fallbackText.isEmpty {
+            return fallbackText
+        }
+
+        return nil
     }
 }
 
