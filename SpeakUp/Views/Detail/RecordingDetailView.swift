@@ -789,26 +789,39 @@ struct RecordingDetailView: View {
             .sorted { $0.start < $1.start }
         guard let first = ordered.first else { return [] }
 
-        var turns: [SpeakerTurn] = []
+        var rawTurns: [(isPrimary: Bool, words: [TranscriptionWord])] = []
         var currentSpeaker = first.isPrimarySpeaker
         var currentWords: [TranscriptionWord] = []
-        var turnIndex = 0
 
         for word in ordered {
             if word.isPrimarySpeaker != currentSpeaker, !currentWords.isEmpty {
-                turns.append(SpeakerTurn(id: turnIndex, isPrimarySpeaker: currentSpeaker, words: currentWords))
-                turnIndex += 1
+                rawTurns.append((isPrimary: currentSpeaker, words: currentWords))
                 currentWords = []
             }
             currentSpeaker = word.isPrimarySpeaker
             currentWords.append(word)
         }
-
         if !currentWords.isEmpty {
-            turns.append(SpeakerTurn(id: turnIndex, isPrimarySpeaker: currentSpeaker, words: currentWords))
+            rawTurns.append((isPrimary: currentSpeaker, words: currentWords))
         }
 
-        return turns
+        // Merge micro-turns: if a turn has only 1-2 words, absorb it into the adjacent turn
+        // with the most words. This prevents single noise-burst words from creating a
+        // spurious speaker-turn bubble in the UI.
+        var merged: [(isPrimary: Bool, words: [TranscriptionWord])] = []
+        for (_, turn) in rawTurns.enumerated() {
+            if turn.words.count <= 2 && !merged.isEmpty {
+                // Absorb into the previous turn (same speaker label as previous)
+                let last = merged.removeLast()
+                merged.append((isPrimary: last.isPrimary, words: last.words + turn.words))
+            } else {
+                merged.append(turn)
+            }
+        }
+
+        return merged.enumerated().map { index, turn in
+            SpeakerTurn(id: index, isPrimarySpeaker: turn.isPrimary, words: turn.words)
+        }
     }
 
     private func hasSeparatedSpeakers(in turns: [SpeakerTurn]) -> Bool {
@@ -819,7 +832,14 @@ struct RecordingDetailView: View {
         let otherWordCount = turns
             .filter { !$0.isPrimarySpeaker }
             .reduce(0) { $0 + $1.words.count }
-        return primaryWordCount >= 8 && otherWordCount >= 4
+        // Lowered otherWordCount threshold from 4 to 3:
+        // In a short conversation (e.g. a Q&A), the other speaker may only contribute
+        // a brief question or acknowledgement. Requiring 4 words was hiding the speaker
+        // turn UI for legitimate two-speaker recordings.
+        // Also require at least 2 distinct turns (not just 2 total words) to avoid
+        // showing the UI for a single isolated noise burst.
+        let otherTurnCount = turns.filter { !$0.isPrimarySpeaker }.count
+        return primaryWordCount >= 8 && otherWordCount >= 3 && otherTurnCount >= 1
     }
 
     // MARK: - Share CTA Section

@@ -486,7 +486,19 @@ class SpeechService {
     }
 
     private func applyReliabilityStabilization(score: Int, reliability: Double, neutralAnchor: Int) -> Int {
-        let clampedReliability = max(0.55, min(1.0, reliability))
+        // Only apply stabilization when reliability is genuinely degraded.
+        // The original code clamped reliability to max(0.55, ...) which meant even
+        // perfect solo sessions (reliability = 1.0) got a 0% pull toward the neutral
+        // anchor — which is correct. However, the clamp also meant the minimum blend
+        // was 55% score + 45% anchor, which is too aggressive for moderately-reliable
+        // sessions. The new formula:
+        //   - reliability >= 0.95: no stabilization at all (pass score through unchanged)
+        //   - reliability in [0.55, 0.95): linear blend from 0% to 45% anchor pull
+        //   - reliability < 0.55: clamp at 55% score / 45% anchor (same as before)
+        // This means solo recordings are never penalized, and only genuinely noisy or
+        // ambiguous multi-speaker sessions get their scores pulled toward neutral.
+        guard reliability < 0.95 else { return max(0, min(100, score)) }
+        let clampedReliability = max(0.55, min(0.95, reliability))
         let blended = Double(score) * clampedReliability + Double(neutralAnchor) * (1.0 - clampedReliability)
         return max(0, min(100, Int(blended.rounded())))
     }
@@ -502,15 +514,21 @@ class SpeechService {
             return max(0.55, residual * 0.70 + 0.30)
         }
         let speakerReliability: Double? = speakerIsolationMetrics.flatMap { metrics -> Double? in
+            // Only apply speaker reliability dampening when isolation was actually applied
+            // AND there is meaningful evidence of a multi-speaker conversation.
+            // Previously, any session with filteredOutWordCount >= 4 would trigger dampening,
+            // even if those 4 words were just noise artifacts in a solo recording.
+            // Now we require conversationDetected OR (filteredOut >= 4 AND switchCount >= 3)
+            // to avoid penalizing clean solo sessions with minor noise.
             let hasAppliedSeparationEvidence =
                 metrics.conversationDetected ||
-                metrics.filteredOutWordCount >= 4 ||
-                metrics.speakerSwitchCount >= 2
+                (metrics.filteredOutWordCount >= 4 && metrics.speakerSwitchCount >= 3)
             guard hasAppliedSeparationEvidence else { return nil }
 
             let confidence = max(0.0, min(1.0, Double(metrics.separationConfidence) / 100.0))
-            // Do not compress solo/near-solo sessions where speaker separation is not needed.
-            if confidence >= 0.65 { return 1.0 }
+            // Raised the pass-through threshold from 0.65 to 0.70:
+            // At 70%+ confidence the isolation is reliable enough to not dampen scores.
+            if confidence >= 0.70 { return 1.0 }
             return max(0.55, confidence * 0.70 + 0.30)
         }
 
@@ -534,12 +552,25 @@ class SpeechService {
     ) -> Bool {
         guard totalWords >= 12, let metrics = speakerIsolationMetrics else { return false }
 
-        let minimumPrimaryWords = max(8, Int(Double(totalWords) * 0.45))
+        // Raised minimum primary words from 45% to 55% of total.
+        // Scoring on fewer than 55% of words means we're discarding nearly half the speech,
+        // which produces an unreliable score. Better to fall back to full transcript.
+        let minimumPrimaryWords = max(10, Int(Double(totalWords) * 0.55))
         guard primaryWordsCount >= minimumPrimaryWords else { return false }
-        guard metrics.separationConfidence >= 58 else { return false }
-        guard (0.45...0.92).contains(metrics.primarySpeakerWordRatio) else { return false }
 
-        let minimumFilteredOutWords = max(4, Int(Double(totalWords) * 0.15))
+        // Raised confidence threshold from 58 to 62.
+        // The ConversationIsolationService confidence formula now starts at 28 (was 35),
+        // so the effective bar is higher. 62 corresponds to clear acoustic separation.
+        guard metrics.separationConfidence >= 62 else { return false }
+
+        // Tightened ratio range: lower bound raised from 0.45 to 0.55 (matching minimumPrimaryWords),
+        // upper bound lowered from 0.92 to 0.90 (if 90%+ are primary, it's likely a solo session
+        // and we should score on all words rather than filtering out the few non-primary ones).
+        guard (0.55...0.90).contains(metrics.primarySpeakerWordRatio) else { return false }
+
+        // Require slightly more evidence: filteredOut must be at least 18% of total (was 15%).
+        // This ensures we only apply isolation when there's a meaningful amount of other-speaker speech.
+        let minimumFilteredOutWords = max(4, Int(Double(totalWords) * 0.18))
         let hasConversationEvidence =
             metrics.conversationDetected ||
             (metrics.filteredOutWordCount >= minimumFilteredOutWords && metrics.speakerSwitchCount >= 2)
