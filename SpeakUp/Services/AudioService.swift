@@ -37,25 +37,12 @@ class AudioService: NSObject {
         recordingSession = AVAudioSession.sharedInstance()
     }
 
-    private func preferredRecordingMode() -> AVAudioSession.Mode {
-        if #available(iOS 15.0, *) {
-            // Prefer dedicated voice-isolation DSP when supported by the current route/device.
-            // Note: .voiceIsolation is only active when the hardware route supports it
-            // (built-in mic, AirPods Pro, AirPods Max). On unsupported routes (e.g. wired
-            // headsets, some Bluetooth devices), iOS silently falls back to .voiceChat.
-            // This is the correct behavior — we don't need to handle it explicitly.
-            return .voiceIsolation
-        }
-        return .voiceChat
-    }
-    
     func requestPermission() async -> Bool {
         do {
-            // Prefer voice isolation to suppress far-field/background speakers.
             try recordingSession?.setCategory(
                 .playAndRecord,
-                mode: preferredRecordingMode(),
-                options: [.defaultToSpeaker, .allowBluetooth]
+                mode: .voiceChat,
+                options: [.defaultToSpeaker, .allowBluetoothHFP]
             )
             try recordingSession?.setActive(true)
             
@@ -92,8 +79,8 @@ class AudioService: NSObject {
         do {
             try recordingSession?.setCategory(
                 .playAndRecord,
-                mode: preferredRecordingMode(),
-                options: [.defaultToSpeaker, .allowBluetooth]
+                mode: .voiceChat,
+                options: [.defaultToSpeaker, .allowBluetoothHFP]
             )
             try recordingSession?.setActive(true)
 

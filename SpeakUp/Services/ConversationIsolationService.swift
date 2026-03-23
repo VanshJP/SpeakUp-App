@@ -242,7 +242,7 @@ enum ConversationIsolationService {
 
     /// Extract a baseline voice profile from a calibration audio recording.
     /// Splits the audio into fixed-size windows and computes median F0/energy.
-    static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
+    nonisolated static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
         guard let mono = loadMonoPCM(url: audioURL) else { return nil }
 
         let windowDuration = 0.08 // 80ms windows

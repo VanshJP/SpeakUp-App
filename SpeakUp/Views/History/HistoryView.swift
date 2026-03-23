@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -338,30 +339,72 @@ struct HistoryView: View {
     // MARK: - Progress Charts Card
 
     private var progressChartsCard: some View {
-        NavigationLink {
+        let recentScores: [(date: Date, score: Int)] = analyzedRecordings
+            .sorted { $0.date < $1.date }
+            .suffix(12)
+            .compactMap { r in
+                guard let score = r.analysis?.speechScore.overall else { return nil }
+                return (date: r.date, score: score)
+            }
+
+        return NavigationLink {
             ProgressChartsView()
         } label: {
             FeaturedGlassCard(gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]) {
-                HStack(spacing: 14) {
-                    Image(systemName: "chart.xyaxis.line")
-                        .font(.title2)
-                        .foregroundStyle(.teal)
-                        .frame(width: 32)
+                VStack(spacing: 12) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "chart.xyaxis.line")
+                            .font(.title2)
+                            .foregroundStyle(.teal)
+                            .frame(width: 32)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Progress Charts")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text("View score trends, pace, fillers & more")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Progress Charts")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("View score trends, pace, fillers & more")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
 
-                    Spacer()
+                    // Inline sparkline preview
+                    if recentScores.count >= 3 {
+                        Chart {
+                            ForEach(Array(recentScores.enumerated()), id: \.offset) { _, point in
+                                LineMark(
+                                    x: .value("Date", point.date),
+                                    y: .value("Score", point.score)
+                                )
+                                .foregroundStyle(.teal.opacity(0.8))
+                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                                .interpolationMethod(.catmullRom)
 
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                                AreaMark(
+                                    x: .value("Date", point.date),
+                                    y: .value("Score", point.score)
+                                )
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.teal.opacity(0.2), .teal.opacity(0.01)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .interpolationMethod(.catmullRom)
+                            }
+                        }
+                        .chartXAxis(.hidden)
+                        .chartYAxis(.hidden)
+                        .chartYScale(domain: max(0, (recentScores.map(\.score).min() ?? 0) - 10)...min(100, (recentScores.map(\.score).max() ?? 100) + 10))
+                        .frame(height: 48)
+                    }
                 }
             }
         }

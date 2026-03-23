@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct WeeklyProgressCard: View {
     let data: WeeklyProgressData
@@ -46,60 +47,120 @@ struct WeeklyProgressCard: View {
                         )
                     }
 
-                    // Mini week bar chart
-                    WeekBarChart(data: data)
+                    // Score sparkline + activity bar chart combined
+                    WeekScoreChart(data: data)
                 }
             }
         }
     }
 }
 
-// MARK: - Week Bar Chart
+// MARK: - Week Score Chart
 
-private struct WeekBarChart: View {
+private struct WeekScoreChart: View {
     let data: WeeklyProgressData
 
     private let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
 
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<7, id: \.self) { index in
-                VStack(spacing: 4) {
-                    // Bar
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(barColor(for: index))
-                        .frame(height: barHeight(for: index))
-                        .frame(maxWidth: .infinity)
+    private var todayIndex: Int {
+        (Calendar.current.component(.weekday, from: Date()) + 5) % 7
+    }
 
-                    // Day label
-                    Text(dayLabels[index])
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
+    var body: some View {
+        VStack(spacing: 6) {
+            // Score sparkline (if scores exist)
+            if !data.dailyScores.isEmpty {
+                Chart {
+                    ForEach(data.dailyScores, id: \.day) { point in
+                        LineMark(
+                            x: .value("Day", point.day),
+                            y: .value("Score", point.score)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.teal, .cyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .interpolationMethod(.catmullRom)
+
+                        AreaMark(
+                            x: .value("Day", point.day),
+                            y: .value("Score", point.score)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.teal.opacity(0.2), .teal.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .interpolationMethod(.catmullRom)
+
+                        PointMark(
+                            x: .value("Day", point.day),
+                            y: .value("Score", point.score)
+                        )
+                        .foregroundStyle(AppColors.scoreColor(for: point.score))
+                        .symbolSize(24)
+                        .annotation(position: .top, spacing: 2) {
+                            Text("\(point.score)")
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppColors.scoreColor(for: point.score))
+                        }
+                    }
+                }
+                .chartXScale(domain: 0...6)
+                .chartYScale(domain: max(0, (data.dailyScores.map(\.score).min() ?? 0) - 15)...min(100, (data.dailyScores.map(\.score).max() ?? 100) + 15))
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .frame(height: 52)
+            }
+
+            // Day labels with activity dots
+            HStack(spacing: 6) {
+                ForEach(0..<7, id: \.self) { index in
+                    VStack(spacing: 4) {
+                        // Activity indicator
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(barColor(for: index))
+                            .frame(height: barHeight(for: index))
+                            .frame(maxWidth: .infinity)
+
+                        Text(dayLabels[index])
+                            .font(.system(size: 9, weight: index == todayIndex ? .bold : .medium))
+                            .foregroundStyle(index == todayIndex ? .teal : .secondary)
+                    }
                 }
             }
+            .frame(height: 32)
         }
-        .frame(height: 44)
         .padding(.top, 4)
     }
 
     private func barHeight(for index: Int) -> CGFloat {
-        // Use sessions this week to determine which days had activity
-        // Simple: fill bars up to sessionsThisWeek count
-        let todayWeekday = (Calendar.current.component(.weekday, from: Date()) + 5) % 7 // Monday = 0
-        if index <= todayWeekday {
-            let hasPractice = index < data.sessionsThisWeek
-            return hasPractice ? 28 : 8
+        if index > todayIndex {
+            return 4
         }
-        return 4 // Future days
+        let hasPractice = data.dailyScores.contains { $0.day == index }
+        return hasPractice ? 20 : 6
     }
 
     private func barColor(for index: Int) -> Color {
-        let todayWeekday = (Calendar.current.component(.weekday, from: Date()) + 5) % 7
-        if index > todayWeekday {
-            return .gray.opacity(0.15)
+        if index > todayIndex {
+            return .gray.opacity(0.12)
         }
-        let hasPractice = index < data.sessionsThisWeek
-        return hasPractice ? .teal : .gray.opacity(0.25)
+        let hasPractice = data.dailyScores.contains { $0.day == index }
+        if hasPractice {
+            // Color by score
+            if let score = data.dailyScores.first(where: { $0.day == index })?.score {
+                return AppColors.scoreColor(for: score).opacity(0.7)
+            }
+            return .teal
+        }
+        return index == todayIndex ? .teal.opacity(0.2) : .gray.opacity(0.2)
     }
 }
 
