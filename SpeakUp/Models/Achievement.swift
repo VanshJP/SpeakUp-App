@@ -3,11 +3,11 @@ import SwiftData
 
 @Model
 final class Achievement {
-    @Attribute(.unique) var id: String
-    var title: String
-    var descriptionText: String
-    var icon: String
-    var isUnlocked: Bool
+    var id: String = ""
+    var title: String = ""
+    var descriptionText: String = ""
+    var icon: String = ""
+    var isUnlocked: Bool = false
     var unlockedDate: Date?
 
     init(

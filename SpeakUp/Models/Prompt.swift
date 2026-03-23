@@ -4,10 +4,10 @@ import SwiftUI
 
 @Model
 final class Prompt {
-    @Attribute(.unique) var id: String
-    var text: String
-    var category: String
-    var difficulty: PromptDifficulty
+    var id: String = ""
+    var text: String = ""
+    var category: String = ""
+    var difficulty: PromptDifficulty = PromptDifficulty.medium
     var isUserCreated: Bool = false
     
     init(

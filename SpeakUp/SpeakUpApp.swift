@@ -23,10 +23,16 @@ struct SpeakUpApp: App {
             RecordingGroup.self,
         ])
 
+        // Respect user's iCloud sync preference (read from UserDefaults since
+        // SwiftData isn't available yet at ModelContainer creation time)
+        // Default to false for existing installs (avoids CloudKit migration crash on
+        // stores created without CloudKit). Users can enable in Settings.
+        let syncEnabled = UserDefaults.standard.object(forKey: ICloudStorageService.syncEnabledKey) as? Bool ?? false
+
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            cloudKitDatabase: .none
+            cloudKitDatabase: syncEnabled ? .automatic : .none
         )
 
         do {
@@ -35,11 +41,17 @@ struct SpeakUpApp: App {
         } catch {
             print("Failed to create ModelContainer: \(error)")
 
-            // Attempt fresh without migration plan as fallback
+            // Fallback: try without CloudKit (existing store may not be CloudKit-compatible)
+            let localConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .none
+            )
+
             do {
-                return try ModelContainer(for: schema, configurations: [modelConfiguration])
+                return try ModelContainer(for: schema, configurations: [localConfig])
             } catch {
-                print("Failed to create ModelContainer: \(error)")
+                print("Failed to create local ModelContainer: \(error)")
 
                 // Last resort: in-memory store – avoids silent data deletion
                 let fallbackConfig = ModelConfiguration(
@@ -64,10 +76,25 @@ struct SpeakUpApp: App {
                 .environment(audioService)
                 .environment(llmService)
                 .task {
-                    await seedPromptsIfNeeded()
+                    // Settings must exist before anything else reads them
                     await ensureSettingsExist()
-                    await seedAchievementsIfNeeded()
-                    await seedCurriculumIfNeeded()
+
+                    // Migrate legacy absolute file URLs to relative filenames
+                    await migrateRecordingURLsIfNeeded()
+
+                    // Seed remaining data concurrently — all independent of each other
+                    async let p: () = seedPromptsIfNeeded()
+                    async let a: () = seedAchievementsIfNeeded()
+                    async let c: () = seedCurriculumIfNeeded()
+                    _ = await (p, a, c)
+
+                    // Migrate local audio files to iCloud when sync is enabled
+                    if ICloudStorageService.shared.isSyncEnabled {
+                        Task(priority: .background) {
+                            await ICloudStorageService.shared.migrateLocalFilesToICloud()
+                        }
+                    }
+
                     // Preload Whisper model in background – don't block UI on launch
                     Task.detached(priority: .background) {
                         await speechService.preloadModel()
@@ -153,6 +180,42 @@ struct SpeakUpApp: App {
             }
         } catch {
             print("Error ensuring settings: \(error)")
+        }
+    }
+
+    @MainActor
+    private func migrateRecordingURLsIfNeeded() async {
+        let context = sharedModelContainer.mainContext
+        let descriptor = FetchDescriptor<Recording>()
+
+        do {
+            let recordings = try context.fetch(descriptor)
+            var migrated = 0
+
+            for recording in recordings {
+                var changed = false
+
+                if let url = recording.audioURL, url.path.hasPrefix("/") {
+                    recording.audioURL = Recording.relativeURL(from: url)
+                    changed = true
+                }
+                if let url = recording.videoURL, url.path.hasPrefix("/") {
+                    recording.videoURL = Recording.relativeURL(from: url)
+                    changed = true
+                }
+                if let url = recording.thumbnailURL, url.path.hasPrefix("/") {
+                    recording.thumbnailURL = Recording.relativeURL(from: url)
+                    changed = true
+                }
+
+                if changed { migrated += 1 }
+            }
+
+            if migrated > 0 {
+                try context.save()
+            }
+        } catch {
+            print("Error migrating recording URLs: \(error)")
         }
     }
 

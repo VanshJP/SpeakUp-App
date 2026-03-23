@@ -169,7 +169,7 @@ struct BeforeAfterReplayView: View {
     }
 
     private func playEarly() {
-        guard let url = viewModel.earliestRecording?.audioURL ?? viewModel.earliestRecording?.videoURL else { return }
+        guard let url = viewModel.earliestRecording?.resolvedAudioURL ?? viewModel.earliestRecording?.resolvedVideoURL else { return }
         audioService.stop()
         playingLatest = false
         playingEarly = true
@@ -180,7 +180,7 @@ struct BeforeAfterReplayView: View {
     }
 
     private func playLatest() {
-        guard let url = viewModel.latestRecording?.audioURL ?? viewModel.latestRecording?.videoURL else { return }
+        guard let url = viewModel.latestRecording?.resolvedAudioURL ?? viewModel.latestRecording?.resolvedVideoURL else { return }
         audioService.stop()
         playingEarly = false
         playingLatest = true

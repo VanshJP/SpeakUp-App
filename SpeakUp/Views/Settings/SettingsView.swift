@@ -92,6 +92,8 @@ struct SettingsView: View {
                 AIModelSettingsView()
             }
 
+            iCloudSyncRow
+
             settingsLink(
                 icon: "externaldrive.fill",
                 iconColor: .gray,
@@ -110,6 +112,88 @@ struct SettingsView: View {
                 AboutSettingsView()
             }
         }
+    }
+
+    // MARK: - iCloud Sync
+
+    @State private var iCloudSyncEnabled = ICloudStorageService.shared.isSyncEnabled
+    @State private var showingSyncRestartAlert = false
+
+    private var iCloudSyncRow: some View {
+        GlassCard(tint: .blue.opacity(0.06), padding: 14) {
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(.blue.opacity(0.15))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "icloud.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.blue)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud Sync")
+                            .font(.subheadline.weight(.semibold))
+                        Text(iCloudSyncSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if !ICloudStorageService.shared.hasResolvedContainer {
+                        ProgressView()
+                            .tint(.secondary)
+                    } else if ICloudStorageService.shared.isICloudReachable {
+                        Toggle("", isOn: $iCloudSyncEnabled)
+                            .labelsHidden()
+                            .tint(AppColors.primary)
+                            .onChange(of: iCloudSyncEnabled) { _, newValue in
+                                ICloudStorageService.shared.isSyncEnabled = newValue
+                                // Also persist to SwiftData settings
+                                if let settings = viewModel.settings {
+                                    settings.iCloudSyncEnabled = newValue
+                                }
+                                showingSyncRestartAlert = true
+                            }
+                    } else {
+                        Image(systemName: "exclamationmark.circle")
+                            .foregroundStyle(.orange)
+                    }
+                }
+
+                if iCloudSyncEnabled && ICloudStorageService.shared.isICloudAvailable {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                        Text("Recordings and data sync across all your devices")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .alert("Restart Required", isPresented: $showingSyncRestartAlert) {
+            Button("OK") {}
+        } message: {
+            Text("Please restart SpeakUp for the sync change to take effect.")
+        }
+    }
+
+    private var iCloudSyncSubtitle: String {
+        if !ICloudStorageService.shared.hasResolvedContainer {
+            return "Checking iCloud availability…"
+        }
+        if !ICloudStorageService.shared.isICloudReachable {
+            return "Sign in to iCloud in Settings to enable"
+        }
+        if iCloudSyncEnabled {
+            return "Syncing across your devices"
+        }
+        return "Disabled — recordings stay on this device"
     }
 
     // MARK: - Helpers

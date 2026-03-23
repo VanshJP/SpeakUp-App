@@ -3,10 +3,10 @@ import SwiftData
 
 @Model
 final class RecordingGroup {
-    var id: UUID
-    var title: String
+    var id: UUID = UUID()
+    var title: String = ""
     var groupDescription: String?
-    var createdDate: Date
+    var createdDate: Date = Date()
     var isArchived: Bool = false
 
     init(

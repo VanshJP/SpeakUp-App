@@ -65,9 +65,9 @@ class AudioService: NSObject {
             }
         }
         
-        // Generate file URL
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let audioFilename = documentsPath.appendingPathComponent("\(UUID().uuidString).m4a")
+        // Generate file URL — store in iCloud container when available, local Documents otherwise
+        let storageDir = ICloudStorageService.shared.recordingsDirectory
+        let audioFilename = storageDir.appendingPathComponent("\(UUID().uuidString).m4a")
         
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),

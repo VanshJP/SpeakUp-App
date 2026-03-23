@@ -3,18 +3,18 @@ import SwiftData
 
 @Model
 final class EventPrepTask {
-    var id: UUID
-    var eventId: UUID
-    var scheduledDate: Date
-    var taskType: String
-    var title: String
-    var taskDescription: String
+    var id: UUID = UUID()
+    var eventId: UUID = UUID()
+    var scheduledDate: Date = Date()
+    var taskType: String = ""
+    var title: String = ""
+    var taskDescription: String = ""
     var targetSectionIndex: Int?
     var drillMode: String?
     var isCompleted: Bool = false
     var completedDate: Date?
     var linkedRecordingId: UUID?
-    var priority: Int
+    var priority: Int = 2
     var estimatedMinutes: Int = 10
 
     init(

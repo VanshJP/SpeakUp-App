@@ -159,7 +159,7 @@ struct CreateEventView: View {
                                         .padding(.vertical, 6)
                                         .background {
                                             Capsule()
-                                                .fill(selectedDuration == minutes ? AppColors.primary.opacity(0.8) : .white.opacity(0.08))
+                                                .fill(selectedDuration == minutes ? AppColors.primary.opacity(0.8) : AppColors.accent.opacity(0.12))
                                         }
                                 }
                                 .buttonStyle(.plain)
@@ -211,7 +211,7 @@ struct CreateEventView: View {
                                                 .padding(.vertical, 6)
                                                 .background {
                                                     Capsule()
-                                                        .fill(audienceType == type ? AppColors.primary.opacity(0.8) : .white.opacity(0.08))
+                                                        .fill(audienceType == type ? AppColors.primary.opacity(0.8) : AppColors.accent.opacity(0.12))
                                                 }
                                         }
                                         .buttonStyle(.plain)
@@ -227,7 +227,7 @@ struct CreateEventView: View {
                                 .padding(.vertical, 10)
                                 .background {
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(.white.opacity(0.06))
+                                        .fill(.ultraThinMaterial)
                                 }
                         }
 
@@ -245,7 +245,7 @@ struct CreateEventView: View {
                                 .padding(.vertical, 10)
                                 .background {
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(.white.opacity(0.06))
+                                        .fill(.ultraThinMaterial)
                                 }
                         }
                     }
@@ -261,7 +261,7 @@ struct CreateEventView: View {
                             .padding(.vertical, 10)
                             .background {
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(.white.opacity(0.06))
+                                    .fill(.ultraThinMaterial)
                             }
                     }
                 }

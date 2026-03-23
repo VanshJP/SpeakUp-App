@@ -3,6 +3,7 @@ import SwiftData
 import Speech
 
 struct WordBankView: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var viewModel: SettingsViewModel
     @State private var selectedTab = 0
     @State private var isWordInputFocused = false
@@ -52,6 +53,16 @@ struct WordBankView: View {
         }
         .navigationTitle("Words")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.white)
+                }
+            }
+        }
         .onChange(of: selectedTab) {
             if dictationEngine.isListening {
                 stopDictationAndAdd()

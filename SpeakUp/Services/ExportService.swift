@@ -52,7 +52,7 @@ class ExportService {
             }
         }
         
-        guard let mediaURL = recording.videoURL ?? recording.audioURL else {
+        guard let mediaURL = recording.resolvedVideoURL ?? recording.resolvedAudioURL else {
             throw ExportError.noMediaFile
         }
         

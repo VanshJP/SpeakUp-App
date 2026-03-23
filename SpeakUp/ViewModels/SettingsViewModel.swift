@@ -677,15 +677,15 @@ class SettingsViewModel {
         guard let context = modelContext else { return }
 
         do {
-            // Delete all recordings and their files
+            // Delete all recordings and their files (local + iCloud)
             let recordingDescriptor = FetchDescriptor<Recording>()
             let recordings = try context.fetch(recordingDescriptor)
             for recording in recordings {
-                if let audioURL = recording.audioURL {
-                    try? FileManager.default.removeItem(at: audioURL)
+                if let audioURL = recording.resolvedAudioURL {
+                    ICloudStorageService.shared.removeFile(at: audioURL)
                 }
-                if let videoURL = recording.videoURL {
-                    try? FileManager.default.removeItem(at: videoURL)
+                if let videoURL = recording.resolvedVideoURL {
+                    ICloudStorageService.shared.removeFile(at: videoURL)
                 }
                 context.delete(recording)
             }

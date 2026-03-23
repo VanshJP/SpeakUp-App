@@ -1,5 +1,5 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 
 // MARK: - Voice Profile Types
 
@@ -321,7 +321,7 @@ enum ConversationIsolationService {
     /// Pitch detection via autocorrelation on a downsampled version of the signal.
     /// Downsampling to ~4kHz reduces computation by ~100x for 44.1kHz audio while
     /// preserving the 85-320Hz fundamental frequency range we care about.
-    private static func estimateDominantF0(in samples: [Float], range: Range<Int>, sampleRate: Double) -> Double? {
+    nonisolated private static func estimateDominantF0(in samples: [Float], range: Range<Int>, sampleRate: Double) -> Double? {
         // Downsample to ~4kHz for F0 detection (Nyquist = 2kHz, well above 320Hz max F0)
         let targetRate = 4000.0
         let factor = max(1, Int(sampleRate / targetRate))
@@ -394,7 +394,7 @@ enum ConversationIsolationService {
         return switches
     }
 
-    private static func median(_ values: [Double]) -> Double? {
+    nonisolated private static func median(_ values: [Double]) -> Double? {
         guard !values.isEmpty else { return nil }
         let sorted = values.sorted()
         let mid = sorted.count / 2
@@ -409,7 +409,7 @@ enum ConversationIsolationService {
         let sampleRate: Double
     }
 
-    static func loadMonoPCM(url: URL) -> MonoPCM? {
+    nonisolated static func loadMonoPCM(url: URL) -> MonoPCM? {
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let sourceFormat = file.processingFormat
         let sampleRate = sourceFormat.sampleRate
@@ -443,7 +443,7 @@ enum ConversationIsolationService {
                 return nil
             }
             guard let converter = AVAudioConverter(from: sourceFormat, to: monoFormat) else { return nil }
-            let status = converter.convert(to: monoBuffer, error: nil) { _, outStatus in
+            let status = converter.convert(to: monoBuffer, error: nil) { [sourceBuffer] _, outStatus in
                 outStatus.pointee = .haveData
                 return sourceBuffer
             }

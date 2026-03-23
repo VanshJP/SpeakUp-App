@@ -35,6 +35,7 @@ struct RecordingDetailView: View {
     @State private var activePlaybackWordID: UUID?
     @State private var orderedTranscriptWords: [TranscriptionWord] = []
     @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
+    @State private var playbackErrorMessage: String?
 
     @Query private var userSettings: [UserSettings]
 
@@ -237,8 +238,10 @@ struct RecordingDetailView: View {
             populateWPMTimeSeriesIfNeeded()
             await transcribeIfNeeded()
 
-            // Post-analysis: enhance coherence with LLM if available
-            await enhanceCoherenceIfNeeded()
+            // Post-analysis: enhance coherence in background — don't block the detail view
+            Task {
+                await enhanceCoherenceIfNeeded()
+            }
         }
         .onDisappear {
             audioService.stop()
@@ -250,6 +253,14 @@ struct RecordingDetailView: View {
             }
         } message: {
             Text("This action cannot be undone.")
+        }
+        .alert("Playback Error", isPresented: Binding(
+            get: { playbackErrorMessage != nil },
+            set: { if !$0 { playbackErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { playbackErrorMessage = nil }
+        } message: {
+            Text(playbackErrorMessage ?? "")
         }
         .sheet(isPresented: $showingScoreWeights) {
             NavigationStack {
@@ -1228,7 +1239,7 @@ struct RecordingDetailView: View {
         prepareTranscriptPlaybackWords(from: recording)
 
         guard waveformHeights.isEmpty || audioService.playbackDuration <= 0 else { return }
-        let mediaURL = recording.audioURL ?? recording.videoURL
+        let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
         let needsWaveform = waveformHeights.isEmpty
         let existingHeights = waveformHeights
 
@@ -1374,7 +1385,7 @@ struct RecordingDetailView: View {
         guard let recording,
               recording.transcriptionText == nil,
               recording.analysis == nil,
-              let audioURL = recording.audioURL ?? recording.videoURL else {
+              let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             return
         }
 
@@ -1528,10 +1539,13 @@ struct RecordingDetailView: View {
         let transcript = resolvedTranscript(for: recording)
         guard !transcript.isEmpty else { return }
 
-        // If local model is downloaded, ensure it is actually loaded before we decide availability.
-        // Previously this returned early and skipped enhancement for the current session.
+        // If local model is downloaded but not loaded, start loading in background
+        // and skip enhancement for this session to avoid blocking the view.
         if !llmService.isAvailable && llmService.localLLM.isModelDownloaded {
-            await llmService.loadLocalModelIfNeeded()
+            Task(priority: .background) {
+                await llmService.loadLocalModelIfNeeded()
+            }
+            return
         }
 
         guard llmService.isAvailable else { return }
@@ -1565,7 +1579,18 @@ struct RecordingDetailView: View {
     }
 
     private func togglePlayback(_ recording: Recording) {
-        guard let url = recording.audioURL ?? recording.videoURL else { return }
+        guard let url = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
+            playbackErrorMessage = "Audio file is no longer available. It may have been moved or deleted."
+            return
+        }
+
+        // Check if file is still downloading from iCloud
+        if !ICloudStorageService.shared.isFileDownloaded(at: url) {
+            ICloudStorageService.shared.ensureDownloaded(at: url)
+            playbackErrorMessage = "This recording is downloading from iCloud. Please try again in a moment."
+            return
+        }
+
         if audioService.isPlaying {
             audioService.pause()
         } else {
@@ -1576,7 +1601,11 @@ struct RecordingDetailView: View {
             }
             Task {
                 playbackDrawerState = .expanded
-                try? await audioService.play(url: url)
+                do {
+                    try await audioService.play(url: url)
+                } catch {
+                    playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
+                }
                 updateActivePlaybackWord()
             }
         }
@@ -1588,10 +1617,22 @@ struct RecordingDetailView: View {
             settings.listenBackCount += 1
             try? modelContext.save()
         }
-        guard let recording, let url = recording.audioURL ?? recording.videoURL else { return }
+        guard let recording, let url = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
+            playbackErrorMessage = "Audio file is no longer available. It may have been moved or deleted."
+            return
+        }
+        if !ICloudStorageService.shared.isFileDownloaded(at: url) {
+            ICloudStorageService.shared.ensureDownloaded(at: url)
+            playbackErrorMessage = "This recording is downloading from iCloud. Please try again in a moment."
+            return
+        }
         Task {
             playbackDrawerState = .expanded
-            try? await audioService.play(url: url)
+            do {
+                try await audioService.play(url: url)
+            } catch {
+                playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
+            }
             updateActivePlaybackWord()
         }
     }
@@ -1607,9 +1648,9 @@ struct RecordingDetailView: View {
         // Stop any playback first
         audioService.stop()
 
-        // Capture file URLs before nilling out
-        let audioURL = recording.audioURL
-        let videoURL = recording.videoURL
+        // Capture resolved file URLs before nilling out
+        let audioURL = recording.resolvedAudioURL
+        let videoURL = recording.resolvedVideoURL
 
         // Nil out local state FIRST so SwiftUI stops rendering the deleted object
         self.recording = nil
@@ -1619,8 +1660,8 @@ struct RecordingDetailView: View {
 
         // Clean up files and delete from context after dismiss
         Task { @MainActor in
-            if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
-            if let videoURL { try? FileManager.default.removeItem(at: videoURL) }
+            if let audioURL { ICloudStorageService.shared.removeFile(at: audioURL) }
+            if let videoURL { ICloudStorageService.shared.removeFile(at: videoURL) }
             modelContext.delete(recording)
             try? modelContext.save()
         }
@@ -1633,7 +1674,7 @@ struct RecordingDetailView: View {
     }
 
     private func hasPlayableMedia(_ recording: Recording) -> Bool {
-        (recording.audioURL ?? recording.videoURL) != nil
+        (recording.resolvedAudioURL ?? recording.resolvedVideoURL) != nil
     }
 
     @ViewBuilder

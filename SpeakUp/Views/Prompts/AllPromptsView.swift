@@ -469,11 +469,7 @@ struct AllPromptsView: View {
                 }
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-        }
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Empty State

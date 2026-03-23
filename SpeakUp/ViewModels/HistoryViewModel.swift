@@ -143,15 +143,15 @@ class HistoryViewModel {
     func deleteRecording(_ recording: Recording) async {
         guard let context = modelContext else { return }
 
-        // Delete associated files
-        if let audioURL = recording.audioURL {
-            try? FileManager.default.removeItem(at: audioURL)
+        // Delete associated files (local + iCloud)
+        if let audioURL = recording.resolvedAudioURL {
+            ICloudStorageService.shared.removeFile(at: audioURL)
         }
-        if let videoURL = recording.videoURL {
-            try? FileManager.default.removeItem(at: videoURL)
+        if let videoURL = recording.resolvedVideoURL {
+            ICloudStorageService.shared.removeFile(at: videoURL)
         }
-        if let thumbnailURL = recording.thumbnailURL {
-            try? FileManager.default.removeItem(at: thumbnailURL)
+        if let thumbnailURL = recording.resolvedThumbnailURL {
+            ICloudStorageService.shared.removeFile(at: thumbnailURL)
         }
 
         // Remove from local array first so SwiftUI stops rendering it

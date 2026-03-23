@@ -68,13 +68,13 @@ struct ScriptEditorView: View {
                             .padding(.vertical, 6)
                             .background {
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(.white.opacity(0.03))
+                                    .fill(AppColors.accent.opacity(0.06))
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 14)
                                             .strokeBorder(
                                                 isEditorFocused
                                                     ? AppColors.primary.opacity(0.65)
-                                                    : .white.opacity(0.12),
+                                                    : AppColors.accent.opacity(0.15),
                                                 lineWidth: isEditorFocused ? 1.25 : 0.8
                                             )
                                     }

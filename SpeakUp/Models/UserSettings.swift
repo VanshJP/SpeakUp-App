@@ -3,33 +3,33 @@ import SwiftData
 
 @Model
 final class UserSettings {
-    var id: UUID
-    var defaultDuration: Int // 30, 60, 90, 120
-    var dailyReminderEnabled: Bool
-    var dailyReminderHour: Int
-    var dailyReminderMinute: Int
-    var weeklyGoalSessions: Int
-    var exportFormat: ExportFormat
-    var showOverallScore: Bool
-    var showClarity: Bool
-    var showPace: Bool
-    var showFillerCount: Bool
-    var showImprovement: Bool
-    var hasCompletedOnboarding: Bool
+    var id: UUID = UUID()
+    var defaultDuration: Int = 60
+    var dailyReminderEnabled: Bool = false
+    var dailyReminderHour: Int = 9
+    var dailyReminderMinute: Int = 0
+    var weeklyGoalSessions: Int = 5
+    var exportFormat: ExportFormat = ExportFormat.portrait
+    var showOverallScore: Bool = true
+    var showClarity: Bool = true
+    var showPace: Bool = true
+    var showFillerCount: Bool = true
+    var showImprovement: Bool = true
+    var hasCompletedOnboarding: Bool = false
 
     // Analysis Features
-    var trackPauses: Bool
-    var trackFillerWords: Bool
+    var trackPauses: Bool = true
+    var trackFillerWords: Bool = true
 
     // Prompt Settings
-    var showDailyPrompt: Bool
-    var enabledPromptCategories: [String] // Store category raw values
+    var showDailyPrompt: Bool = true
+    var enabledPromptCategories: [String] = []
 
     // Weekly Summary
     var lastWeeklySummaryDate: Date?
 
     // Countdown Settings
-    var countdownDuration: Int // 5, 10, 15, 20, 30 seconds
+    var countdownDuration: Int = 10
     var countdownStyle: Int = 0 // 0 = count down, 1 = count up
 
     // Timer End Behavior
@@ -68,6 +68,9 @@ final class UserSettings {
     var voiceProfileEnergyDb: Double?
     var voiceProfileSampleCount: Int = 0
     var voiceProfileLastUpdated: Date?
+
+    // iCloud Sync
+    var iCloudSyncEnabled: Bool = false
 
     // Score Weights
     var clarityWeight: Double = 0.18

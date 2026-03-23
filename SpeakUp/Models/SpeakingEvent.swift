@@ -247,10 +247,10 @@ struct RecommendedTool: Identifiable {
 
 @Model
 final class SpeakingEvent {
-    var id: UUID
-    var title: String
-    var eventDate: Date
-    var expectedDurationMinutes: Int
+    var id: UUID = UUID()
+    var title: String = ""
+    var eventDate: Date = Date()
+    var expectedDurationMinutes: Int = 5
     var maxDailyPracticeMinutes: Int = 45
     var audienceType: String?
     var audienceSize: Int?
@@ -258,7 +258,7 @@ final class SpeakingEvent {
     var notes: String?
     var scriptText: String?
     var scriptSections: [ScriptSection]?
-    var createdDate: Date
+    var createdDate: Date = Date()
     var isArchived: Bool = false
     var readinessScore: Int = 0
     var totalPracticeCount: Int = 0

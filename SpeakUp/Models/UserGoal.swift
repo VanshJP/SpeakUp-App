@@ -3,16 +3,16 @@ import SwiftData
 
 @Model
 final class UserGoal {
-    var id: UUID
-    var type: GoalType
-    var title: String
-    var goalDescription: String
-    var target: Int
-    var current: Int
-    var startDate: Date
-    var deadline: Date
-    var isCompleted: Bool
-    var isActive: Bool
+    var id: UUID = UUID()
+    var type: GoalType = GoalType.sessionsPerWeek
+    var title: String = ""
+    var goalDescription: String = ""
+    var target: Int = 0
+    var current: Int = 0
+    var startDate: Date = Date()
+    var deadline: Date = Date()
+    var isCompleted: Bool = false
+    var isActive: Bool = true
     
     init(
         id: UUID = UUID(),

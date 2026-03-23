@@ -326,7 +326,7 @@ struct EventDetailView: View {
 
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.1))
+                        Capsule().fill(AppColors.accent.opacity(0.15))
                         Capsule()
                             .fill(AppColors.scoreGradient(for: event.readinessScore))
                             .frame(width: geometry.size.width * CGFloat(event.readinessScore) / 100.0)
@@ -537,7 +537,7 @@ struct EventDetailView: View {
             }
 
             if let selectedVersion = selectedPracticeVersion {
-                GlassCard {
+                GlassCard(tint: AppColors.glassTintAccent) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Version \(selectedVersion.versionNumber)")
@@ -557,7 +557,7 @@ struct EventDetailView: View {
                     }
                 }
             } else if let script = event.scriptText {
-                GlassCard {
+                GlassCard(tint: AppColors.glassTintAccent) {
                     Text(script)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -667,7 +667,7 @@ struct EventDetailView: View {
                                 .padding(.vertical, 6)
                                 .background {
                                     Capsule()
-                                        .fill(isSelected ? AppColors.primary : Color.white.opacity(0.08))
+                                        .fill(isSelected ? AppColors.primary : AppColors.accent.opacity(0.12))
                                 }
                             }
                             .buttonStyle(.plain)

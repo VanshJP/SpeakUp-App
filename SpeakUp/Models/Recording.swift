@@ -3,20 +3,20 @@ import SwiftData
 
 @Model
 final class Recording {
-    var id: UUID
-    var date: Date
+    var id: UUID = UUID()
+    var date: Date = Date()
     var prompt: Prompt?
-    var targetDuration: Int // 30, 60, 90, 120 seconds
-    var actualDuration: TimeInterval
-    var mediaType: MediaType
+    var targetDuration: Int = 60
+    var actualDuration: TimeInterval = 0
+    var mediaType: MediaType = MediaType.audio
     var audioURL: URL?
     var videoURL: URL?
     var thumbnailURL: URL?
     var transcriptionText: String?
     var transcriptionWords: [TranscriptionWord]?
     var analysis: SpeechAnalysis?
-    var isProcessing: Bool
-    var isFavorite: Bool
+    var isProcessing: Bool = false
+    var isFavorite: Bool = false
     var customTitle: String?
     var drillMode: String?
     var frameworkUsed: String?
@@ -54,9 +54,9 @@ final class Recording {
         self.targetDuration = targetDuration
         self.actualDuration = actualDuration
         self.mediaType = mediaType
-        self.audioURL = audioURL
-        self.videoURL = videoURL
-        self.thumbnailURL = thumbnailURL
+        self.audioURL = audioURL.map { Self.relativeURL(from: $0) }
+        self.videoURL = videoURL.map { Self.relativeURL(from: $0) }
+        self.thumbnailURL = thumbnailURL.map { Self.relativeURL(from: $0) }
         self.transcriptionText = transcriptionText
         self.transcriptionWords = transcriptionWords
         self.analysis = analysis
@@ -76,11 +76,54 @@ final class Recording {
         }
         return prompt?.text ?? "Practice Session"
     }
-    
-    // Computed property to check if media file is downloaded from iCloud
+
+    // MARK: - Resolved File URLs
+
+    /// Resolves the stored audio path (filename or legacy absolute) to a full Documents URL.
+    var resolvedAudioURL: URL? {
+        Self.resolveStoredURL(audioURL)
+    }
+
+    /// Resolves the stored video path (filename or legacy absolute) to a full Documents URL.
+    var resolvedVideoURL: URL? {
+        Self.resolveStoredURL(videoURL)
+    }
+
+    /// Resolves the stored thumbnail path (filename or legacy absolute) to a full Documents URL.
+    var resolvedThumbnailURL: URL? {
+        Self.resolveStoredURL(thumbnailURL)
+    }
+
+    /// Converts a full file URL to a relative-only URL for storage.
+    static func relativeURL(from url: URL) -> URL {
+        URL(string: url.lastPathComponent)!
+    }
+
+    /// Resolves a stored URL: if it's already absolute and the file exists, returns it as-is.
+    /// If relative (just a filename), checks iCloud container first, then local Documents.
+    private static func resolveStoredURL(_ stored: URL?) -> URL? {
+        guard let stored else { return nil }
+
+        let filename: String
+
+        if stored.path.hasPrefix("/") {
+            // Legacy absolute path — check if file still exists at original location
+            if FileManager.default.fileExists(atPath: stored.path) {
+                return stored
+            }
+            // File moved — extract filename and try resolving
+            filename = stored.lastPathComponent
+        } else {
+            filename = stored.path
+        }
+
+        // Resolve via iCloud service (checks iCloud container, then local Documents)
+        return ICloudStorageService.shared.resolveFile(named: filename)
+    }
+
+    // Computed property to check if media file is available
     var isDownloaded: Bool {
-        guard let url = videoURL ?? audioURL else { return false }
-        return FileManager.default.fileExists(atPath: url.path)
+        (resolvedVideoURL ?? resolvedAudioURL) != nil
     }
     
     // Formatted date string
