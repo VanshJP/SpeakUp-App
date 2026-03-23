@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
@@ -31,6 +32,9 @@ struct TodayView: View {
 
                     // Header Stats (Ring visualization)
                     headerSection
+
+                    // Progress Snapshot (sparkline + standout stat)
+                    progressSnapshotSection
 
                     // Interactive Prompt Card (tap to start)
                     interactivePromptSection
@@ -112,6 +116,33 @@ struct TodayView: View {
             score: Int(viewModel.userStats.averageScore),
             improvement: viewModel.userStats.improvementRate
         )
+    }
+
+    // MARK: - Progress Snapshot Section
+
+    @ViewBuilder
+    private var progressSnapshotSection: some View {
+        let recentScores: [(date: Date, score: Int)] = recordings
+            .prefix(20)
+            .compactMap { r in
+                guard let score = r.analysis?.speechScore.overall else { return nil }
+                return (date: r.date, score: score)
+            }
+            .reversed()
+
+        if recentScores.count >= 3 {
+            let bestScore = recentScores.map(\.score).max() ?? 0
+            let latestScore = recentScores.last?.score ?? 0
+            let firstScore = recentScores.first?.score ?? 0
+            let trendDelta = latestScore - firstScore
+
+            ProgressSnapshotCard(
+                scores: recentScores,
+                bestScore: bestScore,
+                latestScore: latestScore,
+                trendDelta: trendDelta
+            )
+        }
     }
 
     // MARK: - Streak Celebration Banner
@@ -846,6 +877,200 @@ struct PracticeToolCard: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Progress Snapshot Card
+
+struct ProgressSnapshotCard: View {
+    let scores: [(date: Date, score: Int)]
+    let bestScore: Int
+    let latestScore: Int
+    let trendDelta: Int
+
+    @State private var animateChart = false
+
+    private var trendIcon: String {
+        if trendDelta > 5 { return "arrow.up.right" }
+        if trendDelta < -5 { return "arrow.down.right" }
+        return "arrow.right"
+    }
+
+    private var trendColor: Color {
+        if trendDelta > 5 { return .green }
+        if trendDelta < -5 { return .red }
+        return .secondary
+    }
+
+    private var standoutLabel: String {
+        if bestScore == latestScore && bestScore > 0 {
+            return "Personal Best!"
+        }
+        if trendDelta > 10 {
+            return "On a Roll"
+        }
+        if trendDelta > 0 {
+            return "Improving"
+        }
+        return "Score Trend"
+    }
+
+    private var standoutIcon: String {
+        if bestScore == latestScore && bestScore > 0 {
+            return "star.fill"
+        }
+        if trendDelta > 10 {
+            return "flame.fill"
+        }
+        return "chart.line.uptrend.xyaxis"
+    }
+
+    private var standoutColor: Color {
+        if bestScore == latestScore && bestScore > 0 {
+            return .yellow
+        }
+        if trendDelta > 10 {
+            return .orange
+        }
+        return .teal
+    }
+
+    var body: some View {
+        GlassCard(tint: standoutColor.opacity(0.06)) {
+            VStack(spacing: 14) {
+                // Header row: label + standout badge
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: standoutIcon)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(standoutColor)
+
+                        Text(standoutLabel)
+                            .font(.subheadline.weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    // Trend badge
+                    HStack(spacing: 4) {
+                        Image(systemName: trendIcon)
+                            .font(.caption2.weight(.bold))
+                        Text(trendDelta >= 0 ? "+\(trendDelta)" : "\(trendDelta)")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(trendColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background {
+                        Capsule()
+                            .fill(trendColor.opacity(0.15))
+                    }
+                }
+
+                // Sparkline chart
+                Chart {
+                    ForEach(Array(scores.enumerated()), id: \.offset) { index, point in
+                        LineMark(
+                            x: .value("Session", index),
+                            y: .value("Score", animateChart ? point.score : scores.first?.score ?? 0)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.teal, .cyan],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        .interpolationMethod(.catmullRom)
+
+                        AreaMark(
+                            x: .value("Session", index),
+                            y: .value("Score", animateChart ? point.score : scores.first?.score ?? 0)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.teal.opacity(0.25), .teal.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .interpolationMethod(.catmullRom)
+                    }
+
+                    // Latest point highlight
+                    if let last = scores.last {
+                        PointMark(
+                            x: .value("Session", scores.count - 1),
+                            y: .value("Score", animateChart ? last.score : scores.first?.score ?? 0)
+                        )
+                        .foregroundStyle(.teal)
+                        .symbolSize(40)
+                        .annotation(position: .top, spacing: 4) {
+                            Text("\(last.score)")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(.teal)
+                        }
+                    }
+                }
+                .chartYScale(domain: max(0, (scores.map(\.score).min() ?? 0) - 10)...min(100, (scores.map(\.score).max() ?? 100) + 10))
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .frame(height: 80)
+
+                // Bottom stats row
+                HStack(spacing: 0) {
+                    SnapshotStat(
+                        label: "Latest",
+                        value: "\(latestScore)",
+                        color: AppColors.scoreColor(for: latestScore)
+                    )
+
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(width: 0.5, height: 28)
+
+                    SnapshotStat(
+                        label: "Best",
+                        value: "\(bestScore)",
+                        color: .yellow
+                    )
+
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(width: 0.5, height: 28)
+
+                    SnapshotStat(
+                        label: "Sessions",
+                        value: "\(scores.count)",
+                        color: .teal
+                    )
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.8).delay(0.3)) {
+                animateChart = true
+            }
+        }
+    }
+}
+
+private struct SnapshotStat: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

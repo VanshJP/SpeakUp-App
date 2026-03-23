@@ -79,7 +79,7 @@ final class LocalLLMService {
             }
         }
 
-        var minimumRecommendedMemoryBytes: Int {
+        nonisolated var minimumRecommendedMemoryBytes: Int {
             switch self {
             case .compact:
                 return 500 * 1024 * 1024

@@ -397,6 +397,48 @@ class SettingsViewModel {
         Task { await saveSettings() }
     }
 
+    /// Bulk-add vocab words from dictation, skipping duplicates and fillers.
+    /// Returns the count of words actually added.
+    @MainActor
+    @discardableResult
+    func addVocabWords(_ words: [String]) -> Int {
+        var added = 0
+        for raw in words {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.count >= 2,
+                  !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }),
+                  !isFillerWord(trimmed) else { continue }
+            vocabWords.append(trimmed)
+            added += 1
+        }
+        if added > 0 {
+            Haptics.success()
+            Task { await saveSettings() }
+        }
+        return added
+    }
+
+    /// Bulk-add dictation bias words from dictation, skipping duplicates and fillers.
+    /// Returns the count of words actually added.
+    @MainActor
+    @discardableResult
+    func addDictationBiasWords(_ words: [String]) -> Int {
+        var added = 0
+        for raw in words {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.count >= 2,
+                  !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }),
+                  !isFillerWord(trimmed) else { continue }
+            dictationBiasWords.append(trimmed)
+            added += 1
+        }
+        if added > 0 {
+            Haptics.success()
+            Task { await saveSettings() }
+        }
+        return added
+    }
+
     @MainActor
     func addDictationBiasWord() {
         dictationWordError = nil

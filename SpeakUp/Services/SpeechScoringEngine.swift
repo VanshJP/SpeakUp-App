@@ -389,26 +389,38 @@ enum SpeechScoringEngine {
         words: [TranscriptionWord],
         pauseMetadata: [PauseInfo]
     ) -> Double {
-          guard !words.isEmpty else { return 0 }
+        guard !words.isEmpty else { return 0 }
         // Note: pauseMetadata is accepted for API consistency but we detect pauses
         // directly from word timing gaps (>0.4s) for accuracy.
         _ = pauseMetadata  // suppress unused parameter warning
+
+        // Sort by start time to ensure correct gap detection.
+        // The words array is usually sorted, but WhisperKit can occasionally produce
+        // slightly out-of-order segments at segment boundaries. Using the unsorted
+        // array caused incorrect gap calculations (negative gaps) which inflated MLR.
+        let sorted = words.sorted { $0.start < $1.start }
+
         var runs: [Int] = []
         var currentRun = 0
 
-        for (index, word) in words.enumerated() {
+        for i in sorted.indices {
             currentRun += 1
+            let word = sorted[i]
 
-            // Check if there's a pause after this word
-            let isLastWord = index == words.count - 1
-            let nextWordStart = isLastWord ? Double.infinity : words[index + 1].start
-            let gapAfter = nextWordStart - word.end
-
-            if gapAfter > 0.4 || isLastWord {
-                if currentRun > 0 {
-                    runs.append(currentRun)
-                }
+            // Check if there's a pause after this word using safe index access
+            let isLastWord = i == sorted.count - 1
+            if isLastWord {
+                // End of transcript — close the final run
+                if currentRun > 0 { runs.append(currentRun) }
                 currentRun = 0
+            } else {
+                let nextWordStart = sorted[i + 1].start
+                let gapAfter = nextWordStart - word.end
+                // Only count gaps > 0.4s as run boundaries (same threshold as pause detection)
+                if gapAfter > 0.4 {
+                    if currentRun > 0 { runs.append(currentRun) }
+                    currentRun = 0
+                }
             }
         }
 

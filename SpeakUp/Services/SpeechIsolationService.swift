@@ -16,8 +16,15 @@ enum SpeechIsolationService {
 
         let baselineSNR = estimateSNR(samples: mono.samples, sampleRate: mono.sampleRate)
 
-        // Skip processing if audio already has good signal quality
-        guard baselineSNR < 18.0 else { return nil }
+        // Skip processing if audio already has excellent signal quality.
+        // Lowered threshold from 18 dB to 22 dB:
+        // - 18 dB was too conservative: recordings with 15-18 dB SNR benefit from processing
+        //   but were being skipped, leaving noisy audio going into Whisper.
+        // - 22 dB is a more realistic "already clean enough" threshold for mobile recordings.
+        //   Studio-quality speech is typically 30+ dB; 22 dB still has audible background noise.
+        // - This means more recordings get processed, improving Whisper accuracy and
+        //   downstream speaker isolation quality.
+        guard baselineSNR < 22.0 else { return nil }
 
         let highPassed = applyHighPassFilter(to: mono.samples)
         let gated = applyAdaptiveNoiseGate(to: highPassed, sampleRate: mono.sampleRate)
@@ -34,8 +41,16 @@ enum SpeechIsolationService {
             return nil
         }
 
-        let suppressionScore = max(0, min(100, Int(((delta + 2.0) / 8.0) * 100.0)))
-        let residualNoiseScore = max(0, min(100, Int(((improvedSNR + 5.0) / 20.0) * 100.0)))
+        // Adjusted suppression score formula to account for the new 22 dB skip threshold.
+        // Previously: (delta + 2.0) / 8.0 — a 6 dB improvement scored 100.
+        // Now: (delta + 1.5) / 10.0 — a 8.5 dB improvement scores 100.
+        // This gives a more honest score since we're now processing noisier audio.
+        let suppressionScore = max(0, min(100, Int(((delta + 1.5) / 10.0) * 100.0)))
+        // Adjusted residual noise score to match the new skip threshold.
+        // Previously: (improvedSNR + 5.0) / 20.0 — 15 dB output SNR scored 100.
+        // Now: (improvedSNR + 5.0) / 27.0 — 22 dB output SNR scores 100.
+        // This prevents inflated residualNoiseScore values from over-dampening reliability.
+        let residualNoiseScore = max(0, min(100, Int(((improvedSNR + 5.0) / 27.0) * 100.0)))
 
         return Result(
             processedAudioURL: outputURL,
@@ -51,7 +66,15 @@ enum SpeechIsolationService {
 
     // MARK: - Processing
 
-    private static func applyHighPassFilter(to samples: [Float], alpha: Float = 0.995) -> [Float] {
+    private static func applyHighPassFilter(to samples: [Float], alpha: Float = 0.97) -> [Float] {
+        // Lowered alpha from 0.995 to 0.97.
+        // alpha = 0.995 corresponds to a cutoff of ~(1-0.995)*sampleRate/(2π) ≈ 50 Hz at 44.1 kHz.
+        // This was barely filtering anything — 50 Hz is below the fundamental of any human voice.
+        // alpha = 0.97 corresponds to ~210 Hz cutoff, which:
+        //   - Removes low-frequency rumble, HVAC hum, and handling noise (all below 200 Hz)
+        //   - Preserves all speech fundamentals (male: 85-180 Hz, female: 165-255 Hz)
+        //   - Improves SNR for the noise gate stage that follows
+        // Note: This is a first-order IIR high-pass. The -3dB point is approximate.
         guard !samples.isEmpty else { return samples }
         var output = [Float](repeating: 0, count: samples.count)
         var previousInput: Float = samples[0]
@@ -73,8 +96,14 @@ enum SpeechIsolationService {
         let frameRMS = rmsPerFrame(samples: samples, frameSize: frameSize)
         guard !frameRMS.isEmpty else { return samples }
 
-        let noiseFloor = percentile(frameRMS, p: 0.20)
-        let threshold = max(noiseFloor * 1.8, 0.00012)
+        // Raised noise floor percentile from 20th to 15th percentile.
+        // The 20th percentile includes some low-energy speech frames (soft consonants, pauses).
+        // The 15th percentile more accurately captures the true noise floor.
+        let noiseFloor = percentile(frameRMS, p: 0.15)
+        // Raised threshold multiplier from 1.8x to 2.2x noise floor.
+        // 1.8x was too close to the noise floor, causing the gate to partially suppress
+        // quiet speech segments. 2.2x provides a cleaner separation between noise and speech.
+        let threshold = max(noiseFloor * 2.2, 0.00012)
 
         var output = samples
         var smoothedGain: Float = 1.0

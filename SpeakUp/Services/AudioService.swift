@@ -36,14 +36,13 @@ class AudioService: NSObject {
     private func setupSession() {
         recordingSession = AVAudioSession.sharedInstance()
     }
-    
+
     func requestPermission() async -> Bool {
         do {
-            // voiceChat mode enables Apple's built-in near-field voice processing.
             try recordingSession?.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetooth]
+                options: [.defaultToSpeaker, .allowBluetoothHFP]
             )
             try recordingSession?.setActive(true)
             
@@ -81,7 +80,7 @@ class AudioService: NSObject {
             try recordingSession?.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetooth]
+                options: [.defaultToSpeaker, .allowBluetoothHFP]
             )
             try recordingSession?.setActive(true)
 

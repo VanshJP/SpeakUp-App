@@ -85,20 +85,43 @@ enum ConversationIsolationService {
             let f0Penalty: Double
             if let f0 = feature.f0Hz, f0 > 0 {
                 let semitoneDistance = abs(log2(f0 / profileF0) * 12.0)
-                f0Penalty = min(1.0, semitoneDistance / 6.0)
+                // Tighter tolerance: 4 semitones = full penalty (was 6).
+                // Human speakers typically differ by 4+ semitones; 6 was too permissive
+                // and let other-speaker words through as primary.
+                f0Penalty = min(1.0, semitoneDistance / 4.0)
             } else {
-                f0Penalty = 0.35
+                // Unknown F0: moderate penalty (was 0.35 — too forgiving).
+                // Unvoiced/noise segments should lean toward non-primary.
+                f0Penalty = 0.45
             }
 
-            let energyPenalty = min(1.0, abs(feature.energyDb - profileEnergy) / 16.0)
+            // Tighter energy tolerance: 12 dB gap = full penalty (was 16 dB).
+            // A 16 dB gap is enormous — that's a 6x amplitude difference.
+            // 12 dB (4x amplitude) is a more realistic threshold for a different speaker.
+            let energyPenalty = min(1.0, abs(feature.energyDb - profileEnergy) / 12.0)
             let penalty = f0Penalty * 0.75 + energyPenalty * 0.25
             let confidence = max(0.0, min(1.0, 1.0 - penalty))
             wordConfidence[i] = confidence
-            isPrimary[i] = confidence >= 0.48
+            // Raised threshold: 0.52 (was 0.48) to reduce false-positive primary labels.
+            // At 0.48 too many borderline words were included as primary speaker.
+            isPrimary[i] = confidence >= 0.52
         }
 
         // Smooth unstable flips using a local majority window.
-        if isPrimary.count >= 5 {
+        // Widened to ±3 (7-word window, was ±2 / 5-word window).
+        // Natural speaker turns last at least 3-5 words; a 5-word window was too
+        // narrow and caused single-word islands to flip the label back and forth.
+        if isPrimary.count >= 7 {
+            var smoothed = isPrimary
+            for i in 3..<(isPrimary.count - 3) {
+                let local = isPrimary[(i - 3)...(i + 3)]
+                let positives = local.filter { $0 }.count
+                // Require majority of 4/7 (was 3/5) to flip label
+                smoothed[i] = positives >= 4
+            }
+            isPrimary = smoothed
+        } else if isPrimary.count >= 5 {
+            // Fallback for short sessions: keep the original 5-word window
             var smoothed = isPrimary
             for i in 2..<(isPrimary.count - 2) {
                 let local = isPrimary[(i - 2)...(i + 2)]
@@ -137,22 +160,37 @@ enum ConversationIsolationService {
 
         let validF0Ratio = Double(features.compactMap(\.f0Hz).count) / Double(max(1, features.count))
         let switchRate = Double(switchCount) / Double(max(1, isPrimary.count - 1))
+        // Improved confidence formula:
+        // - Lowered base from 35 to 28: the base should represent "no evidence of separation",
+        //   not a generous head-start. 35 was inflating confidence for solo sessions.
+        // - Increased F0 gap contribution cap from 25 to 30: a large F0 gap is strong evidence
+        //   of two distinct speakers and should be weighted more heavily.
+        // - Tightened F0 gap scaling: 5.0 semitones per point (was 6.0) so the cap is reached
+        //   at ~6 semitones (a realistic male/female difference) rather than ~4.2 semitones.
+        // - Increased energy gap contribution cap from 10 to 15: energy separation is underweighted
+        //   in the original formula relative to its predictive power.
+        // - Reduced switch rate contribution cap from 10 to 8: frequent switching can indicate
+        //   a noisy recording rather than a clean two-speaker conversation.
         let confidence = max(
             0,
             min(
                 100,
                 Int(
-                    35.0 +
+                    28.0 +
                     validF0Ratio * 25.0 +
-                    min(f0Gap * 6.0, 25.0) +
-                    min(energyGap * 2.0, 10.0) +
-                    min(switchRate * 40.0, 10.0)
+                    min(f0Gap * 5.0, 30.0) +
+                    min(energyGap * 2.5, 15.0) +
+                    min(switchRate * 40.0, 8.0)
                 )
             )
         )
 
         // Conservative fallback: if separation confidence is poor, avoid excluding words.
-        let shouldApplyIsolation = confidence >= 50 && primaryRatio >= 0.40 && primaryRatio <= 0.95
+        // Raised primary ratio lower bound from 0.40 to 0.50:
+        // If fewer than half the words are attributed to the primary speaker, the isolation
+        // is unreliable — we'd be scoring on less than half the speech, which is worse than
+        // scoring on everything. This prevents over-filtering in noisy conditions.
+        let shouldApplyIsolation = confidence >= 52 && primaryRatio >= 0.50 && primaryRatio <= 0.93
         let conversationDetected = shouldApplyIsolation && filteredOut >= max(4, Int(Double(sortedWords.count) * 0.15)) && switchCount >= 2
 
         var updated = words
@@ -204,7 +242,7 @@ enum ConversationIsolationService {
 
     /// Extract a baseline voice profile from a calibration audio recording.
     /// Splits the audio into fixed-size windows and computes median F0/energy.
-    static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
+    nonisolated static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
         guard let mono = loadMonoPCM(url: audioURL) else { return nil }
 
         let windowDuration = 0.08 // 80ms windows

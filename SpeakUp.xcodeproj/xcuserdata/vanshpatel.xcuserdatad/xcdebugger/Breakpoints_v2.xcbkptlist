@@ -32,7 +32,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1231"
             endingLineNumber = "1231"
-            landmarkName = "loadRecording()"
+            landmarkName = "prepareDetailAssets(for:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

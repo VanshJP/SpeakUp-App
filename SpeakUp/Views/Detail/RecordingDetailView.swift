@@ -15,6 +15,7 @@ struct RecordingDetailView: View {
     @State private var showingShareSheet = false
     @State private var showFillerHighlights = true
     @State private var showVocabHighlights = true
+    @State private var showSpeakerTurns = true
     @State private var waveformHeights: [CGFloat] = []
     @State private var scoreCardImage: UIImage?
     @State private var animateScore = false
@@ -673,6 +674,9 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func transcriptSectionWithHighlights(_ words: [TranscriptionWord]) -> some View {
+        let turns = speakerTurns(from: words)
+        let hasSpeakerSeparation = hasSeparatedSpeakers(in: turns)
+
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Transcript", systemImage: "doc.text.fill")
@@ -681,6 +685,25 @@ struct RecordingDetailView: View {
                 Spacer()
 
                 HStack(spacing: 6) {
+                    if hasSpeakerSeparation {
+                        Button {
+                            showSpeakerTurns.toggle()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: showSpeakerTurns ? "person.2.fill" : "person")
+                                Text("Speakers")
+                            }
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(showSpeakerTurns ? AppColors.primary : .secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background {
+                                Capsule()
+                                    .fill(showSpeakerTurns ? AppColors.primary.opacity(0.15) : .clear)
+                            }
+                        }
+                    }
+
                     Button {
                         showFillerHighlights.toggle()
                     } label: {
@@ -719,13 +742,23 @@ struct RecordingDetailView: View {
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    HighlightedTranscriptView(
-                        words: words,
-                        showFillerHighlights: showFillerHighlights,
-                        showVocabHighlights: showVocabHighlights,
-                        activePlaybackWordID: activePlaybackWordID
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    if showSpeakerTurns && hasSpeakerSeparation {
+                        SpeakerTurnTranscriptView(
+                            turns: turns,
+                            showFillerHighlights: showFillerHighlights,
+                            showVocabHighlights: showVocabHighlights,
+                            activePlaybackWordID: activePlaybackWordID
+                        )
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    } else {
+                        HighlightedTranscriptView(
+                            words: words,
+                            showFillerHighlights: showFillerHighlights,
+                            showVocabHighlights: showVocabHighlights,
+                            activePlaybackWordID: activePlaybackWordID
+                        )
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
 
                     if let analysis = recording?.analysis, !analysis.vocabWordsUsed.isEmpty {
                         Divider()
@@ -748,6 +781,65 @@ struct RecordingDetailView: View {
                 }
             }
         }
+    }
+
+    private func speakerTurns(from words: [TranscriptionWord]) -> [SpeakerTurn] {
+        let ordered = words
+            .filter { !$0.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted { $0.start < $1.start }
+        guard let first = ordered.first else { return [] }
+
+        var rawTurns: [(isPrimary: Bool, words: [TranscriptionWord])] = []
+        var currentSpeaker = first.isPrimarySpeaker
+        var currentWords: [TranscriptionWord] = []
+
+        for word in ordered {
+            if word.isPrimarySpeaker != currentSpeaker, !currentWords.isEmpty {
+                rawTurns.append((isPrimary: currentSpeaker, words: currentWords))
+                currentWords = []
+            }
+            currentSpeaker = word.isPrimarySpeaker
+            currentWords.append(word)
+        }
+        if !currentWords.isEmpty {
+            rawTurns.append((isPrimary: currentSpeaker, words: currentWords))
+        }
+
+        // Merge micro-turns: if a turn has only 1-2 words, absorb it into the adjacent turn
+        // with the most words. This prevents single noise-burst words from creating a
+        // spurious speaker-turn bubble in the UI.
+        var merged: [(isPrimary: Bool, words: [TranscriptionWord])] = []
+        for (_, turn) in rawTurns.enumerated() {
+            if turn.words.count <= 2 && !merged.isEmpty {
+                // Absorb into the previous turn (same speaker label as previous)
+                let last = merged.removeLast()
+                merged.append((isPrimary: last.isPrimary, words: last.words + turn.words))
+            } else {
+                merged.append(turn)
+            }
+        }
+
+        return merged.enumerated().map { index, turn in
+            SpeakerTurn(id: index, isPrimarySpeaker: turn.isPrimary, words: turn.words)
+        }
+    }
+
+    private func hasSeparatedSpeakers(in turns: [SpeakerTurn]) -> Bool {
+        guard turns.count >= 2 else { return false }
+        let primaryWordCount = turns
+            .filter(\.isPrimarySpeaker)
+            .reduce(0) { $0 + $1.words.count }
+        let otherWordCount = turns
+            .filter { !$0.isPrimarySpeaker }
+            .reduce(0) { $0 + $1.words.count }
+        // Lowered otherWordCount threshold from 4 to 3:
+        // In a short conversation (e.g. a Q&A), the other speaker may only contribute
+        // a brief question or acknowledgement. Requiring 4 words was hiding the speaker
+        // turn UI for legitimate two-speaker recordings.
+        // Also require at least 2 distinct turns (not just 2 total words) to avoid
+        // showing the UI for a single isolated noise burst.
+        let otherTurnCount = turns.filter { !$0.isPrimarySpeaker }.count
+        return primaryWordCount >= 8 && otherWordCount >= 3 && otherTurnCount >= 1
     }
 
     // MARK: - Share CTA Section
@@ -1041,17 +1133,21 @@ struct RecordingDetailView: View {
     }
 
     private func resolvedTranscript(for recording: Recording) -> String {
-        let text = recording.transcriptionText?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let text, !text.isEmpty {
-            return text
-        }
-
-        let fallback = recording.transcriptionWords?
+        let wordsTranscript = recording.transcriptionWords?
             .map(\.word)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return fallback ?? ""
+        if let wordsTranscript, !wordsTranscript.isEmpty {
+            return wordsTranscript
+        }
+
+        let fallbackText = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fallbackText, !fallbackText.isEmpty {
+            return fallbackText
+        }
+
+        return ""
     }
 
     private func formattedAIInsightBlocks(_ insight: String) -> [AIInsightBlock] {
@@ -1757,6 +1853,50 @@ struct HighlightedTranscriptView: View {
                     showFillerHighlight: showFillerHighlights && word.isFiller,
                     showVocabHighlight: showVocabHighlights && word.isVocabWord,
                     isActivePlaybackWord: activePlaybackWordID == word.id
+                )
+            }
+        }
+    }
+}
+
+private struct SpeakerTurn: Identifiable {
+    let id: Int
+    let isPrimarySpeaker: Bool
+    let words: [TranscriptionWord]
+}
+
+private struct SpeakerTurnTranscriptView: View {
+    let turns: [SpeakerTurn]
+    let showFillerHighlights: Bool
+    let showVocabHighlights: Bool
+    let activePlaybackWordID: UUID?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(turns) { turn in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: turn.isPrimarySpeaker ? "person.fill.checkmark" : "person.2.fill")
+                            .font(.caption)
+                            .foregroundStyle(turn.isPrimarySpeaker ? AppColors.primary : .secondary)
+
+                        Text(turn.isPrimarySpeaker ? "You" : "Other speaker")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(turn.isPrimarySpeaker ? AppColors.primary : .secondary)
+                    }
+
+                    HighlightedTranscriptView(
+                        words: turn.words,
+                        showFillerHighlights: showFillerHighlights,
+                        showVocabHighlights: showVocabHighlights,
+                        activePlaybackWordID: activePlaybackWordID
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(turn.isPrimarySpeaker ? AppColors.primary.opacity(0.12) : .white.opacity(0.05))
                 )
             }
         }
