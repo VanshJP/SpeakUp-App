@@ -1,7 +1,9 @@
 import SwiftUI
+import UIKit
 import SwiftData
 
 struct WordBankView: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Bindable var viewModel: SettingsViewModel
     @State private var selectedTab = 0
@@ -9,6 +11,7 @@ struct WordBankView: View {
     @State private var isDictationInputFocused = false
     @State private var isFillerInputFocused = false
     @State private var newFillerIsContextDependent = false
+    @State private var isKeyboardVisible = false
 
     // Dictation state
     @State private var dictationEngine = DictationService()
@@ -16,7 +19,7 @@ struct WordBankView: View {
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
-                .ignoresSafeArea(.keyboard)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Segmented picker
@@ -67,56 +70,91 @@ struct WordBankView: View {
                 stopDictationAndAdd()
             }
         }
+        .onAppear {
+            viewModel.configure(with: modelContext)
+        }
     }
 
     // MARK: - Bottom Input Bar
 
     @ViewBuilder
     private var bottomInputBar: some View {
-        VStack(spacing: 8) {
-            // Error messages
-            if selectedTab == 0, let error = viewModel.vocabWordError {
-                errorLabel(error)
-            } else if selectedTab == 1, let error = viewModel.dictationWordError {
-                errorLabel(error)
-            } else if selectedTab == 2, let error = viewModel.fillerWordError {
-                errorLabel(error)
-            }
+        GlassCard(
+            cornerRadius: 20,
+            tint: AppColors.glassTintPrimary,
+            padding: 14,
+            accentBorder: AppColors.primary.opacity(0.28)
+        ) {
+            VStack(spacing: 10) {
+                // Error messages
+                if selectedTab == 0, let error = viewModel.vocabWordError {
+                    errorLabel(error)
+                } else if selectedTab == 1, let error = viewModel.dictationWordError {
+                    errorLabel(error)
+                } else if selectedTab == 2, let error = viewModel.fillerWordError {
+                    errorLabel(error)
+                }
 
-            if selectedTab == 0 {
-                bottomVocabInput
-            } else if selectedTab == 1 {
-                bottomDictionaryInput
-            } else {
-                bottomFillerInput
+                if selectedTab == 0 {
+                    bottomVocabInput
+                } else if selectedTab == 1 {
+                    bottomDictionaryInput
+                } else {
+                    bottomFillerInput
+                }
+
+                if isKeyboardVisible {
+                    keyboardDismissRow
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 12)
         .padding(.top, 8)
-        .padding(.bottom, 4)
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(.white.opacity(0.06))
-                        .frame(height: 0.5)
+        .padding(.bottom, 8)
+        .padding(.bottom, isKeyboardVisible ? 6 : 0)
+        .animation(.easeInOut(duration: 0.2), value: isKeyboardVisible)
+    }
+
+    private var keyboardDismissRow: some View {
+        HStack {
+            Spacer()
+            Button {
+                dismissKeyboard()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.caption.weight(.semibold))
+                    Text("Hide Keyboard")
+                        .font(.caption.weight(.medium))
                 }
-                .ignoresSafeArea(.container, edges: .bottom)
+                .foregroundStyle(.white.opacity(0.82))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background {
+                    Capsule()
+                        .fill(AppColors.glassTintAccent)
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                        }
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
     private var bottomVocabInput: some View {
         HStack(spacing: 10) {
             // Mic button
-            micButton(tint: .teal)
+            micButton(tint: AppColors.primary)
 
             // Text input
             HStack(spacing: 8) {
                 PersistentTextField(
                     hint: "Add a word...",
                     text: $viewModel.newVocabWord,
-                    isFocused: $isWordInputFocused,
+                    isFocused: vocabFocusBinding,
                     onSubmit: { viewModel.addVocabWord() }
                 )
                 .frame(height: 22)
@@ -137,7 +175,7 @@ struct WordBankView: View {
             .padding(.vertical, 10)
             .background {
                 Capsule()
-                    .fill(.white.opacity(0.06))
+                    .fill(AppColors.glassTintAccent)
                     .overlay {
                         Capsule()
                             .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
@@ -156,7 +194,7 @@ struct WordBankView: View {
                 PersistentTextField(
                     hint: "Add a name or phrase...",
                     text: $viewModel.newDictationBiasWord,
-                    isFocused: $isDictationInputFocused,
+                    isFocused: dictationFocusBinding,
                     onSubmit: { viewModel.addDictationBiasWord() }
                 )
                 .frame(height: 22)
@@ -177,7 +215,7 @@ struct WordBankView: View {
             .padding(.vertical, 10)
             .background {
                 Capsule()
-                    .fill(.white.opacity(0.06))
+                    .fill(AppColors.glassTintAccent)
                     .overlay {
                         Capsule()
                             .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
@@ -196,7 +234,7 @@ struct WordBankView: View {
                 PersistentTextField(
                     hint: "Add custom filler...",
                     text: $viewModel.newFillerWord,
-                    isFocused: $isFillerInputFocused,
+                    isFocused: fillerFocusBinding,
                     onSubmit: { viewModel.addCustomFiller(isContextDependent: newFillerIsContextDependent) }
                 )
                 .frame(height: 22)
@@ -217,7 +255,7 @@ struct WordBankView: View {
             .padding(.vertical, 10)
             .background {
                 Capsule()
-                    .fill(.white.opacity(0.06))
+                    .fill(AppColors.glassTintAccent)
                     .overlay {
                         Capsule()
                             .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
@@ -595,7 +633,7 @@ struct WordBankView: View {
     }
 
     private var alwaysDetectedSection: some View {
-        let unconditional = viewModel.activeFillerWords.filter { !$0.isContextDependent }
+        let unconditional = activeUnconditionalFillers
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 GlassSectionHeader("Always Detected", icon: "exclamationmark.triangle.fill")
@@ -621,7 +659,7 @@ struct WordBankView: View {
     }
 
     private var contextDependentSection: some View {
-        let contextual = viewModel.activeFillerWords.filter { $0.isContextDependent }
+        let contextual = activeContextFillers
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 GlassSectionHeader("Context-Dependent", icon: "text.magnifyingglass")
@@ -656,7 +694,7 @@ struct WordBankView: View {
                 GlassSectionHeader("Removed", icon: "eye.slash")
 
                 FlowLayout(spacing: 6) {
-                    ForEach(viewModel.removedDefaultFillers.sorted(), id: \.self) { word in
+                    ForEach(sortedRemovedDefaultFillers, id: \.self) { word in
                         removedChip(word)
                     }
                 }
@@ -737,6 +775,69 @@ struct WordBankView: View {
         .foregroundStyle(.red)
         .padding(.horizontal, 4)
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    private var sortedRemovedDefaultFillers: [String] {
+        viewModel.removedDefaultFillers.sorted()
+    }
+
+    private var activeUnconditionalFillers: [(word: String, isCustom: Bool, isContextDependent: Bool)] {
+        viewModel.activeFillerWords.filter { !$0.isContextDependent }
+    }
+
+    private var activeContextFillers: [(word: String, isCustom: Bool, isContextDependent: Bool)] {
+        viewModel.activeFillerWords.filter { $0.isContextDependent }
+    }
+
+    private var vocabFocusBinding: Binding<Bool> {
+        Binding(
+            get: { isWordInputFocused },
+            set: { newValue in
+                isWordInputFocused = newValue
+                handleFocusChanged(newValue)
+            }
+        )
+    }
+
+    private var dictationFocusBinding: Binding<Bool> {
+        Binding(
+            get: { isDictationInputFocused },
+            set: { newValue in
+                isDictationInputFocused = newValue
+                handleFocusChanged(newValue)
+            }
+        )
+    }
+
+    private var fillerFocusBinding: Binding<Bool> {
+        Binding(
+            get: { isFillerInputFocused },
+            set: { newValue in
+                isFillerInputFocused = newValue
+                handleFocusChanged(newValue)
+            }
+        )
+    }
+
+    private func handleFocusChanged(_ isFocused: Bool) {
+        if isFocused {
+            isKeyboardVisible = true
+        } else if !isWordInputFocused && !isDictationInputFocused && !isFillerInputFocused {
+            isKeyboardVisible = false
+        }
+    }
+
+    private func dismissKeyboard() {
+        isWordInputFocused = false
+        isDictationInputFocused = false
+        isFillerInputFocused = false
+        isKeyboardVisible = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 }
 

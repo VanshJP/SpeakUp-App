@@ -130,31 +130,31 @@ private struct SessionDefaultsChangeModifiers: ViewModifier {
         content
             .onChange(of: viewModel.defaultDuration) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings()
             }
             .onChange(of: viewModel.countdownDuration) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings()
             }
             .onChange(of: viewModel.countdownStyle) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings()
             }
             .onChange(of: viewModel.timerEndBehavior) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings()
             }
             .onChange(of: viewModel.hapticCoachingEnabled) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings()
             }
             .onChange(of: viewModel.chirpSoundEnabled) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings()
             }
             .onChange(of: viewModel.weeklyGoalSessions) { _, _ in
                 guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
+                viewModel.scheduleSaveSettings(debounce: .milliseconds(300))
             }
     }
 }

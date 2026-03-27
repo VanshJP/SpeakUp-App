@@ -152,6 +152,7 @@ class SettingsViewModel {
     private var modelContext: ModelContext?
     private var hasConfigured = false
     var isSyncing = false
+    private var scheduledSaveTask: Task<Void, Never>?
     private let notificationService = NotificationService()
 
     func configure(with context: ModelContext) {
@@ -256,6 +257,8 @@ class SettingsViewModel {
     
     @MainActor
     func saveSettings() async {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = nil
         guard let settings, let context = modelContext else { return }
 
         settings.defaultDuration = defaultDuration.rawValue
@@ -328,6 +331,27 @@ class SettingsViewModel {
         } catch {
             print("Error saving settings: \(error)")
         }
+    }
+
+    @MainActor
+    func scheduleSaveSettings(debounce delay: Duration = .milliseconds(250)) {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = Task { [weak self] in
+            if delay > .zero {
+                try? await Task.sleep(for: delay)
+            }
+            guard !Task.isCancelled else { return }
+            await self?.saveSettings()
+            await MainActor.run {
+                self?.scheduledSaveTask = nil
+            }
+        }
+    }
+
+    @MainActor
+    func cancelScheduledSave() {
+        scheduledSaveTask?.cancel()
+        scheduledSaveTask = nil
     }
     
     @MainActor

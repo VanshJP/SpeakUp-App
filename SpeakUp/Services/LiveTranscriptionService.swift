@@ -95,10 +95,19 @@ class LiveTranscriptionService {
     private func processPartialResult(_ result: SFSpeechRecognitionResult) {
         let segments = result.bestTranscription.segments
         let wordCount = segments.count
+        let lastEndTime = segments.last.map { $0.timestamp + $0.duration }
+
         guard wordCount > 0 else {
             Task { @MainActor in
-                self.liveFillerCount = 0
-                self.liveWordCount = 0
+                if self.liveFillerCount != 0 {
+                    self.liveFillerCount = 0
+                }
+                if self.liveWordCount != 0 {
+                    self.liveWordCount = 0
+                }
+                if self.lastSegmentEndTime != 0 {
+                    self.lastSegmentEndTime = 0
+                }
             }
             return
         }
@@ -114,17 +123,16 @@ class LiveTranscriptionService {
             config: fillerConfig
         )
 
-        // Track when the last word ended (segment timestamp + duration)
-        if let lastSegment = segments.last {
-            let endTime = lastSegment.timestamp + lastSegment.duration
-            Task { @MainActor in
-                self.lastSegmentEndTime = endTime
-            }
-        }
-
         Task { @MainActor in
-            self.liveFillerCount = fillerCount
-            self.liveWordCount = wordCount
+            if self.liveFillerCount != fillerCount {
+                self.liveFillerCount = fillerCount
+            }
+            if self.liveWordCount != wordCount {
+                self.liveWordCount = wordCount
+            }
+            if let lastEndTime, abs(self.lastSegmentEndTime - lastEndTime) > 0.01 {
+                self.lastSegmentEndTime = lastEndTime
+            }
         }
     }
 }

@@ -93,7 +93,7 @@ struct FeedbackSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: viewModel.sessionFeedbackEnabled) { _, _ in
             guard !viewModel.isSyncing else { return }
-            Task { await viewModel.saveSettings() }
+            viewModel.scheduleSaveSettings()
         }
         .sheet(isPresented: $viewModel.showingAddFeedbackQuestion) {
             addFeedbackQuestionSheet

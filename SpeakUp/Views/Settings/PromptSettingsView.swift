@@ -129,10 +129,12 @@ struct PromptSettingsView: View {
         .navigationTitle("Prompts")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: viewModel.hideAnsweredPrompts) { _, _ in
-            Task { await viewModel.saveSettings() }
+            guard !viewModel.isSyncing else { return }
+            viewModel.scheduleSaveSettings()
         }
         .onChange(of: viewModel.storyPracticeEnabled) { _, _ in
-            Task { await viewModel.saveSettings() }
+            guard !viewModel.isSyncing else { return }
+            viewModel.scheduleSaveSettings()
         }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()

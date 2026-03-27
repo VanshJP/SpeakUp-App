@@ -9,6 +9,8 @@ struct HistoryView: View {
     @State private var showingDayDetail = false
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var recordingToDelete: Recording?
     @State private var showingDeleteAlert = false
     @Query private var userSettings: [UserSettings]
@@ -19,8 +21,12 @@ struct HistoryView: View {
 
     // MARK: - Filtered Recordings
 
+    private var nonDeletedRecordings: [Recording] {
+        viewModel.recordings.filter { !$0.isDeleted }
+    }
+
     private var filteredRecordings: [Recording] {
-        var recordings = viewModel.recordings.filter { !$0.isDeleted }
+        var recordings = nonDeletedRecordings
 
         switch selectedFilter {
         case .all: break
@@ -37,16 +43,17 @@ struct HistoryView: View {
             recordings = recordings.filter { $0.storyId != nil }
         }
 
-        if !searchText.isEmpty {
+        let searchQuery = debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !searchQuery.isEmpty {
             recordings = recordings.filter { recording in
                 let promptText = recording.prompt?.text ?? ""
                 let category = recording.prompt?.category ?? ""
                 let transcript = recording.transcriptionText ?? ""
                 let storyTitle = recording.storyTitle ?? ""
-                return promptText.localizedStandardContains(searchText)
-                    || category.localizedStandardContains(searchText)
-                    || transcript.localizedStandardContains(searchText)
-                    || storyTitle.localizedStandardContains(searchText)
+                return promptText.localizedStandardContains(searchQuery)
+                    || category.localizedStandardContains(searchQuery)
+                    || transcript.localizedStandardContains(searchQuery)
+                    || storyTitle.localizedStandardContains(searchQuery)
             }
         }
 
@@ -54,12 +61,13 @@ struct HistoryView: View {
     }
 
     private var analyzedRecordings: [Recording] {
-        viewModel.recordings.filter { $0.analysis != nil }
+        nonDeletedRecordings.filter { $0.analysis != nil }
     }
 
     // MARK: - Body
 
     var body: some View {
+        let analyzed = analyzedRecordings
         ZStack {
             AppBackground()
 
@@ -70,16 +78,16 @@ struct HistoryView: View {
                     vocabUsageSection
 
                     // Progress Charts link
-                    if analyzedRecordings.count >= 2 {
-                        progressChartsCard
+                    if analyzed.count >= 2 {
+                        progressChartsCard(analyzedRecordings: analyzed)
                     }
 
-                    if viewModel.recordings.count >= 5 {
+                    if nonDeletedRecordings.count >= 5 {
                         progressReplayBanner
                     }
 
-                    if analyzedRecordings.count >= 2 {
-                        compareProgressCard
+                    if analyzed.count >= 2 {
+                        compareProgressCard(analyzedRecordings: analyzed)
                     }
 
                     filterSection
@@ -106,6 +114,20 @@ struct HistoryView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
+            debouncedSearchText = searchText
+        }
+        .onChange(of: searchText) { _, newValue in
+            searchDebounceTask?.cancel()
+            searchDebounceTask = Task {
+                try? await Task.sleep(for: .milliseconds(180))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    debouncedSearchText = newValue
+                }
+            }
+        }
+        .onDisappear {
+            searchDebounceTask?.cancel()
         }
         .sheet(isPresented: $showingDayDetail) {
             if let date = selectedDate {
@@ -342,7 +364,7 @@ struct HistoryView: View {
 
     // MARK: - Progress Charts Card
 
-    private var progressChartsCard: some View {
+    private func progressChartsCard(analyzedRecordings: [Recording]) -> some View {
         let recentScores: [(date: Date, score: Int)] = analyzedRecordings
             .sorted { $0.date < $1.date }
             .suffix(12)
@@ -417,7 +439,7 @@ struct HistoryView: View {
 
     // MARK: - Compare Progress Card
 
-    private var compareProgressCard: some View {
+    private func compareProgressCard(analyzedRecordings: [Recording]) -> some View {
         let sorted = analyzedRecordings.sorted { $0.date < $1.date }
         let firstScore = sorted.first?.analysis?.speechScore.overall ?? 0
         let latestScore = sorted.last?.analysis?.speechScore.overall ?? 0
@@ -475,6 +497,11 @@ struct HistoryView: View {
     // MARK: - Filter Section
 
     private var filterSection: some View {
+        let favoritesCount = nonDeletedRecordings.filter(\.isFavorite).count
+        let highScoreCount = nonDeletedRecordings.filter { ($0.analysis?.speechScore.overall ?? 0) >= 80 }.count
+        let eventsCount = nonDeletedRecordings.filter { $0.eventId != nil }.count
+        let storiesCount = nonDeletedRecordings.filter { $0.storyId != nil }.count
+
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(HistoryFilter.allCases) { filter in
@@ -482,7 +509,13 @@ struct HistoryView: View {
                         title: filter.title,
                         icon: filter.icon,
                         isSelected: selectedFilter == filter,
-                        count: countForFilter(filter)
+                        count: countForFilter(
+                            filter,
+                            favoritesCount: favoritesCount,
+                            highScoreCount: highScoreCount,
+                            eventsCount: eventsCount,
+                            storiesCount: storiesCount
+                        )
                     ) {
                         withAnimation(.spring(duration: 0.3)) {
                             selectedFilter = filter
@@ -494,20 +527,27 @@ struct HistoryView: View {
         .scrollIndicators(.hidden)
     }
 
-    private func countForFilter(_ filter: HistoryFilter) -> Int? {
+    private func countForFilter(
+        _ filter: HistoryFilter,
+        favoritesCount: Int,
+        highScoreCount: Int,
+        eventsCount: Int,
+        storiesCount: Int
+    ) -> Int? {
         switch filter {
         case .all: return nil
-        case .favorites: return viewModel.recordings.filter(\.isFavorite).count
-        case .highScore: return viewModel.recordings.filter { ($0.analysis?.speechScore.overall ?? 0) >= 80 }.count
+        case .favorites: return favoritesCount
+        case .highScore: return highScoreCount
         case .recent: return nil
-        case .events: return viewModel.recordings.filter { $0.eventId != nil }.count
-        case .stories: return viewModel.recordings.filter { $0.storyId != nil }.count
+        case .events: return eventsCount
+        case .stories: return storiesCount
         }
     }
 
     // MARK: - Recordings Section
 
     private var recordingsSection: some View {
+        let filtered = filteredRecordings
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("Sessions", systemImage: "list.bullet")
@@ -515,14 +555,14 @@ struct HistoryView: View {
 
                 Spacer()
 
-                if !filteredRecordings.isEmpty {
-                    Text("\(filteredRecordings.count) \(selectedFilter == .all ? "total" : "found")")
+                if !filtered.isEmpty {
+                    Text("\(filtered.count) \(selectedFilter == .all ? "total" : "found")")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            if filteredRecordings.isEmpty {
+            if filtered.isEmpty {
                 EmptyStateCard(
                     icon: selectedFilter == .all ? "mic.slash" : "magnifyingglass",
                     title: selectedFilter == .all ? "No Recordings Yet" : "No Matches",
@@ -532,7 +572,7 @@ struct HistoryView: View {
                 )
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(filteredRecordings) { recording in
+                    ForEach(filtered) { recording in
                         Button {
                             onSelectRecording(recording.id.uuidString)
                         } label: {

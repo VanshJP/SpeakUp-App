@@ -93,15 +93,15 @@ struct AnalysisSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: viewModel.trackPauses) { _, _ in
             guard !viewModel.isSyncing else { return }
-            Task { await viewModel.saveSettings() }
+            viewModel.scheduleSaveSettings()
         }
         .onChange(of: viewModel.trackFillerWords) { _, _ in
             guard !viewModel.isSyncing else { return }
-            Task { await viewModel.saveSettings() }
+            viewModel.scheduleSaveSettings()
         }
         .onChange(of: viewModel.targetWPM) { _, _ in
             guard !viewModel.isSyncing else { return }
-            Task { await viewModel.saveSettings() }
+            viewModel.scheduleSaveSettings()
         }
     }
 }

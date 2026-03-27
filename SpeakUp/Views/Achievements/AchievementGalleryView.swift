@@ -4,27 +4,18 @@ import SwiftUI
 struct AchievementGalleryView: View {
     @Query private var achievements: [Achievement]
 
-    private var unlockedCount: Int {
-        achievements.filter(\.isUnlocked).count
-    }
-
-    private var totalCount: Int {
-        achievements.count
-    }
-
-    private var progress: Double {
-        guard totalCount > 0 else { return 0 }
-        return Double(unlockedCount) / Double(totalCount)
-    }
-
     var body: some View {
+        let sections = partitionAchievements()
         ZStack {
             AppBackground()
 
             ScrollView {
                 VStack(spacing: 20) {
                     // Progress Header
-                    achievementProgressHeader
+                    achievementProgressHeader(
+                        unlockedCount: sections.unlocked.count,
+                        totalCount: sections.totalCount
+                    )
 
                     // Achievement Grid
                     if achievements.isEmpty {
@@ -34,9 +25,8 @@ struct AchievementGalleryView: View {
                             message: "Complete practice sessions to start unlocking achievements."
                         )
                     } else {
-                        // Unlocked section
-                        let unlocked = achievements.filter(\.isUnlocked)
-                        let locked = achievements.filter { !$0.isUnlocked }
+                        let unlocked = sections.unlocked
+                        let locked = sections.locked
 
                         if !unlocked.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
@@ -83,7 +73,8 @@ struct AchievementGalleryView: View {
 
     // MARK: - Progress Header
 
-    private var achievementProgressHeader: some View {
+    private func achievementProgressHeader(unlockedCount: Int, totalCount: Int) -> some View {
+        let progress = totalCount > 0 ? Double(unlockedCount) / Double(totalCount) : 0
         FeaturedGlassCard(
             gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]
         ) {
@@ -154,6 +145,23 @@ struct AchievementGalleryView: View {
                 Spacer(minLength: 0)
             }
         }
+    }
+
+    private func partitionAchievements() -> (unlocked: [Achievement], locked: [Achievement], totalCount: Int) {
+        var unlocked: [Achievement] = []
+        var locked: [Achievement] = []
+        unlocked.reserveCapacity(achievements.count)
+        locked.reserveCapacity(achievements.count)
+
+        for achievement in achievements {
+            if achievement.isUnlocked {
+                unlocked.append(achievement)
+            } else {
+                locked.append(achievement)
+            }
+        }
+
+        return (unlocked: unlocked, locked: locked, totalCount: achievements.count)
     }
 }
 
