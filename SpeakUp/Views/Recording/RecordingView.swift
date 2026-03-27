@@ -16,6 +16,7 @@ struct RecordingView: View {
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
     var eventId: UUID? = nil
+    var groupId: UUID? = nil
     var scriptVersionId: UUID? = nil
     var storyId: UUID? = nil
     let onComplete: (Recording) -> Void
@@ -70,6 +71,7 @@ struct RecordingView: View {
             )
             viewModel.goalId = goalId
             viewModel.eventId = eventId
+            viewModel.groupId = groupId
             viewModel.scriptVersionId = scriptVersionId
             viewModel.storyId = storyId
             if let settings = userSettings.first {

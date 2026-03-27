@@ -4,7 +4,7 @@ import SwiftData
 struct EventDetailView: View {
     let event: SpeakingEvent
     @Bindable var viewModel: EventViewModel
-    var onStartPractice: ((SpeakingEvent, UUID?) -> Void)?
+    var onStartPractice: ((SpeakingEvent, UUID?, UUID?) -> Void)?
     @Environment(\.modelContext) private var modelContext
 
     @Query private var userSettings: [UserSettings]
@@ -25,6 +25,7 @@ struct EventDetailView: View {
     @State private var draftExpectedDurationMinutes = 5
     @State private var draftDailyPracticeMinutes = 30
     @State private var showFullPrepTimeline = false
+    @State private var selectedGroup: RecordingGroup?
 
     var body: some View {
         ZStack {
@@ -35,6 +36,7 @@ struct EventDetailView: View {
                     countdownHeader
                     quickActions
                     logisticsEditorSection
+                    groupSection
                     todayFocusSection
                     recommendedToolsCompactSection
                     if event.scriptText != nil { scriptAtAGlanceSection }
@@ -72,7 +74,7 @@ struct EventDetailView: View {
                     fontSize: event.teleprompterFontSize,
                     onStartRecording: {
                         showingTeleprompter = false
-                        onStartPractice?(event, selectedPracticeVersion?.id)
+                        onStartPractice?(event, selectedPracticeVersion?.id, viewModel.activeRecordingGroup?.id)
                     },
                     onSettingsChanged: { newSpeed, newFontSize in
                         event.teleprompterSpeed = newSpeed
@@ -129,6 +131,9 @@ struct EventDetailView: View {
             NavigationStack {
                 notificationScheduleView
             }
+        }
+        .navigationDestination(item: $selectedGroup) { group in
+            GroupDetailView(group: group)
         }
     }
 
@@ -338,6 +343,54 @@ struct EventDetailView: View {
         }
     }
 
+    // MARK: - Group
+
+    private var groupSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Session Group", systemImage: "folder")
+                    .font(.headline)
+                Spacer()
+            }
+
+            if let group = viewModel.activeRecordingGroup {
+                Button {
+                    selectedGroup = group
+                } label: {
+                    GlassCard(tint: AppColors.glassTintPrimary.opacity(0.6), padding: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "folder.fill")
+                                .foregroundStyle(AppColors.primary)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(group.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                Text("\(viewModel.linkedRecordings.count) recordings")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                GlassCard(tint: AppColors.glassTintAccent, padding: 12) {
+                    Text("A session group is created automatically once recordings are linked to this event.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
     // MARK: - Quick Actions
 
     private var quickActions: some View {
@@ -345,7 +398,7 @@ struct EventDetailView: View {
             if let onStartPractice {
                 GlassButton(title: "Practice", icon: "mic.fill", style: .primary) {
                     Haptics.medium()
-                    onStartPractice(event, selectedPracticeVersion?.id)
+                    onStartPractice(event, selectedPracticeVersion?.id, viewModel.activeRecordingGroup?.id)
                 }
             }
 

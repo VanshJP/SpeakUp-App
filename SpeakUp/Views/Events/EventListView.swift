@@ -9,7 +9,7 @@ struct EventListView: View {
     @State private var selectedEvent: SpeakingEvent?
     @State private var searchText = ""
     @State private var selectedSection: EventListSection = .upcoming
-    var onStartPractice: ((SpeakingEvent, UUID?) -> Void)?
+    var onStartPractice: ((SpeakingEvent, UUID?, UUID?) -> Void)?
 
     private var upcomingEvents: [SpeakingEvent] {
         viewModel.upcomingEvents

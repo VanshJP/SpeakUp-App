@@ -3,12 +3,17 @@ import SwiftData
 
 struct GroupDetailView: View {
     let group: RecordingGroup
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Recording.date, order: .reverse) private var allRecordings: [Recording]
+    @Query private var groupRecordings: [Recording]
+    @State private var selectedRecordingId: String?
 
-    var groupRecordings: [Recording] {
+    init(group: RecordingGroup) {
+        self.group = group
         let groupId = group.id
-        return allRecordings.filter { $0.groupId == groupId }
+        _groupRecordings = Query(
+            filter: #Predicate<Recording> { $0.groupId == groupId },
+            sort: \Recording.date,
+            order: .reverse
+        )
     }
 
     var body: some View {
@@ -45,34 +50,39 @@ struct GroupDetailView: View {
                     } else {
                         LazyVStack(spacing: 12) {
                             ForEach(groupRecordings) { recording in
-                                GlassCard(padding: 12) {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: recording.mediaType.iconName)
-                                            .foregroundStyle(.teal)
+                                Button {
+                                    selectedRecordingId = recording.id.uuidString
+                                } label: {
+                                    GlassCard(padding: 12) {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: recording.mediaType.iconName)
+                                                .foregroundStyle(.teal)
 
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(recording.displayTitle)
-                                                .font(.subheadline.weight(.medium))
-                                                .lineLimit(1)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(recording.displayTitle)
+                                                    .font(.subheadline.weight(.medium))
+                                                    .lineLimit(1)
 
-                                            HStack(spacing: 8) {
-                                                Text(recording.formattedDate)
-                                                Text("•")
-                                                Text(recording.formattedDuration)
+                                                HStack(spacing: 8) {
+                                                    Text(recording.formattedDate)
+                                                    Text("•")
+                                                    Text(recording.formattedDuration)
+                                                }
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
                                             }
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                        }
 
-                                        Spacer()
+                                            Spacer()
 
-                                        if let score = recording.analysis?.speechScore.overall {
-                                            Text("\(score)")
-                                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                                .foregroundStyle(AppColors.scoreColor(for: score))
+                                            if let score = recording.analysis?.speechScore.overall {
+                                                Text("\(score)")
+                                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                                    .foregroundStyle(AppColors.scoreColor(for: score))
+                                            }
                                         }
                                     }
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -82,5 +92,8 @@ struct GroupDetailView: View {
         }
         .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedRecordingId) { recordingId in
+            RecordingDetailView(recordingId: recordingId)
+        }
     }
 }

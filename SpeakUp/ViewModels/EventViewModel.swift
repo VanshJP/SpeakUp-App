@@ -17,6 +17,7 @@ class EventViewModel {
     var errorMessage: String?
     var showArchived = false
     var isCreating = false
+    var activeRecordingGroup: RecordingGroup?
 
     private var modelContext: ModelContext?
     private var configuredContextIdentifier: ObjectIdentifier?
@@ -182,6 +183,7 @@ class EventViewModel {
             timelineDays = []
             revisionMilestones = []
             scriptInsightsByRecordingId = [:]
+            activeRecordingGroup = nil
         }
         loadEvents()
     }
@@ -226,6 +228,23 @@ class EventViewModel {
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
         linkedRecordings = (try? context.fetch(descriptor)) ?? []
+        if linkedRecordings.isEmpty {
+            activeRecordingGroup = nil
+        } else if let existingGroupId = linkedRecordings.compactMap(\.groupId).first {
+            var groupDescriptor = FetchDescriptor<RecordingGroup>(
+                predicate: #Predicate { $0.id == existingGroupId }
+            )
+            groupDescriptor.fetchLimit = 1
+            activeRecordingGroup = try? context.fetch(groupDescriptor).first
+        } else {
+            // Backfill older event recordings that predate group assignment.
+            let defaultGroup = ensureRecordingGroup(for: event, in: context)
+            for recording in linkedRecordings where recording.groupId == nil {
+                recording.groupId = defaultGroup.id
+            }
+            try? context.save()
+            activeRecordingGroup = defaultGroup
+        }
 
         var didMutateEvent = false
         if event.totalPracticeCount != linkedRecordings.count {
@@ -424,6 +443,34 @@ class EventViewModel {
             }
         }
         scriptInsightsByRecordingId = insights
+    }
+
+    @discardableResult
+    private func ensureRecordingGroup(for event: SpeakingEvent, in context: ModelContext) -> RecordingGroup {
+        if let current = activeRecordingGroup {
+            return current
+        }
+
+        if let existingGroupId = linkedRecordings.compactMap(\.groupId).first {
+            var groupDescriptor = FetchDescriptor<RecordingGroup>(
+                predicate: #Predicate { $0.id == existingGroupId }
+            )
+            groupDescriptor.fetchLimit = 1
+            if let group = try? context.fetch(groupDescriptor).first {
+                activeRecordingGroup = group
+                return group
+            }
+        }
+
+        let fallbackTitle = "\(event.title) Sessions"
+        let group = RecordingGroup(
+            title: fallbackTitle,
+            groupDescription: "Practice recordings linked to \(event.title)."
+        )
+        context.insert(group)
+        try? context.save()
+        activeRecordingGroup = group
+        return group
     }
 
     private func resolvedTranscript(for recording: Recording) -> String? {

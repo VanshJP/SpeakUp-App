@@ -1,12 +1,43 @@
 import Foundation
+import SwiftUI
 
 struct WeakArea: Identifiable {
     let id: String
     let metricName: String
     let averageScore: Int
     let trend: String
-    let suggestedDrillMode: String?
+    let suggestedDrillMode: DrillMode?
     let suggestedExercises: [String]
+
+    var color: Color {
+        switch averageScore {
+        case ..<40:
+            return AppColors.error
+        case ..<60:
+            return AppColors.warning
+        case ..<80:
+            return .yellow
+        default:
+            return AppColors.success
+        }
+    }
+
+    var icon: String {
+        switch metricName {
+        case "Pace":
+            return "metronome"
+        case "Filler Usage":
+            return "exclamationmark.bubble.fill"
+        case "Pause Quality":
+            return "pause.circle.fill"
+        case "Delivery":
+            return "waveform.path.ecg"
+        case "Vocabulary":
+            return "text.book.closed.fill"
+        default:
+            return "speaker.wave.2.fill"
+        }
+    }
 }
 
 struct SuggestedActivity {
@@ -30,6 +61,7 @@ class WeakAreaService {
     func analyze(recordings: [Recording]) {
         let recent = Array(recordings.prefix(10))
         guard !recent.isEmpty else {
+            weakAreas = []
             suggestion = SuggestedActivity(
                 title: "Start Practicing",
                 description: "Record your first session to get personalized suggestions.",
@@ -40,7 +72,11 @@ class WeakAreaService {
         }
 
         let analyzed = recent.filter { $0.analysis != nil }
-        guard !analyzed.isEmpty else { return }
+        guard !analyzed.isEmpty else {
+            weakAreas = []
+            suggestion = nil
+            return
+        }
 
         // Compute averages per subscore
         var metrics: [(name: String, avg: Int, drill: DrillMode?)] = []
@@ -72,13 +108,13 @@ class WeakAreaService {
         // Sort by score (weakest first)
         metrics.sort { $0.avg < $1.avg }
 
-        weakAreas = metrics.prefix(2).map { metric in
+        weakAreas = metrics.prefix(3).map { metric in
             WeakArea(
                 id: metric.name,
                 metricName: metric.name,
                 averageScore: metric.avg,
                 trend: metric.avg < 60 ? "needs work" : "improving",
-                suggestedDrillMode: metric.drill?.rawValue,
+                suggestedDrillMode: metric.drill,
                 suggestedExercises: []
             )
         }

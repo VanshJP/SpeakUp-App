@@ -7,8 +7,6 @@ struct TodayView: View {
     @State private var viewModel = TodayViewModel()
     @State private var weakAreaService = WeakAreaService()
     @State private var curriculumViewModel = CurriculumViewModel()
-    @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
-
     @Query private var achievements: [Achievement]
 
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
@@ -102,8 +100,8 @@ struct TodayView: View {
             viewModel.configure(with: modelContext)
             curriculumViewModel.loadProgress(context: modelContext)
         }
-        .task {
-            weakAreaService.analyze(recordings: Array(recordings))
+        .task(id: viewModel.weakAreaVersion) {
+            weakAreaService.analyze(recordings: viewModel.weakAreaSampleRecordings)
         }
     }
 
@@ -123,13 +121,7 @@ struct TodayView: View {
 
     @ViewBuilder
     private var progressSnapshotSection: some View {
-        let recentScores: [(date: Date, score: Int)] = recordings
-            .prefix(20)
-            .compactMap { r in
-                guard let score = r.analysis?.speechScore.overall else { return nil }
-                return (date: r.date, score: score)
-            }
-            .reversed()
+        let recentScores = viewModel.recentScoreSnapshot
 
         if recentScores.count >= 3 {
             let bestScore = recentScores.map(\.score).max() ?? 0
@@ -495,7 +487,7 @@ struct TodayView: View {
 
                 Button {
                     switch suggestion.type {
-                    case .drill:
+                    case .drill(_):
                         onShowDrills()
                     case .exercise, .practice:
                         onStartRecording(nil, viewModel.selectedDuration)
@@ -526,8 +518,41 @@ struct TodayView: View {
                     }
                 }
                 .buttonStyle(.plain)
+
+                if !weakAreaService.weakAreas.isEmpty {
+                    weakAreasRow
+                }
             }
         }
+    }
+
+    private var weakAreasRow: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(weakAreaService.weakAreas) { area in
+                    GlassCard(tint: area.color.opacity(0.08), padding: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: area.icon)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(area.color)
+                                Text(area.metricName)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                            }
+
+                            Text("\(area.averageScore)/100 · \(area.trend)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(width: 150, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
     }
 
     // MARK: - Quick Insights Section

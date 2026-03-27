@@ -16,10 +16,17 @@ class TodayViewModel {
     var weeklyGoalSessions: Int = 5
     var storyPracticeEnabled: Bool = false
     var todaysStory: Story?
+    var recentScoreSnapshot: [(date: Date, score: Int)] = []
+    var weakAreaSampleRecordings: [Recording] = []
+    var weakAreaVersion: Int = 0
+    var totalRecordingCount: Int = 0
+    var latestRecordingDate: Date?
 
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
     private var hasRerolledPrompt = false
+    private var cachedRecordings: [Recording] = []
+    private var recentSkillSubscores: [SpeechSubscores] = []
     
     func configure(with context: ModelContext) {
         self.modelContext = context
@@ -52,8 +59,8 @@ class TodayViewModel {
         // Load active goals
         await loadActiveGoals(context: context)
 
-        // Load daily challenge
-        loadDailyChallenge(recordings: (try? context.fetch(FetchDescriptor<Recording>())) ?? [])
+        // Load daily challenge from already-fetched recording cache.
+        loadDailyChallenge(recordings: cachedRecordings)
 
         // Schedule streak-at-risk notification if applicable
         await scheduleStreakNotificationIfNeeded()
@@ -91,9 +98,9 @@ class TodayViewModel {
             )
         }
 
-        // Track last practice date for streak-at-risk widget
-        if let latestRecording = userStats.scoreHistory.first {
-            WidgetDataProvider.updateLastPracticeDate(latestRecording.date)
+        // Track last practice date for streak-at-risk widget.
+        if let latestPracticeDate = latestRecordingDate {
+            WidgetDataProvider.updateLastPracticeDate(latestPracticeDate)
         }
 
         // Skill mastery
@@ -103,34 +110,22 @@ class TodayViewModel {
     }
 
     private func updateSkillWidgetData() {
-        guard let context = modelContext else { return }
-        let descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        
-        do {
-            let recordings = try context.fetch(descriptor).prefix(5)
-            let scores = recordings.compactMap { $0.analysis?.speechScore.subscores }
-            
-            guard !scores.isEmpty else {
-                WidgetDataProvider.updateSkillMastery(clarity: 0, pace: 0, filler: 0, pause: 0)
-                return
-            }
-            
-            let avgClarity = scores.map(\.clarity).reduce(0, +) / scores.count
-            let avgPace = scores.map(\.pace).reduce(0, +) / scores.count
-            let avgFiller = scores.map(\.fillerUsage).reduce(0, +) / scores.count
-            let avgPause = scores.map(\.pauseQuality).reduce(0, +) / scores.count
-            
-            WidgetDataProvider.updateSkillMastery(
-                clarity: avgClarity,
-                pace: avgPace,
-                filler: avgFiller,
-                pause: avgPause
-            )
-        } catch {
-            print("Error updating skill widget data: \(error)")
+        guard !recentSkillSubscores.isEmpty else {
+            WidgetDataProvider.updateSkillMastery(clarity: 0, pace: 0, filler: 0, pause: 0)
+            return
         }
+
+        let avgClarity = recentSkillSubscores.map(\.clarity).reduce(0, +) / recentSkillSubscores.count
+        let avgPace = recentSkillSubscores.map(\.pace).reduce(0, +) / recentSkillSubscores.count
+        let avgFiller = recentSkillSubscores.map(\.fillerUsage).reduce(0, +) / recentSkillSubscores.count
+        let avgPause = recentSkillSubscores.map(\.pauseQuality).reduce(0, +) / recentSkillSubscores.count
+
+        WidgetDataProvider.updateSkillMastery(
+            clarity: avgClarity,
+            pace: avgPace,
+            filler: avgFiller,
+            pause: avgPause
+        )
     }
 
     private func scheduleStreakNotificationIfNeeded() async {
@@ -204,10 +199,13 @@ class TodayViewModel {
         
         do {
             let recordings = try context.fetch(descriptor)
+            cachedRecordings = recordings
             
             // Calculate stats
             let totalRecordings = recordings.count
+            totalRecordingCount = totalRecordings
             let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
+            latestRecordingDate = recordings.first?.date
             
             // Calculate streaks
             let recordingDates = recordings.map { $0.date }
@@ -219,6 +217,23 @@ class TodayViewModel {
             // Calculate average score
             let scoresWithAnalysis = recordings.compactMap { $0.analysis?.speechScore.overall }
             let averageScore = scoresWithAnalysis.isEmpty ? 0 : Double(scoresWithAnalysis.reduce(0, +)) / Double(scoresWithAnalysis.count)
+
+            // Keep a lightweight score snapshot for Today sparkline and avoid direct
+            // full-list view subscriptions.
+            recentScoreSnapshot = recordings
+                .prefix(20)
+                .compactMap { recording in
+                    guard let score = recording.analysis?.speechScore.overall else { return nil }
+                    return (date: recording.date, score: score)
+                }
+                .reversed()
+
+            let analyzedRecordings = recordings.filter { $0.analysis != nil }
+            weakAreaSampleRecordings = Array(analyzedRecordings.prefix(10))
+            weakAreaVersion &+= 1
+            recentSkillSubscores = analyzedRecordings
+                .prefix(5)
+                .compactMap { $0.analysis?.speechScore.subscores }
             
             // Get score history (last 7 days)
             let sevenDaysAgo = Date().adding(days: -7)
@@ -306,7 +321,13 @@ class TodayViewModel {
 
     @MainActor
     private func loadAnsweredPromptIDs(context: ModelContext) async {
-        let descriptor = FetchDescriptor<Recording>()
+        if !cachedRecordings.isEmpty {
+            answeredPromptIDs = Set(cachedRecordings.compactMap { $0.prompt?.id })
+            return
+        }
+        let descriptor = FetchDescriptor<Recording>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
         do {
             let recordings = try context.fetch(descriptor)
             answeredPromptIDs = Set(recordings.compactMap { $0.prompt?.id })
@@ -365,8 +386,9 @@ class TodayViewModel {
     private func loadDailyChallenge(recordings: [Recording]) {
         var challenge = DailyChallengeService.todaysChallenge()
         let today = Calendar.current.startOfDay(for: Date())
-        let todayRecordings = recordings.filter { $0.date >= today }
-        challenge.isCompleted = todayRecordings.contains { DailyChallengeService.evaluate(challenge: challenge, recording: $0) }
+        challenge.isCompleted = recordings.contains {
+            $0.date >= today && DailyChallengeService.evaluate(challenge: challenge, recording: $0)
+        }
         dailyChallenge = challenge
     }
 

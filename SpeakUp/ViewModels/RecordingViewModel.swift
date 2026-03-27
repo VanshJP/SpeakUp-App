@@ -19,6 +19,7 @@ class RecordingViewModel {
     var goalId: UUID?
     var eventId: UUID?
     var scriptVersionId: UUID?
+    var groupId: UUID?
     var storyId: UUID?
 
     // Timer

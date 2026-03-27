@@ -3,11 +3,12 @@ import SwiftData
 import Charts
 
 struct ProgressChartsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
 
     @State private var selectedTab: ChartTab = .score
     @State private var timeRange: TimeRange = .thirtyDays
+    @State private var latestAnalyzedCache: [Recording] = []
+    @State private var latestAnalyzedRecordingsDate: Date?
 
     enum ChartTab: String, CaseIterable {
         case score = "Score"
@@ -43,15 +44,15 @@ struct ProgressChartsView: View {
         }
     }
 
+    private var allAnalyzedRecordings: [Recording] {
+        latestAnalyzedCache
+    }
+
     private var filteredRecordings: [Recording] {
-        let analyzed = recordings.filter { $0.analysis != nil }
+        let analyzed = allAnalyzedRecordings
         guard let days = timeRange.days else { return analyzed }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
         return analyzed.filter { $0.date >= cutoff }
-    }
-
-    private var allAnalyzedRecordings: [Recording] {
-        recordings.filter { $0.analysis != nil }
     }
 
     var body: some View {
@@ -153,6 +154,27 @@ struct ProgressChartsView: View {
         }
         .navigationTitle("Progress Charts")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            refreshAnalyzedCache()
+        }
+        .onChange(of: recordings.count) { _, _ in
+            refreshAnalyzedCache()
+        }
+        .onChange(of: recordings.first?.date) { _, _ in
+            refreshAnalyzedCache()
+        }
+    }
+
+    private func refreshAnalyzedCache() {
+        let latestDate = recordings.first?.date
+        guard latestDate != latestAnalyzedRecordingsDate || latestAnalyzedCache.count != recordings.count else {
+            return
+        }
+        latestAnalyzedRecordingsDate = latestDate
+        latestAnalyzedCache = recordings
+            .filter { $0.analysis != nil }
+            .prefix(240)
+            .map { $0 }
     }
 
     // MARK: - Highlights Section
@@ -484,8 +506,10 @@ struct ScoreProgressChart: View {
                                                     closestIdx = i
                                                 }
                                             }
-                                            selectedIndex = closestIdx
-                                            Haptics.selection()
+                                            if selectedIndex != closestIdx {
+                                                selectedIndex = closestIdx
+                                                Haptics.selection()
+                                            }
                                         }
                                         .onEnded { _ in
                                             selectedIndex = nil

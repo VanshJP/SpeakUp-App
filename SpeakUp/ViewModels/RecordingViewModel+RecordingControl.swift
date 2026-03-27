@@ -62,6 +62,7 @@ extension RecordingViewModel {
 
         recording.eventId = eventId
         recording.scriptVersionId = scriptVersionId
+        recording.groupId = groupId
         recording.storyId = storyId
 
         // Denormalize story title for display in history

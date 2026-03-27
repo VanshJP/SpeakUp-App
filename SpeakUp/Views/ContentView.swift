@@ -34,6 +34,7 @@ struct ContentView: View {
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
     @State private var recordingEventId: UUID?
+    @State private var recordingGroupId: UUID?
     @State private var recordingScriptVersionId: UUID?
     @State private var recordingStoryId: UUID?
 
@@ -59,6 +60,7 @@ struct ContentView: View {
                         recordingPrompt = prompt
                         recordingDuration = duration
                         recordingEventId = nil
+                        recordingGroupId = nil
                         recordingScriptVersionId = nil
                         showingCountdown = true
                     },
@@ -95,6 +97,7 @@ struct ContentView: View {
                     onStartStoryPractice: { story in
                         recordingPrompt = nil
                         recordingEventId = nil
+                        recordingGroupId = nil
                         recordingScriptVersionId = nil
                         recordingStoryId = story.id
                         recordingDuration = .sixty
@@ -108,6 +111,7 @@ struct ContentView: View {
                     recordingPrompt = prompt
                     recordingDuration = .sixty
                     recordingEventId = nil
+                    recordingGroupId = nil
                     recordingScriptVersionId = nil
                     showingCountdown = true
                 })
@@ -117,6 +121,7 @@ struct ContentView: View {
                 StoriesListView(onStartPractice: { story in
                     recordingPrompt = nil
                     recordingEventId = nil
+                    recordingGroupId = nil
                     recordingScriptVersionId = nil
                     recordingStoryId = story.id
                     recordingDuration = .sixty
@@ -188,6 +193,7 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .fullScreenCover(isPresented: $showingRecording, onDismiss: {
             recordingEventId = nil
+            recordingGroupId = nil
             recordingScriptVersionId = nil
             recordingStoryId = nil
             if let id = pendingRecordingNavigation {
@@ -202,6 +208,7 @@ struct ContentView: View {
                 countdownStyle: countdownStyle,
                 goalId: recordingGoalId,
                 eventId: recordingEventId,
+                groupId: recordingGroupId,
                 scriptVersionId: recordingScriptVersionId,
                 storyId: recordingStoryId,
                 onComplete: { recording in
@@ -222,6 +229,7 @@ struct ContentView: View {
                 showingPromptWheel = false
                 recordingPrompt = prompt
                 recordingEventId = nil
+                recordingGroupId = nil
                 recordingScriptVersionId = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     showingCountdown = true
@@ -273,8 +281,9 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingEvents) {
-            EventListView(onStartPractice: { event, scriptVersionId in
+            EventListView(onStartPractice: { event, scriptVersionId, groupId in
                 recordingEventId = event.id
+                recordingGroupId = groupId
                 recordingScriptVersionId = scriptVersionId
                 let targetSeconds = event.expectedDurationMinutes * 60
                 recordingDuration = RecordingDuration.allCases.min(by: {
@@ -322,6 +331,7 @@ struct ContentView: View {
                             recordingPrompt = prompts.first { $0.id == challenge.promptId }
                         }
                         recordingEventId = nil
+                        recordingGroupId = nil
                         recordingScriptVersionId = nil
                         socialChallengeService.clearIncoming()
                         showingCountdown = true
