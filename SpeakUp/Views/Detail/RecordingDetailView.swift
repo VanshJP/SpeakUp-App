@@ -36,6 +36,7 @@ struct RecordingDetailView: View {
     @State private var orderedTranscriptWords: [TranscriptionWord] = []
     @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
     @State private var playbackErrorMessage: String?
+    @State private var showCopiedConfirmation = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -478,6 +479,21 @@ struct RecordingDetailView: View {
                     if let difficulty = recording.prompt?.difficulty {
                         DifficultyBadge(difficulty: difficulty)
                     }
+
+                    if recording.storyId != nil {
+                        HStack(spacing: 4) {
+                            Image(systemName: "book.pages")
+                                .font(.caption2)
+                            Text(recording.storyTitle ?? "Story Practice")
+                                .font(.caption.weight(.medium))
+                        }
+                        .foregroundStyle(.purple)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background {
+                            Capsule().fill(.purple.opacity(0.12))
+                        }
+                    }
                 }
             }
         }
@@ -671,8 +687,14 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func transcriptSection(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Transcript", systemImage: "doc.text.fill")
-                .font(.headline)
+            HStack {
+                Label("Transcript", systemImage: "doc.text.fill")
+                    .font(.headline)
+
+                Spacer()
+
+                copyTranscriptButton(text: text)
+            }
 
             GlassCard {
                 Text(text)
@@ -696,6 +718,8 @@ struct RecordingDetailView: View {
                 Spacer()
 
                 HStack(spacing: 6) {
+                    copyTranscriptButton(text: words.map(\.word).joined(separator: " "))
+
                     if hasSpeakerSeparation {
                         Button {
                             showSpeakerTurns.toggle()
@@ -791,6 +815,34 @@ struct RecordingDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func copyTranscriptButton(text: String) -> some View {
+        Button {
+            UIPasteboard.general.string = text
+            Haptics.success()
+            showCopiedConfirmation = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                showCopiedConfirmation = false
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: showCopiedConfirmation ? "checkmark" : "doc.on.doc")
+                if showCopiedConfirmation {
+                    Text("Copied")
+                }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(showCopiedConfirmation ? AppColors.success : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                Capsule()
+                    .fill(showCopiedConfirmation ? AppColors.success.opacity(0.1) : .clear)
+            }
+            .animation(.easeInOut(duration: 0.2), value: showCopiedConfirmation)
         }
     }
 

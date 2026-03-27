@@ -14,6 +14,8 @@ class TodayViewModel {
     var dailyChallenge: DailyChallenge?
     var hideAnsweredPrompts: Bool = false
     var weeklyGoalSessions: Int = 5
+    var storyPracticeEnabled: Bool = false
+    var todaysStory: Story?
 
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
@@ -38,6 +40,11 @@ class TodayViewModel {
 
         // Load today's prompt
         await loadTodaysPrompt(context: context)
+
+        // Load today's story if story practice is enabled
+        if storyPracticeEnabled {
+            await loadTodaysStory(context: context)
+        }
 
         // Load user stats
         await loadUserStats(context: context)
@@ -285,6 +292,7 @@ class TodayViewModel {
                 selectedDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
                 hideAnsweredPrompts = settings.hideAnsweredPrompts
                 weeklyGoalSessions = settings.weeklyGoalSessions
+                storyPracticeEnabled = settings.storyPracticeEnabled
             }
         } catch {
             print("Error loading user settings: \(error)")
@@ -360,6 +368,43 @@ class TodayViewModel {
         let todayRecordings = recordings.filter { $0.date >= today }
         challenge.isCompleted = todayRecordings.contains { DailyChallengeService.evaluate(challenge: challenge, recording: $0) }
         dailyChallenge = challenge
+    }
+
+    // MARK: - Story Practice
+
+    @MainActor
+    private func loadTodaysStory(context: ModelContext) async {
+        let descriptor = FetchDescriptor<Story>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+
+        do {
+            let stories = try context.fetch(descriptor)
+            guard !stories.isEmpty else {
+                storyPracticeEnabled = false
+                return
+            }
+            let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
+            todaysStory = stories[dayOfYear % stories.count]
+        } catch {
+            print("Error loading today's story: \(error)")
+        }
+    }
+
+    @MainActor
+    func refreshStory() async {
+        guard let context = modelContext else { return }
+        let descriptor = FetchDescriptor<Story>()
+
+        do {
+            let stories = try context.fetch(descriptor)
+            guard !stories.isEmpty else { return }
+            withAnimation {
+                todaysStory = stories.randomElement()
+            }
+        } catch {
+            print("Error refreshing story: \(error)")
+        }
     }
 
     private func calculateImprovementRate(from recordings: [Recording]) -> Double {

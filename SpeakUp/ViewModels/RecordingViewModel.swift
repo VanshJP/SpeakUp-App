@@ -8,6 +8,7 @@ class RecordingViewModel {
     // Services
     let audioService = AudioService()
     let liveTranscriptionService = LiveTranscriptionService()
+    let coachingService = HapticCoachingService()
 
     // State
     var isRecording = false
@@ -18,6 +19,7 @@ class RecordingViewModel {
     var goalId: UUID?
     var eventId: UUID?
     var scriptVersionId: UUID?
+    var storyId: UUID?
 
     // Timer
     var remainingTime: TimeInterval = 60
@@ -49,6 +51,7 @@ class RecordingViewModel {
     // Audio level samples for volume analysis (collected every ~0.5s)
     var audioLevelSamples: [Float] = []
     var audioLevelSampleCounter = 0
+    var lastCoachingWordCount = 0
 
     // Live filler counter
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
@@ -83,6 +86,7 @@ class RecordingViewModel {
         timer = nil
         stopAudioLevelMonitoring()
         liveTranscriptionService.stop()
+        coachingService.reset()
         audioService.cleanup()
         UIApplication.shared.isIdleTimerDisabled = false
     }

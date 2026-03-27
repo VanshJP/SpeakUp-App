@@ -105,6 +105,19 @@ final class LLMService {
         await localLLM.loadModel()
     }
 
+    // MARK: - General-Purpose Generation
+
+    /// Public general-purpose text generation using the best available backend.
+    func generateText(prompt: String, systemPrompt: String) async -> String? {
+        if appleIntelligenceAvailable {
+            return await generateWithAppleIntelligence(prompt: prompt, systemPrompt: systemPrompt)
+        }
+        if localLLM.isModelReady {
+            return await localLLM.generate(prompt: prompt, systemPrompt: systemPrompt)
+        }
+        return nil
+    }
+
     // MARK: - Coherence Evaluation
 
     func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {

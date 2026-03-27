@@ -21,6 +21,7 @@ struct SpeakUpApp: App {
             SpeakingEvent.self,
             EventPrepTask.self,
             RecordingGroup.self,
+            Story.self,
         ])
 
         // Respect user's iCloud sync preference (read from UserDefaults since

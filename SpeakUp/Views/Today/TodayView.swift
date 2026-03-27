@@ -22,6 +22,7 @@ struct TodayView: View {
     var onShowWordBank: () -> Void = {}
     var onShowEvents: () -> Void = {}
     var onShowReadAloud: () -> Void = {}
+    var onStartStoryPractice: ((Story) -> Void)?
 
     var body: some View {
         ZStack {
@@ -238,15 +239,19 @@ struct TodayView: View {
         HStack(spacing: 12) {
             Button {
                 Haptics.medium()
-                onStartRecording(
-                    viewModel.todaysPrompt,
-                    viewModel.selectedDuration
-                )
+                if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
+                    onStartStoryPractice?(story)
+                } else {
+                    onStartRecording(
+                        viewModel.todaysPrompt,
+                        viewModel.selectedDuration
+                    )
+                }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "mic.fill")
+                    Image(systemName: viewModel.storyPracticeEnabled ? "book.pages" : "mic.fill")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("With Prompt")
+                    Text(viewModel.storyPracticeEnabled ? "With Story" : "With Prompt")
                         .font(.subheadline.weight(.semibold))
                 }
                 .foregroundStyle(.white)
@@ -323,34 +328,57 @@ struct TodayView: View {
 
     private var interactivePromptSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Today's Prompt", systemImage: "text.bubble.fill")
-                    .font(.headline)
+            if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
+                HStack {
+                    Label("Today's Story", systemImage: "book.pages.fill")
+                        .font(.headline)
 
-                Spacer()
+                    Spacer()
 
-                SmallIconButton(icon: "arrow.clockwise") {
-                    Task {
-                        await viewModel.refreshPrompt()
+                    SmallIconButton(icon: "arrow.clockwise") {
+                        Task {
+                            await viewModel.refreshStory()
+                        }
                     }
                 }
+
+                StoryPromptCard(
+                    story: story,
+                    selectedDuration: $viewModel.selectedDuration,
+                    onTap: {
+                        onStartStoryPractice?(story)
+                    }
+                )
+            } else {
+                HStack {
+                    Label("Today's Prompt", systemImage: "text.bubble.fill")
+                        .font(.headline)
+
+                    Spacer()
+
+                    SmallIconButton(icon: "arrow.clockwise") {
+                        Task {
+                            await viewModel.refreshPrompt()
+                        }
+                    }
+                }
+
+                InteractivePromptCard(
+                    prompt: viewModel.todaysPrompt,
+                    selectedDuration: $viewModel.selectedDuration,
+                    onTap: {
+                        onStartRecording(
+                            viewModel.todaysPrompt,
+                            viewModel.selectedDuration
+                        )
+                    },
+                    onRefresh: {
+                        Task {
+                            await viewModel.refreshPrompt()
+                        }
+                    }
+                )
             }
-
-            InteractivePromptCard(
-                prompt: viewModel.todaysPrompt,
-                selectedDuration: $viewModel.selectedDuration,
-                onTap: {
-                    onStartRecording(
-                        viewModel.todaysPrompt,
-                        viewModel.selectedDuration
-                    )
-                },
-                onRefresh: {
-                    Task {
-                        await viewModel.refreshPrompt()
-                    }
-                }
-            )
         }
     }
 
@@ -1087,7 +1115,8 @@ private struct SnapshotStat: View {
             onShowAchievements: {},
             onShowWordBank: {},
             onShowEvents: {},
-            onShowReadAloud: {}
+            onShowReadAloud: {},
+            onStartStoryPractice: { _ in }
         )
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self], inMemory: true)

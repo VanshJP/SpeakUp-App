@@ -13,6 +13,7 @@ extension RecordingViewModel {
             isRecording = true
             UIApplication.shared.isIdleTimerDisabled = true
             Haptics.medium()
+            coachingService.reset()
             startTimer()
             startAudioLevelMonitoring()
 
@@ -33,6 +34,7 @@ extension RecordingViewModel {
         timer = nil
         stopAudioLevelMonitoring()
         liveTranscriptionService.stop()
+        coachingService.reset()
 
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
@@ -60,11 +62,35 @@ extension RecordingViewModel {
 
         recording.eventId = eventId
         recording.scriptVersionId = scriptVersionId
+        recording.storyId = storyId
+
+        // Denormalize story title for display in history
+        if let storyId {
+            let targetId = storyId
+            var storyDescriptor = FetchDescriptor<Story>()
+            storyDescriptor.predicate = #Predicate<Story> { $0.id == targetId }
+            if let story = try? context.fetch(storyDescriptor).first {
+                recording.storyTitle = story.title
+            }
+        }
 
         context.insert(recording)
 
         do {
             try context.save()
+
+            // Increment practice count on linked story
+            if let storyId {
+                let targetId = storyId
+                var storyDescriptor = FetchDescriptor<Story>()
+                storyDescriptor.predicate = #Predicate<Story> { $0.id == targetId }
+                if let story = try? context.fetch(storyDescriptor).first {
+                    story.practiceCount += 1
+                    story.updatedAt = Date()
+                    try? context.save()
+                }
+            }
+
             return recording
         } catch {
             self.error = error

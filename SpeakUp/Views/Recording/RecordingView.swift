@@ -17,6 +17,7 @@ struct RecordingView: View {
     var goalId: UUID? = nil
     var eventId: UUID? = nil
     var scriptVersionId: UUID? = nil
+    var storyId: UUID? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
@@ -70,12 +71,14 @@ struct RecordingView: View {
             viewModel.goalId = goalId
             viewModel.eventId = eventId
             viewModel.scriptVersionId = scriptVersionId
+            viewModel.storyId = storyId
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
                     customFillers: Set(settings.customFillerWords),
                     customContextFillers: Set(settings.customContextFillerWords),
                     removedDefaults: Set(settings.removedDefaultFillers)
                 )
+                viewModel.coachingService.isEnabled = settings.hapticCoachingEnabled
             }
             await viewModel.checkPermissions()
             // Auto-start recording after countdown
@@ -276,6 +279,28 @@ struct RecordingView: View {
         }
     }
 
+    private func coachingCueView(_ cue: CoachingCue) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: cue.icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(cue.tint)
+
+            Text(cue.message)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .strokeBorder(cue.tint.opacity(0.4), lineWidth: 0.5)
+                }
+        }
+    }
+
     private func promptCard(_ prompt: Prompt) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -314,6 +339,13 @@ struct RecordingView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 24) {
+            // Coaching cue
+            if let cue = viewModel.coachingService.currentCue, viewModel.isRecording {
+                coachingCueView(cue)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(cue.message)
+            }
+
             // Live filler counter
             if viewModel.isRecording {
                 FillerCounterOverlay(count: viewModel.liveFillerCount)

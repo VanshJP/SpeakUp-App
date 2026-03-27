@@ -33,6 +33,8 @@ struct HistoryView: View {
             recordings = recordings.filter { $0.date >= weekAgo }
         case .events:
             recordings = recordings.filter { $0.eventId != nil }
+        case .stories:
+            recordings = recordings.filter { $0.storyId != nil }
         }
 
         if !searchText.isEmpty {
@@ -40,9 +42,11 @@ struct HistoryView: View {
                 let promptText = recording.prompt?.text ?? ""
                 let category = recording.prompt?.category ?? ""
                 let transcript = recording.transcriptionText ?? ""
+                let storyTitle = recording.storyTitle ?? ""
                 return promptText.localizedStandardContains(searchText)
                     || category.localizedStandardContains(searchText)
                     || transcript.localizedStandardContains(searchText)
+                    || storyTitle.localizedStandardContains(searchText)
             }
         }
 
@@ -497,6 +501,7 @@ struct HistoryView: View {
         case .highScore: return viewModel.recordings.filter { ($0.analysis?.speechScore.overall ?? 0) >= 80 }.count
         case .recent: return nil
         case .events: return viewModel.recordings.filter { $0.eventId != nil }.count
+        case .stories: return viewModel.recordings.filter { $0.storyId != nil }.count
         }
     }
 
@@ -563,7 +568,7 @@ struct HistoryView: View {
 // MARK: - History Filter
 
 enum HistoryFilter: String, CaseIterable, Identifiable {
-    case all, favorites, highScore, recent, events
+    case all, favorites, highScore, recent, events, stories
 
     var id: String { rawValue }
 
@@ -574,6 +579,7 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         case .highScore: return "High Score"
         case .recent: return "This Week"
         case .events: return "Events"
+        case .stories: return "Stories"
         }
     }
 
@@ -584,6 +590,7 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         case .highScore: return "star.fill"
         case .recent: return "clock"
         case .events: return "calendar"
+        case .stories: return "book.pages"
         }
     }
 }
@@ -845,6 +852,22 @@ struct RecordingRow: View {
                                 .background {
                                     Capsule()
                                         .fill(AppColors.primary.opacity(0.15))
+                                }
+                            }
+
+                            if recording.storyId != nil {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "book.pages")
+                                        .font(.system(size: 8))
+                                    Text("Story")
+                                        .font(.caption2.weight(.medium))
+                                }
+                                .foregroundStyle(.purple)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background {
+                                    Capsule()
+                                        .fill(.purple.opacity(0.15))
                                 }
                             }
                         }

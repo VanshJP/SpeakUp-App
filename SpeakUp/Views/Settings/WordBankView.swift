@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Speech
 
 struct WordBankView: View {
     @Environment(\.dismiss) private var dismiss
@@ -12,7 +11,7 @@ struct WordBankView: View {
     @State private var newFillerIsContextDependent = false
 
     // Dictation state
-    @State private var dictationEngine = DictationEngine()
+    @State private var dictationEngine = DictationService()
 
     var body: some View {
         ZStack {
@@ -741,114 +740,3 @@ struct WordBankView: View {
     }
 }
 
-// MARK: - Dictation Engine
-
-/// Lightweight speech recognizer that extracts individual words from live audio.
-@Observable
-@MainActor
-private class DictationEngine {
-    var isListening = false
-    var recognizedWords: [String] = []
-    var lastAddedIndex = 0
-
-    private var audioEngine: AVAudioEngine?
-    private var recognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-
-    init() {
-        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    }
-
-    func start() async {
-        let authorized = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
-        guard authorized else { return }
-        guard let recognizer, recognizer.isAvailable else { return }
-
-        let engine = AVAudioEngine()
-        self.audioEngine = engine
-
-        // Configure audio session for recording
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.record, mode: .measurement)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
-            print("DictationEngine: audio session setup failed: \(error)")
-            return
-        }
-
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        self.recognitionRequest = request
-
-        let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
-        }
-
-        do {
-            try engine.start()
-        } catch {
-            print("DictationEngine: audio engine failed to start: \(error)")
-            cleanup()
-            return
-        }
-
-        isListening = true
-
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
-
-            if let result {
-                let segments = result.bestTranscription.segments
-                let words = segments.map { $0.substring }
-                    .filter { $0.count >= 2 }
-                    .map { $0.capitalized }
-
-                // Deduplicate while preserving order
-                var seen = Set<String>()
-                var unique: [String] = []
-                for word in words {
-                    let key = word.lowercased()
-                    if !seen.contains(key) {
-                        seen.insert(key)
-                        unique.append(word)
-                    }
-                }
-
-                Task { @MainActor in
-                    self.recognizedWords = unique
-                }
-            }
-
-            if error != nil || (result?.isFinal ?? false) {
-                Task { @MainActor in
-                    self.cleanup()
-                    self.isListening = false
-                }
-            }
-        }
-    }
-
-    func stop() {
-        recognitionRequest?.endAudio()
-        cleanup()
-        isListening = false
-    }
-
-    private func cleanup() {
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        audioEngine = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        recognitionRequest = nil
-    }
-}

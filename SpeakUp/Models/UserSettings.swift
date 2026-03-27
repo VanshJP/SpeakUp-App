@@ -69,6 +69,9 @@ final class UserSettings {
     var voiceProfileSampleCount: Int = 0
     var voiceProfileLastUpdated: Date?
 
+    // Story Practice
+    var storyPracticeEnabled: Bool = false
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 

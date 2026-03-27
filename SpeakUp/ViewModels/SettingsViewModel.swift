@@ -34,6 +34,9 @@ class SettingsViewModel {
     // Local state - Prompt Filtering
     var hideAnsweredPrompts: Bool = false
 
+    // Local state - Story Practice
+    var storyPracticeEnabled: Bool = false
+
     // Local state - Countdown
     var countdownDuration: CountdownDuration = .fifteen
     var countdownStyle: CountdownStyle = .countDown
@@ -210,6 +213,7 @@ class SettingsViewModel {
         showDailyPrompt = settings.showDailyPrompt
         hideAnsweredPrompts = settings.hideAnsweredPrompts
         enabledPromptCategories = Set(settings.enabledCategories)
+        storyPracticeEnabled = settings.storyPracticeEnabled
 
         // Countdown duration & style
         countdownDuration = CountdownDuration(rawValue: settings.countdownDuration) ?? .fifteen
@@ -272,6 +276,7 @@ class SettingsViewModel {
         settings.showDailyPrompt = showDailyPrompt
         settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
+        settings.storyPracticeEnabled = storyPracticeEnabled
 
         // Countdown duration & style
         settings.countdownDuration = countdownDuration.rawValue

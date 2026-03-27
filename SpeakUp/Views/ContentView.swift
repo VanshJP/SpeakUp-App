@@ -35,6 +35,7 @@ struct ContentView: View {
     @State private var recordingGoalId: UUID?
     @State private var recordingEventId: UUID?
     @State private var recordingScriptVersionId: UUID?
+    @State private var recordingStoryId: UUID?
 
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
@@ -90,6 +91,14 @@ struct ContentView: View {
                     },
                     onShowReadAloud: {
                         showingReadAloud = true
+                    },
+                    onStartStoryPractice: { story in
+                        recordingPrompt = nil
+                        recordingEventId = nil
+                        recordingScriptVersionId = nil
+                        recordingStoryId = story.id
+                        recordingDuration = .sixty
+                        showingCountdown = true
                     }
                 )
             }
@@ -100,6 +109,17 @@ struct ContentView: View {
                     recordingDuration = .sixty
                     recordingEventId = nil
                     recordingScriptVersionId = nil
+                    showingCountdown = true
+                })
+            }
+        case .stories:
+            NavigationStack {
+                StoriesListView(onStartPractice: { story in
+                    recordingPrompt = nil
+                    recordingEventId = nil
+                    recordingScriptVersionId = nil
+                    recordingStoryId = story.id
+                    recordingDuration = .sixty
                     showingCountdown = true
                 })
             }
@@ -169,6 +189,7 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showingRecording, onDismiss: {
             recordingEventId = nil
             recordingScriptVersionId = nil
+            recordingStoryId = nil
             if let id = pendingRecordingNavigation {
                 selectedRecordingId = id
                 pendingRecordingNavigation = nil
@@ -182,6 +203,7 @@ struct ContentView: View {
                 goalId: recordingGoalId,
                 eventId: recordingEventId,
                 scriptVersionId: recordingScriptVersionId,
+                storyId: recordingStoryId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     selectedTab = .history
@@ -359,6 +381,7 @@ struct ContentView: View {
 enum AppTab: String, CaseIterable, Identifiable {
     case today
     case prompts
+    case stories
     case history
     case learn
     case settings
@@ -369,6 +392,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: return "Today"
         case .prompts: return "Prompts"
+        case .stories: return "Stories"
         case .history: return "History"
         case .learn: return "Learn"
         case .settings: return "Settings"
@@ -379,6 +403,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: return "mic.badge.plus"
         case .prompts: return "text.bubble"
+        case .stories: return "book.pages"
         case .history: return "clock"
         case .learn: return "book"
         case .settings: return "gearshape"

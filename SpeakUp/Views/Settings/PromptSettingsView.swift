@@ -99,6 +99,24 @@ struct PromptSettingsView: View {
                         }
                     }
 
+                    GlassCard(tint: .purple.opacity(0.06)) {
+                        Toggle(isOn: $viewModel.storyPracticeEnabled) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "book.pages")
+                                    .foregroundStyle(.purple)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Practice Stories")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("Show a random story instead of the daily prompt")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .tint(AppColors.primary)
+                    }
+
                     Text("Browse, search, and manage all prompts. Add your own custom prompts to practice with.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -111,6 +129,9 @@ struct PromptSettingsView: View {
         .navigationTitle("Prompts")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: viewModel.hideAnsweredPrompts) { _, _ in
+            Task { await viewModel.saveSettings() }
+        }
+        .onChange(of: viewModel.storyPracticeEnabled) { _, _ in
             Task { await viewModel.saveSettings() }
         }
         .sheet(isPresented: $showingAddPrompt) {

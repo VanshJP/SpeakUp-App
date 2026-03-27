@@ -25,6 +25,8 @@ final class Recording {
     var eventId: UUID?
     var scriptVersionId: UUID?
     var groupId: UUID?
+    var storyId: UUID?
+    var storyTitle: String?
     @Transient var audioLevelSamples: [Float]? = nil
 
     init(
@@ -69,10 +71,13 @@ final class Recording {
         self.goalId = goalId
     }
 
-    /// Display title: custom title, prompt text, or fallback
+    /// Display title: custom title, story title, prompt text, or fallback
     var displayTitle: String {
         if let customTitle, !customTitle.isEmpty {
             return customTitle
+        }
+        if let storyTitle, !storyTitle.isEmpty {
+            return storyTitle
         }
         return prompt?.text ?? "Practice Session"
     }
