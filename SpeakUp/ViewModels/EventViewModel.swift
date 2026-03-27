@@ -269,6 +269,16 @@ class EventViewModel {
         revisionMilestones = buildRevisionMilestones(for: event)
     }
 
+    func groupIdForPractice(for event: SpeakingEvent) -> UUID? {
+        guard let context = modelContext else { return nil }
+        if let activeRecordingGroup {
+            return activeRecordingGroup.id
+        }
+        let group = ensureRecordingGroup(for: event, in: context)
+        activeRecordingGroup = group
+        return group.id
+    }
+
     // MARK: - Prep Tasks
 
     func loadPrepTasks(for event: SpeakingEvent) {
