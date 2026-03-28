@@ -79,14 +79,18 @@ extension RecordingViewModel {
         do {
             try context.save()
 
-            // Increment practice count on linked story
+            // Update linked story practice stats
             if let storyId {
                 let targetId = storyId
                 var storyDescriptor = FetchDescriptor<Story>()
                 storyDescriptor.predicate = #Predicate<Story> { $0.id == targetId }
                 if let story = try? context.fetch(storyDescriptor).first {
                     story.practiceCount += 1
+                    story.lastPracticeDate = Date()
                     story.updatedAt = Date()
+                    if let score = recording.analysis?.speechScore.overall, score > story.bestScore {
+                        story.bestScore = score
+                    }
                     try? context.save()
                 }
             }
