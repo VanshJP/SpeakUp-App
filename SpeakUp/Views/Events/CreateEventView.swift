@@ -8,13 +8,14 @@ struct CreateEventView: View {
     @State private var title = ""
     @State private var eventDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     @State private var selectedDuration: Int = 5
-    @State private var maxDailyPracticeMinutes = 45
+    @State private var maxDailyPracticeMinutes = 30
     @State private var audienceType: AudienceType?
     @State private var audienceSizeText = ""
     @State private var venue = ""
     @State private var notes = ""
     @State private var scriptText = ""
     @State private var isOpenEnded = false
+    @State private var showOptionalFields = false
 
     var body: some View {
         NavigationStack {
@@ -23,11 +24,16 @@ struct CreateEventView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        introCard
                         sessionTypeSection
                         essentialsSection
-                        optionalContextSection
-                        scriptSection
+
+                        if showOptionalFields {
+                            optionalContextSection
+                            scriptSection
+                        } else {
+                            showMoreButton
+                        }
+
                         createActions
                     }
                     .padding(.horizontal, 20)
@@ -49,21 +55,7 @@ struct CreateEventView: View {
         }
     }
 
-    // MARK: - Sections
-
-    private var introCard: some View {
-        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent], padding: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Set one clear target")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text("Pick your event type, deadline, and daily effort. Optional context can be added below.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
+    // MARK: - Session Type
 
     private var sessionTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -98,6 +90,8 @@ struct CreateEventView: View {
             }
         }
     }
+
+    // MARK: - Essentials
 
     private var essentialsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -134,56 +128,68 @@ struct CreateEventView: View {
 
                     Divider()
 
-                    Stepper(value: $selectedDuration, in: 1...180, step: 1) {
+                    VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Label("Expected speaking time", systemImage: "clock")
+                            Label("Speaking time", systemImage: "clock")
                                 .font(.subheadline)
                             Spacer()
                             Text("\(selectedDuration) min")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(AppColors.primary)
                         }
-                    }
 
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(selectedType.durationOptions, id: \.self) { minutes in
-                                Button {
-                                    Haptics.selection()
-                                    selectedDuration = minutes
-                                } label: {
-                                    Text("\(minutes)m")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(selectedDuration == minutes ? .white : .secondary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background {
-                                            Capsule()
-                                                .fill(selectedDuration == minutes ? AppColors.primary.opacity(0.8) : AppColors.accent.opacity(0.12))
-                                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(selectedType.durationOptions, id: \.self) { minutes in
+                                    Button {
+                                        Haptics.selection()
+                                        selectedDuration = minutes
+                                    } label: {
+                                        Text("\(minutes)m")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(selectedDuration == minutes ? .white : .secondary)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background {
+                                                Capsule()
+                                                    .fill(selectedDuration == minutes ? AppColors.primary.opacity(0.8) : AppColors.accent.opacity(0.12))
+                                            }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-
-                    Divider()
-
-                    Stepper(value: $maxDailyPracticeMinutes, in: 10...240, step: 5) {
-                        HStack {
-                            Label("Daily practice capacity", systemImage: "timer")
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(maxDailyPracticeMinutes) min/day")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(AppColors.primary)
                         }
                     }
                 }
             }
         }
     }
+
+    // MARK: - Show More Button
+
+    private var showMoreButton: some View {
+        Button {
+            Haptics.light()
+            withAnimation(.spring(response: 0.3)) {
+                showOptionalFields = true
+            }
+        } label: {
+            GlassCard(tint: AppColors.glassTintAccent) {
+                HStack {
+                    Label("Add audience, venue, script & more", systemImage: "plus.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Optional Context
 
     private var optionalContextSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -197,7 +203,7 @@ struct CreateEventView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
 
-                            ScrollView(.horizontal) {
+                            ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
                                     ForEach(selectedType.suggestedAudienceTypes) { type in
                                         Button {
@@ -218,7 +224,6 @@ struct CreateEventView: View {
                                     }
                                 }
                             }
-                            .scrollIndicators(.hidden)
 
                             TextField("Audience size (optional)", text: $audienceSizeText)
                                 .textFieldStyle(.plain)
@@ -250,6 +255,17 @@ struct CreateEventView: View {
                         }
                     }
 
+                    Stepper(value: $maxDailyPracticeMinutes, in: 10...240, step: 5) {
+                        HStack {
+                            Label("Daily practice", systemImage: "timer")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(maxDailyPracticeMinutes) min/day")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Notes")
                             .font(.caption.weight(.semibold))
@@ -269,6 +285,8 @@ struct CreateEventView: View {
         }
     }
 
+    // MARK: - Script
+
     private var scriptSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             GlassSectionHeader("Script (optional)", icon: "doc.text")
@@ -276,7 +294,7 @@ struct CreateEventView: View {
             GlassCard(tint: AppColors.glassTintAccent, padding: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     TextEditor(text: $scriptText)
-                        .frame(minHeight: 170)
+                        .frame(minHeight: 120)
                         .scrollContentBackground(.hidden)
                         .font(.body)
 
@@ -296,6 +314,8 @@ struct CreateEventView: View {
         }
     }
 
+    // MARK: - Create Actions
+
     private var createActions: some View {
         VStack(spacing: 10) {
             GlassButton(
@@ -305,22 +325,15 @@ struct CreateEventView: View {
                 isLoading: viewModel.isCreating
             ) {
                 Haptics.success()
-                createEvent(includeScript: !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                createEvent()
             }
             .disabled(viewModel.isCreating || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .opacity((viewModel.isCreating || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.5 : 1)
-
-            if !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                GlassButton(title: "Create Without Script", icon: "forward.fill", style: .ghost, isLoading: viewModel.isCreating) {
-                    Haptics.light()
-                    createEvent(includeScript: false)
-                }
-                .disabled(viewModel.isCreating)
-            }
         }
     }
 
-    private func createEvent(includeScript: Bool) {
+    private func createEvent() {
+        let includeScript = !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         Task {
             _ = await viewModel.createEvent(
                 title: title,
@@ -347,4 +360,3 @@ struct CreateEventView: View {
         return value
     }
 }
-

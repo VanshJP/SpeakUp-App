@@ -10,6 +10,7 @@ struct EventListView: View {
     @State private var searchText = ""
     @State private var selectedSection: EventListSection = .upcoming
     var onStartPractice: ((SpeakingEvent, UUID?) -> Void)?
+    var isSheet: Bool = true
 
     private var upcomingEvents: [SpeakingEvent] {
         viewModel.upcomingEvents
@@ -29,187 +30,296 @@ struct EventListView: View {
 
     private var visibleEvents: [SpeakingEvent] {
         switch selectedSection {
-        case .upcoming:
-            return upcomingEvents
-        case .past:
-            return pastEvents
-        case .all:
-            return upcomingEvents + pastEvents
+        case .upcoming: return upcomingEvents
+        case .past: return pastEvents
+        case .all: return upcomingEvents + pastEvents
         }
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground(style: .primary)
+        let content = ZStack {
+            AppBackground(style: .primary)
 
-                ScrollView {
-                    VStack(spacing: 16) {
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !viewModel.events.isEmpty {
                         summaryCard
-                        sectionFilterCard
+                    }
 
-                        if viewModel.events.isEmpty {
-                            emptyStateCard(
-                                title: "No Events Yet",
-                                message: "Create one event and SpeakUp builds your prep path."
-                            )
-                        } else if visibleEvents.isEmpty {
-                            emptyStateCard(
-                                title: "No Matches",
-                                message: searchText.isEmpty
-                                    ? "No events in this section yet."
-                                    : "Try a different search term."
-                            )
-                        } else {
-                            LazyVStack(alignment: .leading, spacing: 12) {
-                                ForEach(visibleEvents) { event in
-                                    Button {
-                                        selectedEvent = event
-                                    } label: {
-                                        EventCard(event: event)
-                                            .opacity(event.isPast ? 0.75 : 1.0)
+                    quickAddCard
+                    sectionFilterPills
+
+                    if viewModel.events.isEmpty {
+                        EmptyStateCard(
+                            icon: "calendar.badge.plus",
+                            title: "No Events Yet",
+                            message: "Add a speaking engagement and SpeakUp will guide your preparation with smart scheduling, scripts, and practice tracking.",
+                            buttonTitle: "Create Event",
+                            buttonAction: { showingCreateEvent = true }
+                        )
+                        .padding(.top, 20)
+                    } else if visibleEvents.isEmpty {
+                        EmptyStateCard(
+                            icon: "magnifyingglass",
+                            title: "No Matches",
+                            message: searchText.isEmpty
+                                ? "No events in this section."
+                                : "Try a different search term."
+                        )
+                        .padding(.top, 20)
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(visibleEvents) { event in
+                                Button {
+                                    selectedEvent = event
+                                } label: {
+                                    EventCard(event: event)
+                                        .opacity(event.isPast ? 0.75 : 1.0)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    if let onStartPractice {
+                                        Button {
+                                            onStartPractice(event, event.currentScriptVersion?.id)
+                                        } label: {
+                                            Label("Practice", systemImage: "mic")
+                                        }
                                     }
-                                    .buttonStyle(.plain)
+
+                                    Button {
+                                        viewModel.archiveEvent(event)
+                                        Haptics.light()
+                                    } label: {
+                                        Label(event.isArchived ? "Unarchive" : "Archive", systemImage: "archivebox")
+                                    }
+
+                                    Divider()
+
+                                    Button(role: .destructive) {
+                                        viewModel.deleteEvent(event)
+                                        Haptics.warning()
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
-            .navigationTitle("Events")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Search events")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.white)
+        }
+        .searchable(text: $searchText, prompt: "Search events...")
+        .sheet(isPresented: $showingCreateEvent) {
+            CreateEventView(viewModel: viewModel)
+        }
+        .navigationDestination(item: $selectedEvent) { event in
+            EventDetailView(event: event, viewModel: viewModel, onStartPractice: onStartPractice)
+        }
+        .onAppear {
+            viewModel.configure(with: modelContext)
+        }
+
+        if isSheet {
+            NavigationStack {
+                content
+                    .navigationTitle("Events")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarBackground(.hidden, for: .navigationBar)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { dismiss() } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title3)
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                Haptics.light()
+                                showingCreateEvent = true
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.body.weight(.semibold))
+                            }
+                        }
+                    }
+            }
+        } else {
+            content
+                .navigationTitle("Events")
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            Haptics.light()
+                            showingCreateEvent = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.body.weight(.semibold))
+                        }
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Haptics.light()
-                        showingCreateEvent = true
-                    } label: {
-                        Image(systemName: "plus.circle")
+        }
+    }
+
+    // MARK: - Quick Add Card
+
+    private var quickAddCard: some View {
+        Button {
+            Haptics.medium()
+            showingCreateEvent = true
+        } label: {
+            FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.primary.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "calendar.badge.plus")
                             .font(.title3)
                             .foregroundStyle(AppColors.primary)
                     }
-                }
-            }
-            .sheet(isPresented: $showingCreateEvent) {
-                CreateEventView(viewModel: viewModel)
-            }
-            .navigationDestination(item: $selectedEvent) { event in
-                EventDetailView(event: event, viewModel: viewModel, onStartPractice: onStartPractice)
-            }
-            .onAppear {
-                viewModel.configure(with: modelContext)
-            }
-        }
-    }
 
-    private var summaryCard: some View {
-        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Your speaking pipeline")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 12) {
-                    metricPill(
-                        title: "Upcoming",
-                        value: "\(viewModel.upcomingEvents.count)",
-                        icon: "calendar",
-                        tint: AppColors.primary
-                    )
-                    metricPill(
-                        title: "Ready 80+",
-                        value: "\(viewModel.upcomingEvents.filter { $0.readinessScore >= 80 }.count)",
-                        icon: "checkmark.seal.fill",
-                        tint: AppColors.success
-                    )
-                    metricPill(
-                        title: "Past",
-                        value: "\(viewModel.pastEvents.count)",
-                        icon: "clock.arrow.circlepath",
-                        tint: AppColors.accent
-                    )
-                }
-            }
-        }
-    }
-
-    private var sectionFilterCard: some View {
-        GlassCard(tint: AppColors.glassTintPrimary.opacity(0.65), padding: 12) {
-            VStack(spacing: 10) {
-                Picker("Section", selection: $selectedSection) {
-                    ForEach(EventListSection.allCases) { section in
-                        Text(section.title).tag(section)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Add Speaking Event")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("Set a deadline and let SpeakUp plan your prep")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                .pickerStyle(.segmented)
-
-                HStack {
-                    Text(viewModel.showArchived ? "Archived included" : "Archived hidden")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
 
                     Spacer()
 
-                    Button {
-                        Haptics.light()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            viewModel.showArchived.toggle()
-                            viewModel.loadEvents()
-                        }
-                    } label: {
-                        Text(viewModel.showArchived ? "Hide archived" : "Show archived")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppColors.primary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Summary Card
+
+    private var summaryCard: some View {
+        GlassCard(padding: 14) {
+            HStack(spacing: 0) {
+                PromptStatItem(
+                    icon: "calendar",
+                    value: "\(viewModel.upcomingEvents.count)",
+                    label: "Upcoming",
+                    color: AppColors.primary
+                )
+
+                statsCardDivider
+
+                PromptStatItem(
+                    icon: "checkmark.seal.fill",
+                    value: "\(readyCount)",
+                    label: "Ready",
+                    color: AppColors.success
+                )
+
+                statsCardDivider
+
+                PromptStatItem(
+                    icon: "mic.fill",
+                    value: "\(totalPracticeCount)",
+                    label: "Sessions",
+                    color: .orange
+                )
+
+                statsCardDivider
+
+                PromptStatItem(
+                    icon: "clock.arrow.circlepath",
+                    value: "\(viewModel.pastEvents.count)",
+                    label: "Past",
+                    color: AppColors.accent
+                )
+            }
+        }
+    }
+
+    private var statsCardDivider: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(width: 0.5, height: 40)
+    }
+
+    private var readyCount: Int {
+        viewModel.upcomingEvents.filter { $0.readinessScore >= 80 }.count
+    }
+
+    private var totalPracticeCount: Int {
+        viewModel.events.reduce(0) { $0 + $1.totalPracticeCount }
+    }
+
+    // MARK: - Section Filter Pills
+
+    private var sectionFilterPills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(EventListSection.allCases) { section in
+                    sectionPill(section)
+                }
+
+                Divider()
+                    .frame(height: 20)
+                    .padding(.horizontal, 4)
+
+                Button {
+                    Haptics.light()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.showArchived.toggle()
+                        viewModel.loadEvents()
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "archivebox")
+                        Text(viewModel.showArchived ? "Hide Archived" : "Show Archived")
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(viewModel.showArchived ? .white : .secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background {
+                        Capsule().fill(viewModel.showArchived ? AppColors.accent : .ultraThinMaterial)
+                    }
                 }
             }
         }
     }
 
-    private func metricPill(title: String, value: String, icon: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tint)
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+    private func sectionPill(_ section: EventListSection) -> some View {
+        let isSelected = selectedSection == section
+        return Button {
+            Haptics.light()
+            withAnimation(.spring(response: 0.3)) {
+                selectedSection = section
             }
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(section.title)
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(isSelected ? .white : .secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background {
+                if isSelected {
+                    Capsule().fill(AppColors.primary)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(10)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.white.opacity(0.06))
-        }
-    }
-
-    private func emptyStateCard(title: String, message: String) -> some View {
-        EmptyStateCard(
-            icon: "calendar.badge.plus",
-            title: title,
-            message: message,
-            buttonTitle: "Create Event",
-            buttonAction: { showingCreateEvent = true }
-        )
-        .padding(.top, 40)
     }
 }
 
@@ -221,7 +331,6 @@ struct EventCard: View {
     var body: some View {
         GlassCard(tint: sessionTypeColor.opacity(0.06)) {
             HStack(spacing: 14) {
-                // Session type icon
                 ZStack {
                     Circle()
                         .fill(sessionTypeColor.opacity(0.15))
@@ -256,18 +365,17 @@ struct EventCard: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        if let audienceSize = event.audienceSize, audienceSize > 0 {
+                        if event.totalPracticeCount > 0 {
                             Text("•")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
-                            Text("\(audienceSize.formatted())")
+                            Text("\(event.totalPracticeCount) sessions")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .lineLimit(1)
 
-                    // Readiness bar (always show)
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             Capsule()
@@ -309,7 +417,9 @@ struct EventCard: View {
     }
 }
 
-private enum EventListSection: String, CaseIterable, Identifiable {
+// MARK: - Event List Section
+
+enum EventListSection: String, CaseIterable, Identifiable {
     case upcoming
     case past
     case all
@@ -318,12 +428,17 @@ private enum EventListSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .upcoming:
-            return "Upcoming"
-        case .past:
-            return "Past"
-        case .all:
-            return "All"
+        case .upcoming: return "Upcoming"
+        case .past: return "Past"
+        case .all: return "All"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .upcoming: return "calendar"
+        case .past: return "clock.arrow.circlepath"
+        case .all: return "square.grid.2x2"
         }
     }
 }

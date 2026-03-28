@@ -27,9 +27,10 @@ struct ContentView: View {
     @State private var showingWordBank = false
     @State private var showingEvents = false
     @State private var showingReadAloud = false
+    @State private var showingQuickStoryCapture = false
     @State private var settingsViewModel = SettingsViewModel()
 
-    // Recording parameters to pass
+    // Recording parameters
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
@@ -165,7 +166,6 @@ struct ContentView: View {
             }
              .tint(.white)
             
-            // Countdown Overlay
             if showingCountdown {
                 CountdownOverlayView(
                     prompt: recordingPrompt,
@@ -294,6 +294,13 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingQuickStoryCapture) {
+            NavigationStack {
+                QuickCaptureView(viewModel: StoriesViewModel())
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
         .onOpenURL { url in
             handleDeepLink(url)
         }
@@ -370,6 +377,12 @@ struct ContentView: View {
                 showingChallengeAccept = true
             }
 
+        case "story":
+            selectedTab = .stories
+            if url.pathComponents.contains("new") {
+                showingQuickStoryCapture = true
+            }
+
         default:
             break
         }
@@ -416,4 +429,3 @@ enum AppTab: String, CaseIterable, Identifiable {
         .modelContainer(
             for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }
-
