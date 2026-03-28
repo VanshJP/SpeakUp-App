@@ -87,7 +87,11 @@ struct EventListView: View {
                                     }
 
                                     Button {
-                                        viewModel.archiveEvent(event)
+                                        if event.isArchived {
+                                            viewModel.unarchiveEvent(event)
+                                        } else {
+                                            viewModel.archiveEvent(event)
+                                        }
                                         Haptics.light()
                                     } label: {
                                         Label(event.isArchived ? "Unarchive" : "Archive", systemImage: "archivebox")

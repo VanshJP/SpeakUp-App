@@ -134,6 +134,12 @@ class EventViewModel {
         loadEvents()
     }
 
+    func unarchiveEvent(_ event: SpeakingEvent) {
+        event.isArchived = false
+        try? modelContext?.save()
+        loadEvents()
+    }
+
     func updateEventLogistics(
         _ event: SpeakingEvent,
         eventDate: Date,

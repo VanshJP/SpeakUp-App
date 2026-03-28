@@ -13,6 +13,7 @@ struct QuickCaptureView: View {
     @State private var isTranscribing = false
     @State private var recordingURL: URL?
     @State private var errorMessage: String?
+    @State private var didUseDictation = false
 
     var body: some View {
         ZStack {
@@ -194,6 +195,7 @@ struct QuickCaptureView: View {
 
     private func startRecording() {
         Haptics.heavy()
+        didUseDictation = true
         Task {
             do {
                 let url = try await audioService.startRecording()
@@ -248,7 +250,7 @@ struct QuickCaptureView: View {
             title: finalTitle,
             content: content,
             tags: [],
-            inputMethod: content.isEmpty ? "typed" : (recordingURL != nil ? "dictated" : "typed"),
+            inputMethod: didUseDictation ? "dictated" : "typed",
             stage: .spark,
             occasion: selectedOccasion
         )
