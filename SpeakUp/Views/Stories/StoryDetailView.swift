@@ -23,12 +23,10 @@ struct StoryDetailView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     heroHeader
+                    practiceSection
                     statsGrid
                     contentSection
-                    tagsSection
-                    practiceSection
                     recordingsSection
-                    deleteSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -115,7 +113,6 @@ struct StoryDetailView: View {
         GlassCard(padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    // Input method badge
                     HStack(spacing: 5) {
                         Image(systemName: story.inputMethod == "dictated" ? "waveform" : "keyboard")
                             .font(.caption2.weight(.semibold))
@@ -146,12 +143,24 @@ struct StoryDetailView: View {
                     .font(.title3.weight(.bold))
                     .foregroundStyle(.white)
 
-                HStack(spacing: 16) {
-                    Label("\(story.wordCount) words", systemImage: "text.word.spacing")
-                    Label(story.updatedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "clock")
+                if !story.tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(story.tags.prefix(5)) { tag in
+                                StoryTagPill(tag: tag, size: .small, onTap: {
+                                    Haptics.light()
+                                    viewModel.applyTagFilter(tag)
+                                    dismiss()
+                                })
+                            }
+                            if story.tags.count > 5 {
+                                Text("+\(story.tags.count - 5)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -180,18 +189,9 @@ struct StoryDetailView: View {
                 statsGridDivider
 
                 PromptStatItem(
-                    icon: "tag",
-                    value: "\(story.tags.count)",
-                    label: "Tags",
-                    color: .purple
-                )
-
-                statsGridDivider
-
-                PromptStatItem(
-                    icon: "calendar",
-                    value: "\(daysOld)",
-                    label: daysOld == 1 ? "Day Old" : "Days Old",
+                    icon: "clock",
+                    value: storyAge,
+                    label: "Age",
                     color: .blue
                 )
             }
@@ -204,8 +204,17 @@ struct StoryDetailView: View {
             .frame(width: 0.5, height: 40)
     }
 
-    private var daysOld: Int {
-        max(1, Calendar.current.dateComponents([.day], from: story.createdAt, to: Date()).day ?? 1)
+    private var storyAge: String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.month, .day, .hour], from: story.createdAt, to: now)
+        if let months = components.month, months >= 1 {
+            return "\(months)mo"
+        } else if let days = components.day, days >= 1 {
+            return "\(days)d"
+        } else if let hours = components.hour, hours >= 1 {
+            return "\(hours)h"
+        }
+        return "Today"
     }
 
     // MARK: - Content
@@ -252,51 +261,14 @@ struct StoryDetailView: View {
         }
     }
 
-    // MARK: - Tags
-
-    private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Tags", icon: "tag")
-
-            if story.tags.isEmpty {
-                GlassCard {
-                    HStack {
-                        Image(systemName: "tag.slash")
-                            .foregroundStyle(.secondary)
-                        Text("No tags yet. Edit this story to add tags.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } else {
-                GlassCard {
-                    FlowLayout(spacing: 8) {
-                        ForEach(story.tags) { tag in
-                            StoryTagPill(tag: tag)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: - Practice
 
+    @ViewBuilder
     private var practiceSection: some View {
-        Group {
-            if let onStartPractice {
-                VStack(spacing: 6) {
-                    GlassButton(title: "Practice This Story", icon: "mic.fill", style: .primary, size: .large) {
-                        Haptics.heavy()
-                        onStartPractice(story)
-                    }
-
-                    if story.practiceCount > 0 {
-                        Text("Practiced \(story.practiceCount) \(story.practiceCount == 1 ? "time" : "times")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+        if let onStartPractice {
+            GlassButton(title: "Practice This Story", icon: "mic.fill", style: .primary, size: .large, fullWidth: true) {
+                Haptics.heavy()
+                onStartPractice(story)
             }
         }
     }
@@ -359,14 +331,5 @@ struct StoryDetailView: View {
         let scores = linkedRecordings.compactMap { $0.analysis?.speechScore.overall }
         guard !scores.isEmpty else { return nil }
         return scores.reduce(0, +) / scores.count
-    }
-
-    // MARK: - Delete
-
-    private var deleteSection: some View {
-        GlassButton(title: "Delete Story", icon: "trash", style: .danger, fullWidth: true) {
-            showingDeleteAlert = true
-        }
-        .padding(.top, 8)
     }
 }

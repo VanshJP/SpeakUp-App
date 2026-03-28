@@ -43,6 +43,18 @@ class SpeechService {
         return hasPermission
     }
 
+    // MARK: - Lightweight Transcription (text only, no analysis)
+
+    /// Fast transcription that skips isolation, speaker labeling, and filler detection.
+    /// Use for dictation where you only need the raw text.
+    func transcribeTextOnly(audioURL: URL, preferredTerms: [String] = []) async throws -> String {
+        isTranscribing = true
+        defer { isTranscribing = false }
+
+        let result = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
+        return result.text
+    }
+
     // MARK: - Transcription
 
     func transcribe(

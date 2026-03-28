@@ -100,4 +100,5 @@ struct StoryTag: Codable, Identifiable, Hashable {
     var id: UUID = UUID()
     var type: StoryTagType
     var value: String
+    var parsedDate: Date?
 }

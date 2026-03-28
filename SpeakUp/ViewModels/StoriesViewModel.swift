@@ -15,8 +15,25 @@ class StoriesViewModel {
     var selectedTagFilter: StoryTagType? {
         didSet { recomputeFilteredStories() }
     }
+    var selectedTagValue: String? {
+        didSet { recomputeFilteredStories() }
+    }
+    var dateFilterStart: Date? {
+        didSet { recomputeFilteredStories() }
+    }
+    var dateFilterEnd: Date? {
+        didSet { recomputeFilteredStories() }
+    }
+    var favoritesOnly: Bool = false {
+        didSet { recomputeFilteredStories() }
+    }
     var sortOrder: StorySortOrder = .updatedAt {
         didSet { recomputeFilteredStories() }
+    }
+
+    var hasActiveFilters: Bool {
+        selectedTagFilter != nil || selectedTagValue != nil ||
+        dateFilterStart != nil || favoritesOnly || sortOrder != .updatedAt
     }
 
     let taggingService = StoryTaggingService()
@@ -82,6 +99,26 @@ class StoriesViewModel {
             }
         }
 
+        if let tagValue = selectedTagValue {
+            let lower = tagValue.lowercased()
+            result = result.filter { story in
+                story.tags.contains { $0.value.lowercased() == lower }
+            }
+        }
+
+        if let start = dateFilterStart, let end = dateFilterEnd {
+            result = result.filter { story in
+                story.tags.contains { tag in
+                    guard tag.type == .date, let parsed = tag.parsedDate else { return false }
+                    return parsed >= start && parsed <= end
+                }
+            }
+        }
+
+        if favoritesOnly {
+            result = result.filter { $0.isFavorite }
+        }
+
         switch sortOrder {
         case .updatedAt:
             result.sort { $0.updatedAt > $1.updatedAt }
@@ -94,6 +131,28 @@ class StoriesViewModel {
         }
 
         filteredStories = result
+    }
+
+    func clearAllFilters() {
+        selectedTagFilter = nil
+        selectedTagValue = nil
+        dateFilterStart = nil
+        dateFilterEnd = nil
+        favoritesOnly = false
+        sortOrder = .updatedAt
+    }
+
+    func applyTagFilter(_ tag: StoryTag) {
+        selectedTagFilter = tag.type
+        selectedTagValue = tag.value
+
+        if tag.type == .date, let parsed = tag.parsedDate {
+            let calendar = Calendar.current
+            let start = calendar.date(byAdding: .month, value: -1, to: parsed) ?? parsed
+            let end = calendar.date(byAdding: .month, value: 1, to: parsed) ?? parsed
+            dateFilterStart = start
+            dateFilterEnd = end
+        }
     }
 
     // MARK: - CRUD
@@ -275,4 +334,13 @@ enum StorySortOrder: String, CaseIterable, Identifiable {
     case mostPracticed = "Practiced"
 
     var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .updatedAt: return "clock"
+        case .createdAt: return "calendar"
+        case .alphabetical: return "textformat.abc"
+        case .mostPracticed: return "mic"
+        }
+    }
 }

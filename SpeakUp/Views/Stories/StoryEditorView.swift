@@ -18,6 +18,7 @@ struct StoryEditorView: View {
     @State private var errorMessage: String?
     @State private var didUseDictation = false
     @State private var isSaving = false
+    @State private var hasExtractedTags = false
     @State private var isFormattingText = false
     @State private var showFormatOption = false
     @State private var isTranscribing = false
@@ -33,8 +34,7 @@ struct StoryEditorView: View {
                 VStack(spacing: 20) {
                     titleSection
                     contentSection
-                    tagsManagementSection
-                    autoExtractSection
+                    tagsSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -64,6 +64,7 @@ struct StoryEditorView: View {
                 title = story.title
                 content = story.content
                 tags = story.tags
+                hasExtractedTags = !story.tags.isEmpty
             }
         }
         .onDisappear {
@@ -99,32 +100,75 @@ struct StoryEditorView: View {
 
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            GlassSectionHeader("Content", icon: "doc.text")
+            HStack {
+                GlassSectionHeader("Content", icon: "doc.text")
 
-            TextEditor(text: $content)
-                .font(.body)
-                .foregroundStyle(.white)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 200)
-                .padding(14)
-                .glassBackground(cornerRadius: 12)
-                .disabled(audioService.isRecording || isTranscribing)
-                .overlay(alignment: .bottomTrailing) {
-                    if !audioService.isRecording && !isTranscribing && content.isEmpty {
-                        Text("Type your story or tap the mic to dictate...")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(20)
-                            .allowsHitTesting(false)
-                    }
+                Spacer()
+
+                micButton(tint: AppColors.primary)
+            }
+
+            DebouncedTextEditor(
+                text: $content,
+                isDisabled: audioService.isRecording || isTranscribing,
+                placeholder: "Type your story or tap the mic to dictate..."
+            )
+            .frame(minHeight: 200)
+            .padding(14)
+            .glassBackground(cornerRadius: 12)
+            .overlay(alignment: .topLeading) {
+                if !audioService.isRecording && !isTranscribing && content.isEmpty {
+                    Text("Type your story or tap the mic to dictate...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(20)
+                        .allowsHitTesting(false)
                 }
+            }
 
             transcribingIndicator
 
             formatTextBanner
-
-            dictationControls
         }
+    }
+
+    // MARK: - Mic Button
+
+    private func micButton(tint: Color) -> some View {
+        Button {
+            toggleRecording()
+        } label: {
+            HStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(audioService.isRecording ? tint.opacity(0.25) : .white.opacity(0.06))
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    audioService.isRecording ? tint.opacity(0.6) : .white.opacity(0.1),
+                                    lineWidth: 0.5
+                                )
+                        }
+                        .frame(width: 36, height: 36)
+
+                    Image(systemName: audioService.isRecording ? "stop.fill" : "mic.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(audioService.isRecording ? tint : .white.opacity(0.6))
+                        .symbolEffect(.pulse, isActive: audioService.isRecording)
+                }
+
+                Text(audioService.isRecording ? "Stop" : "Dictate")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(audioService.isRecording ? tint : .secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                Capsule().fill(audioService.isRecording ? tint.opacity(0.1) : .clear)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isTranscribing)
     }
 
     // MARK: - Transcribing Indicator
@@ -212,64 +256,63 @@ struct StoryEditorView: View {
         }
     }
 
-    // MARK: - Dictation Controls
-
-    private var dictationControls: some View {
-        HStack {
-            Spacer()
-
-            micButton(tint: AppColors.primary)
-        }
-    }
-
-    private func micButton(tint: Color) -> some View {
-        Button {
-            toggleRecording()
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(audioService.isRecording ? tint.opacity(0.25) : .white.opacity(0.06))
-                    .overlay {
-                        Circle()
-                            .strokeBorder(
-                                audioService.isRecording ? tint.opacity(0.6) : .white.opacity(0.1),
-                                lineWidth: 0.5
-                            )
-                    }
-                    .frame(width: 40, height: 40)
-
-                Image(systemName: audioService.isRecording ? "mic.fill" : "mic")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(audioService.isRecording ? tint : .white.opacity(0.5))
-                    .symbolEffect(.pulse, isActive: audioService.isRecording)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(isTranscribing)
-    }
-
     // MARK: - Tags
 
-    private var tagsManagementSection: some View {
+    private var tagsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Tags", icon: "tag")
+            HStack {
+                GlassSectionHeader("Tags", icon: "tag")
 
-            if !tags.isEmpty {
-                GlassCard {
-                    FlowLayout(spacing: 8) {
-                        ForEach(tags) { tag in
-                            StoryTagPill(tag: tag) {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tags.removeAll { $0.id == tag.id }
-                                }
-                            }
-                        }
+                Spacer()
+
+                if isExtractingTags {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .tint(AppColors.primary)
+                            .scaleEffect(0.7)
+                        Text("Extracting...")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(AppColors.primary)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background { Capsule().fill(AppColors.primary.opacity(0.1)) }
+                } else if llmService.isAvailable && !content.isEmpty {
+                    Button {
+                        Task { await extractTags() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                            Text("Extract")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(AppColors.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background { Capsule().fill(AppColors.primary.opacity(0.1)) }
+                    }
+                    .disabled(content.isEmpty)
                 }
             }
 
             GlassCard {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
+                    if !tags.isEmpty {
+                        FlowLayout(spacing: 8) {
+                            ForEach(tags) { tag in
+                                StoryTagPill(tag: tag) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        tags.removeAll { $0.id == tag.id }
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Divider()
+                            .overlay(Color.white.opacity(0.08))
+                    }
+
                     HStack(spacing: 8) {
                         Menu {
                             ForEach(StoryTagType.allCases) { type in
@@ -313,22 +356,6 @@ struct StoryEditorView: View {
         }
     }
 
-    private var autoExtractSection: some View {
-        Group {
-            if llmService.isAvailable && !content.isEmpty {
-                GlassButton(
-                    title: isExtractingTags ? "Extracting..." : "Extract Tags Now",
-                    icon: "sparkles",
-                    style: .secondary,
-                    size: .medium
-                ) {
-                    Task { await extractTags() }
-                }
-                .disabled(isExtractingTags || content.isEmpty)
-            }
-        }
-    }
-
     // MARK: - Actions
 
     private func toggleRecording() {
@@ -365,8 +392,8 @@ struct StoryEditorView: View {
             }
 
             do {
-                let result = try await speechService.transcribe(audioURL: url)
-                let transcribedText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let transcribedText = try await speechService.transcribeTextOnly(audioURL: url)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 if !transcribedText.isEmpty {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -374,10 +401,15 @@ struct StoryEditorView: View {
                         content = content + separator + transcribedText
                     }
 
-                    // Offer formatting if LLM is available
                     if llmService.isAvailable {
+                        // Offer formatting
                         withAnimation(.spring(response: 0.3)) {
                             showFormatOption = true
+                        }
+
+                        // Auto-extract tags from transcribed content
+                        if !hasExtractedTags {
+                            Task { await autoExtractAfterDictation() }
                         }
                     }
                 }
@@ -403,8 +435,8 @@ struct StoryEditorView: View {
             let method = didUseDictation ? "dictated" : "typed"
             var finalTags = tags
 
-            // Auto-extract tags if LLM is available
-            if llmService.isAvailable && !content.isEmpty {
+            // Only auto-extract if user hasn't already extracted and has no tags
+            if !hasExtractedTags && finalTags.isEmpty && llmService.isAvailable && !content.isEmpty {
                 let extracted = await viewModel.autoExtractTags(from: content, llmService: llmService)
                 for tag in extracted {
                     if !finalTags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
@@ -434,6 +466,7 @@ struct StoryEditorView: View {
             tags.append(tag)
         }
         newTagValue = ""
+        hasExtractedTags = true
         Haptics.light()
     }
 
@@ -450,6 +483,7 @@ struct StoryEditorView: View {
                     }
                 }
             }
+            hasExtractedTags = true
             Haptics.success()
         }
     }
@@ -463,6 +497,30 @@ struct StoryEditorView: View {
                 content = formatted
                 showFormatOption = false
             }
+            Haptics.success()
+
+            // Re-extract tags from cleaner formatted text
+            if !hasExtractedTags {
+                await autoExtractAfterDictation()
+            }
+        }
+    }
+
+    private func autoExtractAfterDictation() async {
+        guard !content.isEmpty, !isExtractingTags else { return }
+        isExtractingTags = true
+        defer { isExtractingTags = false }
+
+        let extracted = await viewModel.autoExtractTags(from: content, llmService: llmService)
+        if !extracted.isEmpty {
+            withAnimation(.spring(response: 0.3)) {
+                for tag in extracted {
+                    if !tags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
+                        tags.append(tag)
+                    }
+                }
+            }
+            hasExtractedTags = true
             Haptics.success()
         }
     }
