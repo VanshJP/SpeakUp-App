@@ -2,6 +2,7 @@ import SwiftUI
 
 struct QuickCaptureView: View {
     @Bindable var viewModel: StoriesViewModel
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AudioService.self) private var audioService
     @Environment(SpeechService.self) private var speechService
@@ -55,6 +56,9 @@ struct QuickCaptureView: View {
             if audioService.isRecording {
                 audioService.cancelRecording()
             }
+        }
+        .onAppear {
+            viewModel.configure(with: modelContext)
         }
         .alert("Error", isPresented: .init(
             get: { errorMessage != nil },
