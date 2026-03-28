@@ -553,8 +553,8 @@ struct EventDetailView: View {
                                     .foregroundStyle(.white)
                                 HStack(spacing: 8) {
                                     Text(recording.formattedDuration)
-                                    if let pace = recording.analysis?.pace {
-                                        Text("\(Int(pace)) wpm")
+                                    if let wpm = recording.analysis?.wordsPerMinute, wpm > 0 {
+                                        Text("\(Int(wpm)) wpm")
                                     }
                                 }
                                 .font(.caption2)

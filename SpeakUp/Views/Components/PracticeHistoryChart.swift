@@ -172,7 +172,7 @@ struct PracticeMetricsRow: View {
     }
 
     private var totalDuration: String {
-        let total = recordings.reduce(0.0) { $0 + $1.duration }
+        let total = recordings.reduce(0.0) { $0 + $1.actualDuration }
         if total < 60 { return "\(Int(total))s" }
         let minutes = Int(total) / 60
         return "\(minutes)m"
