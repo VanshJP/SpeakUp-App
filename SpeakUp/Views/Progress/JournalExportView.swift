@@ -2,6 +2,12 @@ import SwiftUI
 import SwiftData
 
 struct JournalExportView: View {
+    private static let journalDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Recording.date, order: .reverse) private var allRecordings: [Recording]
@@ -188,9 +194,7 @@ struct JournalExportView: View {
                 return
             }
 
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            let dateString = formatter.string(from: Date())
+            let dateString = Self.journalDateFormatter.string(from: Date())
             let fileName = "SpeakUp-Journal-\(dateString).pdf"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 

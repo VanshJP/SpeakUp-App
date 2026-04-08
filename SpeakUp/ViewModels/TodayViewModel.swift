@@ -16,7 +16,6 @@ class TodayViewModel {
     var weeklyGoalSessions: Int = 5
     var storyPracticeEnabled: Bool = false
     var todaysStory: Story?
-
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
     private var hasRerolledPrompt = false
@@ -32,11 +31,22 @@ class TodayViewModel {
     func loadData() async {
         isLoading = true
         defer { isLoading = false }
-        
+
         guard let context = modelContext else { return }
-        
+
         // Load user settings first (needed for prompt filtering)
         await loadUserSettings(context: context)
+
+        // Fetch all recordings once — reused by stats, daily challenge, and answered prompts
+        let descriptor = FetchDescriptor<Recording>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        let allRecordings = (try? context.fetch(descriptor)) ?? []
+
+        // Build answered prompt IDs from shared recordings (needed for prompt filtering)
+        if hideAnsweredPrompts {
+            answeredPromptIDs = Set(allRecordings.compactMap { $0.prompt?.id })
+        }
 
         // Load today's prompt
         await loadTodaysPrompt(context: context)
@@ -46,14 +56,14 @@ class TodayViewModel {
             await loadTodaysStory(context: context)
         }
 
-        // Load user stats
-        await loadUserStats(context: context)
+        // Load user stats (pass pre-fetched recordings)
+        loadUserStats(recordings: allRecordings)
 
         // Load active goals
         await loadActiveGoals(context: context)
 
-        // Load daily challenge
-        loadDailyChallenge(recordings: (try? context.fetch(FetchDescriptor<Recording>())) ?? [])
+        // Load daily challenge (reuse same recordings)
+        loadDailyChallenge(recordings: allRecordings)
 
         // Schedule streak-at-risk notification if applicable
         await scheduleStreakNotificationIfNeeded()
@@ -196,15 +206,7 @@ class TodayViewModel {
         }
     }
     
-    @MainActor
-    private func loadUserStats(context: ModelContext) async {
-        let descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        
-        do {
-            let recordings = try context.fetch(descriptor)
-            
+    private func loadUserStats(recordings: [Recording]) {
             // Calculate stats
             let totalRecordings = recordings.count
             let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
@@ -263,9 +265,6 @@ class TodayViewModel {
                 weeklySessionCount: weeklySessionCount,
                 weeklyGoalSessions: weeklyGoalSessions
             )
-        } catch {
-            print("Error loading user stats: \(error)")
-        }
     }
     
     @MainActor
@@ -298,21 +297,11 @@ class TodayViewModel {
             print("Error loading user settings: \(error)")
         }
 
-        // Build set of prompt IDs that have recordings
-        if hideAnsweredPrompts {
-            await loadAnsweredPromptIDs(context: context)
-        }
     }
 
-    @MainActor
-    private func loadAnsweredPromptIDs(context: ModelContext) async {
-        let descriptor = FetchDescriptor<Recording>()
-        do {
-            let recordings = try context.fetch(descriptor)
-            answeredPromptIDs = Set(recordings.compactMap { $0.prompt?.id })
-        } catch {
-            print("Error loading answered prompts: \(error)")
-        }
+    private func loadAnsweredPromptIDs(context: ModelContext) {
+        let recordings = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
+        answeredPromptIDs = Set(recordings.compactMap { $0.prompt?.id })
     }
     
     @MainActor
@@ -346,7 +335,7 @@ class TodayViewModel {
 
             // If hiding answered prompts, prefer an unanswered one
             if hideAnsweredPrompts {
-                await loadAnsweredPromptIDs(context: context)
+                loadAnsweredPromptIDs(context: context)
                 let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
                 if let pick = unanswered.randomElement() {
                     candidate = pick

@@ -7,7 +7,7 @@ extension RecordingViewModel {
         audioLevelSampleCounter = 0
         audioLevelSamples = []
         lastCoachingWordCount = 0
-        audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
                 let level = self.audioService.getAudioLevel()
@@ -15,7 +15,7 @@ extension RecordingViewModel {
 
                 // Collect sample every ~0.5s (every 10th tick at 0.05s interval)
                 self.audioLevelSampleCounter += 1
-                if self.audioLevelSampleCounter >= 10 {
+                if self.audioLevelSampleCounter >= 5 {
                     self.audioLevelSampleCounter = 0
                     self.audioLevelSamples.append(level)
 

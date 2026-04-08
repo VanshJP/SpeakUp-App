@@ -15,8 +15,6 @@ struct RecordingView: View {
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
-    var eventId: UUID? = nil
-    var scriptVersionId: UUID? = nil
     var storyId: UUID? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
@@ -69,8 +67,6 @@ struct RecordingView: View {
                 countdownStyle: countdownStyle
             )
             viewModel.goalId = goalId
-            viewModel.eventId = eventId
-            viewModel.scriptVersionId = scriptVersionId
             viewModel.storyId = storyId
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
@@ -407,6 +403,7 @@ struct CircularWaveformView: View {
                     totalBars: barCount,
                     baseRadius: baseRadius
                 )
+                .animation(.easeOut(duration: 0.08), value: barHeights[index])
             }
         }
         .frame(width: 200, height: 200)
@@ -418,15 +415,14 @@ struct CircularWaveformView: View {
     private func updateBars(level: Float) {
         // Convert dB level (-60 to 0 range for speech) to normalized value (0 to 1)
         let normalizedLevel = max(0, min(1, (level + 60) / 60))
+        let time = Date().timeIntervalSince1970
 
-        withAnimation(.easeOut(duration: 0.08)) {
-            for i in 0..<barCount {
-                // Create variation across bars for organic look
-                let variation = CGFloat.random(in: 0.7...1.3)
-                let waveOffset = sin(Double(i) * 0.3 + Date().timeIntervalSince1970 * 3) * 0.2
-                let height = CGFloat(normalizedLevel) * variation * 0.8 + 0.15 + waveOffset
-                barHeights[i] = min(1.0, max(0.1, height))
-            }
+        for i in 0..<barCount {
+            // Create variation across bars for organic look
+            let variation = CGFloat.random(in: 0.7...1.3)
+            let waveOffset = sin(Double(i) * 0.3 + time * 3) * 0.2
+            let height = CGFloat(normalizedLevel) * variation * 0.8 + 0.15 + waveOffset
+            barHeights[i] = min(1.0, max(0.1, height))
         }
     }
 }

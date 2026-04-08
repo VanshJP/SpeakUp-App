@@ -5,7 +5,6 @@ import UIKit
 extension RecordingViewModel {
     // MARK: - Recording Control
 
-    @MainActor
     func startRecording() async {
         do {
             recordingURL = try await audioService.startRecording()
@@ -28,7 +27,6 @@ extension RecordingViewModel {
         }
     }
 
-    @MainActor
     func stopRecording() async -> Recording? {
         timer?.invalidate()
         timer = nil
@@ -60,8 +58,6 @@ extension RecordingViewModel {
             goalId: goalId
         )
 
-        recording.eventId = eventId
-        recording.scriptVersionId = scriptVersionId
         recording.storyId = storyId
 
         // Denormalize story title for display in history

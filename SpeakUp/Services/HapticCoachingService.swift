@@ -62,14 +62,13 @@ class HapticCoachingService {
         let delta = currentCount - lastFillerCount
         lastFillerCount = currentCount
 
-        if delta > 0 {
-            fireHaptic(.warning)
-            showCue(CoachingCue(
-                message: "Watch the filler words",
-                icon: "exclamationmark.bubble",
-                tint: .orange
-            ))
-        }
+        guard delta > 0 else { return }
+        fireHaptic(.warning)
+        showCue(CoachingCue(
+            message: "Watch the filler words",
+            icon: "exclamationmark.bubble",
+            tint: .orange
+        ))
     }
 
     func processWordTimestamp() {

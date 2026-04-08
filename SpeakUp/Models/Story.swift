@@ -19,6 +19,7 @@ final class Story {
     var estimatedDurationSeconds: Int = 0
     var lastPracticeDate: Date?
     var bestScore: Int = 0
+    var entryType: String = "story"
 
     init(
         id: UUID = UUID(),
@@ -36,7 +37,8 @@ final class Story {
         occasion: String? = nil,
         estimatedDurationSeconds: Int = 0,
         lastPracticeDate: Date? = nil,
-        bestScore: Int = 0
+        bestScore: Int = 0,
+        entryType: String = "story"
     ) {
         self.id = id
         self.title = title
@@ -54,6 +56,7 @@ final class Story {
         self.estimatedDurationSeconds = estimatedDurationSeconds
         self.lastPracticeDate = lastPracticeDate
         self.bestScore = bestScore
+        self.entryType = entryType
     }
 
     // MARK: - Computed Properties
@@ -94,6 +97,36 @@ final class Story {
 
     var tagTypes: Set<StoryTagType> {
         Set(tags.map(\.type))
+    }
+
+    var resolvedEntryType: StoryEntryType {
+        StoryEntryType(rawValue: entryType) ?? .story
+    }
+}
+
+// MARK: - Entry Type
+
+enum StoryEntryType: String, Codable, CaseIterable, Identifiable {
+    case story
+    case reflection
+    case note
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .story: return "Story"
+        case .reflection: return "Reflection"
+        case .note: return "Note"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .story: return "book.pages"
+        case .reflection: return "thought.bubble"
+        case .note: return "note.text"
+        }
     }
 }
 

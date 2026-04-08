@@ -124,7 +124,11 @@ struct StoryEditorView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 7)
                                     .background {
-                                        Capsule().fill(selectedStage == stage ? AppColors.primary : .ultraThinMaterial)
+                                        if selectedStage == stage {
+                                            Capsule().fill(AppColors.primary)
+                                        } else {
+                                            Capsule().fill(.ultraThinMaterial)
+                                        }
                                     }
                                 }
                             }
@@ -153,7 +157,11 @@ struct StoryEditorView: View {
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 6)
                                         .background {
-                                            Capsule().fill(selectedOccasion == occasion ? AppColors.primary : .ultraThinMaterial)
+                                            if selectedOccasion == occasion {
+                                                Capsule().fill(AppColors.primary)
+                                            } else {
+                                                Capsule().fill(.ultraThinMaterial)
+                                            }
                                         }
                                     }
                                 }
@@ -314,11 +322,11 @@ struct StoryEditorView: View {
                     if !tags.isEmpty {
                         FlowLayout(spacing: 8) {
                             ForEach(tags) { tag in
-                                StoryTagPill(tag: tag) {
+                                StoryTagPill(tag: tag, onTap: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         tags.removeAll { $0.id == tag.id }
                                     }
-                                }
+                                })
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

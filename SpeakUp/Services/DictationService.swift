@@ -93,9 +93,10 @@ class DictationService {
         isListening = true
 
         // Poll the level storage on the main thread for UI updates
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self else { return }
             Task { @MainActor in
-                self?.audioLevel = storage.get()
+                self.audioLevel = storage.get()
             }
         }
 

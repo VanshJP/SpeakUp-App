@@ -37,6 +37,10 @@ struct RecordingDetailView: View {
     @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
     @State private var playbackErrorMessage: String?
     @State private var showCopiedConfirmation = false
+    @State private var journalReflectionText = ""
+    @State private var showingJournalReflection = false
+    @State private var journalSaved = false
+    @State private var storiesViewModel = StoriesViewModel()
 
     @Query private var userSettings: [UserSettings]
 
@@ -724,53 +728,41 @@ struct RecordingDetailView: View {
                         Button {
                             showSpeakerTurns.toggle()
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: showSpeakerTurns ? "person.2.fill" : "person")
-                                Text("Speakers")
-                            }
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(showSpeakerTurns ? AppColors.primary : .secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background {
-                                Capsule()
-                                    .fill(showSpeakerTurns ? AppColors.primary.opacity(0.15) : .clear)
-                            }
+                            Image(systemName: showSpeakerTurns ? "person.2.fill" : "person")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(showSpeakerTurns ? AppColors.primary : .secondary)
+                                .padding(6)
+                                .background {
+                                    Circle()
+                                        .fill(showSpeakerTurns ? AppColors.primary.opacity(0.15) : .clear)
+                                }
                         }
                     }
 
                     Button {
                         showFillerHighlights.toggle()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: showFillerHighlights ? "eye.fill" : "eye.slash")
-                            Text("Fillers")
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(showFillerHighlights ? .orange : .secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background {
-                            Capsule()
-                                .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
-                        }
+                        Image(systemName: showFillerHighlights ? "bubble.left.fill" : "bubble.left")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(showFillerHighlights ? .orange : .secondary)
+                            .padding(6)
+                            .background {
+                                Circle()
+                                    .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
+                            }
                     }
 
                     Button {
                         showVocabHighlights.toggle()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: showVocabHighlights ? "eye.fill" : "eye.slash")
-                            Text("Vocab")
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(showVocabHighlights ? .green : .secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background {
-                            Capsule()
-                                .fill(showVocabHighlights ? .green.opacity(0.1) : .clear)
-                        }
+                        Image(systemName: showVocabHighlights ? "character.book.closed.fill" : "character.book.closed")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(showVocabHighlights ? .green : .secondary)
+                            .padding(6)
+                            .background {
+                                Circle()
+                                    .fill(showVocabHighlights ? .green.opacity(0.1) : .clear)
+                            }
                     }
                 }
             }
@@ -828,21 +820,15 @@ struct RecordingDetailView: View {
                 showCopiedConfirmation = false
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: showCopiedConfirmation ? "checkmark" : "doc.on.doc")
-                if showCopiedConfirmation {
-                    Text("Copied")
+            Image(systemName: showCopiedConfirmation ? "checkmark" : "doc.on.doc")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(showCopiedConfirmation ? AppColors.success : .secondary)
+                .padding(6)
+                .background {
+                    Circle()
+                        .fill(showCopiedConfirmation ? AppColors.success.opacity(0.1) : .clear)
                 }
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(showCopiedConfirmation ? AppColors.success : .secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background {
-                Capsule()
-                    .fill(showCopiedConfirmation ? AppColors.success.opacity(0.1) : .clear)
-            }
-            .animation(.easeInOut(duration: 0.2), value: showCopiedConfirmation)
+                .animation(.easeInOut(duration: 0.2), value: showCopiedConfirmation)
         }
     }
 
@@ -992,6 +978,8 @@ struct RecordingDetailView: View {
         if recording.analysis != nil {
             shareCTASection(recording)
         }
+
+        journalReflectionSection(recording)
     }
 
     // MARK: - AI Insights Section
@@ -1100,6 +1088,103 @@ struct RecordingDetailView: View {
                     showingFeedbackSheet = true
                 }
             }
+        }
+    }
+
+    // MARK: - Journal Reflection
+
+    @ViewBuilder
+    private func journalReflectionSection(_ recording: Recording) -> some View {
+        if journalSaved {
+            GlassCard(tint: AppColors.glassTintSuccess) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(AppColors.success)
+                    Text("Reflection saved to Journal")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                    Spacer()
+                }
+            }
+        } else if showingJournalReflection {
+            GlassCard(tint: AppColors.glassTintPrimary.opacity(0.5)) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "thought.bubble")
+                            .foregroundStyle(AppColors.primary)
+                        Text("Quick Reflection")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Button {
+                            withAnimation { showingJournalReflection = false }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    TextField("How did that feel?", text: $journalReflectionText, axis: .vertical)
+                        .lineLimit(3...6)
+                        .textFieldStyle(.plain)
+                        .font(.body)
+                        .padding(10)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(.ultraThinMaterial)
+                        }
+
+                    GlassButton(title: "Save to Journal", icon: "text.book.closed", style: .primary, size: .small) {
+                        saveReflectionToJournal(recording)
+                    }
+                    .disabled(journalReflectionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        } else {
+            Button {
+                Haptics.light()
+                withAnimation(.spring(response: 0.3)) {
+                    showingJournalReflection = true
+                }
+            } label: {
+                GlassCard(tint: AppColors.glassTintAccent) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "thought.bubble")
+                            .foregroundStyle(.secondary)
+                        Text("How did that feel? Add a reflection...")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func saveReflectionToJournal(_ recording: Recording) {
+        storiesViewModel.configure(with: modelContext)
+
+        let title = "Reflection — \(recording.date.formatted(date: .abbreviated, time: .omitted))"
+        storiesViewModel.createStory(
+            title: title,
+            content: journalReflectionText,
+            tags: [],
+            inputMethod: "typed",
+            stage: .polished,
+            occasion: nil,
+            entryType: .reflection
+        )
+
+        Haptics.success()
+        withAnimation(.spring(response: 0.3)) {
+            journalSaved = true
+            showingJournalReflection = false
         }
     }
 

@@ -17,6 +17,7 @@ class LiveTranscriptionService {
     private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var lastProcessedSegmentCount = 0
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -46,6 +47,7 @@ class LiveTranscriptionService {
         liveFillerCount = 0
         liveWordCount = 0
         lastSegmentEndTime = 0
+        lastProcessedSegmentCount = 0
         isActive = true
 
         let inputNode = engine.inputNode
@@ -103,6 +105,11 @@ class LiveTranscriptionService {
             return
         }
 
+        // Skip reprocessing when the recognizer revises existing segments
+        // without adding new words. Post-recording analysis handles precision.
+        guard wordCount != lastProcessedSegmentCount else { return }
+        lastProcessedSegmentCount = wordCount
+
         let words = segments.map { $0.substring }
         let timestamps = segments.map { $0.timestamp }
         let durations = segments.map { $0.duration }
@@ -114,17 +121,12 @@ class LiveTranscriptionService {
             config: fillerConfig
         )
 
-        // Track when the last word ended (segment timestamp + duration)
-        if let lastSegment = segments.last {
-            let endTime = lastSegment.timestamp + lastSegment.duration
-            Task { @MainActor in
-                self.lastSegmentEndTime = endTime
-            }
-        }
+        let endTime = segments.last.map { $0.timestamp + $0.duration } ?? 0
 
         Task { @MainActor in
             self.liveFillerCount = fillerCount
             self.liveWordCount = wordCount
+            self.lastSegmentEndTime = endTime
         }
     }
 }

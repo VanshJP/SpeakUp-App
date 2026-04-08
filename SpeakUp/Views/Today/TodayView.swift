@@ -20,7 +20,6 @@ struct TodayView: View {
     var onShowCurriculum: () -> Void
     var onShowAchievements: () -> Void = {}
     var onShowWordBank: () -> Void = {}
-    var onShowEvents: () -> Void = {}
     var onShowReadAloud: () -> Void = {}
     var onStartStoryPractice: ((Story) -> Void)?
 
@@ -401,9 +400,6 @@ struct TodayView: View {
             toolbarStripButton(icon: "character.book.closed", label: "Vocab", color: .green) {
                 onShowWordBank()
             }
-            toolbarStripButton(icon: "calendar.badge.plus", label: "Events", color: .cyan) {
-                onShowEvents()
-            }
         }
         .padding(.vertical, 4)
         .background {
@@ -466,13 +462,6 @@ struct TodayView: View {
                     subtitle: "Track your progress",
                     color: .purple
                 ) { onShowGoals() }
-
-                PracticeToolCard(
-                    icon: "calendar.badge.plus",
-                    title: "Events",
-                    subtitle: "Event prep & practice",
-                    color: .cyan
-                ) { onShowEvents() }
 
                 PracticeToolCard(
                     icon: "text.book.closed",
@@ -1114,7 +1103,6 @@ private struct SnapshotStat: View {
             onShowCurriculum: {},
             onShowAchievements: {},
             onShowWordBank: {},
-            onShowEvents: {},
             onShowReadAloud: {},
             onStartStoryPractice: { _ in }
         )

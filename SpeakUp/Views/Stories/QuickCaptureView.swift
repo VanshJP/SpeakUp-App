@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct QuickCaptureView: View {
     @Bindable var viewModel: StoriesViewModel
@@ -14,23 +15,35 @@ struct QuickCaptureView: View {
     @State private var recordingURL: URL?
     @State private var errorMessage: String?
     @State private var didUseDictation = false
+    @State private var selectedEntryType: StoryEntryType = .story
+
+    var preselectedEntryType: StoryEntryType?
 
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
 
             VStack(spacing: 20) {
-                TextField("Story title (optional)", text: $title)
+                // Entry type selector
+                entryTypePicker
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+
+                TextField(
+                    selectedEntryType == .reflection ? "Reflection title (optional)" : "Title (optional)",
+                    text: $title
+                )
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
 
                 contentArea
                     .padding(.horizontal, 20)
 
-                occasionPicker
-                    .padding(.horizontal, 20)
+                if selectedEntryType == .story {
+                    occasionPicker
+                        .padding(.horizontal, 20)
+                }
 
                 Spacer()
 
@@ -39,7 +52,7 @@ struct QuickCaptureView: View {
                     .padding(.bottom, 16)
             }
         }
-        .navigationTitle("Quick Capture")
+        .navigationTitle("Quick Entry")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -60,6 +73,9 @@ struct QuickCaptureView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
+            if let preselectedEntryType {
+                selectedEntryType = preselectedEntryType
+            }
         }
         .alert("Error", isPresented: .init(
             get: { errorMessage != nil },
@@ -112,7 +128,11 @@ struct QuickCaptureView: View {
                 DebouncedTextEditor(
                     text: $content,
                     isDisabled: audioService.isRecording || isTranscribing,
-                    placeholder: "Start typing or tap the mic below..."
+                    placeholder: selectedEntryType == .reflection
+                        ? "How did your practice go?"
+                        : selectedEntryType == .note
+                        ? "Quick thought..."
+                        : "Start typing or tap the mic below..."
                 )
                 .frame(minHeight: 100, maxHeight: 180)
                 .padding(14)
@@ -140,7 +160,11 @@ struct QuickCaptureView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background {
-                            Capsule().fill(selectedOccasion == occasion ? AppColors.primary : .ultraThinMaterial)
+                            if selectedOccasion == occasion {
+                                Capsule().fill(AppColors.primary)
+                            } else {
+                                Capsule().fill(.ultraThinMaterial)
+                            }
                         }
                     }
                 }
@@ -242,21 +266,32 @@ struct QuickCaptureView: View {
     }
 
     private func saveStory() {
-        let finalTitle = title.isEmpty
-            ? generateTitle(from: content)
-            : title
+        let defaultTitle: String
+        switch selectedEntryType {
+        case .reflection: defaultTitle = "Reflection"
+        case .note: defaultTitle = "Note"
+        case .story: defaultTitle = generateTitle(from: content)
+        }
 
-        viewModel.createStory(
+        let finalTitle = title.isEmpty ? defaultTitle : title
+
+        let result = viewModel.createStory(
             title: finalTitle,
             content: content,
             tags: [],
             inputMethod: didUseDictation ? "dictated" : "typed",
-            stage: .spark,
-            occasion: selectedOccasion
+            stage: selectedEntryType == .story ? .spark : .polished,
+            occasion: selectedEntryType == .story ? selectedOccasion : nil,
+            entryType: selectedEntryType
         )
 
-        Haptics.success()
-        dismiss()
+        if result != nil {
+            Haptics.success()
+            dismiss()
+        } else {
+            Haptics.error()
+            errorMessage = viewModel.errorMessage ?? "Failed to save"
+        }
     }
 
     private func generateTitle(from text: String) -> String {
@@ -272,4 +307,39 @@ struct QuickCaptureView: View {
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
+
+    // MARK: - Entry Type Picker
+
+    private var entryTypePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(StoryEntryType.allCases) { type in
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.3)) {
+                        selectedEntryType = type
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: type.icon)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(type.displayName)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(selectedEntryType == type ? .white : .secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        if selectedEntryType == type {
+                            Capsule().fill(AppColors.primary.opacity(0.8))
+                        } else {
+                            Capsule().fill(.ultraThinMaterial)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+    }
+
 }

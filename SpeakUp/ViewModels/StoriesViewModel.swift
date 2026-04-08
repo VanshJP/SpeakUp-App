@@ -33,11 +33,15 @@ class StoriesViewModel {
     var sortOrder: StorySortOrder = .updatedAt {
         didSet { recomputeFilteredStories() }
     }
+    var selectedEntryTypeFilter: StoryEntryType? {
+        didSet { recomputeFilteredStories() }
+    }
 
     var hasActiveFilters: Bool {
         selectedTagFilter != nil || selectedTagValue != nil ||
         selectedStageFilter != nil || dateFilterStart != nil ||
-        favoritesOnly || sortOrder != .updatedAt
+        favoritesOnly || sortOrder != .updatedAt ||
+        selectedEntryTypeFilter != nil
     }
 
     let taggingService = StoryTaggingService()
@@ -95,6 +99,10 @@ class StoriesViewModel {
                 story.content.lowercased().contains(query) ||
                 story.tags.contains { $0.value.lowercased().contains(query) }
             }
+        }
+
+        if let entryTypeFilter = selectedEntryTypeFilter {
+            result = result.filter { $0.resolvedEntryType == entryTypeFilter }
         }
 
         if let stageFilter = selectedStageFilter {
@@ -173,7 +181,8 @@ class StoriesViewModel {
         tags: [StoryTag] = [],
         inputMethod: String = "typed",
         stage: StoryStage = .spark,
-        occasion: StoryOccasion? = nil
+        occasion: StoryOccasion? = nil,
+        entryType: StoryEntryType = .story,
     ) -> Story? {
         guard let context = modelContext else { return nil }
 
@@ -187,7 +196,8 @@ class StoriesViewModel {
             inputMethod: inputMethod,
             storyStage: stage.rawValue,
             occasion: occasion?.rawValue,
-            estimatedDurationSeconds: estimatedSeconds
+            estimatedDurationSeconds: estimatedSeconds,
+            entryType: entryType.rawValue
         )
         context.insert(story)
 
@@ -252,12 +262,13 @@ class StoriesViewModel {
         guard let context = modelContext else { return }
 
         context.delete(story)
-        stories.removeAll { $0.id == story.id }
-        recomputeFilteredStories()
 
         do {
             try context.save()
+            stories.removeAll { $0.id == story.id }
+            recomputeFilteredStories()
         } catch {
+            context.rollback()
             errorMessage = "Failed to delete story: \(error.localizedDescription)"
         }
     }

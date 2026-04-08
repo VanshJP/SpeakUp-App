@@ -29,9 +29,9 @@ struct StoriesListView: View {
 
                     if viewModel.stories.isEmpty {
                         EmptyStateCard(
-                            icon: "book.pages",
-                            title: "Your Story Bank",
-                            message: "Capture stories, anecdotes, and ideas you want to remember and practice telling. Tap the mic to dictate or type to get started."
+                            icon: "text.book.closed",
+                            title: "Your Speaking Journal",
+                            message: "Write speech drafts, capture quick ideas, and reflect on practice sessions. Tap the mic to dictate or type to get started."
                         )
                         .padding(.top, 20)
                     } else if viewModel.filteredStories.isEmpty {
@@ -104,9 +104,9 @@ struct StoriesListView: View {
                 .padding(.vertical, 16)
             }
         }
-        .navigationTitle("Stories")
+        .navigationTitle("Journal")
         .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: $viewModel.searchText, prompt: "Search stories...")
+        .searchable(text: $viewModel.searchText, prompt: "Search journal...")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 toolbarFilterMenu
@@ -178,10 +178,10 @@ struct StoriesListView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Quick Capture")
+                        Text("Quick Entry")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
-                        Text("Tap to dictate a story idea before it fades")
+                        Text("Capture a thought, draft, or reflection")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -311,12 +311,22 @@ struct StoriesListView: View {
         viewModel.stories.filter { $0.resolvedStage == .polished }.count
     }
 
-    // MARK: - Stage Filter Pills
+    // MARK: - Filter Pills
 
     private var stageFilterSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                stageFilterPill(label: "All", stage: nil, icon: "square.grid.2x2")
+                // Entry type filters
+                entryTypeFilterPill(label: "All", type: nil, icon: "square.grid.2x2")
+                ForEach(StoryEntryType.allCases) { entryType in
+                    entryTypeFilterPill(label: entryType.displayName, type: entryType, icon: entryType.icon)
+                }
+
+                Divider()
+                    .frame(height: 20)
+                    .padding(.horizontal, 4)
+
+                // Stage filters
                 ForEach(StoryStage.allCases) { stage in
                     stageFilterPill(label: stage.displayName, stage: stage, icon: stage.icon)
                 }
@@ -330,6 +340,37 @@ struct StoriesListView: View {
                 }
             }
         }
+    }
+
+    private func entryTypeFilterPill(label: String, type: StoryEntryType?, icon: String) -> some View {
+        let isSelected = viewModel.selectedEntryTypeFilter == type && viewModel.selectedStageFilter == nil && viewModel.selectedTagFilter == nil
+        return Button {
+            Haptics.light()
+            withAnimation(.spring(response: 0.3)) {
+                viewModel.selectedEntryTypeFilter = type
+                viewModel.selectedStageFilter = nil
+                viewModel.selectedTagFilter = nil
+                viewModel.selectedTagValue = nil
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(isSelected ? .white : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background {
+                if isSelected {
+                    Capsule().fill(AppColors.primary.opacity(0.8))
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func stageFilterPill(label: String, stage: StoryStage?, icon: String) -> some View {
@@ -393,7 +434,8 @@ struct StoriesListView: View {
 
     @ViewBuilder
     private var activeFiltersRow: some View {
-        if viewModel.hasActiveFilters {
+        let hasExtrasOnly = viewModel.sortOrder != .updatedAt || viewModel.favoritesOnly || viewModel.selectedTagValue != nil
+        if hasExtrasOnly {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if viewModel.sortOrder != .updatedAt {
@@ -403,27 +445,6 @@ struct StoriesListView: View {
                             color: AppColors.primary
                         ) {
                             viewModel.sortOrder = .updatedAt
-                        }
-                    }
-
-                    if let stage = viewModel.selectedStageFilter {
-                        activeFilterTag(
-                            icon: stage.icon,
-                            label: stage.displayName,
-                            color: AppColors.primary
-                        ) {
-                            viewModel.selectedStageFilter = nil
-                        }
-                    }
-
-                    if let tagType = viewModel.selectedTagFilter {
-                        activeFilterTag(
-                            icon: tagType.icon,
-                            label: tagType.displayName,
-                            color: tagTypeColor(tagType)
-                        ) {
-                            viewModel.selectedTagFilter = nil
-                            viewModel.selectedTagValue = nil
                         }
                     }
 
@@ -623,6 +644,7 @@ struct StoryTagPill: View {
         let content = HStack(spacing: 4) {
             Image(systemName: tag.type.icon)
             Text(tag.value)
+                .lineLimit(1)
             if let onRemove {
                 Button {
                     onRemove()

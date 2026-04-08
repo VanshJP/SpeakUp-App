@@ -223,10 +223,14 @@ struct SettingsView: View {
         }
     }
 
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        return f
+    }()
+
     private var reminderTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return "Daily at " + formatter.string(from: viewModel.reminderTime)
+        "Daily at " + Self.timeFormatter.string(from: viewModel.reminderTime)
     }
 
     private func settingsLink<Destination: View>(

@@ -4,6 +4,7 @@ import SwiftData
 import UIKit
 
 @Observable
+@MainActor
 class RecordingViewModel {
     // Services
     let audioService = AudioService()
@@ -17,8 +18,6 @@ class RecordingViewModel {
     var targetDuration: RecordingDuration = .sixty
     var prompt: Prompt?
     var goalId: UUID?
-    var eventId: UUID?
-    var scriptVersionId: UUID?
     var storyId: UUID?
 
     // Timer
