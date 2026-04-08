@@ -130,15 +130,23 @@ enum SpeakUpSchemaV16: VersionedSchema {
     }
 }
 
+enum SpeakUpSchemaV17: VersionedSchema {
+    static var versionIdentifier = Schema.Version(17, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
+    }
+}
+
 // MARK: - Migration Plan
 
 enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self, SpeakUpSchemaV6.self, SpeakUpSchemaV7.self, SpeakUpSchemaV8.self, SpeakUpSchemaV9.self, SpeakUpSchemaV10.self, SpeakUpSchemaV11.self, SpeakUpSchemaV12.self, SpeakUpSchemaV13.self, SpeakUpSchemaV14.self, SpeakUpSchemaV15.self, SpeakUpSchemaV16.self]
+        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self, SpeakUpSchemaV6.self, SpeakUpSchemaV7.self, SpeakUpSchemaV8.self, SpeakUpSchemaV9.self, SpeakUpSchemaV10.self, SpeakUpSchemaV11.self, SpeakUpSchemaV12.self, SpeakUpSchemaV13.self, SpeakUpSchemaV14.self, SpeakUpSchemaV15.self, SpeakUpSchemaV16.self, SpeakUpSchemaV17.self]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, migrateV7toV8, migrateV8toV9, migrateV9toV10, migrateV10toV11, migrateV11toV12, migrateV12toV13, migrateV13toV14, migrateV14toV15, migrateV15toV16]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, migrateV7toV8, migrateV8toV9, migrateV9toV10, migrateV10toV11, migrateV11toV12, migrateV12toV13, migrateV13toV14, migrateV14toV15, migrateV15toV16, migrateV16toV17]
     }
 
     static let migrateV1toV2 = MigrationStage.lightweight(
@@ -214,5 +222,10 @@ enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static let migrateV15toV16 = MigrationStage.lightweight(
         fromVersion: SpeakUpSchemaV15.self,
         toVersion: SpeakUpSchemaV16.self
+    )
+
+    static let migrateV16toV17 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV16.self,
+        toVersion: SpeakUpSchemaV17.self
     )
 }

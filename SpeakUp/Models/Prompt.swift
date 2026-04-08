@@ -9,7 +9,9 @@ final class Prompt {
     var category: String = ""
     var difficulty: PromptDifficulty = PromptDifficulty.medium
     var isUserCreated: Bool = false
-    
+    @Relationship(inverse: \Recording.prompt)
+    var recordings: [Recording]? = []
+
     init(
         id: String,
         text: String,

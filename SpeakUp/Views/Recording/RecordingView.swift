@@ -8,6 +8,7 @@ struct RecordingView: View {
     @State private var selectedFramework: SpeechFramework?
     @State private var showFrameworkPicker = false
     @State private var showingVocabOverlay = false
+    @State private var showSavedToast = false
     @Query private var goals: [UserGoal]
 
     let prompt: Prompt?
@@ -45,6 +46,13 @@ struct RecordingView: View {
                 bottomControls
             }
             .padding()
+
+            // Saved toast
+            if showSavedToast {
+                savedToastOverlay
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    .zIndex(3)
+            }
 
             // Vocab words floating overlay
             if showingVocabOverlay, let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
@@ -87,7 +95,14 @@ struct RecordingView: View {
         }
         .onChange(of: viewModel.autoSavedRecording) { _, recording in
             if let recording {
-                onComplete(recording)
+                Haptics.success()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    showSavedToast = true
+                }
+                Task {
+                    try? await Task.sleep(for: .seconds(1.0))
+                    onComplete(recording)
+                }
             }
         }
         .alert("Permission Required", isPresented: $viewModel.showingPermissionAlert) {
@@ -360,6 +375,11 @@ struct RecordingView: View {
                         Task {
                             if viewModel.isRecording {
                                 if let recording = await viewModel.stopRecording() {
+                                    Haptics.success()
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                                        showSavedToast = true
+                                    }
+                                    try? await Task.sleep(for: .seconds(1.0))
                                     onComplete(recording)
                                 }
                             } else {
@@ -382,6 +402,34 @@ struct RecordingView: View {
             }
         }
         .padding(.bottom, 40)
+    }
+
+    // MARK: - Saved Toast
+
+    private var savedToastOverlay: some View {
+        VStack {
+            Spacer()
+
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.green)
+
+                Text("Saved!")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+            }
+
+            Spacer()
+        }
+        .allowsHitTesting(false)
     }
 }
 
