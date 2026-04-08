@@ -139,7 +139,8 @@ enum SpeechScoringEngine {
     // MARK: - Substance Score
 
     /// Computes a 0-100 substance score that rewards meaningful, informative speech.
-    /// This is the most important gate: gibberish or trivially short speech scores ≤15.
+    /// Tuned for natural progression: a solid 15-20s answer can reach ~55-65, and a
+    /// good 30s+ speech easily clears 75+. Gibberish/empty speech still scores ≤15.
     static func computeSubstanceScore(
         words: [TranscriptionWord],
         nonFillerCount: Int,
@@ -149,84 +150,77 @@ enum SpeechScoringEngine {
         contentWordDensity: Double,
         mlr: Double
     ) -> Int {
-        // Gate 1: Absolute minimum — fewer than 8 non-filler words = near-zero
-        guard nonFillerCount >= 8 else {
-            let base = Double(nonFillerCount) / 8.0
+        guard nonFillerCount >= 5 else {
+            let base = Double(nonFillerCount) / 5.0
             return max(0, min(10, Int(base * 10)))
         }
 
-        // Gate 2: Duration minimum — less than 5 seconds = near-zero
-        guard actualDuration >= 5.0 else {
-            return max(0, min(10, Int(actualDuration / 5.0 * 10)))
+        guard actualDuration >= 3.0 else {
+            return max(0, min(10, Int(actualDuration / 3.0 * 10)))
         }
 
         var score = 0.0
 
         // Component 1: Word count adequacy (0-25 points)
-        // 20 words = 10pts, 50 words = 18pts, 100+ words = 25pts
         let wordCountComponent: Double
-        if nonFillerCount >= 100 {
+        if nonFillerCount >= 70 {
             wordCountComponent = 25
-        } else if nonFillerCount >= 50 {
-            wordCountComponent = 18 + Double(nonFillerCount - 50) / 50.0 * 7
-        } else if nonFillerCount >= 20 {
-            wordCountComponent = 10 + Double(nonFillerCount - 20) / 30.0 * 8
+        } else if nonFillerCount >= 35 {
+            wordCountComponent = 18 + Double(nonFillerCount - 35) / 35.0 * 7
+        } else if nonFillerCount >= 15 {
+            wordCountComponent = 10 + Double(nonFillerCount - 15) / 20.0 * 8
         } else {
-            wordCountComponent = Double(nonFillerCount - 8) / 12.0 * 10
+            wordCountComponent = Double(nonFillerCount - 5) / 10.0 * 10
         }
         score += wordCountComponent
 
         // Component 2: Duration adequacy (0-20 points)
-        // 15s = 8pts, 30s = 14pts, 60s+ = 20pts
         let durationComponent: Double
-        if actualDuration >= 60 {
+        if actualDuration >= 40 {
             durationComponent = 20
-        } else if actualDuration >= 30 {
-            durationComponent = 14 + (actualDuration - 30) / 30.0 * 6
-        } else if actualDuration >= 15 {
-            durationComponent = 8 + (actualDuration - 15) / 15.0 * 6
+        } else if actualDuration >= 20 {
+            durationComponent = 14 + (actualDuration - 20) / 20.0 * 6
+        } else if actualDuration >= 10 {
+            durationComponent = 8 + (actualDuration - 10) / 10.0 * 6
         } else {
-            durationComponent = (actualDuration - 5) / 10.0 * 8
+            durationComponent = (actualDuration - 3) / 7.0 * 8
         }
         score += durationComponent
 
         // Component 3: Lexical diversity via MATTR (0-20 points)
-        // MATTR 0.5 = 5pts, 0.65 = 12pts, 0.80+ = 20pts
         let mattrComponent: Double
-        if mattr >= 0.80 {
+        if mattr >= 0.72 {
             mattrComponent = 20
-        } else if mattr >= 0.65 {
-            mattrComponent = 12 + (mattr - 0.65) / 0.15 * 8
-        } else if mattr >= 0.50 {
-            mattrComponent = 5 + (mattr - 0.50) / 0.15 * 7
+        } else if mattr >= 0.58 {
+            mattrComponent = 12 + (mattr - 0.58) / 0.14 * 8
+        } else if mattr >= 0.45 {
+            mattrComponent = 5 + (mattr - 0.45) / 0.13 * 7
         } else {
-            mattrComponent = mattr / 0.50 * 5
+            mattrComponent = mattr / 0.45 * 5
         }
         score += mattrComponent
 
         // Component 4: Content word density (0-20 points)
-        // 5 unique content words/min = 5pts, 15/min = 12pts, 30+/min = 20pts
         let densityComponent: Double
-        if contentWordDensity >= 30 {
+        if contentWordDensity >= 22 {
             densityComponent = 20
-        } else if contentWordDensity >= 15 {
-            densityComponent = 12 + (contentWordDensity - 15) / 15.0 * 8
-        } else if contentWordDensity >= 5 {
-            densityComponent = 5 + (contentWordDensity - 5) / 10.0 * 7
+        } else if contentWordDensity >= 10 {
+            densityComponent = 12 + (contentWordDensity - 10) / 12.0 * 8
+        } else if contentWordDensity >= 4 {
+            densityComponent = 5 + (contentWordDensity - 4) / 6.0 * 7
         } else {
-            densityComponent = contentWordDensity / 5.0 * 5
+            densityComponent = contentWordDensity / 4.0 * 5
         }
         score += densityComponent
 
         // Component 5: Mean Length of Run (0-15 points)
-        // MLR < 3 = 0pts (very disfluent), MLR 6 = 8pts, MLR 12+ = 15pts
         let mlrComponent: Double
-        if mlr >= 12 {
+        if mlr >= 10 {
             mlrComponent = 15
-        } else if mlr >= 6 {
-            mlrComponent = 8 + (mlr - 6) / 6.0 * 7
-        } else if mlr >= 3 {
-            mlrComponent = (mlr - 3) / 3.0 * 8
+        } else if mlr >= 5 {
+            mlrComponent = 8 + (mlr - 5) / 5.0 * 7
+        } else if mlr >= 2 {
+            mlrComponent = (mlr - 2) / 3.0 * 8
         } else {
             mlrComponent = 0
         }
@@ -239,6 +233,7 @@ enum SpeechScoringEngine {
 
     /// Computes a 0-100 fluency score based on PTR, MLR, and articulation rate.
     /// This is separate from pace (WPM) — a speaker can be slow but fluent.
+    /// Wider ideal zones ensure beginners can still score well on fluency.
     static func computeFluencyScore(
         phonationTimeRatio: Double,
         mlr: Double,
@@ -249,56 +244,54 @@ enum SpeechScoringEngine {
         var score = 0.0
 
         // PTR component (0-35 points)
-        // Ideal range: 0.55-0.75. Below 0.40 = too many pauses. Above 0.85 = no breathing.
+        // Widened ideal: 0.45-0.80. Beginners often run 0.50-0.60 naturally.
         let ptrComponent: Double
-        if phonationTimeRatio >= 0.55 && phonationTimeRatio <= 0.75 {
-            ptrComponent = 35  // Ideal zone
-        } else if phonationTimeRatio >= 0.45 && phonationTimeRatio < 0.55 {
-            ptrComponent = 25 + (phonationTimeRatio - 0.45) / 0.10 * 10
-        } else if phonationTimeRatio > 0.75 && phonationTimeRatio <= 0.85 {
-            ptrComponent = 25 + (0.85 - phonationTimeRatio) / 0.10 * 10
+        if phonationTimeRatio >= 0.45 && phonationTimeRatio <= 0.80 {
+            ptrComponent = 35
         } else if phonationTimeRatio >= 0.35 && phonationTimeRatio < 0.45 {
-            ptrComponent = 10 + (phonationTimeRatio - 0.35) / 0.10 * 15
-        } else if phonationTimeRatio > 0.85 {
-            ptrComponent = max(10, 25 - (phonationTimeRatio - 0.85) / 0.15 * 15)
+            ptrComponent = 22 + (phonationTimeRatio - 0.35) / 0.10 * 13
+        } else if phonationTimeRatio > 0.80 && phonationTimeRatio <= 0.90 {
+            ptrComponent = 22 + (0.90 - phonationTimeRatio) / 0.10 * 13
+        } else if phonationTimeRatio >= 0.25 && phonationTimeRatio < 0.35 {
+            ptrComponent = 8 + (phonationTimeRatio - 0.25) / 0.10 * 14
+        } else if phonationTimeRatio > 0.90 {
+            ptrComponent = max(10, 22 - (phonationTimeRatio - 0.90) / 0.10 * 12)
         } else {
-            // Very low PTR (< 0.35) — very hesitant
-            ptrComponent = max(0, phonationTimeRatio / 0.35 * 10)
+            ptrComponent = max(0, phonationTimeRatio / 0.25 * 8)
         }
         score += ptrComponent
 
         // MLR component (0-35 points)
-        // Research: MLR > 8 is fluent. MLR < 4 is disfluent.
+        // Gentler curve: MLR 5 already earns 22 pts, MLR 8+ is full marks.
         let mlrComponent: Double
-        if mlr >= 10 {
+        if mlr >= 8 {
             mlrComponent = 35
-        } else if mlr >= 6 {
-            mlrComponent = 22 + (mlr - 6) / 4.0 * 13
-        } else if mlr >= 4 {
-            mlrComponent = 12 + (mlr - 4) / 2.0 * 10
-        } else if mlr >= 2 {
-            mlrComponent = 4 + (mlr - 2) / 2.0 * 8
+        } else if mlr >= 5 {
+            mlrComponent = 22 + (mlr - 5) / 3.0 * 13
+        } else if mlr >= 3 {
+            mlrComponent = 12 + (mlr - 3) / 2.0 * 10
+        } else if mlr >= 1.5 {
+            mlrComponent = 4 + (mlr - 1.5) / 1.5 * 8
         } else {
-            mlrComponent = max(0, mlr / 2.0 * 4)
+            mlrComponent = max(0, mlr / 1.5 * 4)
         }
         score += mlrComponent
 
         // Articulation rate component (0-30 points)
-        // Natural English: ~120-180 words/min during voiced time.
-        // Below 80 = very slow/hesitant. Above 220 = rushing.
+        // Widened ideal: 100-200 WPM voiced time (was 120-180).
         let articulationComponent: Double
-        if articulationRate >= 120 && articulationRate <= 180 {
+        if articulationRate >= 100 && articulationRate <= 200 {
             articulationComponent = 30
-        } else if articulationRate >= 90 && articulationRate < 120 {
-            articulationComponent = 20 + (articulationRate - 90) / 30.0 * 10
-        } else if articulationRate > 180 && articulationRate <= 220 {
-            articulationComponent = 20 + (220 - articulationRate) / 40.0 * 10
-        } else if articulationRate >= 60 && articulationRate < 90 {
-            articulationComponent = 8 + (articulationRate - 60) / 30.0 * 12
-        } else if articulationRate > 220 {
-            articulationComponent = max(5, 20 - (articulationRate - 220) / 40.0 * 15)
+        } else if articulationRate >= 75 && articulationRate < 100 {
+            articulationComponent = 20 + (articulationRate - 75) / 25.0 * 10
+        } else if articulationRate > 200 && articulationRate <= 240 {
+            articulationComponent = 20 + (240 - articulationRate) / 40.0 * 10
+        } else if articulationRate >= 50 && articulationRate < 75 {
+            articulationComponent = 8 + (articulationRate - 50) / 25.0 * 12
+        } else if articulationRate > 240 {
+            articulationComponent = max(5, 20 - (articulationRate - 240) / 40.0 * 15)
         } else {
-            articulationComponent = max(0, articulationRate / 60.0 * 8)
+            articulationComponent = max(0, articulationRate / 50.0 * 8)
         }
         score += articulationComponent
 
@@ -654,26 +647,26 @@ enum SpeechScoringEngine {
     /// This ensures that gibberish or near-empty speech cannot score well
     /// even if the few words spoken were "fluent."
     ///
-    /// The multiplier curve:
-    ///   substanceScore 0-15: multiplier 0.05-0.15 (score collapses to near-zero)
-    ///   substanceScore 15-40: multiplier 0.15-0.55 (score heavily penalized)
-    ///   substanceScore 40-65: multiplier 0.55-0.85 (moderate penalty)
-    ///   substanceScore 65-85: multiplier 0.85-0.97 (slight penalty)
-    ///   substanceScore 85-100: multiplier 0.97-1.00 (near-full score)
+    /// The multiplier curve is tuned for natural progression:
+    ///   substanceScore 0-10:  multiplier 0.10-0.25  (gibberish/empty collapses)
+    ///   substanceScore 10-30: multiplier 0.25-0.65  (very short speech penalized)
+    ///   substanceScore 30-50: multiplier 0.65-0.88  (short speech moderate penalty)
+    ///   substanceScore 50-75: multiplier 0.88-0.97  (adequate speech, slight penalty)
+    ///   substanceScore 75-100: multiplier 0.97-1.00 (full-length speech, near-full score)
     static func applySubstanceMultiplier(overallScore: Int, substanceScore: Int) -> Int {
         let s = Double(substanceScore)
         let multiplier: Double
 
-        if s <= 15 {
-            multiplier = 0.05 + (s / 15.0) * 0.10
-        } else if s <= 40 {
-            multiplier = 0.15 + ((s - 15) / 25.0) * 0.40
-        } else if s <= 65 {
-            multiplier = 0.55 + ((s - 40) / 25.0) * 0.30
-        } else if s <= 85 {
-            multiplier = 0.85 + ((s - 65) / 20.0) * 0.12
+        if s <= 10 {
+            multiplier = 0.10 + (s / 10.0) * 0.15
+        } else if s <= 30 {
+            multiplier = 0.25 + ((s - 10) / 20.0) * 0.40
+        } else if s <= 50 {
+            multiplier = 0.65 + ((s - 30) / 20.0) * 0.23
+        } else if s <= 75 {
+            multiplier = 0.88 + ((s - 50) / 25.0) * 0.09
         } else {
-            multiplier = 0.97 + ((s - 85) / 15.0) * 0.03
+            multiplier = 0.97 + ((s - 75) / 25.0) * 0.03
         }
 
         return max(0, min(100, Int(Double(overallScore) * multiplier)))

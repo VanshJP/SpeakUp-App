@@ -258,7 +258,7 @@ enum CoachingTipService {
                 tips.append(CoachingTip(
                     icon: "waveform.and.mic",
                     title: "Reduce Dead Air",
-                    message: "You spent a lot of time pausing. Aim to be speaking 55-75% of your session time.",
+                    message: "You spent a lot of time pausing. Aim to be speaking at least 45-80% of your session time.",
                     category: .pace,
                     teachingPoint: "Excessive pausing often signals hesitation or searching for words. Practice 'thinking out loud' — bridge pauses with transitional phrases like 'What I mean is...' while you formulate your next thought.",
                     suggestedDrillMode: "fillerFree"

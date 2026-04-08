@@ -392,12 +392,12 @@ struct ScoreWeightsView: View {
             SubscoreDescription(
                 name: "Pace", key: "pace", icon: "speedometer",
                 measures: "Speaking speed and fluency. Optimal pace is conversational — not rushed or dragging.",
-                howCalculated: "Bell curve comparison to your target WPM (65%), blended with rate variation bonus (20%) and fluency signals: Phonation Time Ratio and Mean Length of Run (15%)."
+                howCalculated: "Gaussian comparison to your target WPM (wider tolerance ±30 WPM), with optional rate variation (18%) and fluency signals (14%) blended in when available."
             ),
             SubscoreDescription(
                 name: "Filler Usage", key: "filler", icon: "text.badge.minus",
                 measures: "How often you use filler words like 'um', 'uh', 'like', and 'you know'.",
-                howCalculated: "Uses a logarithmic curve so occasional fillers are okay, but frequent use and weak filler-like phrasing lower your score progressively."
+                howCalculated: "Uses a gentle logarithmic curve: occasional fillers (under 3%) barely affect the score, while frequent use lowers it progressively."
             ),
             SubscoreDescription(
                 name: "Pauses", key: "pause", icon: "pause.circle",

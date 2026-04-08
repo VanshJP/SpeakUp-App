@@ -643,24 +643,20 @@ class SpeechService {
         // which applies a graduated multiplier to the final overall score. This prevents the
         // ceiling from artificially compressing subscores while still penalizing short/empty speech.
 
-        // Clarity score — voiced frame ratio (articulation quality) + duration consistency + hedge penalty
+        // Clarity score — voiced frame ratio + duration consistency + hedge penalty + authority.
+        // Tuned so average conversational speech lands in the 60-75 range, not the 40-55 range.
         let clarityScore: Int
         do {
             let articulationComponent: Double
             if let pm = pitchMetrics, pm.voicedFrameRatio > 0 {
-                // voicedFrameRatio: 0.3-0.7 is typical for speech.
-                // Less aggressive mapping so normal speech does not cluster around the mid-50s.
-                // ratio 0.25 → ~60, 0.45 → ~84, 0.58 → ~100
-                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 120 + 30))
+                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 110 + 38))
             } else {
-                // Fallback to word confidence when pitch data unavailable
                 let confidences = words.compactMap { $0.confidence }
                 if !confidences.isEmpty {
                     let averageConfidence = confidences.reduce(0, +) / Double(confidences.count)
-                    // Whisper/ASR confidences are often conservative; map to a wider clarity band.
-                    articulationComponent = min(100, max(35, averageConfidence * 110 + 8))
+                    articulationComponent = min(100, max(40, averageConfidence * 100 + 20))
                 } else {
-                    articulationComponent = 60
+                    articulationComponent = 65
                 }
             }
 
@@ -670,15 +666,14 @@ class SpeechService {
                 let meanDur = durations.reduce(0, +) / Double(durations.count)
                 let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
                 let cv = meanDur > 0 ? sqrt(variance) / meanDur : 1.0
-                // More forgiving curve: natural speech CV ~0.4-0.6 now scores ~64-76.
-                durationComponent = max(0, min(100, (1.0 - cv * 0.60) * 100))
+                durationComponent = max(0, min(100, (1.0 - cv * 0.50) * 100))
             } else {
-                durationComponent = 55
+                durationComponent = 60
             }
 
             let hedgePenalty: Double
             if let tq = textQuality {
-                hedgePenalty = min(14, tq.hedgeWordRatio * 280)
+                hedgePenalty = min(10, tq.hedgeWordRatio * 200)
             } else {
                 hedgePenalty = 0
             }
@@ -687,54 +682,56 @@ class SpeechService {
             if let tq = textQuality {
                 authorityComponent = Double(tq.authorityScore)
             } else {
-                authorityComponent = 55
+                authorityComponent = 60
             }
 
-            let paceAlignmentBonus = max(0, 8 - abs(wordsPerMinute - Double(targetWPM)) / 10)
-            let rawClarity = articulationComponent * 0.52 +
-                durationComponent * 0.24 +
+            let paceAlignmentBonus = max(0, 8 - abs(wordsPerMinute - Double(targetWPM)) / 12)
+            let rawClarity = articulationComponent * 0.50 +
+                durationComponent * 0.22 +
                 (100 - hedgePenalty) * 0.08 +
-                authorityComponent * 0.16 +
+                authorityComponent * 0.12 +
                 paceAlignmentBonus
             clarityScore = max(0, min(100, Int(rawClarity)))
         }
 
-        // Pace score — enhanced with rate variation bonus and fluency (PTR/MLR/articulation rate)
+        // Pace score — WPM Gaussian + optional rate variation and fluency bonuses.
+        // Sigma widened from 45→55 so WPM ±30 from target still scores well.
+        // When optional metrics are available they replace part of the base weight;
+        // when absent, WPM gets the full weight so the score isn't artificially capped.
         let optimalWPM = Double(targetWPM)
-        let sigma = 45.0
+        let sigma = 55.0
         let deviation = wordsPerMinute - optimalWPM
         let basePaceScore = 100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))
 
-        let rateVariationBonus: Double
+        var paceBaseWeight = 1.0
+        var bonusComponents = 0.0
+
         if let rv = rateVariation {
-            rateVariationBonus = Double(rv.rateVariationScore) * 0.20
-        } else {
-            rateVariationBonus = 0
+            bonusComponents += Double(rv.rateVariationScore) * 0.18
+            paceBaseWeight -= 0.18
         }
-        // Blend in fluency score (PTR + MLR + articulation rate) from SpeechScoringEngine.
-        // Research shows fluency is a stronger predictor of speech quality than WPM alone.
-        // Weight: 65% WPM-based pace, 20% rate variation, 15% fluency signal.
-        let fluencyBlend: Double
         if let em = enhancedMetrics {
-            fluencyBlend = Double(em.fluencyScore) * 0.15
-        } else {
-            fluencyBlend = 0
+            bonusComponents += Double(em.fluencyScore) * 0.14
+            paceBaseWeight -= 0.14
         }
-        let rawPaceScore = basePaceScore * 0.65 + rateVariationBonus + fluencyBlend
+
+        let rawPaceScore = basePaceScore * paceBaseWeight + bonusComponents
         let paceScore = max(0, min(100, Int(rawPaceScore)))
 
-        // Filler usage score — logarithmic curve (less punitive than linear)
+        // Filler usage score — gentler log curve so beginners can see progress.
+        // Old multiplier of 20 was brutal: 5% fillers → score 0. New multiplier of 8
+        // means 5% fillers → ~52, 3% → ~72, 1% → ~91, giving room to improve.
         let hedgeAdjustment: Double
         let weakPhraseAdjustment: Double
         if let tq = textQuality {
-            hedgeAdjustment = min(0.03, tq.hedgeWordRatio * 0.5)
-            weakPhraseAdjustment = min(0.04, tq.weakPhraseRatio * 0.9)
+            hedgeAdjustment = min(0.02, tq.hedgeWordRatio * 0.35)
+            weakPhraseAdjustment = min(0.02, tq.weakPhraseRatio * 0.5)
         } else {
             hedgeAdjustment = 0
             weakPhraseAdjustment = 0
         }
         let effectiveFillerRatio = fillerRatio + hedgeAdjustment + weakPhraseAdjustment
-        let rawFillerScore = 100.0 * max(0, 1.0 - log2(1.0 + effectiveFillerRatio * 20.0))
+        let rawFillerScore = 100.0 * max(0, 1.0 - log2(1.0 + effectiveFillerRatio * 8.0))
         let fillerScore = max(0, min(100, Int(rawFillerScore)))
 
         // Pause quality score
@@ -909,7 +906,7 @@ class SpeechService {
         )
     }
 
-    /// Sophisticated pause scoring based on professional standards (e.g. Toastmasters)
+    /// Pause scoring with gentler penalties so beginners aren't crushed by natural hesitations.
     private func calculatePauseScore(
         metadata: [PauseInfo],
         fillerRatio: Double,
@@ -918,43 +915,34 @@ class SpeechService {
         actualDuration: TimeInterval
     ) -> Int {
         guard !metadata.isEmpty else {
-            // No pauses: if WPM is high, this is a major penalty (rushing)
-            // If WPM is low/normal, it's just a moderate penalty
-            return wordsPerMinute > (targetWPM + 20) ? 40 : 60
+            return wordsPerMinute > (targetWPM + 20) ? 50 : 65
         }
 
-        var score = 70.0 // Starting base score
+        var score = 72.0
 
-        let shortPauses = metadata.filter { $0.duration >= 0.4 && $0.duration < 1.2 }
         let mediumPauses = metadata.filter { $0.duration >= 1.2 && $0.duration < 3.0 }
         let longPauses = metadata.filter { $0.duration >= 3.0 }
 
-        // 1. Reward strategic Medium/Long pauses at transitions
         let strategicMediumCount = mediumPauses.filter { $0.isTransition }.count
         let strategicLongCount = longPauses.filter { $0.isTransition }.count
         score += Double(strategicMediumCount) * 4.0
-        score += Double(strategicLongCount) * 8.0
+        score += Double(strategicLongCount) * 6.0
 
-        // 2. Penalize Long pauses NOT at transitions (hesitations)
+        // Softer hesitation penalty (was -15 per long hesitation)
         let hesitationLongCount = longPauses.filter { !$0.isTransition }.count
-        score -= Double(hesitationLongCount) * 15.0
+        score -= Double(min(hesitationLongCount, 4)) * 8.0
 
-        // 3. Reward "Silence as Filler Replacement"
-        // If filler ratio is low (< 0.02) and they have a healthy amount of short/medium pauses
-        if fillerRatio < 0.02 && (shortPauses.count + mediumPauses.count) > 2 {
-            score += 10.0
+        if fillerRatio < 0.03 && metadata.count > 2 {
+            score += 8.0
         }
 
-        // 4. Frequency Check
-        let pausesPerMinute = Double(metadata.count) / (actualDuration / 60)
+        let pausesPerMinute = Double(metadata.count) / max(1, actualDuration / 60)
         if pausesPerMinute < 3 {
-            score -= 10.0 // Too few pauses = monolithic speech
-        } else if pausesPerMinute > 15 {
-            score -= (pausesPerMinute - 15) * 2.0 // Too many pauses = choppy
+            score -= 6.0
+        } else if pausesPerMinute > 18 {
+            score -= (pausesPerMinute - 18) * 1.5
         }
 
-        // 5. Pace Correlation
-        // If they are rushing, they get a bigger bonus for strategic pauses
         if wordsPerMinute > (targetWPM + 10) {
             score += Double(strategicMediumCount + strategicLongCount) * 2.0
         }
