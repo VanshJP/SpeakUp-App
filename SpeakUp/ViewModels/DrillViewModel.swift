@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 @Observable
+@MainActor
 class DrillViewModel {
     // Reuse the same audio services as RecordingViewModel
     let audioService = AudioService()
@@ -77,7 +78,6 @@ class DrillViewModel {
 
     // MARK: - Start Drill
 
-    @MainActor
     func startDrill(mode: DrillMode) {
         selectedMode = mode
         totalDuration = mode.defaultDurationSeconds
@@ -112,7 +112,6 @@ class DrillViewModel {
         }
     }
 
-    @MainActor
     private func startAudio() async {
         do {
             // Start the recorder so the audio session is active
@@ -142,7 +141,6 @@ class DrillViewModel {
         }
     }
 
-    @MainActor
     private func tick() {
         guard isActive else { return }
 
@@ -158,7 +156,6 @@ class DrillViewModel {
 
     // MARK: - Pause Detection
 
-    @MainActor
     private func updatePauseState() {
         let nowActive = pauseTimings.contains { start in
             timeRemaining <= start && timeRemaining > start - pauseWindowDuration
@@ -175,7 +172,6 @@ class DrillViewModel {
         }
     }
 
-    @MainActor
     private func evaluatePauseWindow() {
         let ratio = totalFramesInPause > 0
             ? Double(silentFramesInPause) / Double(totalFramesInPause)
@@ -193,7 +189,7 @@ class DrillViewModel {
     // MARK: - Audio Level Monitoring (reuses same approach as RecordingViewModel)
 
     private func startAudioLevelMonitoring() {
-        audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
                 self.audioLevel = self.audioService.getAudioLevel()
@@ -215,7 +211,6 @@ class DrillViewModel {
 
     // MARK: - Finish Drill
 
-    @MainActor
     func finishDrill() {
         isActive = false
         timer?.invalidate()

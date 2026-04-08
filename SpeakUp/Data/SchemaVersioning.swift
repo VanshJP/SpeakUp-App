@@ -62,7 +62,7 @@ enum SpeakUpSchemaV8: VersionedSchema {
     static var versionIdentifier = Schema.Version(8, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self]
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self]
     }
 }
 
@@ -70,7 +70,7 @@ enum SpeakUpSchemaV9: VersionedSchema {
     static var versionIdentifier = Schema.Version(9, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self]
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self]
     }
 }
 
@@ -78,7 +78,7 @@ enum SpeakUpSchemaV10: VersionedSchema {
     static var versionIdentifier = Schema.Version(10, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self, RecordingGroup.self]
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self]
     }
 }
 
@@ -86,7 +86,7 @@ enum SpeakUpSchemaV11: VersionedSchema {
     static var versionIdentifier = Schema.Version(11, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self, RecordingGroup.self]
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self]
     }
 }
 
@@ -94,7 +94,7 @@ enum SpeakUpSchemaV12: VersionedSchema {
     static var versionIdentifier = Schema.Version(12, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self, RecordingGroup.self, Story.self]
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
     }
 }
 
@@ -102,7 +102,39 @@ enum SpeakUpSchemaV13: VersionedSchema {
     static var versionIdentifier = Schema.Version(13, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, SpeakingEvent.self, EventPrepTask.self, RecordingGroup.self, Story.self]
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
+    }
+}
+
+enum SpeakUpSchemaV14: VersionedSchema {
+    static var versionIdentifier = Schema.Version(14, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
+    }
+}
+
+enum SpeakUpSchemaV15: VersionedSchema {
+    static var versionIdentifier = Schema.Version(15, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
+    }
+}
+
+enum SpeakUpSchemaV16: VersionedSchema {
+    static var versionIdentifier = Schema.Version(16, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
+    }
+}
+
+enum SpeakUpSchemaV17: VersionedSchema {
+    static var versionIdentifier = Schema.Version(17, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self, CurriculumProgress.self, RecordingGroup.self, Story.self]
     }
 }
 
@@ -110,11 +142,11 @@ enum SpeakUpSchemaV13: VersionedSchema {
 
 enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self, SpeakUpSchemaV6.self, SpeakUpSchemaV7.self, SpeakUpSchemaV8.self, SpeakUpSchemaV9.self, SpeakUpSchemaV10.self, SpeakUpSchemaV11.self, SpeakUpSchemaV12.self, SpeakUpSchemaV13.self]
+        [SpeakUpSchemaV1.self, SpeakUpSchemaV2.self, SpeakUpSchemaV3.self, SpeakUpSchemaV4.self, SpeakUpSchemaV5.self, SpeakUpSchemaV6.self, SpeakUpSchemaV7.self, SpeakUpSchemaV8.self, SpeakUpSchemaV9.self, SpeakUpSchemaV10.self, SpeakUpSchemaV11.self, SpeakUpSchemaV12.self, SpeakUpSchemaV13.self, SpeakUpSchemaV14.self, SpeakUpSchemaV15.self, SpeakUpSchemaV16.self, SpeakUpSchemaV17.self]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, migrateV7toV8, migrateV8toV9, migrateV9toV10, migrateV10toV11, migrateV11toV12, migrateV12toV13]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5, migrateV5toV6, migrateV6toV7, migrateV7toV8, migrateV8toV9, migrateV9toV10, migrateV10toV11, migrateV11toV12, migrateV12toV13, migrateV13toV14, migrateV14toV15, migrateV15toV16, migrateV16toV17]
     }
 
     static let migrateV1toV2 = MigrationStage.lightweight(
@@ -175,5 +207,25 @@ enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static let migrateV12toV13 = MigrationStage.lightweight(
         fromVersion: SpeakUpSchemaV12.self,
         toVersion: SpeakUpSchemaV13.self
+    )
+
+    static let migrateV13toV14 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV13.self,
+        toVersion: SpeakUpSchemaV14.self
+    )
+
+    static let migrateV14toV15 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV14.self,
+        toVersion: SpeakUpSchemaV15.self
+    )
+
+    static let migrateV15toV16 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV15.self,
+        toVersion: SpeakUpSchemaV16.self
+    )
+
+    static let migrateV16toV17 = MigrationStage.lightweight(
+        fromVersion: SpeakUpSchemaV16.self,
+        toVersion: SpeakUpSchemaV17.self
     )
 }

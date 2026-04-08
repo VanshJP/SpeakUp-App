@@ -8,6 +8,7 @@ struct StoriesListView: View {
     @State private var selectedStory: Story?
     @State private var showingDeleteAlert = false
     @State private var storyToDelete: Story?
+    @State private var showingQuickCapture = false
 
     var onStartPractice: ((Story) -> Void)?
 
@@ -17,25 +18,27 @@ struct StoriesListView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
+                    quickCaptureCard
+
                     if !viewModel.stories.isEmpty {
                         statsCard
                     }
 
-                    tagFilterSection
+                    stageFilterSection
                     activeFiltersRow
 
                     if viewModel.stories.isEmpty {
                         EmptyStateCard(
-                            icon: "book.pages",
-                            title: "No Stories Yet",
-                            message: "Store stories and scripts you want to remember and practice telling."
+                            icon: "text.book.closed",
+                            title: "Your Speaking Journal",
+                            message: "Write speech drafts, capture quick ideas, and reflect on practice sessions. Tap the mic to dictate or type to get started."
                         )
                         .padding(.top, 20)
                     } else if viewModel.filteredStories.isEmpty {
                         EmptyStateCard(
                             icon: "magnifyingglass",
                             title: "No Matches",
-                            message: "Try a different search term or filter."
+                            message: "Try a different search or filter."
                         )
                         .padding(.top, 20)
                     } else {
@@ -44,12 +47,13 @@ struct StoriesListView: View {
                                 Button {
                                     selectedStory = story
                                 } label: {
-                                    StoryCardRow(story: story) { tag in
-                                        Haptics.light()
-                                        withAnimation(.spring(response: 0.3)) {
-                                            viewModel.applyTagFilter(tag)
-                                        }
-                                    }
+                                    StoryCardRow(
+                                        story: story,
+                                        onStartPractice: onStartPractice != nil ? {
+                                            Haptics.heavy()
+                                            onStartPractice?(story)
+                                        } : nil
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -70,6 +74,19 @@ struct StoriesListView: View {
                                         }
                                     }
 
+                                    Menu {
+                                        ForEach(StoryStage.allCases) { stage in
+                                            Button {
+                                                viewModel.updateStage(story, stage: stage)
+                                                Haptics.light()
+                                            } label: {
+                                                Label(stage.displayName, systemImage: stage.icon)
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Set Stage", systemImage: "arrow.right.circle")
+                                    }
+
                                     Divider()
 
                                     Button(role: .destructive) {
@@ -87,8 +104,9 @@ struct StoriesListView: View {
                 .padding(.vertical, 16)
             }
         }
-        .navigationTitle("Stories")
-        .searchable(text: $viewModel.searchText, prompt: "Search stories...")
+        .navigationTitle("Journal")
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .searchable(text: $viewModel.searchText, prompt: "Search journal...")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 toolbarFilterMenu
@@ -109,6 +127,13 @@ struct StoriesListView: View {
                 StoryEditorView(viewModel: viewModel)
             }
             .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingQuickCapture) {
+            NavigationStack {
+                QuickCaptureView(viewModel: viewModel)
+            }
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
         .navigationDestination(item: $selectedStory) { story in
@@ -134,6 +159,44 @@ struct StoriesListView: View {
         }
     }
 
+    // MARK: - Quick Capture Card
+
+    private var quickCaptureCard: some View {
+        Button {
+            Haptics.medium()
+            showingQuickCapture = true
+        } label: {
+            FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.primary.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "mic.badge.plus")
+                            .font(.title3)
+                            .foregroundStyle(AppColors.primary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Quick Entry")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("Capture a thought, draft, or reflection")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Toolbar Filter Menu
 
     private var toolbarFilterMenu: some View {
@@ -146,25 +209,25 @@ struct StoriesListView: View {
                 }
             }
 
-            Section("Tag Type") {
+            Section("Stage") {
                 Button {
-                    withAnimation { viewModel.selectedTagFilter = nil }
+                    withAnimation { viewModel.selectedStageFilter = nil }
                     Haptics.light()
                 } label: {
                     HStack {
-                        Label("All Types", systemImage: "square.grid.2x2")
-                        if viewModel.selectedTagFilter == nil { Spacer(); Image(systemName: "checkmark") }
+                        Label("All Stages", systemImage: "square.grid.2x2")
+                        if viewModel.selectedStageFilter == nil { Spacer(); Image(systemName: "checkmark") }
                     }
                 }
 
-                ForEach(StoryTagType.allCases) { tagType in
+                ForEach(StoryStage.allCases) { stage in
                     Button {
-                        withAnimation { viewModel.selectedTagFilter = tagType }
+                        withAnimation { viewModel.selectedStageFilter = stage }
                         Haptics.light()
                     } label: {
                         HStack {
-                            Label(tagType.displayName, systemImage: tagType.icon)
-                            if viewModel.selectedTagFilter == tagType { Spacer(); Image(systemName: "checkmark") }
+                            Label(stage.displayName, systemImage: stage.icon)
+                            if viewModel.selectedStageFilter == stage { Spacer(); Image(systemName: "checkmark") }
                         }
                     }
                 }
@@ -212,19 +275,19 @@ struct StoriesListView: View {
                 statsCardDivider
 
                 PromptStatItem(
-                    icon: "tag",
-                    value: "\(totalTagCount)",
-                    label: "Tags",
-                    color: .purple
+                    icon: "lightbulb",
+                    value: "\(sparkCount)",
+                    label: "Sparks",
+                    color: .yellow
                 )
 
                 statsCardDivider
 
                 PromptStatItem(
-                    icon: "star.fill",
-                    value: "\(favoriteCount)",
-                    label: "Favorites",
-                    color: .yellow
+                    icon: "checkmark.seal",
+                    value: "\(polishedCount)",
+                    label: "Polished",
+                    color: AppColors.success
                 )
             }
         }
@@ -240,20 +303,38 @@ struct StoriesListView: View {
         viewModel.stories.reduce(0) { $0 + $1.practiceCount }
     }
 
-    private var totalTagCount: Int {
-        viewModel.stories.reduce(0) { $0 + $1.tags.count }
+    private var sparkCount: Int {
+        viewModel.stories.filter { $0.resolvedStage == .spark }.count
     }
 
-    private var favoriteCount: Int {
-        viewModel.stories.filter(\.isFavorite).count
+    private var polishedCount: Int {
+        viewModel.stories.filter { $0.resolvedStage == .polished }.count
     }
 
-    // MARK: - Tag Filter Pills
+    // MARK: - Filter Pills
 
-    private var tagFilterSection: some View {
+    private var stageFilterSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                tagFilterPill(label: "All", type: nil)
+                // Entry type filters
+                entryTypeFilterPill(label: "All", type: nil, icon: "square.grid.2x2")
+                ForEach(StoryEntryType.allCases) { entryType in
+                    entryTypeFilterPill(label: entryType.displayName, type: entryType, icon: entryType.icon)
+                }
+
+                Divider()
+                    .frame(height: 20)
+                    .padding(.horizontal, 4)
+
+                // Stage filters
+                ForEach(StoryStage.allCases) { stage in
+                    stageFilterPill(label: stage.displayName, stage: stage, icon: stage.icon)
+                }
+
+                Divider()
+                    .frame(height: 20)
+                    .padding(.horizontal, 4)
+
                 ForEach(StoryTagType.allCases) { tagType in
                     tagFilterPill(label: tagType.displayName, type: tagType)
                 }
@@ -261,31 +342,91 @@ struct StoriesListView: View {
         }
     }
 
-    private func tagFilterPill(label: String, type: StoryTagType?) -> some View {
+    private func entryTypeFilterPill(label: String, type: StoryEntryType?, icon: String) -> some View {
+        let isSelected = viewModel.selectedEntryTypeFilter == type && viewModel.selectedStageFilter == nil && viewModel.selectedTagFilter == nil
+        return Button {
+            Haptics.light()
+            withAnimation(.spring(response: 0.3)) {
+                viewModel.selectedEntryTypeFilter = type
+                viewModel.selectedStageFilter = nil
+                viewModel.selectedTagFilter = nil
+                viewModel.selectedTagValue = nil
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(isSelected ? .white : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background {
+                if isSelected {
+                    Capsule().fill(AppColors.primary.opacity(0.8))
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func stageFilterPill(label: String, stage: StoryStage?, icon: String) -> some View {
+        let isSelected = viewModel.selectedStageFilter == stage && viewModel.selectedTagFilter == nil
+        return Button {
+            Haptics.light()
+            withAnimation(.spring(response: 0.3)) {
+                viewModel.selectedStageFilter = stage
+                viewModel.selectedTagFilter = nil
+                viewModel.selectedTagValue = nil
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(isSelected ? .white : .secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background {
+                if isSelected {
+                    Capsule().fill(AppColors.primary)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+        }
+    }
+
+    private func tagFilterPill(label: String, type: StoryTagType) -> some View {
         let isSelected = viewModel.selectedTagFilter == type
         return Button {
             Haptics.light()
             withAnimation(.spring(response: 0.3)) {
-                viewModel.selectedTagFilter = type
-                if type == nil {
-                    viewModel.selectedTagValue = nil
-                    viewModel.dateFilterStart = nil
-                    viewModel.dateFilterEnd = nil
-                }
+                viewModel.selectedTagFilter = isSelected ? nil : type
+                viewModel.selectedStageFilter = nil
             }
         } label: {
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(isSelected ? .white : .secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background {
-                    if isSelected {
-                        Capsule().fill(AppColors.primary)
-                    } else {
-                        Capsule().fill(.ultraThinMaterial)
-                    }
+            HStack(spacing: 5) {
+                Image(systemName: type.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundStyle(isSelected ? .white : .secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background {
+                if isSelected {
+                    Capsule().fill(tagTypeColor(type))
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
                 }
+            }
         }
     }
 
@@ -293,7 +434,8 @@ struct StoriesListView: View {
 
     @ViewBuilder
     private var activeFiltersRow: some View {
-        if viewModel.hasActiveFilters {
+        let hasExtrasOnly = viewModel.sortOrder != .updatedAt || viewModel.favoritesOnly || viewModel.selectedTagValue != nil
+        if hasExtrasOnly {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if viewModel.sortOrder != .updatedAt {
@@ -306,19 +448,6 @@ struct StoriesListView: View {
                         }
                     }
 
-                    if let tagType = viewModel.selectedTagFilter {
-                        activeFilterTag(
-                            icon: tagType.icon,
-                            label: tagType.displayName,
-                            color: tagTypeColor(tagType)
-                        ) {
-                            viewModel.selectedTagFilter = nil
-                            viewModel.selectedTagValue = nil
-                            viewModel.dateFilterStart = nil
-                            viewModel.dateFilterEnd = nil
-                        }
-                    }
-
                     if let tagValue = viewModel.selectedTagValue {
                         activeFilterTag(
                             icon: "tag.fill",
@@ -326,8 +455,6 @@ struct StoriesListView: View {
                             color: .blue
                         ) {
                             viewModel.selectedTagValue = nil
-                            viewModel.dateFilterStart = nil
-                            viewModel.dateFilterEnd = nil
                         }
                     }
 
@@ -385,28 +512,55 @@ struct StoriesListView: View {
 
 private struct StoryCardRow: View {
     let story: Story
-    var onTagTapped: ((StoryTag) -> Void)?
+    var onStartPractice: (() -> Void)?
 
     var body: some View {
-        GlassCard(tint: story.inputMethod == "dictated" ? AppColors.primary.opacity(0.05) : nil) {
+        GlassCard(tint: stageColor.opacity(0.04)) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    if story.isFavorite {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(.yellow)
-                    }
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            if story.isFavorite {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.yellow)
+                            }
 
-                    Text(story.title.isEmpty ? "Untitled Story" : story.title)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                            Text(story.title.isEmpty ? "Untitled Story" : story.title)
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                        }
+
+                        HStack(spacing: 6) {
+                            stageBadge
+                            if let occasion = story.resolvedOccasion {
+                                Text(occasion.rawValue)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background { Capsule().fill(.ultraThinMaterial) }
+                            }
+                        }
+                    }
 
                     Spacer()
 
-                    Text(story.updatedAt, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    if let onStartPractice {
+                        Button {
+                            onStartPractice()
+                        } label: {
+                            Image(systemName: "mic.fill")
+                                .font(.caption)
+                                .foregroundStyle(AppColors.primary)
+                                .padding(8)
+                                .background {
+                                    Circle().fill(AppColors.primary.opacity(0.15))
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 if !story.contentPreview.isEmpty {
@@ -416,41 +570,60 @@ private struct StoryCardRow: View {
                         .lineLimit(2)
                 }
 
-                HStack(spacing: 8) {
-                    // Input method badge
-                    HStack(spacing: 3) {
-                        Image(systemName: story.inputMethod == "dictated" ? "waveform" : "keyboard")
-                        Text(story.inputMethod == "dictated" ? "Dictated" : "Typed")
-                    }
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(AppColors.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background { Capsule().fill(AppColors.primary.opacity(0.15)) }
-
-                    Label("\(story.wordCount) words", systemImage: "text.word.spacing")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
+                HStack(spacing: 10) {
+                    Label("\(story.wordCount)w", systemImage: "text.word.spacing")
+                    Label(story.estimatedReadingTime, systemImage: "clock")
                     if story.practiceCount > 0 {
-                        Label("\(story.practiceCount)", systemImage: "mic")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        Label("\(story.practiceCount)×", systemImage: "mic")
+                    }
+                    if story.bestScore > 0 {
+                        Label("\(story.bestScore)", systemImage: "chart.line.uptrend.xyaxis")
+                            .foregroundStyle(AppColors.scoreColor(for: story.bestScore))
                     }
 
-                    ForEach(story.tags.prefix(3)) { tag in
-                        StoryTagPill(tag: tag, size: .small, onTap: onTagTapped != nil ? {
-                            onTagTapped?(tag)
-                        } : nil)
-                    }
+                    Spacer()
 
-                    if story.tags.count > 3 {
-                        Text("+\(story.tags.count - 3)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    Text(story.updatedAt, style: .relative)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+                if !story.tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(story.tags.prefix(4)) { tag in
+                                StoryTagPill(tag: tag, size: .small)
+                            }
+                            if story.tags.count > 4 {
+                                Text("+\(story.tags.count - 4)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private var stageBadge: some View {
+        let stage = story.resolvedStage
+        return HStack(spacing: 3) {
+            Image(systemName: stage.icon)
+            Text(stage.displayName)
+        }
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(stageColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background { Capsule().fill(stageColor.opacity(0.15)) }
+    }
+
+    private var stageColor: Color {
+        switch story.resolvedStage {
+        case .spark: return .yellow
+        case .draft: return AppColors.primary
+        case .polished: return AppColors.success
         }
     }
 }
@@ -471,6 +644,7 @@ struct StoryTagPill: View {
         let content = HStack(spacing: 4) {
             Image(systemName: tag.type.icon)
             Text(tag.value)
+                .lineLimit(1)
             if let onRemove {
                 Button {
                     onRemove()

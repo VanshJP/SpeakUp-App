@@ -25,16 +25,14 @@ struct ContentView: View {
     @State private var showingJournalExport = false
     @State private var showingAchievements = false
     @State private var showingWordBank = false
-    @State private var showingEvents = false
     @State private var showingReadAloud = false
+    @State private var showingQuickStoryCapture = false
     @State private var settingsViewModel = SettingsViewModel()
 
-    // Recording parameters to pass
+    // Recording parameters
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
-    @State private var recordingEventId: UUID?
-    @State private var recordingScriptVersionId: UUID?
     @State private var recordingStoryId: UUID?
 
     private var countdownDuration: Int {
@@ -58,8 +56,6 @@ struct ContentView: View {
                     onStartRecording: { prompt, duration in
                         recordingPrompt = prompt
                         recordingDuration = duration
-                        recordingEventId = nil
-                        recordingScriptVersionId = nil
                         showingCountdown = true
                     },
                     onShowWheel: {
@@ -86,16 +82,11 @@ struct ContentView: View {
                     onShowWordBank: {
                         showingWordBank = true
                     },
-                    onShowEvents: {
-                        showingEvents = true
-                    },
                     onShowReadAloud: {
                         showingReadAloud = true
                     },
                     onStartStoryPractice: { story in
                         recordingPrompt = nil
-                        recordingEventId = nil
-                        recordingScriptVersionId = nil
                         recordingStoryId = story.id
                         recordingDuration = .sixty
                         showingCountdown = true
@@ -107,8 +98,6 @@ struct ContentView: View {
                 AllPromptsView(onSelectPrompt: { prompt in
                     recordingPrompt = prompt
                     recordingDuration = .sixty
-                    recordingEventId = nil
-                    recordingScriptVersionId = nil
                     showingCountdown = true
                 })
             }
@@ -116,8 +105,6 @@ struct ContentView: View {
             NavigationStack {
                 StoriesListView(onStartPractice: { story in
                     recordingPrompt = nil
-                    recordingEventId = nil
-                    recordingScriptVersionId = nil
                     recordingStoryId = story.id
                     recordingDuration = .sixty
                     showingCountdown = true
@@ -165,7 +152,6 @@ struct ContentView: View {
             }
              .tint(.white)
             
-            // Countdown Overlay
             if showingCountdown {
                 CountdownOverlayView(
                     prompt: recordingPrompt,
@@ -187,8 +173,6 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .fullScreenCover(isPresented: $showingRecording, onDismiss: {
-            recordingEventId = nil
-            recordingScriptVersionId = nil
             recordingStoryId = nil
             if let id = pendingRecordingNavigation {
                 selectedRecordingId = id
@@ -201,8 +185,6 @@ struct ContentView: View {
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
                 goalId: recordingGoalId,
-                eventId: recordingEventId,
-                scriptVersionId: recordingScriptVersionId,
                 storyId: recordingStoryId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
@@ -221,8 +203,6 @@ struct ContentView: View {
             PromptWheelView(onSelectPrompt: { prompt in
                 showingPromptWheel = false
                 recordingPrompt = prompt
-                recordingEventId = nil
-                recordingScriptVersionId = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     showingCountdown = true
                 }
@@ -272,27 +252,17 @@ struct ContentView: View {
                 JournalExportView()
             }
         }
-        .sheet(isPresented: $showingEvents) {
-            EventListView(onStartPractice: { event, scriptVersionId in
-                recordingEventId = event.id
-                recordingScriptVersionId = scriptVersionId
-                let targetSeconds = event.expectedDurationMinutes * 60
-                recordingDuration = RecordingDuration.allCases.min(by: {
-                    abs($0.rawValue - targetSeconds) < abs($1.rawValue - targetSeconds)
-                }) ?? .sixty
-                recordingPrompt = nil
-                showingEvents = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showingCountdown = true
-                }
-            })
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $showingReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingQuickStoryCapture) {
+            NavigationStack {
+                QuickCaptureView(viewModel: StoriesViewModel())
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -321,8 +291,6 @@ struct ContentView: View {
                         if let prompts = try? modelContext.fetch(descriptor) {
                             recordingPrompt = prompts.first { $0.id == challenge.promptId }
                         }
-                        recordingEventId = nil
-                        recordingScriptVersionId = nil
                         socialChallengeService.clearIncoming()
                         showingCountdown = true
                     },
@@ -361,13 +329,17 @@ struct ContentView: View {
             } else {
                 recordingPrompt = nil
             }
-            recordingEventId = nil
-            recordingScriptVersionId = nil
             showingCountdown = true
 
         case "challenge":
             if socialChallengeService.handleIncomingURL(url) {
                 showingChallengeAccept = true
+            }
+
+        case "story":
+            selectedTab = .stories
+            if url.pathComponents.contains("new") {
+                showingQuickStoryCapture = true
             }
 
         default:
@@ -392,7 +364,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: return "Today"
         case .prompts: return "Prompts"
-        case .stories: return "Stories"
+        case .stories: return "Journal"
         case .history: return "History"
         case .learn: return "Learn"
         case .settings: return "Settings"
@@ -403,7 +375,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .today: return "mic.badge.plus"
         case .prompts: return "text.bubble"
-        case .stories: return "book.pages"
+        case .stories: return "text.book.closed"
         case .history: return "clock"
         case .learn: return "book"
         case .settings: return "gearshape"
@@ -416,4 +388,3 @@ enum AppTab: String, CaseIterable, Identifiable {
         .modelContainer(
             for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
 }
-

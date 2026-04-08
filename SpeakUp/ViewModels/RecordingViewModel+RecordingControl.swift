@@ -5,7 +5,6 @@ import UIKit
 extension RecordingViewModel {
     // MARK: - Recording Control
 
-    @MainActor
     func startRecording() async {
         do {
             recordingURL = try await audioService.startRecording()
@@ -28,7 +27,6 @@ extension RecordingViewModel {
         }
     }
 
-    @MainActor
     func stopRecording() async -> Recording? {
         timer?.invalidate()
         timer = nil
@@ -60,8 +58,6 @@ extension RecordingViewModel {
             goalId: goalId
         )
 
-        recording.eventId = eventId
-        recording.scriptVersionId = scriptVersionId
         recording.storyId = storyId
 
         // Denormalize story title for display in history
@@ -79,14 +75,18 @@ extension RecordingViewModel {
         do {
             try context.save()
 
-            // Increment practice count on linked story
+            // Update linked story practice stats
             if let storyId {
                 let targetId = storyId
                 var storyDescriptor = FetchDescriptor<Story>()
                 storyDescriptor.predicate = #Predicate<Story> { $0.id == targetId }
                 if let story = try? context.fetch(storyDescriptor).first {
                     story.practiceCount += 1
+                    story.lastPracticeDate = Date()
                     story.updatedAt = Date()
+                    if let score = recording.analysis?.speechScore.overall, score > story.bestScore {
+                        story.bestScore = score
+                    }
                     try? context.save()
                 }
             }

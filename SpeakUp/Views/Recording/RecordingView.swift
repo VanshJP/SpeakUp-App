@@ -8,6 +8,7 @@ struct RecordingView: View {
     @State private var selectedFramework: SpeechFramework?
     @State private var showFrameworkPicker = false
     @State private var showingVocabOverlay = false
+    @State private var showSavedToast = false
     @Query private var goals: [UserGoal]
 
     let prompt: Prompt?
@@ -15,8 +16,6 @@ struct RecordingView: View {
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
-    var eventId: UUID? = nil
-    var scriptVersionId: UUID? = nil
     var storyId: UUID? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
@@ -48,6 +47,13 @@ struct RecordingView: View {
             }
             .padding()
 
+            // Saved toast
+            if showSavedToast {
+                savedToastOverlay
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    .zIndex(3)
+            }
+
             // Vocab words floating overlay
             if showingVocabOverlay, let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
                 VocabOverlayPanel(words: vocabWords) {
@@ -69,8 +75,6 @@ struct RecordingView: View {
                 countdownStyle: countdownStyle
             )
             viewModel.goalId = goalId
-            viewModel.eventId = eventId
-            viewModel.scriptVersionId = scriptVersionId
             viewModel.storyId = storyId
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
@@ -91,7 +95,14 @@ struct RecordingView: View {
         }
         .onChange(of: viewModel.autoSavedRecording) { _, recording in
             if let recording {
-                onComplete(recording)
+                Haptics.success()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    showSavedToast = true
+                }
+                Task {
+                    try? await Task.sleep(for: .seconds(1.0))
+                    onComplete(recording)
+                }
             }
         }
         .alert("Permission Required", isPresented: $viewModel.showingPermissionAlert) {
@@ -364,6 +375,11 @@ struct RecordingView: View {
                         Task {
                             if viewModel.isRecording {
                                 if let recording = await viewModel.stopRecording() {
+                                    Haptics.success()
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                                        showSavedToast = true
+                                    }
+                                    try? await Task.sleep(for: .seconds(1.0))
                                     onComplete(recording)
                                 }
                             } else {
@@ -387,6 +403,34 @@ struct RecordingView: View {
         }
         .padding(.bottom, 40)
     }
+
+    // MARK: - Saved Toast
+
+    private var savedToastOverlay: some View {
+        VStack {
+            Spacer()
+
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.green)
+
+                Text("Saved!")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+            }
+
+            Spacer()
+        }
+        .allowsHitTesting(false)
+    }
 }
 
 // MARK: - Circular Waveform View (surrounds record button)
@@ -407,6 +451,7 @@ struct CircularWaveformView: View {
                     totalBars: barCount,
                     baseRadius: baseRadius
                 )
+                .animation(.easeOut(duration: 0.08), value: barHeights[index])
             }
         }
         .frame(width: 200, height: 200)
@@ -418,15 +463,14 @@ struct CircularWaveformView: View {
     private func updateBars(level: Float) {
         // Convert dB level (-60 to 0 range for speech) to normalized value (0 to 1)
         let normalizedLevel = max(0, min(1, (level + 60) / 60))
+        let time = Date().timeIntervalSince1970
 
-        withAnimation(.easeOut(duration: 0.08)) {
-            for i in 0..<barCount {
-                // Create variation across bars for organic look
-                let variation = CGFloat.random(in: 0.7...1.3)
-                let waveOffset = sin(Double(i) * 0.3 + Date().timeIntervalSince1970 * 3) * 0.2
-                let height = CGFloat(normalizedLevel) * variation * 0.8 + 0.15 + waveOffset
-                barHeights[i] = min(1.0, max(0.1, height))
-            }
+        for i in 0..<barCount {
+            // Create variation across bars for organic look
+            let variation = CGFloat.random(in: 0.7...1.3)
+            let waveOffset = sin(Double(i) * 0.3 + time * 3) * 0.2
+            let height = CGFloat(normalizedLevel) * variation * 0.8 + 0.15 + waveOffset
+            barHeights[i] = min(1.0, max(0.1, height))
         }
     }
 }

@@ -31,8 +31,6 @@ struct HistoryView: View {
         case .recent:
             let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
             recordings = recordings.filter { $0.date >= weekAgo }
-        case .events:
-            recordings = recordings.filter { $0.eventId != nil }
         case .stories:
             recordings = recordings.filter { $0.storyId != nil }
         }
@@ -226,16 +224,20 @@ struct HistoryView: View {
             .frame(width: 0.5, height: 40)
     }
 
-    private var averageScoreText: String {
+    private var averageScore: Int? {
         let scores = viewModel.recordings.compactMap { $0.analysis?.speechScore.overall }
-        guard !scores.isEmpty else { return "—" }
-        return "\(scores.reduce(0, +) / scores.count)"
+        guard !scores.isEmpty else { return nil }
+        return scores.reduce(0, +) / scores.count
+    }
+
+    private var averageScoreText: String {
+        guard let score = averageScore else { return "—" }
+        return "\(score)"
     }
 
     private var averageScoreColor: Color {
-        let scores = viewModel.recordings.compactMap { $0.analysis?.speechScore.overall }
-        guard !scores.isEmpty else { return .gray }
-        return AppColors.scoreColor(for: scores.reduce(0, +) / scores.count)
+        guard let score = averageScore else { return .gray }
+        return AppColors.scoreColor(for: score)
     }
 
     private var totalPracticeTime: String {
@@ -500,7 +502,6 @@ struct HistoryView: View {
         case .favorites: return viewModel.recordings.filter(\.isFavorite).count
         case .highScore: return viewModel.recordings.filter { ($0.analysis?.speechScore.overall ?? 0) >= 80 }.count
         case .recent: return nil
-        case .events: return viewModel.recordings.filter { $0.eventId != nil }.count
         case .stories: return viewModel.recordings.filter { $0.storyId != nil }.count
         }
     }
@@ -568,7 +569,7 @@ struct HistoryView: View {
 // MARK: - History Filter
 
 enum HistoryFilter: String, CaseIterable, Identifiable {
-    case all, favorites, highScore, recent, events, stories
+    case all, favorites, highScore, recent, stories
 
     var id: String { rawValue }
 
@@ -578,7 +579,6 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         case .favorites: return "Favorites"
         case .highScore: return "High Score"
         case .recent: return "This Week"
-        case .events: return "Events"
         case .stories: return "Stories"
         }
     }
@@ -589,7 +589,6 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         case .favorites: return "heart.fill"
         case .highScore: return "star.fill"
         case .recent: return "clock"
-        case .events: return "calendar"
         case .stories: return "book.pages"
         }
     }
@@ -771,10 +770,14 @@ struct ContributionGraph: View {
 struct RecordingRow: View {
     let recording: Recording
 
+    private static let detailedDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return f
+    }()
+
     private var detailedDateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, h:mm a"
-        return formatter.string(from: recording.date)
+        Self.detailedDateFormatter.string(from: recording.date)
     }
 
     var body: some View {
@@ -837,22 +840,6 @@ struct RecordingRow: View {
                                         Capsule()
                                             .fill((PromptCategory(rawValue: category)?.color ?? .teal).opacity(0.15))
                                     }
-                            }
-
-                            if recording.eventId != nil {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "calendar")
-                                        .font(.system(size: 8))
-                                    Text("Event")
-                                        .font(.caption2.weight(.medium))
-                                }
-                                .foregroundStyle(AppColors.primary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background {
-                                    Capsule()
-                                        .fill(AppColors.primary.opacity(0.15))
-                                }
                             }
 
                             if recording.storyId != nil {
@@ -918,10 +905,14 @@ struct DayDetailSheet: View {
     let recordings: [Recording]
     let onSelectRecording: (Recording) -> Void
 
+    private static let fullDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .full
+        return f
+    }()
+
     private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        return formatter.string(from: date)
+        Self.fullDateFormatter.string(from: date)
     }
 
     var body: some View {

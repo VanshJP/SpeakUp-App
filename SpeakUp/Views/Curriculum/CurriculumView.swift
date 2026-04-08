@@ -20,8 +20,10 @@ struct CurriculumView: View {
                         phaseSection(phase)
                     }
                 }
-                .padding()
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
+            .scrollIndicators(.hidden)
         }
         .navigationTitle("Learning Path")
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -84,20 +86,30 @@ struct CurriculumView: View {
     }
 
     private func phaseSection(_ phase: CurriculumPhase) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
+        let isPreviousPhaseComplete = isPreviousPhaseCompleted(before: phase)
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Week \(phase.week)")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.teal)
 
-                    Text(phase.title)
-                        .font(.title3.weight(.bold))
+                    HStack(spacing: 8) {
+                        Text(phase.title)
+                            .font(.title3.weight(.bold))
+
+                        if !isPreviousPhaseComplete && phase.week > 1 {
+                            Image(systemName: "lock.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Spacer()
 
-                let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
                 Text("\(completedInPhase)/\(phase.lessons.count)")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -108,36 +120,80 @@ struct CurriculumView: View {
                 .foregroundStyle(.secondary)
 
             ForEach(phase.lessons) { lesson in
-                NavigationLink {
-                    LessonDetailView(lesson: lesson, viewModel: viewModel)
-                } label: {
-                    GlassCard(padding: 12) {
-                        HStack(spacing: 12) {
-                            Image(systemName: viewModel.isLessonCompleted(lesson.id) ? "checkmark.circle.fill" : "circle")
-                                .font(.title3)
-                                .foregroundStyle(viewModel.isLessonCompleted(lesson.id) ? .green : .secondary)
+                let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(lesson.title)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
-
-                                Text(lesson.objective)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                if isAccessible {
+                    NavigationLink {
+                        LessonDetailView(lesson: lesson, viewModel: viewModel)
+                    } label: {
+                        lessonCard(lesson, isLocked: false)
                     }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        Haptics.warning()
+                    } label: {
+                        lessonCard(lesson, isLocked: true)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
+    }
+
+    private func lessonCard(_ lesson: CurriculumLesson, isLocked: Bool) -> some View {
+        let isCompleted = viewModel.isLessonCompleted(lesson.id)
+        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
+
+        return GlassCard(padding: 16, accentBorder: isCurrent ? AppColors.primary : nil) {
+            HStack(spacing: 14) {
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : (isLocked ? "lock.fill" : "circle"))
+                    .font(.title2)
+                    .foregroundStyle(isCompleted ? .green : .secondary)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(lesson.title)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(isLocked ? .secondary : .primary)
+
+                        if isCurrent {
+                            Text("Continue")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(AppColors.primary))
+                        }
+                    }
+
+                    Text(lesson.objective)
+                        .font(.subheadline)
+                        .foregroundStyle(isLocked ? .tertiary : .secondary)
+                        .lineLimit(2)
+
+                    Text("\(lesson.activities.count) activities")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                Image(systemName: isLocked ? "lock.fill" : "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(minHeight: 60)
+        }
+        .opacity(isLocked ? 0.6 : 1.0)
+    }
+
+    // MARK: - Helpers
+
+    private func isPreviousPhaseCompleted(before phase: CurriculumPhase) -> Bool {
+        guard let index = viewModel.phases.firstIndex(where: { $0.id == phase.id }),
+              index > 0 else { return true }
+        let previousPhase = viewModel.phases[index - 1]
+        return previousPhase.lessons.allSatisfy { viewModel.isLessonCompleted($0.id) }
     }
 }

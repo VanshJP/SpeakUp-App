@@ -162,64 +162,6 @@ class NotificationService {
         center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
     }
 
-    // MARK: - Event Prep Notifications
-
-    func scheduleEventPrepReminder(eventId: UUID, taskId: UUID, title: String, body: String, at date: Date) async {
-        guard hasPermission else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-
-        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-
-        let identifier = "event_\(eventId.uuidString)_\(taskId.uuidString)"
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
-
-        try? await center.add(request)
-    }
-
-    func cancelEventNotifications(eventId: UUID) async {
-        let pending = await center.pendingNotificationRequests()
-        let prefix = "event_\(eventId.uuidString)"
-        let idsToCancel = pending.filter { $0.identifier.hasPrefix(prefix) }.map(\.identifier)
-        center.removePendingNotificationRequests(withIdentifiers: idsToCancel)
-    }
-
-    func refreshEventNotifications(tasks: [EventPrepTask]) async {
-        guard hasPermission else { return }
-
-        // Cancel all existing event notifications
-        let pending = await center.pendingNotificationRequests()
-        let eventIds = pending.filter { $0.identifier.hasPrefix("event_") }.map(\.identifier)
-        center.removePendingNotificationRequests(withIdentifiers: eventIds)
-
-        // Schedule next 30 upcoming tasks
-        let upcoming = tasks
-            .filter { !$0.isCompleted && $0.scheduledDate > Date() }
-            .sorted { $0.scheduledDate < $1.scheduledDate }
-            .prefix(30)
-
-        for task in upcoming {
-            // Schedule notification at 9am on the task day
-            var components = Calendar.current.dateComponents([.year, .month, .day], from: task.scheduledDate)
-            components.hour = 9
-            components.minute = 0
-
-            guard let notifDate = Calendar.current.date(from: components), notifDate > Date() else { continue }
-
-            await scheduleEventPrepReminder(
-                eventId: task.eventId,
-                taskId: task.id,
-                title: "Event Prep",
-                body: task.taskDescription,
-                at: notifDate
-            )
-        }
-    }
-
     // MARK: - Management
     
     func getScheduledNotifications() async -> [UNNotificationRequest] {

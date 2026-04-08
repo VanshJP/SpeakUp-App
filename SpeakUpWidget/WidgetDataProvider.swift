@@ -120,6 +120,29 @@ enum WidgetDataProvider {
         defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
     }
 
+    // Story data
+    static func updateLatestStory(title: String, preview: String) {
+        defaults?.set(title, forKey: "latestStoryTitle")
+        defaults?.set(preview, forKey: "latestStoryPreview")
+        defaults?.set(storyCount + 1, forKey: "storyCount")
+    }
+
+    static func updateStoryCount(_ count: Int) {
+        defaults?.set(count, forKey: "storyCount")
+    }
+
+    static var latestStoryTitle: String {
+        defaults?.string(forKey: "latestStoryTitle") ?? ""
+    }
+
+    static var latestStoryPreview: String {
+        defaults?.string(forKey: "latestStoryPreview") ?? ""
+    }
+
+    static var storyCount: Int {
+        defaults?.integer(forKey: "storyCount") ?? 0
+    }
+
     // Streak tracking
     static var lastPracticeDate: Date? {
         guard let interval = defaults?.object(forKey: "lastPracticeDate") as? Double else { return nil }

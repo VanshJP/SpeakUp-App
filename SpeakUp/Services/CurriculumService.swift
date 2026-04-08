@@ -155,6 +155,13 @@ class CurriculumService {
         return ordered[(currentIndex + 1)...].first(where: { !isLessonCompleted($0.lessonId) })
     }
 
+    func nextLessonAfter(_ lessonId: String) -> CurriculumLesson? {
+        let allLessons = phases.flatMap(\.lessons)
+        guard let idx = allLessons.firstIndex(where: { $0.id == lessonId }),
+              idx + 1 < allLessons.count else { return nil }
+        return allLessons[idx + 1]
+    }
+
     private func lesson(for lessonId: String) -> CurriculumLesson? {
         phases.flatMap(\.lessons).first { $0.id == lessonId }
     }

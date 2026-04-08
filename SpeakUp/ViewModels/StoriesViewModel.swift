@@ -18,6 +18,9 @@ class StoriesViewModel {
     var selectedTagValue: String? {
         didSet { recomputeFilteredStories() }
     }
+    var selectedStageFilter: StoryStage? {
+        didSet { recomputeFilteredStories() }
+    }
     var dateFilterStart: Date? {
         didSet { recomputeFilteredStories() }
     }
@@ -30,10 +33,15 @@ class StoriesViewModel {
     var sortOrder: StorySortOrder = .updatedAt {
         didSet { recomputeFilteredStories() }
     }
+    var selectedEntryTypeFilter: StoryEntryType? {
+        didSet { recomputeFilteredStories() }
+    }
 
     var hasActiveFilters: Bool {
         selectedTagFilter != nil || selectedTagValue != nil ||
-        dateFilterStart != nil || favoritesOnly || sortOrder != .updatedAt
+        selectedStageFilter != nil || dateFilterStart != nil ||
+        favoritesOnly || sortOrder != .updatedAt ||
+        selectedEntryTypeFilter != nil
     }
 
     let taggingService = StoryTaggingService()
@@ -93,6 +101,14 @@ class StoriesViewModel {
             }
         }
 
+        if let entryTypeFilter = selectedEntryTypeFilter {
+            result = result.filter { $0.resolvedEntryType == entryTypeFilter }
+        }
+
+        if let stageFilter = selectedStageFilter {
+            result = result.filter { $0.resolvedStage == stageFilter }
+        }
+
         if let filter = selectedTagFilter {
             result = result.filter { story in
                 story.tags.contains { $0.type == filter }
@@ -136,6 +152,7 @@ class StoriesViewModel {
     func clearAllFilters() {
         selectedTagFilter = nil
         selectedTagValue = nil
+        selectedStageFilter = nil
         dateFilterStart = nil
         dateFilterEnd = nil
         favoritesOnly = false
@@ -162,15 +179,25 @@ class StoriesViewModel {
         title: String,
         content: String,
         tags: [StoryTag] = [],
-        inputMethod: String = "typed"
+        inputMethod: String = "typed",
+        stage: StoryStage = .spark,
+        occasion: StoryOccasion? = nil,
+        entryType: StoryEntryType = .story,
     ) -> Story? {
         guard let context = modelContext else { return nil }
+
+        let words = content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        let estimatedSeconds = max(0, words * 60 / 150)
 
         let story = Story(
             title: title,
             content: content,
             tags: tags,
-            inputMethod: inputMethod
+            inputMethod: inputMethod,
+            storyStage: stage.rawValue,
+            occasion: occasion?.rawValue,
+            estimatedDurationSeconds: estimatedSeconds,
+            entryType: entryType.rawValue
         )
         context.insert(story)
 
@@ -178,6 +205,12 @@ class StoriesViewModel {
             try context.save()
             stories.insert(story, at: 0)
             recomputeFilteredStories()
+
+            WidgetDataProvider.updateLatestStory(
+                title: title.isEmpty ? "Untitled Spark" : title,
+                preview: story.contentPreview
+            )
+
             return story
         } catch {
             errorMessage = "Failed to save story: \(error.localizedDescription)"
@@ -185,13 +218,24 @@ class StoriesViewModel {
         }
     }
 
-    func updateStory(_ story: Story, title: String, content: String, tags: [StoryTag]) {
+    func updateStory(
+        _ story: Story,
+        title: String,
+        content: String,
+        tags: [StoryTag],
+        stage: StoryStage? = nil,
+        occasion: StoryOccasion? = nil
+    ) {
         guard let context = modelContext else { return }
 
         story.title = title
         story.content = content
         story.tags = tags
         story.updatedAt = Date()
+        if let stage { story.storyStage = stage.rawValue }
+        story.occasion = occasion?.rawValue
+        let words = content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        story.estimatedDurationSeconds = max(0, words * 60 / 150)
 
         do {
             try context.save()
@@ -200,16 +244,31 @@ class StoriesViewModel {
         }
     }
 
+    func updateStage(_ story: Story, stage: StoryStage) {
+        guard let context = modelContext else { return }
+
+        story.storyStage = stage.rawValue
+        story.updatedAt = Date()
+
+        do {
+            try context.save()
+            recomputeFilteredStories()
+        } catch {
+            errorMessage = "Failed to update story stage: \(error.localizedDescription)"
+        }
+    }
+
     func deleteStory(_ story: Story) {
         guard let context = modelContext else { return }
 
         context.delete(story)
-        stories.removeAll { $0.id == story.id }
-        recomputeFilteredStories()
 
         do {
             try context.save()
+            stories.removeAll { $0.id == story.id }
+            recomputeFilteredStories()
         } catch {
+            context.rollback()
             errorMessage = "Failed to delete story: \(error.localizedDescription)"
         }
     }
@@ -316,11 +375,29 @@ class StoriesViewModel {
         do {
             if let story = try context.fetch(descriptor).first {
                 story.practiceCount += 1
+                story.lastPracticeDate = Date()
                 story.updatedAt = Date()
                 try context.save()
             }
         } catch {
             print("Failed to increment practice count: \(error)")
+        }
+    }
+
+    func updateBestScore(for storyId: UUID, score: Int) {
+        guard let context = modelContext else { return }
+
+        let targetId = storyId
+        var descriptor = FetchDescriptor<Story>()
+        descriptor.predicate = #Predicate<Story> { $0.id == targetId }
+
+        do {
+            if let story = try context.fetch(descriptor).first, score > story.bestScore {
+                story.bestScore = score
+                try context.save()
+            }
+        } catch {
+            print("Failed to update best score: \(error)")
         }
     }
 }

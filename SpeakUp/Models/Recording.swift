@@ -22,8 +22,6 @@ final class Recording {
     var frameworkUsed: String?
     var sessionFeedback: SessionFeedback?
     var goalId: UUID?
-    var eventId: UUID?
-    var scriptVersionId: UUID?
     var groupId: UUID?
     var storyId: UUID?
     var storyTitle: String?

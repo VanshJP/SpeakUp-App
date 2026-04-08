@@ -233,6 +233,12 @@ struct DataManagementView: View {
 
     // MARK: - Helpers
 
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
     private static func broadDateString(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
@@ -240,9 +246,7 @@ struct DataManagementView: View {
         } else if calendar.isDateInYesterday(date) {
             return "yesterday"
         } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d"
-            return formatter.string(from: date)
+            return shortDateFormatter.string(from: date)
         }
     }
 }

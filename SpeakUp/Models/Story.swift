@@ -14,6 +14,12 @@ final class Story {
     var colorHex: String?
     var iconName: String?
     var inputMethod: String = "typed"
+    var storyStage: String = "spark"
+    var occasion: String?
+    var estimatedDurationSeconds: Int = 0
+    var lastPracticeDate: Date?
+    var bestScore: Int = 0
+    var entryType: String = "story"
 
     init(
         id: UUID = UUID(),
@@ -26,7 +32,13 @@ final class Story {
         practiceCount: Int = 0,
         colorHex: String? = nil,
         iconName: String? = nil,
-        inputMethod: String = "typed"
+        inputMethod: String = "typed",
+        storyStage: String = "spark",
+        occasion: String? = nil,
+        estimatedDurationSeconds: Int = 0,
+        lastPracticeDate: Date? = nil,
+        bestScore: Int = 0,
+        entryType: String = "story"
     ) {
         self.id = id
         self.title = title
@@ -39,28 +51,144 @@ final class Story {
         self.colorHex = colorHex
         self.iconName = iconName
         self.inputMethod = inputMethod
+        self.storyStage = storyStage
+        self.occasion = occasion
+        self.estimatedDurationSeconds = estimatedDurationSeconds
+        self.lastPracticeDate = lastPracticeDate
+        self.bestScore = bestScore
+        self.entryType = entryType
     }
 
-    /// Number of words in the story content
+    // MARK: - Computed Properties
+
     var wordCount: Int {
         content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
     }
 
-    /// Short preview of story content for list display
     var contentPreview: String {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count <= 100 { return trimmed }
-        return String(trimmed.prefix(100)) + "…"
+        if trimmed.count <= 120 { return trimmed }
+        return String(trimmed.prefix(120)) + "…"
     }
 
-    /// Tags of a specific type
+    var resolvedStage: StoryStage {
+        StoryStage(rawValue: storyStage) ?? .spark
+    }
+
+    var resolvedOccasion: StoryOccasion? {
+        guard let occasion else { return nil }
+        return StoryOccasion(rawValue: occasion)
+    }
+
+    var estimatedReadingTime: String {
+        let words = wordCount
+        guard words > 0 else { return "0s" }
+        let seconds = max(1, words * 60 / 150)
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        let remaining = seconds % 60
+        if remaining == 0 { return "\(minutes)m" }
+        return "\(minutes)m \(remaining)s"
+    }
+
     func tags(ofType type: StoryTagType) -> [StoryTag] {
         tags.filter { $0.type == type }
     }
 
-    /// All unique tag types present on this story
     var tagTypes: Set<StoryTagType> {
         Set(tags.map(\.type))
+    }
+
+    var resolvedEntryType: StoryEntryType {
+        StoryEntryType(rawValue: entryType) ?? .story
+    }
+}
+
+// MARK: - Entry Type
+
+enum StoryEntryType: String, Codable, CaseIterable, Identifiable {
+    case story
+    case reflection
+    case note
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .story: return "Story"
+        case .reflection: return "Reflection"
+        case .note: return "Note"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .story: return "book.pages"
+        case .reflection: return "thought.bubble"
+        case .note: return "note.text"
+        }
+    }
+}
+
+// MARK: - Story Stage
+
+enum StoryStage: String, Codable, CaseIterable, Identifiable {
+    case spark
+    case draft
+    case polished
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .spark: return "Spark"
+        case .draft: return "Draft"
+        case .polished: return "Polished"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .spark: return "lightbulb"
+        case .draft: return "doc.text"
+        case .polished: return "checkmark.seal"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .spark: return "Quick idea or memory"
+        case .draft: return "Working on structure"
+        case .polished: return "Ready to tell"
+        }
+    }
+}
+
+// MARK: - Story Occasion
+
+enum StoryOccasion: String, Codable, CaseIterable, Identifiable {
+    case casual = "Casual"
+    case interview = "Job Interview"
+    case toast = "Toast / Speech"
+    case pitch = "Pitch"
+    case icebreaker = "Icebreaker"
+    case networking = "Networking"
+    case teaching = "Teaching"
+    case personal = "Personal"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .casual: return "bubble.left"
+        case .interview: return "briefcase"
+        case .toast: return "wineglass"
+        case .pitch: return "chart.line.uptrend.xyaxis"
+        case .icebreaker: return "person.2"
+        case .networking: return "link"
+        case .teaching: return "book"
+        case .personal: return "heart"
+        }
     }
 }
 
@@ -77,9 +205,9 @@ enum StoryTagType: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .friend: return "Friends"
+        case .friend: return "People"
         case .date: return "Dates"
-        case .location: return "Locations"
+        case .location: return "Places"
         case .topic: return "Topics"
         case .custom: return "Custom"
         }

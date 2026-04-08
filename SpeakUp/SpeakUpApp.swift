@@ -18,8 +18,6 @@ struct SpeakUpApp: App {
             UserSettings.self,
             Achievement.self,
             CurriculumProgress.self,
-            SpeakingEvent.self,
-            EventPrepTask.self,
             RecordingGroup.self,
             Story.self,
         ])

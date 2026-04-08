@@ -8,8 +8,8 @@ extension RecordingViewModel {
         progress = countdownStyle == .countDown ? 1.0 : 0.0
 
         // Brief pause so the user sees the full starting state
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
-            guard let self else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.isRecording else { return }
             self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let self else { return }
 
