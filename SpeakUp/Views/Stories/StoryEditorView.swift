@@ -15,48 +15,70 @@ struct StoryEditorView: View {
     @State private var selectedStage: StoryStage = .spark
     @State private var selectedOccasion: StoryOccasion?
     @State private var isExtractingTags = false
-    @State private var newTagType: StoryTagType = .custom
     @State private var newTagValue = ""
+    @State private var newTagType: StoryTagType = .topic
     @State private var errorMessage: String?
     @State private var didUseDictation = false
     @State private var isSaving = false
     @State private var isTranscribing = false
     @State private var recordingURL: URL?
+    @State private var showTagInput = false
+
+    @FocusState private var focusedField: Field?
+    @State private var contentFocused = false
+
+    private enum Field: Hashable {
+        case title, tagValue
+    }
 
     private var isEditing: Bool { existingStory != nil }
 
+    // MARK: - Body
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             AppBackground(style: .subtle)
 
-            ScrollView {
-                VStack(spacing: 16) {
-                    stageAndOccasionSection
-                    titleSection
-                    contentSection
-                    tagsSection
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        stagePills
+                            .padding(.bottom, 12)
+
+                        titleField
+                            .padding(.bottom, 4)
+
+                        contentField
+                            .padding(.bottom, 16)
+
+                        transcribingBanner
+                            .padding(.bottom, 8)
+
+                        tagsArea
+                            .id("tags")
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 100)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: showTagInput) { _, show in
+                    if show {
+                        withAnimation { proxy.scrollTo("tags", anchor: .bottom) }
+                    }
+                }
             }
+
+            bottomBar
         }
-        .navigationTitle(isEditing ? "Edit Story" : "New Story")
+        .navigationTitle(isEditing ? "Edit" : "New Story")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                if isSaving {
-                    ProgressView()
-                        .tint(AppColors.primary)
-                } else {
-                    Button(isEditing ? "Save" : "Create") {
-                        saveStory()
-                    }
-                    .disabled((title.isEmpty && content.isEmpty) || audioService.isRecording || isTranscribing)
-                    .foregroundStyle(AppColors.primary)
-                }
+                saveButton
             }
         }
         .onAppear {
@@ -66,12 +88,13 @@ struct StoryEditorView: View {
                 tags = story.tags
                 selectedStage = story.resolvedStage
                 selectedOccasion = story.resolvedOccasion
+                contentFocused = true
+            } else {
+                focusedField = .title
             }
         }
         .onDisappear {
-            if audioService.isRecording {
-                audioService.cancelRecording()
-            }
+            if audioService.isRecording { audioService.cancelRecording() }
         }
         .alert("Error", isPresented: .init(
             get: { errorMessage != nil },
@@ -83,72 +106,69 @@ struct StoryEditorView: View {
         }
     }
 
-    // MARK: - Title
+    // MARK: - Stage Pills
 
-    private var titleSection: some View {
-        TextField("Title (optional)…", text: $title)
-            .font(.title3.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(14)
-            .glassBackground(cornerRadius: 12)
+    private var stagePills: some View {
+        HStack(spacing: 6) {
+            ForEach(StoryStage.allCases) { stage in
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.2)) { selectedStage = stage }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: stage.icon)
+                            .font(.system(size: 10, weight: .bold))
+                        Text(stage.displayName)
+                            .font(.caption2.weight(.bold))
+                    }
+                    .foregroundStyle(selectedStage == stage ? .white : .secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule().fill(selectedStage == stage ? stageColor(stage) : .white.opacity(0.06))
+                    }
+                }
+            }
+
+            Spacer()
+
+            occasionMenu
+        }
     }
 
-    // MARK: - Stage & Occasion
-
-    private var stageAndOccasionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                ForEach(StoryStage.allCases) { stage in
-                    Button {
-                        Haptics.light()
-                        withAnimation(.spring(response: 0.25)) { selectedStage = stage }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: stage.icon)
-                            Text(stage.displayName)
-                        }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(selectedStage == stage ? .white : .secondary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background {
-                            if selectedStage == stage {
-                                Capsule().fill(stageColor(stage))
-                            } else {
-                                Capsule().fill(.ultraThinMaterial)
-                            }
-                        }
-                    }
+    private var occasionMenu: some View {
+        Menu {
+            Button {
+                selectedOccasion = nil
+                Haptics.light()
+            } label: {
+                HStack {
+                    Text("None")
+                    if selectedOccasion == nil { Image(systemName: "checkmark") }
                 }
-                Spacer()
             }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(StoryOccasion.allCases) { occasion in
-                        Button {
-                            Haptics.light()
-                            selectedOccasion = selectedOccasion == occasion ? nil : occasion
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: occasion.icon)
-                                Text(occasion.rawValue)
-                            }
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(selectedOccasion == occasion ? .white : .tertiary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background {
-                                if selectedOccasion == occasion {
-                                    Capsule().fill(AppColors.primary.opacity(0.7))
-                                } else {
-                                    Capsule().fill(.ultraThinMaterial)
-                                }
-                            }
-                        }
+            ForEach(StoryOccasion.allCases) { occasion in
+                Button {
+                    selectedOccasion = occasion
+                    Haptics.light()
+                } label: {
+                    HStack {
+                        Label(occasion.rawValue, systemImage: occasion.icon)
+                        if selectedOccasion == occasion { Image(systemName: "checkmark") }
                     }
                 }
             }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: selectedOccasion?.icon ?? "tag")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(selectedOccasion?.rawValue ?? "Occasion")
+                    .font(.caption2.weight(.medium))
+            }
+            .foregroundStyle(selectedOccasion != nil ? AppColors.primary : .tertiary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background { Capsule().fill(.white.opacity(0.06)) }
         }
     }
 
@@ -160,107 +180,59 @@ struct StoryEditorView: View {
         }
     }
 
+    // MARK: - Title
+
+    private var titleField: some View {
+        TextField("Title", text: $title)
+            .font(.title2.weight(.bold))
+            .foregroundStyle(.white)
+            .focused($focusedField, equals: .title)
+            .submitLabel(.next)
+            .onSubmit { contentFocused = true }
+    }
+
     // MARK: - Content
 
-    private var contentSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                GlassSectionHeader("Content", icon: "doc.text")
-                Spacer()
-                micButton
-            }
-
-            DebouncedTextEditor(
-                text: $content,
-                isDisabled: audioService.isRecording || isTranscribing,
-                placeholder: "Type your story or tap the mic to dictate..."
-            )
-            .frame(minHeight: 200)
-            .padding(14)
-            .glassBackground(cornerRadius: 12)
-
-            transcribingIndicator
-        }
+    private var contentField: some View {
+        DebouncedTextEditor(
+            text: $content,
+            isDisabled: audioService.isRecording || isTranscribing,
+            placeholder: "Start writing…",
+            requestFocus: contentFocused
+        )
+        .frame(minHeight: 220)
     }
 
-    // MARK: - Mic Button
-
-    private var micButton: some View {
-        Button {
-            toggleRecording()
-        } label: {
-            HStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(audioService.isRecording ? AppColors.primary.opacity(0.25) : .white.opacity(0.06))
-                        .overlay {
-                            Circle()
-                                .strokeBorder(
-                                    audioService.isRecording ? AppColors.primary.opacity(0.6) : .white.opacity(0.1),
-                                    lineWidth: 0.5
-                                )
-                        }
-                        .frame(width: 36, height: 36)
-
-                    Image(systemName: audioService.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(audioService.isRecording ? AppColors.primary : .white.opacity(0.6))
-                        .symbolEffect(.pulse, isActive: audioService.isRecording)
-                }
-
-                Text(audioService.isRecording ? "Stop" : "Dictate")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(audioService.isRecording ? AppColors.primary : .secondary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background {
-                Capsule().fill(audioService.isRecording ? AppColors.primary.opacity(0.1) : .clear)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(isTranscribing)
-    }
-
-    // MARK: - Transcribing Indicator
+    // MARK: - Transcribing Banner
 
     @ViewBuilder
-    private var transcribingIndicator: some View {
+    private var transcribingBanner: some View {
         if audioService.isRecording {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(AppColors.recording)
                     .frame(width: 8, height: 8)
                     .pulsingGlow(color: AppColors.recording, isActive: true)
-
-                Text("Recording...")
+                Text("Listening…")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppColors.recording)
-
                 Spacer()
-
                 Text(formatDuration(audioService.recordingDuration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(12)
             .glassBackground(cornerRadius: 10)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         } else if isTranscribing {
-            HStack(spacing: 10) {
-                ProgressView()
-                    .tint(AppColors.primary)
-                    .scaleEffect(0.8)
-
-                Text("Transcribing with Whisper...")
+            HStack(spacing: 8) {
+                ProgressView().tint(AppColors.primary).scaleEffect(0.8)
+                Text("Transcribing…")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppColors.primary)
-
                 Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(12)
             .glassBackground(cornerRadius: 10)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
@@ -268,100 +240,209 @@ struct StoryEditorView: View {
 
     // MARK: - Tags
 
-    private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                GlassSectionHeader("Tags", icon: "tag")
+    private var tagsArea: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !tags.isEmpty || isExtractingTags {
+                tagCloud
+            }
 
-                Spacer()
+            if showTagInput {
+                tagInputRow
+            }
 
-                if isExtractingTags {
-                    HStack(spacing: 4) {
-                        ProgressView()
-                            .tint(AppColors.primary)
-                            .scaleEffect(0.7)
-                        Text("Extracting...")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background { Capsule().fill(AppColors.primary.opacity(0.1)) }
-                } else if llmService.isAvailable && !content.isEmpty {
-                    Button {
-                        Task { await extractTags() }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "sparkles")
-                            Text("Auto-Tag")
-                        }
-                        .font(.caption.weight(.medium))
+            tagActionRow
+        }
+    }
+
+    private var tagCloud: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(tags) { tag in
+                tagChip(tag)
+            }
+            if isExtractingTags {
+                HStack(spacing: 4) {
+                    ProgressView().tint(AppColors.primary).scaleEffect(0.6)
+                    Text("Tagging…")
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(AppColors.primary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background { Capsule().fill(AppColors.primary.opacity(0.1)) }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tagChip(_ tag: StoryTag) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: tag.type.icon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(tag.value)
+                .font(.caption2.weight(.medium))
+                .lineLimit(1)
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    tags.removeAll { $0.id == tag.id }
+                }
+                Haptics.light()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+        }
+        .foregroundStyle(tagColor(tag.type))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background { Capsule().fill(tagColor(tag.type).opacity(0.15)) }
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var tagInputRow: some View {
+        HStack(spacing: 8) {
+            Menu {
+                ForEach(StoryTagType.allCases) { type in
+                    Button {
+                        newTagType = type
+                        Haptics.light()
+                    } label: {
+                        Label(type.displayName, systemImage: type.icon)
                     }
                 }
+            } label: {
+                Image(systemName: newTagType.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.primary)
+                    .frame(width: 28, height: 28)
+                    .background { Circle().fill(AppColors.primary.opacity(0.15)) }
             }
 
-            GlassCard {
-                VStack(spacing: 12) {
-                    if !tags.isEmpty {
-                        FlowLayout(spacing: 8) {
-                            ForEach(tags) { tag in
-                                StoryTagPill(tag: tag, onTap: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        tags.removeAll { $0.id == tag.id }
-                                    }
-                                })
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            TextField("Add tag…", text: $newTagValue)
+                .font(.subheadline)
+                .foregroundStyle(.white)
+                .focused($focusedField, equals: .tagValue)
+                .submitLabel(.done)
+                .onSubmit { addManualTag() }
 
-                        Divider()
-                            .overlay(Color.white.opacity(0.08))
-                    }
-
-                    HStack(spacing: 8) {
-                        Menu {
-                            ForEach(StoryTagType.allCases) { type in
-                                Button {
-                                    newTagType = type
-                                } label: {
-                                    Label(type.displayName, systemImage: type.icon)
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: newTagType.icon)
-                                Text(newTagType.displayName)
-                                Image(systemName: "chevron.down")
-                                    .font(.caption2)
-                            }
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background {
-                                Capsule().fill(AppColors.primary.opacity(0.15))
-                            }
-                        }
-
-                        TextField("Tag value...", text: $newTagValue)
-                            .font(.subheadline)
-                            .foregroundStyle(.white)
-                            .onSubmit { addManualTag() }
-
-                        Button {
-                            addManualTag()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(newTagValue.isEmpty ? .secondary : AppColors.primary)
-                        }
-                        .disabled(newTagValue.isEmpty)
-                    }
+            if !newTagValue.isEmpty {
+                Button {
+                    addManualTag()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(AppColors.primary)
                 }
             }
+        }
+        .padding(10)
+        .glassBackground(cornerRadius: 10)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
+    private var tagActionRow: some View {
+        HStack(spacing: 10) {
+            Button {
+                Haptics.light()
+                withAnimation(.spring(response: 0.25)) {
+                    showTagInput.toggle()
+                    if showTagInput { focusedField = .tagValue }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                    Text("Tag")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background { Capsule().fill(.white.opacity(0.06)) }
+            }
+
+            if llmService.isAvailable && !content.isEmpty && !isExtractingTags {
+                Button {
+                    Task { await extractTags() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                        Text("Auto-Tag")
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppColors.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background { Capsule().fill(AppColors.primary.opacity(0.1)) }
+                }
+            }
+        }
+    }
+
+    private func tagColor(_ type: StoryTagType) -> Color {
+        switch type {
+        case .friend: return .blue
+        case .date: return .orange
+        case .location: return .green
+        case .topic: return .purple
+        case .custom: return .gray
+        }
+    }
+
+    // MARK: - Bottom Bar
+
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            micToggle
+
+            Spacer()
+
+            Text("\(content.split(whereSeparator: \.isWhitespace).count) words")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+
+    private var micToggle: some View {
+        Button {
+            toggleRecording()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: audioService.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .symbolEffect(.pulse, isActive: audioService.isRecording)
+                Text(audioService.isRecording ? "Stop" : "Dictate")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(audioService.isRecording ? AppColors.recording : AppColors.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background {
+                Capsule().fill(
+                    audioService.isRecording
+                        ? AppColors.recording.opacity(0.15)
+                        : AppColors.primary.opacity(0.1)
+                )
+            }
+        }
+        .disabled(isTranscribing)
+    }
+
+    // MARK: - Save Button
+
+    @ViewBuilder
+    private var saveButton: some View {
+        if isSaving {
+            ProgressView().tint(AppColors.primary)
+        } else {
+            Button(isEditing ? "Save" : "Done") {
+                saveStory()
+            }
+            .fontWeight(.semibold)
+            .disabled((title.isEmpty && content.isEmpty) || audioService.isRecording || isTranscribing)
+            .foregroundStyle(AppColors.primary)
         }
     }
 
@@ -378,6 +459,8 @@ struct StoryEditorView: View {
     private func startRecording() {
         Haptics.heavy()
         didUseDictation = true
+        focusedField = nil
+        contentFocused = false
         Task {
             do {
                 let url = try await audioService.startRecording()
@@ -396,18 +479,15 @@ struct StoryEditorView: View {
                 return
             }
 
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTranscribing = true
-            }
+            withAnimation(.easeInOut(duration: 0.2)) { isTranscribing = true }
 
             do {
                 let transcribedText = try await speechService.transcribeTextOnly(audioURL: url)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-
                 if !transcribedText.isEmpty {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         let separator = content.isEmpty ? "" : "\n\n"
-                        content = content + separator + transcribedText
+                        content += separator + transcribedText
                     }
                 }
             } catch {
@@ -417,15 +497,16 @@ struct StoryEditorView: View {
             try? FileManager.default.removeItem(at: url)
             recordingURL = nil
 
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTranscribing = false
-            }
+            withAnimation(.easeInOut(duration: 0.2)) { isTranscribing = false }
+            contentFocused = true
         }
     }
 
     private func saveStory() {
         guard !isSaving else { return }
         isSaving = true
+        focusedField = nil
+        contentFocused = false
 
         Task {
             let method = didUseDictation ? "dictated" : "typed"
@@ -433,10 +514,8 @@ struct StoryEditorView: View {
 
             if finalTags.isEmpty && llmService.isAvailable && !content.isEmpty {
                 let extracted = await viewModel.autoExtractTags(from: content, llmService: llmService)
-                for tag in extracted {
-                    if !finalTags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
-                        finalTags.append(tag)
-                    }
+                for tag in extracted where !finalTags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
+                    finalTags.append(tag)
                 }
             }
 
@@ -450,8 +529,9 @@ struct StoryEditorView: View {
                     occasion: selectedOccasion
                 )
             } else {
+                let resolvedTitle = title.isEmpty ? autoTitle(from: content) : title
                 viewModel.createStory(
-                    title: title,
+                    title: resolvedTitle,
                     content: content,
                     tags: finalTags,
                     inputMethod: method,
@@ -470,9 +550,8 @@ struct StoryEditorView: View {
         let value = newTagValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
 
-        let tag = StoryTag(type: newTagType, value: value)
-        withAnimation(.easeInOut(duration: 0.2)) {
-            tags.append(tag)
+        withAnimation(.spring(response: 0.25)) {
+            tags.append(StoryTag(type: newTagType, value: value))
         }
         newTagValue = ""
         Haptics.light()
@@ -485,14 +564,18 @@ struct StoryEditorView: View {
         let extracted = await viewModel.autoExtractTags(from: content, llmService: llmService)
         if !extracted.isEmpty {
             withAnimation(.spring(response: 0.3)) {
-                for tag in extracted {
-                    if !tags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
-                        tags.append(tag)
-                    }
+                for tag in extracted where !tags.contains(where: { $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased() }) {
+                    tags.append(tag)
                 }
             }
             Haptics.success()
         }
+    }
+
+    private func autoTitle(from text: String) -> String {
+        let words = text.split(separator: " ").prefix(6).joined(separator: " ")
+        if words.count > 40 { return String(words.prefix(40)) + "…" }
+        return words.isEmpty ? "Untitled" : words
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

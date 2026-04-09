@@ -161,7 +161,7 @@ struct StoriesListView: View {
             NavigationStack {
                 QuickCaptureView(viewModel: viewModel)
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .navigationDestination(item: $selectedStory) { story in

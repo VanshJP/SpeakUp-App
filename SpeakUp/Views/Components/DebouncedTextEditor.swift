@@ -6,6 +6,7 @@ struct DebouncedTextEditor: UIViewRepresentable {
     var isDisabled: Bool = false
     var placeholder: String = ""
     var minHeight: CGFloat = 200
+    var requestFocus: Bool = false
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -30,9 +31,12 @@ struct DebouncedTextEditor: UIViewRepresentable {
     func updateUIView(_ textView: UITextView, context: Context) {
         textView.isEditable = !isDisabled
 
-        // Only update text if it changed externally (e.g., dictation append)
         if textView.text != text && !context.coordinator.isUserEditing {
             textView.text = text
+        }
+
+        if requestFocus && !textView.isFirstResponder && !isDisabled {
+            DispatchQueue.main.async { textView.becomeFirstResponder() }
         }
     }
 

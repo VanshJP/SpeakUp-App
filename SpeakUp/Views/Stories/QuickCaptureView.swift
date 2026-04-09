@@ -19,40 +19,49 @@ struct QuickCaptureView: View {
     @State private var didUseDictation = false
     @State private var selectedEntryType: StoryEntryType = .story
 
+    @FocusState private var titleFocused: Bool
+    @State private var contentFocused = false
+
     var preselectedEntryType: StoryEntryType?
 
+    // MARK: - Body
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             AppBackground(style: .subtle)
 
-            VStack(spacing: 20) {
-                // Entry type selector
+            VStack(alignment: .leading, spacing: 0) {
                 entryTypePicker
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
+                    .padding(.bottom, 12)
 
-                TextField(
-                    selectedEntryType == .reflection ? "Reflection title (optional)" : "Title (optional)",
-                    text: $title
-                )
-                    .font(.title3.weight(.semibold))
+                TextField("Title", text: $title)
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(.white)
+                    .focused($titleFocused)
+                    .submitLabel(.next)
+                    .onSubmit { contentFocused = true }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 4)
+
+                statusBanner
                     .padding(.horizontal, 20)
 
-                contentArea
-                    .padding(.horizontal, 20)
+                DebouncedTextEditor(
+                    text: $content,
+                    isDisabled: audioService.isRecording || isTranscribing,
+                    placeholder: placeholder,
+                    requestFocus: contentFocused
+                )
+                .frame(maxHeight: .infinity)
+                .padding(.horizontal, 20)
 
-                if selectedEntryType == .story {
-                    occasionPicker
-                        .padding(.horizontal, 20)
-                }
-
-                Spacer()
-
-                bottomActions
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                Spacer(minLength: 0)
             }
+            .padding(.bottom, 64)
+
+            bottomBar
         }
         .navigationTitle("Quick Entry")
         .navigationBarTitleDisplayMode(.inline)
@@ -61,28 +70,16 @@ struct QuickCaptureView: View {
                 Button("Cancel") { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                if isSaving {
-                    ProgressView()
-                        .tint(AppColors.primary)
-                } else {
-                    Button("Save") {
-                        saveStory()
-                    }
-                    .foregroundStyle(AppColors.primary)
-                    .disabled(content.isEmpty && title.isEmpty)
-                }
+                saveToolbarButton
             }
         }
         .onDisappear {
-            if audioService.isRecording {
-                audioService.cancelRecording()
-            }
+            if audioService.isRecording { audioService.cancelRecording() }
         }
         .onAppear {
             viewModel.configure(with: modelContext)
-            if let preselectedEntryType {
-                selectedEntryType = preselectedEntryType
-            }
+            if let preselectedEntryType { selectedEntryType = preselectedEntryType }
+            contentFocused = true
         }
         .alert("Error", isPresented: .init(
             get: { errorMessage != nil },
@@ -94,129 +91,145 @@ struct QuickCaptureView: View {
         }
     }
 
-    // MARK: - Content Area
-
-    private var contentArea: some View {
-        VStack(spacing: 12) {
-            if isTranscribing {
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .tint(AppColors.primary)
-                        .scaleEffect(0.8)
-                    Text("Transcribing...")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(AppColors.primary)
-                    Spacer()
-                }
-                .padding(14)
-                .glassBackground(cornerRadius: 12)
-            } else if audioService.isRecording {
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(AppColors.recording)
-                        .frame(width: 10, height: 10)
-                        .pulsingGlow(color: AppColors.recording, isActive: true)
-
-                    Text("Listening...")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(AppColors.recording)
-
-                    Spacer()
-
-                    Text(formatDuration(audioService.recordingDuration))
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-                .padding(14)
-                .glassBackground(cornerRadius: 12)
-            }
-
-            if !content.isEmpty || (!audioService.isRecording && !isTranscribing) {
-                DebouncedTextEditor(
-                    text: $content,
-                    isDisabled: audioService.isRecording || isTranscribing,
-                    placeholder: selectedEntryType == .reflection
-                        ? "How did your practice go?"
-                        : selectedEntryType == .note
-                        ? "Quick thought..."
-                        : "Start typing or tap the mic below..."
-                )
-                .frame(minHeight: 100, maxHeight: 180)
-                .padding(14)
-                .glassBackground(cornerRadius: 12)
-            }
+    private var placeholder: String {
+        switch selectedEntryType {
+        case .reflection: return "How did your practice go?"
+        case .note: return "Quick thought…"
+        case .story: return "What happened?"
         }
     }
 
-    // MARK: - Occasion Picker
+    // MARK: - Entry Type Picker
 
-    private var occasionPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(StoryOccasion.allCases) { occasion in
-                    Button {
-                        Haptics.light()
-                        selectedOccasion = selectedOccasion == occasion ? nil : occasion
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: occasion.icon)
-                            Text(occasion.rawValue)
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(selectedOccasion == occasion ? .white : .secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background {
-                            if selectedOccasion == occasion {
-                                Capsule().fill(AppColors.primary)
-                            } else {
-                                Capsule().fill(.ultraThinMaterial)
-                            }
-                        }
+    private var entryTypePicker: some View {
+        HStack(spacing: 6) {
+            ForEach(StoryEntryType.allCases) { type in
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.2)) { selectedEntryType = type }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: type.icon)
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(type.displayName)
+                            .font(.caption2.weight(.bold))
+                    }
+                    .foregroundStyle(selectedEntryType == type ? .white : .secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule().fill(selectedEntryType == type ? AppColors.primary.opacity(0.8) : .white.opacity(0.06))
                     }
                 }
+                .buttonStyle(.plain)
             }
+            Spacer()
         }
     }
 
-    // MARK: - Bottom Actions
+    // MARK: - Status Banner
 
-    private var bottomActions: some View {
-        HStack(spacing: 16) {
+    @ViewBuilder
+    private var statusBanner: some View {
+        if audioService.isRecording {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(AppColors.recording)
+                    .frame(width: 8, height: 8)
+                    .pulsingGlow(color: AppColors.recording, isActive: true)
+                Text("Listening…")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppColors.recording)
+                Spacer()
+                Text(formatDuration(audioService.recordingDuration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .glassBackground(cornerRadius: 10)
+            .padding(.bottom, 8)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        } else if isTranscribing {
+            HStack(spacing: 8) {
+                ProgressView().tint(AppColors.primary).scaleEffect(0.8)
+                Text("Transcribing…")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AppColors.primary)
+                Spacer()
+            }
+            .padding(10)
+            .glassBackground(cornerRadius: 10)
+            .padding(.bottom, 8)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
+    }
+
+    // MARK: - Bottom Bar
+
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
             Button {
                 toggleRecording()
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Image(systemName: audioService.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.body.weight(.semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .symbolEffect(.pulse, isActive: audioService.isRecording)
                     Text(audioService.isRecording ? "Stop" : "Dictate")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                 }
                 .foregroundStyle(audioService.isRecording ? AppColors.recording : AppColors.primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background {
                     Capsule().fill(
                         audioService.isRecording
                             ? AppColors.recording.opacity(0.15)
-                            : AppColors.primary.opacity(0.15)
+                            : AppColors.primary.opacity(0.1)
                     )
                 }
             }
             .disabled(isTranscribing)
 
+            Spacer()
+
             if !content.isEmpty || !title.isEmpty {
                 if isSaving {
-                    ProgressView()
-                        .tint(.white)
-                        .padding(.horizontal, 20)
+                    ProgressView().tint(.white)
                 } else {
-                    GlassButton(title: "Save", icon: "checkmark", style: .primary) {
+                    Button {
                         saveStory()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Save")
+                                .font(.subheadline.weight(.bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background { Capsule().fill(AppColors.primary) }
                     }
                 }
             }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Save Toolbar Button
+
+    @ViewBuilder
+    private var saveToolbarButton: some View {
+        if isSaving {
+            ProgressView().tint(AppColors.primary)
+        } else {
+            Button("Save") { saveStory() }
+                .foregroundStyle(AppColors.primary)
+                .fontWeight(.semibold)
+                .disabled(content.isEmpty && title.isEmpty)
         }
     }
 
@@ -233,6 +246,8 @@ struct QuickCaptureView: View {
     private func startRecording() {
         Haptics.heavy()
         didUseDictation = true
+        titleFocused = false
+        contentFocused = false
         Task {
             do {
                 let url = try await audioService.startRecording()
@@ -251,18 +266,15 @@ struct QuickCaptureView: View {
                 return
             }
 
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTranscribing = true
-            }
+            withAnimation(.easeInOut(duration: 0.2)) { isTranscribing = true }
 
             do {
                 let transcribedText = try await speechService.transcribeTextOnly(audioURL: url)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-
                 if !transcribedText.isEmpty {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         let separator = content.isEmpty ? "" : "\n\n"
-                        content = content + separator + transcribedText
+                        content += separator + transcribedText
                     }
                 }
             } catch {
@@ -272,15 +284,16 @@ struct QuickCaptureView: View {
             try? FileManager.default.removeItem(at: url)
             recordingURL = nil
 
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTranscribing = false
-            }
+            withAnimation(.easeInOut(duration: 0.2)) { isTranscribing = false }
+            contentFocused = true
         }
     }
 
     private func saveStory() {
         guard !isSaving else { return }
         isSaving = true
+        titleFocused = false
+        contentFocused = false
 
         Task {
             let defaultTitle: String
@@ -303,7 +316,7 @@ struct QuickCaptureView: View {
                 tags: autoTags,
                 inputMethod: didUseDictation ? "dictated" : "typed",
                 stage: selectedEntryType == .story ? .spark : .polished,
-                occasion: selectedEntryType == .story ? selectedOccasion : nil,
+                occasion: selectedOccasion,
                 entryType: selectedEntryType
             )
 
@@ -320,10 +333,8 @@ struct QuickCaptureView: View {
 
     private func generateTitle(from text: String) -> String {
         let words = text.split(separator: " ").prefix(6).joined(separator: " ")
-        if words.count > 40 {
-            return String(words.prefix(40)) + "…"
-        }
-        return words.isEmpty ? "Untitled Spark" : words
+        if words.count > 40 { return String(words.prefix(40)) + "…" }
+        return words.isEmpty ? "Untitled" : words
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -331,39 +342,4 @@ struct QuickCaptureView: View {
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
-
-    // MARK: - Entry Type Picker
-
-    private var entryTypePicker: some View {
-        HStack(spacing: 8) {
-            ForEach(StoryEntryType.allCases) { type in
-                Button {
-                    Haptics.light()
-                    withAnimation(.spring(response: 0.3)) {
-                        selectedEntryType = type
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: type.icon)
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(type.displayName)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(selectedEntryType == type ? .white : .secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background {
-                        if selectedEntryType == type {
-                            Capsule().fill(AppColors.primary.opacity(0.8))
-                        } else {
-                            Capsule().fill(.ultraThinMaterial)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-    }
-
 }
