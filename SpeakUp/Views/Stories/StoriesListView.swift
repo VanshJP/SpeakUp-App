@@ -56,6 +56,34 @@ struct StoriesListView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button {
+                                        advanceStage(story)
+                                    } label: {
+                                        let next = nextStage(for: story)
+                                        Label(next.displayName, systemImage: next.icon)
+                                    }
+                                    .tint(AppColors.primary)
+
+                                    Button(role: .destructive) {
+                                        storyToDelete = story
+                                        showingDeleteAlert = true
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        viewModel.toggleFavorite(story)
+                                        Haptics.light()
+                                    } label: {
+                                        Label(
+                                            story.isFavorite ? "Unfavorite" : "Favorite",
+                                            systemImage: story.isFavorite ? "star.slash" : "star"
+                                        )
+                                    }
+                                    .tint(.yellow)
+                                }
                                 .contextMenu {
                                     Button {
                                         viewModel.toggleFavorite(story)
@@ -84,7 +112,7 @@ struct StoriesListView: View {
                                             }
                                         }
                                     } label: {
-                                        Label("Set Stage", systemImage: "arrow.right.circle")
+                                        Label("Move to…", systemImage: "arrow.right.circle")
                                     }
 
                                     Divider()
@@ -277,16 +305,16 @@ struct StoriesListView: View {
                 PromptStatItem(
                     icon: "lightbulb",
                     value: "\(sparkCount)",
-                    label: "Sparks",
+                    label: "Ideas",
                     color: .yellow
                 )
 
                 statsCardDivider
 
                 PromptStatItem(
-                    icon: "checkmark.seal",
+                    icon: "checkmark.circle",
                     value: "\(polishedCount)",
-                    label: "Polished",
+                    label: "Ready",
                     color: AppColors.success
                 )
             }
@@ -505,6 +533,20 @@ struct StoriesListView: View {
         case .topic: return .purple
         case .custom: return .gray
         }
+    }
+
+    private func nextStage(for story: Story) -> StoryStage {
+        switch story.resolvedStage {
+        case .spark: return .draft
+        case .draft: return .polished
+        case .polished: return .spark
+        }
+    }
+
+    private func advanceStage(_ story: Story) {
+        let next = nextStage(for: story)
+        viewModel.updateStage(story, stage: next)
+        Haptics.medium()
     }
 }
 

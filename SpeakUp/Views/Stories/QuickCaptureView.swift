@@ -7,11 +7,13 @@ struct QuickCaptureView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AudioService.self) private var audioService
     @Environment(SpeechService.self) private var speechService
+    @Environment(LLMService.self) private var llmService
 
     @State private var title = ""
     @State private var content = ""
     @State private var selectedOccasion: StoryOccasion?
     @State private var isTranscribing = false
+    @State private var isSaving = false
     @State private var recordingURL: URL?
     @State private var errorMessage: String?
     @State private var didUseDictation = false
@@ -59,11 +61,16 @@ struct QuickCaptureView: View {
                 Button("Cancel") { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    saveStory()
+                if isSaving {
+                    ProgressView()
+                        .tint(AppColors.primary)
+                } else {
+                    Button("Save") {
+                        saveStory()
+                    }
+                    .foregroundStyle(AppColors.primary)
+                    .disabled(content.isEmpty && title.isEmpty)
                 }
-                .foregroundStyle(AppColors.primary)
-                .disabled(content.isEmpty && title.isEmpty)
             }
         }
         .onDisappear {
@@ -200,8 +207,14 @@ struct QuickCaptureView: View {
             .disabled(isTranscribing)
 
             if !content.isEmpty || !title.isEmpty {
-                GlassButton(title: "Save", icon: "checkmark", style: .primary) {
-                    saveStory()
+                if isSaving {
+                    ProgressView()
+                        .tint(.white)
+                        .padding(.horizontal, 20)
+                } else {
+                    GlassButton(title: "Save", icon: "checkmark", style: .primary) {
+                        saveStory()
+                    }
                 }
             }
         }
@@ -266,31 +279,42 @@ struct QuickCaptureView: View {
     }
 
     private func saveStory() {
-        let defaultTitle: String
-        switch selectedEntryType {
-        case .reflection: defaultTitle = "Reflection"
-        case .note: defaultTitle = "Note"
-        case .story: defaultTitle = generateTitle(from: content)
-        }
+        guard !isSaving else { return }
+        isSaving = true
 
-        let finalTitle = title.isEmpty ? defaultTitle : title
+        Task {
+            let defaultTitle: String
+            switch selectedEntryType {
+            case .reflection: defaultTitle = "Reflection"
+            case .note: defaultTitle = "Note"
+            case .story: defaultTitle = generateTitle(from: content)
+            }
 
-        let result = viewModel.createStory(
-            title: finalTitle,
-            content: content,
-            tags: [],
-            inputMethod: didUseDictation ? "dictated" : "typed",
-            stage: selectedEntryType == .story ? .spark : .polished,
-            occasion: selectedEntryType == .story ? selectedOccasion : nil,
-            entryType: selectedEntryType
-        )
+            let finalTitle = title.isEmpty ? defaultTitle : title
 
-        if result != nil {
-            Haptics.success()
-            dismiss()
-        } else {
-            Haptics.error()
-            errorMessage = viewModel.errorMessage ?? "Failed to save"
+            var autoTags: [StoryTag] = []
+            if llmService.isAvailable && !content.isEmpty {
+                autoTags = await viewModel.autoExtractTags(from: content, llmService: llmService)
+            }
+
+            let result = viewModel.createStory(
+                title: finalTitle,
+                content: content,
+                tags: autoTags,
+                inputMethod: didUseDictation ? "dictated" : "typed",
+                stage: selectedEntryType == .story ? .spark : .polished,
+                occasion: selectedEntryType == .story ? selectedOccasion : nil,
+                entryType: selectedEntryType
+            )
+
+            isSaving = false
+            if result != nil {
+                Haptics.success()
+                dismiss()
+            } else {
+                Haptics.error()
+                errorMessage = viewModel.errorMessage ?? "Failed to save"
+            }
         }
     }
 

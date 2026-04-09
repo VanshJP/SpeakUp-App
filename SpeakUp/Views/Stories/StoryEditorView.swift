@@ -30,14 +30,14 @@ struct StoryEditorView: View {
             AppBackground(style: .subtle)
 
             ScrollView {
-                VStack(spacing: 20) {
-                    titleSection
+                VStack(spacing: 16) {
                     stageAndOccasionSection
+                    titleSection
                     contentSection
                     tagsSection
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .padding(.vertical, 12)
             }
         }
         .navigationTitle(isEditing ? "Edit Story" : "New Story")
@@ -86,90 +86,77 @@ struct StoryEditorView: View {
     // MARK: - Title
 
     private var titleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            GlassSectionHeader("Title", icon: "textformat")
-
-            TextField("Story title...", text: $title)
-                .font(.body)
-                .foregroundStyle(.white)
-                .padding(14)
-                .glassBackground(cornerRadius: 12)
-        }
+        TextField("Title (optional)…", text: $title)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(14)
+            .glassBackground(cornerRadius: 12)
     }
 
     // MARK: - Stage & Occasion
 
     private var stageAndOccasionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Details", icon: "info.circle")
-
-            GlassCard(padding: 14) {
-                VStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Stage")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 8) {
-                            ForEach(StoryStage.allCases) { stage in
-                                Button {
-                                    Haptics.light()
-                                    selectedStage = stage
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: stage.icon)
-                                        Text(stage.displayName)
-                                    }
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(selectedStage == stage ? .white : .secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 7)
-                                    .background {
-                                        if selectedStage == stage {
-                                            Capsule().fill(AppColors.primary)
-                                        } else {
-                                            Capsule().fill(.ultraThinMaterial)
-                                        }
-                                    }
-                                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(StoryStage.allCases) { stage in
+                    Button {
+                        Haptics.light()
+                        withAnimation(.spring(response: 0.25)) { selectedStage = stage }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: stage.icon)
+                            Text(stage.displayName)
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selectedStage == stage ? .white : .secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background {
+                            if selectedStage == stage {
+                                Capsule().fill(stageColor(stage))
+                            } else {
+                                Capsule().fill(.ultraThinMaterial)
                             }
                         }
                     }
+                }
+                Spacer()
+            }
 
-                    Divider().overlay(Color.white.opacity(0.06))
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Occasion (optional)")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(StoryOccasion.allCases) { occasion in
-                                    Button {
-                                        Haptics.light()
-                                        selectedOccasion = selectedOccasion == occasion ? nil : occasion
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: occasion.icon)
-                                            Text(occasion.rawValue)
-                                        }
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(selectedOccasion == occasion ? .white : .secondary)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background {
-                                            if selectedOccasion == occasion {
-                                                Capsule().fill(AppColors.primary)
-                                            } else {
-                                                Capsule().fill(.ultraThinMaterial)
-                                            }
-                                        }
-                                    }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(StoryOccasion.allCases) { occasion in
+                        Button {
+                            Haptics.light()
+                            selectedOccasion = selectedOccasion == occasion ? nil : occasion
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: occasion.icon)
+                                Text(occasion.rawValue)
+                            }
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(selectedOccasion == occasion ? .white : .tertiary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background {
+                                if selectedOccasion == occasion {
+                                    Capsule().fill(AppColors.primary.opacity(0.7))
+                                } else {
+                                    Capsule().fill(.ultraThinMaterial)
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private func stageColor(_ stage: StoryStage) -> Color {
+        switch stage {
+        case .spark: return .yellow.opacity(0.8)
+        case .draft: return AppColors.primary
+        case .polished: return AppColors.success
         }
     }
 

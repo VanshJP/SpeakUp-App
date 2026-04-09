@@ -65,7 +65,7 @@ struct StoryDetailView: View {
                             }
                         }
                     } label: {
-                        Label("Set Stage", systemImage: "arrow.right.circle")
+                        Label("Move to…", systemImage: "arrow.right.circle")
                     }
 
                     Divider()

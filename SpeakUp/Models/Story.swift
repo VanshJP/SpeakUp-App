@@ -141,24 +141,24 @@ enum StoryStage: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .spark: return "Spark"
-        case .draft: return "Draft"
-        case .polished: return "Polished"
+        case .spark: return "Idea"
+        case .draft: return "In Progress"
+        case .polished: return "Ready"
         }
     }
 
     var icon: String {
         switch self {
         case .spark: return "lightbulb"
-        case .draft: return "doc.text"
-        case .polished: return "checkmark.seal"
+        case .draft: return "pencil.line"
+        case .polished: return "checkmark.circle"
         }
     }
 
     var description: String {
         switch self {
         case .spark: return "Quick idea or memory"
-        case .draft: return "Working on structure"
+        case .draft: return "Working on it"
         case .polished: return "Ready to tell"
         }
     }
