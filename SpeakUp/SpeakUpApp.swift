@@ -24,10 +24,10 @@ struct SpeakUpApp: App {
         ])
 
         // Respect user's iCloud sync preference (read from UserDefaults since
-        // SwiftData isn't available yet at ModelContainer creation time)
-        // Default to false for existing installs (avoids CloudKit migration crash on
-        // stores created without CloudKit). Users can enable in Settings.
-        let syncEnabled = UserDefaults.standard.object(forKey: ICloudStorageService.syncEnabledKey) as? Bool ?? false
+        // SwiftData isn't available yet at ModelContainer creation time).
+        // On fresh installs, infer an initial preference from iCloud account
+        // availability so reinstall can restore cloud-backed data immediately.
+        let syncEnabled = ICloudStorageService.resolvedSyncEnabledPreference
 
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -180,8 +180,12 @@ struct SpeakUpApp: App {
             let existingSettings = try context.fetch(descriptor)
             if existingSettings.isEmpty {
                 let defaultSettings = UserSettings()
+                defaultSettings.iCloudSyncEnabled = ICloudStorageService.shared.isSyncEnabled
                 context.insert(defaultSettings)
                 try context.save()
+            } else if let settings = existingSettings.first {
+                // Keep startup sync preference in lock-step with persisted settings.
+                ICloudStorageService.shared.isSyncEnabled = settings.iCloudSyncEnabled
             }
         } catch {
             print("Error ensuring settings: \(error)")

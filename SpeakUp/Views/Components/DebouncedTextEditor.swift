@@ -4,7 +4,7 @@ import UIKit
 struct DebouncedTextEditor: UIViewRepresentable {
     @Binding var text: String
     var isDisabled: Bool = false
-    var placeholder: String = ""
+    var placeholder: String = "Entry text"
     var minHeight: CGFloat = 200
     var requestFocus: Bool = false
 

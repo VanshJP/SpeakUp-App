@@ -124,9 +124,14 @@ final class LLMService {
     /// The editor parses the returned Markdown into rich text (bold, italic, headings, lists,
     /// paragraphs). Preserves the speaker's wording, voice, and meaning. Falls back to the
     /// input on failure. The returned string is Markdown, not plain text.
+    ///
+    /// IMPORTANT: local llama backends are more fragile with this long formatting prompt and
+    /// can trigger low-level batch assertions on some devices/builds. To keep dictation stable,
+    /// only Apple Intelligence is used for formatting; local model callers get passthrough text.
     func formatDictation(_ raw: String) async -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, isAvailable else { return raw }
+        guard appleIntelligenceAvailable else { return raw }
 
         let systemPrompt = """
         You format raw dictated speech into lightly-styled Markdown for a personal journal/story entry. \

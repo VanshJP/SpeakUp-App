@@ -13,6 +13,17 @@ final class ICloudStorageService {
     /// Used because ModelContainer is created before SwiftData is available.
     static let syncEnabledKey = "iCloudSyncEnabled"
 
+    /// Effective startup sync preference.
+    /// If the user has never explicitly chosen a value (fresh install), default
+    /// to enabled when iCloud account credentials are available so reinstall can
+    /// restore cloud data automatically.
+    static var resolvedSyncEnabledPreference: Bool {
+        if let storedPreference = UserDefaults.standard.object(forKey: syncEnabledKey) as? Bool {
+            return storedPreference
+        }
+        return FileManager.default.ubiquityIdentityToken != nil
+    }
+
     /// The resolved iCloud container URL, or nil if iCloud is unavailable.
     private(set) var ubiquityContainerURL: URL?
 
@@ -26,7 +37,7 @@ final class ICloudStorageService {
 
     /// Whether the user has opted in to iCloud sync.
     var isSyncEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: Self.syncEnabledKey) as? Bool ?? false }
+        get { Self.resolvedSyncEnabledPreference }
         set { UserDefaults.standard.set(newValue, forKey: Self.syncEnabledKey) }
     }
 
@@ -34,6 +45,12 @@ final class ICloudStorageService {
     var isICloudReachable: Bool { ubiquityContainerURL != nil }
 
     private init() {
+        // Persist an initial preference on fresh installs so app startup and
+        // Settings stay consistent for this installation lifecycle.
+        if UserDefaults.standard.object(forKey: Self.syncEnabledKey) == nil {
+            UserDefaults.standard.set(Self.resolvedSyncEnabledPreference, forKey: Self.syncEnabledKey)
+        }
+
         // Resolve ubiquity container on a background thread (can block briefly)
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }

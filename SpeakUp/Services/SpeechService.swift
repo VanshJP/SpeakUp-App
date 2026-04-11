@@ -50,9 +50,44 @@ class SpeechService {
     func transcribeTextOnly(audioURL: URL, preferredTerms: [String] = []) async throws -> String {
         isTranscribing = true
         defer { isTranscribing = false }
+        let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-        let result = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
-        return result.text
+        do {
+            let primary = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
+            let text = trim(primary.text)
+            if !text.isEmpty {
+                return text
+            }
+        } catch {
+            // Retry below (model reload + fallback)
+        }
+
+        // Retry once with a fresh model in case WhisperKit got into a bad state.
+        whisperService.unloadModel()
+        await whisperService.loadModel(modelVariant: "base")
+
+        do {
+            let retry = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
+            let text = trim(retry.text)
+            if !text.isEmpty {
+                return text
+            }
+        } catch {
+            // Fall through to Apple Speech fallback.
+        }
+
+        let fallback = try await transcribeWithAppleSpeech(audioURL: audioURL)
+        let fallbackText = trim(fallback.text)
+        guard !fallbackText.isEmpty else {
+            throw SpeechServiceError.transcriptionFailed(
+                NSError(
+                    domain: "SpeechService",
+                    code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "No speech detected in recording."]
+                )
+            )
+        }
+        return fallbackText
     }
 
     // MARK: - Transcription

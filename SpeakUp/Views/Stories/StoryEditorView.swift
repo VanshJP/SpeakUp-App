@@ -33,9 +33,9 @@ struct StoryEditorView: View {
     @State private var errorMessage: String?
     @State private var didUseDictation = false
     @State private var isTranscribing = false
-    @State private var recordingURL: URL?
     @State private var showTagInput = false
     @State private var showingMoveSheet = false
+    @State private var moveSheetSelectionToken: UUID = UUID()
 
     // Auto-save
     @State private var draftStory: Story?
@@ -47,6 +47,8 @@ struct StoryEditorView: View {
     @State private var isFormattingDictation = false
     @State private var isDictationTransitioning = false
     @State private var dictationTask: Task<Void, Never>?
+    private let dictationFormattingTimeout: Duration = .seconds(12)
+    private let dictationTranscriptionTimeout: Duration = .seconds(120)
 
     private enum Field: Hashable {
         case title, tagValue
@@ -105,11 +107,17 @@ struct StoryEditorView: View {
                 moreMenu
             }
         }
-        .sheet(isPresented: $showingMoveSheet) {
+        .sheet(isPresented: $showingMoveSheet, onDismiss: {
+            syncFolderSelectionFromDraft()
+        }) {
             if let story = draftStory ?? existingStory {
                 NavigationStack {
-                    StoryMoveFolderSheet(viewModel: viewModel, story: story)
+                    StoryMoveFolderSheet(viewModel: viewModel, story: story) { folderId in
+                        selectedFolderId = folderId
+                        moveSheetSelectionToken = UUID()
+                    }
                 }
+                .id(moveSheetSelectionToken)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
             }
@@ -701,6 +709,13 @@ struct StoryEditorView: View {
         draft.attributedContent = attributedContent
     }
 
+    private func syncFolderSelectionFromDraft() {
+        let latestFolderId = (draftStory ?? existingStory)?.folderId
+        guard selectedFolderId != latestFolderId else { return }
+        selectedFolderId = latestFolderId
+        moveSheetSelectionToken = UUID()
+    }
+
     private func finalSave() {
         autoSaveTask?.cancel()
         let trimmedContent = plainText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -748,8 +763,7 @@ struct StoryEditorView: View {
         Task {
             defer { isDictationTransitioning = false }
             do {
-                let url = try await audioService.startRecording()
-                recordingURL = url
+                _ = try await audioService.startRecording()
             } catch {
                 errorMessage = "Could not start recording: \(error.localizedDescription)"
             }
@@ -760,6 +774,7 @@ struct StoryEditorView: View {
         guard !isDictationTransitioning else { return }
         isDictationTransitioning = true
         Haptics.medium()
+        dictationTask?.cancel()
         dictationTask = Task {
             defer {
                 isDictationTransitioning = false
@@ -778,7 +793,10 @@ struct StoryEditorView: View {
             do {
                 try Task.checkCancellation()
                 let biasTerms = buildDictationBiasTerms()
-                let rawText = try await speechService.transcribeTextOnly(audioURL: url, preferredTerms: biasTerms)
+                let rawText = try await transcribeDictationWithTimeout(
+                    audioURL: url,
+                    preferredTerms: biasTerms
+                )
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 try Task.checkCancellation()
@@ -787,34 +805,40 @@ struct StoryEditorView: View {
                    (userSettings?.autoFormatDictation ?? true),
                    llmService.isAvailable {
                     withAnimation(.easeInOut(duration: 0.2)) { isFormattingDictation = true }
-                    finalText = await llmService.formatDictation(rawText)
+                    let formatted = await formatDictationWithTimeout(rawText)
+                    if !formatted.isEmpty {
+                        finalText = formatted
+                    }
                     withAnimation(.easeInOut(duration: 0.2)) { isFormattingDictation = false }
                 }
 
                 try Task.checkCancellation()
-                if !finalText.isEmpty {
-                    let parsed: NSAttributedString
-                    if (userSettings?.autoFormatDictation ?? true), llmService.isAvailable {
-                        parsed = RichTextEditor.attributedString(fromMarkdown: finalText)
-                    } else {
-                        parsed = NSAttributedString(
-                            string: finalText,
-                            attributes: RichTextEditor.defaultAttributes
-                        )
-                    }
+                if finalText.isEmpty {
+                    errorMessage = "No speech was detected. Try speaking closer to the mic."
+                    return
+                }
 
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        let mutable = NSMutableAttributedString(attributedString: attributedContent)
-                        if !plainText.isEmpty {
-                            mutable.append(NSAttributedString(
-                                string: "\n\n",
-                                attributes: RichTextEditor.defaultAttributes
-                            ))
-                        }
-                        mutable.append(parsed)
-                        attributedContent = mutable
-                        plainText = mutable.string
+                let parsed: NSAttributedString
+                if (userSettings?.autoFormatDictation ?? true), llmService.appleIntelligenceAvailable {
+                    parsed = RichTextEditor.attributedString(fromMarkdown: finalText)
+                } else {
+                    parsed = NSAttributedString(
+                        string: finalText,
+                        attributes: RichTextEditor.defaultAttributes
+                    )
+                }
+
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    let mutable = NSMutableAttributedString(attributedString: attributedContent)
+                    if !plainText.isEmpty {
+                        mutable.append(NSAttributedString(
+                            string: "\n\n",
+                            attributes: RichTextEditor.defaultAttributes
+                        ))
                     }
+                    mutable.append(parsed)
+                    attributedContent = mutable
+                    plainText = mutable.string
                 }
             } catch is CancellationError {
                 // User cancelled — silently clean up
@@ -823,9 +847,86 @@ struct StoryEditorView: View {
             }
 
             try? FileManager.default.removeItem(at: url)
-            recordingURL = nil
             contentFocused = true
         }
+    }
+
+    private func formatDictationWithTimeout(_ rawText: String) async -> String {
+        let stream = AsyncStream<String> { continuation in
+            let formattingTask = Task {
+                let formatted = await llmService.formatDictation(rawText)
+                continuation.yield(formatted)
+                continuation.finish()
+            }
+
+            let timeoutTask = Task {
+                try? await Task.sleep(for: dictationFormattingTimeout)
+                continuation.yield(rawText)
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                formattingTask.cancel()
+                timeoutTask.cancel()
+            }
+        }
+
+        for await value in stream {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? rawText : trimmed
+        }
+
+        return rawText
+    }
+
+    private func transcribeDictationWithTimeout(
+        audioURL: URL,
+        preferredTerms: [String]
+    ) async throws -> String {
+        let stream = AsyncStream<Result<String, Error>> { continuation in
+            let transcriptionTask = Task {
+                do {
+                    let text = try await speechService.transcribeTextOnly(
+                        audioURL: audioURL,
+                        preferredTerms: preferredTerms
+                    )
+                    continuation.yield(.success(text))
+                    continuation.finish()
+                } catch {
+                    continuation.yield(.failure(error))
+                    continuation.finish()
+                }
+            }
+
+            let timeoutTask = Task {
+                try? await Task.sleep(for: dictationTranscriptionTimeout)
+                continuation.yield(
+                    .failure(
+                        NSError(
+                            domain: "StoryEditorView.Dictation",
+                            code: 1,
+                            userInfo: [NSLocalizedDescriptionKey: "Dictation transcription timed out."]
+                        )
+                    )
+                )
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                transcriptionTask.cancel()
+                timeoutTask.cancel()
+            }
+        }
+
+        for await result in stream {
+            return try result.get()
+        }
+
+        throw NSError(
+            domain: "StoryEditorView.Dictation",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "Dictation transcription failed."]
+        )
     }
 
     private func cancelDictation() {
