@@ -112,7 +112,10 @@ struct StoryEditorView: View {
         }) {
             if let story = draftStory ?? existingStory {
                 NavigationStack {
-                    StoryMoveFolderSheet(viewModel: viewModel, story: story)
+                    StoryMoveFolderSheet(viewModel: viewModel, story: story) { folderId in
+                        selectedFolderId = folderId
+                        moveSheetSelectionToken = UUID()
+                    }
                 }
                 .id(moveSheetSelectionToken)
                 .presentationDetents([.medium])
@@ -845,19 +848,31 @@ struct StoryEditorView: View {
     }
 
     private func formatDictationWithTimeout(_ rawText: String) async -> String {
-        await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                await llmService.formatDictation(rawText)
-            }
-            group.addTask {
-                try? await Task.sleep(for: dictationFormattingTimeout)
-                return nil
+        let stream = AsyncStream<String> { continuation in
+            let formattingTask = Task {
+                let formatted = await llmService.formatDictation(rawText)
+                continuation.yield(formatted)
+                continuation.finish()
             }
 
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first ?? rawText
+            let timeoutTask = Task {
+                try? await Task.sleep(for: dictationFormattingTimeout)
+                continuation.yield(rawText)
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                formattingTask.cancel()
+                timeoutTask.cancel()
+            }
         }
+
+        for await value in stream {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? rawText : trimmed
+        }
+
+        return rawText
     }
 
     private func cancelDictation() {
