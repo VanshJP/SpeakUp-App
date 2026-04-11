@@ -33,7 +33,6 @@ struct StoryEditorView: View {
     @State private var errorMessage: String?
     @State private var didUseDictation = false
     @State private var isTranscribing = false
-    @State private var recordingURL: URL?
     @State private var showTagInput = false
     @State private var showingMoveSheet = false
     @State private var moveSheetSelectionToken: UUID = UUID()
@@ -764,8 +763,7 @@ struct StoryEditorView: View {
         Task {
             defer { isDictationTransitioning = false }
             do {
-                let url = try await audioService.startRecording()
-                recordingURL = url
+                _ = try await audioService.startRecording()
             } catch {
                 errorMessage = "Could not start recording: \(error.localizedDescription)"
             }
@@ -849,7 +847,6 @@ struct StoryEditorView: View {
             }
 
             try? FileManager.default.removeItem(at: url)
-            recordingURL = nil
             contentFocused = true
         }
     }
