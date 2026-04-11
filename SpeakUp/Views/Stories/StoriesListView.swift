@@ -3,6 +3,7 @@ import SwiftData
 
 struct StoriesListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var viewModel: StoriesViewModel
     @State private var showingEditor = false
     @State private var editingStory: Story?
@@ -131,6 +132,12 @@ struct StoriesListView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task {
+                await viewModel.loadStories()
+            }
         }
     }
 

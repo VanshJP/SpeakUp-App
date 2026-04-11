@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import CoreData
 
 @MainActor @Observable
 class StoriesViewModel {
@@ -47,14 +48,22 @@ class StoriesViewModel {
     private var modelContext: ModelContext?
     private var hasConfigured = false
     private var searchDebounceTask: Task<Void, Never>?
+    private var remoteChangeObservationTask: Task<Void, Never>?
 
     func configure(with context: ModelContext) {
-        guard !hasConfigured else { return }
-        hasConfigured = true
-        self.modelContext = context
+        if !hasConfigured {
+            hasConfigured = true
+            self.modelContext = context
+            startRemoteChangeObservation()
+        }
         Task {
             await loadStories()
         }
+    }
+
+    deinit {
+        searchDebounceTask?.cancel()
+        remoteChangeObservationTask?.cancel()
     }
 
     // MARK: - Load
@@ -78,6 +87,16 @@ class StoriesViewModel {
             recomputeFilteredStories()
         } catch {
             errorMessage = "Failed to load stories: \(error.localizedDescription)"
+        }
+    }
+
+    private func startRemoteChangeObservation() {
+        remoteChangeObservationTask?.cancel()
+        remoteChangeObservationTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
+                guard !Task.isCancelled else { break }
+                await self?.loadStories()
+            }
         }
     }
 
