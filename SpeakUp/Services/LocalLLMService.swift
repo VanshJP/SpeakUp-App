@@ -648,6 +648,11 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
     private var ctx: OpaquePointer?                         // llama_context *
     private var smpl: UnsafeMutablePointer<llama_sampler>?  // llama_sampler *
     private let lock = NSLock()
+    private let contextTokenLimit: Int = 1024
+    /// Keep prompt decode chunks very small to stay below runtime `n_batch`
+    /// defaults across llama builds. Some builds assert when a single decode
+    /// batch is larger than the configured context batch size.
+    private let promptDecodeChunkSize: Int32 = 8
 
     /// Set to true to request early exit from the generate loop.
     private var _cancelled = false
@@ -742,12 +747,35 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         llama_memory_clear(llama_get_memory(ctx), false)
 
         // 3. Decode prompt tokens
-        var tokensCopy = tokens
-        let promptBatch = llama_batch_get_one(&tokensCopy, Int32(tokens.count))
-        guard llama_decode(ctx, promptBatch) == 0 else {
-            print("[LocalLLM] Failed to decode prompt")
-            lock.unlock()
-            return nil
+        let reservedForGeneration = max(64, min(maxTokens, 256))
+        let maxPromptTokens = max(128, contextTokenLimit - reservedForGeneration - 16)
+        var boundedTokens = tokens
+        if boundedTokens.count > maxPromptTokens {
+            // Keep the most recent prompt tail so the active user request and
+            // assistant tag survive; this prevents llama context overrun.
+            boundedTokens = Array(boundedTokens.suffix(maxPromptTokens))
+        }
+
+        var decodeCursor = 0
+        while decodeCursor < boundedTokens.count {
+            if _cancelled {
+                llama_sampler_reset(smpl)
+                lock.unlock()
+                return nil
+            }
+
+            let remaining = boundedTokens.count - decodeCursor
+            let chunkCount = min(Int(promptDecodeChunkSize), remaining)
+            var chunk = Array(boundedTokens[decodeCursor..<(decodeCursor + chunkCount)])
+            let promptBatch = llama_batch_get_one(&chunk, Int32(chunkCount))
+
+            guard llama_decode(ctx, promptBatch) == 0 else {
+                print("[LocalLLM] Failed to decode prompt chunk")
+                lock.unlock()
+                return nil
+            }
+
+            decodeCursor += chunkCount
         }
 
         // 4. Generate tokens
