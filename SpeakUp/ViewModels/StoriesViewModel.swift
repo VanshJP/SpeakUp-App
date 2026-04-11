@@ -43,12 +43,13 @@ class StoriesViewModel {
         filteredStories.filter { !$0.isFavorite }
     }
 
-    let taggingService = StoryTaggingService()
+    private let taggingService = StoryTaggingService()
 
     private var modelContext: ModelContext?
     private var hasConfigured = false
-    private var searchDebounceTask: Task<Void, Never>?
-    private var remoteChangeObservationTask: Task<Void, Never>?
+    nonisolated(unsafe) private var searchDebounceTask: Task<Void, Never>?
+    nonisolated(unsafe) private var remoteChangeObservationTask: Task<Void, Never>?
+    nonisolated(unsafe) private var remoteChangeRefreshTask: Task<Void, Never>?
 
     func configure(with context: ModelContext) {
         if !hasConfigured {
@@ -64,6 +65,7 @@ class StoriesViewModel {
     deinit {
         searchDebounceTask?.cancel()
         remoteChangeObservationTask?.cancel()
+        remoteChangeRefreshTask?.cancel()
     }
 
     // MARK: - Load
@@ -95,8 +97,19 @@ class StoriesViewModel {
         remoteChangeObservationTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
                 guard !Task.isCancelled else { break }
-                await self?.loadStories()
+                await self?.scheduleRemoteRefresh()
             }
+        }
+    }
+
+    /// Debounce CloudKit notification bursts: each incoming notification resets
+    /// a 250ms timer and only the final trailing edge triggers a reload.
+    private func scheduleRemoteRefresh() {
+        remoteChangeRefreshTask?.cancel()
+        remoteChangeRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await self?.loadStories()
         }
     }
 
@@ -248,9 +261,9 @@ class StoriesViewModel {
         if !searchText.isEmpty {
             let query = searchText.lowercased()
             result = result.filter { story in
-                story.title.lowercased().contains(query) ||
-                story.content.lowercased().contains(query) ||
-                story.tags.contains { $0.value.lowercased().contains(query) }
+                if story.title.range(of: query, options: .caseInsensitive) != nil { return true }
+                if story.content.range(of: query, options: .caseInsensitive) != nil { return true }
+                return story.tags.contains { $0.value.range(of: query, options: .caseInsensitive) != nil }
             }
         }
 
@@ -395,6 +408,7 @@ class StoriesViewModel {
 
         do {
             try context.save()
+            recomputeFilteredStories()
         } catch {
             errorMessage = "Failed to update story: \(error.localizedDescription)"
         }
@@ -488,6 +502,7 @@ class StoriesViewModel {
 
         do {
             try context.save()
+            recomputeFilteredStories()
         } catch {
             errorMessage = "Failed to update story: \(error.localizedDescription)"
         }
