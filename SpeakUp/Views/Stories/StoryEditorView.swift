@@ -49,7 +49,7 @@ struct StoryEditorView: View {
     @State private var isDictationTransitioning = false
     @State private var dictationTask: Task<Void, Never>?
     private let dictationFormattingTimeout: Duration = .seconds(12)
-    private let dictationTranscriptionTimeout: Duration = .seconds(45)
+    private let dictationTranscriptionTimeout: Duration = .seconds(120)
 
     private enum Field: Hashable {
         case title, tagValue
@@ -815,29 +815,32 @@ struct StoryEditorView: View {
                 }
 
                 try Task.checkCancellation()
-                if !finalText.isEmpty {
-                    let parsed: NSAttributedString
-                    if (userSettings?.autoFormatDictation ?? true), llmService.isAvailable {
-                        parsed = RichTextEditor.attributedString(fromMarkdown: finalText)
-                    } else {
-                        parsed = NSAttributedString(
-                            string: finalText,
-                            attributes: RichTextEditor.defaultAttributes
-                        )
-                    }
+                if finalText.isEmpty {
+                    errorMessage = "No speech was detected. Try speaking closer to the mic."
+                    return
+                }
 
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        let mutable = NSMutableAttributedString(attributedString: attributedContent)
-                        if !plainText.isEmpty {
-                            mutable.append(NSAttributedString(
-                                string: "\n\n",
-                                attributes: RichTextEditor.defaultAttributes
-                            ))
-                        }
-                        mutable.append(parsed)
-                        attributedContent = mutable
-                        plainText = mutable.string
+                let parsed: NSAttributedString
+                if (userSettings?.autoFormatDictation ?? true), llmService.appleIntelligenceAvailable {
+                    parsed = RichTextEditor.attributedString(fromMarkdown: finalText)
+                } else {
+                    parsed = NSAttributedString(
+                        string: finalText,
+                        attributes: RichTextEditor.defaultAttributes
+                    )
+                }
+
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    let mutable = NSMutableAttributedString(attributedString: attributedContent)
+                    if !plainText.isEmpty {
+                        mutable.append(NSAttributedString(
+                            string: "\n\n",
+                            attributes: RichTextEditor.defaultAttributes
+                        ))
                     }
+                    mutable.append(parsed)
+                    attributedContent = mutable
+                    plainText = mutable.string
                 }
             } catch is CancellationError {
                 // User cancelled — silently clean up
