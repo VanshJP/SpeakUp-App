@@ -49,6 +49,7 @@ struct StoryEditorView: View {
     @State private var isDictationTransitioning = false
     @State private var dictationTask: Task<Void, Never>?
     private let dictationFormattingTimeout: Duration = .seconds(12)
+    private let dictationTranscriptionTimeout: Duration = .seconds(45)
 
     private enum Field: Hashable {
         case title, tagValue
@@ -794,7 +795,10 @@ struct StoryEditorView: View {
             do {
                 try Task.checkCancellation()
                 let biasTerms = buildDictationBiasTerms()
-                let rawText = try await speechService.transcribeTextOnly(audioURL: url, preferredTerms: biasTerms)
+                let rawText = try await transcribeDictationWithTimeout(
+                    audioURL: url,
+                    preferredTerms: biasTerms
+                )
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 try Task.checkCancellation()
@@ -873,6 +877,56 @@ struct StoryEditorView: View {
         }
 
         return rawText
+    }
+
+    private func transcribeDictationWithTimeout(
+        audioURL: URL,
+        preferredTerms: [String]
+    ) async throws -> String {
+        let stream = AsyncStream<Result<String, Error>> { continuation in
+            let transcriptionTask = Task {
+                do {
+                    let text = try await speechService.transcribeTextOnly(
+                        audioURL: audioURL,
+                        preferredTerms: preferredTerms
+                    )
+                    continuation.yield(.success(text))
+                    continuation.finish()
+                } catch {
+                    continuation.yield(.failure(error))
+                    continuation.finish()
+                }
+            }
+
+            let timeoutTask = Task {
+                try? await Task.sleep(for: dictationTranscriptionTimeout)
+                continuation.yield(
+                    .failure(
+                        NSError(
+                            domain: "StoryEditorView.Dictation",
+                            code: 1,
+                            userInfo: [NSLocalizedDescriptionKey: "Dictation transcription timed out."]
+                        )
+                    )
+                )
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                transcriptionTask.cancel()
+                timeoutTask.cancel()
+            }
+        }
+
+        for await result in stream {
+            return try result.get()
+        }
+
+        throw NSError(
+            domain: "StoryEditorView.Dictation",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "Dictation transcription failed."]
+        )
     }
 
     private func cancelDictation() {
