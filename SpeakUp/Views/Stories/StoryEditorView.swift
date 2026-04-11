@@ -36,6 +36,7 @@ struct StoryEditorView: View {
     @State private var recordingURL: URL?
     @State private var showTagInput = false
     @State private var showingMoveSheet = false
+    @State private var moveSheetSelectionToken: UUID = UUID()
 
     // Auto-save
     @State private var draftStory: Story?
@@ -47,6 +48,7 @@ struct StoryEditorView: View {
     @State private var isFormattingDictation = false
     @State private var isDictationTransitioning = false
     @State private var dictationTask: Task<Void, Never>?
+    private let dictationFormattingTimeout: Duration = .seconds(12)
 
     private enum Field: Hashable {
         case title, tagValue
@@ -105,11 +107,14 @@ struct StoryEditorView: View {
                 moreMenu
             }
         }
-        .sheet(isPresented: $showingMoveSheet) {
+        .sheet(isPresented: $showingMoveSheet, onDismiss: {
+            syncFolderSelectionFromDraft()
+        }) {
             if let story = draftStory ?? existingStory {
                 NavigationStack {
                     StoryMoveFolderSheet(viewModel: viewModel, story: story)
                 }
+                .id(moveSheetSelectionToken)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
             }
@@ -701,6 +706,13 @@ struct StoryEditorView: View {
         draft.attributedContent = attributedContent
     }
 
+    private func syncFolderSelectionFromDraft() {
+        let latestFolderId = (draftStory ?? existingStory)?.folderId
+        guard selectedFolderId != latestFolderId else { return }
+        selectedFolderId = latestFolderId
+        moveSheetSelectionToken = UUID()
+    }
+
     private func finalSave() {
         autoSaveTask?.cancel()
         let trimmedContent = plainText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -760,6 +772,7 @@ struct StoryEditorView: View {
         guard !isDictationTransitioning else { return }
         isDictationTransitioning = true
         Haptics.medium()
+        dictationTask?.cancel()
         dictationTask = Task {
             defer {
                 isDictationTransitioning = false
@@ -787,7 +800,10 @@ struct StoryEditorView: View {
                    (userSettings?.autoFormatDictation ?? true),
                    llmService.isAvailable {
                     withAnimation(.easeInOut(duration: 0.2)) { isFormattingDictation = true }
-                    finalText = await llmService.formatDictation(rawText)
+                    let formatted = await formatDictationWithTimeout(rawText)
+                    if !formatted.isEmpty {
+                        finalText = formatted
+                    }
                     withAnimation(.easeInOut(duration: 0.2)) { isFormattingDictation = false }
                 }
 
@@ -825,6 +841,22 @@ struct StoryEditorView: View {
             try? FileManager.default.removeItem(at: url)
             recordingURL = nil
             contentFocused = true
+        }
+    }
+
+    private func formatDictationWithTimeout(_ rawText: String) async -> String {
+        await withTaskGroup(of: String?.self) { group in
+            group.addTask {
+                await llmService.formatDictation(rawText)
+            }
+            group.addTask {
+                try? await Task.sleep(for: dictationFormattingTimeout)
+                return nil
+            }
+
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first ?? rawText
         }
     }
 

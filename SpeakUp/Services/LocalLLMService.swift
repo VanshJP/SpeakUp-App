@@ -311,9 +311,18 @@ final class LocalLLMService {
 
         let formatted = Self.formatChatPrompt(systemPrompt: systemPrompt, userPrompt: prompt)
 
-        let result = await Task.detached(priority: .userInitiated) { [engine] in
+        let inferenceTask = Task.detached(priority: .userInitiated) { [engine] in
             return engine.generate(prompt: formatted, maxTokens: maxTokens, temperature: temperature)
-        }.value
+        }
+
+        let result = await withTaskCancellationHandler {
+            await inferenceTask.value
+        } onCancel: {
+            // Ensure local inference exits promptly when callers cancel (e.g. user
+            // cancels dictation formatting in the journal editor).
+            inferenceTask.cancel()
+            engine.cancel()
+        }
 
         resetUnloadTimer()
         return result

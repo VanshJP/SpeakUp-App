@@ -169,6 +169,7 @@ struct StoryFolderEditorSheet: View {
 struct StoryMoveFolderSheet: View {
     @Bindable var viewModel: StoriesViewModel
     let story: Story
+    var onMove: ((UUID?) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -185,6 +186,7 @@ struct StoryMoveFolderSheet: View {
                         isSelected: story.folderId == nil
                     ) {
                         viewModel.moveStory(story, toFolder: nil)
+                        onMove?(nil)
                         dismiss()
                     }
 
@@ -196,6 +198,7 @@ struct StoryMoveFolderSheet: View {
                             isSelected: story.folderId == folder.id
                         ) {
                             viewModel.moveStory(story, toFolder: folder.id)
+                            onMove?(folder.id)
                             dismiss()
                         }
                     }
