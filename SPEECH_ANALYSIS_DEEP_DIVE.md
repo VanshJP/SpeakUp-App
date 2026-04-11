@@ -107,6 +107,13 @@ Gates: < 5 non-filler words or < 3 seconds → score ≤ 10.
 - Prompt mode: keyword + semantic + sentence alignment.
 - Free practice: 5-signal coherence model.
 
+#### Story-linked recordings
+- When `Recording.storyId` is set, the linked `Story.content` (plain-text mirror of the rich-text note) is passed as `promptText` into `SpeechService.analyze(...)` instead of `recording.prompt?.text`.
+- This feeds `PromptRelevanceService.score(promptText:transcript:)` so the relevance subscore reflects how closely the delivered speech tracks the user's own written script, not a generic prompt.
+- Story wins when both a `Story` and a `Prompt` are attached — the story is treated as the more specific rubric.
+- No new subscore and no formula change; only a new input source. Same keyword + semantic + sentence-alignment pipeline applies.
+- Resolution happens in `RecordingDetailView.effectivePromptText(for:)` just before `analyze` / `enhanceWithLLM` calls.
+
 ## Overall score
 - Weighted average of available subscores (4 required + up to 5 optional).
 - Weights normalized to sum to 1.0 over included dimensions.

@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Transcription Types
 
-struct TranscriptionWord: Codable, Identifiable {
+nonisolated struct TranscriptionWord: Codable, Identifiable {
     var id: UUID = UUID()
     let word: String
     let start: TimeInterval
@@ -52,7 +52,7 @@ struct TranscriptionWord: Codable, Identifiable {
     }
 }
 
-struct FillerWord: Codable, Identifiable {
+nonisolated struct FillerWord: Codable, Identifiable, Sendable {
     var id: UUID = UUID()
     let word: String
     var count: Int
@@ -67,7 +67,7 @@ struct FillerWord: Codable, Identifiable {
 
 // MARK: - Vocab Word Usage
 
-struct VocabWordUsage: Codable, Identifiable {
+nonisolated struct VocabWordUsage: Codable, Identifiable {
     var id: UUID = UUID()
     let word: String
     var count: Int
@@ -80,7 +80,7 @@ struct VocabWordUsage: Codable, Identifiable {
 
 // MARK: - Volume Metrics
 
-struct VolumeMetrics: Codable {
+nonisolated struct VolumeMetrics: Codable {
     var averageLevel: Float
     var peakLevel: Float
     var dynamicRange: Float
@@ -107,7 +107,7 @@ struct VolumeMetrics: Codable {
 
 // MARK: - Vocabulary Complexity
 
-struct VocabComplexity: Codable {
+nonisolated struct VocabComplexity: Codable {
     var uniqueWordCount: Int
     var uniqueWordRatio: Double
     var averageWordLength: Double
@@ -135,7 +135,7 @@ struct VocabComplexity: Codable {
     }
 }
 
-struct RepeatedPhrase: Codable, Identifiable {
+nonisolated struct RepeatedPhrase: Codable, Identifiable {
     var id: UUID = UUID()
     let phrase: String
     let count: Int
@@ -143,7 +143,7 @@ struct RepeatedPhrase: Codable, Identifiable {
 
 // MARK: - Sentence Analysis
 
-struct SentenceAnalysis: Codable {
+nonisolated struct SentenceAnalysis: Codable {
     var totalSentences: Int
     var incompleteSentences: Int
     var restartCount: Int
@@ -173,7 +173,7 @@ struct SentenceAnalysis: Codable {
 
 // MARK: - Pitch / Prosody Metrics
 
-struct PitchMetrics: Codable {
+nonisolated struct PitchMetrics: Codable {
     var f0Mean: Float
     var f0StdDev: Float
     var f0Min: Float
@@ -216,7 +216,7 @@ struct PitchMetrics: Codable {
 
 // MARK: - Rate Variation Metrics
 
-struct RateVariationMetrics: Codable {
+nonisolated struct RateVariationMetrics: Codable {
     var rateCV: Double
     var articulationRate: Double
     var rateRange: Double
@@ -236,7 +236,7 @@ struct RateVariationMetrics: Codable {
 
 // MARK: - Emphasis Metrics
 
-struct EmphasisMetrics: Codable {
+nonisolated struct EmphasisMetrics: Codable {
     var emphasisCount: Int
     var emphasisPerMinute: Double
     var distributionScore: Int // 0-100
@@ -250,7 +250,7 @@ struct EmphasisMetrics: Codable {
 
 // MARK: - Energy Arc Metrics
 
-struct EnergyArcMetrics: Codable {
+nonisolated struct EnergyArcMetrics: Codable {
     var openingEnergy: Double
     var bodyEnergy: Double
     var closingEnergy: Double
@@ -269,7 +269,7 @@ struct EnergyArcMetrics: Codable {
 
 // MARK: - Text Quality Metrics
 
-struct TextQualityMetrics: Codable {
+nonisolated struct TextQualityMetrics: Codable {
     var hedgeWordCount: Int
     var hedgeWordRatio: Double
     var powerWordCount: Int
@@ -335,7 +335,7 @@ struct TextQualityMetrics: Codable {
 
 // MARK: - Audio / Speaker Isolation Metrics
 
-struct AudioIsolationMetrics: Codable {
+nonisolated struct AudioIsolationMetrics: Codable {
     var estimatedInputSNRDb: Double
     var estimatedOutputSNRDb: Double
     var suppressionDeltaDb: Double
@@ -357,7 +357,7 @@ struct AudioIsolationMetrics: Codable {
     }
 }
 
-struct SpeakerIsolationMetrics: Codable {
+nonisolated struct SpeakerIsolationMetrics: Codable {
     var primarySpeakerWordRatio: Double // 0.0 - 1.0
     var filteredOutWordCount: Int
     var speakerSwitchCount: Int
@@ -381,7 +381,7 @@ struct SpeakerIsolationMetrics: Codable {
 
 // MARK: - WPM Data Point
 
-struct WPMDataPoint: Codable, Identifiable {
+nonisolated struct WPMDataPoint: Codable, Identifiable {
     var id: UUID = UUID()
     let timestamp: TimeInterval  // Seconds into recording (segment midpoint)
     let wpm: Double              // WPM for this segment
@@ -404,7 +404,7 @@ struct WPMDataPoint: Codable, Identifiable {
 
 // MARK: - Speech Analysis
 
-struct SpeechAnalysis: Codable {
+nonisolated struct SpeechAnalysis: Codable {
     var fillerWords: [FillerWord]
     var totalWords: Int
     var wordsPerMinute: Double
@@ -529,7 +529,7 @@ struct SpeechAnalysis: Codable {
 
 // MARK: - Speech Score
 
-struct SpeechScore: Codable {
+nonisolated struct SpeechScore: Codable {
     var overall: Int // 0-100
     var subscores: SpeechSubscores
     var trend: ScoreTrend
@@ -545,7 +545,7 @@ struct SpeechScore: Codable {
     }
 }
 
-struct SpeechSubscores: Codable {
+nonisolated struct SpeechSubscores: Codable, Sendable {
     var clarity: Int      // 0-100: Transcription confidence + articulation + hedge word penalty
     var pace: Int         // 0-100: WPM + rate variation
     var fillerUsage: Int  // 0-100: Inverse of filler + hedge word ratio
@@ -594,7 +594,7 @@ struct SpeechSubscores: Codable {
 
 // MARK: - Score Weights
 
-struct ScoreWeights {
+nonisolated struct ScoreWeights {
     var clarity: Double = 0.18
     var pace: Double = 0.12
     var filler: Double = 0.14
@@ -625,7 +625,7 @@ struct ScoreWeights {
     }
 }
 
-enum ScoreTrend: String, Codable {
+nonisolated enum ScoreTrend: String, Codable {
     case improving
     case stable
     case declining

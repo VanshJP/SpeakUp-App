@@ -25,6 +25,7 @@ final class Recording {
     var groupId: UUID?
     var storyId: UUID?
     var storyTitle: String?
+    var waveformPeaks: [Float]?
     @Transient var audioLevelSamples: [Float]? = nil
 
     init(

@@ -72,6 +72,9 @@ final class UserSettings {
     // Story Practice
     var storyPracticeEnabled: Bool = false
 
+    // Dictation
+    var autoFormatDictation: Bool = true
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 
@@ -199,6 +202,35 @@ final class UserSettings {
 
     func removeDictationBiasWord(_ word: String) {
         dictationBiasWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
+    }
+
+    // MARK: - Transcription Bias
+
+    /// Unified list of user-defined terms to bias Whisper transcription toward.
+    /// Combines the dictation dictionary, the vocabulary word bank, and custom
+    /// filler words (always-detected and context-dependent). De-duplicated
+    /// case-insensitively; the dictation dictionary wins ordering so the most
+    /// deliberate user entries lead the prompt.
+    var transcriptionBiasTerms: [String] {
+        let sources: [[String]] = [
+            dictationBiasWords,
+            vocabWords,
+            customFillerWords,
+            customContextFillerWords
+        ]
+        var seen: Set<String> = []
+        var unique: [String] = []
+        for source in sources {
+            for term in source {
+                let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+                let key = trimmed.lowercased()
+                if seen.insert(key).inserted {
+                    unique.append(trimmed)
+                }
+            }
+        }
+        return unique
     }
 }
 

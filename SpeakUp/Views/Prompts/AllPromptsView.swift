@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 struct AllPromptsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Prompt.category) private var allPrompts: [Prompt]
-    @Query private var recordings: [Recording]
 
+    @State private var answeredPromptIDs: Set<String> = []
     @State private var searchText = ""
     @State private var selectedFilter: PromptFilter = .all
     @State private var selectedCategory: PromptCategory?
@@ -28,10 +28,6 @@ struct AllPromptsView: View {
     }
 
     // MARK: - Computed Data
-
-    private var answeredPromptIDs: Set<String> {
-        Set(recordings.compactMap { $0.prompt?.id })
-    }
 
     private var customCount: Int {
         allPrompts.filter(\.isUserCreated).count
@@ -106,6 +102,9 @@ struct AllPromptsView: View {
         .navigationTitle("Prompts")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task {
+            await loadAnsweredPromptIDs()
+        }
         .searchable(text: $searchText, prompt: "Search prompts...")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -488,6 +487,17 @@ struct AllPromptsView: View {
     }
 
     // MARK: - Actions
+
+    private func loadAnsweredPromptIDs() async {
+        let container = modelContext.container
+        let ids = await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>()
+            let recordings = (try? context.fetch(descriptor)) ?? []
+            return Set(recordings.compactMap { $0.prompt?.id })
+        }.value
+        answeredPromptIDs = ids
+    }
 
     private func deletePrompt(_ prompt: Prompt) {
         withAnimation {

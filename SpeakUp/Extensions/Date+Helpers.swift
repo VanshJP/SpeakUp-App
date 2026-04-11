@@ -1,8 +1,8 @@
 import Foundation
 
-extension Date {
+nonisolated extension Date {
     // MARK: - Start of Periods
-    
+
     var startOfDay: Date {
         Calendar.current.startOfDay(for: self)
     }
@@ -164,7 +164,7 @@ extension Date {
 
 // MARK: - TimeInterval Extensions
 
-extension TimeInterval {
+nonisolated extension TimeInterval {
     var formattedDuration: String {
         let minutes = Int(self) / 60
         let seconds = Int(self) % 60

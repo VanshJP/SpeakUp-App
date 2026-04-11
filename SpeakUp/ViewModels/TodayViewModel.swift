@@ -16,10 +16,14 @@ class TodayViewModel {
     var weeklyGoalSessions: Int = 5
     var storyPracticeEnabled: Bool = false
     var todaysStory: Story?
+    var sparklineScores: [DatedScore] = []
+    var recentSubscores: [SpeechSubscores] = []
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
     private var hasRerolledPrompt = false
-    
+
+    nonisolated init() {}
+
     func configure(with context: ModelContext) {
         self.modelContext = context
         Task { @MainActor in
@@ -33,22 +37,29 @@ class TodayViewModel {
         defer { isLoading = false }
 
         guard let context = modelContext else { return }
+        let container = context.container
 
         // Load user settings first (needed for prompt filtering)
         await loadUserSettings(context: context)
 
-        // Fetch all recordings once — reused by stats, daily challenge, and answered prompts
-        let descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        // Heavy fetch + stats computation off main thread
+        let heavy = await Self.fetchAndCompute(
+            container: container,
+            hideAnsweredPrompts: hideAnsweredPrompts,
+            weeklyGoalSessions: weeklyGoalSessions
         )
-        let allRecordings = (try? context.fetch(descriptor)) ?? []
 
-        // Build answered prompt IDs from shared recordings (needed for prompt filtering)
-        if hideAnsweredPrompts {
-            answeredPromptIDs = Set(allRecordings.compactMap { $0.prompt?.id })
-        }
+        self.userStats = heavy.userStats
+        self.weeklyProgress = heavy.weeklyProgress
+        self.sparklineScores = heavy.sparklineScores
+        self.recentSubscores = heavy.recentSubscores
+        self.answeredPromptIDs = heavy.answeredPromptIDs
 
-        // Load today's prompt
+        var challenge = DailyChallengeService.todaysChallenge()
+        challenge.isCompleted = heavy.dailyChallengeCompleted
+        self.dailyChallenge = challenge
+
+        // Load today's prompt (uses answeredPromptIDs populated above)
         await loadTodaysPrompt(context: context)
 
         // Load today's story if story practice is enabled
@@ -56,23 +67,144 @@ class TodayViewModel {
             await loadTodaysStory(context: context)
         }
 
-        // Load user stats (pass pre-fetched recordings)
-        loadUserStats(recordings: allRecordings)
-
         // Load active goals
         await loadActiveGoals(context: context)
-
-        // Load daily challenge (reuse same recordings)
-        loadDailyChallenge(recordings: allRecordings)
 
         // Schedule streak-at-risk notification if applicable
         await scheduleStreakNotificationIfNeeded()
 
         // Update widget data
-        updateWidgetData()
+        updateWidgetData(skillMastery: heavy.skillMastery)
     }
 
-    private func updateWidgetData() {
+    // MARK: - Background fetch
+
+    private static func fetchAndCompute(
+        container: ModelContainer,
+        hideAnsweredPrompts: Bool,
+        weeklyGoalSessions: Int
+    ) async -> TodayHeavyResult {
+        await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            let recordings = (try? context.fetch(descriptor)) ?? []
+
+            let answered: Set<String> = hideAnsweredPrompts
+                ? Set(recordings.compactMap { $0.prompt?.id })
+                : []
+
+            // Stats
+            let totalRecordings = recordings.count
+            let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
+            let recordingDates = recordings.map(\.date)
+            let currentStreak = Date.calculateStreak(from: recordingDates)
+            let longestStreak = max(currentStreak, recordings.isEmpty ? 0 : 1)
+
+            let scoresWithAnalysis = recordings.compactMap { $0.analysis?.speechScore.overall }
+            let averageScore: Double = scoresWithAnalysis.isEmpty
+                ? 0
+                : Double(scoresWithAnalysis.reduce(0, +)) / Double(scoresWithAnalysis.count)
+
+            let sevenDaysAgo = Date().adding(days: -7)
+            let recentRecordings = recordings.filter { $0.date >= sevenDaysAgo }
+            let scoreHistory = recentRecordings.compactMap { rec -> ScoreHistoryEntry? in
+                guard let score = rec.analysis?.speechScore.overall else { return nil }
+                return ScoreHistoryEntry(date: rec.date, score: score)
+            }
+
+            var fillerCounts: [String: Int] = [:]
+            for r in recordings {
+                for f in r.analysis?.fillerWords ?? [] {
+                    fillerCounts[f.word, default: 0] += f.count
+                }
+            }
+            let mostUsedFillers = fillerCounts
+                .sorted { $0.value > $1.value }
+                .prefix(5)
+                .map { FillerWord(word: $0.key, count: $0.value) }
+
+            // Improvement rate (inline)
+            let improvementRate: Double = {
+                guard recentRecordings.count >= 2 else { return 0 }
+                let sorted = recentRecordings.sorted { $0.date < $1.date }
+                let mid = sorted.count / 2
+                let firstHalf = Array(sorted.prefix(mid))
+                let secondHalf = Array(sorted.suffix(from: mid))
+                let firstSum = firstHalf.compactMap { $0.analysis?.speechScore.overall }.reduce(0, +)
+                let secondSum = secondHalf.compactMap { $0.analysis?.speechScore.overall }.reduce(0, +)
+                guard firstSum > 0 else { return 0 }
+                let firstAvg = Double(firstSum) / Double(max(firstHalf.count, 1))
+                let secondAvg = Double(secondSum) / Double(max(secondHalf.count, 1))
+                return ((secondAvg - firstAvg) / firstAvg) * 100
+            }()
+
+            let calendar = Calendar.current
+            let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+            let weeklySessionCount = recordings.filter { $0.date >= weekStart }.count
+
+            let userStats = UserStats(
+                totalRecordings: totalRecordings,
+                totalPracticeTime: totalPracticeTime,
+                currentStreak: currentStreak,
+                longestStreak: longestStreak,
+                averageScore: averageScore,
+                scoreHistory: scoreHistory,
+                mostUsedFillers: Array(mostUsedFillers),
+                improvementRate: improvementRate,
+                weeklySessionCount: weeklySessionCount,
+                weeklyGoalSessions: weeklyGoalSessions
+            )
+
+            let weeklyProgress = WeeklyProgressService.calculate(recordings: recordings)
+
+            // Daily challenge completion
+            let todayStart = calendar.startOfDay(for: Date())
+            let todayRecordings = recordings.filter { $0.date >= todayStart }
+            let challengeTemplate = DailyChallengeService.todaysChallenge()
+            let challengeCompleted = todayRecordings.contains {
+                DailyChallengeService.evaluate(challenge: challengeTemplate, recording: $0)
+            }
+
+            // Sparkline (last 20 with analysis, oldest-first)
+            let sparkline: [DatedScore] = Array(
+                recordings
+                    .prefix(20)
+                    .compactMap { r -> DatedScore? in
+                        guard let s = r.analysis?.speechScore.overall else { return nil }
+                        return DatedScore(date: r.date, score: s)
+                    }
+                    .reversed()
+            )
+
+            // Recent subscores for weak area (last 10)
+            let recentSubscores: [SpeechSubscores] = recordings
+                .prefix(10)
+                .compactMap { $0.analysis?.speechScore.subscores }
+
+            // Skill mastery from last 5
+            let top5 = recordings.prefix(5).compactMap { $0.analysis?.speechScore.subscores }
+            let skillMastery: SkillMastery? = top5.isEmpty ? nil : SkillMastery(
+                clarity: top5.map(\.clarity).reduce(0, +) / top5.count,
+                pace: top5.map(\.pace).reduce(0, +) / top5.count,
+                filler: top5.map(\.fillerUsage).reduce(0, +) / top5.count,
+                pause: top5.map(\.pauseQuality).reduce(0, +) / top5.count
+            )
+
+            return TodayHeavyResult(
+                userStats: userStats,
+                weeklyProgress: weeklyProgress,
+                answeredPromptIDs: answered,
+                sparklineScores: sparkline,
+                recentSubscores: recentSubscores,
+                dailyChallengeCompleted: challengeCompleted,
+                skillMastery: skillMastery
+            )
+        }.value
+    }
+
+    private func updateWidgetData(skillMastery: SkillMastery?) {
         WidgetDataProvider.updateStreak(userStats.currentStreak)
         if let prompt = todaysPrompt {
             WidgetDataProvider.updateTodaysPrompt(text: prompt.text, category: prompt.category, id: prompt.id)
@@ -106,41 +238,19 @@ class TodayViewModel {
             WidgetDataProvider.updateLastPracticeDate(latestRecording.date)
         }
 
-        // Skill mastery
-        updateSkillWidgetData()
+        // Skill mastery (pre-computed off-main)
+        if let skillMastery {
+            WidgetDataProvider.updateSkillMastery(
+                clarity: skillMastery.clarity,
+                pace: skillMastery.pace,
+                filler: skillMastery.filler,
+                pause: skillMastery.pause
+            )
+        } else {
+            WidgetDataProvider.updateSkillMastery(clarity: 0, pace: 0, filler: 0, pause: 0)
+        }
 
         WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    private func updateSkillWidgetData() {
-        guard let context = modelContext else { return }
-        let descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        
-        do {
-            let recordings = try context.fetch(descriptor).prefix(5)
-            let scores = recordings.compactMap { $0.analysis?.speechScore.subscores }
-            
-            guard !scores.isEmpty else {
-                WidgetDataProvider.updateSkillMastery(clarity: 0, pace: 0, filler: 0, pause: 0)
-                return
-            }
-            
-            let avgClarity = scores.map(\.clarity).reduce(0, +) / scores.count
-            let avgPace = scores.map(\.pace).reduce(0, +) / scores.count
-            let avgFiller = scores.map(\.fillerUsage).reduce(0, +) / scores.count
-            let avgPause = scores.map(\.pauseQuality).reduce(0, +) / scores.count
-            
-            WidgetDataProvider.updateSkillMastery(
-                clarity: avgClarity,
-                pace: avgPace,
-                filler: avgFiller,
-                pause: avgPause
-            )
-        } catch {
-            print("Error updating skill widget data: \(error)")
-        }
     }
 
     private func scheduleStreakNotificationIfNeeded() async {
@@ -204,67 +314,6 @@ class TodayViewModel {
         } catch {
             print("Error loading today's prompt: \(error)")
         }
-    }
-    
-    private func loadUserStats(recordings: [Recording]) {
-            // Calculate stats
-            let totalRecordings = recordings.count
-            let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
-            
-            // Calculate streaks
-            let recordingDates = recordings.map { $0.date }
-            let currentStreak = Date.calculateStreak(from: recordingDates)
-            
-            // Calculate longest streak (simplified - would need more logic for accuracy)
-            let longestStreak = max(currentStreak, recordings.isEmpty ? 0 : 1)
-            
-            // Calculate average score
-            let scoresWithAnalysis = recordings.compactMap { $0.analysis?.speechScore.overall }
-            let averageScore = scoresWithAnalysis.isEmpty ? 0 : Double(scoresWithAnalysis.reduce(0, +)) / Double(scoresWithAnalysis.count)
-            
-            // Get score history (last 7 days)
-            let sevenDaysAgo = Date().adding(days: -7)
-            let recentRecordings = recordings.filter { $0.date >= sevenDaysAgo }
-            let scoreHistory = recentRecordings.compactMap { recording -> ScoreHistoryEntry? in
-                guard let score = recording.analysis?.speechScore.overall else { return nil }
-                return ScoreHistoryEntry(date: recording.date, score: score)
-            }
-            
-            // Most used fillers
-            var fillerCounts: [String: Int] = [:]
-            for recording in recordings {
-                for filler in recording.analysis?.fillerWords ?? [] {
-                    fillerCounts[filler.word, default: 0] += filler.count
-                }
-            }
-            let mostUsedFillers = fillerCounts
-                .sorted { $0.value > $1.value }
-                .prefix(5)
-                .map { FillerWord(word: $0.key, count: $0.value) }
-            
-            // Calculate improvement rate
-            let improvementRate = calculateImprovementRate(from: recentRecordings)
-
-            // Weekly progress
-            weeklyProgress = WeeklyProgressService.calculate(recordings: recordings)
-
-            // Sessions this week (Mon-Sun)
-            let calendar = Calendar.current
-            let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
-            let weeklySessionCount = recordings.filter { $0.date >= weekStart }.count
-            
-            userStats = UserStats(
-                totalRecordings: totalRecordings,
-                totalPracticeTime: totalPracticeTime,
-                currentStreak: currentStreak,
-                longestStreak: longestStreak,
-                averageScore: averageScore,
-                scoreHistory: scoreHistory,
-                mostUsedFillers: Array(mostUsedFillers),
-                improvementRate: improvementRate,
-                weeklySessionCount: weeklySessionCount,
-                weeklyGoalSessions: weeklyGoalSessions
-            )
     }
     
     @MainActor
@@ -351,14 +400,6 @@ class TodayViewModel {
         }
     }
     
-    private func loadDailyChallenge(recordings: [Recording]) {
-        var challenge = DailyChallengeService.todaysChallenge()
-        let today = Calendar.current.startOfDay(for: Date())
-        let todayRecordings = recordings.filter { $0.date >= today }
-        challenge.isCompleted = todayRecordings.contains { DailyChallengeService.evaluate(challenge: challenge, recording: $0) }
-        dailyChallenge = challenge
-    }
-
     // MARK: - Story Practice
 
     @MainActor
@@ -396,24 +437,28 @@ class TodayViewModel {
         }
     }
 
-    private func calculateImprovementRate(from recordings: [Recording]) -> Double {
-        guard recordings.count >= 2 else { return 0 }
-        
-        let sortedByDate = recordings.sorted { $0.date < $1.date }
-        
-        // Get first half and second half averages
-        let midpoint = sortedByDate.count / 2
-        let firstHalf = Array(sortedByDate.prefix(midpoint))
-        let secondHalf = Array(sortedByDate.suffix(from: midpoint))
-        
-        let firstAvg = firstHalf.compactMap { $0.analysis?.speechScore.overall }.reduce(0, +)
-        let secondAvg = secondHalf.compactMap { $0.analysis?.speechScore.overall }.reduce(0, +)
-        
-        guard firstAvg > 0 else { return 0 }
-        
-        let firstAvgDouble = Double(firstAvg) / Double(max(firstHalf.count, 1))
-        let secondAvgDouble = Double(secondAvg) / Double(max(secondHalf.count, 1))
-        
-        return ((secondAvgDouble - firstAvgDouble) / firstAvgDouble) * 100
-    }
+}
+
+// MARK: - Sendable result types
+
+nonisolated struct DatedScore: Sendable, Hashable {
+    let date: Date
+    let score: Int
+}
+
+nonisolated struct SkillMastery: Sendable {
+    let clarity: Int
+    let pace: Int
+    let filler: Int
+    let pause: Int
+}
+
+nonisolated private struct TodayHeavyResult: Sendable {
+    let userStats: UserStats
+    let weeklyProgress: WeeklyProgressData?
+    let answeredPromptIDs: Set<String>
+    let sparklineScores: [DatedScore]
+    let recentSubscores: [SpeechSubscores]
+    let dailyChallengeCompleted: Bool
+    let skillMastery: SkillMastery?
 }

@@ -10,6 +10,8 @@ struct DrillSelectionView: View {
     @State private var selectedDrillMode: DrillMode?
     @State private var showingReadAloud = false
 
+    var sourceStory: Story?
+
     let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
@@ -22,6 +24,11 @@ struct DrillSelectionView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                        if let story = sourceStory {
+                            sourceStoryBanner(story)
+                                .padding(.horizontal)
+                        }
+
                         Text("Choose a drill to sharpen a specific skill.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -136,6 +143,42 @@ struct DrillSelectionView: View {
             .sheet(isPresented: $showingReadAloud) {
                 ReadAloudSelectionView()
             }
+        }
+    }
+
+    private func sourceStoryBanner(_ story: Story) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "text.book.closed.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.indigo)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Drilling from")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(story.title.isEmpty ? "Untitled note" : story.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text("Impromptu")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.indigo)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background {
+                    Capsule().fill(Color.indigo.opacity(0.18))
+                }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.indigo.opacity(0.15))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.indigo.opacity(0.35), lineWidth: 0.5)
+                }
         }
     }
 }

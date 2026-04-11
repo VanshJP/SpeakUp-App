@@ -5,6 +5,8 @@ struct WarmUpListView: View {
     @State private var viewModel = WarmUpViewModel()
     @State private var showingExercise = false
 
+    var sourceStory: Story?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -12,6 +14,10 @@ struct WarmUpListView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
+                        if let story = sourceStory {
+                            sourceStoryBanner(story)
+                        }
+
                         // Category picker
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -103,6 +109,34 @@ struct WarmUpListView: View {
             .fullScreenCover(isPresented: $showingExercise) {
                 WarmUpExerciseView(viewModel: viewModel)
             }
+        }
+    }
+
+    private func sourceStoryBanner(_ story: Story) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "text.book.closed.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppColors.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Warming up for")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(story.title.isEmpty ? "Untitled note" : story.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(AppColors.primary.opacity(0.15))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(AppColors.primary.opacity(0.35), lineWidth: 0.5)
+                }
         }
     }
 }

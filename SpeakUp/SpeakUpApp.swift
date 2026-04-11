@@ -20,6 +20,7 @@ struct SpeakUpApp: App {
             CurriculumProgress.self,
             RecordingGroup.self,
             Story.self,
+            StoryFolder.self,
         ])
 
         // Respect user's iCloud sync preference (read from UserDefaults since
@@ -78,14 +79,19 @@ struct SpeakUpApp: App {
                     // Settings must exist before anything else reads them
                     await ensureSettingsExist()
 
-                    // Migrate legacy absolute file URLs to relative filenames
-                    await migrateRecordingURLsIfNeeded()
-
                     // Seed remaining data concurrently — all independent of each other
                     async let p: () = seedPromptsIfNeeded()
                     async let a: () = seedAchievementsIfNeeded()
                     async let c: () = seedCurriculumIfNeeded()
-                    _ = await (p, a, c)
+                    async let f: () = seedStoryFoldersIfNeeded()
+                    _ = await (p, a, c, f)
+
+                    // Legacy URL migration is one-shot and runs fully off the main
+                    // actor so a populated Recording store never delays first frame.
+                    let container = sharedModelContainer
+                    Task.detached(priority: .background) {
+                        await Self.migrateRecordingURLsIfNeeded(container: container)
+                    }
 
                     // Migrate local audio files to iCloud when sync is enabled
                     if ICloudStorageService.shared.isSyncEnabled {
@@ -182,10 +188,16 @@ struct SpeakUpApp: App {
         }
     }
 
-    @MainActor
-    private func migrateRecordingURLsIfNeeded() async {
-        let context = sharedModelContainer.mainContext
-        let descriptor = FetchDescriptor<Recording>()
+    private static let urlMigrationFlagKey = "didMigrateRecordingURLs_v1"
+
+    private static func migrateRecordingURLsIfNeeded(container: ModelContainer) async {
+        if UserDefaults.standard.bool(forKey: urlMigrationFlagKey) { return }
+
+        // Only fetch the URL fields — avoid hydrating transcript/analysis blobs.
+        var descriptor = FetchDescriptor<Recording>()
+        descriptor.propertiesToFetch = [\.audioURL, \.videoURL, \.thumbnailURL]
+
+        let context = ModelContext(container)
 
         do {
             let recordings = try context.fetch(descriptor)
@@ -213,8 +225,34 @@ struct SpeakUpApp: App {
             if migrated > 0 {
                 try context.save()
             }
+
+            UserDefaults.standard.set(true, forKey: urlMigrationFlagKey)
         } catch {
             print("Error migrating recording URLs: \(error)")
+        }
+    }
+
+    @MainActor
+    private func seedStoryFoldersIfNeeded() async {
+        let context = sharedModelContainer.mainContext
+        let descriptor = FetchDescriptor<StoryFolder>()
+
+        do {
+            let existing = try context.fetch(descriptor)
+            guard existing.isEmpty else { return }
+
+            for (index, spec) in StoryFolder.defaults.enumerated() {
+                let folder = StoryFolder(
+                    name: spec.name,
+                    systemImage: spec.symbol,
+                    colorHex: spec.colorHex,
+                    sortOrder: index
+                )
+                context.insert(folder)
+            }
+            try context.save()
+        } catch {
+            print("Error seeding story folders: \(error)")
         }
     }
 

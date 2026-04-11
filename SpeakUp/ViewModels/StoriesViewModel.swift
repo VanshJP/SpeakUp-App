@@ -5,43 +5,41 @@ import SwiftData
 @MainActor @Observable
 class StoriesViewModel {
     var stories: [Story] = []
+    var folders: [StoryFolder] = []
     var filteredStories: [Story] = []
     var isLoading = false
     var errorMessage: String?
 
-    var searchText = "" {
-        didSet { debounceRecompute() }
-    }
-    var selectedTagFilter: StoryTagType? {
-        didSet { recomputeFilteredStories() }
-    }
-    var selectedTagValue: String? {
-        didSet { recomputeFilteredStories() }
-    }
-    var selectedStageFilter: StoryStage? {
-        didSet { recomputeFilteredStories() }
-    }
-    var dateFilterStart: Date? {
-        didSet { recomputeFilteredStories() }
-    }
-    var dateFilterEnd: Date? {
-        didSet { recomputeFilteredStories() }
-    }
-    var favoritesOnly: Bool = false {
-        didSet { recomputeFilteredStories() }
-    }
-    var sortOrder: StorySortOrder = .updatedAt {
-        didSet { recomputeFilteredStories() }
-    }
-    var selectedEntryTypeFilter: StoryEntryType? {
-        didSet { recomputeFilteredStories() }
-    }
+    // MARK: - Filters (no per-property didSet — use setFilter/clearAllFilters)
+
+    private(set) var searchText = ""
+    private(set) var selectedTagFilter: StoryTagType?
+    private(set) var selectedTagValue: String?
+    private(set) var selectedStageFilter: StoryStage?
+    private(set) var dateFilterStart: Date?
+    private(set) var dateFilterEnd: Date?
+    private(set) var favoritesOnly: Bool = false
+    private(set) var sortOrder: StorySortOrder = .updatedAt
+    private(set) var selectedEntryTypeFilter: StoryEntryType?
+
+    /// Selected folder scope. `nil` = All Notes. Pinned pseudo-folder uses `folderSelection`.
+    var folderSelection: FolderSelection = .all
 
     var hasActiveFilters: Bool {
         selectedTagFilter != nil || selectedTagValue != nil ||
         selectedStageFilter != nil || dateFilterStart != nil ||
         favoritesOnly || sortOrder != .updatedAt ||
         selectedEntryTypeFilter != nil
+    }
+
+    // MARK: - Pinned split
+
+    var pinnedStories: [Story] {
+        filteredStories.filter { $0.isFavorite }
+    }
+
+    var unpinnedStories: [Story] {
+        filteredStories.filter { !$0.isFavorite }
     }
 
     let taggingService = StoryTaggingService()
@@ -70,17 +68,105 @@ class StoriesViewModel {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
 
+        let folderDescriptor = FetchDescriptor<StoryFolder>(
+            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.createdAt)]
+        )
+
         do {
             stories = try context.fetch(descriptor)
+            folders = try context.fetch(folderDescriptor)
             recomputeFilteredStories()
         } catch {
             errorMessage = "Failed to load stories: \(error.localizedDescription)"
         }
     }
 
-    // MARK: - Filtering & Sorting
+    // MARK: - Folder CRUD
 
-    private func debounceRecompute() {
+    @discardableResult
+    func createFolder(name: String, systemImage: String = "folder.fill", colorHex: String = "#0D8488") -> StoryFolder? {
+        guard let context = modelContext else { return nil }
+        let order = (folders.map(\.sortOrder).max() ?? -1) + 1
+        let folder = StoryFolder(name: name, systemImage: systemImage, colorHex: colorHex, sortOrder: order)
+        context.insert(folder)
+
+        do {
+            try context.save()
+            folders.append(folder)
+            return folder
+        } catch {
+            errorMessage = "Failed to create folder: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    func updateFolder(_ folder: StoryFolder, name: String? = nil, systemImage: String? = nil, colorHex: String? = nil) {
+        guard let context = modelContext else { return }
+        if let name { folder.name = name }
+        if let systemImage { folder.systemImage = systemImage }
+        if let colorHex { folder.colorHex = colorHex }
+
+        do {
+            try context.save()
+        } catch {
+            errorMessage = "Failed to update folder: \(error.localizedDescription)"
+        }
+    }
+
+    func deleteFolder(_ folder: StoryFolder) {
+        guard let context = modelContext else { return }
+
+        let targetId = folder.id
+        for story in stories where story.folderId == targetId {
+            story.folderId = nil
+        }
+        context.delete(folder)
+
+        do {
+            try context.save()
+            folders.removeAll { $0.id == targetId }
+            if case .folder(let id) = folderSelection, id == targetId {
+                folderSelection = .all
+            }
+            recomputeFilteredStories()
+        } catch {
+            errorMessage = "Failed to delete folder: \(error.localizedDescription)"
+        }
+    }
+
+    func moveStory(_ story: Story, toFolder folderId: UUID?) {
+        guard let context = modelContext else { return }
+        story.folderId = folderId
+        story.updatedAt = Date()
+
+        do {
+            try context.save()
+            recomputeFilteredStories()
+        } catch {
+            errorMessage = "Failed to move story: \(error.localizedDescription)"
+        }
+    }
+
+    func countForFolder(_ selection: FolderSelection) -> Int {
+        switch selection {
+        case .all:
+            return stories.count
+        case .pinned:
+            return stories.filter { $0.isFavorite }.count
+        case .folder(let id):
+            return stories.filter { $0.folderId == id }.count
+        }
+    }
+
+    func setFolderSelection(_ selection: FolderSelection) {
+        folderSelection = selection
+        recomputeFilteredStories()
+    }
+
+    // MARK: - Filter Setters (batched — single recompute per call)
+
+    func setSearch(_ text: String) {
+        searchText = text
         searchDebounceTask?.cancel()
         searchDebounceTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
@@ -89,8 +175,56 @@ class StoriesViewModel {
         }
     }
 
+    func setEntryTypeFilter(_ type: StoryEntryType?) {
+        selectedEntryTypeFilter = type
+        selectedStageFilter = nil
+        selectedTagFilter = nil
+        selectedTagValue = nil
+        recomputeFilteredStories()
+    }
+
+    func setStageFilter(_ stage: StoryStage?) {
+        selectedStageFilter = stage
+        selectedTagFilter = nil
+        selectedTagValue = nil
+        recomputeFilteredStories()
+    }
+
+    func setTagFilter(_ type: StoryTagType?) {
+        selectedTagFilter = type
+        selectedStageFilter = nil
+        if type == nil { selectedTagValue = nil }
+        recomputeFilteredStories()
+    }
+
+    func setTagValue(_ value: String?) {
+        selectedTagValue = value
+        recomputeFilteredStories()
+    }
+
+    func setSortOrder(_ order: StorySortOrder) {
+        sortOrder = order
+        recomputeFilteredStories()
+    }
+
+    func toggleFavoritesOnly() {
+        favoritesOnly.toggle()
+        recomputeFilteredStories()
+    }
+
+    // MARK: - Filtering & Sorting
+
     func recomputeFilteredStories() {
         var result = stories
+
+        switch folderSelection {
+        case .all:
+            break
+        case .pinned:
+            result = result.filter { $0.isFavorite }
+        case .folder(let id):
+            result = result.filter { $0.folderId == id }
+        }
 
         if !searchText.isEmpty {
             let query = searchText.lowercased()
@@ -157,6 +291,8 @@ class StoriesViewModel {
         dateFilterEnd = nil
         favoritesOnly = false
         sortOrder = .updatedAt
+        selectedEntryTypeFilter = nil
+        recomputeFilteredStories()
     }
 
     func applyTagFilter(_ tag: StoryTag) {
@@ -165,11 +301,10 @@ class StoriesViewModel {
 
         if tag.type == .date, let parsed = tag.parsedDate {
             let calendar = Calendar.current
-            let start = calendar.date(byAdding: .month, value: -1, to: parsed) ?? parsed
-            let end = calendar.date(byAdding: .month, value: 1, to: parsed) ?? parsed
-            dateFilterStart = start
-            dateFilterEnd = end
+            dateFilterStart = calendar.date(byAdding: .month, value: -1, to: parsed) ?? parsed
+            dateFilterEnd = calendar.date(byAdding: .month, value: 1, to: parsed) ?? parsed
         }
+        recomputeFilteredStories()
     }
 
     // MARK: - CRUD
@@ -183,6 +318,7 @@ class StoriesViewModel {
         stage: StoryStage = .spark,
         occasion: StoryOccasion? = nil,
         entryType: StoryEntryType = .story,
+        folderId: UUID? = nil
     ) -> Story? {
         guard let context = modelContext else { return nil }
 
@@ -197,7 +333,8 @@ class StoriesViewModel {
             storyStage: stage.rawValue,
             occasion: occasion?.rawValue,
             estimatedDurationSeconds: estimatedSeconds,
-            entryType: entryType.rawValue
+            entryType: entryType.rawValue,
+            folderId: folderId
         )
         context.insert(story)
 
@@ -244,6 +381,49 @@ class StoriesViewModel {
         }
     }
 
+    /// Auto-save draft changes during editing. Writes the title plus the full
+    /// attributed (rich text) content; `Story.attributedContent` keeps the
+    /// plain `content` mirror in sync transparently.
+    func autoSave(_ story: Story, title: String, attributed: NSAttributedString) {
+        guard let context = modelContext else { return }
+
+        story.title = title
+        story.attributedContent = attributed
+        story.updatedAt = Date()
+        let words = attributed.string.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+        story.estimatedDurationSeconds = max(0, words * 60 / 150)
+
+        do {
+            try context.save()
+        } catch {
+            // best-effort
+        }
+    }
+
+    /// Merge newly extracted tags
+    func appendTags(to story: Story, tags newTags: [StoryTag]) {
+        guard let context = modelContext, !newTags.isEmpty else { return }
+
+        var merged = story.tags
+        for tag in newTags where !merged.contains(where: {
+            $0.type == tag.type && $0.value.lowercased() == tag.value.lowercased()
+        }) {
+            merged.append(tag)
+        }
+
+        guard merged.count != story.tags.count else { return }
+
+        story.tags = merged
+        story.updatedAt = Date()
+
+        do {
+            try context.save()
+            recomputeFilteredStories()
+        } catch {
+            errorMessage = "Failed to update tags: \(error.localizedDescription)"
+        }
+    }
+
     func updateStage(_ story: Story, stage: StoryStage) {
         guard let context = modelContext else { return }
 
@@ -271,6 +451,14 @@ class StoriesViewModel {
             context.rollback()
             errorMessage = "Failed to delete story: \(error.localizedDescription)"
         }
+    }
+
+    /// Delete a story only if it has no meaningful content (used for empty draft cleanup).
+    func deleteIfEmpty(_ story: Story) {
+        let trimmedTitle = story.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedContent = story.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedTitle.isEmpty && trimmedContent.isEmpty else { return }
+        deleteStory(story)
     }
 
     func toggleFavorite(_ story: Story) {
@@ -312,27 +500,6 @@ class StoriesViewModel {
         await taggingService.extractTags(from: text, using: llmService)
     }
 
-    // MARK: - Text Formatting
-
-    func formatDictatedText(_ text: String, llmService: LLMService) async -> String? {
-        guard llmService.isAvailable, !text.isEmpty else { return nil }
-
-        let truncated = String(text.prefix(3000))
-
-        let systemPrompt = """
-        You are a text formatter. Given raw dictated speech text, improve it by:
-        1. Adding proper paragraph breaks where topics change
-        2. Fixing capitalization for proper nouns and sentence starts
-        3. Adding missing punctuation (periods, commas, question marks)
-        4. Removing false starts and repeated words
-        Do NOT change the meaning, add new content, or rewrite sentences.
-        Return ONLY the formatted text with no explanations.
-        """
-
-        let userPrompt = "Format this dictated text:\n\n\(truncated)"
-        return await llmService.generateText(prompt: userPrompt, systemPrompt: systemPrompt)
-    }
-
     // MARK: - Word Bank
 
     func addWordsToVocab(words: [String], settings: UserSettings) {
@@ -363,43 +530,14 @@ class StoriesViewModel {
         }
     }
 
-    // MARK: - Practice Count
+}
 
-    func incrementPracticeCount(for storyId: UUID) {
-        guard let context = modelContext else { return }
+// MARK: - Folder Selection
 
-        let targetId = storyId
-        var descriptor = FetchDescriptor<Story>()
-        descriptor.predicate = #Predicate<Story> { $0.id == targetId }
-
-        do {
-            if let story = try context.fetch(descriptor).first {
-                story.practiceCount += 1
-                story.lastPracticeDate = Date()
-                story.updatedAt = Date()
-                try context.save()
-            }
-        } catch {
-            print("Failed to increment practice count: \(error)")
-        }
-    }
-
-    func updateBestScore(for storyId: UUID, score: Int) {
-        guard let context = modelContext else { return }
-
-        let targetId = storyId
-        var descriptor = FetchDescriptor<Story>()
-        descriptor.predicate = #Predicate<Story> { $0.id == targetId }
-
-        do {
-            if let story = try context.fetch(descriptor).first, score > story.bestScore {
-                story.bestScore = score
-                try context.save()
-            }
-        } catch {
-            print("Failed to update best score: \(error)")
-        }
-    }
+enum FolderSelection: Equatable, Hashable {
+    case all
+    case pinned
+    case folder(UUID)
 }
 
 // MARK: - Sort Order

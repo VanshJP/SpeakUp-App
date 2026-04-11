@@ -7,7 +7,6 @@ struct TodayView: View {
     @State private var viewModel = TodayViewModel()
     @State private var weakAreaService = WeakAreaService()
     @State private var curriculumViewModel = CurriculumViewModel()
-    @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
 
     @Query private var achievements: [Achievement]
 
@@ -101,8 +100,10 @@ struct TodayView: View {
             viewModel.configure(with: modelContext)
             curriculumViewModel.loadProgress(context: modelContext)
         }
-        .task {
-            weakAreaService.analyze(recordings: Array(recordings))
+        .onChange(of: viewModel.isLoading) { _, newValue in
+            if !newValue {
+                weakAreaService.analyze(subscores: viewModel.recentSubscores)
+            }
         }
     }
 
@@ -122,13 +123,7 @@ struct TodayView: View {
 
     @ViewBuilder
     private var progressSnapshotSection: some View {
-        let recentScores: [(date: Date, score: Int)] = recordings
-            .prefix(20)
-            .compactMap { r in
-                guard let score = r.analysis?.speechScore.overall else { return nil }
-                return (date: r.date, score: score)
-            }
-            .reversed()
+        let recentScores = viewModel.sparklineScores
 
         if recentScores.count >= 3 {
             let bestScore = recentScores.map(\.score).max() ?? 0
@@ -900,7 +895,7 @@ struct PracticeToolCard: View {
 // MARK: - Progress Snapshot Card
 
 struct ProgressSnapshotCard: View {
-    let scores: [(date: Date, score: Int)]
+    let scores: [DatedScore]
     let bestScore: Int
     let latestScore: Int
     let trendDelta: Int
