@@ -15,7 +15,10 @@
       "Bash(find /Users/vanshpatel/SpeakUp -type f \\\\\\( -name \"*.mlmodel\" -o -name \"*.gguf\" -o -name \"*.mlpackage\" -o -name \"*model*\" \\\\\\) 2>/dev/null | head -20)",
       "Bash(find /Users/vanshpatel/SpeakUp -name \"*.entitlements\" -type f 2>/dev/null | xargs cat 2>/dev/null)",
       "Bash(git stash:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(npx skills:*)",
+      "Bash(perl -i -pe 's/^\\(struct \\(?:TranscriptionWord|FillerWord|VocabWordUsage|VolumeMetrics|VocabComplexity|RepeatedPhrase|SentenceAnalysis|PitchMetrics|RateVariationMetrics|EmphasisMetrics|EnergyArcMetrics|TextQualityMetrics|AudioIsolationMetrics|SpeakerIsolationMetrics|WPMDataPoint|SpeechAnalysis|SpeechScore|SpeechSubscores|ScoreWeights\\)\\)/nonisolated $1/; s/^\\(enum ScoreTrend\\)/nonisolated $1/' /Users/vanshpatel/SpeakUp/SpeakUp/Models/SpeechAnalysis.swift)",
+      "Bash(idb describe-all:*)"
     ]
   }
 }

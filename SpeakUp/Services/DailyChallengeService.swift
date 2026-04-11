@@ -1,6 +1,6 @@
 import Foundation
 
-enum DailyChallengeService {
+nonisolated enum DailyChallengeService {
     private static let challengeTemplates: [(String, String, String, DailyChallenge.ChallengeType)] = [
         ("Clean Slate", "Complete a session with zero filler words", "checkmark.seal.fill", .zeroFillers),
         ("Steady Pace", "Speak between 130-170 WPM", "speedometer", .targetWPM(min: 130, max: 170)),

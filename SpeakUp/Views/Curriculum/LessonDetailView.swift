@@ -161,7 +161,7 @@ struct LessonDetailView: View {
         let activityId = currentActivity.id
         viewModel.completeActivity(activityId, context: modelContext)
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            completedActivityIds.insert(activityId)
+            _ = completedActivityIds.insert(activityId)
         }
         Haptics.success()
         showStepCompletion()

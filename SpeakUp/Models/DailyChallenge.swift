@@ -1,6 +1,6 @@
 import Foundation
 
-struct DailyChallenge: Identifiable {
+nonisolated struct DailyChallenge: Identifiable, Sendable {
     let id = UUID()
     let type: ChallengeType
     let title: String
@@ -8,7 +8,7 @@ struct DailyChallenge: Identifiable {
     let icon: String
     var isCompleted: Bool = false
 
-    enum ChallengeType {
+    enum ChallengeType: Sendable {
         case zeroFillers
         case targetWPM(min: Int, max: Int)
         case longSession(seconds: Int)

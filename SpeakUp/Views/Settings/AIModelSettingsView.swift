@@ -1,7 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct AIModelSettingsView: View {
     @Environment(LLMService.self) private var llmService
+    @Query private var settingsList: [UserSettings]
+    private var settings: UserSettings? { settingsList.first }
 
     var body: some View {
         ZStack {
@@ -11,6 +14,7 @@ struct AIModelSettingsView: View {
                 VStack(spacing: 20) {
                     appleIntelligenceCard
                     localModelCard
+                    dictationCard
                     featuresCard
                     privacyCard
                 }
@@ -20,6 +24,39 @@ struct AIModelSettingsView: View {
         }
         .navigationTitle("AI Features")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Dictation Card
+
+    private var dictationCard: some View {
+        GlassCard(tint: .teal.opacity(0.05)) {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.title3)
+                    .foregroundStyle(AppColors.primary)
+                    .frame(width: 36, height: 36)
+                    .background(AppColors.primary.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Auto-format Dictation")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Clean up punctuation, capitalization, and paragraphs when you dictate into a note.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { settings?.autoFormatDictation ?? true },
+                    set: { settings?.autoFormatDictation = $0 }
+                ))
+                .labelsHidden()
+                .tint(AppColors.primary)
+                .disabled(settings == nil || !llmService.isAvailable)
+            }
+        }
     }
 
     // MARK: - Subviews

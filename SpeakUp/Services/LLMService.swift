@@ -118,6 +118,116 @@ final class LLMService {
         return nil
     }
 
+    // MARK: - Dictation Formatting
+
+    /// Cleans up raw dictated speech into lightly-formatted Markdown for the story editor.
+    /// The editor parses the returned Markdown into rich text (bold, italic, headings, lists,
+    /// paragraphs). Preserves the speaker's wording, voice, and meaning. Falls back to the
+    /// input on failure. The returned string is Markdown, not plain text.
+    func formatDictation(_ raw: String) async -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, isAvailable else { return raw }
+
+        let systemPrompt = """
+        You format raw dictated speech into lightly-styled Markdown for a personal journal/story entry. \
+        The input is a verbatim transcript of someone speaking out loud. Your output will be parsed into rich text, \
+        so it MUST use Markdown syntax — not plain paragraphs. Keep the speaker's exact voice, wording, tense, \
+        and meaning intact. The goal is to make the raw transcript feel like a written entry.
+
+        === CLEAN THE TEXT ===
+        - Add sentence punctuation (. ? !) and internal punctuation (, ; : — "…" ').
+        - Capitalize sentence starts, the pronoun "I", and proper nouns (names, places, brands, titles).
+        - Remove filler words with no meaning: "um", "uh", "er", "ah", "hmm", and filler uses of "like", "you know", "I mean", "sort of", "kind of", "basically", "literally".
+        - Remove false starts and stuttered repeats. "I— I went to" → "I went to". "so so yesterday" → "so yesterday".
+        - Collapse spoken self-corrections to the corrected version. "I went to the store, I mean the market" → "I went to the market".
+        - Fix clearly-wrong homophone/transcription slips only when unambiguous (e.g. "their" vs "there"). When in doubt, leave the words alone.
+
+        === APPLY MARKDOWN FORMATTING ===
+        Use formatting SPARINGLY and only when the speaker's content actually calls for it. Default is plain paragraphs. Never format everything.
+
+        Paragraphs:
+        - Separate paragraphs with a blank line (two newlines). Break whenever the topic, scene, time, place, or speaker shifts. Long dictation MUST become multiple paragraphs — never return one wall of text.
+
+        Headings (`# Title`, `## Subheading`):
+        - Only if the speaker explicitly announces a title or section header ("Chapter one: the beginning", "Part two", "Section titled Morning Routine"). Strip the announcer words and keep the title on its own heading line.
+        - Do NOT invent headings. Most entries will have zero headings.
+
+        Bold (`**word**`):
+        - The input is a text transcript, so you cannot hear vocal tone. Infer emphasis from TEXTUAL cues only:
+          1. Repetition: "really really important" → "**really** important" (collapse the doubled word).
+          2. Explicit intensifiers: "seriously", "literally" (when used for emphasis, not as filler), "I mean", "I want to emphasize", "the key point is", "the main thing is" — bold the phrase they modify, not the intensifier itself.
+          3. Exclamation sentences with a clear emphatic target: "That was **huge**!"
+          4. Self-labeled takeaways: "the takeaway was **trust your team**", "the lesson is **start small**".
+        - Cap at roughly 1–3 short bolded phrases per entry. Never bold whole sentences, never bold every noun, never bold just for decoration.
+
+        Italic (`*word*`):
+        - Inner thoughts or self-talk: "I thought, *this can't be happening*", "in my head I was like, *just breathe*".
+        - Titles of books, movies, shows, songs, podcasts, albums: *The Great Gatsby*, *Inception*.
+        - Foreign words or phrases: *je ne sais quoi*.
+        - Do NOT italicize for generic emphasis — that's what bold is for.
+
+        Bullet list (`- item` per line):
+        - Only when the speaker verbally enumerates 2+ discrete items with no ordering ("I need to buy eggs, milk, and bread" → three bullets: `- eggs`, `- milk`, `- bread`). Keep each item short.
+
+        Numbered list (`1. item`, `2. item`):
+        - Use when the speaker announces an enumerated sequence with ANY of these spoken ordinal forms:
+          • Cardinal numbers: "one, ... two, ... three, ..."  → `1. ...`, `2. ...`, `3. ...`
+          • Ordinal numbers: "first, ... second, ... third, ..."
+          • Step form: "step one, ... step two, ..."
+          • Number form: "number one, ... number two, ..."
+        - CRITICAL: strip the spoken ordinal word (and any trailing comma) from the item text. Do not leave it in.
+        - Worked example. Input: "one, I like to play guitar. two, I enjoy cooking. three, I read books."
+          Output:
+          1. I like to play guitar.
+          2. I enjoy cooking.
+          3. I read books.
+        - Worked example. Input: "first I woke up, then second I made coffee, and third I went for a walk."
+          Output:
+          1. I woke up.
+          2. I made coffee.
+          3. I went for a walk.
+        - Each numbered item goes on its own line with a single newline between items (no blank line between list items). Put a blank line BEFORE the list and AFTER the list to separate it from surrounding paragraphs.
+
+        === HARD RULES ===
+        - DO NOT paraphrase, rewrite, summarize, shorten, or "improve" the writing style.
+        - DO NOT add new sentences, facts, transitions, or commentary the speaker did not say.
+        - DO NOT change the speaker's tense, slang, informal phrasing, or point of view.
+        - DO NOT wrap the output in code fences, quotes, or a preface like "Here is".
+        - DO NOT use Markdown features not listed above (no links, images, tables, blockquotes, horizontal rules, inline code).
+        - Output ONLY the Markdown body. Nothing else.
+        """
+        let userPrompt = "Format this dictated text as Markdown:\n\n\(trimmed)"
+
+        guard let output = await generateText(prompt: userPrompt, systemPrompt: systemPrompt) else {
+            return raw
+        }
+
+        var cleaned = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Strip accidental code fences if the model wrapped its reply.
+        if cleaned.hasPrefix("```") {
+            if let firstNewline = cleaned.firstIndex(of: "\n") {
+                cleaned = String(cleaned[cleaned.index(after: firstNewline)...])
+            }
+            if cleaned.hasSuffix("```") {
+                cleaned = String(cleaned.dropLast(3))
+            }
+            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Sanity check: length must be in sensible range — otherwise model hallucinated.
+        // Floor is loose (1/3) because filler/false-start removal can legitimately shrink text.
+        // Ceiling is 2.5x because added Markdown punctuation (**, -, #) inflates character count.
+        let inputLen = trimmed.count
+        let outputLen = cleaned.count
+        guard outputLen > 0,
+              outputLen >= inputLen / 3,
+              Double(outputLen) <= Double(inputLen) * 2.5 else {
+            return raw
+        }
+        return cleaned
+    }
+
     // MARK: - Coherence Evaluation
 
     func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {

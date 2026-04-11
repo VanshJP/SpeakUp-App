@@ -27,9 +27,8 @@ class WeakAreaService {
     var weakAreas: [WeakArea] = []
     var suggestion: SuggestedActivity?
 
-    func analyze(recordings: [Recording]) {
-        let recent = Array(recordings.prefix(10))
-        guard !recent.isEmpty else {
+    func analyze(subscores: [SpeechSubscores]) {
+        guard !subscores.isEmpty else {
             suggestion = SuggestedActivity(
                 title: "Start Practicing",
                 description: "Record your first session to get personalized suggestions.",
@@ -39,31 +38,29 @@ class WeakAreaService {
             return
         }
 
-        let analyzed = recent.filter { $0.analysis != nil }
-        guard !analyzed.isEmpty else { return }
-
         // Compute averages per subscore
         var metrics: [(name: String, avg: Int, drill: DrillMode?)] = []
+        let count = subscores.count
 
-        let clarityAvg = analyzed.compactMap { $0.analysis?.speechScore.subscores.clarity }.reduce(0, +) / max(1, analyzed.count)
+        let clarityAvg = subscores.map(\.clarity).reduce(0, +) / count
         metrics.append(("Clarity", clarityAvg, nil))
 
-        let paceAvg = analyzed.compactMap { $0.analysis?.speechScore.subscores.pace }.reduce(0, +) / max(1, analyzed.count)
+        let paceAvg = subscores.map(\.pace).reduce(0, +) / count
         metrics.append(("Pace", paceAvg, .paceControl))
 
-        let fillerAvg = analyzed.compactMap { $0.analysis?.speechScore.subscores.fillerUsage }.reduce(0, +) / max(1, analyzed.count)
+        let fillerAvg = subscores.map(\.fillerUsage).reduce(0, +) / count
         metrics.append(("Filler Usage", fillerAvg, .fillerElimination))
 
-        let pauseAvg = analyzed.compactMap { $0.analysis?.speechScore.subscores.pauseQuality }.reduce(0, +) / max(1, analyzed.count)
+        let pauseAvg = subscores.map(\.pauseQuality).reduce(0, +) / count
         metrics.append(("Pause Quality", pauseAvg, .pausePractice))
 
-        let deliveryScores = analyzed.compactMap { $0.analysis?.speechScore.subscores.delivery }
+        let deliveryScores = subscores.compactMap(\.delivery)
         if !deliveryScores.isEmpty {
             let deliveryAvg = deliveryScores.reduce(0, +) / deliveryScores.count
             metrics.append(("Delivery", deliveryAvg, nil))
         }
 
-        let vocabScores = analyzed.compactMap { $0.analysis?.speechScore.subscores.vocabulary }
+        let vocabScores = subscores.compactMap(\.vocabulary)
         if !vocabScores.isEmpty {
             let vocabAvg = vocabScores.reduce(0, +) / vocabScores.count
             metrics.append(("Vocabulary", vocabAvg, .impromptuSprint))

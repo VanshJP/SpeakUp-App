@@ -30,11 +30,6 @@ struct RecordingDetailView: View {
     @State private var showingFeedbackSheet = false
     @State private var llmInsight: String?
     @State private var transcriptionFailed = false
-    @State private var playbackDrawerState: PlaybackDrawerState = .expanded
-    @State private var playbackDrawerDragOffset: CGFloat = 0
-    @State private var activePlaybackWordID: UUID?
-    @State private var orderedTranscriptWords: [TranscriptionWord] = []
-    @State private var orderedTranscriptRanges: [ClosedRange<TimeInterval>] = []
     @State private var playbackErrorMessage: String?
     @State private var showCopiedConfirmation = false
     @State private var journalReflectionText = ""
@@ -149,23 +144,11 @@ struct RecordingDetailView: View {
                     .contentMargins(.horizontal, 0)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         if hasPlayableMedia(recording) {
-                            playbackDrawer(recording)
-                        }
-                    }
-                    .onAppear {
-                        prepareDetailAssets(for: recording)
-                        playbackDrawerState = .expanded
-                        playbackDrawerDragOffset = 0
-                        updateActivePlaybackWord()
-                    }
-                    .onChange(of: audioService.playbackProgress) { _, _ in
-                        updateActivePlaybackWord()
-                    }
-                    .onChange(of: audioService.isPlaying) { _, isPlaying in
-                        if !isPlaying {
-                            activePlaybackWordID = nil
-                        } else {
-                            updateActivePlaybackWord()
+                            PlaybackDrawerContainer(
+                                recording: recording,
+                                waveformHeights: waveformHeights,
+                                onTogglePlayback: { togglePlayback(recording) }
+                            )
                         }
                     }
                     .task {
@@ -240,6 +223,9 @@ struct RecordingDetailView: View {
         .task {
             settingsViewModel.configure(with: modelContext)
             await loadRecording()
+            if let recording {
+                prepareDetailAssets(for: recording)
+            }
             populateWPMTimeSeriesIfNeeded()
             await transcribeIfNeeded()
 
@@ -514,82 +500,6 @@ struct RecordingDetailView: View {
         }
     }
 
-    // MARK: - Playback Control Section
-
-    @ViewBuilder
-    private func playbackControlSection(_ recording: Recording) -> some View {
-        VStack(spacing: 14) {
-            // Waveform with timestamps
-            HStack(spacing: 10) {
-                Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, alignment: .leading)
-
-                GeometryReader { geometry in
-                    let barWidth: CGFloat = 3
-                    let spacing: CGFloat = 2
-                    let totalBarWidth = barWidth + spacing
-                    let barCount = max(1, Int(geometry.size.width / totalBarWidth))
-                    let width = geometry.size.width
-
-                    HStack(spacing: spacing) {
-                        ForEach(0..<barCount, id: \.self) { i in
-                            let progress = Double(i) / Double(barCount)
-                            let isPlayed = progress < audioService.playbackProgress
-                            let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
-
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(isPlayed ? Color.teal : Color.white.opacity(0.2))
-                                .frame(width: barWidth, height: height)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        let progress = max(0, min(1, location.x / max(1, width)))
-                        audioService.seek(to: progress)
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 4)
-                            .onChanged { value in
-                                // Only seek on predominantly horizontal drags
-                                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                                let progress = max(0, min(1, value.location.x / max(1, width)))
-                                audioService.seek(to: progress)
-                            }
-                    )
-                }
-                .frame(height: 32)
-
-                Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, alignment: .trailing)
-            }
-
-            // Play button
-            Button {
-                togglePlayback(recording)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.body.weight(.semibold))
-                    Text(audioService.isPlaying ? "Pause" : "Listen Back")
-                        .font(.subheadline.weight(.medium))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background {
-                    Capsule()
-                        .fill(Color.teal)
-                }
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     // MARK: - Processing Section (moved to AnalyzingView)
 
     // MARK: - Stats Grid
@@ -769,23 +679,14 @@ struct RecordingDetailView: View {
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    if showSpeakerTurns && hasSpeakerSeparation {
-                        SpeakerTurnTranscriptView(
-                            turns: turns,
-                            showFillerHighlights: showFillerHighlights,
-                            showVocabHighlights: showVocabHighlights,
-                            activePlaybackWordID: activePlaybackWordID
-                        )
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    } else {
-                        HighlightedTranscriptView(
-                            words: words,
-                            showFillerHighlights: showFillerHighlights,
-                            showVocabHighlights: showVocabHighlights,
-                            activePlaybackWordID: activePlaybackWordID
-                        )
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
+                    PlaybackHighlightedTranscript(
+                        words: words,
+                        turns: turns,
+                        showFillerHighlights: showFillerHighlights,
+                        showVocabHighlights: showVocabHighlights,
+                        showSpeakerTurns: showSpeakerTurns,
+                        hasSpeakerSeparation: hasSpeakerSeparation
+                    )
 
                     if let analysis = recording?.analysis, !analysis.vocabWordsUsed.isEmpty {
                         Divider()
@@ -1110,7 +1011,7 @@ struct RecordingDetailView: View {
             GlassCard(tint: AppColors.glassTintPrimary.opacity(0.5)) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Image(systemName: "thought.bubble")
+                        Image(systemName: "bubble.left.fill")
                             .foregroundStyle(AppColors.primary)
                         Text("Quick Reflection")
                             .font(.subheadline.weight(.semibold))
@@ -1151,7 +1052,7 @@ struct RecordingDetailView: View {
             } label: {
                 GlassCard(tint: AppColors.glassTintAccent) {
                     HStack(spacing: 10) {
-                        Image(systemName: "thought.bubble")
+                        Image(systemName: "bubble.left.fill")
                             .foregroundStyle(.secondary)
                         Text("How did that feel? Add a reflection...")
                             .font(.subheadline)
@@ -1373,31 +1274,38 @@ struct RecordingDetailView: View {
     }
 
     private func prepareDetailAssets(for recording: Recording) {
-        prepareTranscriptPlaybackWords(from: recording)
-
         guard waveformHeights.isEmpty || audioService.playbackDuration <= 0 else { return }
         let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
         let needsWaveform = waveformHeights.isEmpty
-        let existingHeights = waveformHeights
+        let cachedPeaks = recording.waveformPeaks
+
+        // Use cached peaks synchronously — no file I/O needed.
+        if needsWaveform, let cachedPeaks, !cachedPeaks.isEmpty {
+            waveformHeights = AudioWaveformGenerator.heights(from: cachedPeaks)
+        }
+
+        let shouldGeneratePeaks = needsWaveform && (cachedPeaks == nil || cachedPeaks?.isEmpty == true)
 
         Task(priority: .utility) {
-            let prepared = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .utility).async {
-                    let generatedHeights: [CGFloat]
-                    if needsWaveform, let mediaURL {
-                        generatedHeights = AudioWaveformGenerator.generate(from: mediaURL, binCount: 50)
-                    } else {
-                        generatedHeights = existingHeights
+            if shouldGeneratePeaks, let mediaURL {
+                let peaks = await withCheckedContinuation { continuation in
+                    DispatchQueue.global(qos: .utility).async {
+                        let generated = AudioWaveformGenerator.generatePeaks(from: mediaURL, binCount: 50)
+                        continuation.resume(returning: generated)
                     }
+                }
 
-                    continuation.resume(returning: generatedHeights)
+                guard !Task.isCancelled else { return }
+
+                if !peaks.isEmpty {
+                    waveformHeights = AudioWaveformGenerator.heights(from: peaks)
+                    recording.waveformPeaks = peaks
+                    try? modelContext.save()
+                } else if waveformHeights.isEmpty {
+                    waveformHeights = AudioWaveformGenerator.heights(from: [])
                 }
             }
 
-            guard !Task.isCancelled else { return }
-            if waveformHeights.isEmpty {
-                waveformHeights = prepared
-            }
             if let mediaURL, audioService.playbackDuration <= 0 {
                 let asset = AVURLAsset(url: mediaURL)
                 if let duration = try? await asset.load(.duration) {
@@ -1407,63 +1315,7 @@ struct RecordingDetailView: View {
                     }
                 }
             }
-            updateActivePlaybackWord()
         }
-    }
-
-    private func prepareTranscriptPlaybackWords(from recording: Recording) {
-        let words = (recording.transcriptionWords ?? [])
-            .filter { $0.end > $0.start }
-            .sorted { $0.start < $1.start }
-
-        orderedTranscriptWords = words
-        orderedTranscriptRanges = words.map { $0.start...$0.end }
-        activePlaybackWordID = nil
-    }
-
-    private func updateActivePlaybackWord() {
-        guard !orderedTranscriptWords.isEmpty else {
-            activePlaybackWordID = nil
-            return
-        }
-
-        if audioService.playbackDuration <= 0 {
-            activePlaybackWordID = nil
-            return
-        }
-
-        let currentTime = max(0, audioService.playbackProgress) * audioService.playbackDuration
-        guard let matchedIndex = wordIndexForPlaybackTime(currentTime) else {
-            activePlaybackWordID = nil
-            return
-        }
-        activePlaybackWordID = orderedTranscriptWords[matchedIndex].id
-    }
-
-    private func wordIndexForPlaybackTime(_ time: TimeInterval) -> Int? {
-        guard !orderedTranscriptRanges.isEmpty else { return nil }
-        let toleranceBefore: TimeInterval = 0.08
-        let toleranceAfter: TimeInterval = 0.14
-
-        var low = 0
-        var high = orderedTranscriptRanges.count - 1
-
-        while low <= high {
-            let mid = (low + high) / 2
-            let range = orderedTranscriptRanges[mid]
-
-            if time < range.lowerBound - toleranceBefore {
-                high = mid - 1
-            } else if time > range.upperBound + toleranceAfter {
-                low = mid + 1
-            } else {
-                return mid
-            }
-        }
-
-        // During brief pauses between words, keep highlighting the latest spoken word.
-        let fallback = min(max(low - 1, 0), orderedTranscriptRanges.count - 1)
-        return orderedTranscriptRanges.indices.contains(fallback) ? fallback : nil
     }
 
     private func loadRecording() async {
@@ -1518,11 +1370,98 @@ struct RecordingDetailView: View {
         }
     }
 
+    /// Returns the text fed into `PromptRelevanceService` during scoring.
+    /// Prefers the linked story's content (the more specific script), falling
+    /// back to the recording's prompt text when there is no linked story.
+    private func effectivePromptText(for recording: Recording) -> String? {
+        if let storyId = recording.storyId {
+            var descriptor = FetchDescriptor<Story>(
+                predicate: #Predicate { $0.id == storyId }
+            )
+            descriptor.fetchLimit = 1
+            if let story = (try? modelContext.fetch(descriptor))?.first {
+                let trimmed = story.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+            }
+        }
+        return recording.prompt?.text
+    }
+
+    private func analyzeExistingTranscript(
+        recording: Recording,
+        text: String,
+        words: [TranscriptionWord]
+    ) async {
+        let settingsDescriptor = FetchDescriptor<UserSettings>()
+        let settings = (try? modelContext.fetch(settingsDescriptor))?.first
+        let vocabWords = settings?.vocabWords ?? []
+        let weights = scoreWeights(from: settings)
+
+        let result = SpeechTranscriptionResult(
+            text: text,
+            words: words,
+            duration: recording.actualDuration
+        )
+
+        let actualDuration = recording.actualDuration
+        let audioLevelSamples = recording.audioLevelSamples ?? []
+        let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
+        let promptText = effectivePromptText(for: recording)
+        let targetWPM = settings?.targetWPM ?? 150
+        let trackFillerWords = settings?.trackFillerWords ?? true
+        let trackPauses = settings?.trackPauses ?? true
+
+        let computed: (SpeechAnalysis, [TranscriptionWord]) = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let analyzer = SpeechService()
+                let analysis = analyzer.analyze(
+                    transcription: result,
+                    actualDuration: actualDuration,
+                    vocabWords: vocabWords,
+                    audioLevelSamples: audioLevelSamples,
+                    audioURL: audioURL,
+                    promptText: promptText,
+                    targetWPM: targetWPM,
+                    trackFillerWords: trackFillerWords,
+                    trackPauses: trackPauses,
+                    scoreWeights: weights,
+                    audioIsolationMetrics: nil,
+                    speakerIsolationMetrics: nil
+                )
+                let markedWords = analyzer.markVocabWordsInTranscription(
+                    words,
+                    vocabWords: vocabWords
+                )
+                continuation.resume(returning: (analysis, markedWords))
+            }
+        }
+
+        recording.transcriptionWords = computed.1
+        recording.analysis = computed.0
+        try? modelContext.save()
+    }
+
     private func transcribeIfNeeded() async {
         guard let recording,
-              recording.transcriptionText == nil,
-              recording.analysis == nil,
-              let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
+              recording.analysis == nil else {
+            return
+        }
+
+        // Fast path: transcript already exists but analysis is missing (e.g. old
+        // schema or aborted analyze step). Skip WhisperKit entirely and reuse the
+        // existing words so the detail view doesn't hang for ~10s on open.
+        if let existingText = recording.transcriptionText,
+           let existingWords = recording.transcriptionWords,
+           !existingWords.isEmpty {
+            await analyzeExistingTranscript(
+                recording: recording,
+                text: existingText,
+                words: existingWords
+            )
+            return
+        }
+
+        guard let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             return
         }
 
@@ -1550,7 +1489,7 @@ struct RecordingDetailView: View {
             let settingsDescriptor = FetchDescriptor<UserSettings>()
             let settings = (try? modelContext.fetch(settingsDescriptor))?.first
             let vocabWords = settings?.vocabWords ?? []
-            let preferredTerms = settings?.dictationBiasWords ?? []
+            let preferredTerms = settings?.transcriptionBiasTerms ?? []
 
             // Build filler config from user settings
             let fillerConfig = FillerWordConfig(
@@ -1567,7 +1506,8 @@ struct RecordingDetailView: View {
                                     sampleCount: settings?.voiceProfileSampleCount ?? 0)
             }()
 
-            // Free LLM memory before transcription to avoid competing with WhisperKit
+            // Free LLM memory before transcription to avoid competing with WhisperKit.
+            // Only unload here — the transcript-reuse fast path doesn't need Whisper.
             if llmService.localLLM.isModelReady {
                 llmService.unloadLocalModel()
             }
@@ -1598,7 +1538,7 @@ struct RecordingDetailView: View {
             let resultSnapshot = result
             let actualDuration = recording.actualDuration
             let audioLevelSamples = recording.audioLevelSamples ?? []
-            let promptText = recording.prompt?.text
+            let promptText = effectivePromptText(for: recording)
             let targetWPM = settings?.targetWPM ?? 150
             let trackFillerWords = settings?.trackFillerWords ?? true
             let trackPauses = settings?.trackPauses ?? true
@@ -1633,7 +1573,6 @@ struct RecordingDetailView: View {
             recording.transcriptionText = result.text
             recording.transcriptionWords = computed.1
             recording.analysis = computed.0
-            prepareTranscriptPlaybackWords(from: recording)
 
             try modelContext.save()
 
@@ -1690,7 +1629,7 @@ struct RecordingDetailView: View {
         let weights = scoreWeights(from: userSettings.first)
 
         // Pass prompt text for prompt-aware coherence scoring
-        let promptText = recording.prompt?.text
+        let promptText = effectivePromptText(for: recording)
 
         await speechService.enhanceWithLLM(
             analysis: &analysis,
@@ -1737,13 +1676,11 @@ struct RecordingDetailView: View {
                 return
             }
             Task {
-                playbackDrawerState = .expanded
                 do {
                     try await audioService.play(url: url)
                 } catch {
                     playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
                 }
-                updateActivePlaybackWord()
             }
         }
     }
@@ -1764,13 +1701,11 @@ struct RecordingDetailView: View {
             return
         }
         Task {
-            playbackDrawerState = .expanded
             do {
                 try await audioService.play(url: url)
             } catch {
                 playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
             }
-            updateActivePlaybackWord()
         }
     }
 
@@ -1804,33 +1739,38 @@ struct RecordingDetailView: View {
         }
     }
 
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-
     private func hasPlayableMedia(_ recording: Recording) -> Bool {
         (recording.resolvedAudioURL ?? recording.resolvedVideoURL) != nil
     }
+}
 
-    @ViewBuilder
-    private func playbackDrawer(_ recording: Recording) -> some View {
+// MARK: - Playback Drawer Container
+
+private struct PlaybackDrawerContainer: View {
+    let recording: Recording
+    let waveformHeights: [CGFloat]
+    let onTogglePlayback: () -> Void
+
+    @Environment(AudioService.self) private var audioService
+    @State private var drawerState: PlaybackDrawerState = .expanded
+    @State private var dragOffset: CGFloat = 0
+
+    var body: some View {
         VStack(spacing: 0) {
-            if playbackDrawerState != .hidden {
+            if drawerState != .hidden {
                 VStack(spacing: 8) {
                     Capsule()
                         .fill(Color.white.opacity(0.35))
                         .frame(width: 40, height: 4)
                         .padding(.top, 8)
 
-                    if playbackDrawerState == .expanded {
-                        playbackControlSection(recording)
+                    if drawerState == .expanded {
+                        playbackControlSection
                             .padding(.horizontal, 16)
                             .padding(.bottom, 12)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else if playbackDrawerState == .collapsed {
-                        collapsedPlaybackBar(recording)
+                    } else if drawerState == .collapsed {
+                        collapsedPlaybackBar
                             .padding(.horizontal, 16)
                             .padding(.bottom, 10)
                             .transition(.opacity)
@@ -1849,11 +1789,10 @@ struct RecordingDetailView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                // Hidden: show a small pull-up tab to restore the drawer
                 Button {
                     Haptics.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        playbackDrawerState = .collapsed
+                        drawerState = .collapsed
                     }
                 } label: {
                     HStack(spacing: 6) {
@@ -1874,16 +1813,15 @@ struct RecordingDetailView: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .contentShape(Rectangle())
-        .animation(.spring(response: 0.30, dampingFraction: 0.86), value: playbackDrawerState)
-        .offset(y: playbackDrawerDragOffset)
+        .animation(.spring(response: 0.30, dampingFraction: 0.86), value: drawerState)
+        .offset(y: dragOffset)
         .simultaneousGesture(
             DragGesture(minimumDistance: 10)
                 .onChanged { value in
                     let translation = value.translation.height
-                    // Only handle predominantly vertical drags
                     guard abs(translation) > abs(value.translation.width) else { return }
-                    if playbackDrawerState == .expanded || playbackDrawerState == .collapsed {
-                        playbackDrawerDragOffset = max(-56, min(56, translation))
+                    if drawerState == .expanded || drawerState == .collapsed {
+                        dragOffset = max(-56, min(56, translation))
                     }
                 }
                 .onEnded { value in
@@ -1891,22 +1829,102 @@ struct RecordingDetailView: View {
                     let velocity = value.predictedEndTranslation.height
 
                     withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
-                        playbackDrawerDragOffset = 0
+                        dragOffset = 0
 
-                        if playbackDrawerState == .expanded && (translation > 34 || velocity > 180) {
-                            // Moderate swipe down from expanded — collapse
-                            playbackDrawerState = .collapsed
-                        } else if playbackDrawerState == .collapsed && (translation < -30 || velocity < -170) {
-                            // Swipe up from collapsed — expand
-                            playbackDrawerState = .expanded
+                        if drawerState == .expanded && (translation > 34 || velocity > 180) {
+                            drawerState = .collapsed
+                        } else if drawerState == .collapsed && (translation < -30 || velocity < -170) {
+                            drawerState = .expanded
                         }
                     }
                 }
         )
+        .onAppear {
+            drawerState = .expanded
+            dragOffset = 0
+        }
+        .onChange(of: audioService.isPlaying) { _, isPlaying in
+            if isPlaying {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    drawerState = .expanded
+                }
+            }
+        }
     }
 
     @ViewBuilder
-    private func collapsedPlaybackBar(_ recording: Recording) -> some View {
+    private var playbackControlSection: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 40, alignment: .leading)
+
+                GeometryReader { geometry in
+                    let barWidth: CGFloat = 3
+                    let spacing: CGFloat = 2
+                    let totalBarWidth = barWidth + spacing
+                    let barCount = max(1, Int(geometry.size.width / totalBarWidth))
+                    let width = geometry.size.width
+
+                    HStack(spacing: spacing) {
+                        ForEach(0..<barCount, id: \.self) { i in
+                            let progress = Double(i) / Double(barCount)
+                            let isPlayed = progress < audioService.playbackProgress
+                            let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
+
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(isPlayed ? Color.teal : Color.white.opacity(0.2))
+                                .frame(width: barWidth, height: height)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        let progress = max(0, min(1, location.x / max(1, width)))
+                        audioService.seek(to: progress)
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { value in
+                                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                                let progress = max(0, min(1, value.location.x / max(1, width)))
+                                audioService.seek(to: progress)
+                            }
+                    )
+                }
+                .frame(height: 32)
+
+                Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 40, alignment: .trailing)
+            }
+
+            Button {
+                onTogglePlayback()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.body.weight(.semibold))
+                    Text(audioService.isPlaying ? "Pause" : "Listen Back")
+                        .font(.subheadline.weight(.medium))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background {
+                    Capsule()
+                        .fill(Color.teal)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var collapsedPlaybackBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
                 .font(.caption.weight(.semibold))
@@ -1923,7 +1941,7 @@ struct RecordingDetailView: View {
                 .foregroundStyle(.secondary)
 
             Button {
-                togglePlayback(recording)
+                onTogglePlayback()
             } label: {
                 Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
                     .font(.caption.weight(.semibold))
@@ -1936,9 +1954,122 @@ struct RecordingDetailView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                playbackDrawerState = .expanded
+                drawerState = .expanded
             }
         }
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Playback Highlighted Transcript
+
+private struct PlaybackHighlightedTranscript: View {
+    let words: [TranscriptionWord]
+    let turns: [SpeakerTurn]
+    let showFillerHighlights: Bool
+    let showVocabHighlights: Bool
+    let showSpeakerTurns: Bool
+    let hasSpeakerSeparation: Bool
+
+    @Environment(AudioService.self) private var audioService
+    @State private var activeWordID: UUID?
+
+    private let orderedIDs: [UUID]
+    private let orderedRanges: [ClosedRange<TimeInterval>]
+
+    init(
+        words: [TranscriptionWord],
+        turns: [SpeakerTurn],
+        showFillerHighlights: Bool,
+        showVocabHighlights: Bool,
+        showSpeakerTurns: Bool,
+        hasSpeakerSeparation: Bool
+    ) {
+        self.words = words
+        self.turns = turns
+        self.showFillerHighlights = showFillerHighlights
+        self.showVocabHighlights = showVocabHighlights
+        self.showSpeakerTurns = showSpeakerTurns
+        self.hasSpeakerSeparation = hasSpeakerSeparation
+
+        let ordered = words
+            .filter { $0.end > $0.start }
+            .sorted { $0.start < $1.start }
+        self.orderedIDs = ordered.map(\.id)
+        self.orderedRanges = ordered.map { $0.start...$0.end }
+    }
+
+    var body: some View {
+        Group {
+            if showSpeakerTurns && hasSpeakerSeparation {
+                SpeakerTurnTranscriptView(
+                    turns: turns,
+                    showFillerHighlights: showFillerHighlights,
+                    showVocabHighlights: showVocabHighlights,
+                    activePlaybackWordID: activeWordID
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            } else {
+                HighlightedTranscriptView(
+                    words: words,
+                    showFillerHighlights: showFillerHighlights,
+                    showVocabHighlights: showVocabHighlights,
+                    activePlaybackWordID: activeWordID
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+        .onAppear { updateActiveWord() }
+        .onChange(of: audioService.playbackProgress) { _, _ in
+            updateActiveWord()
+        }
+        .onChange(of: audioService.isPlaying) { _, playing in
+            if !playing {
+                if activeWordID != nil { activeWordID = nil }
+            } else {
+                updateActiveWord()
+            }
+        }
+    }
+
+    private func updateActiveWord() {
+        guard !orderedRanges.isEmpty, audioService.playbackDuration > 0 else {
+            if activeWordID != nil { activeWordID = nil }
+            return
+        }
+        let currentTime = max(0, audioService.playbackProgress) * audioService.playbackDuration
+        let newID = wordIndex(for: currentTime).map { orderedIDs[$0] }
+        if activeWordID != newID { activeWordID = newID }
+    }
+
+    private func wordIndex(for time: TimeInterval) -> Int? {
+        guard !orderedRanges.isEmpty else { return nil }
+        let toleranceBefore: TimeInterval = 0.08
+        let toleranceAfter: TimeInterval = 0.14
+
+        var low = 0
+        var high = orderedRanges.count - 1
+
+        while low <= high {
+            let mid = (low + high) / 2
+            let range = orderedRanges[mid]
+
+            if time < range.lowerBound - toleranceBefore {
+                high = mid - 1
+            } else if time > range.upperBound + toleranceAfter {
+                low = mid + 1
+            } else {
+                return mid
+            }
+        }
+
+        let fallback = min(max(low - 1, 0), orderedRanges.count - 1)
+        return orderedRanges.indices.contains(fallback) ? fallback : nil
     }
 }
 
@@ -2102,65 +2233,6 @@ struct WordView: View {
                         .fill((isActivePlaybackWord ? Color.teal : highlightColor).opacity(0.2))
                 }
             }
-    }
-}
-
-// MARK: - Flow Layout
-
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
-
-    struct CacheData {
-        var size: CGSize
-        var positions: [CGPoint]
-    }
-
-    func makeCache(subviews: Subviews) -> CacheData {
-        CacheData(size: .zero, positions: [])
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout CacheData) -> CGSize {
-        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
-        cache = CacheData(size: result.size, positions: result.positions)
-        return result.size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout CacheData) {
-        for (index, position) in cache.positions.enumerated() {
-            subviews[index].place(
-                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
-                proposal: .unspecified
-            )
-        }
-    }
-
-    private func arrangeSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var positions: [CGPoint] = []
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var totalHeight: CGFloat = 0
-        var totalWidth: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-
-            if currentX + size.width > maxWidth && currentX > 0 {
-                currentX = 0
-                currentY += lineHeight + spacing
-                lineHeight = 0
-            }
-
-            positions.append(CGPoint(x: currentX, y: currentY))
-
-            currentX += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-            totalWidth = max(totalWidth, currentX - spacing)
-            totalHeight = currentY + lineHeight
-        }
-
-        return (CGSize(width: totalWidth, height: totalHeight), positions)
     }
 }
 

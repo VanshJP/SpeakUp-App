@@ -1,10 +1,15 @@
-# Speech Analysis Algorithm Contract (Claude-Optimized)
+# Speech Analysis Algorithm Contract
 
 Purpose: compact, high-signal reference for LLM context injection.
-Status: source-of-truth for current behavior.
+Status: source-of-truth for current behavior (updated April 2026).
+
+## Design philosophy
+
+Scores should feel **achievable and progressive**. A beginner delivering a natural 15-20 second answer should land in the 50-65 range, not the 20-35 range. An experienced speaker giving a solid 60-second talk should routinely see 75-90. Only gibberish, silence, or extremely short/empty speech should score below 20.
 
 ## Canonical files
 - `SpeakUp/Services/SpeechService.swift`
+- `SpeakUp/Services/SpeechScoringEngine.swift`
 - `SpeakUp/Services/PromptRelevanceService.swift`
 - `SpeakUp/Services/TextAnalysisService.swift`
 - `SpeakUp/Services/SpeechIsolationService.swift`
@@ -12,281 +17,123 @@ Status: source-of-truth for current behavior.
 - `SpeakUp/Models/SpeechAnalysis.swift`
 - Runtime wiring: `SpeakUp/Views/Detail/RecordingDetailView.swift`
 
-## Runtime sequence (actual order)
+## Runtime sequence
 1. `RecordingDetailView.task`: load recording/settings.
 2. `transcribeIfNeeded()` only if `transcriptionText == nil && analysis == nil`.
-3. Transcription backend order:
-   - speech isolation preprocessing (high-pass + adaptive gate) when beneficial
-   - WhisperKit
-   - WhisperKit unload/reload retry
-   - Apple Speech fallback (`addsPunctuation = false`)
-4. Conversation isolation pass labels likely primary-speaker words.
+3. Transcription backend order: speech isolation → WhisperKit → reload retry → Apple Speech fallback.
+4. Conversation isolation labels primary-speaker words.
 5. `SpeechService.analyze(...)` computes base analysis + subscores + overall.
-6. `enhanceCoherenceIfNeeded()` optionally runs LLM post-pass and recalculates overall.
+6. `enhanceCoherenceIfNeeded()` optionally runs LLM post-pass.
 
-## Inputs to `SpeechService.analyze(...)`
-- Transcript (`text`, `[TranscriptionWord]`)
-- `actualDuration`
-- User vocab words
-- `audioLevelSamples`
-- Optional `audioURL`
-- Optional prompt
-- `targetWPM`
-- `trackFillerWords`, `trackPauses`
-- `ScoreWeights`
-- `audioIsolationMetrics`, `speakerIsolationMetrics`
-
-## Preprocessing and core derived metrics
-- Words sorted by `start`.
-- Primary-speaker stream is used only when separation is strong and conversational evidence exists:
-  - enough retained primary words,
-  - separation confidence threshold,
-  - plausible primary-speaker ratio,
-  - and either conversation detection or enough filtered/switching evidence.
-- Pause detection: gap `> 0.4s`; pause duration cap `10.0s`.
-- Transition pause: previous token ends with `.`, `?`, or `!`.
-- `wordsPerMinute = totalWords / (effectiveSpeechDuration / 60)`.
-- `averagePauseLength` uses median.
-- Optional analyzers:
-  - volume metrics (requires `audioLevelSamples`)
-  - pitch metrics (requires `audioURL`)
-  - vocab complexity, sentence analysis, rate variation, emphasis, energy arc, text quality
-
-## Relevance branch
-- Prompt mode: if `prompt != nil && totalWords >= 10` -> `PromptRelevanceService.score`.
-- Free-practice mode: if `prompt == nil && totalWords >= 20` -> `PromptRelevanceService.coherenceScore`.
-- Else relevance is `nil`.
-
-## Hard gates and caps
-- Zero-score gate: if `totalWords == 0 || nonFillerWordCount == 0` -> overall `0`.
-- **Substance gate (NEW):** `SpeechScoringEngine.applySubstanceMultiplier(overall, substanceScore)` — multiplicative gate (0.05x–1.0x multiplier). Replaces the old `min(overall, 40)` ceiling.
-- **Enhanced gibberish gate (NEW):** `SpeechScoringEngine.applyGibberishGate(score, gibberishConfidence)` — graduated cap (≤8 / ≤15 / ≤30) based on 5-signal confidence score. Replaces the old binary `isLikelyGibberish` check.
-- Legacy gibberish safety net: `PromptRelevanceService.isLikelyGibberish(...)` still runs as final safety net, now with 5 checks and threshold 3+ (was 3 checks, threshold 2+).
-- Subscore ceiling for short recordings:
-  - `scoreCeiling = min(100, 40 + Int(actualDuration * 6))`
-  - Applied to clarity, pace, fillerUsage, pauseQuality, vocalVariety.
-
-## Text quality model (used by multiple subscores)
-`TextAnalysisService.analyze(text,totalWords)` outputs:
-- hedge/power words
-- rhetorical devices
-- transition variety
-- weak phrases
-- repeated sentence starts
-- rhetorical questions
-- calls to action
-- `authorityScore`, `craftScore`, `concisenessScore`, `engagementScore`
-
-Key formulas:
-- `authorityScore = clamp(70 - min(30, hedgeCount*3) + min(30, powerCount*5))`
-- `craftScore = clamp(35 + deviceBonus + transitionBonus + engagementBonus)`
-- `concisenessScore = clamp(85 - weakPhrasePenalty - repeatedStartPenalty - longSentencePenalty)`
-- `engagementScore = clamp(35 + bridgeBonus + questionBonus + ctaBonus)`
+## Hard gates and caps (applied in order)
+1. **Zero-score gate:** `totalWords == 0 || nonFillerWordCount == 0` → overall `0`.
+2. **Substance multiplier:** graduated 0.10x–1.0x (see curve below).
+3. **Gibberish gate:** graduated cap at ≤8 / ≤15 / ≤30 based on 5-signal confidence.
 
 ## Enhanced Metrics (`SpeechScoringEngine.computeEnhancedMetrics`)
-New research-backed metrics computed before subscores:
-- **Phonation Time Ratio (PTR):** voiced time / total duration. Benchmark: 0.55–0.75.
-- **Articulation Rate:** words/min during voiced time only. Benchmark: 120–180 WPM.
-- **Mean Length of Run (MLR):** avg words between pauses. Benchmark: MLR > 8 = fluent.
-- **MATTR:** Moving Average Type-Token Ratio (50-word window). Benchmark: 0.70+ = rich.
-- **Content Word Density:** unique content words per minute. Benchmark: 15–30/min.
-- **Substance Score (0–100):** composite of word count + duration + MATTR + density + MLR.
-- **Fluency Score (0–100):** composite of PTR + MLR + articulation rate.
-- **Lexical Sophistication Score (0–100):** MATTR + word length + NLEmbedding rarity.
-- **Gibberish Confidence (0–1):** 5-signal graduated confidence (0 = real, 1 = gibberish).
+- **PTR:** voiced time / duration. Ideal 0.45–0.80 (widened from 0.55–0.75).
+- **Articulation Rate:** words/min during voiced time. Ideal 100–200 WPM (widened from 120–180).
+- **MLR:** avg words between pauses. MLR ≥ 8 = fluent (gentler curve, MLR ≥ 5 scores well).
+- **MATTR:** 50-word sliding window. 0.72+ = full marks (lowered from 0.80).
+- **Substance Score (0–100):** word count + duration + MATTR + density + MLR. Thresholds lowered so 20s speeches can hit 55-65.
+- **Fluency Score (0–100):** PTR + MLR + articulation rate with wider ideal zones.
+- **Lexical Sophistication (0–100):** MATTR + word length + NLEmbedding rarity.
+- **Gibberish Confidence (0–1):** 5-signal graduated confidence.
 
-All stored in `SpeechAnalysis.enhancedMetrics: EnhancedSpeechMetrics?`.
+## Substance score thresholds
+
+| Component | Max Pts | Key thresholds |
+|-----------|---------|----------------|
+| Word count | 25 | 15 words → 10pts, 35 → 18pts, 70+ → 25pts |
+| Duration | 20 | 10s → 8pts, 20s → 14pts, 40s+ → 20pts |
+| MATTR | 20 | 0.45 → 5pts, 0.58 → 12pts, 0.72+ → 20pts |
+| Content density | 20 | 4/min → 5pts, 10/min → 12pts, 22+/min → 20pts |
+| MLR | 15 | 2 → base, 5 → 8pts, 10+ → 15pts |
+
+Gates: < 5 non-filler words or < 3 seconds → score ≤ 10.
+
+## Substance multiplier curve
+
+| Substance | Multiplier | Effect |
+|-----------|-----------|--------|
+| 0–10 | 0.10–0.25 | Gibberish/empty collapses |
+| 10–30 | 0.25–0.65 | Very short, penalized |
+| 30–50 | 0.65–0.88 | Short speech, moderate penalty |
+| 50–75 | 0.88–0.97 | Adequate speech, slight penalty |
+| 75–100 | 0.97–1.00 | Full-length, near-full score |
 
 ## Subscore formulas (`calculateSubscores`)
 
 ### 1) Clarity
-- Articulation:
-  - pitch path: `clamp(voicedFrameRatio*120 + 18)`
-  - fallback: avg confidence * 100
-  - fallback: 55
-- Duration consistency:
-  - `cv = stdev(wordDurations) / mean(wordDurations)`
-  - `durationComponent = clamp((1 - cv*0.75)*100)` (fallback 55)
-- Hedge penalty: `min(20, hedgeWordRatio*400)`
-- Authority component: `textQuality.authorityScore` (fallback 55)
-- Formula:
-  - `rawClarity = articulation*0.50 + duration*0.25 + (100-hedgePenalty)*0.10 + authority*0.15`
-  - `clarity = min(Int(rawClarity), scoreCeiling)`
+- Articulation: voicedFrameRatio × 110 + 38 (pitch path) or ASR confidence × 100 + 20 (fallback) or 65 (default).
+- Duration consistency: CV-based with 0.50 multiplier (softened from 0.60).
+- Hedge penalty: min(10, hedgeWordRatio × 200) — reduced from min(14, ratio × 280).
+- Authority: textQuality.authorityScore or 60.
+- Pace alignment: max(0, 8 - |wpm - target| / 12).
+- Formula: articulation × 0.50 + duration × 0.22 + (100 - hedge) × 0.08 + authority × 0.12 + paceBonus.
 
 ### 2) Pace
-- `base = 100 * exp(-(wpm-target)^2 / (2*45^2))`
-- **NEW:** `fluencyBlend = enhancedMetrics.fluencyScore * 0.15` (PTR + MLR + articulation rate)
-- `rawPace = base*0.65 + rateVariationScore*0.20 + fluencyBlend`
-- `pace = clamp(rawPace, 0...100)` then cap by `scoreCeiling`
+- Gaussian: sigma = 55 (widened from 45), giving ±30 WPM good tolerance.
+- Adaptive weighting: WPM gets full weight when optional metrics are absent. With rate variation: -18% base → +18% rateVariation. With fluency: -14% base → +14% fluency.
+- No artificial cap when optional metrics are missing.
 
 ### 3) Filler Usage
-- `hedgeAdjustment = min(0.03, hedgeWordRatio*0.5)`
-- `weakPhraseAdjustment = min(0.04, weakPhraseRatio*0.9)`
-- `effectiveFillerRatio = fillerRatio + hedgeAdjustment + weakPhraseAdjustment`
-- `rawFiller = 100 * max(0, 1 - log2(1 + effectiveFillerRatio*20))`
-- `fillerUsage = clamp(rawFiller, 0...100)` then cap by `scoreCeiling`
+- Effective ratio = fillerRatio + hedge adjustment (max 0.02) + weak phrase (max 0.02).
+- Curve: `100 × max(0, 1 - log₂(1 + ratio × 8))` — multiplier reduced from 20 to 8.
+- Impact: 1% fillers → ~91, 3% → ~72, 5% → ~52, 10% → ~24.
 
 ### 4) Pause Quality
-- If pause tracking off: `50`.
-- Else base `70` with adjustments:
-  - `+4` per strategic medium pause (`1.2-3.0s`)
-  - `+8` per strategic long pause (`>=3.0s`)
-  - `-15` per non-transition long pause
-  - `+10` if `fillerRatio < 0.02` and enough short/medium pauses
-  - frequency penalties: `<3/min -> -10`, `>15/min -> -(excess*2)`
-  - rushing bonus if `wpm > target+10`: `+2` per strategic medium/long pause
-  - no-pause fallback: `40` if `wpm > target+20`, else `60`
-- Final clamp + `scoreCeiling`
+- Base 72 (raised from 70), no-pause fallback: 50/65 (raised from 40/60).
+- Strategic rewards: +4 per medium transition, +6 per long transition (reduced from +8).
+- Hesitation penalty: -8 per long hesitation, capped at 4 occurrences (was -15, uncapped).
+- Low-filler bonus: +8 if fillerRatio < 0.03 (was 0.02).
+- Frequency: too few < 3/min → -6, choppy > 18/min → -1.5× excess (was 15/min, -2x).
 
 ### 5) Delivery (optional)
-- Only if volume metrics exist.
-- `rawDelivery = energy*0.25 + monotone*0.25 + contentDensity*0.10 + emphasis*0.15 + arc*0.20 + engagement*0.05`
-- Final clamp `0...100`
-- Else `delivery = nil`
+- energy × 0.25 + monotone × 0.25 + contentDensity × 0.10 + emphasis × 0.15 + arc × 0.20 + engagement × 0.05.
 
 ### 6) Vocal Variety (optional)
-- If any of pitch/volume/rate variation exists:
-  - pitch variation: 0.40
-  - volume monotone score: 0.25
-  - rate variation: 0.15
-  - pitch-energy correlation: 0.20 (when available)
-- Weighted normalized blend, then clamp and cap by `scoreCeiling`
-- Else `vocalVariety = nil`
+- Pitch (0.40) + volume (0.25) + rate (0.15) + pitch-energy correlation (0.20 when available).
 
 ### 7) Vocabulary (optional)
-- Base: `vocabComplexity.complexityScore`
-- Bonuses:
-  - vocab bank: `min(8, totalUsed*3)`
-  - power words: `min(5, Int(powerRatio*150))`
-- **NEW MATTR blend:** `vocabulary = base*0.60 + lexicalSophisticationScore*0.40`
-  - `lexicalSophisticationScore = MATTR*0.50 + wordLength*0.25 + NLEmbeddingRarity*0.25`
-  - Fallback: if no vocabComplexity, use lexicalSophisticationScore directly
-- Clamp `0...100`
+- Base: vocabComplexity.complexityScore.
+- Bonuses: vocab bank min(8), power words min(5).
+- MATTR blend: 60% existing + 40% lexicalSophisticationScore.
 
 ### 8) Structure (optional)
-- Base: `sentenceAnalysis.structureScore`
-- Adjustments:
-  - `+min(12, rhetoricalDeviceCount*4)`
-  - `+min(8, Int(transitionVariety*0.8))`
-  - `+Int((concisenessScore-50)*0.20)`
-  - `+Int((engagementScore-50)*0.15)`
-- Clamp `0...100`
+- Base: sentenceAnalysis.structureScore + rhetoric/transition/conciseness/engagement adjustments.
 
 ### 9) Relevance (optional)
-- Pass-through from relevance branch above.
+- Prompt mode: keyword + semantic + sentence alignment.
+- Free practice: 5-signal coherence model.
 
-## Overall score (`calculateOverallScore`)
-- Normalize weights (`weights.normalized`).
-- Always include required dimensions:
-  - clarity, pace, filler, pause
-- Include optional only when non-nil:
-  - vocalVariety, delivery, vocabulary, structure, relevance
-- `overall = clamp(weightedSum / sum(includedWeights), 0...100)`
-- Low-confidence acoustic sessions (noise/speaker overlap) apply reliability stabilization toward a neutral anchor before overall aggregation.
-- If no isolation reliability metrics are available, stabilization is bypassed (no neutral pull-down).
-- Speaker-isolation reliability is only applied when conversation/separation evidence exists (no solo-session penalty).
-- Stabilization uses a higher reliability floor to avoid collapsing strong performances toward the midline.
+#### Story-linked recordings
+- When `Recording.storyId` is set, the linked `Story.content` (plain-text mirror of the rich-text note) is passed as `promptText` into `SpeechService.analyze(...)` instead of `recording.prompt?.text`.
+- This feeds `PromptRelevanceService.score(promptText:transcript:)` so the relevance subscore reflects how closely the delivered speech tracks the user's own written script, not a generic prompt.
+- Story wins when both a `Story` and a `Prompt` are attached — the story is treated as the more specific rubric.
+- No new subscore and no formula change; only a new input source. Same keyword + semantic + sentence-alignment pipeline applies.
+- Resolution happens in `RecordingDetailView.effectivePromptText(for:)` just before `analyze` / `enhanceWithLLM` calls.
 
-**NEW post-aggregation gates (applied in order after calculateOverallScore):**
-1. `SpeechScoringEngine.applySubstanceMultiplier(overall, substanceScore)` — multiplicative gate
-2. `SpeechScoringEngine.applyGibberishGate(score, gibberishConfidence)` — graduated cap
-3. `PromptRelevanceService.isLikelyGibberish(...)` — legacy safety net (cap at 12)
-
-In `enhanceWithLLM`, substance multiplier and gibberish gate are re-applied after LLM recalculation to prevent LLM inflation of gibberish/empty speech scores.
+## Overall score
+- Weighted average of available subscores (4 required + up to 5 optional).
+- Weights normalized to sum to 1.0 over included dimensions.
+- Then: substance multiplier → gibberish gate → optional LLM post-pass.
 
 ## Default weights (`ScoreWeights.defaults`)
-- clarity 0.18
-- pace 0.12
-- filler 0.14
-- pause 0.12
-- vocalVariety 0.12
-- delivery 0.10
-- vocabulary 0.08
-- structure 0.08
-- relevance 0.06
-- If total weight `<= 0`: normalization falls back to defaults.
+clarity 0.18, pace 0.12, filler 0.14, pause 0.12, vocalVariety 0.12, delivery 0.10, vocabulary 0.08, structure 0.08, relevance 0.06.
 
-## Prompt relevance and coherence
+## Score behavior examples
 
-### Prompt relevance (`PromptRelevanceService.score`)
-- Signals:
-  - keyword overlap
-  - word semantic similarity
-  - sentence alignment (if available)
-- Blend:
-  - full: `0.25 overlap + 0.35 wordSemantic + 0.40 sentenceAlignment`
-  - no sentence alignment: `0.35 overlap + 0.65 wordSemantic`
-  - no semantics: overlap only
-- Coherence bonus:
-  - `+0.12` if coherence `>50`
-  - `+0.20` if coherence `>70`
-- Floor rule:
-  - if transcript words `>=50`, raw `<0.30`, coherence `>65` -> floor to `0.30`
-- Output: `0...100`
-
-### Free-practice coherence (`coherenceScore(transcript:)`)
-Weighted 5-signal model:
-- entity continuity 25%
-- adjacent sentence flow 20%
-- sliding-window topic drift 20%
-- weighted connectives 15%
-- structural progression 20%
-Includes early gibberish-like caps for fragmented text.
-
-## LLM post-pass (`enhanceWithLLM`)
-Runs only when:
-- LLM available
-- transcript length >= 25 chars
-
-Steps:
-1. Replace relevance with LLM-blended coherence.
-2. Blend structure and vocabulary with LLM transcript quality.
-3. Apply backend-aware stabilization caps (component + overall).
-4. Recompute overall score.
-
-Blend ratios for structure/vocabulary blend:
-- Apple Intelligence: LLM 45%, rule-based 55%
-- Local LLM: LLM 40%, rule-based 60%
-
-Prompt coherence blend inside `PromptRelevanceService`:
-- Apple Intelligence: LLM 60%, rules 40%
-- Local LLM: LLM 40%, rules 60%
-
-Stabilization caps in `SpeechService`:
-- Component cap (relevance/structure/vocabulary):
-  - Apple Intelligence: max ±20 points vs baseline
-  - Local LLM: max ±16 points vs baseline
-- Overall cap (final score vs baseline):
-  - Apple Intelligence: max ±14 points
-  - Local LLM: max ±10 points
-
-Rationale:
-- Keeps score movement predictable between no-AI / Apple Intelligence / local LLM scenarios.
-- Prevents abrupt score jumps from a single LLM pass while still allowing meaningful refinement.
-
-## Settings constraints affecting score behavior
-- Target WPM slider: 100...200, step 5.
-- Weight sliders: each 0.00...0.30, step 0.01.
-- Save guard: rounded sum must equal exactly 100%.
-- Pause/filler tracking toggles can disable corresponding signal effects.
+| Input | Expected Score | Reason |
+|-------|---------------|--------|
+| "um yeah I don't know" (3s) | 3–8 | Substance gate + gibberish |
+| Gibberish (2s) | 1–5 | Gibberish confidence 0.9+ |
+| 15s casual answer, some fillers | 45–60 | Moderate substance, decent subscores |
+| 30s clear speech, good vocab | 65–80 | Strong substance multiplier, good subscores |
+| 60s polished structured speech | 78–92 | Full substance, high subscores |
+| 90s profound, well-structured | 85–96 | Maximum substance, high across all dimensions |
 
 ## Data and decode caveats
-- `SpeechSubscores` has 9 dimensions: clarity, pace, fillerUsage, pauseQuality, vocalVariety, delivery, vocabulary, structure, relevance.
-- `SpeechAnalysis.init(from:)` intentionally nulls advanced fields for compatibility:
-  - `volumeMetrics`, `vocabComplexity`, `sentenceAnalysis`, `promptRelevanceScore`, `wpmTimeSeries`, `pitchMetrics`, `rateVariation`, `emphasisMetrics`, `energyArc`, `textQuality`
-  - `audioIsolationMetrics`, `speakerIsolationMetrics`, `enhancedMetrics` (NEW)
-- `Recording.audioLevelSamples` is `@Transient` (not persisted).
-- Current recording save path does not persist sampled audio levels into saved `Recording`, so delivery/energy metrics may be absent post-hoc.
-- `EnhancedSpeechMetrics` uses a custom `Decodable` init with `decodeIfPresent` for all fields, so older persisted data will decode to zero-value defaults without crashing.
-
-## Claude usage notes
-- Treat this file as implementation contract, not product copy.
-- If code and doc differ, code wins and doc must be updated in same PR.
-- For score debugging, inspect in order:
-  1. transcription backend
-  2. timing/pause extraction
-  3. optional analyzer availability
-  4. nil optional subscores (changes denominator)
-  5. weight normalization
-  6. gates/caps
-  7. LLM post-pass mutations
+- `SpeechAnalysis.init(from:)` nulls advanced fields for older recordings.
+- `Recording.audioLevelSamples` is `@Transient`.
+- `EnhancedSpeechMetrics` uses `decodeIfPresent` for forward compatibility.

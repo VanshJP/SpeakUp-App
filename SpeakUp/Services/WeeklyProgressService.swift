@@ -1,18 +1,23 @@
 import Foundation
 
-struct WeeklyProgressData {
+nonisolated struct WeeklyProgressData: Sendable {
     let sessionsThisWeek: Int
     let sessionsLastWeek: Int
     let scoreChange: Double        // positive = improved
     let fillerReduction: Double    // positive = reduced fillers (good)
     let totalMinutes: Double
-    let dailyScores: [(day: Int, score: Int)]  // day 0=Mon..6=Sun, latest score per day
+    let dailyScores: [DailyScore]  // day 0=Mon..6=Sun, latest score per day
 
     var hasImproved: Bool { scoreChange > 0 }
     var sessionsDelta: Int { sessionsThisWeek - sessionsLastWeek }
 }
 
-enum WeeklyProgressService {
+nonisolated struct DailyScore: Sendable {
+    let day: Int
+    let score: Int
+}
+
+nonisolated enum WeeklyProgressService {
     static func calculate(recordings: [Recording]) -> WeeklyProgressData? {
         let calendar = Calendar.current
         let now = Date()
@@ -41,16 +46,16 @@ enum WeeklyProgressService {
         let totalMinutes = thisWeek.reduce(0) { $0 + $1.actualDuration } / 60
 
         // Build daily scores for this week (latest score per day)
-        var dailyScores: [(day: Int, score: Int)] = []
+        var dailyScores: [DailyScore] = []
         let sortedThisWeek = thisWeek.sorted { $0.date < $1.date }
         for recording in sortedThisWeek {
             guard let score = recording.analysis?.speechScore.overall else { continue }
             let weekday = (calendar.component(.weekday, from: recording.date) + 5) % 7 // Mon=0
             // Keep the latest score for each day (overwrite earlier)
             if let existingIdx = dailyScores.firstIndex(where: { $0.day == weekday }) {
-                dailyScores[existingIdx] = (day: weekday, score: score)
+                dailyScores[existingIdx] = DailyScore(day: weekday, score: score)
             } else {
-                dailyScores.append((day: weekday, score: score))
+                dailyScores.append(DailyScore(day: weekday, score: score))
             }
         }
         dailyScores.sort { $0.day < $1.day }

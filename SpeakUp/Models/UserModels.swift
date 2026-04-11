@@ -2,12 +2,12 @@ import Foundation
 
 // MARK: - Session Feedback Types
 
-enum FeedbackQuestionType: String, Codable {
+nonisolated enum FeedbackQuestionType: String, Codable {
     case scale // 1-5
     case yesNo
 }
 
-struct FeedbackQuestion: Codable, Identifiable {
+nonisolated struct FeedbackQuestion: Codable, Identifiable {
     var id: UUID
     var text: String
     var type: FeedbackQuestionType
@@ -19,7 +19,7 @@ struct FeedbackQuestion: Codable, Identifiable {
     }
 }
 
-struct FeedbackAnswer: Codable, Identifiable {
+nonisolated struct FeedbackAnswer: Codable, Identifiable {
     var id: UUID = UUID()
     var questionId: UUID
     var questionText: String
@@ -36,7 +36,7 @@ struct FeedbackAnswer: Codable, Identifiable {
     }
 }
 
-struct SessionFeedback: Codable {
+nonisolated struct SessionFeedback: Codable {
     var answers: [FeedbackAnswer]
     var submittedAt: Date
 
@@ -48,7 +48,7 @@ struct SessionFeedback: Codable {
 
 // MARK: - User Statistics
 
-struct UserStats {
+nonisolated struct UserStats: Sendable {
     var totalRecordings: Int
     var totalPracticeTime: TimeInterval // in seconds
     var currentStreak: Int
@@ -95,7 +95,7 @@ struct UserStats {
     }
 }
 
-struct ScoreHistoryEntry: Codable, Identifiable {
+nonisolated struct ScoreHistoryEntry: Codable, Identifiable, Sendable {
     var id: UUID = UUID()
     let date: Date
     let score: Int
@@ -103,7 +103,7 @@ struct ScoreHistoryEntry: Codable, Identifiable {
 
 // MARK: - Weekly Activity
 
-struct WeeklyActivity: Identifiable {
+nonisolated struct WeeklyActivity: Identifiable {
     var id: Date { weekStart }
     let weekStart: Date
     var sessions: Int

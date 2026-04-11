@@ -23,6 +23,15 @@ class WhisperService {
     // The transcript style with hesitations helps Whisper recognize and output them
     private let fillerPrompt = "Um, uh, er, ah, hmm, mm, mhm, uh-huh, like, you know, I mean, so, basically. The speaker says um and uh frequently. Um, so, like, you know, I was, uh, thinking about, um, the thing."
 
+    /// Whisper's decoder prompt context is capped at 224 tokens. Staying comfortably under
+    /// the cap prevents the decoder from hanging on oversized prompts when the user has a
+    /// large vocab/dictation bank.
+    private static let maxPromptTokens = 200
+
+    /// Maximum number of user-supplied bias terms to include in the prompt line, so the
+    /// dictionary clause can never dominate the prompt budget even before tokenization.
+    private static let maxBiasTerms = 25
+
     // MARK: - Initialization
 
     /// Load the Whisper model (call this early, e.g., on app launch)
@@ -79,8 +88,12 @@ class WhisperService {
 
         do {
             // Tokenize prompt to condition the model toward fillers + user dictionary words.
+            // Whisper's prompt context is capped (~224 tokens). If the encoded prompt exceeds
+            // the cap, the decoder can hang indefinitely on inference — cap both the source
+            // term list and the final token count to stay safely under the limit.
             let biasPrompt = buildBiasPrompt(preferredTerms: preferredTerms)
-            let promptTokens = whisperKit.tokenizer?.encode(text: biasPrompt).filter { $0 < 51865 } ?? []
+            let encoded = whisperKit.tokenizer?.encode(text: biasPrompt).filter { $0 < 51865 } ?? []
+            let promptTokens = Array(encoded.suffix(WhisperService.maxPromptTokens))
             
             // Configure decoding options for filler word capture
             let options = DecodingOptions(
@@ -103,14 +116,26 @@ class WhisperService {
                 noSpeechThreshold: 0.4  // Lower threshold to capture more speech including hesitations
             )
 
-            // Transcribe the audio
-            let results = try await whisperKit.transcribe(
-                audioPath: audioURL.path,
-                decodeOptions: options
-            )
-
-            guard let result = results.first else {
-                throw WhisperServiceError.noSpeechTranscriptionResult
+            // Transcribe with a timeout — WhisperKit's decoder can hang indefinitely
+            // under certain conditions (e.g. degenerate audio, prompt edge-cases).
+            let result: WhisperTranscriptionResult = try await withThrowingTaskGroup(of: WhisperTranscriptionResult.self) { group in
+                group.addTask {
+                    let results = try await whisperKit.transcribe(
+                        audioPath: audioURL.path,
+                        decodeOptions: options
+                    )
+                    guard let first = results.first else {
+                        throw WhisperServiceError.noSpeechTranscriptionResult
+                    }
+                    return first
+                }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(90))
+                    throw WhisperServiceError.transcriptionTimedOut
+                }
+                let first = try await group.next()!
+                group.cancelAll()
+                return first
             }
 
             transcriptionProgress = 1.0
@@ -128,6 +153,7 @@ class WhisperService {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .uniquedPreservingOrder()
+            .prefix(WhisperService.maxBiasTerms)
 
         guard !cleanedTerms.isEmpty else { return fillerPrompt }
         let dictionaryLine = "Preferred names and terms: \(cleanedTerms.joined(separator: ", "))."
@@ -229,6 +255,7 @@ enum WhisperServiceError: LocalizedError {
     case modelNotLoaded
     case noSpeechTranscriptionResult
     case transcriptionFailed(Error)
+    case transcriptionTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -238,6 +265,8 @@ enum WhisperServiceError: LocalizedError {
             return "No transcription result was produced."
         case .transcriptionFailed(let error):
             return "Transcription failed: \(error.localizedDescription)"
+        case .transcriptionTimedOut:
+            return "Transcription timed out. Try recording a shorter clip or restart the app."
         }
     }
 }

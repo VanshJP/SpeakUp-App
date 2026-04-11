@@ -26,8 +26,13 @@ struct ContentView: View {
     @State private var showingAchievements = false
     @State private var showingWordBank = false
     @State private var showingReadAloud = false
-    @State private var showingQuickStoryCapture = false
+    @State private var showingStoryEditor = false
     @State private var settingsViewModel = SettingsViewModel()
+    @State private var storiesViewModel = StoriesViewModel()
+
+    // Story → Warm-Up / Drill routing
+    @State private var warmUpStory: Story?
+    @State private var drillStory: Story?
 
     // Recording parameters
     @State private var recordingPrompt: Prompt?
@@ -103,12 +108,21 @@ struct ContentView: View {
             }
         case .stories:
             NavigationStack {
-                StoriesListView(onStartPractice: { story in
-                    recordingPrompt = nil
-                    recordingStoryId = story.id
-                    recordingDuration = .sixty
-                    showingCountdown = true
-                })
+                StoriesListView(
+                    viewModel: storiesViewModel,
+                    onStartPractice: { story in
+                        recordingPrompt = nil
+                        recordingStoryId = story.id
+                        recordingDuration = .sixty
+                        showingCountdown = true
+                    },
+                    onSendToWarmUp: { story in
+                        warmUpStory = story
+                    },
+                    onSendToDrill: { story in
+                        drillStory = story
+                    }
+                )
             }
         case .history:
             NavigationStack {
@@ -220,8 +234,18 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(item: $warmUpStory) { story in
+            WarmUpListView(sourceStory: story)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showingDrills) {
             DrillSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $drillStory) { story in
+            DrillSelectionView(sourceStory: story)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -257,11 +281,11 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingQuickStoryCapture) {
+        .sheet(isPresented: $showingStoryEditor) {
             NavigationStack {
-                QuickCaptureView(viewModel: StoriesViewModel())
+                StoryEditorView(viewModel: storiesViewModel)
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         .onOpenURL { url in
@@ -277,6 +301,7 @@ struct ContentView: View {
         }
         .onAppear {
             settingsViewModel.configure(with: modelContext)
+            storiesViewModel.configure(with: modelContext)
             if userSettings.first?.hasCompletedOnboarding != true {
                 showOnboarding = true
             }
@@ -339,7 +364,7 @@ struct ContentView: View {
         case "story":
             selectedTab = .stories
             if url.pathComponents.contains("new") {
-                showingQuickStoryCapture = true
+                showingStoryEditor = true
             }
 
         default:

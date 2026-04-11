@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 @Model
 final class Story {
@@ -20,6 +21,8 @@ final class Story {
     var lastPracticeDate: Date?
     var bestScore: Int = 0
     var entryType: String = "story"
+    var folderId: UUID?
+    var contentAttributed: Data?
 
     init(
         id: UUID = UUID(),
@@ -38,7 +41,9 @@ final class Story {
         estimatedDurationSeconds: Int = 0,
         lastPracticeDate: Date? = nil,
         bestScore: Int = 0,
-        entryType: String = "story"
+        entryType: String = "story",
+        folderId: UUID? = nil,
+        contentAttributed: Data? = nil
     ) {
         self.id = id
         self.title = title
@@ -57,6 +62,39 @@ final class Story {
         self.lastPracticeDate = lastPracticeDate
         self.bestScore = bestScore
         self.entryType = entryType
+        self.folderId = folderId
+        self.contentAttributed = contentAttributed
+    }
+
+    // MARK: - Attributed Content
+
+    /// Rich-text content, with a plain-text fallback if no attributed data has been saved yet.
+    var attributedContent: NSAttributedString {
+        get {
+            if let data = contentAttributed,
+               let decoded = try? NSAttributedString(
+                    data: data,
+                    options: [.documentType: NSAttributedString.DocumentType.rtfd],
+                    documentAttributes: nil
+               ) {
+                return decoded
+            }
+            return NSAttributedString(
+                string: content,
+                attributes: [
+                    .font: UIFont.preferredFont(forTextStyle: .body),
+                    .foregroundColor: UIColor.white
+                ]
+            )
+        }
+        set {
+            let range = NSRange(location: 0, length: newValue.length)
+            contentAttributed = try? newValue.data(
+                from: range,
+                documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd]
+            )
+            content = newValue.string
+        }
     }
 
     // MARK: - Computed Properties
@@ -124,7 +162,7 @@ enum StoryEntryType: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .story: return "book.pages"
-        case .reflection: return "thought.bubble"
+        case .reflection: return "bubble.left.fill"
         case .note: return "note.text"
         }
     }
@@ -141,24 +179,24 @@ enum StoryStage: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .spark: return "Spark"
-        case .draft: return "Draft"
-        case .polished: return "Polished"
+        case .spark: return "Idea"
+        case .draft: return "In Progress"
+        case .polished: return "Ready"
         }
     }
 
     var icon: String {
         switch self {
         case .spark: return "lightbulb"
-        case .draft: return "doc.text"
-        case .polished: return "checkmark.seal"
+        case .draft: return "pencil.line"
+        case .polished: return "checkmark.circle"
         }
     }
 
     var description: String {
         switch self {
         case .spark: return "Quick idea or memory"
-        case .draft: return "Working on structure"
+        case .draft: return "Working on it"
         case .polished: return "Ready to tell"
         }
     }

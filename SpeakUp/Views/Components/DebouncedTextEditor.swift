@@ -6,6 +6,7 @@ struct DebouncedTextEditor: UIViewRepresentable {
     var isDisabled: Bool = false
     var placeholder: String = ""
     var minHeight: CGFloat = 200
+    var requestFocus: Bool = false
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -24,15 +25,38 @@ struct DebouncedTextEditor: UIViewRepresentable {
         textView.setContentHuggingPriority(.defaultLow, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
+        // Placeholder label
+        let placeholderLabel = UILabel()
+        placeholderLabel.text = placeholder
+        placeholderLabel.font = UIFont.preferredFont(forTextStyle: .body)
+        placeholderLabel.textColor = UIColor.white.withAlphaComponent(0.3)
+        placeholderLabel.tag = 999
+        placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
+        textView.addSubview(placeholderLabel)
+        NSLayoutConstraint.activate([
+            placeholderLabel.topAnchor.constraint(equalTo: textView.topAnchor),
+            placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
+        ])
+        placeholderLabel.isHidden = !text.isEmpty
+
         return textView
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
         textView.isEditable = !isDisabled
 
-        // Only update text if it changed externally (e.g., dictation append)
         if textView.text != text && !context.coordinator.isUserEditing {
             textView.text = text
+        }
+
+        // Update placeholder visibility
+        if let placeholderLabel = textView.viewWithTag(999) as? UILabel {
+            placeholderLabel.isHidden = !textView.text.isEmpty
+            placeholderLabel.text = placeholder
+        }
+
+        if requestFocus && !textView.isFirstResponder && !isDisabled {
+            DispatchQueue.main.async { textView.becomeFirstResponder() }
         }
     }
 
@@ -54,6 +78,11 @@ struct DebouncedTextEditor: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            // Update placeholder visibility immediately
+            if let placeholderLabel = textView.viewWithTag(999) as? UILabel {
+                placeholderLabel.isHidden = !textView.text.isEmpty
+            }
+
             debounceTask?.cancel()
             debounceTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
