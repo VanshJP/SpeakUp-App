@@ -96,8 +96,8 @@ enum ConversationIsolationService {
             }
 
             // Tighter energy tolerance: 12 dB gap = full penalty (was 16 dB).
-            // A 16 dB gap is enormous — that's a 6x amplitude difference.
-            // 12 dB (4x amplitude) is a more realistic threshold for a different speaker.
+            // A 16 dB gap is enormous — that's about a 6x signal-level difference.
+            // 12 dB (~4x signal level) is a more realistic threshold for a different speaker.
             let energyPenalty = min(1.0, abs(feature.energyDb - profileEnergy) / 12.0)
             let penalty = f0Penalty * 0.75 + energyPenalty * 0.25
             let confidence = max(0.0, min(1.0, 1.0 - penalty))
