@@ -116,7 +116,7 @@ struct RecordingDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(alignment: .center, spacing: 12) {
                     Button {
-                        if let recording {
+                        if case .ready(let recording) = detailScreenState {
                             scoreCardImage = ScoreCardRenderer.render(recording: recording)
                         }
                         showingShareSheet = true
@@ -127,7 +127,7 @@ struct RecordingDetailView: View {
                     }
 
                     Menu {
-                        if let recording {
+                        if case .ready(let recording) = detailScreenState {
                             Button {
                                 editingTitleText = recording.customTitle ?? ""
                                 isEditingTitle = true
@@ -161,7 +161,7 @@ struct RecordingDetailView: View {
         .task {
             settingsViewModel.configure(with: modelContext)
             await loadRecording()
-            if let recording {
+            if case .ready(let recording) = detailScreenState {
                 prepareDetailAssets(for: recording)
                 configurePlaybackState(for: recording)
                 enqueueProcessingIfNeeded(recording)
@@ -207,7 +207,7 @@ struct RecordingDetailView: View {
             }
         }
         .onChange(of: showingShareSheet) { _, show in
-            if show, let recording {
+            if show, case .ready(let recording) = detailScreenState {
                 exportService.shareRecording(recording, scoreCardImage: scoreCardImage)
                 showingShareSheet = false
             }
@@ -1404,7 +1404,7 @@ struct RecordingDetailView: View {
     }
 
     private func enhanceCoherenceIfNeeded() async {
-        guard let recording,
+        guard case .ready(let recording) = detailScreenState,
               var analysis = recording.analysis else { return }
 
         let transcript = resolvedTranscript(for: recording)
