@@ -174,7 +174,7 @@ final class RecordingProcessingCoordinator {
             recording.isProcessing = false
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
         } catch {
-            logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .private(mask: .hash))")
             recording.isProcessing = false
             save(modelContext, context: "clearing processing flag after error \(recordingID.uuidString)")
         }
@@ -258,7 +258,7 @@ final class RecordingProcessingCoordinator {
         do {
             return try modelContext.fetch(descriptor).first
         } catch {
-            logger.error("Failed to fetch recording for processing: \(error.localizedDescription, privacy: .public)")
+            logger.error("Failed to fetch recording for processing: \(error.localizedDescription, privacy: .private(mask: .hash))")
             return nil
         }
     }
@@ -267,18 +267,19 @@ final class RecordingProcessingCoordinator {
         do {
             return try modelContext.fetch(FetchDescriptor<UserSettings>()).first
         } catch {
-            logger.error("Failed to fetch user settings for processing: \(error.localizedDescription, privacy: .public)")
+            logger.error("Failed to fetch user settings for processing: \(error.localizedDescription, privacy: .private(mask: .hash))")
             return nil
         }
     }
 
     @discardableResult
     private func save(_ modelContext: ModelContext, context: String) -> Bool {
+        guard modelContext.hasChanges else { return true }
         do {
             try modelContext.save()
             return true
         } catch {
-            logger.error("Failed to save model context (\(context, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            logger.error("Failed to save model context (\(context, privacy: .public)): \(error.localizedDescription, privacy: .private(mask: .hash))")
             return false
         }
     }
