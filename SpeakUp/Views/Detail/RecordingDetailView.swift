@@ -36,6 +36,7 @@ struct RecordingDetailView: View {
     @State private var showingJournalReflection = false
     @State private var journalSaved = false
     @State private var storiesViewModel = StoriesViewModel()
+    @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
 
     @Query private var userSettings: [UserSettings]
 
@@ -147,7 +148,12 @@ struct RecordingDetailView: View {
                             PlaybackDrawerContainer(
                                 recording: recording,
                                 waveformHeights: waveformHeights,
-                                onTogglePlayback: { togglePlayback(recording) }
+                                playbackViewModel: playbackViewModel,
+                                onTogglePlayback: { togglePlayback(recording) },
+                                onSeek: { progress in
+                                    audioService.seek(to: progress)
+                                    playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+                                }
                             )
                         }
                     }
@@ -225,6 +231,7 @@ struct RecordingDetailView: View {
             await loadRecording()
             if let recording {
                 prepareDetailAssets(for: recording)
+                configurePlaybackState(for: recording)
             }
             populateWPMTimeSeriesIfNeeded()
             await transcribeIfNeeded()
@@ -236,6 +243,15 @@ struct RecordingDetailView: View {
         }
         .onDisappear {
             audioService.stop()
+        }
+        .onChange(of: audioService.playbackProgress) { _, _ in
+            syncPlaybackStateIfNeeded()
+        }
+        .onChange(of: audioService.playbackDuration) { _, _ in
+            syncPlaybackStateIfNeeded()
+        }
+        .onChange(of: audioService.isPlaying) { _, _ in
+            syncPlaybackStateIfNeeded()
         }
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
@@ -685,7 +701,8 @@ struct RecordingDetailView: View {
                         showFillerHighlights: showFillerHighlights,
                         showVocabHighlights: showVocabHighlights,
                         showSpeakerTurns: showSpeakerTurns,
-                        hasSpeakerSeparation: hasSpeakerSeparation
+                        hasSpeakerSeparation: hasSpeakerSeparation,
+                        playbackViewModel: playbackViewModel
                     )
 
                     if let analysis = recording?.analysis, !analysis.vocabWordsUsed.isEmpty {
@@ -1318,6 +1335,16 @@ struct RecordingDetailView: View {
         }
     }
 
+    private func configurePlaybackState(for recording: Recording) {
+        playbackViewModel.configureTranscript(words: recording.transcriptionWords ?? [])
+        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+    }
+
+    private func syncPlaybackStateIfNeeded() {
+        guard let recording else { return }
+        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+    }
+
     private func loadRecording() async {
         isLoading = true
         defer { isLoading = false }
@@ -1438,6 +1465,8 @@ struct RecordingDetailView: View {
 
         recording.transcriptionWords = computed.1
         recording.analysis = computed.0
+        playbackViewModel.configureTranscript(words: computed.1)
+        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
         try? modelContext.save()
     }
 
@@ -1573,6 +1602,8 @@ struct RecordingDetailView: View {
             recording.transcriptionText = result.text
             recording.transcriptionWords = computed.1
             recording.analysis = computed.0
+            playbackViewModel.configureTranscript(words: computed.1)
+            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
 
             try modelContext.save()
 
@@ -1749,67 +1780,45 @@ struct RecordingDetailView: View {
 private struct PlaybackDrawerContainer: View {
     let recording: Recording
     let waveformHeights: [CGFloat]
+    let playbackViewModel: RecordingDetailPlaybackViewModel
     let onTogglePlayback: () -> Void
+    let onSeek: (Double) -> Void
 
-    @Environment(AudioService.self) private var audioService
     @State private var drawerState: PlaybackDrawerState = .expanded
     @State private var dragOffset: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            if drawerState != .hidden {
-                VStack(spacing: 8) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.35))
-                        .frame(width: 40, height: 4)
-                        .padding(.top, 8)
+            VStack(spacing: 8) {
+                Capsule()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(width: 40, height: 4)
+                    .padding(.top, 8)
 
-                    if drawerState == .expanded {
-                        playbackControlSection
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 12)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else if drawerState == .collapsed {
-                        collapsedPlaybackBar
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 10)
-                            .transition(.opacity)
-                    }
+                if drawerState == .expanded {
+                    playbackControlSection
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    collapsedPlaybackBar
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
+                        .transition(.opacity)
                 }
-                .frame(maxWidth: .infinity)
-                .background(
-                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                        .fill(.ultraThinMaterial)
-                        .ignoresSafeArea(edges: .bottom)
-                )
-                .overlay(alignment: .top) {
-                    UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                        .stroke(.white.opacity(0.12), lineWidth: 0.5)
-                        .ignoresSafeArea(edges: .bottom)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                Button {
-                    Haptics.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        drawerState = .collapsed
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.up")
-                            .font(.caption2.weight(.bold))
-                        Image(systemName: "waveform")
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 12, topTrailingRadius: 12))
-                }
-                .buttonStyle(.plain)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            .frame(maxWidth: .infinity)
+            .background(
+                UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                    .fill(.ultraThinMaterial)
+                    .ignoresSafeArea(edges: .bottom)
+            )
+            .overlay(alignment: .top) {
+                UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
+                    .stroke(.white.opacity(0.12), lineWidth: 0.5)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
         .ignoresSafeArea(edges: .bottom)
         .contentShape(Rectangle())
@@ -1843,7 +1852,7 @@ private struct PlaybackDrawerContainer: View {
             drawerState = .expanded
             dragOffset = 0
         }
-        .onChange(of: audioService.isPlaying) { _, isPlaying in
+        .onChange(of: playbackViewModel.isPlaying) { _, isPlaying in
             if isPlaying {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                     drawerState = .expanded
@@ -1854,9 +1863,33 @@ private struct PlaybackDrawerContainer: View {
 
     @ViewBuilder
     private var playbackControlSection: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Label(
+                    playbackViewModel.isPlaying ? "Now Playing" : "Playback",
+                    systemImage: playbackViewModel.isPlaying ? "waveform.circle.fill" : "waveform"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+
+                Spacer()
+
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
+                        drawerState = .collapsed
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(6)
+                }
+                .buttonStyle(.plain)
+            }
+
             HStack(spacing: 10) {
-                Text(formatTime(audioService.playbackProgress * audioService.playbackDuration))
+                Text(formatTime(playbackViewModel.currentTime))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 40, alignment: .leading)
@@ -1871,7 +1904,7 @@ private struct PlaybackDrawerContainer: View {
                     HStack(spacing: spacing) {
                         ForEach(0..<barCount, id: \.self) { i in
                             let progress = Double(i) / Double(barCount)
-                            let isPlayed = progress < audioService.playbackProgress
+                            let isPlayed = progress < playbackViewModel.playbackProgress
                             let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
 
                             RoundedRectangle(cornerRadius: 1.5)
@@ -1883,43 +1916,55 @@ private struct PlaybackDrawerContainer: View {
                     .contentShape(Rectangle())
                     .onTapGesture { location in
                         let progress = max(0, min(1, location.x / max(1, width)))
-                        audioService.seek(to: progress)
+                        onSeek(progress)
                     }
                     .gesture(
                         DragGesture(minimumDistance: 4)
                             .onChanged { value in
                                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                                 let progress = max(0, min(1, value.location.x / max(1, width)))
-                                audioService.seek(to: progress)
+                                onSeek(progress)
                             }
                     )
                 }
                 .frame(height: 32)
 
-                Text(formatTime(audioService.playbackDuration > 0 ? audioService.playbackDuration : recording.actualDuration))
+                Text(formatTime(playbackViewModel.playbackDuration > 0 ? playbackViewModel.playbackDuration : recording.actualDuration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 40, alignment: .trailing)
             }
 
-            Button {
-                onTogglePlayback()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+            HStack(spacing: 22) {
+                Button {
+                    seekBy(seconds: -10)
+                } label: {
+                    Image(systemName: "gobackward.10")
                         .font(.body.weight(.semibold))
-                    Text(audioService.isPlaying ? "Pause" : "Listen Back")
-                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background {
-                    Capsule()
-                        .fill(Color.teal)
+                .buttonStyle(.plain)
+
+                Button {
+                    onTogglePlayback()
+                } label: {
+                    Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(Color.teal))
                 }
+                .buttonStyle(.plain)
+
+                Button {
+                    seekBy(seconds: 10)
+                } label: {
+                    Image(systemName: "goforward.10")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -1930,20 +1975,20 @@ private struct PlaybackDrawerContainer: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.teal)
 
-            Text(audioService.isPlaying ? "Now Playing" : "Playback")
+            Text(playbackViewModel.isPlaying ? "Now Playing" : "Playback")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white)
 
             Spacer()
 
-            Text(formatTime(audioService.playbackProgress * max(audioService.playbackDuration, recording.actualDuration)))
+            Text(formatTime(playbackViewModel.currentTime))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
 
             Button {
                 onTogglePlayback()
             } label: {
-                Image(systemName: audioService.isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
@@ -1957,6 +2002,13 @@ private struct PlaybackDrawerContainer: View {
                 drawerState = .expanded
             }
         }
+    }
+
+    private func seekBy(seconds: TimeInterval) {
+        let duration = max(playbackViewModel.playbackDuration, recording.actualDuration)
+        guard duration > 0 else { return }
+        let targetTime = min(max(playbackViewModel.currentTime + seconds, 0), duration)
+        onSeek(targetTime / duration)
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
@@ -1975,8 +2027,8 @@ private struct PlaybackHighlightedTranscript: View {
     let showVocabHighlights: Bool
     let showSpeakerTurns: Bool
     let hasSpeakerSeparation: Bool
+    let playbackViewModel: RecordingDetailPlaybackViewModel
 
-    @Environment(AudioService.self) private var audioService
     @State private var activeWordID: UUID?
 
     private let orderedIDs: [UUID]
@@ -1988,7 +2040,8 @@ private struct PlaybackHighlightedTranscript: View {
         showFillerHighlights: Bool,
         showVocabHighlights: Bool,
         showSpeakerTurns: Bool,
-        hasSpeakerSeparation: Bool
+        hasSpeakerSeparation: Bool,
+        playbackViewModel: RecordingDetailPlaybackViewModel
     ) {
         self.words = words
         self.turns = turns
@@ -1996,6 +2049,7 @@ private struct PlaybackHighlightedTranscript: View {
         self.showVocabHighlights = showVocabHighlights
         self.showSpeakerTurns = showSpeakerTurns
         self.hasSpeakerSeparation = hasSpeakerSeparation
+        self.playbackViewModel = playbackViewModel
 
         let ordered = words
             .filter { $0.end > $0.start }
@@ -2025,10 +2079,10 @@ private struct PlaybackHighlightedTranscript: View {
             }
         }
         .onAppear { updateActiveWord() }
-        .onChange(of: audioService.playbackProgress) { _, _ in
+        .onChange(of: playbackViewModel.currentTime) { _, _ in
             updateActiveWord()
         }
-        .onChange(of: audioService.isPlaying) { _, playing in
+        .onChange(of: playbackViewModel.isPlaying) { _, playing in
             if !playing {
                 if activeWordID != nil { activeWordID = nil }
             } else {
@@ -2038,11 +2092,13 @@ private struct PlaybackHighlightedTranscript: View {
     }
 
     private func updateActiveWord() {
-        guard !orderedRanges.isEmpty, audioService.playbackDuration > 0 else {
+        guard playbackViewModel.isPlaying,
+              !orderedRanges.isEmpty,
+              playbackViewModel.playbackDuration > 0 else {
             if activeWordID != nil { activeWordID = nil }
             return
         }
-        let currentTime = max(0, audioService.playbackProgress) * audioService.playbackDuration
+        let currentTime = max(0, playbackViewModel.syncedTranscriptTime)
         let newID = wordIndex(for: currentTime).map { orderedIDs[$0] }
         if activeWordID != newID { activeWordID = newID }
     }
@@ -2068,8 +2124,7 @@ private struct PlaybackHighlightedTranscript: View {
             }
         }
 
-        let fallback = min(max(low - 1, 0), orderedRanges.count - 1)
-        return orderedRanges.indices.contains(fallback) ? fallback : nil
+        return nil
     }
 }
 
@@ -2247,7 +2302,6 @@ enum DetailTab: String, CaseIterable {
 private enum PlaybackDrawerState {
     case expanded
     case collapsed
-    case hidden
 }
 
 private enum AIInsightBlock {

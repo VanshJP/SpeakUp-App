@@ -21,6 +21,17 @@ class SpeechService {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
 
+    // MARK: - Main-Actor State
+
+    private func setTranscribingState(isTranscribing: Bool, progress: Double? = nil) async {
+        await MainActor.run {
+            self.isTranscribing = isTranscribing
+            if let progress {
+                self.transcriptionProgress = progress
+            }
+        }
+    }
+
     // MARK: - Model Loading
 
     /// Pre-load the Whisper model (call on app launch for better UX)
@@ -39,8 +50,11 @@ class SpeechService {
             }
         }
 
-        hasPermission = status == .authorized
-        return hasPermission
+        let authorized = status == .authorized
+        await MainActor.run {
+            hasPermission = authorized
+        }
+        return authorized
     }
 
     // MARK: - Lightweight Transcription (text only, no analysis)
@@ -48,8 +62,10 @@ class SpeechService {
     /// Fast transcription that skips isolation, speaker labeling, and filler detection.
     /// Use for dictation where you only need the raw text.
     func transcribeTextOnly(audioURL: URL, preferredTerms: [String] = []) async throws -> String {
-        isTranscribing = true
-        defer { isTranscribing = false }
+        await setTranscribingState(isTranscribing: true)
+        defer {
+            Task { await self.setTranscribingState(isTranscribing: false) }
+        }
         let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
         do {
@@ -98,16 +114,24 @@ class SpeechService {
         preferredTerms: [String] = [],
         voiceProfile: VoiceProfile? = nil
     ) async throws -> SpeechTranscriptionResult {
-        isTranscribing = true
-        transcriptionProgress = 0
+        await setTranscribingState(isTranscribing: true, progress: 0)
 
         defer {
-            isTranscribing = false
-            transcriptionProgress = 1.0
+            Task {
+                await self.setTranscribingState(isTranscribing: false, progress: 1.0)
+            }
         }
 
-        let isolationResult = SpeechIsolationService.preprocessIfBeneficial(audioURL: audioURL)
-        let transcriptionURL = isolationResult?.processedAudioURL ?? audioURL
+        let preparation = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let isolationResult = SpeechIsolationService.preprocessIfBeneficial(audioURL: audioURL)
+                let transcriptionURL = isolationResult?.processedAudioURL ?? audioURL
+                continuation.resume(returning: (isolationResult, transcriptionURL))
+            }
+        }
+
+        let isolationResult = preparation.0
+        let transcriptionURL = preparation.1
         let shouldCleanupProcessedFile = transcriptionURL != audioURL
 
         defer {
@@ -121,7 +145,9 @@ class SpeechService {
         do {
             // Use WhisperKit for accurate filler word detection
             result = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
-            transcriptionProgress = whisperService.transcriptionProgress
+            await MainActor.run {
+                transcriptionProgress = whisperService.transcriptionProgress
+            }
         } catch {
             // Retry once: unload and reload the model
             whisperService.unloadModel()
@@ -135,46 +161,52 @@ class SpeechService {
             }
         }
 
-        let wordsAfterFillerRetagging: [TranscriptionWord]
-        if fillerConfig.customFillers.isEmpty && fillerConfig.removedDefaults.isEmpty {
-            wordsAfterFillerRetagging = result.words
-        } else {
-            let rawTimings = result.words.map { w in
-                RawWordTiming(word: w.word, start: w.start, end: w.end, confidence: w.confidence ?? 1.0)
+        let postProcessed: SpeechTranscriptionResult = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let wordsAfterFillerRetagging: [TranscriptionWord]
+                if fillerConfig.customFillers.isEmpty && fillerConfig.removedDefaults.isEmpty {
+                    wordsAfterFillerRetagging = result.words
+                } else {
+                    let rawTimings = result.words.map { w in
+                        RawWordTiming(word: w.word, start: w.start, end: w.end, confidence: w.confidence ?? 1.0)
+                    }
+                    wordsAfterFillerRetagging = FillerDetectionPipeline.tagFillers(in: rawTimings, config: fillerConfig)
+                }
+
+                var finalWords = wordsAfterFillerRetagging
+                // Pre-load audio once for speaker isolation (avoids redundant file I/O)
+                let preloaded = ConversationIsolationService.loadMonoPCM(url: transcriptionURL)
+                let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
+                    words: finalWords,
+                    audioURL: transcriptionURL,
+                    totalDuration: result.duration,
+                    persistentProfile: voiceProfile,
+                    preloadedSamples: preloaded.map { ($0.samples, $0.sampleRate) }
+                )
+                finalWords = speakerLabeled.0
+                let speakerIsolationMetrics = speakerLabeled.1
+                let voiceProfileUpdate = speakerLabeled.2
+                let outputWords = self.isolatedPrimaryTranscriptWords(
+                    from: finalWords,
+                    metrics: speakerIsolationMetrics
+                )
+                let outputText = self.transcriptText(
+                    from: outputWords,
+                    fallback: result.text
+                )
+
+                continuation.resume(returning: SpeechTranscriptionResult(
+                    text: outputText,
+                    words: outputWords,
+                    duration: result.duration,
+                    audioIsolationMetrics: isolationResult?.metrics,
+                    speakerIsolationMetrics: speakerIsolationMetrics,
+                    voiceProfileUpdate: voiceProfileUpdate
+                ))
             }
-            wordsAfterFillerRetagging = FillerDetectionPipeline.tagFillers(in: rawTimings, config: fillerConfig)
         }
 
-        var finalWords = wordsAfterFillerRetagging
-        // Pre-load audio once for speaker isolation (avoids redundant file I/O)
-        let preloaded = ConversationIsolationService.loadMonoPCM(url: transcriptionURL)
-        let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
-            words: finalWords,
-            audioURL: transcriptionURL,
-            totalDuration: result.duration,
-            persistentProfile: voiceProfile,
-            preloadedSamples: preloaded.map { ($0.samples, $0.sampleRate) }
-        )
-        finalWords = speakerLabeled.0
-        let speakerIsolationMetrics = speakerLabeled.1
-        let voiceProfileUpdate = speakerLabeled.2
-        let outputWords = isolatedPrimaryTranscriptWords(
-            from: finalWords,
-            metrics: speakerIsolationMetrics
-        )
-        let outputText = transcriptText(
-            from: outputWords,
-            fallback: result.text
-        )
-
-        return SpeechTranscriptionResult(
-            text: outputText,
-            words: outputWords,
-            duration: result.duration,
-            audioIsolationMetrics: isolationResult?.metrics,
-            speakerIsolationMetrics: speakerIsolationMetrics,
-            voiceProfileUpdate: voiceProfileUpdate
-        )
+        return postProcessed
     }
 
     /// Fallback transcription using Apple's SFSpeechRecognizer
