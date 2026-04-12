@@ -10,7 +10,6 @@ struct RecordingDetailView: View {
 
     @State private var recording: Recording?
     @State private var isLoading = true
-    @State private var isTranscribing = false
     @State private var showingDeleteAlert = false
     @State private var showingShareSheet = false
     @State private var showFillerHighlights = true
@@ -24,17 +23,15 @@ struct RecordingDetailView: View {
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
     @State private var exportService = ExportService()
-    @State private var pendingFeedback = false
     @State private var showingScoreWeights = false
     @State private var settingsViewModel = SettingsViewModel()
-    @State private var showingFeedbackSheet = false
     @State private var llmInsight: String?
-    @State private var transcriptionFailed = false
     @State private var playbackErrorMessage: String?
     @State private var showCopiedConfirmation = false
     @State private var journalReflectionText = ""
     @State private var showingJournalReflection = false
     @State private var journalSaved = false
+    @State private var dismissedFeedbackGates: Set<UUID> = []
     @State private var storiesViewModel = StoriesViewModel()
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
 
@@ -45,135 +42,70 @@ struct RecordingDetailView: View {
     @Environment(SpeechService.self) private var speechService
     @Environment(LLMService.self) private var llmService
 
+    private enum DetailScreenState {
+        case loading
+        case processing(Recording)
+        case ready(Recording)
+        case missing
+    }
+
+    private var detailScreenState: DetailScreenState {
+        guard let recording else {
+            return isLoading ? .loading : .missing
+        }
+        return (recording.isProcessing || shouldGateFeedback(for: recording))
+            ? .processing(recording)
+            : .ready(recording)
+    }
+
+    private var feedbackEnabled: Bool {
+        userSettings.first?.sessionFeedbackEnabled ?? false
+    }
+
+    private func shouldGateFeedback(for recording: Recording) -> Bool {
+        feedbackEnabled &&
+        recording.analysis != nil &&
+        recording.sessionFeedback == nil &&
+        !dismissedFeedbackGates.contains(recording.id)
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             AppBackground(style: .subtle)
 
-            if let recording {
-                if recording.isProcessing || isTranscribing || (!speechService.isModelLoaded && recording.analysis == nil) || pendingFeedback {
-                    if transcriptionFailed {
-                        // Transcription failed — show retry instead of infinite spinner
-                        VStack(spacing: 20) {
-                            Spacer()
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 40))
-                                .foregroundStyle(AppColors.warning)
-                            Text("Analysis Unavailable")
-                                .font(.title3.bold())
-                                .foregroundStyle(.white)
-                            Text("Transcription could not be completed.\nThe speech model may still be loading.")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.7))
-                                .multilineTextAlignment(.center)
-                            GlassButton(title: "Retry Analysis", icon: "arrow.clockwise", style: .primary) {
-                                retryTranscription()
-                            }
-                            GlassButton(title: "Go Back", icon: "chevron.left", style: .secondary) {
-                                dismiss()
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 40)
-                    } else {
-                        // Full-page analyzing experience
-                        AnalyzingView(
-                            recording: recording,
-                            isModelLoading: !speechService.isModelLoaded,
-                            feedbackEnabled: userSettings.first?.sessionFeedbackEnabled ?? false,
-                            feedbackQuestions: feedbackQuestionsForAnalyzing,
-                            existingFeedback: recording.sessionFeedback,
-                            onFeedbackSubmitted: { feedback in
-                                recording.sessionFeedback = feedback
-                                try? modelContext.save()
-                            },
-                            onFeedbackCompleted: {
-                                withAnimation(.spring(response: 0.3)) {
-                                    pendingFeedback = false
-                                }
-                            },
-                            analysisReady: recording.analysis != nil
-                        )
-                    }
-                } else {
-                    ScrollView(.vertical) {
-                        VStack(spacing: 20) {
-                            // Always visible: Prompt + Score + Stats
-                            promptHeader(recording)
-
-                            if let analysis = recording.analysis {
-                                heroScoreSection(analysis)
-                                statsGrid(analysis)
-                            }
-
-                            // Goal progress (if recording has goalId)
-                            if recording.goalId != nil {
-                                goalProgressCard(recording)
-                            }
-
-                            if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
-                                wpmChartSection(wpmData)
-                            }
-
-                            // Segmented tab picker
-                            if recording.analysis != nil {
-                                Picker("Detail", selection: $selectedDetailTab) {
-                                    ForEach(DetailTab.allCases, id: \.self) { tab in
-                                        Text(tab.rawValue).tag(tab)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .padding(.horizontal, 4)
-                            }
-
-                            // Tab content
-                            switch selectedDetailTab {
-                            case .analysis:
-                                analysisTabContent(recording)
-                            case .transcript:
-                                transcriptTabContent(recording)
-                            case .coaching:
-                                coachingTabContent(recording)
-                            }
-
-                            // Actions (always at bottom)
-                            actionsSection(recording)
-                        }
-                        .padding()
-                    }
-                    .scrollIndicators(.hidden)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .contentMargins(.horizontal, 0)
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if hasPlayableMedia(recording) {
-                            PlaybackDrawerContainer(
-                                recording: recording,
-                                waveformHeights: waveformHeights,
-                                playbackViewModel: playbackViewModel,
-                                onTogglePlayback: { togglePlayback(recording) },
-                                onSeek: { progress in
-                                    audioService.seek(to: progress)
-                                    playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-                                }
-                            )
-                        }
-                    }
-                    .task {
-                        // Delay score animation
-                        try? await Task.sleep(for: .milliseconds(300))
-                        withAnimation(.easeOut(duration: 0.8)) {
-                            animateScore = true
-                        }
-                    }
-                }
-            } else if isLoading {
+            switch detailScreenState {
+            case .loading:
                 ProgressView("Loading...")
                     .padding(.top, 100)
-            } else {
+
+            case .missing:
                 ContentUnavailableView(
                     "Recording Not Found",
                     systemImage: "exclamationmark.triangle",
                     description: Text("This recording may have been deleted.")
                 )
+
+            case .processing(let recording):
+                AnalyzingView(
+                    recording: recording,
+                    isModelLoading: !speechService.isModelLoaded,
+                    feedbackEnabled: feedbackEnabled,
+                    feedbackQuestions: feedbackQuestionsForAnalyzing,
+                    existingFeedback: recording.sessionFeedback,
+                    onFeedbackSubmitted: { feedback in
+                        recording.sessionFeedback = feedback
+                        try? modelContext.save()
+                    },
+                    onFeedbackCompleted: {
+                        dismissedFeedbackGates.insert(recording.id)
+                        recording.isProcessing = false
+                        try? modelContext.save()
+                    },
+                    analysisReady: recording.analysis != nil
+                )
+
+            case .ready(let recording):
+                readyContent(recording)
             }
         }
         .navigationTitle("")
@@ -232,9 +164,9 @@ struct RecordingDetailView: View {
             if let recording {
                 prepareDetailAssets(for: recording)
                 configurePlaybackState(for: recording)
+                enqueueProcessingIfNeeded(recording)
             }
             populateWPMTimeSeriesIfNeeded()
-            await transcribeIfNeeded()
 
             // Post-analysis: enhance coherence in background — don't block the detail view
             Task {
@@ -290,18 +222,90 @@ struct RecordingDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showingListenBackEncouragement)
-    .sheet(isPresented: $showingFeedbackSheet) {
-        NavigationStack {
-            SessionFeedbackSheet(
-                questions: feedbackQuestionsForAnalyzing,
-                onSubmit: { feedback in
-                    recording?.sessionFeedback = feedback
-                    try? modelContext.save()
-                    showingFeedbackSheet = false
+    }
+
+    @ViewBuilder
+    private func readyContent(_ recording: Recording) -> some View {
+        ScrollView(.vertical) {
+            VStack(spacing: 20) {
+                promptHeader(recording)
+
+                if let analysis = recording.analysis {
+                    heroScoreSection(analysis)
+                    statsGrid(analysis)
                 }
-            )
+
+                if recording.goalId != nil {
+                    goalProgressCard(recording)
+                }
+
+                if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
+                    wpmChartSection(wpmData)
+                }
+
+                if recording.analysis != nil {
+                    Picker("Detail", selection: $selectedDetailTab) {
+                        ForEach(DetailTab.allCases, id: \.self) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 4)
+                }
+
+                switch selectedDetailTab {
+                case .analysis:
+                    analysisTabContent(recording)
+                case .transcript:
+                    transcriptTabContent(recording)
+                case .coaching:
+                    coachingTabContent(recording)
+                }
+
+                actionsSection(recording)
+            }
+            .padding()
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .contentMargins(.horizontal, 0)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if hasPlayableMedia(recording) {
+                PlaybackDrawerContainer(
+                    recording: recording,
+                    waveformHeights: waveformHeights,
+                    playbackViewModel: playbackViewModel,
+                    onTogglePlayback: { togglePlayback(recording) },
+                    onSeek: { progress in
+                        audioService.seek(to: progress)
+                        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+                    }
+                )
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(300))
+            withAnimation(.easeOut(duration: 0.8)) {
+                animateScore = true
+            }
         }
     }
+
+    private func enqueueProcessingIfNeeded(_ recording: Recording, force: Bool = false) {
+        if force {
+            recording.isProcessing = true
+            try? modelContext.save()
+            if recording.analysis != nil { return }
+        }
+        if recording.analysis != nil {
+            return
+        }
+        RecordingProcessingCoordinator.shared.enqueue(
+            recordingID: recording.id,
+            modelContext: modelContext,
+            speechService: speechService,
+            llmService: llmService
+        )
     }
 
     // MARK: - Hero Score Section
@@ -1003,7 +1007,9 @@ struct RecordingDetailView: View {
 
                 GlassButton(title: "Answer Quick Questions", icon: "pencil.line", style: .primary, fullWidth: true) {
                     Haptics.medium()
-                    showingFeedbackSheet = true
+                    if case .ready(let recording) = detailScreenState {
+                        enqueueProcessingIfNeeded(recording, force: true)
+                    }
                 }
             }
         }
@@ -1362,8 +1368,8 @@ struct RecordingDetailView: View {
             // Reset stale isProcessing flag — if the app crashed mid-transcription,
             // this flag stays true in SwiftData but no task is actually running.
             // Clear it so the view doesn't get stuck on the AnalyzingView spinner.
-            // transcribeIfNeeded() will re-process if analysis is still nil.
-            if let recording, recording.isProcessing {
+            // enqueueProcessingIfNeeded() will re-process if analysis is still nil.
+            if recording?.isProcessing == true {
                 recording.isProcessing = false
                 try? modelContext.save()
             }
@@ -1397,248 +1403,6 @@ struct RecordingDetailView: View {
         }
     }
 
-    /// Returns the text fed into `PromptRelevanceService` during scoring.
-    /// Prefers the linked story's content (the more specific script), falling
-    /// back to the recording's prompt text when there is no linked story.
-    private func effectivePromptText(for recording: Recording) -> String? {
-        if let storyId = recording.storyId {
-            var descriptor = FetchDescriptor<Story>(
-                predicate: #Predicate { $0.id == storyId }
-            )
-            descriptor.fetchLimit = 1
-            if let story = (try? modelContext.fetch(descriptor))?.first {
-                let trimmed = story.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { return trimmed }
-            }
-        }
-        return recording.prompt?.text
-    }
-
-    private func analyzeExistingTranscript(
-        recording: Recording,
-        text: String,
-        words: [TranscriptionWord]
-    ) async {
-        let settingsDescriptor = FetchDescriptor<UserSettings>()
-        let settings = (try? modelContext.fetch(settingsDescriptor))?.first
-        let vocabWords = settings?.vocabWords ?? []
-        let weights = scoreWeights(from: settings)
-
-        let result = SpeechTranscriptionResult(
-            text: text,
-            words: words,
-            duration: recording.actualDuration
-        )
-
-        let actualDuration = recording.actualDuration
-        let audioLevelSamples = recording.audioLevelSamples ?? []
-        let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
-        let promptText = effectivePromptText(for: recording)
-        let targetWPM = settings?.targetWPM ?? 150
-        let trackFillerWords = settings?.trackFillerWords ?? true
-        let trackPauses = settings?.trackPauses ?? true
-
-        let computed: (SpeechAnalysis, [TranscriptionWord]) = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let analyzer = SpeechService()
-                let analysis = analyzer.analyze(
-                    transcription: result,
-                    actualDuration: actualDuration,
-                    vocabWords: vocabWords,
-                    audioLevelSamples: audioLevelSamples,
-                    audioURL: audioURL,
-                    promptText: promptText,
-                    targetWPM: targetWPM,
-                    trackFillerWords: trackFillerWords,
-                    trackPauses: trackPauses,
-                    scoreWeights: weights,
-                    audioIsolationMetrics: nil,
-                    speakerIsolationMetrics: nil
-                )
-                let markedWords = analyzer.markVocabWordsInTranscription(
-                    words,
-                    vocabWords: vocabWords
-                )
-                continuation.resume(returning: (analysis, markedWords))
-            }
-        }
-
-        recording.transcriptionWords = computed.1
-        recording.analysis = computed.0
-        playbackViewModel.configureTranscript(words: computed.1)
-        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-        try? modelContext.save()
-    }
-
-    private func transcribeIfNeeded() async {
-        guard let recording,
-              recording.analysis == nil else {
-            return
-        }
-
-        // Fast path: transcript already exists but analysis is missing (e.g. old
-        // schema or aborted analyze step). Skip WhisperKit entirely and reuse the
-        // existing words so the detail view doesn't hang for ~10s on open.
-        if let existingText = recording.transcriptionText,
-           let existingWords = recording.transcriptionWords,
-           !existingWords.isEmpty {
-            await analyzeExistingTranscript(
-                recording: recording,
-                text: existingText,
-                words: existingWords
-            )
-            return
-        }
-
-        guard let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
-            return
-        }
-
-        guard FileManager.default.fileExists(atPath: audioURL.path) else {
-            transcriptionFailed = true
-            return
-        }
-
-        isTranscribing = true
-        recording.isProcessing = true
-
-        // Activate pending feedback if enabled and not already submitted
-        let feedbackEnabled = userSettings.first?.sessionFeedbackEnabled ?? false
-        if feedbackEnabled && recording.sessionFeedback == nil {
-            pendingFeedback = true
-        }
-
-        defer {
-            isTranscribing = false
-            recording.isProcessing = false
-        }
-
-        do {
-            // Fetch settings for analysis configuration
-            let settingsDescriptor = FetchDescriptor<UserSettings>()
-            let settings = (try? modelContext.fetch(settingsDescriptor))?.first
-            let vocabWords = settings?.vocabWords ?? []
-            let preferredTerms = settings?.transcriptionBiasTerms ?? []
-
-            // Build filler config from user settings
-            let fillerConfig = FillerWordConfig(
-                customFillers: Set(settings?.customFillerWords ?? []),
-                customContextFillers: Set(settings?.customContextFillerWords ?? []),
-                removedDefaults: Set(settings?.removedDefaultFillers ?? [])
-            )
-
-            // Build persistent voice profile from settings
-            let voiceProfile: VoiceProfile? = {
-                guard let f0 = settings?.voiceProfileF0Hz,
-                      let energy = settings?.voiceProfileEnergyDb else { return nil }
-                return VoiceProfile(f0Hz: f0, energyDb: energy,
-                                    sampleCount: settings?.voiceProfileSampleCount ?? 0)
-            }()
-
-            // Free LLM memory before transcription to avoid competing with WhisperKit.
-            // Only unload here — the transcript-reuse fast path doesn't need Whisper.
-            if llmService.localLLM.isModelReady {
-                llmService.unloadLocalModel()
-            }
-
-            let result = try await withThrowingTaskGroup(of: SpeechTranscriptionResult.self) { group in
-                group.addTask {
-                    try await self.speechService.transcribe(
-                        audioURL: audioURL,
-                        fillerConfig: fillerConfig,
-                        preferredTerms: preferredTerms,
-                        voiceProfile: voiceProfile
-                    )
-                }
-                group.addTask {
-                    try await Task.sleep(for: .seconds(90))
-                    throw SpeechServiceError.transcriptionFailed(
-                        NSError(domain: "SpeakUp", code: -1,
-                                userInfo: [NSLocalizedDescriptionKey: "Transcription timed out"])
-                    )
-                }
-                let result = try await group.next()!
-                group.cancelAll()
-                return result
-            }
-
-            let weights = scoreWeights(from: settings)
-
-            let resultSnapshot = result
-            let actualDuration = recording.actualDuration
-            let audioLevelSamples = recording.audioLevelSamples ?? []
-            let promptText = effectivePromptText(for: recording)
-            let targetWPM = settings?.targetWPM ?? 150
-            let trackFillerWords = settings?.trackFillerWords ?? true
-            let trackPauses = settings?.trackPauses ?? true
-            let vocabWordsSnapshot = vocabWords
-            let weightSnapshot = weights
-
-            let computed = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let analyzer = SpeechService()
-                    let analysis = analyzer.analyze(
-                        transcription: resultSnapshot,
-                        actualDuration: actualDuration,
-                        vocabWords: vocabWordsSnapshot,
-                        audioLevelSamples: audioLevelSamples,
-                        audioURL: audioURL,
-                        promptText: promptText,
-                        targetWPM: targetWPM,
-                        trackFillerWords: trackFillerWords,
-                        trackPauses: trackPauses,
-                        scoreWeights: weightSnapshot,
-                        audioIsolationMetrics: resultSnapshot.audioIsolationMetrics,
-                        speakerIsolationMetrics: resultSnapshot.speakerIsolationMetrics
-                    )
-                    let markedWords = analyzer.markVocabWordsInTranscription(
-                        resultSnapshot.words,
-                        vocabWords: vocabWordsSnapshot
-                    )
-                    continuation.resume(returning: (analysis, markedWords))
-                }
-            }
-
-            recording.transcriptionText = result.text
-            recording.transcriptionWords = computed.1
-            recording.analysis = computed.0
-            playbackViewModel.configureTranscript(words: computed.1)
-            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-
-            try modelContext.save()
-
-            // Update persistent voice profile via EMA
-            if let update = result.voiceProfileUpdate, let settings {
-                // Solo recordings are safe to learn from without high separation confidence.
-                // Only require confidence >= 50 when a conversation was detected.
-                let conversationDetected = result.speakerIsolationMetrics?.conversationDetected ?? false
-                if !conversationDetected || update.separationConfidence >= 50 {
-                    let alpha = 0.3
-                    if let existing = settings.voiceProfileF0Hz, settings.voiceProfileSampleCount > 0 {
-                        settings.voiceProfileF0Hz = existing * (1 - alpha) + update.sessionF0Hz * alpha
-                        settings.voiceProfileEnergyDb = (settings.voiceProfileEnergyDb ?? 0) * (1 - alpha) + update.sessionEnergyDb * alpha
-                    } else {
-                        settings.voiceProfileF0Hz = update.sessionF0Hz
-                        settings.voiceProfileEnergyDb = update.sessionEnergyDb
-                    }
-                    settings.voiceProfileSampleCount += 1
-                    settings.voiceProfileLastUpdated = Date()
-                    try? modelContext.save()
-                }
-            }
-        } catch {
-            transcriptionFailed = true
-        }
-    }
-
-    private func retryTranscription() {
-        transcriptionFailed = false
-        Task {
-            await transcribeIfNeeded()
-            await enhanceCoherenceIfNeeded()
-        }
-    }
-
     private func enhanceCoherenceIfNeeded() async {
         guard let recording,
               var analysis = recording.analysis else { return }
@@ -1659,14 +1423,11 @@ struct RecordingDetailView: View {
 
         let weights = scoreWeights(from: userSettings.first)
 
-        // Pass prompt text for prompt-aware coherence scoring
-        let promptText = effectivePromptText(for: recording)
-
         await speechService.enhanceWithLLM(
             analysis: &analysis,
             transcript: transcript,
             llmService: llmService,
-            promptText: promptText,
+            promptText: recording.prompt?.text,
             scoreWeights: weights
         )
 
@@ -1722,7 +1483,8 @@ struct RecordingDetailView: View {
             settings.listenBackCount += 1
             try? modelContext.save()
         }
-        guard let recording, let url = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
+        guard case .ready(let recording) = detailScreenState,
+              let url = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             playbackErrorMessage = "Audio file is no longer available. It may have been moved or deleted."
             return
         }
@@ -2169,38 +1931,6 @@ struct SubscoreRow: View {
     }
 }
 
-// MARK: - Stat Grid Item
-
-struct StatGridItem: View {
-    let label: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        GlassCard(padding: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(color)
-                    .frame(width: 24)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(label)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    Text(value)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                }
-                
-                Spacer(minLength: 0)
-            }
-        }
-    }
-}
-
 // MARK: - Highlighted Transcript View
 
 struct HighlightedTranscriptView: View {
@@ -2308,188 +2038,6 @@ private enum AIInsightBlock {
     case heading(AttributedString)
     case paragraph(AttributedString)
     case bullet(AttributedString)
-}
-
-// MARK: - Session Feedback Sheet
-
-struct SessionFeedbackSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let questions: [FeedbackQuestion]
-    let onSubmit: (SessionFeedback) -> Void
-
-    @State private var scaleAnswers: [UUID: Int] = [:]
-    @State private var boolAnswers: [UUID: Bool] = [:]
-
-    private var allQuestionsAnswered: Bool {
-        questions.allSatisfy { q in
-            q.type == .scale ? scaleAnswers[q.id] != nil : boolAnswers[q.id] != nil
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            AppBackground(style: .subtle)
-
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 6) {
-                        Image(systemName: "checkmark.message.fill")
-                            .font(.largeTitle)
-                            .foregroundStyle(.teal)
-
-                        Text("Quick Self-Check")
-                            .font(.title3.weight(.bold))
-
-                        Text("How did you feel about this session?")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 8)
-
-                    ForEach(Array(questions.enumerated()), id: \.element.id) { index, question in
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text(question.text)
-                                    .font(.headline)
-                                    .fixedSize(horizontal: false, vertical: true)
-
-                                if question.type == .scale {
-                                    sheetScaleInput(questionId: question.id)
-                                } else {
-                                    sheetYesNoInput(questionId: question.id)
-                                }
-                            }
-                        }
-                    }
-
-                    if allQuestionsAnswered {
-                        GlassButton(title: "Submit", icon: "checkmark.circle", style: .primary, fullWidth: true) {
-                            submitFeedback()
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .padding()
-            }
-            .scrollIndicators(.hidden)
-        }
-        .navigationTitle("Self-Assessment")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func sheetScaleInput(questionId: UUID) -> some View {
-        let selected = scaleAnswers[questionId]
-        let labels = ["Very Poor", "Poor", "Okay", "Good", "Excellent"]
-        let icons = ["face.dashed", "face.smiling.inverse", "face.smiling", "hand.thumbsup", "star.fill"]
-
-        HStack(spacing: 0) {
-            ForEach(1...5, id: \.self) { value in
-                let isSelected = selected == value
-                let scoreColor = AppColors.scoreColor(for: value * 20)
-
-                Button {
-                    Haptics.selection()
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                        scaleAnswers[questionId] = value
-                    }
-                } label: {
-                    VStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(isSelected ? scoreColor.opacity(0.2) : Color.white.opacity(0.06))
-                                .overlay {
-                                    Circle()
-                                        .strokeBorder(
-                                            isSelected ? scoreColor.opacity(0.6) : Color.white.opacity(0.1),
-                                            lineWidth: isSelected ? 2 : 1
-                                        )
-                                }
-
-                            Image(systemName: icons[value - 1])
-                                .font(.system(size: isSelected ? 20 : 16))
-                                .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
-                        }
-                        .frame(width: 48, height: 48)
-                        .scaleEffect(isSelected ? 1.1 : 1.0)
-
-                        Text(labels[value - 1])
-                            .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func sheetYesNoInput(questionId: UUID) -> some View {
-        let selected = boolAnswers[questionId]
-
-        HStack(spacing: 12) {
-            yesNoOption(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success, isSelected: selected == true, questionId: questionId)
-            yesNoOption(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning, isSelected: selected == false, questionId: questionId)
-        }
-    }
-
-    private func yesNoOption(label: String, icon: String, value: Bool, tint: Color, isSelected: Bool, questionId: UUID) -> some View {
-        Button {
-            Haptics.selection()
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                boolAnswers[questionId] = value
-            }
-        } label: {
-            VStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 28))
-                    .foregroundStyle(isSelected ? tint : .white.opacity(0.3))
-
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.5))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? tint.opacity(0.15) : Color.white.opacity(0.04))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(
-                                isSelected ? tint.opacity(0.5) : Color.white.opacity(0.08),
-                                lineWidth: isSelected ? 1.5 : 1
-                            )
-                    }
-            }
-            .scaleEffect(isSelected ? 1.02 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func submitFeedback() {
-        let answers: [FeedbackAnswer] = questions.map { question in
-            FeedbackAnswer(
-                questionId: question.id,
-                questionText: question.text,
-                type: question.type,
-                scaleValue: question.type == .scale ? scaleAnswers[question.id] : nil,
-                boolValue: question.type == .yesNo ? boolAnswers[question.id] : nil
-            )
-        }
-        Haptics.success()
-        onSubmit(SessionFeedback(answers: answers))
-    }
 }
 
 // MARK: - Goal Progress Badge

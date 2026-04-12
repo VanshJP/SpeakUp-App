@@ -4,6 +4,8 @@ import SwiftData
 struct RecordingView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var userSettings: [UserSettings]
+    @Environment(SpeechService.self) private var speechService
+    @Environment(LLMService.self) private var llmService
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
     @State private var showFrameworkPicker = false
@@ -95,14 +97,7 @@ struct RecordingView: View {
         }
         .onChange(of: viewModel.autoSavedRecording) { _, recording in
             if let recording {
-                Haptics.success()
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    showSavedToast = true
-                }
-                Task {
-                    try? await Task.sleep(for: .seconds(1.0))
-                    onComplete(recording)
-                }
+                handleRecordingCompletion(recording)
             }
         }
         .alert("Permission Required", isPresented: $viewModel.showingPermissionAlert) {
@@ -375,12 +370,7 @@ struct RecordingView: View {
                         Task {
                             if viewModel.isRecording {
                                 if let recording = await viewModel.stopRecording() {
-                                    Haptics.success()
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                                        showSavedToast = true
-                                    }
-                                    try? await Task.sleep(for: .seconds(1.0))
-                                    onComplete(recording)
+                                    handleRecordingCompletion(recording)
                                 }
                             } else {
                                 await viewModel.startRecording()
@@ -430,6 +420,23 @@ struct RecordingView: View {
             Spacer()
         }
         .allowsHitTesting(false)
+    }
+
+    private func handleRecordingCompletion(_ recording: Recording) {
+        RecordingProcessingCoordinator.shared.enqueue(
+            recordingID: recording.id,
+            modelContext: modelContext,
+            speechService: speechService,
+            llmService: llmService
+        )
+        Haptics.success()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            showSavedToast = true
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.0))
+            onComplete(recording)
+        }
     }
 }
 
