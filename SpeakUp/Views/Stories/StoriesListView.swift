@@ -136,7 +136,7 @@ struct StoriesListView: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             Task {
-                await viewModel.loadStories()
+                viewModel.loadStories()
             }
         }
     }

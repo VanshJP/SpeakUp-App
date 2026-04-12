@@ -1,11 +1,13 @@
 import Foundation
 import SwiftData
+import os
 
 @MainActor
 @Observable
 final class RecordingProcessingCoordinator {
     static let shared = RecordingProcessingCoordinator()
 
+    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "RecordingProcessing")
     private var activeRecordingIDs: Set<UUID> = []
 
     private init() {}
@@ -45,12 +47,12 @@ final class RecordingProcessingCoordinator {
             predicate: #Predicate { $0.id == recordingID }
         )
 
-        guard let recording = (try? modelContext.fetch(descriptor))?.first else { return }
+        guard let recording = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
 
         if recording.analysis != nil {
             if recording.isProcessing {
                 recording.isProcessing = false
-                try? modelContext.save()
+                save(modelContext, context: "clearing processing flag for pre-analyzed recording \(recordingID.uuidString)")
             }
             return
         }
@@ -58,14 +60,14 @@ final class RecordingProcessingCoordinator {
         guard let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL,
               FileManager.default.fileExists(atPath: mediaURL.path) else {
             recording.isProcessing = false
-            try? modelContext.save()
+            save(modelContext, context: "clearing processing flag for missing media \(recordingID.uuidString)")
             return
         }
 
         recording.isProcessing = true
-        try? modelContext.save()
+        save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
-        let settings = (try? modelContext.fetch(FetchDescriptor<UserSettings>()))?.first
+        let settings = fetchSettings(from: modelContext)
         let vocabWords = settings?.vocabWords ?? []
         let scoreWeights = scoreWeights(from: settings)
 
@@ -170,10 +172,11 @@ final class RecordingProcessingCoordinator {
             recording.transcriptionWords = computed.1
             recording.analysis = computed.0
             recording.isProcessing = false
-            try? modelContext.save()
+            save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
         } catch {
+            logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
             recording.isProcessing = false
-            try? modelContext.save()
+            save(modelContext, context: "clearing processing flag after error \(recordingID.uuidString)")
         }
     }
 
@@ -246,5 +249,37 @@ final class RecordingProcessingCoordinator {
             structure: settings.structureWeight,
             relevance: settings.relevanceWeight
         )
+    }
+
+    private func fetchRecording(
+        with descriptor: FetchDescriptor<Recording>,
+        modelContext: ModelContext
+    ) -> Recording? {
+        do {
+            return try modelContext.fetch(descriptor).first
+        } catch {
+            logger.error("Failed to fetch recording for processing: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private func fetchSettings(from modelContext: ModelContext) -> UserSettings? {
+        do {
+            return try modelContext.fetch(FetchDescriptor<UserSettings>()).first
+        } catch {
+            logger.error("Failed to fetch user settings for processing: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    @discardableResult
+    private func save(_ modelContext: ModelContext, context: String) -> Bool {
+        do {
+            try modelContext.save()
+            return true
+        } catch {
+            logger.error("Failed to save model context (\(context, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
 }

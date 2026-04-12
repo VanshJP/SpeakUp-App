@@ -1369,8 +1369,8 @@ struct RecordingDetailView: View {
             // this flag stays true in SwiftData but no task is actually running.
             // Clear it so the view doesn't get stuck on the AnalyzingView spinner.
             // enqueueProcessingIfNeeded() will re-process if analysis is still nil.
-            if recording?.isProcessing == true {
-                recording.isProcessing = false
+            if let loadedRecording = recording, loadedRecording.isProcessing {
+                loadedRecording.isProcessing = false
                 try? modelContext.save()
             }
         } catch {
