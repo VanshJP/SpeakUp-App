@@ -75,6 +75,9 @@ final class UserSettings {
     // Dictation
     var autoFormatDictation: Bool = true
 
+    // First Recording Setup
+    var hasShownFirstRecordingSetup: Bool = false
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 

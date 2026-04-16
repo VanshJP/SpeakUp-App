@@ -34,6 +34,7 @@ struct RecordingDetailView: View {
     @State private var dismissedFeedbackGates: Set<UUID> = []
     @State private var storiesViewModel = StoriesViewModel()
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
+    @State private var showingFirstRecordingSetup = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -98,8 +99,10 @@ struct RecordingDetailView: View {
                     },
                     onFeedbackCompleted: {
                         dismissedFeedbackGates.insert(recording.id)
-                        recording.isProcessing = false
-                        try? modelContext.save()
+                        if recording.analysis != nil {
+                            recording.isProcessing = false
+                            try? modelContext.save()
+                        }
                     },
                     analysisReady: recording.analysis != nil
                 )
@@ -168,6 +171,9 @@ struct RecordingDetailView: View {
             }
             populateWPMTimeSeriesIfNeeded()
 
+            // Show first-recording settings popup if this is the user's very first recording
+            await checkFirstRecordingSetup()
+
             // Post-analysis: enhance coherence in background — don't block the detail view
             Task {
                 await enhanceCoherenceIfNeeded()
@@ -205,6 +211,11 @@ struct RecordingDetailView: View {
             NavigationStack {
                 ScoreWeightsView(viewModel: settingsViewModel)
             }
+        }
+        .sheet(isPresented: $showingFirstRecordingSetup) {
+            FirstRecordingSetupSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .onChange(of: showingShareSheet) { _, show in
             if show, case .ready(let recording) = detailScreenState {
@@ -699,14 +710,13 @@ struct RecordingDetailView: View {
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    PlaybackHighlightedTranscript(
+                    TranscriptContentView(
                         words: words,
                         turns: turns,
                         showFillerHighlights: showFillerHighlights,
                         showVocabHighlights: showVocabHighlights,
                         showSpeakerTurns: showSpeakerTurns,
-                        hasSpeakerSeparation: hasSpeakerSeparation,
-                        playbackViewModel: playbackViewModel
+                        hasSpeakerSeparation: hasSpeakerSeparation
                     )
 
                     if let analysis = recording?.analysis, !analysis.vocabWordsUsed.isEmpty {
@@ -1342,7 +1352,6 @@ struct RecordingDetailView: View {
     }
 
     private func configurePlaybackState(for recording: Recording) {
-        playbackViewModel.configureTranscript(words: recording.transcriptionWords ?? [])
         playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
     }
 
@@ -1534,6 +1543,18 @@ struct RecordingDetailView: View {
 
     private func hasPlayableMedia(_ recording: Recording) -> Bool {
         (recording.resolvedAudioURL ?? recording.resolvedVideoURL) != nil
+    }
+
+    private func checkFirstRecordingSetup() async {
+        guard userSettings.first?.hasShownFirstRecordingSetup != true else { return }
+        let descriptor = FetchDescriptor<Recording>()
+        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+        guard count == 1, case .ready = detailScreenState else { return }
+        showingFirstRecordingSetup = true
+        if let settings = userSettings.first {
+            settings.hasShownFirstRecordingSetup = true
+            try? modelContext.save()
+        }
     }
 }
 
@@ -1780,113 +1801,32 @@ private struct PlaybackDrawerContainer: View {
     }
 }
 
-// MARK: - Playback Highlighted Transcript
+// MARK: - Transcript Content (filler/vocab highlights only — no playback tracking)
 
-private struct PlaybackHighlightedTranscript: View {
+private struct TranscriptContentView: View {
     let words: [TranscriptionWord]
     let turns: [SpeakerTurn]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
     let showSpeakerTurns: Bool
     let hasSpeakerSeparation: Bool
-    let playbackViewModel: RecordingDetailPlaybackViewModel
-
-    @State private var activeWordID: UUID?
-
-    private let orderedIDs: [UUID]
-    private let orderedRanges: [ClosedRange<TimeInterval>]
-
-    init(
-        words: [TranscriptionWord],
-        turns: [SpeakerTurn],
-        showFillerHighlights: Bool,
-        showVocabHighlights: Bool,
-        showSpeakerTurns: Bool,
-        hasSpeakerSeparation: Bool,
-        playbackViewModel: RecordingDetailPlaybackViewModel
-    ) {
-        self.words = words
-        self.turns = turns
-        self.showFillerHighlights = showFillerHighlights
-        self.showVocabHighlights = showVocabHighlights
-        self.showSpeakerTurns = showSpeakerTurns
-        self.hasSpeakerSeparation = hasSpeakerSeparation
-        self.playbackViewModel = playbackViewModel
-
-        let ordered = words
-            .filter { $0.end > $0.start }
-            .sorted { $0.start < $1.start }
-        self.orderedIDs = ordered.map(\.id)
-        self.orderedRanges = ordered.map { $0.start...$0.end }
-    }
 
     var body: some View {
-        Group {
-            if showSpeakerTurns && hasSpeakerSeparation {
-                SpeakerTurnTranscriptView(
-                    turns: turns,
-                    showFillerHighlights: showFillerHighlights,
-                    showVocabHighlights: showVocabHighlights,
-                    activePlaybackWordID: activeWordID
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else {
-                HighlightedTranscriptView(
-                    words: words,
-                    showFillerHighlights: showFillerHighlights,
-                    showVocabHighlights: showVocabHighlights,
-                    activePlaybackWordID: activeWordID
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
+        if showSpeakerTurns && hasSpeakerSeparation {
+            SpeakerTurnTranscriptView(
+                turns: turns,
+                showFillerHighlights: showFillerHighlights,
+                showVocabHighlights: showVocabHighlights
+            )
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        } else {
+            HighlightedTranscriptView(
+                words: words,
+                showFillerHighlights: showFillerHighlights,
+                showVocabHighlights: showVocabHighlights
+            )
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .onAppear { updateActiveWord() }
-        .onChange(of: playbackViewModel.currentTime) { _, _ in
-            updateActiveWord()
-        }
-        .onChange(of: playbackViewModel.isPlaying) { _, playing in
-            if !playing {
-                if activeWordID != nil { activeWordID = nil }
-            } else {
-                updateActiveWord()
-            }
-        }
-    }
-
-    private func updateActiveWord() {
-        guard playbackViewModel.isPlaying,
-              !orderedRanges.isEmpty,
-              playbackViewModel.playbackDuration > 0 else {
-            if activeWordID != nil { activeWordID = nil }
-            return
-        }
-        let currentTime = max(0, playbackViewModel.syncedTranscriptTime)
-        let newID = wordIndex(for: currentTime).map { orderedIDs[$0] }
-        if activeWordID != newID { activeWordID = newID }
-    }
-
-    private func wordIndex(for time: TimeInterval) -> Int? {
-        guard !orderedRanges.isEmpty else { return nil }
-        let toleranceBefore: TimeInterval = 0.08
-        let toleranceAfter: TimeInterval = 0.14
-
-        var low = 0
-        var high = orderedRanges.count - 1
-
-        while low <= high {
-            let mid = (low + high) / 2
-            let range = orderedRanges[mid]
-
-            if time < range.lowerBound - toleranceBefore {
-                high = mid - 1
-            } else if time > range.upperBound + toleranceAfter {
-                low = mid + 1
-            } else {
-                return mid
-            }
-        }
-
-        return nil
     }
 }
 
@@ -1937,7 +1877,6 @@ struct HighlightedTranscriptView: View {
     let words: [TranscriptionWord]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
-    let activePlaybackWordID: UUID?
 
     var body: some View {
         FlowLayout(spacing: 4) {
@@ -1945,8 +1884,7 @@ struct HighlightedTranscriptView: View {
                 WordView(
                     word: word,
                     showFillerHighlight: showFillerHighlights && word.isFiller,
-                    showVocabHighlight: showVocabHighlights && word.isVocabWord,
-                    isActivePlaybackWord: activePlaybackWordID == word.id
+                    showVocabHighlight: showVocabHighlights && word.isVocabWord
                 )
             }
         }
@@ -1963,7 +1901,6 @@ private struct SpeakerTurnTranscriptView: View {
     let turns: [SpeakerTurn]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
-    let activePlaybackWordID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1982,8 +1919,7 @@ private struct SpeakerTurnTranscriptView: View {
                     HighlightedTranscriptView(
                         words: turn.words,
                         showFillerHighlights: showFillerHighlights,
-                        showVocabHighlights: showVocabHighlights,
-                        activePlaybackWordID: activePlaybackWordID
+                        showVocabHighlights: showVocabHighlights
                     )
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -2001,21 +1937,20 @@ struct WordView: View {
     let word: TranscriptionWord
     let showFillerHighlight: Bool
     let showVocabHighlight: Bool
-    let isActivePlaybackWord: Bool
 
-    private var isHighlighted: Bool { isActivePlaybackWord || showFillerHighlight || showVocabHighlight }
+    private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
     private var highlightColor: Color { showFillerHighlight ? .orange : .green }
 
     var body: some View {
         Text(word.word)
             .font(.body)
-            .foregroundStyle(isActivePlaybackWord ? .teal : (isHighlighted ? highlightColor : .primary))
+            .foregroundStyle(isHighlighted ? highlightColor : .primary)
             .padding(.horizontal, isHighlighted ? 4 : 0)
             .padding(.vertical, isHighlighted ? 2 : 0)
             .background {
                 if isHighlighted {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill((isActivePlaybackWord ? Color.teal : highlightColor).opacity(0.2))
+                        .fill(highlightColor.opacity(0.2))
                 }
             }
     }

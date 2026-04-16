@@ -28,7 +28,7 @@ struct AnalyzingView: View {
     private static let autoSubmitDelay: Duration = .milliseconds(350)
 
     private var shouldShowFeedback: Bool {
-        feedbackEnabled && !feedbackQuestions.isEmpty && existingFeedback == nil && !feedbackSubmitted
+        feedbackEnabled && analysisReady && !feedbackQuestions.isEmpty && existingFeedback == nil && !feedbackSubmitted
     }
 
     private var allQuestionsAnswered: Bool {

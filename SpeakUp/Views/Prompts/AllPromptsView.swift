@@ -581,6 +581,7 @@ struct AllPromptsView: View {
         case .interviewPrep: return "Interview"
         case .storytelling: return "Storytelling"
         case .elevatorPitch: return "Pitch"
+        case .conversationStarters: return "Conversation"
         }
     }
 }

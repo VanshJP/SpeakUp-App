@@ -2527,6 +2527,130 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
         // ============================================
+        // Conversation Starters
+        // ============================================
+        PromptData(
+            id: "convo-1",
+            text: "You are at a networking event and notice someone standing alone. Walk up and start a natural conversation.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-2",
+            text: "You just sat down next to someone on a long flight. Break the ice and keep the conversation going.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-3",
+            text: "You are at a friend's party where you do not know anyone else. Introduce yourself to a small group.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+        PromptData(
+            id: "convo-4",
+            text: "Practice asking follow-up questions: someone just told you they recently changed careers. Keep the conversation flowing.",
+            category: "Conversation Starters",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "convo-5",
+            text: "You bump into your neighbor in the elevator. Turn a brief greeting into a genuine two-minute chat.",
+            category: "Conversation Starters",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "convo-6",
+            text: "You are at a coffee shop and the person next to you is reading a book you love. Start a conversation about it.",
+            category: "Conversation Starters",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "convo-7",
+            text: "You are the new person at a team lunch. Introduce yourself and find common ground with your colleagues.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-8",
+            text: "You meet someone at a conference who works in a completely different industry. Find an interesting topic you can both discuss.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-9",
+            text: "Practice gracefully exiting a conversation that has run its course without being rude.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+        PromptData(
+            id: "convo-10",
+            text: "You are waiting in line and strike up a conversation with the person behind you. Keep it light and engaging.",
+            category: "Conversation Starters",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "convo-11",
+            text: "You are at a dinner party seated next to someone quiet. Draw them out with thoughtful questions.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+        PromptData(
+            id: "convo-12",
+            text: "Practice introducing two people who do not know each other and facilitating a three-way conversation.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+        PromptData(
+            id: "convo-13",
+            text: "You run into an old acquaintance you have not seen in years. Reconnect naturally without it feeling forced.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-14",
+            text: "You are at a gym class and want to talk to someone who seems friendly. Start a conversation between sets.",
+            category: "Conversation Starters",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "convo-15",
+            text: "Practice keeping a conversation going when there is an awkward silence. Use open-ended questions and observations.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-16",
+            text: "You are at a wedding reception and do not know many people. Approach a table and join the conversation.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+        PromptData(
+            id: "convo-17",
+            text: "Practice giving a genuine compliment to a stranger and turning it into a brief, pleasant exchange.",
+            category: "Conversation Starters",
+            difficulty: .easy
+        ),
+        PromptData(
+            id: "convo-18",
+            text: "You meet your partner's friends for the first time. Make a great first impression through natural conversation.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+        PromptData(
+            id: "convo-19",
+            text: "You are at a volunteer event. Start conversations while working alongside new people.",
+            category: "Conversation Starters",
+            difficulty: .medium
+        ),
+        PromptData(
+            id: "convo-20",
+            text: "Practice redirecting a conversation away from a topic you are not comfortable with, smoothly and politely.",
+            category: "Conversation Starters",
+            difficulty: .hard
+        ),
+
+        // ============================================
         // Describe & Explain (Step-by-step / Descriptive)
         // ============================================
         PromptData(

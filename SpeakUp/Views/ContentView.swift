@@ -98,19 +98,24 @@ struct ContentView: View {
                     }
                 )
             }
-        case .prompts:
+        case .practice:
             NavigationStack {
-                AllPromptsView(onSelectPrompt: { prompt in
-                    recordingPrompt = prompt
-                    recordingDuration = .sixty
-                    showingCountdown = true
-                })
-            }
-        case .stories:
-            NavigationStack {
-                StoriesListView(
-                    viewModel: storiesViewModel,
-                    onStartPractice: { story in
+                PracticeHubView(
+                    onSelectPrompt: { prompt in
+                        recordingPrompt = prompt
+                        recordingDuration = .sixty
+                        showingCountdown = true
+                    },
+                    onSelectRecording: { recordingId in
+                        selectedRecordingId = recordingId
+                    },
+                    onShowBeforeAfter: {
+                        showingBeforeAfter = true
+                    },
+                    onShowJournalExport: {
+                        showingJournalExport = true
+                    },
+                    onStartStoryPractice: { story in
                         recordingPrompt = nil
                         recordingStoryId = story.id
                         recordingDuration = .sixty
@@ -121,21 +126,8 @@ struct ContentView: View {
                     },
                     onSendToDrill: { story in
                         drillStory = story
-                    }
-                )
-            }
-        case .history:
-            NavigationStack {
-                HistoryView(
-                    onSelectRecording: { recordingId in
-                        selectedRecordingId = recordingId
                     },
-                    onShowBeforeAfter: {
-                        showingBeforeAfter = true
-                    },
-                    onShowJournalExport: {
-                        showingJournalExport = true
-                    }
+                    storiesViewModel: storiesViewModel
                 )
                 .navigationDestination(item: $selectedRecordingId) { recordingId in
                     RecordingDetailView(recordingId: recordingId)
@@ -202,7 +194,7 @@ struct ContentView: View {
                 storyId: recordingStoryId,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
-                    selectedTab = .history
+                    selectedTab = .practice
                     showingRecording = false
                     Task {
                         await achievementService.checkAchievements(context: modelContext)
@@ -362,7 +354,7 @@ struct ContentView: View {
             }
 
         case "story":
-            selectedTab = .stories
+            selectedTab = .practice
             if url.pathComponents.contains("new") {
                 showingStoryEditor = true
             }
@@ -377,9 +369,7 @@ struct ContentView: View {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case today
-    case prompts
-    case stories
-    case history
+    case practice
     case learn
     case settings
 
@@ -388,9 +378,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .today: return "Today"
-        case .prompts: return "Prompts"
-        case .stories: return "Journal"
-        case .history: return "History"
+        case .practice: return "Practice"
         case .learn: return "Learn"
         case .settings: return "Settings"
         }
@@ -399,9 +387,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .today: return "mic.badge.plus"
-        case .prompts: return "text.bubble"
-        case .stories: return "text.book.closed"
-        case .history: return "clock"
+        case .practice: return "rectangle.stack"
         case .learn: return "book"
         case .settings: return "gearshape"
         }
