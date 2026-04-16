@@ -39,11 +39,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BBF472AFAE8F4A9E878A0636 /* SharedVersion.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = SharedVersion.xcconfig; sourceTree = "<group>"; };
 		BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpeakUpWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB20805D2F61F09800D509F0 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		BB20805F2F61F09800D509F0 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpeakUp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/SharedVersion.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -118,7 +118,7 @@
 			children = (
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
 				BB2080612F61F09800D509F0 /* SpeakUpWidget */,
-				BBF472AFAE8F4A9E878A0636 /* SharedVersion.xcconfig */,
+				BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */,
 				BB49FAB32F5F5CD300D298F1 /* Frameworks */,
 				BBCE3AE02F285A2B005C1EB3 /* Products */,
 			);
@@ -271,7 +271,7 @@
 /* Begin XCBuildConfiguration section */
 		BB2080712F61F09900D509F0 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* SharedVersion.xcconfig */;
+			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
@@ -306,7 +306,7 @@
 		};
 		BB2080722F61F09900D509F0 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* SharedVersion.xcconfig */;
+			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
@@ -342,7 +342,7 @@
 		};
 		BBCE3AE82F285A2C005C1EB3 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* SharedVersion.xcconfig */;
+			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -407,7 +407,7 @@
 		};
 		BBCE3AE92F285A2C005C1EB3 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* SharedVersion.xcconfig */;
+			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;

@@ -355,7 +355,12 @@ class SpeechService {
 
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
         let scoringDuration = effectiveSpeechDuration(words: scoringWords, fallback: actualDuration)
-        let wordsPerMinute = scoringDuration > 0 ? Double(totalWords) / (scoringDuration / 60) : 0
+        // WPM is the gross speech rate the user sees: total words over the full recording
+        // duration. Using scoringDuration here (active speech window) inflated the number
+        // whenever there was pre/post-speech dead time — e.g. 135 words in a 50s clip where
+        // the user started speaking 9s in would report ~254 WPM instead of the correct 162.
+        let wpmDuration = max(actualDuration, 1.0)
+        let wordsPerMinute = Double(totalWords) / (wpmDuration / 60)
 
         let pauses = pauseMetadata.map { $0.duration }
         // Use median to resist outlier skew from long recording gaps
@@ -499,7 +504,7 @@ class SpeechService {
         let clarity = Double(subscores.clarity)
 
         // Compute WPM time series
-        let wpmTimeSeries = computeWPMTimeSeries(words: scoringWords, actualDuration: scoringDuration)
+        let wpmTimeSeries = computeWPMTimeSeries(words: scoringWords, actualDuration: wpmDuration)
 
         return SpeechAnalysis(
             fillerWords: fillerWords,

@@ -383,44 +383,96 @@ struct TodayView: View {
             toolbarStripButton(icon: "wind", label: "Warm Up", color: .blue) {
                 onShowWarmUps()
             }
+            toolbarStripDivider
             toolbarStripButton(icon: "bolt.fill", label: "Drills", color: .orange) {
                 onShowDrills()
             }
+            toolbarStripDivider
             toolbarStripButton(icon: "heart.fill", label: "Calm", color: .pink) {
                 onShowConfidence()
             }
-            toolbarStripButton(icon: "circle.grid.3x3.fill", label: "Wheel", color: .purple) {
+            toolbarStripDivider
+            toolbarStripButton(icon: "shuffle", label: "Wheel", color: .purple) {
                 onShowWheel()
             }
+            toolbarStripDivider
             toolbarStripButton(icon: "character.book.closed", label: "Vocab", color: .green) {
                 onShowWordBank()
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
         .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(.white.opacity(0.08), lineWidth: 0.5)
-                }
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(.ultraThinMaterial)
+
+                // Blended color wash across the full tray
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .blue.opacity(0.08), location: 0.0),
+                                .init(color: .orange.opacity(0.06), location: 0.25),
+                                .init(color: .pink.opacity(0.06), location: 0.5),
+                                .init(color: .purple.opacity(0.06), location: 0.75),
+                                .init(color: .green.opacity(0.08), location: 1.0),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
+                // Top edge highlight
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.15), .white.opacity(0.04), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+            .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
         }
     }
 
+    private var toolbarStripDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.08))
+            .frame(width: 0.5, height: 28)
+    }
+
     private func toolbarStripButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
+        Button {
+            Haptics.light()
+            action()
+        } label: {
+            VStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(color)
+                    .frame(height: 22)
+
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.65))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ToolbarStripButtonStyle())
+    }
+
+    private struct ToolbarStripButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.90 : 1.0)
+                .brightness(configuration.isPressed ? 0.08 : 0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.65), value: configuration.isPressed)
+        }
     }
 
     // MARK: - Practice Tools 2x2 Grid
@@ -1071,7 +1123,7 @@ struct ProgressSnapshotCard: View {
 private struct SnapshotStat: View {
     let label: String
     let value: String
-    let color: Color
+     let color: Color
 
     var body: some View {
         VStack(spacing: 3) {

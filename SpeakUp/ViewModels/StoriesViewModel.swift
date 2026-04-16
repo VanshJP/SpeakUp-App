@@ -47,9 +47,9 @@ class StoriesViewModel {
 
     private var modelContext: ModelContext?
     private var hasConfigured = false
-    private var searchDebounceTask: Task<Void, Never>?
-    private var remoteChangeObservationTask: Task<Void, Never>?
-    private var remoteChangeRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteChangeObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteChangeRefreshTask: Task<Void, Never>?
 
     func configure(with context: ModelContext) {
         if !hasConfigured {
@@ -60,12 +60,6 @@ class StoriesViewModel {
         Task {
             loadStories()
         }
-    }
-
-    deinit {
-        searchDebounceTask?.cancel()
-        remoteChangeObservationTask?.cancel()
-        remoteChangeRefreshTask?.cancel()
     }
 
     // MARK: - Load
@@ -96,8 +90,8 @@ class StoriesViewModel {
         remoteChangeObservationTask?.cancel()
         remoteChangeObservationTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
-                guard !Task.isCancelled else { break }
-                self?.scheduleRemoteRefresh()
+                guard !Task.isCancelled, let self else { break }
+                self.scheduleRemoteRefresh()
             }
         }
     }

@@ -16,6 +16,7 @@ class AudioService: NSObject {
     var isPlaying = false
     var playbackProgress: Double = 0
     var playbackDuration: TimeInterval = 0
+    var currentPlaybackTime: TimeInterval = 0
 
     // Permission
     var hasPermission = false
@@ -189,9 +190,10 @@ class AudioService: NSObject {
             
             // Start progress timer
             await MainActor.run {
-                playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
                     guard let self, let player = self.audioPlayer else { return }
                     self.playbackProgress = player.currentTime / player.duration
+                    self.currentPlaybackTime = player.currentTime
                 }
             }
         } catch {
@@ -212,9 +214,10 @@ class AudioService: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.playbackTimer?.invalidate()
-            self.playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self.playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
                 guard let self, let player = self.audioPlayer else { return }
                 self.playbackProgress = player.currentTime / player.duration
+                self.currentPlaybackTime = player.currentTime
             }
         }
     }
@@ -222,17 +225,19 @@ class AudioService: NSObject {
     func stop() {
         playbackTimer?.invalidate()
         playbackTimer = nil
-        
+
         audioPlayer?.stop()
         audioPlayer = nil
         isPlaying = false
         playbackProgress = 0
+        currentPlaybackTime = 0
     }
     
     func seek(to progress: Double) {
         guard let player = audioPlayer else { return }
         player.currentTime = progress * player.duration
         playbackProgress = progress
+        currentPlaybackTime = player.currentTime
     }
     
     // MARK: - File Management
@@ -285,6 +290,7 @@ extension AudioService: AVAudioPlayerDelegate {
         Task { @MainActor in
             isPlaying = false
             playbackProgress = 0
+            currentPlaybackTime = 0
             playbackTimer?.invalidate()
             playbackTimer = nil
         }
