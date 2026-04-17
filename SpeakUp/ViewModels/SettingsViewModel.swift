@@ -622,7 +622,7 @@ class SettingsViewModel {
         settings.trackFillerWords = true
         settings.targetWPM = 150
         settings.showDailyPrompt = true
-        settings.hideAnsweredPrompts = false
+        settings.hideAnsweredPrompts = true
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15
         settings.countdownStyle = 0

@@ -200,8 +200,9 @@ class WhisperService {
         // Sort by start time to ensure chronological order across segments
         rawTimings.sort { $0.start < $1.start }
 
-        // Stabilize timings for downstream playback word-highlighting.
-        // Whisper partial segments can occasionally emit tiny overlaps or zero-length words.
+        // Normalize timings: Whisper partial segments can occasionally emit tiny overlaps
+        // or zero-length words. Clamp each word so starts never regress and every word
+        // has a non-zero duration.
         var normalizedTimings: [RawWordTiming] = []
         normalizedTimings.reserveCapacity(rawTimings.count)
         var lastEnd: TimeInterval = 0

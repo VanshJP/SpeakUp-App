@@ -60,6 +60,7 @@ enum PromptCategory: String, CaseIterable {
     case interviewPrep = "Interview Prep"
     case storytelling = "Storytelling"
     case elevatorPitch = "Elevator Pitch"
+    case conversationStarters = "Conversation Starters"
 
     var displayName: String { rawValue }
 
@@ -75,6 +76,7 @@ enum PromptCategory: String, CaseIterable {
         case .interviewPrep: return "person.crop.rectangle.fill"
         case .storytelling: return "book.fill"
         case .elevatorPitch: return "arrow.up.right.circle.fill"
+        case .conversationStarters: return "person.2.wave.2.fill"
         }
     }
 
@@ -90,6 +92,7 @@ enum PromptCategory: String, CaseIterable {
         case .interviewPrep: return .indigo
         case .storytelling: return .brown
         case .elevatorPitch: return .mint
+        case .conversationStarters: return .pink
         }
     }
 }

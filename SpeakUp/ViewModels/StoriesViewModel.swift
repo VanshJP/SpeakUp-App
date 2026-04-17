@@ -47,9 +47,9 @@ class StoriesViewModel {
 
     private var modelContext: ModelContext?
     private var hasConfigured = false
-    nonisolated(unsafe) private var searchDebounceTask: Task<Void, Never>?
-    nonisolated(unsafe) private var remoteChangeObservationTask: Task<Void, Never>?
-    nonisolated(unsafe) private var remoteChangeRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteChangeObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteChangeRefreshTask: Task<Void, Never>?
 
     func configure(with context: ModelContext) {
         if !hasConfigured {
@@ -58,19 +58,13 @@ class StoriesViewModel {
             startRemoteChangeObservation()
         }
         Task {
-            await loadStories()
+            loadStories()
         }
-    }
-
-    deinit {
-        searchDebounceTask?.cancel()
-        remoteChangeObservationTask?.cancel()
-        remoteChangeRefreshTask?.cancel()
     }
 
     // MARK: - Load
 
-    func loadStories() async {
+    func loadStories() {
         guard let context = modelContext else { return }
         isLoading = true
         defer { isLoading = false }
@@ -96,8 +90,8 @@ class StoriesViewModel {
         remoteChangeObservationTask?.cancel()
         remoteChangeObservationTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
-                guard !Task.isCancelled else { break }
-                await self?.scheduleRemoteRefresh()
+                guard !Task.isCancelled, let self else { break }
+                self.scheduleRemoteRefresh()
             }
         }
     }
@@ -109,7 +103,7 @@ class StoriesViewModel {
         remoteChangeRefreshTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
-            await self?.loadStories()
+            self?.loadStories()
         }
     }
 

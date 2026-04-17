@@ -34,7 +34,27 @@ class AchievementService {
     }
 
     private func evaluateAll(achievements: [Achievement], recordings: [Recording], context: ModelContext, listenBackCount: Int = 0) {
-        let lookup = Dictionary(uniqueKeysWithValues: achievements.map { ($0.id, $0) })
+        // CloudKit sync can produce duplicate Achievement rows with the same id.
+        // Build the lookup tolerating duplicates, and delete extras so we converge
+        // on a single row per id over time.
+        var lookup: [String: Achievement] = [:]
+        var duplicates: [Achievement] = []
+        for achievement in achievements {
+            if let existing = lookup[achievement.id] {
+                // Prefer the unlocked row so we don't lose progress.
+                if achievement.isUnlocked && !existing.isUnlocked {
+                    duplicates.append(existing)
+                    lookup[achievement.id] = achievement
+                } else {
+                    duplicates.append(achievement)
+                }
+            } else {
+                lookup[achievement.id] = achievement
+            }
+        }
+        for dup in duplicates {
+            context.delete(dup)
+        }
         let totalRecordings = recordings.count
         let recordingDates = recordings.map { $0.date }
         let streak = Date.calculateStreak(from: recordingDates)

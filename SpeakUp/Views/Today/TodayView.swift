@@ -9,10 +9,11 @@ struct TodayView: View {
     @State private var curriculumViewModel = CurriculumViewModel()
 
     @Query private var achievements: [Achievement]
+    @Query private var userSettings: [UserSettings]
+    @State private var showingFirstRecordingSetup = false
 
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowWheel: () -> Void
-    var onShowGoals: () -> Void
     var onShowWarmUps: () -> Void
     var onShowDrills: () -> Void
     var onShowConfidence: () -> Void
@@ -29,22 +30,17 @@ struct TodayView: View {
             ScrollView {
                 VStack(spacing: 20) {
 
-                    // Header Stats (Ring visualization)
+                    // 1. Header Stats (Ring visualization)
                     headerSection
 
-                    // Progress Snapshot (sparkline + standout stat)
-                    progressSnapshotSection
-
-                    // Interactive Prompt Card (tap to start)
+                    // 2. Interactive Prompt Card + Start Buttons
                     interactivePromptSection
-
-                    // Prominent Start Button
                     startButtonSection
 
-                    // Quick-access toolbar strip
+                    // 3. Quick Actions Strip
                     toolbarStrip
 
-                    // Continue Learning (Curriculum)
+                    // 4. Continue Learning (Curriculum)
                     if curriculumViewModel.currentLesson != nil {
                         CurriculumProgressCard(
                             viewModel: curriculumViewModel,
@@ -52,39 +48,21 @@ struct TodayView: View {
                         )
                     }
 
-                    // Achievements Banner
-                    achievementsBanner
+                    // 5. Your Progress (merged snapshot + insights + weekly)
+                    progressSummaryCard
 
-                    // Practice Tools 2x2 Grid
-                    practiceToolsGrid
+                    // 6. Streak & Achievements (compact row)
+                    streakAndAchievementsStrip
 
-                    // Suggested For You (weak areas)
+                    // 7. Suggested For You (weak areas)
                     suggestedSection
 
-                    // Daily Challenge
+                    // 8. Daily Challenge
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
                     }
 
-                    // Streak Celebration (if active)
-                    if viewModel.userStats.currentStreak >= 2 {
-                        streakCelebrationBanner
-                    }
-
-                    // Quick Insights Row
-                    quickInsightsSection
-
-                    // Weekly Progress Card
-                    if let weeklyData = viewModel.weeklyProgress {
-                        WeeklyProgressCard(data: weeklyData)
-                    }
-
-                    // Active Goals Preview
-                    if !viewModel.activeGoals.isEmpty {
-                        goalsPreviewSection
-                    }
-
-                    // Daily Tip
+                    // 9. Daily Tip
                     dailyTipSection
                 }
                 .padding()
@@ -105,6 +83,28 @@ struct TodayView: View {
                 weakAreaService.analyze(subscores: viewModel.recentSubscores)
             }
         }
+        .task {
+            await checkFirstRecordingSetup()
+        }
+        .sheet(isPresented: $showingFirstRecordingSetup) {
+            FirstRecordingSetupSheet()
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - First Recording Setup
+
+    private func checkFirstRecordingSetup() async {
+        guard userSettings.first?.hasShownFirstRecordingSetup != true else { return }
+        let descriptor = FetchDescriptor<Recording>()
+        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+        guard count >= 1 else { return }
+        showingFirstRecordingSetup = true
+        if let settings = userSettings.first {
+            settings.hasShownFirstRecordingSetup = true
+            try? modelContext.save()
+        }
     }
 
     // MARK: - Header Section
@@ -119,112 +119,12 @@ struct TodayView: View {
         )
     }
 
-    // MARK: - Progress Snapshot Section
-
-    @ViewBuilder
-    private var progressSnapshotSection: some View {
-        let recentScores = viewModel.sparklineScores
-
-        if recentScores.count >= 3 {
-            let bestScore = recentScores.map(\.score).max() ?? 0
-            let latestScore = recentScores.last?.score ?? 0
-            let firstScore = recentScores.first?.score ?? 0
-            let trendDelta = latestScore - firstScore
-
-            ProgressSnapshotCard(
-                scores: recentScores,
-                bestScore: bestScore,
-                latestScore: latestScore,
-                trendDelta: trendDelta
-            )
-        }
-    }
-
-    // MARK: - Streak Celebration Banner
-
-    private var streakCelebrationBanner: some View {
-        FeaturedGlassCard(
-            gradientColors: [.orange.opacity(0.15), .yellow.opacity(0.08)]
-        ) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.yellow, .orange, .red],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-                .frame(width: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(viewModel.userStats.currentStreak)-Day Streak!")
-                        .font(.headline.weight(.bold))
-
-                    Text(streakMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Text("\(viewModel.userStats.currentStreak)")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(.orange)
-                    .frame(width: 44, height: 44)
-                    .background {
-                        Circle()
-                            .fill(.orange.opacity(0.15))
-                            .overlay {
-                                Circle()
-                                    .stroke(.orange.opacity(0.3), lineWidth: 1.5)
-                            }
-                    }
-            }
-        }
-    }
-
     private var streakMessage: String {
         let streak = viewModel.userStats.currentStreak
-        if streak >= 30 { return "Incredible dedication! You're a master." }
-        if streak >= 14 { return "Two weeks strong! Consistency is key." }
-        if streak >= 7 { return "A full week! Your habits are forming." }
-        return "Nice momentum! Keep showing up."
-    }
-
-    // MARK: - Achievements Banner
-
-    private var achievementsBanner: some View {
-        let unlocked = achievements.filter(\.isUnlocked).count
-        let total = achievements.count
-
-        return Button { onShowAchievements() } label: {
-            GlassCard(tint: .yellow.opacity(0.06), padding: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: "trophy.fill")
-                        .font(.title3)
-                        .foregroundStyle(.yellow)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Achievements")
-                            .font(.subheadline.weight(.semibold))
-                        Text("\(unlocked) of \(total) unlocked")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
+        if streak >= 30 { return "Incredible dedication!" }
+        if streak >= 14 { return "Two weeks strong!" }
+        if streak >= 7 { return "A full week!" }
+        return "Keep showing up!"
     }
 
     // MARK: - Start Button Section
@@ -376,95 +276,69 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Quick-Access Toolbar Strip
+    // MARK: - Quick Actions Strip
 
     private var toolbarStrip: some View {
-        HStack(spacing: 0) {
-            toolbarStripButton(icon: "wind", label: "Warm Up", color: .blue) {
+        HStack(spacing: 8) {
+            quickActionTile(icon: "wind", label: "Warm Up", color: .blue) {
                 onShowWarmUps()
             }
-            toolbarStripButton(icon: "bolt.fill", label: "Drills", color: .orange) {
+            quickActionTile(icon: "bolt.fill", label: "Drills", color: .orange) {
                 onShowDrills()
             }
-            toolbarStripButton(icon: "heart.fill", label: "Calm", color: .pink) {
+            quickActionTile(icon: "heart.fill", label: "Calm", color: .pink) {
                 onShowConfidence()
             }
-            toolbarStripButton(icon: "circle.grid.3x3.fill", label: "Wheel", color: .purple) {
+            quickActionTile(icon: "shuffle", label: "Wheel", color: .purple) {
                 onShowWheel()
             }
-            toolbarStripButton(icon: "character.book.closed", label: "Vocab", color: .green) {
+            quickActionTile(icon: "character.book.closed", label: "Vocab", color: .green) {
                 onShowWordBank()
             }
         }
-        .padding(.vertical, 4)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(.white.opacity(0.08), lineWidth: 0.5)
-                }
-        }
     }
 
-    private func toolbarStripButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func quickActionTile(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.light()
+            action()
+        } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(color)
+                    .frame(height: 22)
+
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(color.opacity(0.08))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                    }
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(QuickActionTileStyle())
     }
 
-    // MARK: - Practice Tools 2x2 Grid
-
-    private var practiceToolsGrid: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Practice Tools", icon: "square.grid.2x2.fill")
-
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                PracticeToolCard(
-                    icon: "wind",
-                    title: "Warm Up",
-                    subtitle: "Breathing & vocal",
-                    color: .blue
-                ) { onShowWarmUps() }
-
-                PracticeToolCard(
-                    icon: "bolt.fill",
-                    title: "Quick Drills",
-                    subtitle: "Focused skill practice",
-                    color: .orange
-                ) { onShowDrills() }
-
-                PracticeToolCard(
-                    icon: "heart.fill",
-                    title: "Confidence",
-                    subtitle: "Calming & visualization",
-                    color: .pink
-                ) { onShowConfidence() }
-
-                PracticeToolCard(
-                    icon: "target",
-                    title: "Goals",
-                    subtitle: "Track your progress",
-                    color: .purple
-                ) { onShowGoals() }
-
-                PracticeToolCard(
-                    icon: "text.book.closed",
-                    title: "Read Aloud",
-                    subtitle: "Reading clarity",
-                    color: .indigo
-                ) { onShowReadAloud() }
-            }
+    private struct QuickActionTileStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+                .brightness(configuration.isPressed ? 0.1 : 0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
         }
     }
 
@@ -514,65 +388,150 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Quick Insights Section
+    // MARK: - Progress Summary Card (merged snapshot + insights + weekly)
 
-    private var quickInsightsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Quick Insights", systemImage: "lightbulb.fill")
-                .font(.headline)
+    @ViewBuilder
+    private var progressSummaryCard: some View {
+        let recentScores = viewModel.sparklineScores
 
-            HStack(spacing: 12) {
-                QuickInsightCard(
-                    icon: "exclamationmark.bubble.fill",
-                    iconColor: .orange,
-                    title: topFillerDisplay,
-                    subtitle: "Top Filler",
-                    gradientColors: [.orange.opacity(0.1), .clear]
-                )
+        NavigationLink {
+            ProgressChartsView()
+        } label: {
+            GlassCard(tint: .teal.opacity(0.06)) {
+                VStack(spacing: 14) {
+                    HStack {
+                        Label("Your Progress", systemImage: "chart.line.uptrend.xyaxis")
+                            .font(.subheadline.weight(.semibold))
 
-                QuickInsightCard(
-                    icon: "clock.fill",
-                    iconColor: .purple,
-                    title: viewModel.userStats.formattedPracticeTime,
-                    subtitle: "Total Practice",
-                    gradientColors: [.purple.opacity(0.1), .clear]
-                )
+                        Spacer()
+
+                        HStack(spacing: 4) {
+                            Text("Details")
+                                .font(.caption)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.tertiary)
+                    }
+
+                    if recentScores.count >= 3 {
+                        let latestScore = recentScores.last?.score ?? 0
+                        let firstScore = recentScores.first?.score ?? 0
+                        let trendDelta = latestScore - firstScore
+
+                        // Sparkline
+                        Chart {
+                            ForEach(Array(recentScores.enumerated()), id: \.offset) { _, point in
+                                LineMark(
+                                    x: .value("Date", point.date),
+                                    y: .value("Score", point.score)
+                                )
+                                .foregroundStyle(.teal.opacity(0.8))
+                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                                .interpolationMethod(.catmullRom)
+
+                                AreaMark(
+                                    x: .value("Date", point.date),
+                                    y: .value("Score", point.score)
+                                )
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.teal.opacity(0.2), .teal.opacity(0.01)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .interpolationMethod(.catmullRom)
+                            }
+                        }
+                        .chartXAxis(.hidden)
+                        .chartYAxis(.hidden)
+                        .chartYScale(domain: max(0, (recentScores.map(\.score).min() ?? 0) - 10)...min(100, (recentScores.map(\.score).max() ?? 100) + 10))
+                        .frame(height: 48)
+
+                        // Stats row
+                        HStack(spacing: 0) {
+                            progressStatItem(
+                                value: "\(latestScore)",
+                                label: "Latest",
+                                color: AppColors.scoreColor(for: latestScore)
+                            )
+                            progressStatItem(
+                                value: trendDelta >= 0 ? "+\(trendDelta)" : "\(trendDelta)",
+                                label: "Trend",
+                                color: trendDelta > 0 ? .green : trendDelta < 0 ? .red : .secondary
+                            )
+                            progressStatItem(
+                                value: topFillerDisplay,
+                                label: "Top Filler",
+                                color: .orange
+                            )
+                            progressStatItem(
+                                value: viewModel.userStats.formattedPracticeTime,
+                                label: "Practice",
+                                color: .purple
+                            )
+                        }
+                    } else {
+                        Text("Complete 3 sessions to see your progress trend")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+
+                    if let weeklyData = viewModel.weeklyProgress {
+                        Divider().overlay(Color.white.opacity(0.06))
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar")
+                                .font(.caption)
+                                .foregroundStyle(.teal)
+                            Text("This week: \(weeklyData.sessionsThisWeek) sessions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                }
             }
         }
+        .buttonStyle(.plain)
+    }
+
+    private func progressStatItem(value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var topFillerDisplay: String {
         if let topFiller = viewModel.userStats.mostUsedFillers.first {
             return "\"\(topFiller.word)\""
         }
-        return "None yet"
+        return "None"
     }
 
-    // MARK: - Goals Preview Section
+    // MARK: - Streak & Achievements Strip (compact merged row)
 
-    private var goalsPreviewSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Active Goals", systemImage: "target")
-                    .font(.headline)
+    private var streakAndAchievementsStrip: some View {
+        let streak = viewModel.userStats.currentStreak
+        let unlocked = achievements.filter(\.isUnlocked).count
+        let total = achievements.count
 
-                Spacer()
+        return HStack(spacing: 12) {
+            StreakTile(streak: streak, message: streakMessage)
 
-                Button {
-                    onShowGoals()
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("See All")
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.teal)
-                }
-            }
-
-            ForEach(viewModel.activeGoals.prefix(2)) { goal in
-                GoalProgressRow(goal: goal)
+            AchievementsTile(unlocked: unlocked, total: total) {
+                onShowAchievements()
             }
         }
     }
@@ -1071,7 +1030,7 @@ struct ProgressSnapshotCard: View {
 private struct SnapshotStat: View {
     let label: String
     let value: String
-    let color: Color
+     let color: Color
 
     var body: some View {
         VStack(spacing: 3) {
@@ -1086,12 +1045,162 @@ private struct SnapshotStat: View {
     }
 }
 
+// MARK: - Streak Tile
+
+private struct StreakTile: View {
+    let streak: Int
+    let message: String
+
+    @State private var animatePulse = false
+
+    private var isActive: Bool { streak >= 1 }
+
+    var body: some View {
+        GlassCard(tint: isActive ? .orange.opacity(0.08) : .white.opacity(0.02), padding: 14) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: isActive
+                                    ? [Color.orange.opacity(0.45), Color.orange.opacity(0.0)]
+                                    : [Color.white.opacity(0.08), Color.clear],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 28
+                            )
+                        )
+                        .frame(width: 52, height: 52)
+                        .scaleEffect(animatePulse && isActive ? 1.12 : 0.95)
+                        .opacity(animatePulse && isActive ? 0.55 : 1.0)
+
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: isActive
+                                    ? [Color.yellow, Color.orange, Color.red.opacity(0.85)]
+                                    : [Color.white.opacity(0.35), Color.white.opacity(0.2)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: isActive ? .orange.opacity(0.5) : .clear, radius: 6, y: 2)
+                }
+                .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text("\(streak)")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText(value: Double(streak)))
+                        Text(streak == 1 ? "day" : "days")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                    Text(isActive ? message : "Start today")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            guard isActive else { return }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                animatePulse = true
+            }
+        }
+    }
+}
+
+// MARK: - Achievements Tile
+
+private struct AchievementsTile: View {
+    let unlocked: Int
+    let total: Int
+    let action: () -> Void
+
+    private var progress: Double {
+        guard total > 0 else { return 0 }
+        return Double(unlocked) / Double(total)
+    }
+
+    var body: some View {
+        Button {
+            Haptics.light()
+            action()
+        } label: {
+            GlassCard(tint: .yellow.opacity(0.07), padding: 14) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.08), lineWidth: 3)
+                            .frame(width: 44, height: 44)
+
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [Color.yellow, Color.orange, Color.yellow],
+                                    center: .center
+                                ),
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                            )
+                            .frame(width: 44, height: 44)
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeOut(duration: 0.8), value: progress)
+
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.yellow, Color.orange],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .shadow(color: .yellow.opacity(0.4), radius: 4, y: 1)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                            Text("\(unlocked)")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .contentTransition(.numericText(value: Double(unlocked)))
+                            Text("/ \(total)")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        Text("Achievements")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+
 #Preview {
     NavigationStack {
         TodayView(
             onStartRecording: { _, _ in },
             onShowWheel: {},
-            onShowGoals: {},
             onShowWarmUps: {},
             onShowDrills: {},
             onShowConfidence: {},

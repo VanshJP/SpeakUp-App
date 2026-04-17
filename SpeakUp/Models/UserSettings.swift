@@ -49,7 +49,7 @@ final class UserSettings {
     var chirpSoundEnabled: Bool = true
 
     // Prompt Filtering
-    var hideAnsweredPrompts: Bool = false
+    var hideAnsweredPrompts: Bool = true
 
     // Listen Back
     var listenBackCount: Int = 0
@@ -74,6 +74,9 @@ final class UserSettings {
 
     // Dictation
     var autoFormatDictation: Bool = true
+
+    // First Recording Setup
+    var hasShownFirstRecordingSetup: Bool = false
 
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false

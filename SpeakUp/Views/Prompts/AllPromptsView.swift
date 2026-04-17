@@ -79,9 +79,7 @@ struct AllPromptsView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            AppBackground(style: .primary)
-
+        ZStack(alignment: .bottomTrailing) {
             ScrollView {
                 VStack(spacing: 16) {
                     statsCard
@@ -94,10 +92,16 @@ struct AllPromptsView: View {
                     } else {
                         promptSections(groups)
                     }
+
+                    Color.clear.frame(height: 88) // FAB breathing room
                 }
                 .padding()
             }
             .scrollIndicators(.hidden)
+
+            floatingActionButton
+                .padding(.trailing, 20)
+                .padding(.bottom, 24)
         }
         .navigationTitle("Prompts")
         .navigationBarTitleDisplayMode(.large)
@@ -107,12 +111,8 @@ struct AllPromptsView: View {
         }
         .searchable(text: $searchText, prompt: "Search prompts...")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                toolbarFilterMenu
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
-                toolbarAddMenu
+                toolbarFilterMenu
             }
         }
         .sheet(isPresented: $showingAddPrompt) {
@@ -248,22 +248,37 @@ struct AllPromptsView: View {
         }
     }
 
-    private var toolbarAddMenu: some View {
+    // MARK: - Floating Action Button
+
+    private var floatingActionButton: some View {
         Menu {
             Button {
+                Haptics.light()
                 showingAddPrompt = true
             } label: {
                 Label("Add Single Prompt", systemImage: "plus")
             }
 
             Button {
+                Haptics.light()
                 showingBatchAdd = true
             } label: {
                 Label("Add Multiple Prompts", systemImage: "text.badge.plus")
             }
         } label: {
             Image(systemName: "plus")
-                .font(.body.weight(.semibold))
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background {
+                    Circle()
+                        .fill(AppColors.primary)
+                        .shadow(color: AppColors.primary.opacity(0.4), radius: 12, y: 4)
+                }
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
+                }
         }
     }
 
@@ -581,6 +596,7 @@ struct AllPromptsView: View {
         case .interviewPrep: return "Interview"
         case .storytelling: return "Storytelling"
         case .elevatorPitch: return "Pitch"
+        case .conversationStarters: return "Conversation"
         }
     }
 }

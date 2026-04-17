@@ -66,9 +66,6 @@ struct ContentView: View {
                     onShowWheel: {
                         showingPromptWheel = true
                     },
-                    onShowGoals: {
-                        showingGoals = true
-                    },
                     onShowWarmUps: {
                         showingWarmUps = true
                     },
@@ -98,19 +95,15 @@ struct ContentView: View {
                     }
                 )
             }
-        case .prompts:
+        case .library:
             NavigationStack {
-                AllPromptsView(onSelectPrompt: { prompt in
-                    recordingPrompt = prompt
-                    recordingDuration = .sixty
-                    showingCountdown = true
-                })
-            }
-        case .stories:
-            NavigationStack {
-                StoriesListView(
-                    viewModel: storiesViewModel,
-                    onStartPractice: { story in
+                PracticeHubView(
+                    onSelectPrompt: { prompt in
+                        recordingPrompt = prompt
+                        recordingDuration = .sixty
+                        showingCountdown = true
+                    },
+                    onStartStoryPractice: { story in
                         recordingPrompt = nil
                         recordingStoryId = story.id
                         recordingDuration = .sixty
@@ -121,7 +114,8 @@ struct ContentView: View {
                     },
                     onSendToDrill: { story in
                         drillStory = story
-                    }
+                    },
+                    storiesViewModel: storiesViewModel
                 )
             }
         case .history:
@@ -135,6 +129,9 @@ struct ContentView: View {
                     },
                     onShowJournalExport: {
                         showingJournalExport = true
+                    },
+                    onShowGoals: {
+                        showingGoals = true
                     }
                 )
                 .navigationDestination(item: $selectedRecordingId) { recordingId in
@@ -362,7 +359,7 @@ struct ContentView: View {
             }
 
         case "story":
-            selectedTab = .stories
+            selectedTab = .library
             if url.pathComponents.contains("new") {
                 showingStoryEditor = true
             }
@@ -377,8 +374,7 @@ struct ContentView: View {
 
 enum AppTab: String, CaseIterable, Identifiable {
     case today
-    case prompts
-    case stories
+    case library
     case history
     case learn
     case settings
@@ -388,8 +384,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .today: return "Today"
-        case .prompts: return "Prompts"
-        case .stories: return "Journal"
+        case .library: return "Library"
         case .history: return "History"
         case .learn: return "Learn"
         case .settings: return "Settings"
@@ -399,9 +394,8 @@ enum AppTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .today: return "mic.badge.plus"
-        case .prompts: return "text.bubble"
-        case .stories: return "text.book.closed"
-        case .history: return "clock"
+        case .library: return "books.vertical.fill"
+        case .history: return "clock.fill"
         case .learn: return "book"
         case .settings: return "gearshape"
         }

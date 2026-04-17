@@ -4,9 +4,10 @@ import SwiftData
 struct RecordingView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var userSettings: [UserSettings]
+    @Environment(SpeechService.self) private var speechService
+    @Environment(LLMService.self) private var llmService
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
-    @State private var showFrameworkPicker = false
     @State private var showingVocabOverlay = false
     @State private var showSavedToast = false
     @Query private var goals: [UserGoal]
@@ -95,14 +96,7 @@ struct RecordingView: View {
         }
         .onChange(of: viewModel.autoSavedRecording) { _, recording in
             if let recording {
-                Haptics.success()
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    showSavedToast = true
-                }
-                Task {
-                    try? await Task.sleep(for: .seconds(1.0))
-                    onComplete(recording)
-                }
+                handleRecordingCompletion(recording)
             }
         }
         .alert("Permission Required", isPresented: $viewModel.showingPermissionAlert) {
@@ -179,10 +173,12 @@ struct RecordingView: View {
                         Text(goal.title)
                             .font(.caption2.weight(.medium))
                             .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                     .foregroundStyle(.teal)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
+                    .frame(maxWidth: 140)
                     .background {
                         Capsule()
                             .fill(.ultraThinMaterial)
@@ -191,6 +187,7 @@ struct RecordingView: View {
                                     .strokeBorder(.teal.opacity(0.3), lineWidth: 0.5)
                             }
                     }
+                    .layoutPriority(-1)
                 }
 
                 // Vocab overlay button (only if user has vocab words)
@@ -252,10 +249,7 @@ struct RecordingView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial.opacity(0.8))
-        }
+        .glassCard(cornerRadius: 14)
         .padding(.horizontal, 4)
     }
 
@@ -375,12 +369,7 @@ struct RecordingView: View {
                         Task {
                             if viewModel.isRecording {
                                 if let recording = await viewModel.stopRecording() {
-                                    Haptics.success()
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                                        showSavedToast = true
-                                    }
-                                    try? await Task.sleep(for: .seconds(1.0))
-                                    onComplete(recording)
+                                    handleRecordingCompletion(recording)
                                 }
                             } else {
                                 await viewModel.startRecording()
@@ -391,15 +380,18 @@ struct RecordingView: View {
             }
 
             // Hint text
-            if !viewModel.isRecording {
-                Text("Tap to start recording")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.6))
-            } else {
-                Text("Tap to stop")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.6))
-            }
+            Text(viewModel.isRecording ? "Tap to stop" : "Tap to start recording")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                }
+                .id(viewModel.isRecording)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .animation(.easeInOut(duration: 0.2), value: viewModel.isRecording)
         }
         .padding(.bottom, 40)
     }
@@ -431,73 +423,90 @@ struct RecordingView: View {
         }
         .allowsHitTesting(false)
     }
+
+    private func handleRecordingCompletion(_ recording: Recording) {
+        RecordingProcessingCoordinator.shared.enqueue(
+            recordingID: recording.id,
+            modelContext: modelContext,
+            speechService: speechService,
+            llmService: llmService
+        )
+        Haptics.success()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            showSavedToast = true
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.0))
+            onComplete(recording)
+        }
+    }
 }
 
 // MARK: - Circular Waveform View (surrounds record button)
 
+/// Radial waveform drawn in a single Canvas node inside a TimelineView.
+/// One draw per frame, 48 capsule paths, no per-bar view diffing.
+///
+/// - `audioLevel`: incoming dB reading, smoothed to avoid jitter.
+/// - `autoAnimate`: when true, ignores `audioLevel` and renders a synthetic
+///   resting motion. Used by the post-recording skeleton so the visual reads
+///   as "same screen, just processing."
 struct CircularWaveformView: View {
-    let audioLevel: Float
+    var audioLevel: Float = 0
+    var autoAnimate: Bool = false
+
     private let barCount = 48
-    private let baseRadius: CGFloat = 70  // Just outside the record button
-
-    @State private var barHeights: [CGFloat] = Array(repeating: 0.15, count: 48)
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<barCount, id: \.self) { index in
-                WaveformBar(
-                    height: barHeights[index],
-                    index: index,
-                    totalBars: barCount,
-                    baseRadius: baseRadius
-                )
-                .animation(.easeOut(duration: 0.08), value: barHeights[index])
-            }
-        }
-        .frame(width: 200, height: 200)
-        .onChange(of: audioLevel) { _, newLevel in
-            updateBars(level: newLevel)
-        }
-    }
-
-    private func updateBars(level: Float) {
-        // Convert dB level (-60 to 0 range for speech) to normalized value (0 to 1)
-        let normalizedLevel = max(0, min(1, (level + 60) / 60))
-        let time = Date().timeIntervalSince1970
-
-        for i in 0..<barCount {
-            // Create variation across bars for organic look
-            let variation = CGFloat.random(in: 0.7...1.3)
-            let waveOffset = sin(Double(i) * 0.3 + time * 3) * 0.2
-            let height = CGFloat(normalizedLevel) * variation * 0.8 + 0.15 + waveOffset
-            barHeights[i] = min(1.0, max(0.1, height))
-        }
-    }
-}
-
-private struct WaveformBar: View {
-    let height: CGFloat
-    let index: Int
-    let totalBars: Int
-    let baseRadius: CGFloat
-
+    private let baseRadius: CGFloat = 70
     private let maxBarHeight: CGFloat = 35
     private let barWidth: CGFloat = 3
+    private let canvasSize: CGFloat = 200
+
+    @State private var smoothedLevel: CGFloat = 0.15
 
     var body: some View {
-        let angle = (Double(index) / Double(totalBars)) * 360
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+            Canvas { graphics, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let time = context.date.timeIntervalSinceReferenceDate
+                let baseLevel: CGFloat = autoAnimate ? 0.55 : smoothedLevel
+                let gradient = Gradient(colors: [.teal, .cyan])
 
-        Capsule()
-            .fill(
-                LinearGradient(
-                    colors: [Color.teal, Color.cyan],
-                    startPoint: .bottom,
-                    endPoint: .top
-                )
-            )
-            .frame(width: barWidth, height: maxBarHeight * height)
-            .offset(y: -(baseRadius + (maxBarHeight * height) / 2))
-            .rotationEffect(.degrees(angle))
+                for i in 0..<barCount {
+                    let angle = (Double(i) / Double(barCount)) * 2 * .pi
+                    let wave = sin(time * 3.0 + Double(i) * 0.35) * 0.22
+                    let variation = sin(Double(i) * 1.7 + time * 1.1) * 0.12
+                    let h = max(0.12, min(1.0, baseLevel + CGFloat(wave) + CGFloat(variation)))
+                    let barLength = maxBarHeight * h
+
+                    var layer = graphics
+                    layer.translateBy(x: center.x, y: center.y)
+                    layer.rotate(by: .radians(angle))
+
+                    let rect = CGRect(
+                        x: -barWidth / 2,
+                        y: -(baseRadius + barLength),
+                        width: barWidth,
+                        height: barLength
+                    )
+                    let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                    layer.fill(
+                        path,
+                        with: .linearGradient(
+                            gradient,
+                            startPoint: CGPoint(x: 0, y: -baseRadius),
+                            endPoint: CGPoint(x: 0, y: -(baseRadius + maxBarHeight))
+                        )
+                    )
+                }
+            }
+        }
+        .frame(width: canvasSize, height: canvasSize)
+        .allowsHitTesting(false)
+        .onChange(of: audioLevel) { _, newLevel in
+            guard !autoAnimate else { return }
+            let normalized = CGFloat(max(0, min(1, (Double(newLevel) + 60) / 60)))
+            smoothedLevel = smoothedLevel * 0.7 + normalized * 0.3
+        }
     }
 }
 

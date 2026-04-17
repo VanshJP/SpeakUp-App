@@ -1,6 +1,8 @@
 import Foundation
 import AVFoundation
 import Observation
+import QuartzCore
+import UIKit
 
 @Observable
 class AudioService: NSObject {
@@ -16,19 +18,28 @@ class AudioService: NSObject {
     var isPlaying = false
     var playbackProgress: Double = 0
     var playbackDuration: TimeInterval = 0
+    var currentPlaybackTime: TimeInterval = 0
 
     // Permission
     var hasPermission = false
 
     private var recordingTimer: Timer?
-    private var playbackTimer: Timer?
+    private var displayLink: CADisplayLink?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     // Completion handler for recording finish
     private var recordingCompletion: ((Bool) -> Void)?
-    
+
     override init() {
         super.init()
         setupSession()
+        registerLifecycleObservers()
+    }
+
+    deinit {
+        for observer in lifecycleObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     // MARK: - Session Setup
@@ -186,53 +197,100 @@ class AudioService: NSObject {
             audioPlayer?.play()
             
             isPlaying = true
-            
-            // Start progress timer
+
             await MainActor.run {
-                playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                    guard let self, let player = self.audioPlayer else { return }
-                    self.playbackProgress = player.currentTime / player.duration
-                }
+                self.startDisplayLink()
             }
         } catch {
             throw AudioServiceError.playbackFailed(error)
         }
     }
-    
+
     func pause() {
         audioPlayer?.pause()
         isPlaying = false
-        playbackTimer?.invalidate()
+        displayLink?.isPaused = true
     }
-    
+
     func resume() {
-        audioPlayer?.play()
+        guard let player = audioPlayer else { return }
+        player.play()
         isPlaying = true
-        
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.playbackTimer?.invalidate()
-            self.playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self, let player = self.audioPlayer else { return }
-                self.playbackProgress = player.currentTime / player.duration
-            }
+        if displayLink == nil {
+            startDisplayLink()
+        } else {
+            displayLink?.isPaused = false
         }
     }
-    
+
     func stop() {
-        playbackTimer?.invalidate()
-        playbackTimer = nil
-        
+        stopDisplayLink()
+
         audioPlayer?.stop()
         audioPlayer = nil
         isPlaying = false
         playbackProgress = 0
+        currentPlaybackTime = 0
     }
-    
+
     func seek(to progress: Double) {
         guard let player = audioPlayer else { return }
         player.currentTime = progress * player.duration
         playbackProgress = progress
+        currentPlaybackTime = player.currentTime
+    }
+
+    // MARK: - Playback clock
+
+    private func startDisplayLink() {
+        stopDisplayLink()
+        let link = CADisplayLink(target: self, selector: #selector(displayLinkTick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 60, preferred: 30)
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func displayLinkTick(_ link: CADisplayLink) {
+        guard let player = audioPlayer, player.isPlaying else { return }
+        let duration = player.duration
+        let time = player.currentTime
+        currentPlaybackTime = time
+        playbackProgress = duration > 0 ? max(0, min(1, time / duration)) : 0
+    }
+
+    // MARK: - App lifecycle
+
+    private func registerLifecycleObservers() {
+        let center = NotificationCenter.default
+        let resign = center.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.displayLink?.isPaused = true
+        }
+        let active = center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            if let player = self.audioPlayer {
+                self.currentPlaybackTime = player.currentTime
+                if player.duration > 0 {
+                    self.playbackProgress = max(0, min(1, player.currentTime / player.duration))
+                }
+            }
+            if self.isPlaying {
+                self.displayLink?.isPaused = false
+            }
+        }
+        lifecycleObservers = [resign, active]
     }
     
     // MARK: - File Management
@@ -285,8 +343,8 @@ extension AudioService: AVAudioPlayerDelegate {
         Task { @MainActor in
             isPlaying = false
             playbackProgress = 0
-            playbackTimer?.invalidate()
-            playbackTimer = nil
+            currentPlaybackTime = 0
+            stopDisplayLink()
         }
     }
     

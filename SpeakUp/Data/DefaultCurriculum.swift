@@ -811,5 +811,93 @@ struct DefaultCurriculum {
                 ),
             ]
         ),
+
+        // ╔══════════════════════════════════════════════════════════════╗
+        // ║  WEEK 9 — CONVERSATION SKILLS                              ║
+        // ╚══════════════════════════════════════════════════════════════╝
+
+        CurriculumPhase(
+            id: "week9", week: 9,
+            title: "Conversation Skills",
+            description: "Master the art of starting and sustaining conversations with new people.",
+            lessons: [
+
+                // ── W9 L1: The Art of the Opener ──────────────────────
+                CurriculumLesson(
+                    id: "w9_l1",
+                    title: "The Art of the Opener",
+                    objective: "Learn techniques for starting conversations naturally with anyone.",
+                    activities: [
+                        .lesson(
+                            id: "w9_l1_a1",
+                            title: "Breaking the ice",
+                            description: "Great conversations don't start with great lines — they start with genuine curiosity and low-pressure openings.",
+                            content: LessonContent(sections: [
+                                .concepts(title: "Why Small Talk Matters", body: "Small talk is the gateway to every meaningful relationship — professional or personal. Research shows people who are skilled at casual conversation are perceived as more likeable, trustworthy, and competent.\nThe biggest myth about conversation starters is that you need something clever. You don't. You need something genuine.", icon: "person.2.wave.2.fill"),
+                                .concepts(title: "Three Types of Openers", body: "Observational — Comment on something in your shared environment. 'This coffee shop has the best playlist, don't you think?'\nSituational — Reference the event or circumstance. 'How do you know the host?' or 'First time at this meetup?'\nCompliment-based — Offer a genuine, specific compliment. 'That's a great jacket — where did you find it?'\nAll three work because they're low-pressure and easy to respond to.", icon: "text.bubble"),
+                                .tip("The FORD technique: ask about Family, Occupation, Recreation, or Dreams. These four topics work in almost any social setting and naturally lead to deeper conversation."),
+                                .keyTakeaway("The best conversation starter isn't a line — it's a mindset. Approach with curiosity, not performance anxiety. You're not auditioning; you're connecting."),
+                            ])
+                        ),
+                        .practice(id: "w9_l1_a2", title: "Practice three openers", description: "Record yourself delivering three different conversation openers — one observational, one situational, and one compliment-based. Speak naturally, as if someone is standing in front of you.", duration: 60),
+                    ]
+                ),
+
+                // ── W9 L2: Keeping It Going ──────────────────────────
+                CurriculumLesson(
+                    id: "w9_l2",
+                    title: "Keeping It Going",
+                    objective: "Master follow-up questions and active listening to sustain engaging conversations.",
+                    activities: [
+                        .lesson(
+                            id: "w9_l2_a1",
+                            title: "The follow-up question",
+                            description: "Starting a conversation is step one. Keeping it flowing requires curiosity and the art of follow-up.",
+                            content: LessonContent(sections: [
+                                .concepts(title: "The Follow-Up Formula", body: "Great conversationalists share a secret: they ask more than they tell. After someone shares something, dig deeper instead of pivoting to yourself.\nBad follow-up: 'Oh cool, I also like hiking.'\nGood follow-up: 'What's the best trail you've done recently? What made it special?'\nThe key difference is you stay in their world before entering yours.", icon: "arrow.turn.down.right"),
+                                .concepts(title: "Active Listening Signals", body: "Verbal cues — 'That's interesting,' 'Tell me more,' 'What happened next?'\nNon-verbal cues — Nodding, eye contact, leaning in slightly.\nReflection — Paraphrase what they said: 'So you basically rebuilt the whole thing from scratch? That must have been intense.'\nThese signals tell the other person you're genuinely engaged, not just waiting for your turn.", icon: "ear"),
+                                .tip("Practice the 'two questions before one statement' rule. For every opinion or story you share, first ask two genuine questions about what the other person said. This builds rapport faster than anything."),
+                                .keyTakeaway("Conversations die when both people are thinking about what to say next instead of listening to what's being said now. Be present, be curious, and the conversation will flow."),
+                            ])
+                        ),
+                        .practice(id: "w9_l2_a2", title: "Follow-up practice", description: "Imagine someone just told you they recently started learning to cook. Record a 60-second response where you ask follow-up questions and show genuine interest before sharing your own experience.", duration: 60),
+                    ]
+                ),
+
+                // ── W9 L3: Reading the Room ──────────────────────────
+                CurriculumLesson(
+                    id: "w9_l3",
+                    title: "Reading the Room",
+                    objective: "Learn to navigate group conversations, exits, and social cues.",
+                    activities: [
+                        .lesson(
+                            id: "w9_l3_a1",
+                            title: "Social awareness in conversations",
+                            description: "Great conversation skills include knowing when to join, when to step back, and when to gracefully exit.",
+                            content: LessonContent(sections: [
+                                .concepts(title: "Joining a Group Conversation", body: "Approach with open body language and listen for 30 seconds before speaking.\nFind a natural entry point — agree with something said, ask a clarifying question, or add a relevant observation.\nAvoid interrupting or redirecting the topic. Your first contribution should add to the existing flow, not change it.", icon: "person.3.fill"),
+                                .concepts(title: "Graceful Exits", body: "Wrap up with a callback — reference something they said: 'I'm definitely going to check out that restaurant you mentioned.'\nUse social bridges: 'I should go say hi to someone, but it was great talking with you.'\nExchange contact info if appropriate: 'I'd love to continue this conversation — can I get your number?'\nNever just walk away mid-conversation or pull out your phone.", icon: "hand.wave"),
+                                .concepts(title: "Reading Discomfort", body: "Watch for closed body language — crossed arms, short answers, wandering eyes.\nIf someone seems uncomfortable with a topic, pivot: 'Anyway, tell me about…'\nRespect silences — not every pause needs to be filled. A comfortable silence is a sign of good rapport.", icon: "eye"),
+                                .tip("The best conversationalists make others feel interesting, not impressed. Focus on making the other person feel heard and valued, and they'll remember you as someone they want to talk to again."),
+                                .keyTakeaway("Social intelligence is as important as speaking skills. Great conversations are a dance — pay attention to your partner's rhythm and match it."),
+                            ])
+                        ),
+                        .practice(id: "w9_l3_a2", title: "Full conversation scenario", description: "Simulate a networking event conversation: open with a starter, ask follow-up questions, share something about yourself, and practice a graceful exit. Record the full 90-second scenario.", duration: 90),
+                    ]
+                ),
+
+                // ── W9 L4: Conversation Confidence ──────────────────
+                CurriculumLesson(
+                    id: "w9_l4",
+                    title: "Conversation Confidence",
+                    objective: "Build lasting confidence in social situations through repeated practice.",
+                    activities: [
+                        .exercise(id: "w9_l4_a1", title: "Pre-social warm-up", description: "Do a quick breathing exercise followed by vocal warm-up to get in a confident, relaxed state before social interactions.", exerciseId: "calming"),
+                        .practice(id: "w9_l4_a2", title: "Party scenario practice", description: "You're at a friend's party. Record yourself introducing yourself to an imaginary group, asking about how they know the host, sharing a brief story, and keeping the energy warm and approachable.", duration: 120),
+                        .review(id: "w9_l4_a3", title: "Conversation skills review", description: "Listen back to your conversation practices from this week. Notice: Did your openers sound natural? Did your follow-up questions go deeper? Did your exits feel graceful? Identify one specific area to keep working on."),
+                    ]
+                ),
+            ]
+        ),
     ]
 }

@@ -224,28 +224,31 @@ struct VoiceCalibrationView: View {
             }
         }
         .frame(minHeight: phase == .ready ? 0 : 80)
+        .animation(.easeInOut(duration: 0.3), value: phase == .success)
     }
 
     @ViewBuilder
     private var actionButtons: some View {
         switch phase {
         case .ready:
-            GlassButton(title: "Start Reading", icon: "mic.fill", style: .primary, size: .large) {
+            GlassButton(title: "Start Reading", icon: "mic.fill", style: .primary, size: .large, fullWidth: true) {
                 startCalibration()
             }
         case .recording:
-            if wordTracker.progressPercentage >= 0.6 {
-                GlassButton(title: "Finish Early", icon: "checkmark", style: .primary, size: .medium) {
-                    finishCalibration()
+            VStack(spacing: 10) {
+                if wordTracker.progressPercentage >= 0.6 {
+                    GlassButton(title: "Finish Early", icon: "checkmark", style: .primary, size: .medium, fullWidth: true) {
+                        finishCalibration()
+                    }
                 }
-            }
-            GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium) {
-                cancelCalibration()
+                GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium, fullWidth: true) {
+                    cancelCalibration()
+                }
             }
         case .analyzing:
             EmptyView()
         case .success:
-            GlassButton(title: "Done", icon: "checkmark", style: .primary, size: .large) {
+            GlassButton(title: "Done", icon: "checkmark", style: .primary, size: .large, fullWidth: true) {
                 dismiss()
             }
         }

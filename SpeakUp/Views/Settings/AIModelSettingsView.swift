@@ -258,13 +258,13 @@ struct AIModelSettingsView: View {
             }
 
         case .downloaded:
-            HStack(spacing: 12) {
-                GlassButton(title: "Load Model", icon: "play.fill", style: .primary) {
+            HStack(spacing: 10) {
+                GlassButton(title: "Load Model", icon: "play.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     Task { await llmService.loadLocalModel() }
                 }
 
-                GlassButton(title: "Delete", icon: "trash", style: .danger) {
+                GlassButton(title: "Delete", icon: "trash", style: .danger, fullWidth: true) {
                     Haptics.warning()
                     llmService.deleteLocalModel()
                 }
@@ -287,12 +287,12 @@ struct AIModelSettingsView: View {
             }
 
         case .ready:
-            HStack(spacing: 12) {
-                GlassButton(title: "Unload", icon: "stop.fill", style: .secondary) {
+            HStack(spacing: 10) {
+                GlassButton(title: "Unload", icon: "stop.fill", style: .secondary, fullWidth: true) {
                     llmService.unloadLocalModel()
                 }
 
-                GlassButton(title: "Delete", icon: "trash", style: .danger) {
+                GlassButton(title: "Delete", icon: "trash", style: .danger, fullWidth: true) {
                     Haptics.warning()
                     llmService.deleteLocalModel()
                 }

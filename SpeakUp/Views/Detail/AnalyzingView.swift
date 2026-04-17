@@ -20,9 +20,15 @@ struct AnalyzingView: View {
     @State private var scaleAnswers: [UUID: Int] = [:]
     @State private var boolAnswers: [UUID: Bool] = [:]
     @State private var feedbackSubmitted = false
+    @State private var pendingAutoSubmit: Task<Void, Never>?
+
+    // Debounce window before auto-submit fires. Matches the selection spring
+    // (~0.3 s response) so the user sees their tap register before the view
+    // transitions to results.
+    private static let autoSubmitDelay: Duration = .milliseconds(350)
 
     private var shouldShowFeedback: Bool {
-        feedbackEnabled && !feedbackQuestions.isEmpty && existingFeedback == nil && !feedbackSubmitted
+        feedbackEnabled && analysisReady && !feedbackQuestions.isEmpty && existingFeedback == nil && !feedbackSubmitted
     }
 
     private var allQuestionsAnswered: Bool {
@@ -62,13 +68,10 @@ struct AnalyzingView: View {
         VStack(spacing: 0) {
             if shouldShowFeedback {
                 feedbackContent
-            } else {
-                progressContent
-            }
-
-            if shouldShowFeedback {
                 feedbackBottomBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                progressContent
             }
         }
         .animation(.spring(response: 0.35), value: shouldShowFeedback)
@@ -76,46 +79,21 @@ struct AnalyzingView: View {
         .task { await animatePulse() }
         .task { await cycleTips() }
         .task { await cycleStages() }
+        .onDisappear {
+            pendingAutoSubmit?.cancel()
+            pendingAutoSubmit = nil
+        }
     }
 
     private var progressContent: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Spacer()
-                    .frame(height: 20)
-
-                WaveformOrb(
-                    phase: waveformPhase,
-                    pulseScale: pulseScale,
-                    showCheckmark: false
-                )
-                .frame(height: 200)
-
-                VStack(spacing: 6) {
-                    Text(statusTitle)
-                        .font(.headline.weight(.semibold))
-                        .contentTransition(.numericText())
-
-                    Text(statusSubtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                AnalyzingProgressDots(stage: progressStage)
-
-                MotivationalTipCard(
-                    tipIndex: currentTipIndex,
-                    isVisible: showTip
-                )
-
-                AnalyzingSkeletonPreview()
-
-                Spacer()
-                    .frame(height: 40)
-            }
-            .padding(.horizontal, 20)
-        }
-        .scrollIndicators(.hidden)
+        RecordingContinuitySkeleton(
+            recording: recording,
+            statusTitle: statusTitle,
+            statusSubtitle: statusSubtitle,
+            stage: progressStage,
+            currentTipIndex: currentTipIndex,
+            tipVisible: showTip
+        )
     }
 
     private var feedbackContent: some View {
@@ -228,6 +206,7 @@ struct AnalyzingView: View {
                                     withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                         scaleAnswers[question.id] = value
                                     }
+                                    answerChanged()
                                 }
                             )
                         } else {
@@ -238,6 +217,7 @@ struct AnalyzingView: View {
                                     withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                         boolAnswers[question.id] = value
                                     }
+                                    answerChanged()
                                 }
                             )
                         }
@@ -263,6 +243,7 @@ struct AnalyzingView: View {
             HStack(spacing: 12) {
                 Button {
                     Haptics.light()
+                    pendingAutoSubmit?.cancel()
                     withAnimation(.spring(response: 0.3)) {
                         feedbackSubmitted = true
                     }
@@ -282,18 +263,58 @@ struct AnalyzingView: View {
 
                 Spacer()
 
-                if allQuestionsAnswered {
-                    GlassButton(title: "Submit", icon: "checkmark.circle", style: .primary, size: .medium) {
-                        submitFeedback()
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
+                autoSubmitStatusLabel
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
         }
-        .animation(.spring(response: 0.25), value: allQuestionsAnswered)
+        .animation(.easeInOut(duration: 0.2), value: allQuestionsAnswered)
+    }
+
+    @ViewBuilder
+    private var autoSubmitStatusLabel: some View {
+        if allQuestionsAnswered {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.teal)
+                Text("Saving...")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.teal)
+            }
+            .padding(.horizontal, 12)
+            .transition(.opacity)
+        } else {
+            Text("Tap a response for each question")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .transition(.opacity)
+        }
+    }
+
+    // MARK: - Auto-Submit
+
+    /// Called from each answer selection. Schedules a debounced auto-submit
+    /// once every question has a response. Cancelling and re-scheduling on each
+    /// call lets the user change their mind during the grace window.
+    private func answerChanged() {
+        guard !feedbackSubmitted else { return }
+        pendingAutoSubmit?.cancel()
+
+        guard allQuestionsAnswered else {
+            pendingAutoSubmit = nil
+            return
+        }
+
+        pendingAutoSubmit = Task { @MainActor in
+            try? await Task.sleep(for: Self.autoSubmitDelay)
+            guard !Task.isCancelled,
+                  !feedbackSubmitted,
+                  allQuestionsAnswered else { return }
+            submitFeedback()
+        }
     }
 
     // MARK: - Submit
@@ -629,115 +650,129 @@ private struct MotivationalTipCard: View {
     }
 }
 
-// MARK: - Skeleton Preview (extracted subview)
+// MARK: - Recording Continuity Skeleton
+//
+// Post-recording loading state. Mirrors the RecordingView layout — same top
+// bar silhouette, frozen TimerView at the final duration, auto-animated
+// CircularWaveformView around a sparkles icon where the record button lived —
+// so the transition from recording → processing feels like a single continuous
+// screen rather than a jump to an unrelated view.
 
-private struct AnalyzingSkeletonPreview: View {
+private struct RecordingContinuitySkeleton: View {
+    let recording: Recording
+    let statusTitle: String
+    let statusSubtitle: String
+    let stage: Int
+    let currentTipIndex: Int
+    let tipVisible: Bool
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Your results are coming...", systemImage: "sparkles")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            topBarShell
+                .padding(.top, 50)
 
-            GlassCard {
-                HStack {
-                    VStack(alignment: .leading, spacing: 8) {
-                        SkeletonBar(width: 80, height: 32)
-                        SkeletonBar(width: 120, height: 8)
-                    }
-                    Spacer()
-                    SkeletonBar(width: 70, height: 28)
-                }
-            }
+            Spacer(minLength: 12)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(0..<4, id: \.self) { _ in
-                    GlassCard(padding: 14) {
-                        HStack(spacing: 12) {
-                            SkeletonCircle(size: 24)
-                            VStack(alignment: .leading, spacing: 6) {
-                                SkeletonBar(width: 50, height: 8)
-                                SkeletonBar(width: 40, height: 14)
+            TimerView(
+                remainingTime: recording.actualDuration,
+                totalTime: max(recording.actualDuration, 1),
+                progress: 1.0,
+                color: .teal,
+                isRecording: false,
+                isOvertime: false,
+                timerLabel: "final"
+            )
+
+            Spacer(minLength: 12)
+
+            VStack(spacing: 16) {
+                statusPill
+
+                AnalyzingProgressDots(stage: stage)
+
+                ZStack {
+                    CircularWaveformView(autoAnimate: true)
+                        .opacity(0.85)
+
+                    // Silhouette where the record button lived.
+                    ZStack {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .frame(width: 80, height: 80)
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(Color.teal.opacity(0.35), lineWidth: 1)
                             }
-                            Spacer(minLength: 0)
-                        }
-                    }
-                }
-            }
 
-            GlassCard {
-                VStack(spacing: 14) {
-                    ForEach(0..<4, id: \.self) { _ in
-                        HStack(spacing: 10) {
-                            SkeletonCircle(size: 16)
-                            SkeletonBar(width: 70, height: 10)
-                            Spacer()
-                            SkeletonBar(width: 60, height: 6)
-                            SkeletonBar(width: 24, height: 10)
-                        }
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.teal, .cyan],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .symbolEffect(.variableColor.iterative, options: .repeating)
                     }
                 }
+                .frame(width: 200, height: 200)
+
+                MotivationalTipCard(tipIndex: currentTipIndex, isVisible: tipVisible)
+            }
+            .padding(.bottom, 32)
+        }
+        .padding(.horizontal)
+    }
+
+    private var topBarShell: some View {
+        HStack {
+            Image(systemName: "waveform")
+                .font(.title.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.4))
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                }
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.teal)
+                Text("Analyzing")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.teal)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
             }
         }
     }
-}
 
-// MARK: - Skeleton Components
+    private var statusPill: some View {
+        VStack(spacing: 4) {
+            Text(statusTitle)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .multilineTextAlignment(.center)
 
-private struct SkeletonBar: View {
-    let width: CGFloat
-    let height: CGFloat
-
-    @State private var shimmer = false
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: height / 2)
-            .fill(Color.white.opacity(0.08))
-            .frame(width: width, height: height)
-            .overlay {
-                RoundedRectangle(cornerRadius: height / 2)
-                    .fill(
-                        LinearGradient(
-                            colors: [.clear, .white.opacity(0.06), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .offset(x: shimmer ? width : -width)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: height / 2))
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
-                    shimmer = true
-                }
-            }
-    }
-}
-
-private struct SkeletonCircle: View {
-    let size: CGFloat
-
-    @State private var shimmer = false
-
-    var body: some View {
-        Circle()
-            .fill(Color.white.opacity(0.08))
-            .frame(width: size, height: size)
-            .overlay {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.clear, .white.opacity(0.06), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .offset(x: shimmer ? size : -size)
-            }
-            .clipShape(Circle())
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false)) {
-                    shimmer = true
-                }
-            }
+            Text(statusSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+        }
     }
 }

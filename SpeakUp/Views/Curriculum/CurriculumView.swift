@@ -15,6 +15,12 @@ struct CurriculumView: View {
                     // Overall progress
                     progressHeader
 
+                    // Continue where you left off
+                    if let currentLesson = viewModel.currentLesson,
+                       let currentPhase = viewModel.currentPhase {
+                        continueCard(lesson: currentLesson, phase: currentPhase)
+                    }
+
                     // Phase list
                     ForEach(viewModel.phases) { phase in
                         phaseSection(phase)
@@ -85,39 +91,113 @@ struct CurriculumView: View {
         }
     }
 
+    // MARK: - Continue Card
+
+    private func continueCard(lesson: CurriculumLesson, phase: CurriculumPhase) -> some View {
+        NavigationLink {
+            LessonDetailView(lesson: lesson, viewModel: viewModel)
+        } label: {
+            FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), .cyan.opacity(0.08)]) {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Continue Learning")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(AppColors.primary)
+
+                        Text(lesson.title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        Text("Week \(phase.week) · \(lesson.activities.count) activities")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    ZStack {
+                        Circle()
+                            .fill(AppColors.primary.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "play.fill")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Phase Section
+
     private func phaseSection(_ phase: CurriculumPhase) -> some View {
         let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
         let isPreviousPhaseComplete = isPreviousPhaseCompleted(before: phase)
+        let isPhaseComplete = completedInPhase == phase.lessons.count
+        let phaseProgress = phase.lessons.isEmpty ? 0.0 : Double(completedInPhase) / Double(phase.lessons.count)
 
         return VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            // Phase header
+            HStack(spacing: 12) {
+                // Phase number badge
+                ZStack {
+                    Circle()
+                        .fill(isPhaseComplete ? .green.opacity(0.2) : (!isPreviousPhaseComplete && phase.week > 1) ? .gray.opacity(0.1) : AppColors.primary.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    if isPhaseComplete {
+                        Image(systemName: "checkmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.green)
+                    } else if !isPreviousPhaseComplete && phase.week > 1 {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("\(phase.week)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Week \(phase.week)")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(isPhaseComplete ? .green : .teal)
 
-                    HStack(spacing: 8) {
-                        Text(phase.title)
-                            .font(.title3.weight(.bold))
-
-                        if !isPreviousPhaseComplete && phase.week > 1 {
-                            Image(systemName: "lock.fill")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    Text(phase.title)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle((!isPreviousPhaseComplete && phase.week > 1) ? .secondary : .primary)
                 }
 
                 Spacer()
 
                 Text("\(completedInPhase)/\(phase.lessons.count)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(isPhaseComplete ? .green : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(isPhaseComplete ? .green.opacity(0.15) : Color.white.opacity(0.06)))
+            }
+
+            // Phase progress bar
+            if !isPhaseComplete {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.08))
+                        Capsule()
+                            .fill(AppColors.primary)
+                            .frame(width: geo.size.width * phaseProgress)
+                    }
+                }
+                .frame(height: 3)
+                .padding(.leading, 48)
             }
 
             Text(phase.description)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .padding(.leading, 48)
 
             ForEach(phase.lessons) { lesson in
                 let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)

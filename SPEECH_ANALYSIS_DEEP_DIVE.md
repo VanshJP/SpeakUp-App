@@ -65,12 +65,15 @@ Gates: < 5 non-filler words or < 3 seconds → score ≤ 10.
 ## Subscore formulas (`calculateSubscores`)
 
 ### 1) Clarity
-- Articulation: voicedFrameRatio × 110 + 38 (pitch path) or ASR confidence × 100 + 20 (fallback) or 65 (default).
-- Duration consistency: CV-based with 0.50 multiplier (softened from 0.60).
-- Hedge penalty: min(10, hedgeWordRatio × 200) — reduced from min(14, ratio × 280).
-- Authority: textQuality.authorityScore or 60.
-- Pace alignment: max(0, 8 - |wpm - target| / 12).
-- Formula: articulation × 0.50 + duration × 0.22 + (100 - hedge) × 0.08 + authority × 0.12 + paceBonus.
+Two complementary articulation signals (VFR and ASR confidence) are blended so neither alone can cap the score. Calibrated so typical conversational speech (VFR ~0.30, avgConf ~0.78, CV ~0.70, authority 70) lands in the low-80s.
+- Articulation from VFR: clamp(voicedFrameRatio × 140 + 55, 0, 100). VFR 0.30 → 97, 0.20 → 83.
+- ASR confidence: clamp(avgConfidence × 120 - 10, 0, 100). 0.80 → 86, 0.70 → 74.
+- Duration consistency: clamp((1 - CV × 0.35) × 100). CV 0.70 → 75.5, 0.50 → 82.5.
+- Authority: textQuality.authorityScore or 70.
+- Hedge penalty: min(12, hedgeWordRatio × 180).
+- Pace alignment: max(0, 5 - |wpm - target| / 20).
+- Weights (both signals present): VFR × 0.30 + ASR × 0.25 + duration × 0.15 + authority × 0.15 + (100 - hedge) × 0.05 + paceBonus. When only one articulation source is available, its weight absorbs the other's (total 0.55).
+- Reliability stabilization uses neutralAnchor = 65 (other subscores stay at 55) so degraded-reliability sessions aren't pulled toward a punitive center.
 
 ### 2) Pace
 - Gaussian: sigma = 55 (widened from 45), giving ±30 WPM good tolerance.

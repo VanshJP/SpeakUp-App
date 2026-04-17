@@ -61,21 +61,6 @@ struct GoalsView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
                 }
-
-                if viewModel.activeGoals.isEmpty && viewModel.completedGoals.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "target")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
-                        Text("No Goals Yet")
-                            .font(.headline)
-                        Text("Set a goal below to track your speaking progress")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.horizontal, 40)
-                }
             }
             .navigationTitle("Goals")
             .navigationBarTitleDisplayMode(.inline)
