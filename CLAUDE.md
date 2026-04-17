@@ -1,56 +1,41 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with the SpeakUp iOS project.
+Guidance for Claude Code / Augment Agent on the SpeakUp iOS project. This file and `AGENTS.md` are the same file (AGENTS.md is a symlink).
+
+## Persona — Smart Caveman (full mode)
+
+All AI responses in this project default to **Smart Caveman, full intensity**.
+
+- Drop articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries (sure/certainly/of course/happy to), hedging.
+- Fragments OK. Short synonyms (big not extensive, fix not "implement a solution for"). Technical terms exact. Code blocks unchanged. Errors quoted exact.
+- Pattern: `[thing] [action] [reason]. [next step].`
+- Auto-clarity exceptions: destructive action warnings, multi-step sequences where fragment order risks misread, explicit user confusion. Resume caveman after clear part done.
+- Never write commits/PRs/code comments in caveman — normal English for persisted artifacts.
+- User may switch with `/caveman lite|full|ultra` or `stop caveman`. Level persists until changed.
+
+## Workflow — **AI MUST NOT BUILD OR TEST**
+
+**Hard rule:** the AI agent does not run iOS builds, does not run simulators, does not run automated tests, does not invoke `xcodebuild`, `xcrun simctl`, `idb`, XCUITest, or any emulator/device interaction. The developer handles all build + test loops independently.
+
+Do:
+- Edit Swift source, markdown, configuration.
+- Use `codebase-retrieval`, `view`, and `grep` to understand code before editing.
+- Trace downstream impact of every edit (callers, subclasses, schemas, viewmodels).
+- When changes are complete, hand off to the developer with a clear summary of what changed and what should be built/tested.
+
+Do not:
+- Run `xcodebuild`, `xcrun`, `idb`, `simctl`, screenshot automation, accessibility trees.
+- Launch long-running processes to verify compile.
+- Install dependencies without explicit permission (use `xcodebuild -resolvePackageDependencies` etc. only when asked).
+- Loop on build errors — surface any suspected error, let the developer confirm.
+
+If the user explicitly asks "build it" or "run tests," still defer: respond with the exact commands the developer should run, don't execute them.
 
 ## Project Overview
 
-SpeakUp is a native iOS speech practice app built with SwiftUI and SwiftData. It helps users improve public speaking by recording, transcribing (via WhisperKit), and analyzing speech with metrics like filler word usage, pace, clarity, volume, vocabulary complexity, and pause quality. Features include structured drills, warm-up exercises, confidence tools, a learning curriculum, social challenges, progress journaling, and achievement tracking.
+SpeakUp = native iOS speech practice app. SwiftUI + SwiftData + WhisperKit. On-device transcription, multi-dimensional speech scoring, optional on-device LLM coherence pass. Features: recording, drills, warm-ups, confidence tools, structured curriculum, user-authored Stories (rich-text scripts), Read-Aloud passages with pronunciation scoring, social challenges, journal PDFs, achievements, iCloud sync, widgets.
 
-## Build & Run
-```bash
-# Build for simulator (use generic destination — avoids device-not-found errors)
-xcodebuild -project SpeakUp.xcodeproj -scheme SpeakUp \
-  -destination 'generic/platform=iOS Simulator' \
-  -configuration Debug build
-
-# Boot simulator if needed
-xcrun simctl boot "iPhone 16" 2>/dev/null || true
-
-# Install & launch
-xcrun simctl install booted ~/Library/Developer/Xcode/DerivedData/SpeakUp-*/Build/Products/Debug-iphonesimulator/SpeakUp.app
-xcrun simctl launch booted com.vansh.SpeakUpMore
-
-# Terminate
-xcrun simctl terminate booted com.vansh.SpeakUpMore
-```
-
-## Build Validation Strategy
-
-Xcode builds are slow. **Validate once after all changes are complete**, not after each individual edit. Batch all fixes together, then run a single build to confirm. Only iterate if the build reveals new errors.
-
-## UI Testing Loop (use this whenever verifying visual changes)
-
-Always follow this sequence — never assume UI is correct without checking:
-```bash
-# 1. Screenshot
-xcrun simctl io booted screenshot /tmp/speakup_screen.png
-
-# 2. Inspect accessibility tree
-idb describe-all
-
-# 3. Interact
-idb tap <x> <y>
-idb type "text"
-idb swipe <x1> <y1> <x2> <y2>
-
-# 4. Screenshot again to confirm
-xcrun simctl io booted screenshot /tmp/speakup_after.png
-```
-
-When debugging a UI issue:
-- Screenshot first, inspect second, fix third, verify fourth
-- Cross-reference visual screenshot with `idb describe-all` element frames
-- Rebuild and re-verify after every fix before moving to the next issue
+Bundle id: `com.vansh.SpeakUpMore`. Deployment: iOS 17+. Liquid glass effects activate on iOS 26+.
 
 ## Architecture
 
@@ -61,83 +46,148 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 
 ### Layer responsibilities
 
-- **Models/** — SwiftData entities: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`. Pure structs: `SpeechAnalysis` (metrics, scoring, filler detection), `DrillMode`, `WarmUpExercise`, `ConfidenceExercise`, `SocialChallenge`, `DailyChallenge`, `SpeechFramework`, `CurriculumModels`.
-- **Services/** — Business logic only, no UI. Each service is `@Observable` and owns its error enum:
-  - `SpeechService` — orchestrates transcription + analysis
-  - `WhisperService` — WhisperKit on-device STT
-  - `AudioService` — AVFoundation record/playback/metering
-  - `LiveTranscriptionService` — real-time filler detection during recording
-  - `HapticCoachingService` — haptic feedback for pace/silence/fillers
-  - `ChirpPlayer` — audio cue playback for warm-ups/drills
-  - `AchievementService` — checks/unlocks achievements post-recording
-  - `CoachingTipService` — generates contextual coaching tips from analysis
-  - `DailyChallengeService` — daily challenge generation
-  - `WeeklyProgressService` — weekly stats computation
-  - `WeakAreaService` — identifies weakest metric and suggests exercises
-  - `CurriculumService` — loads curriculum, tracks lesson completion
-  - `NotificationService` — daily reminder scheduling
-  - `ExportService` — share recordings via UIActivityViewController
-  - `ScoreCardRenderer` — UIKit-drawn shareable score card image
-  - `JournalExportService` — PDF progress journal generation
-  - `SocialChallengeService` — deep link challenge handling
-  - `AudioWaveformGenerator` — waveform data from audio files
-  - `WidgetDataProvider` — writes shared data for widget target
-- **ViewModels/** — One per feature area, `@MainActor @Observable`. Owns UI state, calls services. Never imports SwiftData directly: `TodayViewModel`, `RecordingViewModel`, `HistoryViewModel`, `SettingsViewModel`, `OnboardingViewModel`, `PromptWheelViewModel`, `ComparisonViewModel`, `ProgressReplayViewModel`, `DrillViewModel`, `WarmUpViewModel`, `CurriculumViewModel`.
-- **Views/** — Grouped by feature (see View Groups below). Shared pieces in `Components/`.
-- **Theme/** — `AppColors`, `GlassStyles`, `AppBackground`. All UI uses the glassmorphism system — never raw colors or custom styling outside the theme.
-- **Extensions/** — `Date+Helpers.swift` (date math, formatting, streak calculation), `Haptics.swift` (typed haptic feedback), `View+Glass.swift` (iOS 26 liquid glass compatibility).
-- **Data/** — `DefaultPrompts.swift`, `DefaultWarmUps.swift`, `DefaultConfidenceExercises.swift`, `DefaultCurriculum.swift`, `SchemaVersioning.swift`.
-- **SpeakUpWidget/** — Separate WidgetKit target. Daily prompt + streak widgets. Keep widget code isolated from main app logic.
+- **Models/** — SwiftData entities: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. Pure structs / value types: `SpeechAnalysis` (metrics + `EnhancedSpeechMetrics` + subscores + scoring), `DrillMode`, `WarmUpExercise`, `ConfidenceExercise`, `SocialChallenge`, `DailyChallenge`, `SpeechFramework`, `CurriculumModels`, `LessonContent`, `ReadAloudPassage`, `FillerWordList`, `UserModels`.
+- **Services/** — `@Observable`, no UI, own error enum. Current roster:
+  - **Transcription & audio:** `SpeechService` (orchestrator), `WhisperService` (WhisperKit), `AudioService` (AVFoundation record/play/metering), `LiveTranscriptionService` (real-time fillers), `DictationService` (Apple Speech fallback), `SpeechIsolationService` (on-device AVAudioEngine voice isolation), `ConversationIsolationService` (primary-speaker labeling when multi-speaker), `AudioWaveformGenerator`.
+  - **Analysis pipeline:** `SpeechScoringEngine` (subscores + overall + gates), `TextAnalysisService` (authority, hedges, power words, sentence structure, coherence), `PromptRelevanceService` (keyword + semantic + sentence alignment), `PitchAnalysisService` (vDSP autocorrelation F0 contour), `FillerDetectionPipeline` (shared pause-aware filler tagging for Whisper / Apple Speech / live).
+  - **LLM:** `LLMService` (Apple Intelligence / FoundationModels front-door + memory-pressure monitor), `LocalLLMService` (llama.cpp via `LlamaSwift` — download, load, generate on devices without Apple Intelligence), `StoryTaggingService` (conservative LLM tag extraction for Stories), `RecordingProcessingCoordinator` (idempotent per-recording transcribe → analyze → LLM enhance job queue).
+  - **Practice & coaching:** `HapticCoachingService`, `ChirpPlayer`, `CoachingTipService`, `WeakAreaService`, `DailyChallengeService`, `WeeklyProgressService`, `CurriculumService`, `CurriculumActivitySignalStore`, `GoalProgressService`, `AchievementService`.
+  - **Read-Aloud:** `ReadAloudService` (scores delivered passage vs reference), `PronunciationService` (AVSpeechSynthesizer + UIReferenceLibrary dictionary lookups).
+  - **Platform / IO:** `NotificationService`, `ExportService` (UIActivityViewController share), `ScoreCardRenderer` (UIKit-drawn shareable PNG), `JournalExportService` (PDF), `SocialChallengeService` (deep-link challenges), `PromptCSVService` (bulk prompt import/export), `ICloudStorageService` (audio file migration + CloudKit sync preference resolution), `WidgetDataProvider` (App Group shared data).
+- **ViewModels/** — `@MainActor @Observable`. Own UI state, call services, never import SwiftData types: `TodayViewModel`, `RecordingViewModel` (split across `+AudioMonitoring`, `+Computed`, `+Permissions`, `+RecordingControl`, `+Timer`), `HistoryViewModel`, `SettingsViewModel`, `OnboardingViewModel`, `PromptWheelViewModel`, `ComparisonViewModel`, `ProgressReplayViewModel`, `DrillViewModel`, `WarmUpViewModel`, `CurriculumViewModel`, `ReadAloudViewModel`, `RecordingDetailPlaybackViewModel`, `StoriesViewModel`.
+- **Views/** — grouped by feature (see table below). Shared pieces in `Components/`.
+- **Theme/** — `AppColors`, `GlassStyles`, `AppBackground`. All UI uses the glassmorphism system — no raw colors or inline styling.
+- **Extensions/** — `Date+Helpers.swift`, `Haptics.swift`, `View+Glass.swift` (iOS 26 liquid glass).
+- **Data/** — `DefaultPrompts`, `DefaultWarmUps`, `DefaultConfidenceExercises`, `DefaultCurriculum`, `DefaultReadAloudPassages`, `DefaultFeedbackQuestions`, `SchemaVersioning` (V1 → V16).
+- **SpeakUpWidget/** — WidgetKit target. Widgets: `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget`. Reads via App Group from `WidgetDataProvider`.
 
 ### View groups
 
-| Folder | Files | Purpose |
-|--------|-------|---------|
-| `Today/` | `TodayView`, `DailyChallengeCard`, `WeeklyProgressCard` | Home tab — stats rings, prompt card, quick-access toolbar, daily challenge, weekly progress |
-| `Recording/` | `RecordingView`, `RecordButton`, `TimerView`, `CountdownOverlayView`, `FillerCounterOverlay`, `FrameworkOverlayView` | Full-screen recording session with live filler count, framework cues, circular waveform |
-| `Detail/` | `RecordingDetailView`, `SpeechTimelineView`, `PaceChartView`, `CoachingTipsView`, `ListenBackEncouragementView`, `ScoreCardPreview` | Post-recording analysis — scores, highlighted transcript, waveform playback, coaching tips |
-| `History/` | `HistoryView`, `ComparisonView` | Contribution graph, streak stats, searchable recordings list, first-vs-latest comparison |
-| `Achievements/` | `AchievementGalleryView`, `AchievementUnlockedView` | Achievement grid with unlock celebrations + confetti |
-| `Goals/` | `GoalsView` | Goal management with templates |
-| `Curriculum/` | `CurriculumView`, `CurriculumProgressCard`, `LessonDetailView` | Structured learning path with weekly phases and lesson tracking |
-| `WarmUp/` | `WarmUpListView`, `WarmUpExerciseView`, `BreathingAnimationView` | Pre-speech exercises (Breathing, Tongue Twisters, Vocal, Articulation) |
-| `Drills/` | `DrillSelectionView`, `DrillSessionView`, `DrillResultView` | Focused drills (Filler Elimination, Pace Control, Pause Practice, Impromptu Sprint) |
-| `Confidence/` | `ConfidenceToolsView`, `ConfidenceExerciseView` | Calming, Visualization, Progressive, Affirmation exercises |
-| `Progress/` | `BeforeAfterReplayView`, `JournalExportView`, `JournalSummaryView` | Then-vs-Now audio replay, PDF journal export with date ranges |
+| Folder | Key files | Purpose |
+|--------|-----------|---------|
+| `Today/` | `TodayView`, `DailyChallengeCard`, `WeeklyProgressCard`, `StoryPromptCard` | Home — stats rings, prompt card, quick-access toolbar, daily challenge, weekly progress, story prompt shortcut |
+| `Practice/` | `PracticeHubView` | **Library tab root** — unified browser across prompts, stories, warm-ups, drills, read-aloud |
+| `Prompts/` | `AllPromptsView`, `AddPromptView`, `BatchAddPromptsView` | Browse / add / CSV-import prompts |
+| `Stories/` | `StoriesListView`, `StoryDetailView`, `StoryEditorView`, `StoryFolderBar`, `StoryFolderEditorSheet` | User-authored rich-text scripts in folders; link Stories to recordings for script-aware relevance scoring |
+| `ReadAloud/` | `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `DictionaryView`, `WordDetailSheet` | Read-aloud practice with pronunciation score + word-level dictionary |
+| `Recording/` | `RecordingView`, `RecordButton`, `TimerView`, `CountdownOverlayView`, `FillerCounterOverlay`, `FrameworkOverlayView` | Full-screen recording; live fillers, framework cues, circular waveform |
+| `Detail/` | `RecordingDetailView`, `AnalyzingView`, `DetailAnalysisTab`, `CoachingTipsView`, `WPMChartView`, `ListenBackEncouragementView`, `ScoreCardPreview`, `FirstRecordingSetupSheet` | Post-recording analysis; tabbed scores / transcript / waveform / tips |
+| `History/` | `HistoryView`, `ComparisonView`, `ProgressChartsView` | Contribution graph, streaks, searchable list, first-vs-latest, charted progress |
+| `Achievements/` | `AchievementGalleryView`, `AchievementUnlockedView` | Grid + confetti celebrations (presented as sheet) |
+| `Goals/` | `GoalsView` | Goal management with templates + `GoalProgressService` |
+| `Curriculum/` | `CurriculumView`, `CurriculumProgressCard`, `LessonDetailView`, `LessonContentView`, `LessonCompletionView`, `PracticeResultsCard` | **Learn tab root** — weekly phases, lessons, signal-driven progression |
+| `WarmUp/` | `WarmUpListView`, `WarmUpExerciseView`, `BreathingAnimationView` | Breathing / Tongue Twisters / Vocal / Articulation; can be linked to a Story |
+| `Drills/` | `DrillSelectionView`, `DrillSessionView`, `DrillResultView` | Filler Elimination / Pace Control / Pause Practice / Impromptu Sprint; can be linked to a Story |
+| `Confidence/` | `ConfidenceToolsView`, `ConfidenceExerciseView` | Calming / Visualization / Progressive / Affirmation |
+| `Progress/` | `BeforeAfterReplayView`, `JournalExportView`, `JournalSummaryView` | Then-vs-Now replay, PDF journal export |
 | `Social/` | `ChallengeShareView`, `ChallengeAcceptView` | Deep-link friend challenges |
-| `Settings/` | `SettingsView`, `WordBankInputView` | Session defaults, analysis settings, word bank, reminders, data management |
+| `Settings/` | `SettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` | Fully split settings surfaces |
 | `PromptWheel/` | `PromptWheelView` | Spinning random prompt selector |
-| `Onboarding/` | `OnboardingView`, `OnboardingPageView` | First-launch onboarding flow |
-| `Components/` | `GlassCard`, `GlassButton`, `RingStatsView`, `ConfettiView` | Reusable glass-styled components |
+| `Onboarding/` | `OnboardingView`, `OnboardingPageView` | First-launch flow |
+| `Components/` | `GlassCard`, `GlassButton`, `RingStatsView`, `ConfettiView`, `FlowLayout`, `PersistentTextField`, `RichTextEditor`, `PracticeHistoryChart` | Shared glass-styled building blocks |
 
 ### Entry point
 
-`SpeakUpApp.swift` — initializes SwiftData model container (schemas: `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`; in-memory fallback). Injects `SpeechService` and `AudioService` via `@Environment`. Seeds prompts, settings, achievements, and curriculum on first launch. Preloads WhisperKit model in background.
+`SpeakUpApp.swift` — builds `ModelContainer` over `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. CloudKit sync toggled via `ICloudStorageService.resolvedSyncEnabledPreference`; falls back to local-only then in-memory if container creation fails. Injects `SpeechService`, `AudioService`, `LLMService` via `@Environment`. Seeds prompts, settings, achievements, curriculum progress, story folders concurrently. Background tasks: legacy URL migration, iCloud file migration, Whisper preload, local LLM auto-load.
 
 ### Navigation
 
-4-tab layout in `ContentView.swift` using iOS 17 `Tab { }` API:
+5-tab layout in `ContentView.swift` (iOS 17 `Tab { }` API). `AppTab` enum owns titles + SF Symbols:
 
 | Tab | Icon | Root View |
 |-----|------|-----------|
 | Today | `mic.badge.plus` | `TodayView` |
+| Library | `books.vertical.fill` | `PracticeHubView` |
 | History | `clock.fill` | `HistoryView` → `RecordingDetailView` |
-| Achievements | `trophy.fill` | `AchievementGalleryView` |
-| Settings | `gearshape.fill` | `SettingsView` |
+| Learn | `book` | `CurriculumView` |
+| Settings | `gearshape` | `SettingsView` |
 
-Global overlays/sheets managed at `ContentView` level: countdown, recording, prompt wheel, goals, warm-ups, drills, confidence tools, before/after replay, journal export, curriculum, social challenge accept, onboarding, achievement unlock celebration.
+Achievements moved off the tab bar — presented as a sheet from Today. Global overlays/sheets at `ContentView`: countdown, recording `fullScreenCover`, prompt wheel, goals, warm-ups (optionally with `sourceStory`), drills (optionally with `sourceStory`), confidence tools, before/after replay, journal export, read-aloud selection, story editor, achievement unlock, onboarding `fullScreenCover`, challenge accept `fullScreenCover`.
 
-Deep link schemes: `speakup://record?prompt=<id>`, `speakup://challenge?...`
+Deep link schemes:
+- `speakup://record?prompt=<id>` — start recording, optionally pre-fill prompt
+- `speakup://challenge?...` — accept incoming social challenge
+- `speakup://story` / `speakup://story/new` — open Library / story editor
+
+## Speak Algorithm (speech scoring pipeline)
+
+Source-of-truth file: `SPEECH_ANALYSIS_DEEP_DIVE.md`. Summary below for context injection.
+
+### Design philosophy
+Scores are progressive and achievable. 20s casual speech → 50-65. Solid 60s speech → 75-90. Only gibberish, silence, or near-empty speech scores below 20.
+
+### Canonical files
+`SpeechService.swift`, `SpeechScoringEngine.swift`, `TextAnalysisService.swift`, `PromptRelevanceService.swift`, `SpeechIsolationService.swift`, `ConversationIsolationService.swift`, `FillerDetectionPipeline.swift`, `PitchAnalysisService.swift`, `LLMService.swift`, `RecordingProcessingCoordinator.swift`, `Models/SpeechAnalysis.swift`. Runtime wiring in `RecordingDetailView`.
+
+### Runtime sequence
+1. `RecordingDetailView.task` loads recording + settings.
+2. `transcribeIfNeeded()` runs only when `transcriptionText == nil && analysis == nil`.
+3. Transcription backend order: speech isolation → WhisperKit → reload retry → Apple Speech fallback.
+4. `ConversationIsolationService` labels primary-speaker words.
+5. `SpeechService.analyze(...)` computes base analysis + enhanced metrics + subscores + overall.
+6. `enhanceCoherenceIfNeeded()` runs optional LLM post-pass (Apple Intelligence → local llama → skip).
+7. `RecordingProcessingCoordinator` guards against duplicate concurrent jobs per `recordingID`.
+
+### Hard gates (applied in order)
+1. **Zero-score gate:** `totalWords == 0 || nonFillerWordCount == 0` → overall `0`.
+2. **Substance multiplier:** graduated 0.10× – 1.0× based on substance score.
+3. **Gibberish gate:** graduated cap at ≤8 / ≤15 / ≤30 based on 5-signal confidence.
+
+### Enhanced metrics (`SpeechScoringEngine.computeEnhancedMetrics`)
+- **PTR** (voiced time / duration), ideal 0.45–0.80.
+- **Articulation Rate** (WPM during voiced time), ideal 100–200.
+- **MLR** (avg words between pauses), MLR ≥ 8 = fluent.
+- **MATTR** (50-word sliding TTR), 0.72+ = full marks.
+- **Substance Score** (word count + duration + MATTR + density + MLR).
+- **Fluency Score** (PTR + MLR + articulation rate).
+- **Lexical Sophistication** (MATTR + word length + NLEmbedding rarity).
+- **Gibberish Confidence** (5-signal graduated 0–1).
+
+### Substance multiplier curve
+| Substance | Multiplier | Effect |
+|-----------|-----------|--------|
+| 0–10 | 0.10–0.25 | Gibberish / empty collapse |
+| 10–30 | 0.25–0.65 | Very short, penalized |
+| 30–50 | 0.65–0.88 | Short speech, moderate penalty |
+| 50–75 | 0.88–0.97 | Adequate, slight penalty |
+| 75–100 | 0.97–1.00 | Full-length, near-full score |
+
+### Subscores (`calculateSubscores`)
+Four required + up to five optional.
+
+1. **Clarity** — blend VFR articulation + ASR confidence + duration consistency + authority + hedge penalty + pace alignment. Weights redistribute when one articulation source is absent. Neutral anchor 65 under degraded reliability.
+2. **Pace** — Gaussian around target WPM (sigma 55). Adaptive weighting with rate variation + fluency when present.
+3. **Filler Usage** — effective ratio = fillerRatio + hedge + weak phrase. Curve `100 × max(0, 1 − log₂(1 + ratio × 8))`.
+4. **Pause Quality** — base 72, rewards strategic medium/long pauses, penalizes long hesitations (capped at 4), low-filler bonus, frequency band 3–18 pauses/min.
+5. **Delivery** *(optional)* — energy + monotone + content density + emphasis + arc + engagement.
+6. **Vocal Variety** *(optional)* — pitch + volume + rate + pitch-energy correlation (from `PitchAnalysisService`).
+7. **Vocabulary** *(optional)* — complexity score + word bank bonus + power words bonus + MATTR blend.
+8. **Structure** *(optional)* — sentence analysis + rhetoric / transition / conciseness / engagement.
+9. **Relevance** *(optional)* — prompt mode uses keyword + semantic + sentence alignment; free-practice uses 5-signal coherence. Story-linked recordings feed `Story.content` as promptText instead of `Prompt.text`, so relevance reflects script fidelity.
+
+### Overall score
+Weighted average of included subscores (weights normalized to 1.0) → substance multiplier → gibberish gate → optional LLM coherence post-pass.
+
+### Default weights (`ScoreWeights.defaults`)
+clarity 0.18, pace 0.12, filler 0.14, pause 0.12, vocalVariety 0.12, delivery 0.10, vocabulary 0.08, structure 0.08, relevance 0.06. User-tunable in `ScoreWeightsView`.
+
+### Filler detection (`FillerDetectionPipeline`)
+Shared between WhisperService, SpeechService, LiveTranscriptionService. Pause threshold 0.3s, sentence boundary 0.8s. Converts `RawWordTiming` → `TranscriptionWord` with filler flags. Consumes `FillerWordList` (default + user word bank).
+
+### LLM post-pass
+`LLMService` picks backend: Apple Intelligence (FoundationModels) → `LocalLLMService` (LlamaSwift, GGUF model download) → none. Monitors memory pressure and cancels generation on warning/critical. Output: `CoherenceResult { score, topicFocus, logicalFlow, reason }` folded into the relevance subscore when available.
 
 ## UI Design System (follow this for all new views)
 
-### Philosophy
-Dark glassmorphism with a deep navy base. Every surface is translucent glass — no opaque cards, no flat backgrounds. The aesthetic is layered depth with subtle light effects.
+### Aesthetic philosophy
+Deep-navy glassmorphism, layered depth, subtle light. Every surface is translucent frosted glass over a dark gradient — no opaque cards, no flat fills, no system backgrounds. Cards float above radial ambient light (teal top-right, indigo bottom-left, cyan center-ish). Content is primarily white on glass; tint comes through material, not opaque fills. On iOS 26+ the system's Liquid Glass effect (`.glassEffect`) is adopted where supported; iOS 17–25 falls back to `.ultraThinMaterial` with inner glow + fine white stroke at the top edge. Motion is restrained: `.spring(response: 0.3)` or `.easeInOut(duration: 0.2)`.
+
+Tab bar is tinted white (`.tint(.white)`), navigation titles inline, color scheme locked to `.dark` (`preferredColorScheme(.dark)`).
 
 ### Background — `AppBackground`
-Layered `ZStack` with radial gradient orbs on a deep navy base (`rgb: 0.05, 0.07, 0.16`):
+Layered `ZStack` with radial gradient orbs on a near-black navy base (`rgb: 0.035, 0.04, 0.09`) + a primary navy gradient wash:
 - **`.primary`** — default for all tabs. Teal orb top-right (12%), indigo orb bottom-left (9%), cyan glow center (4%).
-- **`.recording`** — darker navy with stronger teal (18%) and cyan (6%) for active recording sessions.
+- **`.recording`** — darker navy, stronger teal (18%) and cyan (6%) for focused recording sessions.
 - **`.subtle`** — slightly lighter navy for sheets and detail views.
 
 Apply via `.appBackground(.primary)`. Every screen must have an `AppBackground` — never use plain `Color` or system backgrounds.
@@ -237,6 +287,10 @@ Before building custom UI, check `Components/` for existing pieces:
 - `RingStatsView` — triple concentric progress rings with metrics row
 - `ConfettiView` — canvas-based celebration particles
 - `GlassSectionHeader(icon:title:)` — section header with icon
+- `FlowLayout` — wrapping chip/tag flow layout (used in Stories, prompt categories)
+- `RichTextEditor` — UIKit-backed `NSAttributedString` editor (Stories rich-text body)
+- `PersistentTextField` — text field that survives view identity churn
+- `PracticeHistoryChart` — compact Swift Charts sparkline for a metric over recent sessions
 
 ### Building a new view — checklist
 1. Wrap in `ScrollView` with `.appBackground(.primary)` (or `.subtle` for sheets)
@@ -272,10 +326,10 @@ Before building custom UI, check `Components/` for existing pieces:
 - File name matches primary type name exactly
 
 ### SwiftData rules
-- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift`
+- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift` (latest: `SpeakUpSchemaV16`)
 - Never rename a `@Attribute` without a migration step
-- Test schema changes with the in-memory container path first
-- Current schemas: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`
+- Describe schema changes so the developer can exercise the in-memory container path — AI does not run the simulator
+- Current schemas registered in `SpeakUpApp.sharedModelContainer`: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`
 
 ## Common Pitfalls to Avoid
 
@@ -291,23 +345,95 @@ Before building custom UI, check `Components/` for existing pieces:
 
 ## Dependencies
 
-- **WhisperKit** — on-device speech-to-text via Swift Package Manager. No API key needed.
-- No other external dependencies.
+Swift Package Manager only. No API keys, no network-mandatory services.
+- **WhisperKit** — on-device speech-to-text.
+- **FoundationModels** (system framework, iOS 18.1+) — Apple Intelligence LLM backend.
+- **LlamaSwift** — llama.cpp Swift bindings for on-device GGUF LLM fallback when Apple Intelligence is unavailable.
+- **Accelerate / vDSP** (system) — pitch autocorrelation in `PitchAnalysisService`.
+- **NaturalLanguage** (system) — `NLEmbedding` for lexical rarity + semantic relevance.
+- **AVFoundation / Speech** (system) — recording, playback, metering, Apple Speech fallback transcription.
+- **CloudKit** (system, optional) — iCloud sync when user enables it.
 
-## Simulator Shortcuts
-```bash
-# List available simulators
-xcrun simctl list devices available
+## Recently added features
 
-# Clear app data (reset to fresh install)
-xcrun simctl uninstall booted com.vansh.SpeakUpMore
+Feature set the agent should assume is available in the codebase. Group labels map to service + view folders.
 
-# View live app logs
-xcrun simctl spawn booted log stream --predicate 'subsystem == "com.vansh.SpeakUpMore"'
+### Stories (user-authored rich-text scripts)
+- SwiftData models: `Story`, `StoryFolder`. Rich-text body stored as `NSAttributedString` data + plain-text mirror for search and LLM input.
+- Views: `StoriesListView`, `StoryDetailView`, `StoryEditorView`, `StoryFolderBar`, `StoryFolderEditorSheet`, `StoryPromptCard`.
+- Editor: `RichTextEditor` (UIKit-backed) + `PersistentTextField` for title.
+- Tagging: `StoryTaggingService` extracts Friends / Dates / Locations / Topics conservatively via `LLMService` (skips when no LLM).
+- Default folders seeded on first launch via `StoryFolder.defaults`.
+- Deep link: `speakup://story` / `speakup://story/new`.
 
-# Trigger a specific URL scheme
-xcrun simctl openurl booted "speakup://debug"
-```
+### Story-linked recordings
+- `Recording.storyId` optional link. When set, `RecordingDetailView.effectivePromptText(for:)` feeds `Story.content` to `SpeechService.analyze(...)` as `promptText`, so relevance scores script fidelity, not generic prompt match.
+- Story wins over Prompt when both are attached.
+- Warm-ups and drills accept a `sourceStory` parameter to practice against a specific script.
+
+### Read-Aloud practice
+- Models: `ReadAloudPassage` with difficulty tiers; passages seeded from `DefaultReadAloudPassages`.
+- Views: `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `DictionaryView`, `WordDetailSheet`.
+- `ReadAloudService` scores delivered speech vs reference passage (word-level match + timing).
+- `PronunciationService` uses AVSpeechSynthesizer for audio playback and `UIReferenceLibraryViewController` for dictionary lookups per word.
+- ViewModel: `ReadAloudViewModel`.
+
+### Library tab (Practice Hub)
+- New tab at `books.vertical.fill`. Root: `PracticeHubView`.
+- Unified browser across prompts, stories, warm-ups, drills, read-aloud. Send-to actions route stories into warm-ups / drills.
+
+### On-device LLM stack
+- `LLMService` multi-backend front-door: Apple Intelligence (`FoundationModels`) → `LocalLLMService` (LlamaSwift) → none.
+- `LocalLLMService` handles GGUF model download, load state (`LocalModelState`), memory-pressure-aware generation.
+- `RecordingProcessingCoordinator` — shared singleton; enforces one transcribe+analyze+LLM job per `recordingID`.
+- `AIModelSettingsView` — user selects backend, downloads local model, monitors state.
+- Coherence post-pass: LLM returns `CoherenceResult { score, topicFocus, logicalFlow, reason }` folded into relevance subscore.
+
+### Advanced speech pipeline
+- `SpeechScoringEngine` replaces previous monolithic scorer; handles enhanced metrics, subscore formulas, substance multiplier, gibberish gate.
+- `TextAnalysisService` — authority, hedges, weak phrases, power words, sentence structure, coherence.
+- `PromptRelevanceService` — keyword + `NLEmbedding` semantic + sentence alignment.
+- `PitchAnalysisService` — Accelerate/vDSP autocorrelation F0 contour + pitch-energy correlation for vocal variety.
+- `FillerDetectionPipeline` — shared pause-aware filler tagging used by WhisperService, SpeechService, LiveTranscriptionService.
+- `SpeechIsolationService` — AVAudioEngine-based voice isolation before transcription.
+- `ConversationIsolationService` — primary-speaker labeling for multi-speaker recordings.
+- `DictationService` — Apple Speech fallback when WhisperKit fails or reloads.
+- `VoiceCalibrationView` — user-baseline calibration for pace + volume targets.
+- `ScoreWeightsView` — user-tunable subscore weights, persisted to `UserSettings`.
+
+### Prompt management
+- `AllPromptsView` / `AddPromptView` / `BatchAddPromptsView` with CSV import/export via `PromptCSVService`.
+- `PromptSettingsView` gates which categories appear in prompt wheel + daily challenge.
+
+### Goals + progress
+- `GoalProgressService` — per-goal completion tracking fed by each recording.
+- `ProgressChartsView` — Swift Charts progression for each metric over time.
+- `PracticeHistoryChart` component reused in history and detail cards.
+
+### Settings surface split
+- Previously single `SettingsView` is now a hub routing to: `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView`.
+
+### iCloud sync
+- `ICloudStorageService` — resolves initial sync preference from iCloud account availability, migrates local audio files into iCloud container on opt-in, and flips `UserSettings.iCloudSyncEnabled` in lock-step with startup preference.
+- CloudKit database selected at `ModelContainer` creation time. Falls back to local store, then in-memory if creation fails.
+
+### Widgets
+- Additions beyond the original two: `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `WeeklyProgressWidget`. All hydrate from `WidgetDataProvider` via App Group.
+
+### Curriculum signals
+- `CurriculumActivitySignalStore` — durable per-session signal store used by `CurriculumService` to advance lessons based on observed practice behavior, not just manual completion.
+- `LessonContentView` + `LessonCompletionView` + `PracticeResultsCard` render content and outcomes.
+
+### Detail view polish
+- `AnalyzingView` covers the async transcribe → analyze → LLM window.
+- `DetailAnalysisTab` replaces ad-hoc layout; tabs for Summary / Metrics / Transcript.
+- `WPMChartView` visualizes per-segment pace.
+- `FirstRecordingSetupSheet` walks new users through first-recording permissions + calibration.
+
+## AGENTS.md
+
+`AGENTS.md` at the repository root is a symlink to this file. Anything written here also applies to agent frameworks that look for `AGENTS.md`.
+
 ---
 name: greenlight
 description: >
