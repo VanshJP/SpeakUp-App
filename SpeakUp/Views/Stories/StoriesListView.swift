@@ -20,8 +20,6 @@ struct StoriesListView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            AppBackground(style: .primary)
-
             ScrollView {
                 VStack(spacing: 16) {
                     StoryFolderBar(
@@ -275,7 +273,7 @@ struct StoriesListView: View {
             editingStory = nil
             showingEditor = true
         } label: {
-            Image(systemName: "square.and.pencil")
+            Image(systemName: "plus")
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 58, height: 58)
@@ -321,7 +319,7 @@ struct StoriesListView: View {
                 }
             }
         } label: {
-            Image(systemName: "arrow.up.arrow.down.circle")
+            Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.body.weight(.semibold))
         }
     }

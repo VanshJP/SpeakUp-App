@@ -11,11 +11,14 @@ struct HistoryView: View {
     @State private var searchText = ""
     @State private var summaryToDelete: RecordingSummary?
     @State private var showingDeleteAlert = false
+    @State private var selectedSection: HistorySection = .recordings
+    @Namespace private var pickerNamespace
     @Query private var userSettings: [UserSettings]
 
     var onSelectRecording: (String) -> Void
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
+    var onShowGoals: () -> Void = {}
 
     // MARK: - Filtered Summaries
 
@@ -52,43 +55,26 @@ struct HistoryView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
-                VStack(spacing: 16) {
-                    contributionGraphSection
-                    streakSection
-                    vocabUsageSection
+            VStack(spacing: 0) {
+                sectionPicker
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
 
-                    // Progress Charts link
-                    if analyzedSummaries.count >= 2 {
-                        progressChartsCard
+                ZStack {
+                    switch selectedSection {
+                    case .recordings:
+                        recordingsScrollView
+                            .transition(.opacity)
+                    case .progress:
+                        progressScrollView
+                            .transition(.opacity)
                     }
-
-                    if viewModel.summaries.count >= 5 {
-                        progressReplayBanner
-                    }
-
-                    if analyzedSummaries.count >= 2 {
-                        compareProgressCard
-                    }
-
-                    filterSection
-                    recordingsSection
                 }
-                .padding()
             }
-            .scrollIndicators(.hidden)
         }
         .navigationTitle("History")
         .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    onShowJournalExport()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                }
-            }
-        }
         .searchable(text: $searchText, prompt: "Search recordings...")
         .refreshable {
             await viewModel.loadData()
@@ -124,6 +110,201 @@ struct HistoryView: View {
         } message: {
             Text("This recording and its audio will be permanently deleted.")
         }
+    }
+
+    // MARK: - Recordings Scroll View
+
+    private var recordingsScrollView: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                quickStatsStrip
+                filterSection
+                recordingsSection
+            }
+            .padding()
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    // MARK: - Progress Scroll View
+
+    private var progressScrollView: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                contributionGraphSection
+                streakSection
+
+                if analyzedSummaries.count >= 2 {
+                    progressChartsCard
+                }
+
+                if viewModel.summaries.count >= 2 {
+                    progressReplayBanner
+                }
+
+                if analyzedSummaries.count >= 2 {
+                    compareProgressCard
+                }
+
+                goalsSection
+                journalExportCard
+
+                vocabUsageSection
+            }
+            .padding()
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    // MARK: - Quick Stats Strip
+
+    private var quickStatsStrip: some View {
+        GlassCard(padding: 12) {
+            HStack(spacing: 0) {
+                quickStatItem(
+                    icon: "flame.fill",
+                    value: "\(viewModel.currentStreak)",
+                    label: "Streak",
+                    color: .orange,
+                    isHighlighted: viewModel.currentStreak > 0
+                )
+
+                quickStatDivider
+
+                quickStatItem(
+                    icon: "mic.fill",
+                    value: "\(viewModel.summaries.count)",
+                    label: "Sessions",
+                    color: .teal,
+                    isHighlighted: false
+                )
+
+                quickStatDivider
+
+                quickStatItem(
+                    icon: "chart.line.uptrend.xyaxis",
+                    value: averageScoreText,
+                    label: "Avg Score",
+                    color: averageScoreColor,
+                    isHighlighted: false
+                )
+            }
+        }
+    }
+
+    private var quickStatDivider: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .frame(width: 0.5, height: 32)
+    }
+
+    private func quickStatItem(
+        icon: String,
+        value: String,
+        label: String,
+        color: Color,
+        isHighlighted: Bool
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isHighlighted ? color : color.opacity(0.75))
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Section Picker
+
+    private var sectionPicker: some View {
+        HStack(spacing: 6) {
+            ForEach(HistorySection.allCases) { section in
+                sectionPickerItem(section)
+            }
+        }
+        .padding(6)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.05), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.18), .white.opacity(0.04)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+        }
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+    }
+
+    @ViewBuilder
+    private func sectionPickerItem(_ section: HistorySection) -> some View {
+        let isSelected = selectedSection == section
+        Button {
+            guard selectedSection != section else { return }
+            Haptics.selection()
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                selectedSection = section
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(section.label)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(isSelected ? .white : Color.white.opacity(0.55))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppColors.primary.opacity(0.85),
+                                    AppColors.primary.opacity(0.55)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
+                        }
+                        .shadow(color: AppColors.primary.opacity(0.45), radius: 8, y: 3)
+                        .matchedGeometryEffect(id: "historyPickerSelection", in: pickerNamespace)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Contribution Graph Section
@@ -448,6 +629,68 @@ struct HistoryView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Goals Section
+
+    private var goalsSection: some View {
+        Button {
+            onShowGoals()
+        } label: {
+            GlassCard(tint: .purple.opacity(0.06)) {
+                HStack(spacing: 12) {
+                    Image(systemName: "target")
+                        .font(.title3)
+                        .foregroundStyle(.purple)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Goals")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Set and track your speaking goals")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Journal Export Card
+
+    private var journalExportCard: some View {
+        Button {
+            onShowJournalExport()
+        } label: {
+            GlassCard(tint: .blue.opacity(0.06)) {
+                HStack(spacing: 12) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                        .foregroundStyle(.blue)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Export Progress Journal")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Generate a PDF summary of your journey")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Filter Section
 
     private var filterSection: some View {
@@ -622,7 +865,7 @@ struct FilterChip: View {
 
 // MARK: - Streak Stat Item
 
-private struct StreakStatItem: View {
+struct StreakStatItem: View {
     let icon: String
     let value: String
     let label: String
@@ -910,6 +1153,29 @@ struct DayDetailSheet: View {
             }
             .navigationTitle(formattedDate)
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+// MARK: - History Section Enum
+
+enum HistorySection: String, CaseIterable, Identifiable {
+    case recordings
+    case progress
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .recordings: return "Recordings"
+        case .progress: return "Progress"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .recordings: return "waveform"
+        case .progress: return "chart.line.uptrend.xyaxis"
         }
     }
 }

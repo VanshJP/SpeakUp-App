@@ -2,12 +2,10 @@ import SwiftUI
 import SwiftData
 
 struct PracticeHubView: View {
-    @State private var selectedSection: PracticeSection = .history
+    @State private var selectedSection: PracticeSection = .prompts
+    @Namespace private var pickerNamespace
 
     let onSelectPrompt: (Prompt) -> Void
-    let onSelectRecording: (String) -> Void
-    var onShowBeforeAfter: () -> Void = {}
-    var onShowJournalExport: () -> Void = {}
     var onStartStoryPractice: ((Story) -> Void)? = nil
     var onSendToWarmUp: ((Story) -> Void)? = nil
     var onSendToDrill: ((Story) -> Void)? = nil
@@ -23,23 +21,22 @@ struct PracticeHubView: View {
                 sectionPicker
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
+                    .padding(.bottom, 12)
 
-                switch selectedSection {
-                case .history:
-                    HistoryView(
-                        onSelectRecording: onSelectRecording,
-                        onShowBeforeAfter: onShowBeforeAfter,
-                        onShowJournalExport: onShowJournalExport
-                    )
-                case .prompts:
-                    AllPromptsView(onSelectPrompt: onSelectPrompt)
-                case .journal:
-                    StoriesListView(
-                        viewModel: storiesViewModel,
-                        onStartPractice: onStartStoryPractice,
-                        onSendToWarmUp: onSendToWarmUp,
-                        onSendToDrill: onSendToDrill
-                    )
+                ZStack {
+                    switch selectedSection {
+                    case .prompts:
+                        AllPromptsView(onSelectPrompt: onSelectPrompt)
+                            .transition(.opacity)
+                    case .journal:
+                        StoriesListView(
+                            viewModel: storiesViewModel,
+                            onStartPractice: onStartStoryPractice,
+                            onSendToWarmUp: onSendToWarmUp,
+                            onSendToDrill: onSendToDrill
+                        )
+                        .transition(.opacity)
+                    }
                 }
             }
         }
@@ -51,47 +48,89 @@ struct PracticeHubView: View {
     private var sectionPicker: some View {
         HStack(spacing: 6) {
             ForEach(PracticeSection.allCases) { section in
-                Button {
-                    Haptics.light()
-                    withAnimation(.spring(response: 0.25)) {
-                        selectedSection = section
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: section.icon)
-                            .font(.caption2.weight(.semibold))
-
-                        Text(section.label)
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .foregroundStyle(selectedSection == section ? .white : .secondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .frame(maxWidth: .infinity)
-                    .background {
-                        if selectedSection == section {
-                            Capsule()
-                                .fill(AppColors.primary.opacity(0.6))
-                        } else {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule()
-                                        .stroke(.white.opacity(0.08), lineWidth: 0.5)
-                                }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
+                sectionPickerItem(section)
             }
         }
+        .padding(6)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.05), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.18), .white.opacity(0.04)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 0.5
+                        )
+                }
+        }
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+    }
+
+    @ViewBuilder
+    private func sectionPickerItem(_ section: PracticeSection) -> some View {
+        let isSelected = selectedSection == section
+        Button {
+            guard selectedSection != section else { return }
+            Haptics.selection()
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                selectedSection = section
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 15, weight: .semibold))
+                Text(section.label)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(isSelected ? .white : Color.white.opacity(0.55))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppColors.primary.opacity(0.85),
+                                    AppColors.primary.opacity(0.55)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
+                        }
+                        .shadow(color: AppColors.primary.opacity(0.45), radius: 8, y: 3)
+                        .matchedGeometryEffect(id: "pickerSelection", in: pickerNamespace)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 
 // MARK: - Practice Section Enum
 
 enum PracticeSection: String, CaseIterable, Identifiable {
-    case history
     case prompts
     case journal
 
@@ -99,7 +138,6 @@ enum PracticeSection: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .history: return "Recordings"
         case .prompts: return "Prompts"
         case .journal: return "Journal"
         }
@@ -107,7 +145,6 @@ enum PracticeSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .history: return "Recordings"
         case .prompts: return "Prompts"
         case .journal: return "Journal"
         }
@@ -115,9 +152,8 @@ enum PracticeSection: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .history: return "clock"
-        case .prompts: return "text.bubble"
-        case .journal: return "text.book.closed"
+        case .prompts: return "text.bubble.fill"
+        case .journal: return "text.book.closed.fill"
         }
     }
 }
@@ -126,7 +162,6 @@ enum PracticeSection: String, CaseIterable, Identifiable {
     NavigationStack {
         PracticeHubView(
             onSelectPrompt: { _ in },
-            onSelectRecording: { _ in },
             storiesViewModel: StoriesViewModel()
         )
     }

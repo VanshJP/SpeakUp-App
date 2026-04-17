@@ -53,7 +53,7 @@ struct SettingsView: View {
                 title: "Words",
                 subtitle: wordsSubtitle
             ) {
-                WordBankView(viewModel: viewModel)
+                WordBankView(viewModel: viewModel, showDismissButton: false)
             }
 
             settingsLink(

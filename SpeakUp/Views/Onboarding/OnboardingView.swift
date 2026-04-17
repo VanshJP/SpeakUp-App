@@ -511,7 +511,7 @@ struct OnboardingView: View {
                         title: "Load Model",
                         icon: "play.fill",
                         style: .secondary,
-                        size: .small,
+                        size: .medium,
                         fullWidth: true
                     ) {
                         Task { await llmService.loadLocalModel() }
@@ -525,7 +525,7 @@ struct OnboardingView: View {
                             title: "Retry Download",
                             icon: "arrow.clockwise",
                             style: .primary,
-                            size: .small,
+                            size: .medium,
                             fullWidth: true
                         ) {
                             Task { await llmService.setupLocalModel() }
@@ -536,7 +536,7 @@ struct OnboardingView: View {
                         title: "Download Local AI",
                         icon: "arrow.down.circle",
                         style: .primary,
-                        size: .small,
+                        size: .medium,
                         fullWidth: true
                     ) {
                         Task { await llmService.setupLocalModel() }

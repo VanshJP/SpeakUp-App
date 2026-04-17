@@ -86,7 +86,7 @@ struct FirstRecordingSetupSheet: View {
 
     private var quickSettingsSection: some View {
         VStack(spacing: 14) {
-            GlassSectionHeader(icon: "slider.horizontal.3", title: "Quick Setup")
+            GlassSectionHeader("Quick Setup", icon: "slider.horizontal.3")
 
             GlassCard {
                 VStack(spacing: 16) {
@@ -96,28 +96,17 @@ struct FirstRecordingSetupSheet: View {
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white)
 
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 8) {
-                                ForEach(RecordingDuration.allCases) { duration in
-                                    Button {
-                                        Haptics.light()
-                                        selectedDuration = duration
-                                    } label: {
-                                        Text(duration.displayName)
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(selectedDuration == duration ? .white : .secondary)
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 8)
-                                            .background {
-                                                Capsule()
-                                                    .fill(selectedDuration == duration ? AppColors.primary.opacity(0.6) : Color.white.opacity(0.06))
-                                            }
-                                    }
-                                    .buttonStyle(.plain)
+                        HStack(spacing: 8) {
+                            ForEach(RecordingDuration.allCases) { duration in
+                                selectionTile(
+                                    text: duration.displayName,
+                                    isSelected: selectedDuration == duration
+                                ) {
+                                    Haptics.light()
+                                    selectedDuration = duration
                                 }
                             }
                         }
-                        .scrollIndicators(.hidden)
                     }
 
                     Divider().overlay(Color.white.opacity(0.06))
@@ -152,21 +141,13 @@ struct FirstRecordingSetupSheet: View {
 
                         HStack(spacing: 8) {
                             ForEach([3, 5, 10, 15], id: \.self) { seconds in
-                                Button {
+                                selectionTile(
+                                    text: "\(seconds)s",
+                                    isSelected: countdownSeconds == seconds
+                                ) {
                                     Haptics.light()
                                     countdownSeconds = seconds
-                                } label: {
-                                    Text("\(seconds)s")
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(countdownSeconds == seconds ? .white : .secondary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 8)
-                                        .background {
-                                            Capsule()
-                                                .fill(countdownSeconds == seconds ? AppColors.primary.opacity(0.6) : Color.white.opacity(0.06))
-                                        }
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -180,19 +161,45 @@ struct FirstRecordingSetupSheet: View {
             Haptics.light()
             selectedTimerBehavior = value
         } label: {
+            let isSelected = selectedTimerBehavior == value
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.body)
                 Text(title)
                     .font(.subheadline.weight(.medium))
             }
-            .foregroundStyle(selectedTimerBehavior == value ? .white : .secondary)
+            .foregroundStyle(isSelected ? .white : .secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(selectedTimerBehavior == value ? AppColors.primary.opacity(0.6) : Color.white.opacity(0.06))
+                    .fill(isSelected ? AppColors.primary.opacity(0.5) : .clear)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? AppColors.primary.opacity(0.6) : .white.opacity(0.08), lineWidth: 1)
+                    }
             }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func selectionTile(text: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isSelected ? AppColors.primary.opacity(0.5) : .clear)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(isSelected ? AppColors.primary.opacity(0.6) : .white.opacity(0.08), lineWidth: 1)
+                        }
+                }
         }
         .buttonStyle(.plain)
     }

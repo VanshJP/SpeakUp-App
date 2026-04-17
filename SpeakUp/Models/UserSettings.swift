@@ -49,7 +49,7 @@ final class UserSettings {
     var chirpSoundEnabled: Bool = true
 
     // Prompt Filtering
-    var hideAnsweredPrompts: Bool = false
+    var hideAnsweredPrompts: Bool = true
 
     // Listen Back
     var listenBackCount: Int = 0

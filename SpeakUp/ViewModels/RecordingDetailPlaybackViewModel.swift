@@ -16,8 +16,15 @@ final class RecordingDetailPlaybackViewModel {
             : fallbackDuration
         playbackDuration = max(0, resolvedDuration)
 
-        let normalizedProgress = max(0, min(1, audioService.playbackProgress))
-        playbackProgress = normalizedProgress
-        currentTime = normalizedProgress * max(playbackDuration, 0)
+        // Authoritative time comes directly from AVAudioPlayer via AudioService.
+        let clampedTime = max(0, min(audioService.currentPlaybackTime, playbackDuration))
+        currentTime = clampedTime
+
+        // Derive progress from time so scrubber and highlight stay in lockstep.
+        if playbackDuration > 0 {
+            playbackProgress = max(0, min(1, clampedTime / playbackDuration))
+        } else {
+            playbackProgress = max(0, min(1, audioService.playbackProgress))
+        }
     }
 }

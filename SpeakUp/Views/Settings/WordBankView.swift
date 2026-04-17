@@ -4,6 +4,7 @@ import SwiftData
 struct WordBankView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var viewModel: SettingsViewModel
+    var showDismissButton: Bool = true
     @State private var selectedTab = 0
     @State private var isWordInputFocused = false
     @State private var isDictationInputFocused = false
@@ -53,12 +54,14 @@ struct WordBankView: View {
         .navigationTitle("Words")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.white)
+            if showDismissButton {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.white)
+                    }
                 }
             }
         }

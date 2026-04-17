@@ -363,18 +363,15 @@ class SpeechService {
         let wordsPerMinute = Double(totalWords) / (wpmDuration / 60)
 
         let pauses = pauseMetadata.map { $0.duration }
-        // Use median to resist outlier skew from long recording gaps
+        // Mean over pauses ≤ 5 s; gaps longer than that are recording artifacts, not speech pauses.
+        // Median was tried but skews too low when many micro-gaps (0.4–0.7 s) outnumber intentional pauses.
         let averagePauseLength: Double
         if pauses.isEmpty {
             averagePauseLength = 0
         } else {
-            let sortedPauses = pauses.sorted()
-            let mid = sortedPauses.count / 2
-            if sortedPauses.count % 2 == 0 {
-                averagePauseLength = (sortedPauses[mid - 1] + sortedPauses[mid]) / 2.0
-            } else {
-                averagePauseLength = sortedPauses[mid]
-            }
+            let sample = pauses.filter { $0 <= 5.0 }
+            let relevant = sample.isEmpty ? pauses : sample
+            averagePauseLength = relevant.reduce(0, +) / Double(relevant.count)
         }
 
         // Count strategic vs hesitation pauses
@@ -715,55 +712,71 @@ class SpeechService {
         // which applies a graduated multiplier to the final overall score. This prevents the
         // ceiling from artificially compressing subscores while still penalizing short/empty speech.
 
-        // Clarity score — voiced frame ratio + duration consistency + hedge penalty + authority.
-        // Tuned so average conversational speech lands in the 60-75 range, not the 40-55 range.
+        // Clarity score — blends two articulation signals (voiced-frame ratio and ASR confidence)
+        // with duration steadiness, authority, and a small hedge/pace adjustment. Calibrated so
+        // a typical conversational session (VFR 0.30, avgConf 0.78, CV 0.70, authority 70) lands
+        // in the low-80s, while mumbled delivery stays below 60 and strong delivery reaches 90+.
         let clarityScore: Int
         do {
-            let articulationComponent: Double
+            let hasVFR = (pitchMetrics?.voicedFrameRatio ?? 0) > 0
+            let confidences = words.compactMap { $0.confidence }
+            let hasConfidence = !confidences.isEmpty
+
+            let articulationFromVFR: Double
             if let pm = pitchMetrics, pm.voicedFrameRatio > 0 {
-                articulationComponent = min(100, max(0, Double(pm.voicedFrameRatio) * 110 + 38))
+                articulationFromVFR = min(100, max(0, Double(pm.voicedFrameRatio) * 140 + 55))
             } else {
-                let confidences = words.compactMap { $0.confidence }
-                if !confidences.isEmpty {
-                    let averageConfidence = confidences.reduce(0, +) / Double(confidences.count)
-                    articulationComponent = min(100, max(40, averageConfidence * 100 + 20))
-                } else {
-                    articulationComponent = 65
-                }
+                articulationFromVFR = 70
+            }
+
+            let asrConfidenceScore: Double
+            if hasConfidence {
+                let averageConfidence = confidences.reduce(0, +) / Double(confidences.count)
+                asrConfidenceScore = min(100, max(0, averageConfidence * 120 - 10))
+            } else {
+                asrConfidenceScore = 70
             }
 
             let durations = words.map { $0.duration }.filter { $0 > 0 }
-            let durationComponent: Double
+            let durationScore: Double
             if durations.count >= 2 {
                 let meanDur = durations.reduce(0, +) / Double(durations.count)
                 let variance = durations.reduce(0.0) { $0 + pow($1 - meanDur, 2) } / Double(durations.count)
                 let cv = meanDur > 0 ? sqrt(variance) / meanDur : 1.0
-                durationComponent = max(0, min(100, (1.0 - cv * 0.50) * 100))
+                durationScore = max(0, min(100, (1.0 - cv * 0.35) * 100))
             } else {
-                durationComponent = 60
-            }
-
-            let hedgePenalty: Double
-            if let tq = textQuality {
-                hedgePenalty = min(10, tq.hedgeWordRatio * 200)
-            } else {
-                hedgePenalty = 0
+                durationScore = 70
             }
 
             let authorityComponent: Double
+            let hedgePenalty: Double
             if let tq = textQuality {
                 authorityComponent = Double(tq.authorityScore)
+                hedgePenalty = min(12, tq.hedgeWordRatio * 180)
             } else {
-                authorityComponent = 60
+                authorityComponent = 70
+                hedgePenalty = 0
             }
 
-            let paceAlignmentBonus = max(0, 8 - abs(wordsPerMinute - Double(targetWPM)) / 12)
-            let rawClarity = articulationComponent * 0.50 +
-                durationComponent * 0.22 +
-                (100 - hedgePenalty) * 0.08 +
-                authorityComponent * 0.12 +
+            // Redistribute weight when one articulation source is unavailable so the absent
+            // component doesn't silently drop 25-30% of the score.
+            let vfrWeight: Double
+            let asrWeight: Double
+            switch (hasVFR, hasConfidence) {
+            case (true, true):   vfrWeight = 0.30; asrWeight = 0.25
+            case (true, false):  vfrWeight = 0.55; asrWeight = 0.00
+            case (false, true):  vfrWeight = 0.00; asrWeight = 0.55
+            case (false, false): vfrWeight = 0.30; asrWeight = 0.25
+            }
+
+            let paceAlignmentBonus = max(0, 5 - abs(wordsPerMinute - Double(targetWPM)) / 20)
+            let rawClarity = articulationFromVFR * vfrWeight +
+                asrConfidenceScore * asrWeight +
+                durationScore * 0.15 +
+                authorityComponent * 0.15 +
+                (100 - hedgePenalty) * 0.05 +
                 paceAlignmentBonus
-            clarityScore = max(0, min(100, Int(rawClarity)))
+            clarityScore = max(0, min(100, Int(rawClarity.rounded())))
         }
 
         // Pace score — WPM Gaussian + optional rate variation and fluency bonuses.
@@ -827,10 +840,12 @@ class SpeechService {
         )
         let neutralAnchor = 55
 
+        // Clarity uses a higher anchor (65) because its newly calibrated range centers on ~80 for
+        // typical speech — pulling toward 55 would punish any moderately-reliable solo recording.
         let stabilizedClarity = applyReliabilityStabilization(
             score: clarityScore,
             reliability: combinedReliability,
-            neutralAnchor: neutralAnchor
+            neutralAnchor: 65
         )
         let stabilizedPace = applyReliabilityStabilization(
             score: paceScore,

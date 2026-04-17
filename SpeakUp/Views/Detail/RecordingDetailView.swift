@@ -34,7 +34,6 @@ struct RecordingDetailView: View {
     @State private var dismissedFeedbackGates: Set<UUID> = []
     @State private var storiesViewModel = StoriesViewModel()
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
-    @State private var showingFirstRecordingSetup = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -171,8 +170,6 @@ struct RecordingDetailView: View {
             }
             populateWPMTimeSeriesIfNeeded()
 
-            // Show first-recording settings popup if this is the user's very first recording
-            await checkFirstRecordingSetup()
 
             // Post-analysis: enhance coherence in background — don't block the detail view
             Task {
@@ -182,7 +179,7 @@ struct RecordingDetailView: View {
         .onDisappear {
             audioService.stop()
         }
-        .onChange(of: audioService.playbackProgress) { _, _ in
+        .onChange(of: audioService.currentPlaybackTime) { _, _ in
             syncPlaybackStateIfNeeded()
         }
         .onChange(of: audioService.playbackDuration) { _, _ in
@@ -211,11 +208,6 @@ struct RecordingDetailView: View {
             NavigationStack {
                 ScoreWeightsView(viewModel: settingsViewModel)
             }
-        }
-        .sheet(isPresented: $showingFirstRecordingSetup) {
-            FirstRecordingSetupSheet()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
         }
         .onChange(of: showingShareSheet) { _, show in
             if show, case .ready(let recording) = detailScreenState {
@@ -651,7 +643,7 @@ struct RecordingDetailView: View {
     }
 
     @ViewBuilder
-    private func transcriptSectionWithHighlights(_ words: [TranscriptionWord]) -> some View {
+    private func transcriptSectionWithHighlights(_ words: [TranscriptionWord], recording: Recording) -> some View {
         let turns = speakerTurns(from: words)
         let hasSpeakerSeparation = hasSeparatedSpeakers(in: turns)
 
@@ -719,7 +711,7 @@ struct RecordingDetailView: View {
                         hasSpeakerSeparation: hasSpeakerSeparation
                     )
 
-                    if let analysis = recording?.analysis, !analysis.vocabWordsUsed.isEmpty {
+                    if let analysis = recording.analysis, !analysis.vocabWordsUsed.isEmpty {
                         Divider()
                             .padding(.vertical, 10)
 
@@ -880,7 +872,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func transcriptTabContent(_ recording: Recording) -> some View {
         if let words = recording.transcriptionWords, !words.isEmpty {
-            transcriptSectionWithHighlights(words)
+            transcriptSectionWithHighlights(words, recording: recording)
         } else if let text = recording.transcriptionText, !text.isEmpty {
             transcriptSection(text)
         }
@@ -1545,17 +1537,6 @@ struct RecordingDetailView: View {
         (recording.resolvedAudioURL ?? recording.resolvedVideoURL) != nil
     }
 
-    private func checkFirstRecordingSetup() async {
-        guard userSettings.first?.hasShownFirstRecordingSetup != true else { return }
-        let descriptor = FetchDescriptor<Recording>()
-        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
-        guard count == 1, case .ready = detailScreenState else { return }
-        showingFirstRecordingSetup = true
-        if let settings = userSettings.first {
-            settings.hasShownFirstRecordingSetup = true
-            try? modelContext.save()
-        }
-    }
 }
 
 // MARK: - Playback Drawer Container
@@ -1801,7 +1782,7 @@ private struct PlaybackDrawerContainer: View {
     }
 }
 
-// MARK: - Transcript Content (filler/vocab highlights only — no playback tracking)
+// MARK: - Transcript Content (filler/vocab highlights)
 
 private struct TranscriptContentView: View {
     let words: [TranscriptionWord]
@@ -1941,10 +1922,14 @@ struct WordView: View {
     private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
     private var highlightColor: Color { showFillerHighlight ? .orange : .green }
 
+    private var foreground: Color {
+        isHighlighted ? highlightColor : .primary
+    }
+
     var body: some View {
         Text(word.word)
             .font(.body)
-            .foregroundStyle(isHighlighted ? highlightColor : .primary)
+            .foregroundStyle(foreground)
             .padding(.horizontal, isHighlighted ? 4 : 0)
             .padding(.vertical, isHighlighted ? 2 : 0)
             .background {

@@ -34,36 +34,6 @@
             endingLineNumber = "1231"
             landmarkName = "RecordingDetailView"
             landmarkType = "14">
-            <Locations>
-               <Location
-                  uuid = "ABC64723-94DA-47AE-BA1F-9B84365AE7B7 - 943e5fc7c850bad4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SpeakUp.RecordingDetailView.resolvedTranscript(for: SpeakUp.Recording) -&gt; Swift.String"
-                  moduleName = "SpeakUp.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/vanshpatel/SpeakUp/SpeakUp/Views/Detail/RecordingDetailView.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "1231"
-                  endingLineNumber = "1231">
-               </Location>
-               <Location
-                  uuid = "ABC64723-94DA-47AE-BA1F-9B84365AE7B7 - 943e5fc7c850bad4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SpeakUp.RecordingDetailView.resolvedTranscript(for: SpeakUp.Recording) -&gt; Swift.String"
-                  moduleName = "SpeakUp.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/vanshpatel/SpeakUp/SpeakUp/Views/Detail/RecordingDetailView.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "1231"
-                  endingLineNumber = "1231">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>
