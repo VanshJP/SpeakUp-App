@@ -17,27 +17,27 @@ struct PracticeHubView: View {
         ZStack {
             AppBackground()
 
-            VStack(spacing: 0) {
+            ZStack {
+                switch selectedSection {
+                case .prompts:
+                    AllPromptsView(onSelectPrompt: onSelectPrompt)
+                        .transition(.opacity)
+                case .journal:
+                    StoriesListView(
+                        viewModel: storiesViewModel,
+                        onStartPractice: onStartStoryPractice,
+                        onSendToWarmUp: onSendToWarmUp,
+                        onSendToDrill: onSendToDrill
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
                 sectionPicker
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 12)
-
-                ZStack {
-                    switch selectedSection {
-                    case .prompts:
-                        AllPromptsView(onSelectPrompt: onSelectPrompt)
-                            .transition(.opacity)
-                    case .journal:
-                        StoriesListView(
-                            viewModel: storiesViewModel,
-                            onStartPractice: onStartStoryPractice,
-                            onSendToWarmUp: onSendToWarmUp,
-                            onSendToDrill: onSendToDrill
-                        )
-                        .transition(.opacity)
-                    }
-                }
+                    .background(Color(red: 0.05, green: 0.07, blue: 0.16))
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -90,11 +90,11 @@ struct PracticeHubView: View {
                 selectedSection = section
             }
         } label: {
-            VStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                 Text(section.label)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
