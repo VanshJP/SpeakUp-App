@@ -17,29 +17,30 @@ struct PracticeHubView: View {
         ZStack {
             AppBackground()
 
-            ZStack {
-                switch selectedSection {
-                case .prompts:
-                    AllPromptsView(onSelectPrompt: onSelectPrompt)
-                        .transition(.opacity)
-                case .journal:
-                    StoriesListView(
-                        viewModel: storiesViewModel,
-                        onStartPractice: onStartStoryPractice,
-                        onSendToWarmUp: onSendToWarmUp,
-                        onSendToDrill: onSendToDrill
-                    )
-                    .transition(.opacity)
-                }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
                 sectionPicker
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 12)
-                    .background(Color(red: 0.05, green: 0.07, blue: 0.16))
+
+                ZStack {
+                    switch selectedSection {
+                    case .prompts:
+                        AllPromptsView(onSelectPrompt: onSelectPrompt)
+                            .transition(.opacity)
+                    case .journal:
+                        StoriesListView(
+                            viewModel: storiesViewModel,
+                            onStartPractice: onStartStoryPractice,
+                            onSendToWarmUp: onSendToWarmUp,
+                            onSendToDrill: onSendToDrill
+                        )
+                        .transition(.opacity)
+                    }
+                }
             }
         }
+        .navigationTitle("Library")
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
@@ -137,13 +138,6 @@ enum PracticeSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var label: String {
-        switch self {
-        case .prompts: return "Prompts"
-        case .journal: return "Journal"
-        }
-    }
-
-    var title: String {
         switch self {
         case .prompts: return "Prompts"
         case .journal: return "Journal"

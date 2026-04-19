@@ -465,8 +465,9 @@
 		BBCE3AEB2F285A2C005C1EB3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = WavesIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Speakcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = SpeakUp/SpeakUp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -489,7 +490,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "$(APP_MARKETING_VERSION)";
+				MARKETING_VERSION = 3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore;
 				PRODUCT_NAME = SpeakUp;
 				REGISTER_APP_GROUPS = YES;
@@ -510,8 +511,9 @@
 		BBCE3AEC2F285A2C005C1EB3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = WavesIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Speakcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = SpeakUp/SpeakUp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -534,7 +536,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "$(APP_MARKETING_VERSION)";
+				MARKETING_VERSION = 3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore;
 				PRODUCT_NAME = SpeakUp;
 				REGISTER_APP_GROUPS = YES;

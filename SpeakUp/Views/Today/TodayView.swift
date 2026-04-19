@@ -27,7 +27,10 @@ struct TodayView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            // Explicit vertical axis — the Today screen is intentionally locked
+            // to vertical scrolling only. No horizontal paging, no TabView page
+            // style, no horizontal ScrollView.
+            ScrollView(.vertical) {
                 VStack(spacing: 20) {
 
                     // 1. Header Stats (Ring visualization)

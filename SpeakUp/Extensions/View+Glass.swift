@@ -131,32 +131,54 @@ struct GlassTabItem: View {
 }
 
 // MARK: - Shimmer Effect
+//
+// Wrap a block of shimmering primitives in `ShimmerHost` so one animation +
+// zero GeometryReaders drive the entire tree via an environment value. The
+// modifier animates a LinearGradient through the content's own bounds via
+// UnitPoint — no GeometryReader, no per-instance timing.
 
-struct ShimmerModifier: ViewModifier {
+private struct ShimmerPhaseKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    fileprivate var shimmerPhase: CGFloat {
+        get { self[ShimmerPhaseKey.self] }
+        set { self[ShimmerPhaseKey.self] = newValue }
+    }
+}
+
+struct ShimmerHost<Content: View>: View {
+    @ViewBuilder let content: Content
     @State private var phase: CGFloat = 0
-    
-    func body(content: Content) -> some View {
+
+    var body: some View {
         content
-            .overlay {
-                GeometryReader { geometry in
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .white.opacity(0.3),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geometry.size.width * 2)
-                    .offset(x: -geometry.size.width + (phase * geometry.size.width * 2))
-                }
-                .mask(content)
-            }
+            .environment(\.shimmerPhase, phase)
             .onAppear {
                 withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                     phase = 1
                 }
+            }
+    }
+}
+
+struct ShimmerModifier: ViewModifier {
+    @Environment(\.shimmerPhase) private var phase: CGFloat
+
+    func body(content: Content) -> some View {
+        let start = UnitPoint(x: -0.6 + phase * 1.6, y: 0.5)
+        let end = UnitPoint(x: 0.4 + phase * 1.6, y: 0.5)
+
+        content
+            .overlay {
+                LinearGradient(
+                    colors: [.clear, .white.opacity(0.3), .clear],
+                    startPoint: start,
+                    endPoint: end
+                )
+                .mask(content)
+                .allowsHitTesting(false)
             }
     }
 }

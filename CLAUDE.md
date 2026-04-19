@@ -500,8 +500,3 @@ greenlight ipa /path/to/build.ipa          # Binary inspection
 greenlight scan --app-id <ID>              # App Store Connect checks (needs auth)
 greenlight guidelines search "privacy"     # Search Apple guidelines
 ```
-
-## About
-
-**Greenlight** is built by [Revyl](https://revyl.com) — the mobile reliability platform.
-Catch more than rejections. Catch bugs before your users do.

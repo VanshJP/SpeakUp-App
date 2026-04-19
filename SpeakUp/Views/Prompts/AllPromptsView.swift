@@ -103,7 +103,7 @@ struct AllPromptsView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        .navigationTitle("Prompts")
+        .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .task {

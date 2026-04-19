@@ -1,5 +1,25 @@
 import SwiftUI
 
+// MARK: - Session Feedback Gate Store
+//
+// Shared, MainActor-isolated set of recording IDs whose post-recording feedback
+// gate has already been handled (submitted or skipped). Used to coordinate
+// between the pre-navigation gate shown inside RecordingView and the fallback
+// gate inside RecordingDetailView so the user is not prompted twice.
+
+@MainActor
+enum SessionFeedbackGateStore {
+    private static var dismissedIds: Set<UUID> = []
+
+    static func markDismissed(_ id: UUID) {
+        dismissedIds.insert(id)
+    }
+
+    static func isDismissed(_ id: UUID) -> Bool {
+        dismissedIds.contains(id)
+    }
+}
+
 struct AnalyzingView: View {
     let recording: Recording
     let isModelLoading: Bool
@@ -28,7 +48,7 @@ struct AnalyzingView: View {
     private static let autoSubmitDelay: Duration = .milliseconds(350)
 
     private var shouldShowFeedback: Bool {
-        feedbackEnabled && analysisReady && !feedbackQuestions.isEmpty && existingFeedback == nil && !feedbackSubmitted
+        feedbackEnabled && !feedbackQuestions.isEmpty && existingFeedback == nil && !feedbackSubmitted
     }
 
     private var allQuestionsAnswered: Bool {
@@ -38,23 +58,11 @@ struct AnalyzingView: View {
     }
 
     private var statusTitle: String {
-        if isModelLoading {
-            return "Preparing Speech Engine..."
-        } else if analysisReady && shouldShowFeedback {
-            return "Before you see your results..."
-        } else {
-            return stages[progressStage]
-        }
+        isModelLoading ? "Preparing Speech Engine..." : stages[progressStage]
     }
 
     private var statusSubtitle: String {
-        if isModelLoading {
-            return "Loading the AI model for first-time use"
-        } else if analysisReady && shouldShowFeedback {
-            return "How did you feel about that session?"
-        } else {
-            return "Sit tight — we're crunching the numbers"
-        }
+        isModelLoading ? "Loading the AI model for first-time use" : "Sit tight — we're crunching the numbers"
     }
 
     private let stages = [
@@ -63,6 +71,16 @@ struct AnalyzingView: View {
         "Analyzing pace & pauses...",
         "Scoring your delivery..."
     ]
+
+    // Parent RecordingView uses .ignoresSafeArea(); go through UIKit to get
+    // the true system inset so feedback content clears the Dynamic Island.
+    private var systemTopSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.top ?? 0
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,7 +104,7 @@ struct AnalyzingView: View {
     }
 
     private var progressContent: some View {
-        RecordingContinuitySkeleton(
+        DetailSkeletonView(
             recording: recording,
             statusTitle: statusTitle,
             statusSubtitle: statusSubtitle,
@@ -112,7 +130,7 @@ struct AnalyzingView: View {
     private var feedbackContentStack: some View {
         VStack(spacing: 14) {
             Spacer()
-                .frame(height: 8)
+                .frame(height: systemTopSafeAreaInset + 8)
 
             WaveformOrb(
                 phase: waveformPhase,
@@ -132,45 +150,11 @@ struct AnalyzingView: View {
                     .foregroundStyle(.secondary)
             }
 
-            feedbackBanner
             allQuestionsCard
 
             Spacer(minLength: 6)
         }
         .padding(.horizontal, 20)
-    }
-
-    // MARK: - Feedback Banner
-
-    private var feedbackBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.title3)
-                .foregroundStyle(.white)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Analysis complete!")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-                Text("Take a moment to reflect before viewing results")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.8))
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: 14)
-                .fill(
-                    LinearGradient(
-                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-        }
-        .transition(.scale(scale: 0.95).combined(with: .opacity))
     }
 
     // MARK: - All Questions Card
@@ -650,15 +634,16 @@ private struct MotivationalTipCard: View {
     }
 }
 
-// MARK: - Recording Continuity Skeleton
+// MARK: - Detail Skeleton View
 //
-// Post-recording loading state. Mirrors the RecordingView layout — same top
-// bar silhouette, frozen TimerView at the final duration, auto-animated
-// CircularWaveformView around a sparkles icon where the record button lived —
-// so the transition from recording → processing feels like a single continuous
-// screen rather than a jump to an unrelated view.
+// Post-recording loading state. Mirrors the layout the user is about to see on
+// RecordingDetailView — prompt header, hero score ring + subscore rows, stats
+// grid, pace chart, transcript — rendered as shimmering placeholders so the
+// wait reads as "your results are materializing here" rather than an unrelated
+// progress screen. A status pill at the top and an animated progress ring
+// report the pipeline stage as the scoring algorithm runs.
 
-private struct RecordingContinuitySkeleton: View {
+private struct DetailSkeletonView: View {
     let recording: Recording
     let statusTitle: String
     let statusSubtitle: String
@@ -667,112 +652,235 @@ private struct RecordingContinuitySkeleton: View {
     let tipVisible: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBarShell
-                .padding(.top, 50)
+        ScrollView {
+            // Single ShimmerHost drives one animation for every skeleton
+            // primitive in this view via the shimmerPhase environment value.
+            ShimmerHost {
+                VStack(spacing: 16) {
+                    statusHeader
+                        // The parent RecordingView ZStack uses .ignoresSafeArea()
+                        // so the recording UI can paint edge-to-edge. When the
+                        // skeleton takes over, that inherited modifier pushes
+                        // the status pill under the notch / Dynamic Island.
+                        // Pad the header by the system top safe area so it
+                        // clears the status bar regardless of device.
+                        .padding(.top, systemTopSafeAreaInset + 8)
 
-            Spacer(minLength: 12)
+                    promptHeaderSkeleton
+                    heroScoreSkeleton
+                    statsGridSkeleton
+                    chartSkeleton
+                    transcriptSkeleton
 
-            TimerView(
-                remainingTime: recording.actualDuration,
-                totalTime: max(recording.actualDuration, 1),
-                progress: 1.0,
-                color: .teal,
-                isRecording: false,
-                isOvertime: false,
-                timerLabel: "final"
-            )
-
-            Spacer(minLength: 12)
-
-            VStack(spacing: 16) {
-                statusPill
-
-                AnalyzingProgressDots(stage: stage)
-
-                ZStack {
-                    CircularWaveformView(autoAnimate: true)
-                        .opacity(0.85)
-
-                    // Silhouette where the record button lived.
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 80, height: 80)
-                            .overlay {
-                                Circle()
-                                    .strokeBorder(Color.teal.opacity(0.35), lineWidth: 1)
-                            }
-
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.teal, .cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
-                    }
+                    MotivationalTipCard(tipIndex: currentTipIndex, isVisible: tipVisible)
+                        .padding(.top, 4)
                 }
-                .frame(width: 200, height: 200)
-
-                MotivationalTipCard(tipIndex: currentTipIndex, isVisible: tipVisible)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 32)
             }
-            .padding(.bottom, 32)
         }
-        .padding(.horizontal)
+        .scrollIndicators(.hidden)
+        .scrollDisabled(true)
     }
 
-    private var topBarShell: some View {
-        HStack {
-            Image(systemName: "waveform")
-                .font(.title.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.4))
-                .frame(width: 44, height: 44)
-                .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                }
+    /// Top safe-area inset read directly from the key window. Using
+    /// GeometryProxy.safeAreaInsets here would return 0 because a parent view
+    /// in the hierarchy calls .ignoresSafeArea(); going through UIKit bypasses
+    /// the ignored value and gives us the true system inset.
+    private var systemTopSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.top ?? 0
+    }
 
-            Spacer()
+    // MARK: - Status Header
 
+    private var statusHeader: some View {
+        VStack(spacing: 10) {
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.mini)
                     .tint(.teal)
                 Text("Analyzing")
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.teal)
+                Spacer()
+                Text(recording.formattedDuration)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
+                Capsule().fill(.ultraThinMaterial)
+            }
+
+            VStack(spacing: 2) {
+                Text(statusTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .multilineTextAlignment(.center)
+
+                Text(statusSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            AnalyzingProgressDots(stage: stage)
+        }
+    }
+
+    // MARK: - Skeleton Sections
+
+    private var promptHeaderSkeleton: some View {
+        GlassCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    SkeletonBar(width: 88, height: 12)
+                    Spacer()
+                    SkeletonBar(width: 72, height: 10)
+                }
+                SkeletonBar(width: nil, height: 14)
+                SkeletonBar(width: 200, height: 14)
             }
         }
     }
 
-    private var statusPill: some View {
-        VStack(spacing: 4) {
-            Text(statusTitle)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .contentTransition(.numericText())
-                .multilineTextAlignment(.center)
-
-            Text(statusSubtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+    private var heroScoreSkeleton: some View {
+        GlassCard(tint: AppColors.glassTintPrimary) {
+            VStack(spacing: 18) {
+                HStack {
+                    SkeletonBar(width: 140, height: 14)
+                    Spacer()
+                }
+                HStack(spacing: 18) {
+                    SkeletonRing()
+                    VStack(spacing: 10) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            SkeletonSubscoreRow()
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
+    }
+
+    private var statsGridSkeleton: some View {
+        GlassCard(padding: 14) {
+            HStack(spacing: 0) {
+                ForEach(0..<4, id: \.self) { i in
+                    VStack(spacing: 6) {
+                        SkeletonBar(width: 22, height: 22, cornerRadius: 6)
+                        SkeletonBar(width: 36, height: 16)
+                        SkeletonBar(width: 44, height: 10)
+                    }
+                    .frame(maxWidth: .infinity)
+                    if i < 3 {
+                        Rectangle()
+                            .fill(.quaternary)
+                            .frame(width: 0.5, height: 40)
+                    }
+                }
+            }
+        }
+    }
+
+    private var chartSkeleton: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SkeletonBar(width: 160, height: 16)
+
+            GlassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .bottom, spacing: 6) {
+                        ForEach(0..<14, id: \.self) { i in
+                            let h: CGFloat = [28, 48, 36, 62, 44, 72, 52, 40, 58, 34, 66, 46, 54, 42][i % 14]
+                            SkeletonBar(width: nil, height: h, cornerRadius: 4)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .frame(height: 80)
+
+                    HStack {
+                        SkeletonBar(width: 40, height: 8)
+                        Spacer()
+                        SkeletonBar(width: 40, height: 8)
+                        Spacer()
+                        SkeletonBar(width: 40, height: 8)
+                    }
+                }
+            }
+        }
+    }
+
+    private var transcriptSkeleton: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SkeletonBar(width: 120, height: 16)
+                Spacer()
+                SkeletonBar(width: 28, height: 28, cornerRadius: 14)
+            }
+
+            GlassCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    SkeletonBar(width: nil, height: 12)
+                    SkeletonBar(width: nil, height: 12)
+                    SkeletonBar(width: 260, height: 12)
+                    SkeletonBar(width: nil, height: 12)
+                    SkeletonBar(width: 180, height: 12)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Skeleton Primitives
+
+private struct SkeletonBar: View {
+    var width: CGFloat? = nil
+    var height: CGFloat
+    var cornerRadius: CGFloat = 4
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(Color.white.opacity(0.08))
+            .frame(width: width, height: height)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+            .shimmer()
+    }
+}
+
+private struct SkeletonRing: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.08), lineWidth: 10)
+                .frame(width: 112, height: 112)
+            Circle()
+                .trim(from: 0, to: 0.35)
+                .stroke(Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .frame(width: 112, height: 112)
+                .rotationEffect(.degrees(-90))
+
+            VStack(spacing: 4) {
+                SkeletonBar(width: 50, height: 22)
+                SkeletonBar(width: 30, height: 8)
+            }
+        }
+        .shimmer()
+    }
+}
+
+private struct SkeletonSubscoreRow: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            SkeletonBar(width: 54, height: 10)
+            SkeletonBar(width: 90, height: 7, cornerRadius: 3.5)
+            SkeletonBar(width: 24, height: 10)
         }
     }
 }

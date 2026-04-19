@@ -9,7 +9,8 @@ struct RecordingView: View {
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
     @State private var showingVocabOverlay = false
-    @State private var showSavedToast = false
+    @State private var completedRecording: Recording?
+    @State private var hasNavigated = false
     @Query private var goals: [UserGoal]
 
     let prompt: Prompt?
@@ -28,45 +29,16 @@ struct RecordingView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            audioBackground
-
-            // Content Overlay
-            VStack(spacing: 0) {
-                // Top Bar
-                topBar
-
-                Spacer()
-
-                // Center Content (Timer)
-                centerContent
-
-                Spacer()
-
-                // Bottom Controls
-                bottomControls
-            }
-            .padding()
-
-            // Saved toast
-            if showSavedToast {
-                savedToastOverlay
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                    .zIndex(3)
-            }
-
-            // Vocab words floating overlay
-            if showingVocabOverlay, let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
-                VocabOverlayPanel(words: vocabWords) {
-                    withAnimation(.spring(response: 0.3)) {
-                        showingVocabOverlay = false
-                    }
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(2)
+            if let completedRecording {
+                feedbackGateContent(for: completedRecording)
+                    .transition(.opacity)
+                    .zIndex(5)
+            } else {
+                recordingContent
             }
         }
         .ignoresSafeArea()
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: completedRecording?.id)
         .task {
             viewModel.configure(
                 with: modelContext,
@@ -109,6 +81,109 @@ struct RecordingView: View {
         } message: {
             Text(viewModel.permissionAlertMessage)
         }
+    }
+
+    // MARK: - Recording Content
+
+    private var recordingContent: some View {
+        ZStack {
+            audioBackground
+
+            VStack(spacing: 0) {
+                topBar
+                Spacer()
+                centerContent
+                Spacer()
+                bottomControls
+            }
+            .padding()
+
+            if showingVocabOverlay, let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
+                VocabOverlayPanel(words: vocabWords) {
+                    withAnimation(.spring(response: 0.3)) {
+                        showingVocabOverlay = false
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(2)
+            }
+        }
+    }
+
+    // MARK: - Feedback Gate (pre-navigation)
+    //
+    // Presented in-place after the user stops recording. The analysis job runs
+    // in the background via RecordingProcessingCoordinator; this view blocks
+    // navigation to the detail screen until feedback is submitted or skipped
+    // (when enabled), or until analysis lands (when feedback is off).
+
+    private var feedbackEnabled: Bool {
+        userSettings.first?.sessionFeedbackEnabled ?? false
+    }
+
+    private var feedbackQuestions: [FeedbackQuestion] {
+        let custom = userSettings.first?.customFeedbackQuestions ?? []
+        return DefaultFeedbackQuestions.questions + custom
+    }
+
+    private var feedbackGateActive: Bool {
+        feedbackEnabled && !feedbackQuestions.isEmpty
+    }
+
+    @ViewBuilder
+    private func feedbackGateContent(for recording: Recording) -> some View {
+        ZStack {
+            AppBackground(style: .subtle)
+
+            AnalyzingView(
+                recording: recording,
+                isModelLoading: !speechService.isModelLoaded,
+                feedbackEnabled: feedbackEnabled,
+                feedbackQuestions: feedbackQuestions,
+                existingFeedback: recording.sessionFeedback,
+                onFeedbackSubmitted: { feedback in
+                    recording.sessionFeedback = feedback
+                    try? modelContext.save()
+                },
+                onFeedbackCompleted: {
+                    SessionFeedbackGateStore.markDismissed(recording.id)
+                    finishAndNavigate(recording)
+                },
+                analysisReady: recording.analysis != nil
+            )
+        }
+        // When feedback is off: auto-navigate once processing completes.
+        // `try? await Task.sleep` + `Task.isCancelled` guard prevents fall-through
+        // navigation if the key changes mid-sleep (coordinator lag race condition).
+        .task(id: gateStateKey(for: recording)) {
+            // Feedback active: wait for user to submit — onFeedbackCompleted drives navigation
+            if feedbackGateActive { return }
+
+            // Feedback disabled: wait for processing to complete before navigating
+            let stillProcessing =
+                recording.isProcessing ||
+                RecordingProcessingCoordinator.shared.isProcessing(recording.id)
+            guard !stillProcessing else { return }
+
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+
+            SessionFeedbackGateStore.markDismissed(recording.id)
+            finishAndNavigate(recording)
+        }
+    }
+
+    private func gateStateKey(for recording: Recording) -> [Bool] {
+        [
+            recording.isProcessing,
+            RecordingProcessingCoordinator.shared.isProcessing(recording.id)
+        ]
+    }
+
+    private func finishAndNavigate(_ recording: Recording) {
+        guard !hasNavigated else { return }
+        hasNavigated = true
+        onComplete(recording)
     }
 
     // MARK: - Audio Background
@@ -396,35 +471,8 @@ struct RecordingView: View {
         .padding(.bottom, 40)
     }
 
-    // MARK: - Saved Toast
-
-    private var savedToastOverlay: some View {
-        VStack {
-            Spacer()
-
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.green)
-
-                Text("Saved!")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 14)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
-            }
-
-            Spacer()
-        }
-        .allowsHitTesting(false)
-    }
-
     private func handleRecordingCompletion(_ recording: Recording) {
+        guard completedRecording == nil, !hasNavigated else { return }
         RecordingProcessingCoordinator.shared.enqueue(
             recordingID: recording.id,
             modelContext: modelContext,
@@ -432,12 +480,8 @@ struct RecordingView: View {
             llmService: llmService
         )
         Haptics.success()
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-            showSavedToast = true
-        }
-        Task {
-            try? await Task.sleep(for: .seconds(1.0))
-            onComplete(recording)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            completedRecording = recording
         }
     }
 }

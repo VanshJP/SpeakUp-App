@@ -63,7 +63,7 @@ struct StoriesListView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        .navigationTitle("Notes")
+        .navigationTitle("Library")
         .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: $searchBinding, prompt: "Search notes…")
         .onChange(of: searchBinding) { _, newValue in

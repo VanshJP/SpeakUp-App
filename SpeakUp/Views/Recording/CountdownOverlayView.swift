@@ -16,6 +16,7 @@ struct CountdownOverlayView: View {
 
     @State private var elapsedSeconds: Int = 0
     @State private var isPulsing: Bool = false
+    @State private var hasCompleted: Bool = false
 
     private var totalSeconds: Int { countdownDuration }
 
@@ -71,13 +72,30 @@ struct CountdownOverlayView: View {
 
                 Spacer()
 
-                GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium) {
-                    onCancel()
+                GeometryReader { geo in
+                    HStack(spacing: 12) {
+                        GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium) {
+                            onCancel()
+                        }
+                        .frame(width: (geo.size.width - 12) / 2, height: 48)
+                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+
+                        GlassButton(title: "Start Now", icon: "bolt.fill", style: .secondary, size: .medium) {
+                            skipCountdown()
+                        }
+                        .frame(width: (geo.size.width - 12) / 2, height: 48)
+                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                    }
                 }
+                .frame(height: 48)
+                .padding(.horizontal, 20)
                 .padding(.bottom, 50)
             }
         }
         .onReceive(timer) { _ in
+            guard !hasCompleted else { return }
             if elapsedSeconds < totalSeconds {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     elapsedSeconds += 1
@@ -89,6 +107,7 @@ struct CountdownOverlayView: View {
                     Haptics.light()
                 }
             } else {
+                hasCompleted = true
                 Haptics.success()
                 onComplete()
             }
@@ -101,6 +120,15 @@ struct CountdownOverlayView: View {
                 selectedGoalId = firstGoal.id
             }
         }
+    }
+
+    // MARK: - Actions
+
+    private func skipCountdown() {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        Haptics.success()
+        onComplete()
     }
 
     // MARK: - Countdown Ring
@@ -217,3 +245,4 @@ struct CountdownOverlayView: View {
         onCancel: {}
     )
 }
+

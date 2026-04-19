@@ -8,7 +8,7 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            AppBackground(style: .subtle)
+            AppBackground()
 
             ScrollView {
                 VStack(spacing: 16) {
@@ -289,7 +289,7 @@ struct AboutSettingsView: View {
 
     var body: some View {
         ZStack {
-            AppBackground(style: .subtle)
+            AppBackground()
 
             ScrollView {
                 VStack(spacing: 12) {

@@ -31,7 +31,6 @@ struct RecordingDetailView: View {
     @State private var journalReflectionText = ""
     @State private var showingJournalReflection = false
     @State private var journalSaved = false
-    @State private var dismissedFeedbackGates: Set<UUID> = []
     @State private var storiesViewModel = StoriesViewModel()
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
 
@@ -66,7 +65,7 @@ struct RecordingDetailView: View {
         feedbackEnabled &&
         recording.analysis != nil &&
         recording.sessionFeedback == nil &&
-        !dismissedFeedbackGates.contains(recording.id)
+        !SessionFeedbackGateStore.isDismissed(recording.id)
     }
 
     var body: some View {
@@ -97,7 +96,7 @@ struct RecordingDetailView: View {
                         try? modelContext.save()
                     },
                     onFeedbackCompleted: {
-                        dismissedFeedbackGates.insert(recording.id)
+                        SessionFeedbackGateStore.markDismissed(recording.id)
                         if recording.analysis != nil {
                             recording.isProcessing = false
                             try? modelContext.save()
@@ -1554,10 +1553,28 @@ private struct PlaybackDrawerContainer: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
-                Capsule()
-                    .fill(Color.white.opacity(0.35))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 8)
+                // Grabber — widens and brightens when the drawer is already at
+                // its maximum (expanded) height so the user reads the affordance
+                // as "pull down to collapse" instead of "pull up for more".
+                // Wrapped in a Button so VoiceOver users can toggle the drawer
+                // without needing the drag gesture.
+                Button {
+                    Haptics.selection()
+                    withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
+                        drawerState = drawerState == .expanded ? .collapsed : .expanded
+                    }
+                } label: {
+                    Image(systemName: drawerState == .expanded ? "chevron.compact.down" : "chevron.compact.up")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(drawerState == .expanded ? 0.55 : 0.35))
+                        .contentTransition(.symbolEffect(.replace))
+                        .padding(.top, 8)
+                        .padding(.horizontal, 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(drawerState == .expanded ? "Collapse playback drawer" : "Expand playback drawer")
+                .accessibilityAddTraits(.isButton)
 
                 if drawerState == .expanded {
                     playbackControlSection
@@ -1593,8 +1610,16 @@ private struct PlaybackDrawerContainer: View {
                 .onChanged { value in
                     let translation = value.translation.height
                     guard abs(translation) > abs(value.translation.width) else { return }
-                    if drawerState == .expanded || drawerState == .collapsed {
-                        dragOffset = max(-56, min(56, translation))
+                    switch drawerState {
+                    case .expanded:
+                        // Already at maximum height. Allow a downward pull to
+                        // collapse; clamp upward pulls to a small rubber-band
+                        // offset so the drawer visibly resists further expansion.
+                        dragOffset = max(-6, min(56, translation))
+                    case .collapsed:
+                        // Inverse: full upward travel to expand; short downward
+                        // rubber-band to signal the floor.
+                        dragOffset = max(-56, min(6, translation))
                     }
                 }
                 .onEnded { value in
