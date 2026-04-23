@@ -47,10 +47,20 @@ class RecordingViewModel {
     // Audio level for waveform visualization
     var audioLevel: Float = -160
 
-    // Audio level samples for volume analysis (collected every ~0.5s)
-    var audioLevelSamples: [Float] = []
-    var audioLevelSampleCounter = 0
+    // Audio level samples for volume analysis (collected every ~0.5s).
+    // @ObservationIgnored: never read by any view — only the view-model
+    // itself and SpeechService.analyze consume it. Keeping it observable
+    // fires the observation registrar on every 0.5s append for no gain.
+    @ObservationIgnored var audioLevelSamples: [Float] = []
+    @ObservationIgnored var audioLevelSampleCounter = 0
     var lastCoachingWordCount = 0
+
+    /// Soft cap for `audioLevelSamples` to protect long `.keepGoing` sessions.
+    /// 7200 samples = 1 hour at 0.5s cadence. When reached, oldest 1800
+    /// (= 15 min) are dropped FIFO so the retained window still represents
+    /// the session without unbounded growth.
+    static let audioLevelSampleCap = 7200
+    static let audioLevelSampleDropChunk = 1800
 
     // Live filler counter
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
@@ -58,8 +68,11 @@ class RecordingViewModel {
     // Filler word config (set before recording starts)
     var fillerConfig: FillerWordConfig = .default
 
+    // Single 10 Hz timer drives timer progress AND audio-level sampling.
+    // Previously two separate timers enqueued 20 main-actor tasks/sec,
+    // saturating the main actor and causing coaching-cue animations to
+    // stall or crash under load.
     var timer: Timer?
-    var audioLevelTimer: Timer?
     var modelContext: ModelContext?
 
     func configure(

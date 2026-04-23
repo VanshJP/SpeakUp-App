@@ -72,24 +72,27 @@ struct CountdownOverlayView: View {
 
                 Spacer()
 
-                GeometryReader { geo in
-                    HStack(spacing: 12) {
-                        GlassButton(title: "Cancel", icon: "xmark", style: .secondary, size: .medium) {
-                            onCancel()
-                        }
-                        .frame(width: (geo.size.width - 12) / 2, height: 48)
-                        .contentShape(Rectangle())
-                        .buttonStyle(.plain)
+                HStack(spacing: 12) {
+                    GlassButton(
+                        title: "Cancel",
+                        icon: "xmark",
+                        style: .secondary,
+                        size: .medium,
+                        fullWidth: true
+                    ) {
+                        onCancel()
+                    }
 
-                        GlassButton(title: "Start Now", icon: "bolt.fill", style: .secondary, size: .medium) {
-                            skipCountdown()
-                        }
-                        .frame(width: (geo.size.width - 12) / 2, height: 48)
-                        .contentShape(Rectangle())
-                        .buttonStyle(.plain)
+                    GlassButton(
+                        title: "Start Now",
+                        icon: "bolt.fill",
+                        style: .primary,
+                        size: .medium,
+                        fullWidth: true
+                    ) {
+                        skipCountdown()
                     }
                 }
-                .frame(height: 48)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 50)
             }

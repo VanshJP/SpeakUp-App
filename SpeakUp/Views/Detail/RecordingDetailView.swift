@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftData
-import AVKit
+import AVFoundation
 
 struct RecordingDetailView: View {
     @Environment(\.modelContext) private var modelContext
@@ -1550,6 +1550,14 @@ private struct PlaybackDrawerContainer: View {
     @State private var drawerState: PlaybackDrawerState = .expanded
     @State private var dragOffset: CGFloat = 0
 
+    // Gesture tuning. Distances in points, velocities in points/sec.
+    private let drawerSpring: Animation = .spring(response: 0.26, dampingFraction: 0.90)
+    private let collapseDistance: CGFloat = 50      // drag-to-close threshold
+    private let expandDistance: CGFloat = 40        // drag-to-open threshold
+    private let flickVelocity: CGFloat = 320        // points/sec to snap on a flick
+    private let rubberBandLimit: CGFloat = 56       // resistance sets in past this
+    private let rubberBandFactor: CGFloat = 0.32    // smaller = stiffer past limit
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
@@ -1560,14 +1568,17 @@ private struct PlaybackDrawerContainer: View {
                 // without needing the drag gesture.
                 Button {
                     Haptics.selection()
-                    withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
+                    withAnimation(drawerSpring) {
                         drawerState = drawerState == .expanded ? .collapsed : .expanded
                     }
                 } label: {
-                    Image(systemName: drawerState == .expanded ? "chevron.compact.down" : "chevron.compact.up")
+                    // Single chevron rotated in-place so the affordance flips
+                    // smoothly in sync with the drawer's spring, instead of
+                    // cross-fading between two separate SF Symbols.
+                    Image(systemName: "chevron.compact.up")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(drawerState == .expanded ? 0.55 : 0.35))
-                        .contentTransition(.symbolEffect(.replace))
+                        .rotationEffect(.degrees(drawerState == .expanded ? 180 : 0))
                         .padding(.top, 8)
                         .padding(.horizontal, 40)
                         .contentShape(Rectangle())
@@ -1603,51 +1614,101 @@ private struct PlaybackDrawerContainer: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .contentShape(Rectangle())
-        .animation(.spring(response: 0.30, dampingFraction: 0.86), value: drawerState)
+        .animation(drawerSpring, value: drawerState)
         .offset(y: dragOffset)
         .simultaneousGesture(
-            DragGesture(minimumDistance: 10)
+            // minimumDistance 3 keeps the grabber button tappable while still
+            // picking up finger travel almost immediately — prevents the
+            // "drag starts 10pt in" lag the old 10pt gate produced.
+            DragGesture(minimumDistance: 3)
                 .onChanged { value in
                     let translation = value.translation.height
+                    // Direction filter: ignore drags that are mostly horizontal
+                    // so the gesture does not fight sibling scroll/list views.
                     guard abs(translation) > abs(value.translation.width) else { return }
                     switch drawerState {
                     case .expanded:
-                        // Already at maximum height. Allow a downward pull to
-                        // collapse; clamp upward pulls to a small rubber-band
-                        // offset so the drawer visibly resists further expansion.
-                        dragOffset = max(-6, min(56, translation))
+                        // Top is the natural floor in this state: strictly
+                        // clamp upward (negative) pulls to 0 — the drawer
+                        // never peeks above its maximum height. Downward
+                        // travel tracks the finger 1:1 until `rubberBandLimit`,
+                        // then resistance climbs so the drawer feels tethered.
+                        if translation <= 0 {
+                            dragOffset = 0
+                        } else {
+                            dragOffset = Self.rubberBanded(
+                                translation,
+                                limit: rubberBandLimit,
+                                factor: rubberBandFactor
+                            )
+                        }
                     case .collapsed:
-                        // Inverse: full upward travel to expand; short downward
-                        // rubber-band to signal the floor.
-                        dragOffset = max(-56, min(6, translation))
+                        // Inverse: upward is "open", downward is already past
+                        // the floor of the collapsed state so rubber-band it
+                        // firmly to signal the boundary.
+                        if translation >= 0 {
+                            dragOffset = Self.rubberBanded(
+                                translation,
+                                limit: 4,
+                                factor: 0.18
+                            )
+                        } else {
+                            dragOffset = -Self.rubberBanded(
+                                -translation,
+                                limit: rubberBandLimit,
+                                factor: rubberBandFactor
+                            )
+                        }
                     }
                 }
                 .onEnded { value in
                     let translation = value.translation.height
-                    let velocity = value.predictedEndTranslation.height
+                    let velocity = value.velocity.height     // points/sec, iOS 17+
+                    let previousState = drawerState
 
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
-                        dragOffset = 0
-
-                        if drawerState == .expanded && (translation > 34 || velocity > 180) {
-                            drawerState = .collapsed
-                        } else if drawerState == .collapsed && (translation < -30 || velocity < -170) {
-                            drawerState = .expanded
+                    // Snap decision blends distance and velocity:
+                    //   — a short swipe with a strong flick still commits,
+                    //   — a long slow drag also commits,
+                    //   — everything else returns to its origin.
+                    // Using the same spring as the state `.animation(_:value:)`
+                    // so the offset release and the state change unwind as
+                    // one motion, with no visible seam at the hand-off.
+                    withAnimation(drawerSpring) {
+                        switch drawerState {
+                        case .expanded:
+                            if translation > collapseDistance || velocity > flickVelocity {
+                                drawerState = .collapsed
+                            }
+                        case .collapsed:
+                            if translation < -expandDistance || velocity < -flickVelocity {
+                                drawerState = .expanded
+                            }
                         }
+                        dragOffset = 0
+                    }
+
+                    // Physical confirmation only when the drawer actually
+                    // commits to a new state — no haptic on return-to-origin.
+                    if drawerState != previousState {
+                        Haptics.light()
                     }
                 }
         )
-        .onAppear {
-            drawerState = .expanded
-            dragOffset = 0
-        }
         .onChange(of: playbackViewModel.isPlaying) { _, isPlaying in
             if isPlaying {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                withAnimation(drawerSpring) {
                     drawerState = .expanded
                 }
             }
         }
+    }
+
+    /// Progressive resistance past `limit`: finger travel still moves the
+    /// drawer but each additional point contributes `factor` as much. Keeps
+    /// the drag feeling alive without letting the drawer slide unbounded.
+    private static func rubberBanded(_ offset: CGFloat, limit: CGFloat, factor: CGFloat) -> CGFloat {
+        guard offset > limit else { return offset }
+        return limit + (offset - limit) * factor
     }
 
     @ViewBuilder
@@ -1665,7 +1726,7 @@ private struct PlaybackDrawerContainer: View {
 
                 Button {
                     Haptics.light()
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.84)) {
+                    withAnimation(drawerSpring) {
                         drawerState = .collapsed
                     }
                 } label: {
@@ -1787,7 +1848,7 @@ private struct PlaybackDrawerContainer: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+            withAnimation(drawerSpring) {
                 drawerState = .expanded
             }
         }

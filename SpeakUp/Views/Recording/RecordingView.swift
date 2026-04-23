@@ -284,23 +284,9 @@ struct RecordingView: View {
                     }
                 }
 
-                // Voice activity indicator (top right)
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(viewModel.audioLevel > -40 ? Color.green : Color.gray)
-                        .frame(width: 8, height: 8)
-                        .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
-
-                    Text(viewModel.audioLevel > -40 ? "Speaking" : "Silent")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(viewModel.audioLevel > -40 ? .white : .white.opacity(0.6))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                }
+                // Voice activity indicator — extracted so it only re-renders
+                // when the boolean flips, not on every 0.1 s audioLevel write.
+                VoiceActivityPill(isSpeaking: viewModel.audioLevel > -40)
             }
 
             // Compact prompt card at top (during recording)
@@ -406,56 +392,56 @@ struct RecordingView: View {
                 .foregroundStyle(.white)
                 .lineLimit(3)
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        }
+        .glassCard(cornerRadius: 16)
         .padding(.horizontal)
     }
 
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
-        VStack(spacing: 24) {
+        // Snapshot observable reads into locals. Each child subview receives
+        // only the fields it needs as plain values — SwiftUI short-circuits
+        // child diffs when inputs are unchanged, so waveform (driven by
+        // audioLevel) doesn't re-render on filler-count / coaching-cue
+        // updates, and vice versa.
+        let cue = viewModel.coachingService.currentCue
+        let isRecording = viewModel.isRecording
+        let fillerCount = viewModel.liveFillerCount
+        let level = viewModel.audioLevel
+
+        return VStack(spacing: 24) {
             // Coaching cue
-            if let cue = viewModel.coachingService.currentCue, viewModel.isRecording {
+            if let cue, isRecording {
                 coachingCueView(cue)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .id(cue.message)
             }
 
             // Live filler counter
-            if viewModel.isRecording {
-                FillerCounterOverlay(count: viewModel.liveFillerCount)
+            if isRecording {
+                FillerCounterOverlay(count: fillerCount)
             }
 
-            // Record Button with circular waveform
-            ZStack {
-                // Circular waveform around button
-                if viewModel.isRecording {
-                    CircularWaveformView(audioLevel: viewModel.audioLevel)
-                }
-
-                RecordButton(
-                    isRecording: viewModel.isRecording,
-                    onTap: {
-                        Task {
-                            if viewModel.isRecording {
-                                if let recording = await viewModel.stopRecording() {
-                                    handleRecordingCompletion(recording)
-                                }
-                            } else {
-                                await viewModel.startRecording()
+            RecordButtonWaveformStack(
+                audioLevel: level,
+                isRecording: isRecording,
+                onTap: {
+                    Task {
+                        if viewModel.isRecording {
+                            if let recording = await viewModel.stopRecording() {
+                                handleRecordingCompletion(recording)
                             }
+                        } else {
+                            await viewModel.startRecording()
                         }
                     }
-                )
-            }
+                }
+            )
 
             // Hint text
-            Text(viewModel.isRecording ? "Tap to stop" : "Tap to start recording")
+            Text(isRecording ? "Tap to stop" : "Tap to start recording")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .padding(.horizontal, 16)
@@ -464,9 +450,9 @@ struct RecordingView: View {
                     Capsule()
                         .fill(.ultraThinMaterial)
                 }
-                .id(viewModel.isRecording)
+                .id(isRecording)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .animation(.easeInOut(duration: 0.2), value: viewModel.isRecording)
+                .animation(.easeInOut(duration: 0.2), value: isRecording)
         }
         .padding(.bottom, 40)
     }
@@ -499,13 +485,14 @@ struct CircularWaveformView: View {
     var audioLevel: Float = 0
     var autoAnimate: Bool = false
 
-    private let barCount = 48
-    private let baseRadius: CGFloat = 70
-    private let maxBarHeight: CGFloat = 35
+    private let barCount = 54
+    private let baseRadius: CGFloat = 72
+    private let maxBarHeight: CGFloat = 44
+    private let minBarHeight: CGFloat = 8
     private let barWidth: CGFloat = 3
-    private let canvasSize: CGFloat = 200
+    private let canvasSize: CGFloat = 220
 
-    @State private var smoothedLevel: CGFloat = 0.15
+    @State private var smoothedLevel: CGFloat = 0.18
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
@@ -513,22 +500,27 @@ struct CircularWaveformView: View {
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let time = context.date.timeIntervalSinceReferenceDate
                 let baseLevel: CGFloat = autoAnimate ? 0.55 : smoothedLevel
-                let gradient = Gradient(colors: [.teal, .cyan])
+                let gradient = Gradient(colors: [AppColors.primary, .cyan])
 
                 for i in 0..<barCount {
                     let angle = (Double(i) / Double(barCount)) * 2 * .pi
+                    // Two detuned sines give each bar an organic, non-repeating
+                    // bob that still tracks the incoming audio envelope.
                     let wave = sin(time * 3.0 + Double(i) * 0.35) * 0.22
                     let variation = sin(Double(i) * 1.7 + time * 1.1) * 0.12
-                    let h = max(0.12, min(1.0, baseLevel + CGFloat(wave) + CGFloat(variation)))
-                    let barLength = maxBarHeight * h
+                    let h = max(0.15, min(1.0, baseLevel + CGFloat(wave) + CGFloat(variation)))
+                    let barLength = minBarHeight + (maxBarHeight - minBarHeight) * h
+                    let half = barLength / 2
 
                     var layer = graphics
                     layer.translateBy(x: center.x, y: center.y)
                     layer.rotate(by: .radians(angle))
 
+                    // Capsule centered on the ring perimeter — half extends
+                    // inward, half outward, producing a mirrored spoke.
                     let rect = CGRect(
                         x: -barWidth / 2,
-                        y: -(baseRadius + barLength),
+                        y: -(baseRadius + half),
                         width: barWidth,
                         height: barLength
                     )
@@ -537,8 +529,8 @@ struct CircularWaveformView: View {
                         path,
                         with: .linearGradient(
                             gradient,
-                            startPoint: CGPoint(x: 0, y: -baseRadius),
-                            endPoint: CGPoint(x: 0, y: -(baseRadius + maxBarHeight))
+                            startPoint: CGPoint(x: 0, y: -(baseRadius + half)),
+                            endPoint: CGPoint(x: 0, y: -(baseRadius - half))
                         )
                     )
                 }
@@ -549,7 +541,55 @@ struct CircularWaveformView: View {
         .onChange(of: audioLevel) { _, newLevel in
             guard !autoAnimate else { return }
             let normalized = CGFloat(max(0, min(1, (Double(newLevel) + 60) / 60)))
-            smoothedLevel = smoothedLevel * 0.7 + normalized * 0.3
+            smoothedLevel = smoothedLevel * 0.72 + normalized * 0.28
+        }
+    }
+}
+
+// MARK: - Voice Activity Pill
+
+/// Isolated so the capsule + dot only re-render when the speaking boolean
+/// flips, not on every 0.1 s audioLevel write.
+private struct VoiceActivityPill: View {
+    let isSpeaking: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isSpeaking ? Color.green : Color.gray)
+                .frame(width: 8, height: 8)
+                .animation(.easeInOut(duration: 0.15), value: isSpeaking)
+
+            Text(isSpeaking ? "Speaking" : "Silent")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(isSpeaking ? .white : .white.opacity(0.6))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+        }
+    }
+}
+
+// MARK: - Record Button + Waveform Stack
+
+/// POD container for the circular waveform and record button. Isolated so
+/// the waveform subtree does not re-diff when filler-count / coaching-cue
+/// state changes further up in `bottomControls`.
+private struct RecordButtonWaveformStack: View {
+    let audioLevel: Float
+    let isRecording: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        ZStack {
+            if isRecording {
+                CircularWaveformView(audioLevel: audioLevel)
+            }
+
+            RecordButton(isRecording: isRecording, onTap: onTap)
         }
     }
 }
@@ -598,14 +638,7 @@ struct VocabOverlayPanel: View {
                 }
             }
             .padding(14)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    }
-            }
+            .glassCard(cornerRadius: 16)
             .padding(.horizontal, 20)
             .padding(.top, 110)
 

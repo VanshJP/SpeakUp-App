@@ -14,6 +14,10 @@ extension RecordingViewModel {
                 guard let self else { return }
 
                 Task { @MainActor in
+                    // Audio-level sampling piggy-backs on this same timer to
+                    // keep the main-actor task rate at 10/s (not 20/s).
+                    self.sampleAudioLevelTick()
+
                     self.remainingTime -= 0.1
                     self.recordingDuration = TimeInterval(self.targetDuration.seconds) - self.remainingTime
 

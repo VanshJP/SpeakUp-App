@@ -17,21 +17,25 @@ struct FrameworkOverlayView: View {
         return framework.sections.count - 1
     }
 
-    private var currentSection: FrameworkSection {
-        framework.sections[currentSectionIndex]
+    private var currentSection: FrameworkSection? {
+        framework.sections.indices.contains(currentSectionIndex)
+            ? framework.sections[currentSectionIndex]
+            : nil
     }
 
     var body: some View {
         VStack(spacing: 8) {
             // Section name and hint
-            VStack(spacing: 4) {
-                Text(currentSection.title)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
+            if let currentSection {
+                VStack(spacing: 4) {
+                    Text(currentSection.title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
 
-                Text(currentSection.hint)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+                    Text(currentSection.hint)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
             }
 
             // Progress dots
@@ -59,14 +63,7 @@ struct FrameworkOverlayView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                }
-        }
+        .glassCard(cornerRadius: 14)
         .animation(.easeInOut(duration: 0.3), value: currentSectionIndex)
     }
 }

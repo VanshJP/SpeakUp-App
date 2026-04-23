@@ -51,83 +51,10 @@ enum WidgetDataProvider {
         defaults.set(date.timeIntervalSince1970, forKey: "lastPracticeDate")
     }
 
-    // MARK: - Read (from widget)
-
-    static var currentStreak: Int {
-        defaults.integer(forKey: "currentStreak")
-    }
-
-    static var todaysPromptText: String {
-        defaults.string(forKey: "todaysPromptText") ?? "Open the app to get your daily prompt"
-    }
-
-    static var todaysPromptCategory: String {
-        defaults.string(forKey: "todaysPromptCategory") ?? ""
-    }
-
-    static var todaysPromptId: String {
-        defaults.string(forKey: "todaysPromptId") ?? ""
-    }
-
-    static var lastScore: Int {
-        defaults.integer(forKey: "lastScore")
-    }
-
-    static var weeklySessionCount: Int {
-        defaults.integer(forKey: "weeklySessionCount")
-    }
-
-    static var weeklyGoalSessions: Int {
-        let value = defaults.integer(forKey: "weeklyGoalSessions")
-        return value == 0 ? 5 : value
-    }
-
-    static var weeklyAverageScore: Int {
-        defaults.integer(forKey: "weeklyAverageScore")
-    }
-
-    static var weeklyPracticeMinutes: Int {
-        defaults.integer(forKey: "weeklyPracticeMinutes")
-    }
-
-    static var dailyChallengeTitle: String {
-        defaults.string(forKey: "dailyChallengeTitle") ?? "Open app for today's challenge"
-    }
-
-    static var dailyChallengeDescription: String {
-        defaults.string(forKey: "dailyChallengeDescription") ?? ""
-    }
-
-    static var dailyChallengeIcon: String {
-        defaults.string(forKey: "dailyChallengeIcon") ?? "target"
-    }
-
-    static var dailyChallengeCompleted: Bool {
-        defaults.bool(forKey: "dailyChallengeCompleted")
-    }
-
     // MARK: - Story Data
 
-    static func updateLatestStory(title: String, preview: String) {
+    static func updateLatestStory(title: String) {
         defaults.set(title, forKey: "latestStoryTitle")
-        defaults.set(preview, forKey: "latestStoryPreview")
-        defaults.set(storyCount + 1, forKey: "storyCount")
+        defaults.set(defaults.integer(forKey: "storyCount") + 1, forKey: "storyCount")
     }
-
-    static func updateStoryCount(_ count: Int) {
-        defaults.set(count, forKey: "storyCount")
-    }
-
-    static var latestStoryTitle: String {
-        defaults.string(forKey: "latestStoryTitle") ?? ""
-    }
-
-    static var latestStoryPreview: String {
-        defaults.string(forKey: "latestStoryPreview") ?? ""
-    }
-
-    static var storyCount: Int {
-        defaults.integer(forKey: "storyCount")
-    }
-
 }

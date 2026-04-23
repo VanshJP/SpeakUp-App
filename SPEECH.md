@@ -396,6 +396,15 @@ The blended value replaces the stored `SpeechAnalysis.speechScore.subscores.rele
 | 60 s polished, structured talk | 78–92 | Full substance × near-1.0 multiplier |
 | 90 s profound, well-structured | 85–96 | Full substance + rhetoric + relevance |
 
+## Live pipeline safeguards
+- Live transcription is re-entry-safe: `LiveTranscriptionService.start()` calls `stopInternal()` when already active, so the engine, tap, recognition request, and recognition task are always torn down before a new session is created. Prevents `AVAudioEngine` crashes when the record button is double-tapped or the view-model re-invokes `start()` before teardown completes.
+- The recording view-model drives all real-time UI from a single 10 Hz main-actor `Timer` in `RecordingViewModel+Timer`. Audio-level sampling piggy-backs on the same tick via `sampleAudioLevelTick()` — the previous separate `audioLevelTimer` was deleted. Main-actor task enqueue rate halved from 20/s to 10/s.
+- `audioLevel` writes are gated by a 1 dB delta to avoid redundant `@Observable` invalidations (performance-patterns §1). Waveform smoothing in `CircularWaveformView` compensates for the reduced cadence.
+- `audioLevelSamples` / `audioLevelSampleCounter` are `@ObservationIgnored` — never read by any view, so no observation registrar traffic. The array is soft-capped at `audioLevelSampleCap = 7200` (1 hour at 0.5 s cadence) with FIFO drop of `audioLevelSampleDropChunk = 1800` when the cap is reached. `reserveCapacity(targetDuration.seconds * 2 + 32)` is called up front to amortize allocations.
+- `FrameworkOverlayView.currentSection` is bounds-checked (`framework.sections.indices.contains(currentSectionIndex)`) and its body guards with `if let` to eliminate the latent force-subscript on empty sections.
+- `HapticCoachingService` fires the silence cue once per silence window via a `silenceCueFired` gate (reset on voice return and in `reset()`), removing repeated `showCue`/`fireHaptic` calls while silence persists. `UIImpactFeedbackGenerator` (light + medium) and `UINotificationFeedbackGenerator` instances are stored and `prepare()`-ed in `init`, reused across the session instead of instantiated per fire.
+- The real-time feedback bar (`bottomControls` in `RecordingView`) snapshots observable reads (`currentCue`, `isRecording`, `liveFillerCount`, `audioLevel`) into locals once per parent re-evaluation and hands each child subview only the fields it needs. `RecordButtonWaveformStack` and `VoiceActivityPill` are POD wrappers so the waveform subtree does not re-diff on filler-count or coaching-cue updates, and the top-bar pill does not re-render until the speaking boolean flips.
+
 ## Data and decode caveats
 - `SpeechAnalysis.init(from:)` nulls advanced fields for older recordings; forward compatibility via `decodeIfPresent`.
 - `Recording.audioLevelSamples` is `@Transient` — not persisted; regenerated from the audio file when needed.

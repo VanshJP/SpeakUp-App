@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct ReminderSettingsView: View {
     @Bindable var viewModel: SettingsViewModel

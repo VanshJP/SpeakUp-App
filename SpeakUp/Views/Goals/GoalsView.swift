@@ -5,7 +5,6 @@ struct GoalsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = GoalsViewModel()
-    @State private var showingAddGoal = false
 
     var body: some View {
         NavigationStack {

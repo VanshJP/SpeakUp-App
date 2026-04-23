@@ -370,8 +370,7 @@ class StoriesViewModel {
             recomputeFilteredStories()
 
             WidgetDataProvider.updateLatestStory(
-                title: title.isEmpty ? "Untitled Spark" : title,
-                preview: story.contentPreview
+                title: title.isEmpty ? "Untitled Spark" : title
             )
 
             return story

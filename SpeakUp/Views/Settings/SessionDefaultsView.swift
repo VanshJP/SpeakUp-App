@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct SessionDefaultsView: View {
     @Bindable var viewModel: SettingsViewModel

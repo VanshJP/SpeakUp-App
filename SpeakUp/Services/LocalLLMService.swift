@@ -3,26 +3,6 @@ import LlamaSwift
 
 // MARK: - Types
 
-enum LocalLLMError: LocalizedError {
-    case modelNotDownloaded
-    case downloadFailed(String)
-    case failedToLoadModel
-    case failedToCreateContext
-    case generationFailed
-    case insufficientMemory
-
-    var errorDescription: String? {
-        switch self {
-        case .modelNotDownloaded: return "Model not downloaded"
-        case .downloadFailed(let msg): return "Download failed: \(msg)"
-        case .failedToLoadModel: return "Failed to load LLM model"
-        case .failedToCreateContext: return "Failed to create inference context"
-        case .generationFailed: return "Text generation failed"
-        case .insufficientMemory: return "Insufficient memory for LLM inference"
-        }
-    }
-}
-
 enum LocalModelState: Equatable {
     case notDownloaded
     case downloading(progress: Double)

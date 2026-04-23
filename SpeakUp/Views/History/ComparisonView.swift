@@ -5,12 +5,6 @@ struct ComparisonView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ComparisonViewModel()
 
-    private var scoreChange: Int {
-        guard let a = viewModel.recordingA?.analysis?.speechScore.overall,
-              let b = viewModel.recordingB?.analysis?.speechScore.overall else { return 0 }
-        return b - a
-    }
-
     var body: some View {
         ZStack {
             AppBackground()

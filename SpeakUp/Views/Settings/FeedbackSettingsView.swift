@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct FeedbackSettingsView: View {
     @Bindable var viewModel: SettingsViewModel

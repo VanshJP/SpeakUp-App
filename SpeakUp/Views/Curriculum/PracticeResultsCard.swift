@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct PracticeResultsCard: View {
     let recording: Recording

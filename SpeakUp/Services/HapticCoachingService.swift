@@ -30,9 +30,26 @@ class HapticCoachingService {
     private var lastFillerCount = 0
     private var cueDismissTask: Task<Void, Never>?
 
+    /// Gate so one silence window fires one cue, not one per sample tick.
+    /// Reset when voice returns (level > -40) and in `reset()`.
+    private var silenceCueFired = false
+
     private let hapticCooldown: TimeInterval = 3.0
     private let cueCooldown: TimeInterval = 6.0
     private let cueDisplayDuration: TimeInterval = 3.5
+
+    // Prepared haptic generators. `prepare()` is called in `init` so the
+    // first fire doesn't incur the per-call instantiation cost on the
+    // already-saturated main actor during recording.
+    private let lightGenerator = UIImpactFeedbackGenerator(style: .light)
+    private let mediumGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private let warningGenerator = UINotificationFeedbackGenerator()
+
+    init() {
+        lightGenerator.prepare()
+        mediumGenerator.prepare()
+        warningGenerator.prepare()
+    }
 
     // MARK: - Public API
 
@@ -43,9 +60,11 @@ class HapticCoachingService {
         if level > -40 {
             silenceDuration = 0
             lastAudioTime = now
+            silenceCueFired = false
         } else {
             silenceDuration = now.timeIntervalSince(lastAudioTime)
-            if silenceDuration >= silenceThreshold {
+            if silenceDuration >= silenceThreshold && !silenceCueFired {
+                silenceCueFired = true
                 fireHaptic(.light, double: true)
                 showCue(CoachingCue(
                     message: "You've been quiet — keep going!",
@@ -110,6 +129,7 @@ class HapticCoachingService {
         lastHapticTime = .distantPast
         lastCueTime = .distantPast
         lastFillerCount = 0
+        silenceCueFired = false
         cueDismissTask?.cancel()
         currentCue = nil
     }
@@ -126,17 +146,17 @@ class HapticCoachingService {
 
         switch type {
         case .light:
-            let generator = UIImpactFeedbackGenerator(style: .light)
-            generator.impactOccurred()
+            lightGenerator.impactOccurred()
             if double {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    generator.impactOccurred()
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    self?.lightGenerator.impactOccurred()
                 }
             }
         case .medium:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            mediumGenerator.impactOccurred()
         case .warning:
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            warningGenerator.notificationOccurred(.warning)
         }
     }
 

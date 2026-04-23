@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct DetailAnalysisTab: View {
     let recording: Recording

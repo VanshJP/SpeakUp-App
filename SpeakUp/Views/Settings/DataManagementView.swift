@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct DataManagementView: View {
     @Bindable var viewModel: SettingsViewModel

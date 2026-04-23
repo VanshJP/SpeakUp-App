@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct AnalysisSettingsView: View {
     @Bindable var viewModel: SettingsViewModel

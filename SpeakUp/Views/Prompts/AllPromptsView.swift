@@ -696,45 +696,6 @@ struct PromptStatItem: View {
     }
 }
 
-// MARK: - Category Chip
-
-struct CategoryChip: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.caption2)
-                Text(title)
-                    .font(.caption.weight(.medium))
-            }
-            .foregroundStyle(isSelected ? .white : .secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background {
-                if isSelected {
-                    Capsule()
-                        .fill(color.opacity(0.7))
-                } else {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule()
-                                .stroke(.white.opacity(0.08), lineWidth: 0.5)
-                        }
-                }
-            }
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Prompt Row
 
 struct PromptRow: View {

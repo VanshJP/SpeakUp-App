@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct PromptSettingsView: View {
     @Bindable var viewModel: SettingsViewModel

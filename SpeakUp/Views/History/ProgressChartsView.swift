@@ -3,7 +3,6 @@ import SwiftData
 import Charts
 
 struct ProgressChartsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
 
     @State private var selectedTab: ChartTab = .score

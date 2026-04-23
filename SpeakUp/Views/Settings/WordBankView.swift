@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct WordBankView: View {
     @Environment(\.dismiss) private var dismiss
@@ -299,24 +298,6 @@ struct WordBankView: View {
                 viewModel.addVocabWords(words)
             } else if selectedTab == 1 {
                 viewModel.addDictationBiasWords(words)
-            }
-        }
-    }
-
-    /// Add newly recognized words incrementally while dictation is still active.
-    private func addNewWords() {
-        let words = dictationEngine.recognizedWords
-        let startIndex = dictationEngine.lastAddedIndex
-        guard words.count > startIndex else { return }
-
-        let newWords = Array(words[startIndex...])
-        dictationEngine.lastAddedIndex = words.count
-
-        withAnimation(.spring(duration: 0.25)) {
-            if selectedTab == 0 {
-                viewModel.addVocabWords(newWords)
-            } else if selectedTab == 1 {
-                viewModel.addDictationBiasWords(newWords)
             }
         }
     }

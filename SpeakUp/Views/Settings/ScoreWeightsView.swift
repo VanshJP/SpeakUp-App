@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct ScoreWeightsView: View {
     @Bindable var viewModel: SettingsViewModel

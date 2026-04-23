@@ -8,7 +8,6 @@ struct JournalExportView: View {
         return f
     }()
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Recording.date, order: .reverse) private var allRecordings: [Recording]
     @Query private var achievements: [Achievement]

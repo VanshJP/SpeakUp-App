@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct CurriculumProgressCard: View {
     var viewModel: CurriculumViewModel
