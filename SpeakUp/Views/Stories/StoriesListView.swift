@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct StoriesListView: View {
+struct StoriesListView<Header: View>: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var viewModel: StoriesViewModel
@@ -17,53 +17,71 @@ struct StoriesListView: View {
     var onStartPractice: ((Story) -> Void)?
     var onSendToWarmUp: ((Story) -> Void)?
     var onSendToDrill: ((Story) -> Void)?
+    private let pinnedHeader: Header
+
+    init(
+        viewModel: StoriesViewModel,
+        onStartPractice: ((Story) -> Void)? = nil,
+        onSendToWarmUp: ((Story) -> Void)? = nil,
+        onSendToDrill: ((Story) -> Void)? = nil,
+        @ViewBuilder pinnedHeader: () -> Header
+    ) {
+        self.viewModel = viewModel
+        self.onStartPractice = onStartPractice
+        self.onSendToWarmUp = onSendToWarmUp
+        self.onSendToDrill = onSendToDrill
+        self.pinnedHeader = pinnedHeader()
+    }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView {
-                VStack(spacing: 16) {
-                    StoryFolderBar(
-                        viewModel: viewModel,
-                        onCreateFolder: {
-                            folderEditorPresentation = .create
-                        },
-                        onEditFolder: { folder in
-                            folderEditorPresentation = .edit(folder)
+                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        StoryFolderBar(
+                            viewModel: viewModel,
+                            onCreateFolder: {
+                                folderEditorPresentation = .create
+                            },
+                            onEditFolder: { folder in
+                                folderEditorPresentation = .edit(folder)
+                            }
+                        )
+
+                        if viewModel.stories.isEmpty {
+                            EmptyStateCard(
+                                icon: "note.text",
+                                title: "Your Notebook",
+                                message: "Jot drafts, capture quick ideas, and reflect on practice sessions. Tap + to start."
+                            )
+                            .padding(.top, 20)
+                        } else if viewModel.filteredStories.isEmpty {
+                            EmptyStateCard(
+                                icon: "magnifyingglass",
+                                title: "Nothing Here",
+                                message: "No notes match this filter. Try another folder or search."
+                            )
+                            .padding(.top, 20)
+                        } else {
+                            storyList
                         }
-                    )
-                    .padding(.horizontal, 20)
 
-                    if viewModel.stories.isEmpty {
-                        EmptyStateCard(
-                            icon: "note.text",
-                            title: "Your Notebook",
-                            message: "Jot drafts, capture quick ideas, and reflect on practice sessions. Tap + to start."
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                    } else if viewModel.filteredStories.isEmpty {
-                        EmptyStateCard(
-                            icon: "magnifyingglass",
-                            title: "Nothing Here",
-                            message: "No notes match this filter. Try another folder or search."
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                    } else {
-                        storyList
-                            .padding(.horizontal, 20)
+                        Color.clear.frame(height: 88) // FAB breathing room
+                    } header: {
+                        pinnedHeader
                     }
-
-                    Color.clear.frame(height: 88) // FAB breathing room
                 }
-                .padding(.vertical, 16)
+                .padding(.horizontal)
+                .padding(.bottom, 16)
             }
+            .scrollIndicators(.hidden)
 
             floatingActionButton
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
         .navigationTitle("Library")
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: $searchBinding, prompt: "Search notes…")
         .onChange(of: searchBinding) { _, newValue in
@@ -329,6 +347,23 @@ struct StoriesListView: View {
     private var currentFolderId: UUID? {
         if case .folder(let id) = viewModel.folderSelection { return id }
         return nil
+    }
+}
+
+extension StoriesListView where Header == EmptyView {
+    init(
+        viewModel: StoriesViewModel,
+        onStartPractice: ((Story) -> Void)? = nil,
+        onSendToWarmUp: ((Story) -> Void)? = nil,
+        onSendToDrill: ((Story) -> Void)? = nil
+    ) {
+        self.init(
+            viewModel: viewModel,
+            onStartPractice: onStartPractice,
+            onSendToWarmUp: onSendToWarmUp,
+            onSendToDrill: onSendToDrill,
+            pinnedHeader: { EmptyView() }
+        )
     }
 }
 

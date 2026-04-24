@@ -17,31 +17,37 @@ struct PracticeHubView: View {
         ZStack {
             AppBackground()
 
-            VStack(spacing: 0) {
-                sectionPicker
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-
-                ZStack {
-                    switch selectedSection {
-                    case .prompts:
-                        AllPromptsView(onSelectPrompt: onSelectPrompt)
-                            .transition(.opacity)
-                    case .journal:
-                        StoriesListView(
-                            viewModel: storiesViewModel,
-                            onStartPractice: onStartStoryPractice,
-                            onSendToWarmUp: onSendToWarmUp,
-                            onSendToDrill: onSendToDrill
-                        )
-                        .transition(.opacity)
+            ZStack {
+                switch selectedSection {
+                case .prompts:
+                    AllPromptsView(onSelectPrompt: onSelectPrompt) {
+                        pinnedSectionPicker
                     }
+                    .transition(.opacity)
+                case .journal:
+                    StoriesListView(
+                        viewModel: storiesViewModel,
+                        onStartPractice: onStartStoryPractice,
+                        onSendToWarmUp: onSendToWarmUp,
+                        onSendToDrill: onSendToDrill
+                    ) {
+                        pinnedSectionPicker
+                    }
+                    .transition(.opacity)
                 }
             }
         }
         .navigationTitle("Library")
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - Pinned Section Picker
+
+    private var pinnedSectionPicker: some View {
+        sectionPicker
+            .padding(.horizontal, 4)
+            .padding(.top, 4)
+            .padding(.bottom, 10)
     }
 
     // MARK: - Section Picker

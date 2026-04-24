@@ -30,9 +30,9 @@
             filePath = "SpeakUp/Views/Detail/RecordingDetailView.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1231"
-            endingLineNumber = "1231"
-            landmarkName = "formattedAIInsightBlocks(_:)"
+            startingLineNumber = "1133"
+            endingLineNumber = "1133"
+            landmarkName = "journalReflectionSection(_:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

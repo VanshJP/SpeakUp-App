@@ -55,21 +55,14 @@ struct HistoryView: View {
         ZStack {
             AppBackground()
 
-            VStack(spacing: 0) {
-                sectionPicker
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-
-                ZStack {
-                    switch selectedSection {
-                    case .recordings:
-                        recordingsScrollView
-                            .transition(.opacity)
-                    case .progress:
-                        progressScrollView
-                            .transition(.opacity)
-                    }
+            ZStack {
+                switch selectedSection {
+                case .recordings:
+                    recordingsScrollView
+                        .transition(.opacity)
+                case .progress:
+                    progressScrollView
+                        .transition(.opacity)
                 }
             }
         }
@@ -116,12 +109,17 @@ struct HistoryView: View {
 
     private var recordingsScrollView: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                quickStatsStrip
-                filterSection
-                recordingsSection
+            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    quickStatsStrip
+                    filterSection
+                    recordingsSection
+                } header: {
+                    pinnedSectionPicker
+                }
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
     }
@@ -130,30 +128,43 @@ struct HistoryView: View {
 
     private var progressScrollView: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                contributionGraphSection
-                streakSection
+            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    contributionGraphSection
+                    streakSection
 
-                if analyzedSummaries.count >= 2 {
-                    progressChartsCard
+                    if analyzedSummaries.count >= 2 {
+                        progressChartsCard
+                    }
+
+                    if viewModel.summaries.count >= 2 {
+                        progressReplayBanner
+                    }
+
+                    if analyzedSummaries.count >= 2 {
+                        compareProgressCard
+                    }
+
+                    goalsSection
+                    journalExportCard
+
+                    vocabUsageSection
+                } header: {
+                    pinnedSectionPicker
                 }
-
-                if viewModel.summaries.count >= 2 {
-                    progressReplayBanner
-                }
-
-                if analyzedSummaries.count >= 2 {
-                    compareProgressCard
-                }
-
-                goalsSection
-                journalExportCard
-
-                vocabUsageSection
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
+    }
+
+    // MARK: - Pinned Section Picker
+
+    private var pinnedSectionPicker: some View {
+        sectionPicker
+            .padding(.top, 4)
+            .padding(.bottom, 10)
     }
 
     // MARK: - Quick Stats Strip

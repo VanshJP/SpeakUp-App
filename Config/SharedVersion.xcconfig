@@ -1,5 +1,5 @@
 // Single source of truth for parent app + extension versions.
 // CI can override with xcargs, e.g.:
 // APP_MARKETING_VERSION=2.1 APP_BUILD_NUMBER=42
-APP_MARKETING_VERSION = 2
-APP_BUILD_NUMBER = 1
+APP_MARKETING_VERSION = 3
+APP_BUILD_NUMBER = 2

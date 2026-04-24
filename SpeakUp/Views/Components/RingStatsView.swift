@@ -247,7 +247,7 @@ struct RingProgress: View {
 
 #Preview {
     VStack(spacing: 20) {
-        RingStatsView(streak: 5, sessions: 3, sessionsGoal: 5, score: 72, improvement: 12.5)
+        RingStatsView(streak: 5, sessions: 3, sessionsGoal: 5, score: 80, improvement: 12.5)
         RingStatsView(streak: 2, sessions: 1, sessionsGoal: 5, score: 45, improvement: -8.0)
     }
     .padding()

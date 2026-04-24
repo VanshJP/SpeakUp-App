@@ -314,56 +314,30 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func heroScoreSection(_ analysis: SpeechAnalysis) -> some View {
+        let axes = SubscoreRadarChart.Axis.from(
+            subscores: analysis.speechScore.subscores,
+            isPromptRelevance: analysis.promptRelevanceScore != nil && recording?.prompt != nil
+        )
+
         GlassCard(tint: AppColors.glassTintPrimary) {
-            VStack(spacing: 18) {
-                HStack {
-                    Label("SpeakUp Score", systemImage: "waveform.circle.fill")
+            VStack(spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Performance Profile")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
                     Spacer()
+                    Text(heroSummary(for: axes))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
 
-                HStack(spacing: 18) {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.12), lineWidth: 10)
-                            .frame(width: 112, height: 112)
-                        Circle()
-                            .trim(from: 0, to: animateScore ? Double(analysis.speechScore.overall) / 100 : 0)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        AppColors.scoreColor(for: analysis.speechScore.overall).opacity(0.55),
-                                        AppColors.scoreColor(for: analysis.speechScore.overall)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                            )
-                            .frame(width: 112, height: 112)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.easeOut(duration: 0.8), value: animateScore)
-
-                        VStack(spacing: 1) {
-                            Text("\(animateScore ? analysis.speechScore.overall : 0)")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppColors.scoreColor(for: analysis.speechScore.overall))
-                                .contentTransition(.numericText())
-                            Text("/100")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    VStack(spacing: 10) {
-                        scoreSnapshotRow(label: "Clarity", value: analysis.speechScore.subscores.clarity, color: .blue)
-                        scoreSnapshotRow(label: "Pace", value: analysis.speechScore.subscores.pace, color: .green)
-                        scoreSnapshotRow(label: "Fillers", value: analysis.speechScore.subscores.fillerUsage, color: .orange)
-                        scoreSnapshotRow(label: "Pauses", value: analysis.speechScore.subscores.pauseQuality, color: .purple)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                SubscoreRadarChart(
+                    axes: axes,
+                    overallScore: analysis.speechScore.overall,
+                    animate: animateScore
+                )
+                .frame(height: 300)
 
                 if let textQuality = analysis.textQuality {
                     HStack(spacing: 8) {
@@ -376,32 +350,13 @@ struct RecordingDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func scoreSnapshotRow(label: String, value: Int, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 54, alignment: .trailing)
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.white.opacity(0.08))
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [color.opacity(0.6), color],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 90 * CGFloat(value) / 100)
-            }
-            .frame(width: 90, height: 7)
-            Text("\(value)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(color)
-                .frame(width: 28, alignment: .leading)
+    private func heroSummary(for axes: [SubscoreRadarChart.Axis]) -> String {
+        guard let strongest = axes.max(by: { $0.value < $1.value }),
+              let weakest = axes.min(by: { $0.value < $1.value }),
+              strongest.id != weakest.id else {
+            return ""
         }
+        return "↑ \(strongest.label) · ↓ \(weakest.label)"
     }
 
     @ViewBuilder
@@ -2091,9 +2046,191 @@ struct GoalProgressBadge: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        RecordingDetailView(recordingId: UUID().uuidString)
+#Preview("Recording Detail — Mock Data") {
+    struct PreviewWrapper: View {
+        let recordingId: String
+        let container: ModelContainer
+
+        init() {
+            let schema = Schema([
+                Recording.self,
+                Prompt.self,
+                UserGoal.self,
+                UserSettings.self,
+                Achievement.self,
+                CurriculumProgress.self,
+                RecordingGroup.self,
+                Story.self,
+                StoryFolder.self,
+            ])
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let container = try! ModelContainer(for: schema, configurations: [config])
+            self.container = container
+
+            let context = container.mainContext
+
+            let prompt = Prompt(
+                id: UUID().uuidString,
+                text: "Tell me about a time you overcame a significant challenge and what you learned from it.",
+                category: "Personal Growth",
+                difficulty: .medium
+            )
+            context.insert(prompt)
+
+            let mockId = UUID()
+            let recording = Recording(
+                id: mockId,
+                date: Date().addingTimeInterval(-3600),
+                prompt: prompt,
+                targetDuration: 120,
+                actualDuration: 87.5,
+                transcriptionText: "So um I think one of the biggest challenges I faced was when I had to um present our quarterly results to the entire company. I was really nervous because um you know public speaking has always been something I've struggled with. But I prepared extensively, practiced in front of the mirror, and asked colleagues for feedback. The presentation went well and I learned that thorough preparation can really help overcome anxiety. Since then I've volunteered for more speaking opportunities and each time it gets a little easier.",
+                transcriptionWords: PreviewWrapper.mockWords(),
+                analysis: PreviewWrapper.mockAnalysis(),
+                isProcessing: false,
+                isFavorite: true
+            )
+            context.insert(recording)
+
+            let settings = UserSettings()
+            context.insert(settings)
+
+            try? context.save()
+            self.recordingId = mockId.uuidString
+        }
+
+        var body: some View {
+            NavigationStack {
+                RecordingDetailView(recordingId: recordingId)
+            }
+            .modelContainer(container)
+            .environment(AudioService())
+            .environment(SpeechService())
+            .environment(LLMService())
+            .preferredColorScheme(.dark)
+        }
+
+        static func mockWords() -> [TranscriptionWord] {
+            let text = "So um I think one of the biggest challenges I faced was when I had to um present our quarterly results to the entire company I was really nervous because um you know public speaking has always been something I've struggled with But I prepared extensively practiced in front of the mirror and asked colleagues for feedback The presentation went well and I learned that thorough preparation can really help overcome anxiety Since then I've volunteered for more speaking opportunities and each time it gets a little easier"
+            let words = text.components(separatedBy: " ")
+            let fillers: Set<String> = ["um", "uh", "you", "know", "like", "So"]
+            var time: TimeInterval = 0.5
+            return words.map { word in
+                let duration = Double.random(in: 0.15...0.45)
+                let w = TranscriptionWord(
+                    word: word,
+                    start: time,
+                    end: time + duration,
+                    confidence: Double.random(in: 0.85...0.99),
+                    isFiller: fillers.contains(word),
+                    isVocabWord: ["extensively", "quarterly", "volunteered", "preparation", "anxiety"].contains(word),
+                    isPrimarySpeaker: true
+                )
+                time += duration + Double.random(in: 0.05...0.25)
+                return w
+            }
+        }
+
+        static func mockAnalysis() -> SpeechAnalysis {
+            SpeechAnalysis(
+                fillerWords: [
+                    FillerWord(word: "um", count: 3, timestamps: [2.1, 8.4, 22.0]),
+                    FillerWord(word: "you know", count: 1, timestamps: [25.3]),
+                    FillerWord(word: "so", count: 1, timestamps: [0.5])
+                ],
+                totalWords: 89,
+                wordsPerMinute: 142.0,
+                pauseCount: 7,
+                averagePauseLength: 0.6,
+                strategicPauseCount: 4,
+                hesitationPauseCount: 3,
+                clarity: 72.0,
+                speechScore: SpeechScore(
+                    overall: 74,
+                    subscores: SpeechSubscores(
+                        clarity: 78,
+                        pace: 82,
+                        fillerUsage: 65,
+                        pauseQuality: 71,
+                        vocalVariety: 68,
+                        delivery: 73,
+                        vocabulary: 76,
+                        structure: 20,
+                        relevance: 80
+                    ),
+                    trend: .improving
+                ),
+                vocabWordsUsed: [
+                    VocabWordUsage(word: "extensively", count: 1),
+                    VocabWordUsage(word: "quarterly", count: 1),
+                    VocabWordUsage(word: "volunteered", count: 1)
+                ],
+                volumeMetrics: VolumeMetrics(
+                    averageLevel: -18.5,
+                    peakLevel: -6.2,
+                    dynamicRange: 12.3,
+                    monotoneScore: 62,
+                    energyScore: 71
+                ),
+                vocabComplexity: VocabComplexity(
+                    uniqueWordCount: 68,
+                    uniqueWordRatio: 0.76,
+                    averageWordLength: 4.8,
+                    longWordCount: 12,
+                    longWordRatio: 0.13,
+                    complexityScore: 72
+                ),
+                sentenceAnalysis: SentenceAnalysis(
+                    totalSentences: 6,
+                    incompleteSentences: 1,
+                    restartCount: 0,
+                    averageSentenceLength: 14.8,
+                    longestSentence: 22,
+                    structureScore: 70
+                ),
+                promptRelevanceScore: 80,
+                wpmTimeSeries: [
+                    WPMDataPoint(timestamp: 10, wpm: 128, wordCount: 21),
+                    WPMDataPoint(timestamp: 20, wpm: 145, wordCount: 24),
+                    WPMDataPoint(timestamp: 30, wpm: 155, wordCount: 26),
+                    WPMDataPoint(timestamp: 40, wpm: 138, wordCount: 23),
+                    WPMDataPoint(timestamp: 50, wpm: 150, wordCount: 25),
+                    WPMDataPoint(timestamp: 60, wpm: 142, wordCount: 24),
+                    WPMDataPoint(timestamp: 70, wpm: 135, wordCount: 22),
+                    WPMDataPoint(timestamp: 80, wpm: 148, wordCount: 25)
+                ],
+                pitchMetrics: PitchMetrics(
+                    f0Mean: 165, f0StdDev: 28,
+                    f0Min: 95, f0Max: 280,
+                    f0RangeSemitones: 18.7,
+                    pitchVariationScore: 68,
+                    declinationRate: -0.3,
+                    voicedFrameRatio: 0.62
+                ),
+                rateVariation: RateVariationMetrics(
+                    rateCV: 0.18, articulationRate: 168,
+                    rateRange: 55, rateVariationScore: 65
+                ),
+                emphasisMetrics: EmphasisMetrics(
+                    emphasisCount: 8, emphasisPerMinute: 5.5, distributionScore: 62
+                ),
+                energyArc: EnergyArcMetrics(
+                    openingEnergy: 0.55, bodyEnergy: 0.72,
+                    closingEnergy: 0.65, hasClimax: true, arcScore: 70
+                ),
+                textQuality: TextQualityMetrics(
+                    hedgeWordCount: 3, hedgeWordRatio: 0.034,
+                    powerWordCount: 4, rhetoricalDeviceCount: 1,
+                    transitionVariety: 3,
+                    weakPhraseCount: 2, weakPhraseRatio: 0.022,
+                    repeatedSentenceStartCount: 1,
+                    rhetoricalQuestionCount: 0, callToActionCount: 0,
+                    authorityScore: 65, craftScore: 68,
+                    concisenessScore: 72, engagementScore: 66
+                )
+            )
+        }
     }
-    .modelContainer(for: [Recording.self, Prompt.self], inMemory: true)
+
+    return PreviewWrapper()
 }

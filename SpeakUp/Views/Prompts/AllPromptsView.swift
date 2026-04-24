@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-struct AllPromptsView: View {
+struct AllPromptsView<Header: View>: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Prompt.category) private var allPrompts: [Prompt]
 
@@ -22,10 +22,24 @@ struct AllPromptsView: View {
     @State private var promptToDelete: Prompt?
 
     let onSelectPrompt: ((Prompt) -> Void)?
+    private let pinnedHeader: Header
 
-    init(onSelectPrompt: ((Prompt) -> Void)? = nil) {
+    init(
+        onSelectPrompt: ((Prompt) -> Void)? = nil,
+        @ViewBuilder pinnedHeader: () -> Header
+    ) {
         self.onSelectPrompt = onSelectPrompt
+        self.pinnedHeader = pinnedHeader()
     }
+}
+
+extension AllPromptsView where Header == EmptyView {
+    init(onSelectPrompt: ((Prompt) -> Void)? = nil) {
+        self.init(onSelectPrompt: onSelectPrompt, pinnedHeader: { EmptyView() })
+    }
+}
+
+extension AllPromptsView {
 
     // MARK: - Computed Data
 
@@ -58,7 +72,6 @@ struct AllPromptsView: View {
 
         switch sortMode {
         case .category: prompts.sort { $0.category < $1.category }
-        case .alphabetical: prompts.sort { $0.text.localizedCompare($1.text) == .orderedAscending }
         case .difficulty:
             let order: [PromptDifficulty] = [.easy, .medium, .hard]
             prompts.sort { (order.firstIndex(of: $0.difficulty) ?? 0) < (order.firstIndex(of: $1.difficulty) ?? 0) }
@@ -81,21 +94,26 @@ struct AllPromptsView: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             ScrollView {
-                VStack(spacing: 16) {
-                    statsCard
-                    filterChips
-                    activeFiltersRow
+                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        statsCard
+                        filterChips
+                        activeFiltersRow
 
-                    let groups = groupedPrompts
-                    if groups.isEmpty {
-                        emptyState
-                    } else {
-                        promptSections(groups)
+                        let groups = groupedPrompts
+                        if groups.isEmpty {
+                            emptyState
+                        } else {
+                            promptSections(groups)
+                        }
+
+                        Color.clear.frame(height: 88) // FAB breathing room
+                    } header: {
+                        pinnedHeader
                     }
-
-                    Color.clear.frame(height: 88) // FAB breathing room
                 }
-                .padding()
+                .padding(.horizontal)
+                .padding(.bottom, 16)
             }
             .scrollIndicators(.hidden)
 
@@ -433,7 +451,7 @@ struct AllPromptsView: View {
     // MARK: - Prompt Sections
 
     private func promptSections(_ groups: [(String, [Prompt])]) -> some View {
-        LazyVStack(spacing: 16, pinnedViews: .sectionHeaders) {
+        LazyVStack(spacing: 16) {
             ForEach(groups, id: \.0) { category, prompts in
                 Section {
                     ForEach(prompts, id: \.id) { prompt in
@@ -646,7 +664,6 @@ enum PromptFilter: String, CaseIterable, Identifiable {
 
 enum PromptSortMode: String, CaseIterable, Identifiable {
     case category
-    case alphabetical
     case difficulty
 
     var id: String { rawValue }
@@ -654,7 +671,6 @@ enum PromptSortMode: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .category: return "By Category"
-        case .alphabetical: return "Alphabetical"
         case .difficulty: return "By Difficulty"
         }
     }
@@ -662,7 +678,6 @@ enum PromptSortMode: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .category: return "folder"
-        case .alphabetical: return "textformat.abc"
         case .difficulty: return "speedometer"
         }
     }
