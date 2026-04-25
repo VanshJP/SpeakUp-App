@@ -12,6 +12,7 @@ struct AllPromptsView<Header: View>: View {
     @State private var selectedCategory: PromptCategory?
     @State private var selectedDifficulty: PromptDifficulty?
     @State private var sortMode: PromptSortMode = .category
+    @AppStorage("allPromptsLayoutMode") private var layoutMode: PromptLayoutMode = .list
     @State private var showingAddPrompt = false
     @State private var showingBatchAdd = false
     @State private var showingFileImporter = false
@@ -98,6 +99,7 @@ extension AllPromptsView {
                     Section {
                         statsCard
                         filterChips
+                        layoutToggle
                         activeFiltersRow
 
                         let groups = groupedPrompts
@@ -448,31 +450,106 @@ extension AllPromptsView {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Layout Toggle
+
+    private var layoutToggle: some View {
+        HStack(spacing: 8) {
+            ForEach(PromptLayoutMode.allCases) { mode in
+                Button {
+                    Haptics.light()
+                    withAnimation(.spring(response: 0.3)) {
+                        layoutMode = mode
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: mode.icon)
+                            .font(.caption.weight(.semibold))
+                        Text(mode.displayName)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(layoutMode == mode ? .white : .secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .frame(maxWidth: .infinity)
+                    .background {
+                        if layoutMode == mode {
+                            Capsule().fill(AppColors.primary)
+                        } else {
+                            Capsule().fill(.ultraThinMaterial)
+                        }
+                    }
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.white.opacity(layoutMode == mode ? 0.18 : 0.06), lineWidth: 0.5)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     // MARK: - Prompt Sections
 
+    @ViewBuilder
     private func promptSections(_ groups: [(String, [Prompt])]) -> some View {
         LazyVStack(spacing: 16) {
             ForEach(groups, id: \.0) { category, prompts in
                 Section {
-                    ForEach(prompts, id: \.id) { prompt in
-                        PromptRow(
-                            prompt: prompt,
-                            isAnswered: answeredPromptIDs.contains(prompt.id),
-                            showMicIcon: onSelectPrompt != nil,
-                            onTap: onSelectPrompt.map { selectAction in
-                                {
-                                    Haptics.medium()
-                                    selectAction(prompt)
-                                }
-                            },
-                            onDelete: prompt.isUserCreated ? {
-                                promptToDelete = prompt
-                            } : nil
-                        )
+                    switch layoutMode {
+                    case .list:
+                        listSection(prompts: prompts)
+                    case .card:
+                        cardSection(prompts: prompts)
                     }
                 } header: {
                     promptSectionHeader(category, prompts: prompts)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func listSection(prompts: [Prompt]) -> some View {
+        ForEach(prompts, id: \.id) { prompt in
+            PromptRow(
+                prompt: prompt,
+                isAnswered: answeredPromptIDs.contains(prompt.id),
+                showMicIcon: onSelectPrompt != nil,
+                onTap: onSelectPrompt.map { selectAction in
+                    {
+                        Haptics.medium()
+                        selectAction(prompt)
+                    }
+                },
+                onDelete: prompt.isUserCreated ? {
+                    promptToDelete = prompt
+                } : nil
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func cardSection(prompts: [Prompt]) -> some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12)
+        ]
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(prompts, id: \.id) { prompt in
+                PromptCard(
+                    prompt: prompt,
+                    isAnswered: answeredPromptIDs.contains(prompt.id),
+                    showMicIcon: onSelectPrompt != nil,
+                    onTap: onSelectPrompt.map { selectAction in
+                        {
+                            Haptics.medium()
+                            selectAction(prompt)
+                        }
+                    },
+                    onDelete: prompt.isUserCreated ? {
+                        promptToDelete = prompt
+                    } : nil
+                )
             }
         }
     }
@@ -660,6 +737,29 @@ enum PromptFilter: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Layout Mode
+
+enum PromptLayoutMode: String, CaseIterable, Identifiable {
+    case list
+    case card
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .list: return "List"
+        case .card: return "Cards"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .list: return "list.bullet"
+        case .card: return "square.grid.2x2.fill"
+        }
+    }
+}
+
 // MARK: - Sort Mode
 
 enum PromptSortMode: String, CaseIterable, Identifiable {
@@ -802,6 +902,133 @@ struct PromptRow: View {
 
     private var categoryIcon: String {
         PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble"
+    }
+}
+
+// MARK: - Prompt Card (Grid Layout)
+
+struct PromptCard: View {
+    let prompt: Prompt
+    var isAnswered: Bool = false
+    var showMicIcon: Bool = false
+    var onTap: (() -> Void)?
+    var onDelete: (() -> Void)?
+
+    var body: some View {
+        let content = ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(categoryColor)
+                        .frame(width: 28, height: 28)
+                        .background {
+                            Circle().fill(categoryColor.opacity(0.18))
+                        }
+
+                    Text(shortCategoryName)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(categoryColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Spacer(minLength: 0)
+                }
+
+                Text(prompt.text)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(5)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 6) {
+                    DifficultyBadge(difficulty: prompt.difficulty)
+
+                    if prompt.isUserCreated {
+                        Text("Custom")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background {
+                                Capsule().fill(AppColors.primary.opacity(0.18))
+                            }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if showMicIcon && !isAnswered {
+                        Image(systemName: "mic.fill")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
+
+            if isAnswered {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.success)
+                    .padding(10)
+            }
+        }
+        .glassCard(cornerRadius: 16, tint: categoryColor.opacity(0.10))
+
+        if let onTap {
+            Button(action: onTap) { content }
+                .buttonStyle(.plain)
+                .contextMenu { contextMenuItems }
+        } else {
+            content
+                .contextMenu { contextMenuItems }
+        }
+    }
+
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        if let onTap {
+            Button(action: onTap) {
+                Label("Practice this prompt", systemImage: "mic.fill")
+            }
+        }
+
+        if let onDelete {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete Prompt", systemImage: "trash")
+            }
+        }
+    }
+
+    private var categoryColor: Color {
+        PromptCategory(rawValue: prompt.category)?.color ?? .gray
+    }
+
+    private var categoryIcon: String {
+        PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble"
+    }
+
+    private var shortCategoryName: String {
+        guard let cat = PromptCategory(rawValue: prompt.category) else { return prompt.category }
+        switch cat {
+        case .professionalDevelopment: return "Professional"
+        case .communicationSkills: return "Communication"
+        case .personalGrowth: return "Growth"
+        case .problemSolving: return "Problem Solving"
+        case .currentEvents: return "Current Events"
+        case .quickFire: return "Quick Fire"
+        case .debatePersuasion: return "Debate"
+        case .interviewPrep: return "Interview"
+        case .storytelling: return "Storytelling"
+        case .elevatorPitch: return "Pitch"
+        case .conversationStarters: return "Conversation"
+        }
     }
 }
 
