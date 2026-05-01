@@ -626,30 +626,34 @@ struct RecordingDetailView: View {
                         }
                     }
 
-                    Button {
-                        showFillerHighlights.toggle()
-                    } label: {
-                        Image(systemName: showFillerHighlights ? "bubble.left.fill" : "bubble.left")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(showFillerHighlights ? .orange : .secondary)
-                            .padding(6)
-                            .background {
-                                Circle()
-                                    .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
-                            }
+                    if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
+                        Button {
+                            showFillerHighlights.toggle()
+                        } label: {
+                            Image(systemName: showFillerHighlights ? "bubble.left.fill" : "bubble.left")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(showFillerHighlights ? .orange : .secondary)
+                                .padding(6)
+                                .background {
+                                    Circle()
+                                        .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
+                                }
+                        }
                     }
 
-                    Button {
-                        showVocabHighlights.toggle()
-                    } label: {
-                        Image(systemName: showVocabHighlights ? "character.book.closed.fill" : "character.book.closed")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(showVocabHighlights ? .green : .secondary)
-                            .padding(6)
-                            .background {
-                                Circle()
-                                    .fill(showVocabHighlights ? .green.opacity(0.1) : .clear)
-                            }
+                    if let analysis = recording.analysis, !analysis.vocabWordsUsed.isEmpty {
+                        Button {
+                            showVocabHighlights.toggle()
+                        } label: {
+                            Image(systemName: showVocabHighlights ? "character.book.closed.fill" : "character.book.closed")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(showVocabHighlights ? .green : .secondary)
+                                .padding(6)
+                                .background {
+                                    Circle()
+                                        .fill(showVocabHighlights ? .green.opacity(0.1) : .clear)
+                                }
+                        }
                     }
                 }
             }
@@ -1364,6 +1368,11 @@ struct RecordingDetailView: View {
 
         let transcript = resolvedTranscript(for: recording)
         guard !transcript.isEmpty else { return }
+
+        // Skip if LLM has already enhanced this analysis. Re-running blends
+        // non-deterministic LLM output back into the persisted score and drifts
+        // the overall by ±1-2 points across opens.
+        if analysis.llmEnhancedAt != nil { return }
 
         // If local model is downloaded but not loaded, start loading in background
         // and skip enhancement for this session to avoid blocking the view.

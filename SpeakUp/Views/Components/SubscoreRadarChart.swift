@@ -28,21 +28,31 @@ struct SubscoreRadarChart: View {
 
     let axes: [Axis]
     let overallScore: Int
-    var animate: Bool = true
+    var animate: Bool
 
-    @State private var drawProgress: CGFloat = 0
+    @State private var drawProgress: CGFloat
     @State private var selectedAxis: Axis?
+    @State private var isAnimatingIn = false
 
     private let labelInset: CGFloat = 52
+
+    init(axes: [Axis], overallScore: Int, animate: Bool = true) {
+        self.axes = axes
+        self.overallScore = overallScore
+        self.animate = animate
+        self._drawProgress = State(initialValue: animate ? 0.0 : 1.0)
+    }
 
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
             let radius = (side / 2) - labelInset
+            let inner = radius * 0.38
 
             ZStack {
-                wedgeLayer(center: center, outerRadius: radius, innerRadius: radius * 0.38)
+                wedgeCanvas(outerRadius: radius, innerRadius: inner)
+                hitTestLayer(outerRadius: radius, innerRadius: inner)
                 axisLabels(center: center, radius: radius)
                 centerScore
             }
@@ -51,7 +61,15 @@ struct SubscoreRadarChart: View {
         .aspectRatio(1, contentMode: .fit)
         .onAppear { if animate { animateIn() } }
         .onChange(of: animate) { _, newValue in
-            if newValue { animateIn() } else { drawProgress = 0 }
+            if newValue {
+                animateIn()
+            } else {
+                var resetTx = Transaction()
+                resetTx.disablesAnimations = true
+                withTransaction(resetTx) {
+                    drawProgress = 1
+                }
+            }
         }
         .sheet(item: $selectedAxis) { axis in
             MetricExplainerSheet(axis: axis)
@@ -67,21 +85,26 @@ struct SubscoreRadarChart: View {
 
     // MARK: - Layers
 
-    @ViewBuilder
-    private func wedgeLayer(center: CGPoint, outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
+    /// Draws all wedge ring fills in a single Canvas pass instead of one
+    /// SwiftUI Shape view per ring. Reduces per-frame view count from
+    /// `axes.count * ringCount` to one during the draw-in animation.
+    private func wedgeCanvas(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
         let count = max(axes.count, 1)
         let step = 2 * Double.pi / Double(count)
         let angularGap: Double = step * 0.04
         let ringCount = 6
         let radialGap: CGFloat = 2.5
+        let progress = drawProgress
+        let selectedID = selectedAxis?.id
 
-        ForEach(Array(axes.enumerated()), id: \.element.id) { index, axis in
-            let mid = axisAngle(for: index)
+        // Hoist per-axis trig + color lookups to one O(axes) pass per body
+        // re-evaluation instead of recomputing inside the Canvas closure on
+        // every frame of the draw-in animation.
+        let table: [WedgeGeometry] = axes.enumerated().map { index, axis in
+            let mid = -.pi / 2 + step * Double(index)
             let start = Angle(radians: mid - step / 2 + angularGap / 2)
             let end = Angle(radians: mid + step / 2 - angularGap / 2)
-            let isSelected = selectedAxis?.id == axis.id
-            let color = AppColors.scoreColor(for: axis.value)
-            let filledRings: Int = {
+            let filled: Int = {
                 let v = axis.value
                 if v == 0 { return 0 }
                 if v < 40 { return v < 20 ? 1 : 2 }
@@ -89,45 +112,80 @@ struct SubscoreRadarChart: View {
                 if v < 80 { return 4 }
                 return v < 90 ? 5 : 6
             }()
-            let bump: CGFloat = isSelected ? 4 : 0
-            let span = ((outerRadius + bump) - innerRadius) * drawProgress
+            return WedgeGeometry(
+                start: start,
+                end: end,
+                color: AppColors.scoreColor(for: axis.value),
+                filledRings: filled,
+                axisID: axis.id
+            )
+        }
 
-            ForEach(0..<ringCount, id: \.self) { ring in
-                let ringInner = innerRadius + span * CGFloat(ring) / CGFloat(ringCount) + radialGap / 2
-                let ringOuter = innerRadius + span * CGFloat(ring + 1) / CGFloat(ringCount) - radialGap / 2
-                let isFilled = ring < filledRings
-                let ringFraction = Double(ring) / Double(max(ringCount - 1, 1))
-                let filledOpacity = isSelected
-                    ? 0.55 + 0.45 * ringFraction
-                    : 0.45 + 0.47 * ringFraction
-                let fillColor: Color = isFilled
-                    ? color.opacity(filledOpacity)
-                    : Color.white.opacity(isSelected ? 0.09 : 0.055)
+        return Canvas(rendersAsynchronously: true) { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            for wedge in table {
+                let isSelected = selectedID == wedge.axisID
+                let bump: CGFloat = isSelected ? 4 : 0
+                let span = ((outerRadius + bump) - innerRadius) * progress
 
-                AnnularWedge(
-                    innerRadius: ringInner,
-                    outerRadius: ringOuter,
-                    startAngle: start,
-                    endAngle: end
-                )
-                .fill(fillColor)
-                .allowsHitTesting(false)
+                for ring in 0..<ringCount {
+                    let ringInner = innerRadius + span * CGFloat(ring) / CGFloat(ringCount) + radialGap / 2
+                    let ringOuter = innerRadius + span * CGFloat(ring + 1) / CGFloat(ringCount) - radialGap / 2
+                    guard ringOuter > ringInner else { continue }
+                    let isFilled = ring < wedge.filledRings
+                    let ringFraction = Double(ring) / Double(max(ringCount - 1, 1))
+                    let filledOpacity = isSelected
+                        ? 0.55 + 0.45 * ringFraction
+                        : 0.45 + 0.47 * ringFraction
+                    let fillColor: Color = isFilled
+                        ? wedge.color.opacity(filledOpacity)
+                        : Color.white.opacity(isSelected ? 0.09 : 0.055)
+
+                    let path = AnnularWedge.makePath(
+                        center: center,
+                        innerRadius: ringInner,
+                        outerRadius: ringOuter,
+                        startAngle: wedge.start,
+                        endAngle: wedge.end
+                    )
+                    context.fill(path, with: .color(fillColor))
+                }
             }
+        }
+        .allowsHitTesting(false)
+    }
 
-            AnnularWedge(
+    private struct WedgeGeometry {
+        let start: Angle
+        let end: Angle
+        let color: Color
+        let filledRings: Int
+        let axisID: String
+    }
+
+    /// Static, animation-independent hit targets — one shape per axis. These
+    /// don't observe `drawProgress` so they don't rebuild during the
+    /// draw-in animation.
+    @ViewBuilder
+    private func hitTestLayer(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
+        let count = max(axes.count, 1)
+        let step = 2 * Double.pi / Double(count)
+        let angularGap: Double = step * 0.04
+
+        ForEach(Array(axes.enumerated()), id: \.element.id) { index, axis in
+            let mid = -.pi / 2 + step * Double(index)
+            let start = Angle(radians: mid - step / 2 + angularGap / 2)
+            let end = Angle(radians: mid + step / 2 - angularGap / 2)
+            let wedge = AnnularWedge(
                 innerRadius: innerRadius,
-                outerRadius: outerRadius + bump,
+                outerRadius: outerRadius + 4,
                 startAngle: start,
                 endAngle: end
             )
-            .fill(Color.white.opacity(0.001))
-            .contentShape(AnnularWedge(
-                innerRadius: innerRadius,
-                outerRadius: outerRadius + bump,
-                startAngle: start,
-                endAngle: end
-            ))
-            .onTapGesture { selectAxis(axis) }
+            wedge
+                .fill(Color.white.opacity(0.001))
+                .contentShape(wedge)
+                .onTapGesture { selectAxis(axis) }
         }
     }
 
@@ -159,8 +217,12 @@ struct SubscoreRadarChart: View {
 
     private var centerScore: some View {
         let color = AppColors.scoreColor(for: overallScore)
+        // Clamp + round so the count-up lands exactly on `overallScore`
+        // instead of one below (e.g. Int(66 * 0.9994) == 65 truncates).
+        let clamped = min(1.0, max(0.0, drawProgress))
+        let displayed = Int((Double(overallScore) * Double(clamped)).rounded())
         return VStack(spacing: 0) {
-            Text("\(Int(Double(overallScore) * Double(drawProgress)))")
+            Text("\(displayed)")
                 .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(color)
                 .contentTransition(.numericText())
@@ -189,9 +251,22 @@ struct SubscoreRadarChart: View {
     }
 
     private func animateIn() {
-        drawProgress = 0
+        guard !isAnimatingIn else { return }
+        isAnimatingIn = true
+        // Reset must run outside any inherited animation transaction (e.g.
+        // RecordingDetailView wraps `animate = true` in a 0.8s easeOut), or
+        // the reset itself animates 1→0 and races the draw-in 0→1.
+        var resetTx = Transaction()
+        resetTx.disablesAnimations = true
+        withTransaction(resetTx) {
+            drawProgress = 0
+        }
         withAnimation(.easeOut(duration: 0.9)) {
             drawProgress = 1
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(950))
+            isAnimatingIn = false
         }
     }
 }
@@ -204,19 +279,41 @@ struct AnnularWedge: Shape {
     var startAngle: Angle
     var endAngle: Angle
 
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(innerRadius, outerRadius) }
-        set {
-            innerRadius = newValue.first
-            outerRadius = newValue.second
-        }
+    func path(in rect: CGRect) -> Path {
+        AnnularWedge.makePath(
+            center: CGPoint(x: rect.midX, y: rect.midY),
+            innerRadius: innerRadius,
+            outerRadius: outerRadius,
+            startAngle: startAngle,
+            endAngle: endAngle
+        )
     }
 
-    func path(in rect: CGRect) -> Path {
+    /// Shared path builder reused by both `Shape.path(in:)` and the
+    /// `Canvas`-based wedge renderer in `SubscoreRadarChart`.
+    static func makePath(
+        center: CGPoint,
+        innerRadius: CGFloat,
+        outerRadius: CGFloat,
+        startAngle: Angle,
+        endAngle: Angle
+    ) -> Path {
         var path = Path()
         guard outerRadius > innerRadius else { return path }
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let r: CGFloat = min(3.5, (outerRadius - innerRadius) * 0.25)
+
+        // Thin rings: skip corner rounding to avoid degenerate quad-curves
+        // and roughly halve path-build cost. Fires when the chart is small
+        // or during the first frames of the draw-in animation.
+        let ringThickness = outerRadius - innerRadius
+        if ringThickness < 6 {
+            var simple = Path()
+            simple.addArc(center: center, radius: outerRadius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+            simple.addArc(center: center, radius: innerRadius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
+            simple.closeSubpath()
+            return simple
+        }
+
+        let r: CGFloat = min(3.5, ringThickness * 0.25)
 
         let oStart = point(center: center, radius: outerRadius, angle: startAngle)
         let oEnd   = point(center: center, radius: outerRadius, angle: endAngle)
@@ -239,21 +336,21 @@ struct AnnularWedge: Shape {
         return path
     }
 
-    private func point(center: CGPoint, radius: CGFloat, angle: Angle) -> CGPoint {
+    private static func point(center: CGPoint, radius: CGFloat, angle: Angle) -> CGPoint {
         CGPoint(
             x: center.x + radius * CGFloat(cos(angle.radians)),
             y: center.y + radius * CGFloat(sin(angle.radians))
         )
     }
 
-    private func nudge(_ from: CGPoint, toward to: CGPoint, by d: CGFloat) -> CGPoint {
+    private static func nudge(_ from: CGPoint, toward to: CGPoint, by d: CGFloat) -> CGPoint {
         let dx = to.x - from.x, dy = to.y - from.y
         let len = hypot(dx, dy)
         guard len > 0 else { return from }
         return CGPoint(x: from.x + dx / len * d, y: from.y + dy / len * d)
     }
 
-    private func insetAngle(_ r: CGFloat, _ radius: CGFloat) -> Angle {
+    private static func insetAngle(_ r: CGFloat, _ radius: CGFloat) -> Angle {
         guard radius > 0 else { return .zero }
         return Angle(radians: Double(r / radius))
     }
