@@ -430,6 +430,10 @@ nonisolated struct SpeechAnalysis: Codable {
     var speakerIsolationMetrics: SpeakerIsolationMetrics?
     /// Enhanced scoring metrics from SpeechScoringEngine (MATTR, PTR, MLR, substance, fluency)
     var enhancedMetrics: EnhancedSpeechMetrics?
+    /// Timestamp set when `enhanceWithLLM` has applied LLM output to this analysis.
+    /// Used to gate `enhanceCoherenceIfNeeded` so the LLM does not re-run on every
+    /// detail-view open and drift the persisted overall score.
+    var llmEnhancedAt: Date?
 
     init(
         fillerWords: [FillerWord] = [],
@@ -454,7 +458,8 @@ nonisolated struct SpeechAnalysis: Codable {
         textQuality: TextQualityMetrics? = nil,
         audioIsolationMetrics: AudioIsolationMetrics? = nil,
         speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
-        enhancedMetrics: EnhancedSpeechMetrics? = nil
+        enhancedMetrics: EnhancedSpeechMetrics? = nil,
+        llmEnhancedAt: Date? = nil
     ) {
         self.fillerWords = fillerWords
         self.totalWords = totalWords
@@ -479,6 +484,7 @@ nonisolated struct SpeechAnalysis: Codable {
         self.audioIsolationMetrics = audioIsolationMetrics
         self.speakerIsolationMetrics = speakerIsolationMetrics
         self.enhancedMetrics = enhancedMetrics
+        self.llmEnhancedAt = llmEnhancedAt
     }
 
     // Custom Decodable to handle missing fields in existing data
@@ -511,6 +517,7 @@ nonisolated struct SpeechAnalysis: Codable {
         audioIsolationMetrics = nil
         speakerIsolationMetrics = nil
         enhancedMetrics = nil
+        llmEnhancedAt = try? container.decodeIfPresent(Date.self, forKey: .llmEnhancedAt)
     }
 
     var totalFillerCount: Int {

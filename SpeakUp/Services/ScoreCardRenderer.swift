@@ -24,38 +24,43 @@ private struct ScoreCardView: View {
     let recording: Recording
     let analysis: SpeechAnalysis
 
-    private var scoreColor: Color {
-        AppColors.scoreColor(for: analysis.speechScore.overall)
-    }
-
     var body: some View {
-        VStack(spacing: 36) {
-            brandRow
-            scoreHero
-            metricsRow
-            if let prompt = recording.prompt {
-                promptCaption(prompt.text)
-            }
-            footerRow
-        }
-        .padding(.horizontal, 36)
-        .padding(.vertical, 44)
-        .frame(width: 400)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28)
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.75)
-        }
-    }
+        ZStack {
+            AppBackground(style: .primary)
 
-    // MARK: - Sections
+            VStack(spacing: 36) {
+                brandRow
+
+                let axes = SubscoreRadarChart.Axis.from(
+                    subscores: analysis.speechScore.subscores,
+                    isPromptRelevance: analysis.promptRelevanceScore != nil && recording.prompt != nil
+                )
+
+                SubscoreRadarChart(
+                    axes: axes,
+                    overallScore: analysis.speechScore.overall,
+                    animate: false
+                )
+                .frame(height: 300)
+
+                if let text = recording.prompt?.text ?? recording.storyTitle {
+                    promptCaption(text)
+                }
+
+                footerRow
+            }
+            .padding(.horizontal, 36)
+            .padding(.vertical, 44)
+        }
+        .frame(width: 400)
+    }
 
     private var brandRow: some View {
         HStack(spacing: 10) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.teal)
+            Image("SpeakUpOrb")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28)
             Text("SpeakUp")
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
@@ -66,69 +71,12 @@ private struct ScoreCardView: View {
         }
     }
 
-    private var scoreHero: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 10)
-                    .frame(width: 168, height: 168)
-
-                Circle()
-                    .trim(from: 0, to: Double(analysis.speechScore.overall) / 100)
-                    .stroke(scoreColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .frame(width: 168, height: 168)
-                    .rotationEffect(.degrees(-90))
-
-                VStack(spacing: 2) {
-                    Text("\(analysis.speechScore.overall)")
-                        .font(.system(size: 64, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text("/ 100")
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-            }
-
-            Text("SpeakUp Score")
-                .font(.caption.weight(.medium))
-                .tracking(1.6)
-                .textCase(.uppercase)
-                .foregroundStyle(.white.opacity(0.55))
-        }
-    }
-
-    private var metricsRow: some View {
-        HStack(spacing: 0) {
-            ScoreCardMetric(
-                label: "Clarity",
-                value: "\(analysis.speechScore.subscores.clarity)"
-            )
-            metricDivider
-            ScoreCardMetric(
-                label: "Pace",
-                value: "\(Int(analysis.wordsPerMinute))",
-                unit: "WPM"
-            )
-            metricDivider
-            ScoreCardMetric(
-                label: "Fillers",
-                value: "\(analysis.totalFillerCount)"
-            )
-        }
-    }
-
-    private var metricDivider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.08))
-            .frame(width: 0.75, height: 40)
-    }
-
     private func promptCaption(_ text: String) -> some View {
         Text("\u{201C}\(text)\u{201D}")
             .font(.footnote)
             .foregroundStyle(.white.opacity(0.55))
             .multilineTextAlignment(.center)
-            .lineLimit(2)
+            .lineLimit(3)
             .padding(.horizontal, 12)
     }
 
@@ -139,53 +87,4 @@ private struct ScoreCardView: View {
             .foregroundStyle(.white.opacity(0.3))
     }
 
-    // MARK: - Background
-
-    private var cardBackground: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.035, green: 0.04, blue: 0.09),
-                    Color(red: 0.02, green: 0.03, blue: 0.07)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            RadialGradient(
-                colors: [Color.teal.opacity(0.10), .clear],
-                center: UnitPoint(x: 0.5, y: 0.28),
-                startRadius: 20,
-                endRadius: 260
-            )
-        }
-    }
-}
-
-// MARK: - Score Card Metric
-
-private struct ScoreCardMetric: View {
-    let label: String
-    let value: String
-    var unit: String? = nil
-
-    var body: some View {
-        VStack(spacing: 6) {
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(value)
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                if let unit {
-                    Text(unit)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-            }
-            Text(label)
-                .font(.caption.weight(.medium))
-                .tracking(0.6)
-                .textCase(.uppercase)
-                .foregroundStyle(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity)
-    }
 }

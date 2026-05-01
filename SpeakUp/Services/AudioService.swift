@@ -130,8 +130,6 @@ class AudioService: NSObject {
             return nil
         }
 
-        let duration = recorder.currentTime
-
         // Wait for the recorder to properly finalize the file
         let success = await withCheckedContinuation { continuation in
             recordingCompletion = { success in
@@ -141,19 +139,18 @@ class AudioService: NSObject {
         }
 
         isRecording = false
-        recordingDuration = duration
-
-        // Give the file system a moment to finalize
         try? await Task.sleep(for: .milliseconds(100))
 
-        guard success else {
-            return nil
-        }
+        guard success else { return nil }
 
-        // Capture URL and clear it so cleanup() won't delete the file
         let url = recordingURL
         recordingURL = nil
         audioRecorder = nil
+
+        // Duration comes from the finalized file, not recorder.currentTime —
+        // the latter drifts under audio-session interruptions and sample-rate
+        // mismatches (e.g. .voiceChat + HFP), occasionally by 60× or more.
+        recordingDuration = url.flatMap { getAudioDuration(at: $0) } ?? 0
 
         return url
     }

@@ -1167,6 +1167,7 @@ class SpeechService {
             candidate: newOverall,
             maxDelta: overallMaxDelta
         )
+        analysis.llmEnhancedAt = Date()
     }
 
     // MARK: - WPM Time Series
