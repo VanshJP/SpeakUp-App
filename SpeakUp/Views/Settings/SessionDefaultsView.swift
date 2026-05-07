@@ -11,6 +11,18 @@ struct SessionDefaultsView: View {
                 VStack(spacing: 20) {
                     GlassCard {
                         VStack(spacing: 0) {
+                            settingsRow(icon: "person.fill", title: "Speaker Level") {
+                                Picker("", selection: $viewModel.speakerLevel) {
+                                    ForEach(SpeakerLevel.allCases) { level in
+                                        Text(level.displayName).tag(level)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(.teal)
+                            }
+
+                            divider
+
                             settingsRow(icon: "clock", title: "Default Duration") {
                                 Picker("", selection: $viewModel.defaultDuration) {
                                     ForEach(RecordingDuration.allCases) { duration in
@@ -91,7 +103,7 @@ struct SessionDefaultsView: View {
                         }
                     }
 
-                    Text("Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills.")
+                    Text("Speaker level controls your daily prompt difficulty mix. Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
@@ -127,6 +139,10 @@ private struct SessionDefaultsChangeModifiers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .onChange(of: viewModel.speakerLevel) { _, _ in
+                guard !viewModel.isSyncing else { return }
+                Task { await viewModel.saveSettings() }
+            }
             .onChange(of: viewModel.defaultDuration) { _, _ in
                 guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }

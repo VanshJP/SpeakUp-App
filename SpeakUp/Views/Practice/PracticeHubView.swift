@@ -3,7 +3,6 @@ import SwiftData
 
 struct PracticeHubView: View {
     @State private var selectedSection: PracticeSection = .prompts
-    @Namespace private var pickerNamespace
 
     let onSelectPrompt: (Prompt) -> Void
     var onStartStoryPractice: ((Story) -> Void)? = nil
@@ -45,7 +44,6 @@ struct PracticeHubView: View {
 
     private var pinnedSectionPicker: some View {
         sectionPicker
-            .padding(.horizontal, 4)
             .padding(.top, 4)
             .padding(.bottom, 10)
     }
@@ -53,85 +51,12 @@ struct PracticeHubView: View {
     // MARK: - Section Picker
 
     private var sectionPicker: some View {
-        HStack(spacing: 6) {
-            ForEach(PracticeSection.allCases) { section in
-                sectionPickerItem(section)
-            }
-        }
-        .padding(6)
-        .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.05), .clear],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.18), .white.opacity(0.04)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
-                }
-        }
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
-    }
-
-    @ViewBuilder
-    private func sectionPickerItem(_ section: PracticeSection) -> some View {
-        let isSelected = selectedSection == section
-        Button {
-            guard selectedSection != section else { return }
-            Haptics.selection()
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                selectedSection = section
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: section.icon)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(section.label)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .foregroundStyle(isSelected ? .white : Color.white.opacity(0.55))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppColors.primary.opacity(0.85),
-                                    AppColors.primary.opacity(0.55)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
-                        }
-                        .shadow(color: AppColors.primary.opacity(0.45), radius: 8, y: 3)
-                        .matchedGeometryEffect(id: "pickerSelection", in: pickerNamespace)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        SectionPicker(
+            sections: PracticeSection.allCases,
+            selection: $selectedSection,
+            label: { $0.label },
+            icon: { $0.icon }
+        )
     }
 }
 

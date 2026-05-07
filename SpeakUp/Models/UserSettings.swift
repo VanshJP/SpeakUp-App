@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Model
 final class UserSettings {
@@ -80,6 +81,23 @@ final class UserSettings {
 
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
+
+    // Speaker Level (drives daily-prompt difficulty weighting)
+    // Stored as raw Int so SwiftData lightweight migration handles older
+    // databases without a manual migration step.
+    var speakerLevel: Int = SpeakerLevel.intermediate.rawValue
+
+    // User identity (captured during onboarding, used for personalised copy
+    // and seeded into the dictation dictionary so transcripts spell it right).
+    var userName: String = ""
+
+    // Primary practice goal selected during onboarding. Drives default prompt
+    // category mix on first run. Stored as raw Int for lightweight migration.
+    var onboardingGoalRaw: Int = OnboardingGoal.everydayConfidence.rawValue
+
+    // Onboarding resume support — last reached step so a force-quit mid-flow
+    // resumes where the user left off instead of restarting from welcome.
+    var onboardingStepRaw: Int = 0
 
     // Score Weights
     var clarityWeight: Double = 0.18
@@ -207,6 +225,18 @@ final class UserSettings {
         dictationBiasWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
     }
 
+    // MARK: - Speaker Level
+
+    var resolvedSpeakerLevel: SpeakerLevel {
+        SpeakerLevel(rawValue: speakerLevel) ?? .intermediate
+    }
+
+    // MARK: - Onboarding Goal
+
+    var resolvedOnboardingGoal: OnboardingGoal {
+        OnboardingGoal(rawValue: onboardingGoalRaw) ?? .everydayConfidence
+    }
+
     // MARK: - Transcription Bias
 
     /// Unified list of user-defined terms to bias Whisper transcription toward.
@@ -234,6 +264,129 @@ final class UserSettings {
             }
         }
         return unique
+    }
+}
+
+// MARK: - Speaker Level
+
+enum SpeakerLevel: Int, Codable, CaseIterable, Identifiable {
+    case beginner = 0
+    case intermediate = 1
+    case advanced = 2
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .beginner: return "Beginner"
+        case .intermediate: return "Intermediate"
+        case .advanced: return "Advanced"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .beginner: return "New to public speaking. Build confidence with easy prompts."
+        case .intermediate: return "Comfortable speaking. Mix of everyday and challenging prompts."
+        case .advanced: return "Experienced speaker. Push limits with harder prompts."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .beginner: return "leaf.fill"
+        case .intermediate: return "flame.fill"
+        case .advanced: return "crown.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .beginner: return .green
+        case .intermediate: return .orange
+        case .advanced: return .purple
+        }
+    }
+
+    /// Weighted distribution of (easy, medium, hard) prompts for daily
+    /// rotation. Higher weight = more frequent on the home screen.
+    var dailyDifficultyWeights: (easy: Int, medium: Int, hard: Int) {
+        switch self {
+        case .beginner:     return (easy: 6, medium: 3, hard: 1)
+        case .intermediate: return (easy: 3, medium: 5, hard: 2)
+        case .advanced:     return (easy: 1, medium: 3, hard: 6)
+        }
+    }
+}
+
+// MARK: - Onboarding Goal
+
+/// What the user wants out of SpeakUp. Drives default prompt category mix on
+/// first launch and is shown back to the user on Today as gentle context.
+enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
+    case interviews = 0
+    case meetings = 1
+    case presentations = 2
+    case everydayConfidence = 3
+    case storytelling = 4
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .interviews: return "Ace Interviews"
+        case .meetings: return "Lead Meetings"
+        case .presentations: return "Nail Presentations"
+        case .everydayConfidence: return "Everyday Confidence"
+        case .storytelling: return "Tell Better Stories"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .interviews: return "Crisp answers, no filler, calm under pressure."
+        case .meetings: return "Speak up, stay concise, drive the room."
+        case .presentations: return "Pace, structure, and stage-ready delivery."
+        case .everydayConfidence: return "Sound clearer in any conversation."
+        case .storytelling: return "Narrative arc, beats, and emotion."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .interviews: return "briefcase.fill"
+        case .meetings: return "person.3.fill"
+        case .presentations: return "rectangle.on.rectangle.angled"
+        case .everydayConfidence: return "sparkles"
+        case .storytelling: return "book.pages.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .interviews: return .blue
+        case .meetings: return .orange
+        case .presentations: return .pink
+        case .everydayConfidence: return .teal
+        case .storytelling: return .purple
+        }
+    }
+
+    /// Recommended starter prompt categories for this goal. The user keeps
+    /// the ability to toggle others on later in `PromptSettingsView`.
+    var defaultPromptCategoryNames: [String] {
+        switch self {
+        case .interviews:
+            return ["Professional Development", "Communication Skills", "Problem Solving"]
+        case .meetings:
+            return ["Professional Development", "Communication Skills", "Current Events & Opinions"]
+        case .presentations:
+            return ["Communication Skills", "Personal Growth", "Problem Solving"]
+        case .everydayConfidence:
+            return ["Personal Growth", "Communication Skills", "Current Events & Opinions"]
+        case .storytelling:
+            return ["Personal Growth", "Communication Skills"]
+        }
     }
 }
 

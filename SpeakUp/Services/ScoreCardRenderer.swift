@@ -46,8 +46,6 @@ private struct ScoreCardView: View {
                 if let text = recording.prompt?.text ?? recording.storyTitle {
                     promptCaption(text)
                 }
-
-                footerRow
             }
             .padding(.horizontal, 36)
             .padding(.vertical, 44)
@@ -80,11 +78,5 @@ private struct ScoreCardView: View {
             .padding(.horizontal, 12)
     }
 
-    private var footerRow: some View {
-        Text("speakup.app")
-            .font(.caption2.weight(.medium))
-            .tracking(0.8)
-            .foregroundStyle(.white.opacity(0.3))
-    }
 
 }

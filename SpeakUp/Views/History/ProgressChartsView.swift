@@ -8,12 +8,14 @@ struct ProgressChartsView: View {
     @State private var selectedTab: ChartTab = .score
     @State private var timeRange: TimeRange = .thirtyDays
 
-    enum ChartTab: String, CaseIterable {
+    enum ChartTab: String, CaseIterable, Identifiable {
         case score = "Score"
         case fillers = "Fillers"
         case pace = "Pace"
         case skills = "Skills"
         case activity = "Activity"
+
+        var id: String { rawValue }
 
         var icon: String {
             switch self {
@@ -26,11 +28,13 @@ struct ProgressChartsView: View {
         }
     }
 
-    enum TimeRange: String, CaseIterable {
+    enum TimeRange: String, CaseIterable, Identifiable {
         case sevenDays = "7d"
         case thirtyDays = "30d"
         case ninetyDays = "90d"
         case all = "All"
+
+        var id: String { rawValue }
 
         var days: Int? {
             switch self {
@@ -65,67 +69,23 @@ struct ProgressChartsView: View {
                     }
 
                     // Tab picker
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(ChartTab.allCases, id: \.self) { tab in
-                                Button {
-                                    Haptics.selection()
-                                    withAnimation(.spring(response: 0.3)) {
-                                        selectedTab = tab
-                                    }
-                                } label: {
-                                    HStack(spacing: 5) {
-                                        Image(systemName: tab.icon)
-                                            .font(.caption2)
-                                        Text(tab.rawValue)
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                    .foregroundStyle(selectedTab == tab ? .white : .secondary)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background {
-                                        Capsule()
-                                            .fill(selectedTab == tab
-                                                  ? LinearGradient(colors: [.teal.opacity(0.8), .teal], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                                  : LinearGradient(colors: [Color.white.opacity(0.06)], startPoint: .top, endPoint: .bottom))
-                                    }
-                                    .overlay {
-                                        if selectedTab == tab {
-                                            Capsule()
-                                                .stroke(.white.opacity(0.2), lineWidth: 0.5)
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
+                    SectionPicker(
+                        sections: ChartTab.allCases,
+                        selection: $selectedTab,
+                        label: { $0.rawValue },
+                        icon: { $0.icon },
+                        layout: .scrollable
+                    )
 
                     // Time range picker (not for skills)
                     if selectedTab != .skills {
-                        HStack(spacing: 8) {
-                            ForEach(TimeRange.allCases, id: \.self) { range in
-                                Button {
-                                    Haptics.selection()
-                                    withAnimation(.spring(response: 0.3)) {
-                                        timeRange = range
-                                    }
-                                } label: {
-                                    Text(range.rawValue)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(timeRange == range ? .white : .secondary)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background {
-                                            Capsule()
-                                                .fill(timeRange == range ? Color.teal.opacity(0.3) : Color.white.opacity(0.06))
-                                        }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            Spacer()
-                        }
+                        SectionPicker(
+                            sections: TimeRange.allCases,
+                            selection: $timeRange,
+                            label: { $0.rawValue },
+                            icon: { _ in nil },
+                            style: .compact
+                        )
                     }
 
                     // Chart content

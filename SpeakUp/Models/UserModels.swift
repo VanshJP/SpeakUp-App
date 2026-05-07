@@ -54,6 +54,7 @@ nonisolated struct UserStats: Sendable {
     var currentStreak: Int
     var longestStreak: Int
     var averageScore: Double
+    var bestScore: Int // highest overall score across all recordings
     var scoreHistory: [ScoreHistoryEntry]
     var mostUsedFillers: [FillerWord]
     var improvementRate: Double // percentage change over last 7 days
@@ -66,6 +67,7 @@ nonisolated struct UserStats: Sendable {
         currentStreak: Int = 0,
         longestStreak: Int = 0,
         averageScore: Double = 0,
+        bestScore: Int = 0,
         scoreHistory: [ScoreHistoryEntry] = [],
         mostUsedFillers: [FillerWord] = [],
         improvementRate: Double = 0,
@@ -77,6 +79,7 @@ nonisolated struct UserStats: Sendable {
         self.currentStreak = currentStreak
         self.longestStreak = longestStreak
         self.averageScore = averageScore
+        self.bestScore = bestScore
         self.scoreHistory = scoreHistory
         self.mostUsedFillers = mostUsedFillers
         self.improvementRate = improvementRate

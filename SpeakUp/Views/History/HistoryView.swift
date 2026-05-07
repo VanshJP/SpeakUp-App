@@ -12,7 +12,6 @@ struct HistoryView: View {
     @State private var summaryToDelete: RecordingSummary?
     @State private var showingDeleteAlert = false
     @State private var selectedSection: HistorySection = .recordings
-    @Namespace private var pickerNamespace
     @Query private var userSettings: [UserSettings]
 
     var onSelectRecording: (String) -> Void
@@ -170,152 +169,40 @@ struct HistoryView: View {
     // MARK: - Quick Stats Strip
 
     private var quickStatsStrip: some View {
-        GlassCard(padding: 12) {
-            HStack(spacing: 0) {
-                quickStatItem(
+        StatStrip(
+            items: [
+                .init(
                     icon: "flame.fill",
                     value: "\(viewModel.currentStreak)",
                     label: "Streak",
                     color: .orange,
                     isHighlighted: viewModel.currentStreak > 0
-                )
-
-                quickStatDivider
-
-                quickStatItem(
+                ),
+                .init(
                     icon: "mic.fill",
                     value: "\(viewModel.summaries.count)",
                     label: "Sessions",
-                    color: .teal,
-                    isHighlighted: false
-                )
-
-                quickStatDivider
-
-                quickStatItem(
+                    color: .teal
+                ),
+                .init(
                     icon: "chart.line.uptrend.xyaxis",
                     value: averageScoreText,
                     label: "Avg Score",
-                    color: averageScoreColor,
-                    isHighlighted: false
+                    color: averageScoreColor
                 )
-            }
-        }
-    }
-
-    private var quickStatDivider: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 0.5, height: 32)
-    }
-
-    private func quickStatItem(
-        icon: String,
-        value: String,
-        label: String,
-        color: Color,
-        isHighlighted: Bool
-    ) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isHighlighted ? color : color.opacity(0.75))
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .contentTransition(.numericText())
-                Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-        }
-        .frame(maxWidth: .infinity)
+            ]
+        )
     }
 
     // MARK: - Section Picker
 
     private var sectionPicker: some View {
-        HStack(spacing: 6) {
-            ForEach(HistorySection.allCases) { section in
-                sectionPickerItem(section)
-            }
-        }
-        .padding(6)
-        .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [.white.opacity(0.05), .clear],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.18), .white.opacity(0.04)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
-                }
-        }
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
-    }
-
-    @ViewBuilder
-    private func sectionPickerItem(_ section: HistorySection) -> some View {
-        let isSelected = selectedSection == section
-        Button {
-            guard selectedSection != section else { return }
-            Haptics.selection()
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                selectedSection = section
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: section.icon)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(section.label)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .foregroundStyle(isSelected ? .white : Color.white.opacity(0.55))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppColors.primary.opacity(0.85),
-                                    AppColors.primary.opacity(0.55)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
-                        }
-                        .shadow(color: AppColors.primary.opacity(0.45), radius: 8, y: 3)
-                        .matchedGeometryEffect(id: "historyPickerSelection", in: pickerNamespace)
-                }
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        SectionPicker(
+            sections: HistorySection.allCases,
+            selection: $selectedSection,
+            label: { $0.label },
+            icon: { $0.icon }
+        )
     }
 
     // MARK: - Contribution Graph Section
@@ -348,63 +235,41 @@ struct HistoryView: View {
     // MARK: - Streak Section
 
     private var streakSection: some View {
-        GlassCard(padding: 14) {
-            HStack(spacing: 0) {
-                StreakStatItem(
+        StatStrip(
+            items: [
+                .init(
                     icon: "flame.fill",
                     value: "\(viewModel.currentStreak)",
                     label: "Current",
                     color: .orange,
                     isHighlighted: viewModel.currentStreak > 0
-                )
-
-                streakDivider
-
-                StreakStatItem(
+                ),
+                .init(
                     icon: "trophy.fill",
                     value: "\(viewModel.longestStreak)",
                     label: "Best",
-                    color: .yellow,
-                    isHighlighted: false
-                )
-
-                streakDivider
-
-                StreakStatItem(
+                    color: .yellow
+                ),
+                .init(
                     icon: "mic.fill",
                     value: "\(viewModel.summaries.count)",
                     label: "Sessions",
-                    color: .teal,
-                    isHighlighted: false
-                )
-
-                streakDivider
-
-                StreakStatItem(
+                    color: .teal
+                ),
+                .init(
                     icon: "clock.fill",
                     value: totalPracticeTime,
                     label: "Time",
-                    color: .purple,
-                    isHighlighted: false
-                )
-
-                streakDivider
-
-                StreakStatItem(
+                    color: .purple
+                ),
+                .init(
                     icon: "chart.line.uptrend.xyaxis",
                     value: averageScoreText,
                     label: "Avg",
-                    color: averageScoreColor,
-                    isHighlighted: false
+                    color: averageScoreColor
                 )
-            }
-        }
-    }
-
-    private var streakDivider: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 0.5, height: 40)
+            ]
+        )
     }
 
     private var averageScoreText: String {
@@ -871,35 +736,6 @@ struct FilterChip: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Streak Stat Item
-
-struct StreakStatItem: View {
-    let icon: String
-    let value: String
-    let label: String
-    let color: Color
-    let isHighlighted: Bool
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(color)
-
-                Text(value)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(color)
-            }
-
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

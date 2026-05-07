@@ -37,6 +37,9 @@ class SettingsViewModel {
     // Local state - Story Practice
     var storyPracticeEnabled: Bool = false
 
+    // Local state - Speaker Level
+    var speakerLevel: SpeakerLevel = .intermediate
+
     // Local state - Countdown
     var countdownDuration: CountdownDuration = .fifteen
     var countdownStyle: CountdownStyle = .countDown
@@ -215,6 +218,9 @@ class SettingsViewModel {
         enabledPromptCategories = Set(settings.enabledCategories)
         storyPracticeEnabled = settings.storyPracticeEnabled
 
+        // Speaker Level
+        speakerLevel = settings.resolvedSpeakerLevel
+
         // Countdown duration & style
         countdownDuration = CountdownDuration(rawValue: settings.countdownDuration) ?? .fifteen
         countdownStyle = CountdownStyle(rawValue: settings.countdownStyle) ?? .countDown
@@ -277,6 +283,9 @@ class SettingsViewModel {
         settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
         settings.storyPracticeEnabled = storyPracticeEnabled
+
+        // Speaker Level
+        settings.speakerLevel = speakerLevel.rawValue
 
         // Countdown duration & style
         settings.countdownDuration = countdownDuration.rawValue

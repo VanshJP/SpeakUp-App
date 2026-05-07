@@ -20,6 +20,7 @@ class TodayViewModel {
     var recentSubscores: [SpeechSubscores] = []
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
+    private var enabledPromptCategoryNames: Set<String> = []
     private var hasRerolledPrompt = false
 
     nonisolated init() {}
@@ -106,6 +107,7 @@ class TodayViewModel {
             let averageScore: Double = scoresWithAnalysis.isEmpty
                 ? 0
                 : Double(scoresWithAnalysis.reduce(0, +)) / Double(scoresWithAnalysis.count)
+            let bestScore = scoresWithAnalysis.max() ?? 0
 
             let sevenDaysAgo = Date().adding(days: -7)
             let recentRecordings = recordings.filter { $0.date >= sevenDaysAgo }
@@ -150,6 +152,7 @@ class TodayViewModel {
                 currentStreak: currentStreak,
                 longestStreak: longestStreak,
                 averageScore: averageScore,
+                bestScore: bestScore,
                 scoreHistory: scoreHistory,
                 mostUsedFillers: Array(mostUsedFillers),
                 improvementRate: improvementRate,
@@ -280,8 +283,11 @@ class TodayViewModel {
         // If the user has rerolled the prompt this session, keep it
         if hasRerolledPrompt && todaysPrompt != nil { return }
 
-        // Get today's prompt based on date seed
-        let todayData = DefaultPrompts.getTodaysPrompt()
+        // Get today's prompt based on date seed, weighted by self-reported
+        // speaker level so beginners see easier rotations and advanced
+        // users see more challenging ones.
+        let level = currentSpeakerLevel(context: context)
+        let todayData = DefaultPrompts.getTodaysPrompt(for: level)
         let targetId = todayData.id
 
         // Fetch all prompts and filter in memory to avoid SwiftData predicate issues
@@ -308,7 +314,10 @@ class TodayViewModel {
 
             // If hiding answered prompts and current prompt was already answered, pick an unanswered one
             if hideAnsweredPrompts, let current = todaysPrompt, answeredPromptIDs.contains(current.id) {
-                let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
+                let unanswered = allPrompts.filter {
+                    !answeredPromptIDs.contains($0.id) &&
+                    (enabledPromptCategoryNames.isEmpty || enabledPromptCategoryNames.contains($0.category))
+                }
                 todaysPrompt = unanswered.randomElement() ?? current
             }
         } catch {
@@ -341,6 +350,7 @@ class TodayViewModel {
                 hideAnsweredPrompts = settings.hideAnsweredPrompts
                 weeklyGoalSessions = settings.weeklyGoalSessions
                 storyPracticeEnabled = settings.storyPracticeEnabled
+                enabledPromptCategoryNames = Set(settings.enabledPromptCategories)
             }
         } catch {
             print("Error loading user settings: \(error)")
@@ -352,13 +362,23 @@ class TodayViewModel {
         let recordings = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
         answeredPromptIDs = Set(recordings.compactMap { $0.prompt?.id })
     }
+
+    /// Read the user's stored speaker level. Defaults to `.intermediate`
+    /// when no settings row exists yet (cold launch / first install).
+    @MainActor
+    private func currentSpeakerLevel(context: ModelContext) -> SpeakerLevel {
+        let descriptor = FetchDescriptor<UserSettings>()
+        let settings = try? context.fetch(descriptor).first
+        return settings?.resolvedSpeakerLevel ?? .intermediate
+    }
     
     @MainActor
     func refreshPrompt() async {
         guard let context = modelContext else { return }
 
-        // Get a random prompt
-        let randomData = DefaultPrompts.getRandomPrompt()
+        // Get a random prompt biased by the user's speaker level
+        let level = currentSpeakerLevel(context: context)
+        let randomData = DefaultPrompts.getRandomPrompt(for: level, enabledCategories: enabledPromptCategoryNames)
         let targetId = randomData.id
 
         // Fetch all prompts and filter in memory to avoid SwiftData predicate issues
@@ -385,7 +405,10 @@ class TodayViewModel {
             // If hiding answered prompts, prefer an unanswered one
             if hideAnsweredPrompts {
                 loadAnsweredPromptIDs(context: context)
-                let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
+                let unanswered = allPrompts.filter {
+                    !answeredPromptIDs.contains($0.id) &&
+                    (enabledPromptCategoryNames.isEmpty || enabledPromptCategoryNames.contains($0.category))
+                }
                 if let pick = unanswered.randomElement() {
                     candidate = pick
                 }

@@ -33,10 +33,13 @@ struct TodayView: View {
             ScrollView(.vertical) {
                 VStack(spacing: 20) {
 
-                    // 1. Header Stats (Ring visualization)
-                    headerSection
+                    // 1. Top header (greeting + streak chip)
+                    topHeaderRow
 
-                    // 2. Interactive Prompt Card + Start Buttons
+                    // 2. Ring stats hero (streak / weekly / score rings + metrics)
+                    ringStatsSection
+
+                    // 3. Interactive Prompt Card + Start Buttons
                     interactivePromptSection
                     startButtonSection
 
@@ -72,7 +75,8 @@ struct TodayView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .navigationTitle("Today")
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
@@ -110,24 +114,63 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Header Section
+    // MARK: - Top Header
 
-    private var headerSection: some View {
-        RingStatsView(
-            streak: viewModel.userStats.currentStreak,
-            sessions: viewModel.userStats.weeklySessionCount,
-            sessionsGoal: viewModel.userStats.weeklyGoalSessions,
-            score: Int(viewModel.userStats.averageScore),
-            improvement: viewModel.userStats.improvementRate
-        )
+    private var topHeaderRow: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greeting)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(greetingName)
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+            }
+
+            Spacer()
+
+            NavigationLink {
+                StreakDetailView()
+            } label: {
+                StreakChip(streak: viewModel.userStats.currentStreak)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
+        }
+        .padding(.top, 4)
     }
 
-    private var streakMessage: String {
-        let streak = viewModel.userStats.currentStreak
-        if streak >= 30 { return "Incredible dedication!" }
-        if streak >= 14 { return "Two weeks strong!" }
-        if streak >= 7 { return "A full week!" }
-        return "Keep showing up!"
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<12: return "Good morning"
+        case 12..<17: return "Good afternoon"
+        case 17..<22: return "Good evening"
+        default: return "Hello"
+        }
+    }
+
+    private var greetingName: String {
+        let name = userSettings.first?.userName.trimmingCharacters(in: .whitespaces) ?? ""
+        return name.isEmpty ? "Ready to practice?" : "\(name)"
+    }
+
+    // MARK: - Ring Stats Section
+
+    private var ringStatsSection: some View {
+        NavigationLink {
+            ProgressChartsView()
+        } label: {
+            RingStatsView(
+                sessions: viewModel.userStats.weeklySessionCount,
+                sessionsGoal: viewModel.userStats.weeklyGoalSessions,
+                score: Int(viewModel.userStats.averageScore),
+                bestScore: viewModel.userStats.bestScore,
+                improvement: viewModel.userStats.improvementRate
+            )
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded { Haptics.medium() })
     }
 
     // MARK: - Start Button Section
@@ -523,19 +566,14 @@ struct TodayView: View {
         return "None"
     }
 
-    // MARK: - Streak & Achievements Strip (compact merged row)
+    // MARK: - Achievements Strip
 
     private var streakAndAchievementsStrip: some View {
-        let streak = viewModel.userStats.currentStreak
         let unlocked = achievements.filter(\.isUnlocked).count
         let total = achievements.count
 
-        return HStack(spacing: 12) {
-            StreakTile(streak: streak, message: streakMessage)
-
-            AchievementsTile(unlocked: unlocked, total: total) {
-                onShowAchievements()
-            }
+        return AchievementsTile(unlocked: unlocked, total: total) {
+            onShowAchievements()
         }
     }
 
@@ -650,7 +688,7 @@ struct InteractivePromptCard: View {
 
     private var categoryColor: Color {
         guard let category = prompt?.category else { return .gray }
-        return AppColors.categoryColor(category)
+        return PromptCategory(rawValue: category)?.color ?? .gray
     }
 
     private var categoryIcon: String {
@@ -777,79 +815,6 @@ struct PracticeToolCard: View {
             }
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Streak Tile
-
-private struct StreakTile: View {
-    let streak: Int
-    let message: String
-
-    @State private var animatePulse = false
-
-    private var isActive: Bool { streak >= 1 }
-
-    var body: some View {
-        GlassCard(tint: isActive ? .orange.opacity(0.08) : .white.opacity(0.02), padding: 14) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: isActive
-                                    ? [Color.orange.opacity(0.45), Color.orange.opacity(0.0)]
-                                    : [Color.white.opacity(0.08), Color.clear],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 28
-                            )
-                        )
-                        .frame(width: 52, height: 52)
-                        .scaleEffect(animatePulse && isActive ? 1.12 : 0.95)
-                        .opacity(animatePulse && isActive ? 0.55 : 1.0)
-
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: isActive
-                                    ? [Color.yellow, Color.orange, Color.red.opacity(0.85)]
-                                    : [Color.white.opacity(0.35), Color.white.opacity(0.2)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .shadow(color: isActive ? .orange.opacity(0.5) : .clear, radius: 6, y: 2)
-                }
-                .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text("\(streak)")
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText(value: Double(streak)))
-                        Text(streak == 1 ? "day" : "days")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
-                    Text(isActive ? message : "Start today")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .onAppear {
-            guard isActive else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                animatePulse = true
-            }
-        }
     }
 }
 

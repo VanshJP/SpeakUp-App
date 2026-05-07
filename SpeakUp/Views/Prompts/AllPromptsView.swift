@@ -315,49 +315,34 @@ extension AllPromptsView {
     // MARK: - Stats Card
 
     private var statsCard: some View {
-        GlassCard(padding: 14) {
-            HStack(spacing: 0) {
-                PromptStatItem(
+        StatStrip(
+            items: [
+                .init(
                     icon: "text.bubble.fill",
                     value: "\(allPrompts.count)",
                     label: "Total",
                     color: .teal
-                )
-
-                promptStatDivider
-
-                PromptStatItem(
+                ),
+                .init(
                     icon: "checkmark.circle.fill",
                     value: "\(answeredPromptIDs.count)",
                     label: "Answered",
                     color: .green
-                )
-
-                promptStatDivider
-
-                PromptStatItem(
+                ),
+                .init(
                     icon: "circle.dashed",
                     value: "\(allPrompts.count - answeredPromptIDs.count)",
                     label: "Remaining",
                     color: .orange
-                )
-
-                promptStatDivider
-
-                PromptStatItem(
+                ),
+                .init(
                     icon: "person.fill",
                     value: "\(customCount)",
                     label: "Custom",
                     color: .purple
                 )
-            }
-        }
-    }
-
-    private var promptStatDivider: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 0.5, height: 40)
+            ]
+        )
     }
 
     // MARK: - Filter Chips
@@ -1045,34 +1030,6 @@ enum PromptSortMode: String, CaseIterable, Identifiable {
         case .category: return "folder"
         case .difficulty: return "speedometer"
         }
-    }
-}
-
-// MARK: - Prompt Stat Item
-
-struct PromptStatItem: View {
-    let icon: String
-    let value: String
-    let label: String
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(color)
-
-                Text(value)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(color)
-            }
-
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

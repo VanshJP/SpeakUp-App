@@ -38,6 +38,10 @@ struct StoriesListView<Header: View>: View {
             ScrollView {
                 LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                     Section {
+                        if !viewModel.stories.isEmpty {
+                            statsStrip
+                        }
+
                         StoryFolderBar(
                             viewModel: viewModel,
                             onCreateFolder: {
@@ -155,6 +159,40 @@ struct StoriesListView<Header: View>: View {
                 viewModel.loadStories()
             }
         }
+    }
+
+    // MARK: - Stats Strip
+
+    private var statsStrip: some View {
+        StatStrip(
+            items: [
+                .init(
+                    icon: "note.text",
+                    value: "\(viewModel.stories.count)",
+                    label: "Notes",
+                    color: .teal
+                ),
+                .init(
+                    icon: "pin.fill",
+                    value: "\(viewModel.stories.filter(\.isFavorite).count)",
+                    label: "Pinned",
+                    color: .yellow,
+                    isHighlighted: viewModel.stories.contains(where: \.isFavorite)
+                ),
+                .init(
+                    icon: "folder.fill",
+                    value: "\(viewModel.folders.count)",
+                    label: "Folders",
+                    color: .blue
+                ),
+                .init(
+                    icon: "tag.fill",
+                    value: "\(viewModel.stories.filter { !$0.tags.isEmpty }.count)",
+                    label: "Tagged",
+                    color: .purple
+                )
+            ]
+        )
     }
 
     // MARK: - Story List
@@ -392,6 +430,12 @@ private struct CompactStoryRow: View {
     let story: Story
 
     var body: some View {
+        GlassCard(padding: 14) {
+            rowContent
+        }
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -439,17 +483,7 @@ private struct CompactStoryRow: View {
                     }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
-                }
-        }
     }
 
     private var tagStrip: some View {

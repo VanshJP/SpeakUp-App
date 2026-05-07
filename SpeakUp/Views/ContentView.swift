@@ -324,13 +324,82 @@ struct ContentView: View {
             }
         }
         .fullScreenCover(isPresented: $showOnboarding) {
-            OnboardingView {
-                if let settings = userSettings.first {
-                    settings.hasCompletedOnboarding = true
-                    try? modelContext.save()
+            OnboardingView { result in
+                Task { @MainActor in
+                    if let settings = userSettings.first {
+                        applyOnboardingResult(result, to: settings)
+                        try? modelContext.save()
+                    }
+                    OnboardingViewModel.clearResumeState()
+                    // Sync SettingsViewModel's cached word lists so vocab and
+                    // dictionary words appear immediately without a restart.
+                    await settingsViewModel.loadSettings()
+                    showOnboarding = false
+
+                    if result.reminderEnabled {
+                        let service = NotificationService()
+                        await service.checkPermission()
+                        await service.scheduleDailyReminder(
+                            hour: result.reminderHour,
+                            minute: result.reminderMinute
+                        )
+                    }
+
+                    if result.launchFirstRecording {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        recordingPrompt = nil
+                        recordingStoryId = nil
+                        recordingDuration = .sixty
+                        showingCountdown = true
+                    }
                 }
-                showOnboarding = false
             }
+        }
+    }
+
+    // MARK: - Onboarding
+
+    /// Apply user picks captured during onboarding to the persisted
+    /// `UserSettings` row. De-duplicates word lists case-insensitively
+    /// against existing entries so re-running onboarding never produces
+    /// duplicate vocab/dictionary chips.
+    private func applyOnboardingResult(_ result: OnboardingResult, to settings: UserSettings) {
+        settings.hasCompletedOnboarding = true
+        settings.speakerLevel = result.speakerLevel.rawValue
+        settings.userName = result.userName
+        settings.onboardingGoalRaw = result.goal.rawValue
+
+        // Persist reminder preference + time so SettingsView reflects it.
+        settings.dailyReminderEnabled = result.reminderEnabled
+        settings.dailyReminderHour = result.reminderHour
+        settings.dailyReminderMinute = result.reminderMinute
+
+        // Narrow daily prompt categories to the goal's recommended mix on
+        // first run. We only override if the user hasn't already customised
+        // the list (i.e. it still equals the full default set).
+        let allCategories = Set(PromptCategory.allCases.map { $0.rawValue })
+        let currentCategories = Set(settings.enabledPromptCategories)
+        if currentCategories == allCategories || currentCategories.isEmpty {
+            let goalCategories = result.goal.defaultPromptCategoryNames
+            if !goalCategories.isEmpty {
+                settings.enabledPromptCategories = goalCategories
+            }
+        }
+
+        for word in result.vocabWords {
+            settings.addVocabWord(word)
+        }
+        for word in result.dictionaryWords {
+            settings.addDictationBiasWord(word)
+        }
+
+        // If recordings already exist when onboarding completes (re-onboarding,
+        // app upgrade, or testing), suppress the first-recording setup sheet —
+        // the user clearly knows how to record. Without this, the sheet fires
+        // on TodayView appearance whenever count >= 1 and the flag is false.
+        if !settings.hasShownFirstRecordingSetup {
+            let count = (try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
+            if count > 0 { settings.hasShownFirstRecordingSetup = true }
         }
     }
 

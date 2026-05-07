@@ -483,49 +483,34 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        GlassCard(padding: 14) {
-            HStack(spacing: 0) {
-                PromptStatItem(
+        StatStrip(
+            items: [
+                .init(
                     icon: "speedometer",
                     value: "\(Int(analysis.wordsPerMinute))",
                     label: "WPM",
                     color: .cyan
-                )
-
-                statsGridDivider
-
-                PromptStatItem(
+                ),
+                .init(
                     icon: "text.word.spacing",
                     value: "\(analysis.totalWords)",
                     label: "Words",
                     color: .white
-                )
-
-                statsGridDivider
-
-                PromptStatItem(
+                ),
+                .init(
                     icon: "exclamationmark.bubble",
                     value: "\(analysis.totalFillerCount)",
                     label: "Fillers",
                     color: analysis.totalFillerCount > 5 ? .orange : .green
-                )
-
-                statsGridDivider
-
-                PromptStatItem(
+                ),
+                .init(
                     icon: "pause.circle",
                     value: "\(analysis.pauseCount)",
                     label: "Pauses",
                     color: .green
                 )
-            }
-        }
-    }
-
-    private var statsGridDivider: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 0.5, height: 40)
+            ]
+        )
     }
 
     // MARK: - WPM Chart Section

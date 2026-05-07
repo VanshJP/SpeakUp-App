@@ -2746,23 +2746,41 @@ enum DefaultPrompts {
     ]
 
     // MARK: - Helper Functions
-    
+
     static func getRandomPrompt() -> PromptData {
         all.randomElement()!
     }
-    
+
+    /// Random prompt biased by the user's self-reported speaker level.
+    /// Beginners see more easy prompts; advanced users see more hard ones.
+    static func getRandomPrompt(for level: SpeakerLevel) -> PromptData {
+        let target = pickDifficulty(for: level, seed: Int.random(in: 0..<1_000_000))
+        let pool = all.filter { $0.difficulty == target }
+        return pool.randomElement() ?? all.randomElement()!
+    }
+
+    /// Random prompt filtered to enabled categories, then biased by speaker level.
+    static func getRandomPrompt(for level: SpeakerLevel, enabledCategories: Set<String>) -> PromptData {
+        guard !enabledCategories.isEmpty else { return getRandomPrompt(for: level) }
+        let target = pickDifficulty(for: level, seed: Int.random(in: 0..<1_000_000))
+        let pool = all.filter { $0.difficulty == target && enabledCategories.contains($0.category) }
+        if let pick = pool.randomElement() { return pick }
+        let fallback = all.filter { enabledCategories.contains($0.category) }
+        return fallback.randomElement() ?? all.randomElement()!
+    }
+
     static func getPromptsByCategory(_ category: String) -> [PromptData] {
         all.filter { $0.category == category }
     }
-    
+
     static func getPromptsByDifficulty(_ difficulty: PromptDifficulty) -> [PromptData] {
         all.filter { $0.difficulty == difficulty }
     }
-    
+
     static var allCategories: [String] {
         Array(Set(all.map { $0.category })).sorted()
     }
-    
+
     static func getTodaysPrompt() -> PromptData {
         // Use date as seed for consistent daily prompt
         let today = Calendar.current.startOfDay(for: Date())
@@ -2770,5 +2788,30 @@ enum DefaultPrompts {
         let seed = (components.year ?? 0) + (components.month ?? 0) + (components.day ?? 0)
         let index = seed % all.count
         return all[index]
+    }
+
+    /// Date-seeded daily prompt biased by the user's self-reported speaker
+    /// level. The same calendar day always returns the same prompt for a
+    /// given level, so the home screen stays stable across re-fetches.
+    static func getTodaysPrompt(for level: SpeakerLevel) -> PromptData {
+        let today = Calendar.current.startOfDay(for: Date())
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: today)
+        let seed = (components.year ?? 0) * 366 + (components.month ?? 0) * 31 + (components.day ?? 0)
+
+        let target = pickDifficulty(for: level, seed: seed)
+        let pool = all.filter { $0.difficulty == target }
+        guard !pool.isEmpty else { return all[seed % all.count] }
+        return pool[seed % pool.count]
+    }
+
+    /// Map a `(easy, medium, hard)` weight tuple onto the seed to pick a
+    /// difficulty bucket deterministically.
+    private static func pickDifficulty(for level: SpeakerLevel, seed: Int) -> PromptDifficulty {
+        let weights = level.dailyDifficultyWeights
+        let total = max(weights.easy + weights.medium + weights.hard, 1)
+        let pick = abs(seed) % total
+        if pick < weights.easy { return .easy }
+        if pick < weights.easy + weights.medium { return .medium }
+        return .hard
     }
 }
