@@ -44,7 +44,7 @@ struct DailyPromptWidgetView: View {
                 Image(systemName: "waveform.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.teal)
-                Text("SpeakUp")
+                Text("Big Talk")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.teal)
                 Spacer()

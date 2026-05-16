@@ -19,7 +19,7 @@ class PromptCSVService {
         }
 
         let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SpeakUp_Prompts_\(Date().formatted(.dateTime.year().month().day()))")
+            .appendingPathComponent("BigTalk_Prompts_\(Date().formatted(.dateTime.year().month().day()))")
             .appendingPathExtension("csv")
 
         try csv.write(to: tempURL, atomically: true, encoding: .utf8)

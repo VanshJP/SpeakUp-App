@@ -298,7 +298,7 @@ private struct OnboardingOrb: View {
     @State private var pulseScale: CGFloat = 1.0
 
     var body: some View {
-        Image("SpeakUpOrb")
+        Image("BigTalkOrb")
             .resizable()
             .renderingMode(.original)
             .aspectRatio(contentMode: .fit)
@@ -519,7 +519,7 @@ private struct OnboardingGoalStep: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
-                Text("Why did you download SpeakUp? Pick the closest fit — we'll tune your daily prompts to match. You can change this later in Settings.")
+                Text("Why did you download Big Talk? Pick the closest fit — we'll tune your daily prompts to match. You can change this later in Settings.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
@@ -891,7 +891,7 @@ private struct OnboardingMicStep: View {
         if heardVoice {
             return "Mic is working. Keep talking or continue."
         }
-        return "Try saying: \"Hi, I'm getting started with SpeakUp.\""
+        return "Try saying: \"Hi, I'm getting started with Big Talk.\""
     }
 }
 

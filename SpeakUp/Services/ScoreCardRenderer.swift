@@ -55,11 +55,11 @@ private struct ScoreCardView: View {
 
     private var brandRow: some View {
         HStack(spacing: 10) {
-            Image("SpeakUpOrb")
+            Image("BigTalkOrb")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 28, height: 28)
-            Text("SpeakUp")
+            Text("Big Talk")
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
             Spacer()

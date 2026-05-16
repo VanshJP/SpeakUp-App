@@ -1,6 +1,6 @@
 # Speech Analysis Algorithm Contract
 
-Purpose: compact, authoritative reference for LLM context injection. Source-of-truth for the SpeakUp scoring pipeline. Also aliased in docs as `SPEECH_ANALYSIS_DEEP_DIVE.md` — this file (`SPEECH.md`) is canonical.
+Purpose: compact, authoritative reference for LLM context injection. Source-of-truth for the Big Talk scoring pipeline. Also aliased in docs as `SPEECH_ANALYSIS_DEEP_DIVE.md` — this file (`SPEECH.md`) is canonical.
 Last refresh: April 2026. Aligned with `SpeechService.swift`, `SpeechScoringEngine.swift`, `RecordingProcessingCoordinator.swift`.
 
 ## Design philosophy
@@ -8,19 +8,19 @@ Last refresh: April 2026. Aligned with `SpeechService.swift`, `SpeechScoringEngi
 Scores are progressive and achievable. A beginner's natural 15–20 s answer lands 50–65, not 20–35. A solid 60 s talk routinely sees 75–90. Only gibberish, silence, or near-empty speech drops below 20.
 
 ## Canonical files
-- `SpeakUp/Services/SpeechService.swift` — orchestrator + `analyze(...)` entry point
-- `SpeakUp/Services/SpeechScoringEngine.swift` — enhanced metrics, substance multiplier, gibberish gate, subscore helpers
-- `SpeakUp/Services/RecordingProcessingCoordinator.swift` — singleton job queue wrapping transcription + analysis + LLM pass
-- `SpeakUp/Services/FillerDetectionPipeline.swift` — shared pause-aware filler tagging
-- `SpeakUp/Services/WhisperService.swift`, `DictationService.swift` — transcription backends
-- `SpeakUp/Services/SpeechIsolationService.swift` — audio preprocessing (high-pass + noise gate)
-- `SpeakUp/Services/ConversationIsolationService.swift` — primary-speaker labeling
-- `SpeakUp/Services/TextAnalysisService.swift` — authority / hedges / power words / rhetoric
-- `SpeakUp/Services/PromptRelevanceService.swift` — keyword + semantic + coherence scoring
-- `SpeakUp/Services/PitchAnalysisService.swift` — vDSP F0 autocorrelation
-- `SpeakUp/Services/LLMService.swift`, `LocalLLMService.swift` — Apple Intelligence / llama.cpp backends
-- `SpeakUp/Models/SpeechAnalysis.swift` — `SpeechAnalysis`, `SpeechSubscores`, `SpeechScore`, `EnhancedSpeechMetrics`, `ScoreWeights`, `TranscriptionWord`, `PauseInfo`
-- Runtime wiring: `SpeakUp/Views/Detail/RecordingDetailView.swift`
+- `Big Talk/Services/SpeechService.swift` — orchestrator + `analyze(...)` entry point
+- `Big Talk/Services/SpeechScoringEngine.swift` — enhanced metrics, substance multiplier, gibberish gate, subscore helpers
+- `Big Talk/Services/RecordingProcessingCoordinator.swift` — singleton job queue wrapping transcription + analysis + LLM pass
+- `Big Talk/Services/FillerDetectionPipeline.swift` — shared pause-aware filler tagging
+- `Big Talk/Services/WhisperService.swift`, `DictationService.swift` — transcription backends
+- `Big Talk/Services/SpeechIsolationService.swift` — audio preprocessing (high-pass + noise gate)
+- `Big Talk/Services/ConversationIsolationService.swift` — primary-speaker labeling
+- `Big Talk/Services/TextAnalysisService.swift` — authority / hedges / power words / rhetoric
+- `Big Talk/Services/PromptRelevanceService.swift` — keyword + semantic + coherence scoring
+- `Big Talk/Services/PitchAnalysisService.swift` — vDSP F0 autocorrelation
+- `Big Talk/Services/LLMService.swift`, `LocalLLMService.swift` — Apple Intelligence / llama.cpp backends
+- `Big Talk/Models/SpeechAnalysis.swift` — `SpeechAnalysis`, `SpeechSubscores`, `SpeechScore`, `EnhancedSpeechMetrics`, `ScoreWeights`, `TranscriptionWord`, `PauseInfo`
+- Runtime wiring: `Big Talk/Views/Detail/RecordingDetailView.swift`
 
 ## Runtime sequence
 

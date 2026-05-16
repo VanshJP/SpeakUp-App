@@ -71,7 +71,7 @@ class ExportService {
     // MARK: - Text Generation
     
     func generateShareText(for recording: Recording) -> String {
-        var text = "SpeakUp Practice Session\n"
+        var text = "Big Talk Practice Session\n"
         text += "Date: \(recording.date.formatted(date: .abbreviated, time: .shortened))\n"
 
         if let prompt = recording.prompt {
@@ -87,8 +87,8 @@ class ExportService {
             text += "Filler words: \(analysis.totalFillerCount)\n"
         }
 
-        text += "\nPractice your speaking with SpeakUp!"
-        text += "\n#SpeakUp #PublicSpeaking"
+        text += "\nPractice your speaking with Big Talk!"
+        text += "\n#BigTalk #PublicSpeaking"
 
         return text
     }
@@ -111,8 +111,8 @@ class ExportService {
             text += getScoreEmoji(for: score)
         }
 
-        text += "\n\nPractice your speaking with SpeakUp!"
-        text += "\n#SpeakUp #SpeakingPractice"
+        text += "\n\nPractice your speaking with Big Talk!"
+        text += "\n#BigTalk #SpeakingPractice"
 
         return text
     }

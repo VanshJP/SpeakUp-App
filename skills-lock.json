@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "aso-appstore-screenshots": {
+      "source": "adamlyttleapps/claude-skill-aso-appstore-screenshots",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "4fd0d6b1bb4c16b98dbc05050168e99f1c8d52369598214cf83ad46c05019931"
+    },
     "caveman": {
       "source": "juliusbrussee/caveman",
       "sourceType": "github",

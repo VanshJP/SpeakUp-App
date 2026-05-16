@@ -12,6 +12,10 @@ enum LocalModelState: Equatable {
     case error(String)
 }
 
+enum ModelFamily {
+    case gemma
+}
+
 // MARK: - LocalLLMService
 
 @MainActor @Observable
@@ -20,71 +24,59 @@ final class LocalLLMService {
     // MARK: - Configuration
 
     enum ModelProfile: String, CaseIterable, Identifiable {
-        case compact
-        case balanced
-        case quality
+        case gemmaE2B
+        case gemmaE4B
 
         var id: String { rawValue }
 
+        var modelFamily: ModelFamily { .gemma }
+
         var displayName: String {
             switch self {
-            case .compact:
-                return "Qwen 2.5 (0.5B)"
-            case .balanced:
-                return "Qwen 2.5 (1.5B)"
-            case .quality:
-                return "Qwen 2.5 (3B)"
+            case .gemmaE2B:
+                return "Gemma 4 E2B"
+            case .gemmaE4B:
+                return "Gemma 4 E4B"
             }
         }
 
         var modelFileName: String {
             switch self {
-            case .compact:
-                return "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-            case .balanced:
-                return "qwen2.5-1.5b-instruct-q4_k_m.gguf"
-            case .quality:
-                return "qwen2.5-3b-instruct-q4_k_m.gguf"
+            case .gemmaE2B:
+                return "google_gemma-4-E2B-it-Q4_K_M.gguf"
+            case .gemmaE4B:
+                return "google_gemma-4-E4B-it-Q4_K_M.gguf"
             }
         }
 
         var approximateModelSize: String {
             switch self {
-            case .compact:
-                return "~400 MB"
-            case .balanced:
-                return "~1.1 GB"
-            case .quality:
-                return "~2.0 GB"
+            case .gemmaE2B:
+                return "~3.5 GB"
+            case .gemmaE4B:
+                return "~5.4 GB"
             }
         }
 
         nonisolated var minimumRecommendedMemoryBytes: Int {
             switch self {
-            case .compact:
-                return 500 * 1024 * 1024
-            case .balanced:
-                return 1_500 * 1024 * 1024
-            case .quality:
-                return 2_500 * 1024 * 1024
+            case .gemmaE2B:
+                return 4_000 * 1024 * 1024
+            case .gemmaE4B:
+                return 6_000 * 1024 * 1024
             }
         }
 
         var downloadURL: URL {
             switch self {
-            case .compact:
-                guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf") else {
-                    preconditionFailure("Invalid compact local model URL")
+            case .gemmaE2B:
+                guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf") else {
+                    preconditionFailure("Invalid Gemma 4 E2B local model URL")
                 }
                 return url
-            case .balanced:
-                guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf") else {
-                    preconditionFailure("Invalid balanced local model URL")
-                }
-                return url
-            case .quality:
-                guard let url = URL(string: "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf") else {
-                    preconditionFailure("Invalid quality local model URL")
+            case .gemmaE4B:
+                guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf") else {
+                    preconditionFailure("Invalid Gemma 4 E4B local model URL")
                 }
                 return url
             }
@@ -169,13 +161,10 @@ final class LocalLLMService {
     }
 
     nonisolated static func recommendedProfile(forAvailableMemory memoryBytes: Int) -> ModelProfile {
-        if memoryBytes >= ModelProfile.quality.minimumRecommendedMemoryBytes {
-            return .quality
+        if memoryBytes >= ModelProfile.gemmaE4B.minimumRecommendedMemoryBytes {
+            return .gemmaE4B
         }
-        if memoryBytes >= ModelProfile.balanced.minimumRecommendedMemoryBytes {
-            return .balanced
-        }
-        return .compact
+        return .gemmaE2B
     }
 
     func selectProfile(_ profile: ModelProfile) {
@@ -289,7 +278,7 @@ final class LocalLLMService {
             return nil
         }
 
-        let formatted = Self.formatChatPrompt(systemPrompt: systemPrompt, userPrompt: prompt)
+        let formatted = Self.formatChatPrompt(systemPrompt: systemPrompt, userPrompt: prompt, family: selectedProfile.modelFamily)
 
         let inferenceTask = Task.detached(priority: .userInitiated) { [engine] in
             return engine.generate(prompt: formatted, maxTokens: maxTokens, temperature: temperature)
@@ -464,10 +453,10 @@ final class LocalLLMService {
         return (structure: max(0, min(100, s)), vocabulary: max(0, min(100, v)))
     }
 
-    // MARK: - Chat Template (Qwen2.5)
+    // MARK: - Chat Template (Gemma 4)
 
-    private static func formatChatPrompt(systemPrompt: String, userPrompt: String) -> String {
-        "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(userPrompt)<|im_end|>\n<|im_start|>assistant\n"
+    private static func formatChatPrompt(systemPrompt: String, userPrompt: String, family: ModelFamily) -> String {
+        "<|turn>system\n\(systemPrompt) \n<|turn>user\n\(userPrompt) \n<|turn>model\n"
     }
 
     // MARK: - Parsing Helpers

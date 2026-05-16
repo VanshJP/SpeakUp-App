@@ -83,7 +83,7 @@ struct VoiceCalibrationView: View {
                 .foregroundStyle(.white)
 
             Text(phase == .ready
-                 ? "Read the passage below at your natural pace. SpeakUp will listen and build your voice profile."
+                 ? "Read the passage below at your natural pace. Big Talk will listen and build your voice profile."
                  : "Read each word aloud — they'll highlight as you go.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

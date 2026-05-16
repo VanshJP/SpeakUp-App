@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code / Augment Agent on the SpeakUp iOS project. This file and `AGENTS.md` are the same file (AGENTS.md is a symlink).
+Guidance for Claude Code / Augment Agent on the Big Talk iOS project. This file and `AGENTS.md` are the same file (AGENTS.md is a symlink).
 
 ## Persona — Smart Caveman (full mode)
 
@@ -33,9 +33,9 @@ If the user explicitly asks "build it" or "run tests," still defer: respond with
 
 ## Project Overview
 
-SpeakUp = native iOS speech practice app. SwiftUI + SwiftData + WhisperKit. On-device transcription, multi-dimensional speech scoring, optional on-device LLM coherence pass. Features: recording, drills, warm-ups, confidence tools, structured curriculum, user-authored Stories (rich-text scripts), Read-Aloud passages with pronunciation scoring, social challenges, journal PDFs, achievements, iCloud sync, widgets.
+Big Talk = native iOS speech practice app. SwiftUI + SwiftData + WhisperKit. On-device transcription, multi-dimensional speech scoring, optional on-device LLM coherence pass. Features: recording, drills, warm-ups, confidence tools, structured curriculum, user-authored Stories (rich-text scripts), Read-Aloud passages with pronunciation scoring, social challenges, journal PDFs, achievements, iCloud sync, widgets.
 
-Bundle id: `com.vansh.SpeakUpMore`. Deployment: iOS 17+. Liquid glass effects activate on iOS 26+.
+Bundle id: `com.vansh.Big TalkMore`. Deployment: iOS 17+. Liquid glass effects activate on iOS 26+.
 
 ## Architecture
 
@@ -59,7 +59,7 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 - **Theme/** — `AppColors`, `GlassStyles`, `AppBackground`. All UI uses the glassmorphism system — no raw colors or inline styling.
 - **Extensions/** — `Date+Helpers.swift`, `Haptics.swift`, `View+Glass.swift` (iOS 26 liquid glass).
 - **Data/** — `DefaultPrompts`, `DefaultWarmUps`, `DefaultConfidenceExercises`, `DefaultCurriculum`, `DefaultReadAloudPassages`, `DefaultFeedbackQuestions`, `SchemaVersioning` (V1 → V16).
-- **SpeakUpWidget/** — WidgetKit target. Widgets: `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget`. Reads via App Group from `WidgetDataProvider`.
+- **Big TalkWidget/** — WidgetKit target. Widgets: `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget`. Reads via App Group from `WidgetDataProvider`.
 
 ### View groups
 
@@ -88,7 +88,7 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 
 ### Entry point
 
-`SpeakUpApp.swift` — builds `ModelContainer` over `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. CloudKit sync toggled via `ICloudStorageService.resolvedSyncEnabledPreference`; falls back to local-only then in-memory if container creation fails. Injects `SpeechService`, `AudioService`, `LLMService` via `@Environment`. Seeds prompts, settings, achievements, curriculum progress, story folders concurrently. Background tasks: legacy URL migration, iCloud file migration, Whisper preload, local LLM auto-load.
+`Big TalkApp.swift` — builds `ModelContainer` over `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. CloudKit sync toggled via `ICloudStorageService.resolvedSyncEnabledPreference`; falls back to local-only then in-memory if container creation fails. Injects `SpeechService`, `AudioService`, `LLMService` via `@Environment`. Seeds prompts, settings, achievements, curriculum progress, story folders concurrently. Background tasks: legacy URL migration, iCloud file migration, Whisper preload, local LLM auto-load.
 
 ### Navigation
 
@@ -326,10 +326,10 @@ Before building custom UI, check `Components/` for existing pieces:
 - File name matches primary type name exactly
 
 ### SwiftData rules
-- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift` (latest: `SpeakUpSchemaV16`)
+- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift` (latest: `Big TalkSchemaV16`)
 - Never rename a `@Attribute` without a migration step
 - Describe schema changes so the developer can exercise the in-memory container path — AI does not run the simulator
-- Current schemas registered in `SpeakUpApp.sharedModelContainer`: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`
+- Current schemas registered in `Big TalkApp.sharedModelContainer`: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`
 
 ## Common Pitfalls to Avoid
 

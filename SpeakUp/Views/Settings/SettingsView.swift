@@ -179,7 +179,7 @@ struct SettingsView: View {
         .alert("Restart Required", isPresented: $showingSyncRestartAlert) {
             Button("OK") {}
         } message: {
-            Text("Please restart SpeakUp for the sync change to take effect.")
+            Text("Please restart Big Talk for the sync change to take effect.")
         }
     }
 

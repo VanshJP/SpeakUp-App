@@ -194,7 +194,7 @@ struct JournalExportView: View {
             }
 
             let dateString = Self.journalDateFormatter.string(from: Date())
-            let fileName = "SpeakUp-Journal-\(dateString).pdf"
+            let fileName = "BigTalk-Journal-\(dateString).pdf"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
             do {

@@ -131,7 +131,7 @@ struct AIModelSettingsView: View {
                 modelTierSection
 
                 if !llmService.appleIntelligenceAvailable {
-                    Text("Download your selected on-device model tier to enable AI-powered coherence scoring and coaching tips on this device.")
+                    Text("Download a Gemma 4 model to enable on-device AI coherence scoring and coaching tips.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {

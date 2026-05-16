@@ -88,7 +88,7 @@ struct DataManagementView: View {
                                 .buttonStyle(.plain)
                             } else {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("Calibrate your voice so SpeakUp can recognize you in conversations, or it will learn automatically as you record.")
+                                    Text("Calibrate your voice so Big Talk can recognize you in conversations, or it will learn automatically as you record.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
