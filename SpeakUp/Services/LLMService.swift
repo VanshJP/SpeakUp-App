@@ -26,9 +26,22 @@ final class LLMService {
     /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
 
+    /// When `true`, route inference to the local Gemma model even on devices
+    /// where Apple Intelligence is available. Persisted across launches so the
+    /// preference survives backgrounding. Defaults to `false` (Apple
+    /// Intelligence preferred), matching the original behaviour.
+    var preferLocalLLM: Bool {
+        didSet {
+            UserDefaults.standard.set(preferLocalLLM, forKey: Self.preferLocalDefaultsKey)
+        }
+    }
+
+    private static let preferLocalDefaultsKey = "llm_prefer_local"
+
     nonisolated private let memoryPressureSource: DispatchSourceMemoryPressure
 
     init() {
+        preferLocalLLM = UserDefaults.standard.bool(forKey: Self.preferLocalDefaultsKey)
         memoryPressureSource = DispatchSource.makeMemoryPressureSource(
             eventMask: [.warning, .critical],
             queue: .global(qos: .utility)
@@ -45,7 +58,29 @@ final class LLMService {
     private func setupMemoryPressureMonitor() {
         memoryPressureSource.setEventHandler { [weak self] in
             guard let self else { return }
-            print("[LLMService] Memory pressure detected — unloading local LLM")
+            let event = self.memoryPressureSource.data
+            let isCritical = event.contains(.critical)
+            // Read the preference directly from UserDefaults to avoid hopping
+            // to the main actor just to check a Bool.
+            let preferLocal = UserDefaults.standard.bool(forKey: Self.preferLocalDefaultsKey)
+            // When the user has explicitly opted into the local Gemma path
+            // (hackathon / on-device demo), large models intentionally sit
+            // near the per-process budget. `.warning` fires routinely in that
+            // band; treating it as a mandate to unload defeats the feature.
+            // Only react to `.critical` in that mode — iOS will jetsam the
+            // process anyway if real exhaustion follows.
+            if preferLocal && !isCritical {
+                print("[LLMService] Memory pressure .warning ignored — preferLocalLLM is on")
+                return
+            }
+            print("[LLMService] Memory pressure (\(isCritical ? "critical" : "warning")) — unloading local LLM")
+            // Abort any in-flight generation first. `unloadModel` schedules a
+            // detached `engine.unload()` that has to take the inference lock,
+            // which `generate` holds for the full token-decode loop — without
+            // a prior cancel, unload can sit blocked for 10+ seconds while
+            // jetsam fires. `cancelInflight` is non-blocking and lets the
+            // generate loop break at its next per-8-token cancellation poll.
+            self.localLLM.cancelInflight()
             Task { @MainActor in
                 self.localLLM.unloadModel()
             }
@@ -65,10 +100,22 @@ final class LLMService {
     }
 
     /// The backend that will be used for the next generation request.
+    /// Honors `preferLocalLLM` so the user can force the on-device Gemma path
+    /// even when Apple Intelligence is available.
     var activeBackend: LLMBackend {
+        if preferLocalLLM && localLLM.isModelReady { return .localLLM }
         if appleIntelligenceAvailable { return .appleIntelligence }
         if localLLM.isModelReady { return .localLLM }
         return .none
+    }
+
+    /// Whether the next inference request should route to Apple Intelligence
+    /// first. False when the user has explicitly opted into the local model and
+    /// the local model is loaded.
+    private var prefersAppleIntelligence: Bool {
+        guard appleIntelligenceAvailable else { return false }
+        if preferLocalLLM && localLLM.isModelReady { return false }
+        return true
     }
 
     // MARK: - Local Model Management (pass-through)
@@ -97,9 +144,13 @@ final class LLMService {
 
     /// Loads the local model if it's downloaded but not yet loaded.
     func loadLocalModelIfNeeded() async {
-        guard !appleIntelligenceAvailable,
-              localLLM.isModelDownloaded,
-              !localLLM.isModelReady else { return }
+        // Load when (a) Apple Intelligence is unavailable, OR (b) the user has
+        // opted to prefer the local model — in both cases the local engine
+        // needs to be ready before the next inference call.
+        let shouldLoad = (!appleIntelligenceAvailable || preferLocalLLM)
+            && localLLM.isModelDownloaded
+            && !localLLM.isModelReady
+        guard shouldLoad else { return }
         // Avoid re-loading if already loading
         if case .loading = localLLM.modelState { return }
         await localLLM.loadModel()
@@ -108,9 +159,13 @@ final class LLMService {
     // MARK: - General-Purpose Generation
 
     /// Public general-purpose text generation using the best available backend.
+    /// Falls back from Apple Intelligence to the local model if the AI call
+    /// returns nil (e.g. simulator, feature disabled).
     func generateText(prompt: String, systemPrompt: String) async -> String? {
-        if appleIntelligenceAvailable {
-            return await generateWithAppleIntelligence(prompt: prompt, systemPrompt: systemPrompt)
+        if prefersAppleIntelligence {
+            if let result = await generateWithAppleIntelligence(prompt: prompt, systemPrompt: systemPrompt) {
+                return result
+            }
         }
         if localLLM.isModelReady {
             return await localLLM.generate(prompt: prompt, systemPrompt: systemPrompt)
@@ -236,12 +291,12 @@ final class LLMService {
     // MARK: - Coherence Evaluation
 
     func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {
-        // Prefer Apple Intelligence when available
-        if appleIntelligenceAvailable {
-            return await evaluateCoherenceWithAppleIntelligence(transcript: transcript, promptText: promptText)
+        if prefersAppleIntelligence {
+            if let result = await evaluateCoherenceWithAppleIntelligence(transcript: transcript, promptText: promptText) {
+                return result
+            }
         }
 
-        // Fall back to local LLM
         if localLLM.isModelReady {
             return await localLLM.evaluateCoherence(transcript: transcript, promptText: promptText)
         }
@@ -258,15 +313,14 @@ final class LLMService {
         isGenerating = true
         defer { isGenerating = false }
 
-        // Prefer Apple Intelligence
-        if appleIntelligenceAvailable {
+        if prefersAppleIntelligence {
             if let raw = await generateCoachingWithAppleIntelligence(analysis: analysis, transcript: transcript) {
                 return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript)
             }
-            return nil
+            // Apple Intelligence returned nil — try the local model rather than
+            // surfacing nothing to the user.
         }
 
-        // Fall back to local LLM
         if localLLM.isModelReady {
             if let raw = await localLLM.generateCoachingInsight(from: analysis, transcript: transcript) {
                 return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript)
@@ -280,9 +334,10 @@ final class LLMService {
     // MARK: - Transcript Quality Evaluation
 
     func evaluateTranscriptQuality(transcript: String) async -> (structure: Int, vocabulary: Int)? {
-        // Prefer Apple Intelligence
-        if appleIntelligenceAvailable {
-            return await evaluateTranscriptQualityWithAppleIntelligence(transcript: transcript)
+        if prefersAppleIntelligence {
+            if let result = await evaluateTranscriptQualityWithAppleIntelligence(transcript: transcript) {
+                return result
+            }
         }
 
         // Fall back to local LLM

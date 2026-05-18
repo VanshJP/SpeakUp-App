@@ -140,9 +140,32 @@ struct AIModelSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if llmService.appleIntelligenceAvailable && llmService.localLLM.isModelReady {
+                    preferLocalToggle
+                }
+
                 // Actions based on state
                 localModelActions
             }
+        }
+    }
+
+    private var preferLocalToggle: some View {
+        @Bindable var bindable = llmService
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Use Local Model for AI Features")
+                    .font(.subheadline.weight(.semibold))
+                Text("Route coaching insights and coherence scoring through the on-device Gemma model instead of Apple Intelligence.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: $bindable.preferLocalLLM)
+                .labelsHidden()
+                .tint(AppColors.primary)
         }
     }
 

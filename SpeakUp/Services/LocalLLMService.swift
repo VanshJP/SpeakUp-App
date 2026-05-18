@@ -16,6 +16,45 @@ enum ModelFamily {
     case gemma
 }
 
+/// Typed errors surfaced from `LocalLLMService.loadModel()` so the UI can
+/// distinguish recoverable problems (missing file → re-download) from
+/// transient ones (insufficient RAM → close other apps and retry) from
+/// hard llama backend failures.
+enum LocalLLMError: LocalizedError {
+    case fileNotFound(path: String)
+    case insufficientMemory(availableBytes: Int, requiredBytes: Int)
+    case backendInitFailed
+    case modelInitFailed
+    case contextInitFailed
+    case unknown(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .fileNotFound(let path):
+            return "Model file not found at \(path). Re-download the model."
+        case .insufficientMemory(let available, let required):
+            let avail = ByteCountFormatter.string(fromByteCount: Int64(available), countStyle: .memory)
+            let req = ByteCountFormatter.string(fromByteCount: Int64(required), countStyle: .memory)
+            return "Insufficient RAM (\(avail) available, \(req) recommended). Close other apps and try again."
+        case .backendInitFailed:
+            return "Internal Llama error: failed to initialize backend."
+        case .modelInitFailed:
+            return "Internal Llama error: failed to read model weights."
+        case .contextInitFailed:
+            return "Internal Llama error: failed to create inference context."
+        case .unknown(let detail):
+            return "Internal Llama error: \(detail)"
+        }
+    }
+}
+
+extension Notification.Name {
+    /// Posted by `LocalLLMService` immediately before it initializes the heavy
+    /// `LLMInferenceEngine`. Listeners (e.g. `WhisperService`) should unload
+    /// their own large in-memory models so the LLM can claim the RAM.
+    static let localLLMWillLoad = Notification.Name("LocalLLM.willLoadHeavyModel")
+}
+
 // MARK: - LocalLLMService
 
 @MainActor @Observable
@@ -24,6 +63,12 @@ final class LocalLLMService {
     // MARK: - Configuration
 
     enum ModelProfile: String, CaseIterable, Identifiable {
+        /// Gemma 3 1B instruction-tuned — smallest viable profile. ~0.8 GB on
+        /// disk, ~1 GB resident. Fits inside the iOS app budget on every
+        /// supported device (iPhone XR / SE 2nd gen onward) without the
+        /// increased-memory entitlement. Uses the standard
+        /// `<start_of_turn>` Gemma chat template the engine already emits.
+        case gemma3_1B
         case gemmaE2B
         case gemmaE4B
 
@@ -33,6 +78,8 @@ final class LocalLLMService {
 
         var displayName: String {
             switch self {
+            case .gemma3_1B:
+                return "Gemma 3 1B"
             case .gemmaE2B:
                 return "Gemma 4 E2B"
             case .gemmaE4B:
@@ -42,40 +89,95 @@ final class LocalLLMService {
 
         var modelFileName: String {
             switch self {
+            case .gemma3_1B:
+                return "google_gemma-3-1b-it-Q4_K_M.gguf"
             case .gemmaE2B:
                 return "google_gemma-4-E2B-it-Q4_K_M.gguf"
             case .gemmaE4B:
-                return "google_gemma-4-E4B-it-Q4_K_M.gguf"
+                // IQ2_M is the smallest published quant for E4B (~3.96 GB on
+                // disk). Required to keep peak resident inside the iOS process
+                // budget on 6 GB devices like iPhone 14 Pro; larger quants
+                // (Q3_K_S 4.7 GB, Q4_K_M 5.41 GB) push the Metal weight buffer
+                // past the `.warning` memory-pressure threshold.
+                return "google_gemma-4-E4B-it-IQ2_M.gguf"
             }
         }
 
         var approximateModelSize: String {
             switch self {
+            case .gemma3_1B:
+                return "~0.8 GB"
             case .gemmaE2B:
                 return "~3.5 GB"
             case .gemmaE4B:
-                return "~5.4 GB"
+                return "~4 GB"
             }
         }
 
+        /// Minimum *app-available* memory required to load this profile.
+        ///
+        /// iOS does not let an app allocate the device's total RAM — `jetsam`
+        /// will kill the app at a much lower threshold reported by
+        /// `os_proc_available_memory()`. Even on an 8 GB iPhone 15 Pro a
+        /// foreground app typically gets ~3 GB before being killed (more with
+        /// the `com.apple.developer.kernel.increased-memory-limit` entitlement,
+        /// which this target enables).
+        ///
+        /// These values are tuned to the *real* app budget after the
+        /// model weights, KV cache (Q8 quantized), activations and decode
+        /// buffers are accounted for — not the on-disk model size.
         nonisolated var minimumRecommendedMemoryBytes: Int {
             switch self {
+            case .gemma3_1B:
+                // ~0.8 GB Q4_K_M weights + ~25 MB KV (Q4_0 @ 1024 ctx) +
+                // ~150 MB activations / compute buffer + Swift/UIKit overhead.
+                // Sized to fit inside the default app budget on iPhone XR / SE.
+                return 900 * 1024 * 1024
             case .gemmaE2B:
-                return 4_000 * 1024 * 1024
+                // ~1.6 GB Q4_K_M weights (hot mmap pages) + ~30 MB KV
+                // (Q4_0 @ 1024 ctx) + ~200 MB activations / compute buffer +
+                // Swift/UIKit overhead. Peak resident on iPhone 14 Pro after
+                // Whisper unload sits around 2.0 GB; this leaves ~300 MB of
+                // headroom before iOS fires `.warning` memory pressure on a
+                // 4 GB increased-memory-entitlement budget.
+                return 2_100 * 1024 * 1024
             case .gemmaE4B:
-                return 6_000 * 1024 * 1024
+                // IQ2_M weights mmap'd (~2.5 GB hot pages on CPU backend) +
+                // ~20 MB KV (Q4_0 @ 512 ctx) + activations. Tuned for iPhone 14
+                // Pro and up with the increased-memory entitlement enabled.
+                return 2_400 * 1024 * 1024
+            }
+        }
+
+        /// llama_context `n_ctx`. Per-profile because the KV cache scales
+        /// linearly with context size and the larger Gemma 4 E4B quant has no
+        /// headroom for a bigger window. E2B / Gemma 3 1B comfortably fit a
+        /// 1024-token window with Q4_0 KV (~30 MB) which is enough to hold
+        /// the full coaching system prompt + speech summary + transcript tail
+        /// without truncation.
+        nonisolated var contextTokenLimit: Int {
+            switch self {
+            case .gemma3_1B, .gemmaE2B:
+                return 1024
+            case .gemmaE4B:
+                return 512
             }
         }
 
         var downloadURL: URL {
             switch self {
+            case .gemma3_1B:
+                guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf") else {
+                    preconditionFailure("Invalid Gemma 3 1B local model URL")
+                }
+                return url
             case .gemmaE2B:
                 guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf") else {
                     preconditionFailure("Invalid Gemma 4 E2B local model URL")
                 }
                 return url
             case .gemmaE4B:
-                guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf") else {
+                guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-IQ2_M.gguf") else {
                     preconditionFailure("Invalid Gemma 4 E4B local model URL")
                 }
                 return url
@@ -84,7 +186,7 @@ final class LocalLLMService {
     }
 
     /// Minimum available memory (bytes) required before running inference.
-    nonisolated private static let minimumMemoryForInference: Int = 200 * 1024 * 1024 // 200 MB
+    nonisolated private static let minimumMemoryForInference: Int = 350 * 1024 * 1024 // 350 MB
     private static let selectedProfileDefaultsKey = "local_llm_selected_profile"
 
     // MARK: - State
@@ -112,8 +214,41 @@ final class LocalLLMService {
     // MARK: - Private
 
     nonisolated private let engine = LLMInferenceEngine()
-    private var downloadTask: Task<Void, Never>?
+    @ObservationIgnored private var activeURLSessionTask: URLSessionDownloadTask?
     private var unloadTimer: Timer?
+    @ObservationIgnored private let downloadDelegate = DownloadProgressDelegate()
+
+    /// Background `URLSession` used for multi-GB GGUF downloads. The background
+    /// configuration lets the system keep the transfer running when the user
+    /// navigates away from the settings screen or backgrounds the app. The
+    /// session is created lazily because instantiating a background session
+    /// with a given identifier can only happen once per process.
+    ///
+    /// `@ObservationIgnored` is required: the `@Observable` macro rewrites
+    /// stored properties into init-accessor computed pairs, which is
+    /// incompatible with `lazy`.
+    @ObservationIgnored
+    private lazy var backgroundSession: URLSession = {
+        let identifier = "com.vansh.SpeakUp.LocalLLM.download"
+        let config = URLSessionConfiguration.background(withIdentifier: identifier)
+        config.isDiscretionary = false
+        config.sessionSendsLaunchEvents = true
+        config.allowsCellularAccess = false
+        config.allowsExpensiveNetworkAccess = false
+        config.allowsConstrainedNetworkAccess = false
+        config.timeoutIntervalForResource = 7200 // 2 hours for very large files
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config, delegate: downloadDelegate, delegateQueue: nil)
+    }()
+
+    /// Optional hook awaited just before the `LLMInferenceEngine` is created.
+    /// Host code (typically `LLMService` at app startup) should set this to a
+    /// closure that unloads other heavy in-memory assets — primarily the
+    /// Whisper model — so the LLM can claim the RAM. When `nil`, the
+    /// `Notification.Name.localLLMWillLoad` notification is still posted so
+    /// observers can react.
+    @ObservationIgnored
+    var preloadCleanupHandler: (@MainActor @Sendable () async -> Void)?
 
     // MARK: - Model File Management
 
@@ -164,14 +299,25 @@ final class LocalLLMService {
         if memoryBytes >= ModelProfile.gemmaE4B.minimumRecommendedMemoryBytes {
             return .gemmaE4B
         }
-        return .gemmaE2B
+        if memoryBytes >= ModelProfile.gemmaE2B.minimumRecommendedMemoryBytes {
+            return .gemmaE2B
+        }
+        return .gemma3_1B
     }
 
-    func selectProfile(_ profile: ModelProfile) {
-        guard selectedProfile != profile else { return }
+    /// Switches the active model profile.
+    ///
+    /// Returns `false` and leaves the active profile unchanged when a download
+    /// is in progress — silently interrupting a multi-GB transfer would be
+    /// hostile. Callers must surface this to the UI so the user can choose to
+    /// invoke `cancelDownload()` explicitly.
+    @discardableResult
+    func selectProfile(_ profile: ModelProfile) -> Bool {
+        guard selectedProfile != profile else { return true }
 
         if case .downloading = modelState {
-            cancelDownload()
+            print("[LocalLLM] Refusing profile switch — download in progress for \(selectedProfile.rawValue)")
+            return false
         }
         if isModelReady {
             unloadModel()
@@ -181,6 +327,7 @@ final class LocalLLMService {
         UserDefaults.standard.set(profile.rawValue, forKey: Self.selectedProfileDefaultsKey)
         downloadProgress = 0
         modelState = isModelDownloaded ? .downloaded : .notDownloaded
+        return true
     }
 
     // MARK: - Download
@@ -190,6 +337,9 @@ final class LocalLLMService {
             modelState = .downloaded
             return
         }
+        // Guard against double-starts — the background session would happily
+        // launch a second copy of the same transfer.
+        if case .downloading = modelState { return }
 
         modelState = .downloading(progress: 0)
         downloadProgress = 0
@@ -211,13 +361,23 @@ final class LocalLLMService {
             modelState = .notDownloaded
             downloadProgress = 0
         } catch {
-            modelState = .error("Download failed: \(error.localizedDescription)")
+            // User-initiated cancels surface as NSURLErrorCancelled — treat as
+            // a non-error reset rather than a failure state.
+            if (error as NSError).code == NSURLErrorCancelled {
+                modelState = .notDownloaded
+                downloadProgress = 0
+            } else {
+                modelState = .error("Download failed: \(error.localizedDescription)")
+            }
         }
     }
 
+    /// Cancels the active background download. Must only be invoked in response
+    /// to explicit user intent (e.g. the Cancel button in `AIModelSettingsView`).
+    /// View lifecycle, profile switches, and tab navigation must not call this.
     func cancelDownload() {
-        downloadTask?.cancel()
-        downloadTask = nil
+        activeURLSessionTask?.cancel()
+        activeURLSessionTask = nil
         modelState = .notDownloaded
         downloadProgress = 0
     }
@@ -230,19 +390,69 @@ final class LocalLLMService {
             return
         }
 
+        let path = Self.modelFilePath(for: selectedProfile).path
+
+        // Pre-check 1: file existence. Distinguishes a missing file (re-download
+        // path) from a corrupt file (llama internal error path).
+        guard FileManager.default.fileExists(atPath: path) else {
+            modelState = .error(
+                LocalLLMError.fileNotFound(path: path).errorDescription ?? "Model file missing"
+            )
+            return
+        }
+
         modelState = .loading
 
-        let path = Self.modelFilePath(for: selectedProfile).path
-        let success = await Task.detached(priority: .userInitiated) { [engine] in
-            return engine.load(modelPath: path)
-        }.value
+        // Aggressive memory release: tell observers (WhisperService, etc.) to
+        // unload before we claim multiple GB for llama context. Best-effort —
+        // a missing host hook is not fatal, just makes the next memory check
+        // more likely to fail.
+        NotificationCenter.default.post(name: .localLLMWillLoad, object: self)
+        if let handler = preloadCleanupHandler {
+            await handler()
+        }
 
-        modelState = success ? .ready : .error("Failed to load model")
+        // Pre-check 2: memory headroom, measured *after* cleanup. The
+        // pre-cleanup reading would frequently false-negative on devices that
+        // had Whisper loaded.
+        let availableAfterCleanup = Int(clamping: os_proc_available_memory())
+        let required = selectedProfile.minimumRecommendedMemoryBytes
+        if availableAfterCleanup < required {
+            modelState = .error(
+                LocalLLMError.insufficientMemory(
+                    availableBytes: availableAfterCleanup,
+                    requiredBytes: required
+                ).errorDescription ?? "Insufficient memory"
+            )
+            return
+        }
+
+        do {
+            try await Task.detached(priority: .userInitiated) { [engine, selectedProfile] in
+                try engine.load(modelPath: path, contextSize: selectedProfile.contextTokenLimit)
+            }.value
+            modelState = .ready
+        } catch let error as LocalLLMError {
+            modelState = .error(error.errorDescription ?? "Failed to load model")
+        } catch {
+            modelState = .error(
+                LocalLLMError.unknown(error.localizedDescription).errorDescription ?? "Failed to load model"
+            )
+        }
     }
 
     func unloadModel() {
         Task.detached { [engine] in engine.unload() }
         modelState = isModelDownloaded ? .downloaded : .notDownloaded
+    }
+
+    /// Requests the engine abort any in-flight `generate` call as quickly as
+    /// possible. Safe to call from any actor — does not block on the engine's
+    /// inference lock. Intended for memory-pressure handlers so a long
+    /// coaching-insight generation cannot keep the model resident past a
+    /// `.warning` / `.critical` event and trip `jetsam`.
+    nonisolated func cancelInflight() {
+        engine.cancel()
     }
 
     func deleteModel() {
@@ -270,7 +480,10 @@ final class LocalLLMService {
     // MARK: - Generation
 
     func generate(prompt: String, systemPrompt: String, maxTokens: Int = 256, temperature: Float = 0.3) async -> String? {
-        guard engine.isLoaded else { return nil }
+        // Check `modelState` (MainActor-local enum) rather than `engine.isLoaded`,
+        // which would take the inference NSLock and could stall the main thread
+        // if a back-to-back generation is still holding it.
+        guard isModelReady else { return nil }
 
         // Pre-inference memory check
         guard Self.hasSufficientMemory() else {
@@ -278,7 +491,7 @@ final class LocalLLMService {
             return nil
         }
 
-        let formatted = Self.formatChatPrompt(systemPrompt: systemPrompt, userPrompt: prompt, family: selectedProfile.modelFamily)
+        let formatted = Self.formatChatPrompt(systemPrompt: systemPrompt, userPrompt: prompt, profile: selectedProfile)
 
         let inferenceTask = Task.detached(priority: .userInitiated) { [engine] in
             return engine.generate(prompt: formatted, maxTokens: maxTokens, temperature: temperature)
@@ -311,42 +524,62 @@ final class LocalLLMService {
         if let promptText, !promptText.isEmpty {
             // --- Prompt-based session ---
             systemPrompt = """
-            You are a speech evaluator. Score this speech 0-100 based on four criteria:
-            1. Prompt relevance — Does the speech address the given topic?
-            2. Logical flow — Are ideas connected with transitions?
-            3. Completeness — Does it have an opening, body, and conclusion?
-            4. Fluency — Are sentences well-formed and clear?
-            Reply EXACTLY in this format:
-            SCORE: <number>
-            TOPIC_FOCUS: <one sentence>
-            LOGICAL_FLOW: <one sentence>
-            REASON: <one sentence>
+            You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
+
+            PENALIZE (drag the score down):
+            - Rambling: tangents, repetition without payoff, sentences that wander off the prompt
+            - Disjointed jumps between unrelated ideas with no signposting
+            - Speech that ignores or contradicts the prompt
+            - Run-on thoughts with no clear arc
+
+            REWARD (push the score up):
+            - Explicit logical transitions ("first", "however", "as a result", "to summarize")
+            - Clear opening → body → conclusion structure
+            - Tight, sustained relevance to the prompt
+            - Each sentence advancing the argument
+
+            Reply EXACTLY in this format, one line each, no extra text:
+            SCORE: <0-100 integer>
+            TOPIC_FOCUS: <one sentence on how well the speech addressed the prompt>
+            LOGICAL_FLOW: <one sentence on transitions and structure>
+            REASON: <one sentence naming the single biggest driver of the score>
+
             Example:
             SCORE: 72
-            TOPIC_FOCUS: The speaker mostly addressed the prompt but drifted mid-speech.
-            LOGICAL_FLOW: Ideas were connected but lacked clear transitions.
-            REASON: Good opening, weak conclusion.
+            TOPIC_FOCUS: The speaker addressed the prompt clearly but drifted mid-speech.
+            LOGICAL_FLOW: Ideas connected but lacked explicit transitions between points.
+            REASON: Strong opening was undercut by a rambling middle section.
             """
 
             userPrompt = "Prompt: \(promptText)\n\nSpeech transcript:\n\(truncated)"
         } else {
             // --- Free-practice session ---
             systemPrompt = """
-            You are a speech evaluator. Score this speech 0-100 based on four criteria:
-            1. Internal consistency — Do sentences relate to each other?
-            2. Logical flow — Are ideas connected and ordered logically?
-            3. Topical focus — Does the speaker stay on one thread or ramble?
-            4. Fluency — Are sentences well-formed and clear?
-            Reply EXACTLY in this format:
-            SCORE: <number>
-            TOPIC_FOCUS: <one sentence>
-            LOGICAL_FLOW: <one sentence>
-            REASON: <one sentence>
+            You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
+
+            PENALIZE (drag the score down):
+            - Rambling: tangents, repetition without payoff, sentences that drift between unrelated threads
+            - Disjointed jumps with no signposting
+            - Run-on thoughts that never resolve
+            - Filler-heavy delivery that obscures the point
+
+            REWARD (push the score up):
+            - Explicit logical transitions ("first", "however", "as a result", "to summarize")
+            - One sustained thread or argument across the speech
+            - Each sentence advancing the previous one
+            - A discernible arc from opening to conclusion
+
+            Reply EXACTLY in this format, one line each, no extra text:
+            SCORE: <0-100 integer>
+            TOPIC_FOCUS: <one sentence on whether the speaker held a single thread>
+            LOGICAL_FLOW: <one sentence on transitions and structure>
+            REASON: <one sentence naming the single biggest driver of the score>
+
             Example:
             SCORE: 65
-            TOPIC_FOCUS: The speaker stayed on one main idea throughout.
-            LOGICAL_FLOW: Some jumps between ideas without transitions.
-            REASON: Decent structure but the ending trailed off.
+            TOPIC_FOCUS: The speaker held one main idea but revisited it without adding depth.
+            LOGICAL_FLOW: Some jumps between sub-points without explicit transitions.
+            REASON: Decent structure overall, but the ending trailed off without resolving the thread.
             """
 
             userPrompt = "Evaluate the coherence of this speech:\n\n\(truncated)"
@@ -374,18 +607,25 @@ final class LocalLLMService {
         transcript: String
     ) async -> String? {
         let systemPrompt = """
-        You are an expert public-speaking coach. Your job is to help speakers \
-        improve their delivery, clarity, and confidence.
-        Speech-science context you MUST use when relevant:
-        - Optimal pace: 130-170 words per minute. Above 185 is rushing. Below 115 is dragging.
-        - Filler words (um, uh, like, you know) above 5% of total words hurt credibility.
-        - Strategic pauses of 1-2 seconds after key points improve audience retention.
+        You are a warm, encouraging public-speaking coach reviewing a session the speaker just finished. Your voice is that of a trusted mentor who has watched them work and wants to point out what actually shaped this delivery — confident, specific, kind, never preachy.
+
+        How to think about the speech:
+        1. Find the ONE pattern that most defined this delivery — pace, fillers, pauses, vocal variety, or structure.
+        2. Connect that pattern to how the speech felt to a listener, not just to the metric.
+        3. End with the next concrete exercise the speaker can try.
+
+        Speech-science benchmarks to draw on when relevant:
+        - Conversational pace: 130-170 WPM. Above 185 reads as rushing. Below 115 reads as dragging.
+        - Fillers above ~5% of total words erode credibility.
+        - 1-2 second pauses after key points improve audience retention.
         - Vocal variety (pitch + volume changes) keeps listeners engaged.
+
         Rules:
-        - Give exactly 2-3 tips. Each tip MUST be a specific, actionable exercise.
-        - Reference the speaker's actual numbers (WPM, filler count, scores).
+        - Reply with exactly 2-3 tips. No preamble, no closing line.
         - Start each tip on a new line with •.
-        - Keep each tip to 1-2 sentences. Be encouraging but honest.
+        - Each tip: one short observation that ties the speaker's actual numbers (WPM, filler count, subscores) to how the speech landed, then one specific, doable exercise.
+        - Weave the numbers into the prose — do not list them as bullet facts.
+        - 1-2 sentences per tip. Encouraging, not condescending. No emojis.
         """
 
         let prompt = Self.buildCoachingPrompt(from: analysis, transcript: transcript)
@@ -453,10 +693,26 @@ final class LocalLLMService {
         return (structure: max(0, min(100, s)), vocabulary: max(0, min(100, v)))
     }
 
-    // MARK: - Chat Template (Gemma 4)
+    // MARK: - Chat Template
 
-    private static func formatChatPrompt(systemPrompt: String, userPrompt: String, family: ModelFamily) -> String {
-        "<|turn>system\n\(systemPrompt) \n<|turn>user\n\(userPrompt) \n<|turn>model\n"
+    private static func formatChatPrompt(systemPrompt: String, userPrompt: String, profile: ModelProfile) -> String {
+        // Gemma has no dedicated system role, so system instructions are
+        // prepended to the first user turn separated by a blank line. Turn
+        // markers and newline placement must match the official Gemma chat
+        // template exactly — any deviation (extra spaces, missing newlines)
+        // measurably degrades instruction-following. BOS is injected
+        // automatically by `llama_tokenize` with `add_special: true`, so it
+        // is intentionally omitted here.
+        switch profile {
+        case .gemma3_1B:
+            // Gemma 2 / 3 / 3n family template.
+            return "<start_of_turn>user\n\(systemPrompt)\n\n\(userPrompt)<end_of_turn>\n<start_of_turn>model\n"
+        case .gemmaE2B, .gemmaE4B:
+            // Gemma 4 template (HF `chat_template.jinja`): `<|turn>` opens a
+            // turn, `<turn|>` closes it. `parse_special: true` on tokenize
+            // ensures these are emitted as single special tokens.
+            return "<|turn>user\n\(systemPrompt)\n\n\(userPrompt)<turn|>\n<|turn>model\n"
+        }
     }
 
     // MARK: - Parsing Helpers
@@ -533,22 +789,26 @@ final class LocalLLMService {
 
     private func downloadWithProgress(url: URL) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
-            let delegate = DownloadProgressDelegate(
+            // Re-target the long-lived background-session delegate at this
+            // call's continuation. The delegate is one-shot per completion
+            // handler so cancel/success/error all resolve exactly once.
+            downloadDelegate.update(
                 onProgress: { [weak self] progress in
                     Task { @MainActor [weak self] in
                         self?.downloadProgress = progress
                         self?.modelState = .downloading(progress: progress)
                     }
                 },
-                onComplete: { result in
+                onComplete: { [weak self] result in
+                    Task { @MainActor [weak self] in
+                        self?.activeURLSessionTask = nil
+                    }
                     continuation.resume(with: result)
                 }
             )
 
-            let config = URLSessionConfiguration.default
-            config.timeoutIntervalForResource = 3600 // 1 hour for large model download
-            let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
-            let task = session.downloadTask(with: url)
+            let task = backgroundSession.downloadTask(with: url)
+            activeURLSessionTask = task
             task.resume()
         }
     }
@@ -556,16 +816,38 @@ final class LocalLLMService {
 
 // MARK: - Download Progress Delegate
 
-nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, Sendable {
-    let onProgress: @Sendable (Double) -> Void
-    let onComplete: @Sendable (Result<URL, Error>) -> Void
+/// Long-lived delegate attached to the background `URLSession`. Handlers are
+/// re-targeted per call via `update(...)` so a single delegate instance can
+/// serve consecutive downloads without leaking continuations across calls.
+nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    typealias ProgressHandler = @Sendable (Double) -> Void
+    typealias CompletionHandler = @Sendable (Result<URL, Error>) -> Void
 
-    init(
-        onProgress: @escaping @Sendable (Double) -> Void,
-        onComplete: @escaping @Sendable (Result<URL, Error>) -> Void
-    ) {
-        self.onProgress = onProgress
-        self.onComplete = onComplete
+    private let lock = NSLock()
+    private var _onProgress: ProgressHandler?
+    private var _onComplete: CompletionHandler?
+
+    func update(onProgress: @escaping ProgressHandler, onComplete: @escaping CompletionHandler) {
+        lock.lock()
+        _onProgress = onProgress
+        _onComplete = onComplete
+        lock.unlock()
+    }
+
+    private func progressHandler() -> ProgressHandler? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _onProgress
+    }
+
+    /// One-shot: clears the stored handler so a subsequent error callback for
+    /// the same task cannot double-resume the continuation.
+    private func takeCompletionHandler() -> CompletionHandler? {
+        lock.lock()
+        defer { lock.unlock() }
+        let handler = _onComplete
+        _onComplete = nil
+        return handler
     }
 
     nonisolated func urlSession(
@@ -577,7 +859,7 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
     ) {
         guard totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        onProgress(progress)
+        progressHandler()?(progress)
     }
 
     nonisolated func urlSession(
@@ -585,14 +867,15 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        // Copy to a temp file we control (URLSession's file is deleted after this method returns)
+        // Background sessions reclaim the temp file as soon as this callback
+        // returns, so the copy must happen synchronously on this thread.
         let tempDir = FileManager.default.temporaryDirectory
         let tempFile = tempDir.appendingPathComponent(UUID().uuidString + ".gguf")
         do {
             try FileManager.default.copyItem(at: location, to: tempFile)
-            onComplete(.success(tempFile))
+            takeCompletionHandler()?(.success(tempFile))
         } catch {
-            onComplete(.failure(error))
+            takeCompletionHandler()?(.failure(error))
         }
     }
 
@@ -602,7 +885,7 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
         didCompleteWithError error: Error?
     ) {
         if let error {
-            onComplete(.failure(error))
+            takeCompletionHandler()?(.failure(error))
         }
     }
 }
@@ -617,13 +900,23 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
     private var ctx: OpaquePointer?                         // llama_context *
     private var smpl: UnsafeMutablePointer<llama_sampler>?  // llama_sampler *
     private let lock = NSLock()
-    private let contextTokenLimit: Int = 1024
+    /// Context window in tokens. Set by `load(modelPath:contextSize:)` based on
+    /// the active `ModelProfile`. The KV cache scales linearly with `n_ctx`,
+    /// so the smaller Gemma 4 E4B / IQ2_M build is pinned to 512 while the
+    /// E2B / 3 1B profiles use 1024 to fit full coaching system prompts
+    /// without truncation. The `maxPromptTokens` calculation reads from this
+    /// value so the budget tracks the configured window automatically.
+    private(set) var contextTokenLimit: Int = 512
     /// Keep prompt decode chunks very small to stay below runtime `n_batch`
     /// defaults across llama builds. Some builds assert when a single decode
     /// batch is larger than the configured context batch size.
     private let promptDecodeChunkSize: Int32 = 8
 
-    /// Set to true to request early exit from the generate loop.
+    /// Cancellation flag protected by a *separate* lock so callers can request
+    /// abort without contending with the heavyweight inference lock held by
+    /// `generate`. Sharing the inference lock would defeat the purpose — the
+    /// flag would only become observable *after* generation returned.
+    private let cancelLock = NSLock()
     private var _cancelled = false
 
     var isLoaded: Bool {
@@ -634,41 +927,133 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     // MARK: - Cancellation
 
+    /// Requests early exit from the in-flight `generate` call. Non-blocking —
+    /// only contends on a tiny dedicated lock, never the inference lock — so
+    /// it stays responsive even during multi-second token decode loops.
     func cancel() {
-        lock.lock()
+        cancelLock.lock()
         _cancelled = true
-        lock.unlock()
+        cancelLock.unlock()
+    }
+
+    private var isCancelled: Bool {
+        cancelLock.lock()
+        defer { cancelLock.unlock() }
+        return _cancelled
+    }
+
+    private func resetCancellation() {
+        cancelLock.lock()
+        _cancelled = false
+        cancelLock.unlock()
     }
 
     // MARK: - Load
 
-    func load(modelPath: String) -> Bool {
+    /// Loads the model from `modelPath`. Throws a typed `LocalLLMError` so the
+    /// caller can distinguish missing-file / OOM / llama-internal failures and
+    /// surface the right recovery action. `contextSize` is the `n_ctx` value
+    /// to use for this profile — caller picks based on memory budget.
+    func load(modelPath: String, contextSize: Int) throws {
         lock.lock()
         defer { lock.unlock() }
 
         // Clean up any previous state (including backend)
         freeResources()
+        contextTokenLimit = contextSize
 
         llama_backend_init()
 
-        // Load model
+        // Load model. mmap lets iOS evict cold weight pages under pressure;
+        // mlock would pin them and trigger jetsam, so we leave it disabled.
+        //
+        // `n_gpu_layers = 0` forces the CPU backend even on Apple Silicon. On
+        // iOS the Metal backend allocates a wired `MTLBuffer` for weight
+        // tensors — `ggml_metal_log_allocated_size: 3072 MiB ...` in the load
+        // log — and that buffer is non-pageable. Under the per-process budget
+        // (~4 GB on iPhone 14 Pro with the increased-memory entitlement),
+        // that wired allocation alone trips `.warning` memory pressure. The
+        // CPU backend serves weights from the mmap'd file, so iOS can evict
+        // cold pages under pressure without killing the app. Trade-off:
+        // decode is ~2-3× slower per token than Metal, acceptable for
+        // ≤300-token coaching insights.
+        //
+        // `check_tensors = false` skips a per-tensor integrity scan that
+        // touches every weight page during load — a guaranteed way to fault
+        // the entire 1.6 GB Q4_K_M E2B file into resident memory before
+        // generation even starts. Disabling it lets mmap stay cold and keeps
+        // the load-time RSS spike inside the iPhone 14 Pro budget.
+        // Leave `use_extra_bufts` at its default (true) — it enables the
+        // ggml-cpu-aarch64 weight repacking that gives ~2-3× decode throughput
+        // on Apple ARM CPUs. Disabling it stalls coaching generation long
+        // enough to look like a UI hang on iPhone 14 Pro.
         var mparams = llama_model_default_params()
         mparams.use_mmap = true
+        mparams.use_mlock = false
+        mparams.check_tensors = false
+        mparams.n_gpu_layers = 0
         let loadedModel = llama_model_load_from_file(modelPath, mparams)
 
         guard let loadedModel else {
             print("[LocalLLM] Failed to load model from: \(modelPath)")
             llama_backend_free()
-            return false
+            throw LocalLLMError.modelInitFailed
         }
         model = loadedModel
 
-        // Create context — 1024 tokens is sufficient for our short prompts
+        // Create context. Memory-saving tweaks for iOS:
+        //   • n_ctx                 — per-profile (1024 for E2B / 3 1B, 512
+        //                             for E4B); KV cache scales linearly.
+        //   • type_k/type_v = Q4_0  — quarter of F16 KV cache size; quality
+        //                             cost is small at short contexts and is
+        //                             essential to keep the larger Gemma 4
+        //                             quants inside the iPhone 14 Pro process
+        //                             budget. Requires flash_attn.
+        //   • flash_attn = ENABLED  — lower attention memory + faster decode.
+        //   • n_batch = 64          — bounds the logical decode-buffer
+        //                             allocation; we only ever submit chunks
+        //                             of `promptDecodeChunkSize` (8) tokens,
+        //                             so anything larger is wasted compute
+        //                             scratch held resident for the whole run.
+        //   • n_ubatch = 16         — physical batch ≤ logical batch; 16 still
+        //                             covers single chunks with 2× headroom.
+        //   • op_offload = false    — no device backend to offload to on the
+        //                             CPU path; suppresses an unused
+        //                             scheduler allocation.
+        //   • swa_full = false      — Gemma 3 / 4 use a sliding-window cache;
+        //                             this caps the KV buffer at the window
+        //                             size instead of full `n_ctx`, saving
+        //                             ~40-60% of KV memory on long contexts.
+        //   • kv_unified = true     — single-sequence inference, so the
+        //                             unified buffer is both smaller and
+        //                             faster than per-sequence allocation.
+        //   • no_perf = true        — skip llama's internal perf timers; we
+        //                             don't surface them and they keep a
+        //                             little extra state on the hot path.
+        //   • n_threads = 2         — Apple ARM generation is memory-bandwidth
+        //                             bound; using both P-cores and E-cores
+        //                             adds L2 pressure with little throughput
+        //                             gain and accelerates thermal throttling
+        //                             on the 10-30s coaching-insight runs.
+        //                             Two P-core threads is the sweet spot.
+        //   • n_threads_batch = 4   — prompt processing is compute-bound;
+        //                             give it the full P+E core budget.
         var cparams = llama_context_default_params()
-        cparams.n_ctx = 1024
-        let threadCount = Int32(max(2, min(4, ProcessInfo.processInfo.processorCount - 2)))
-        cparams.n_threads = threadCount
-        cparams.n_threads_batch = threadCount
+        cparams.n_ctx = UInt32(contextTokenLimit)
+        cparams.n_batch = 64
+        cparams.n_ubatch = 16
+        cparams.type_k = GGML_TYPE_Q4_0
+        cparams.type_v = GGML_TYPE_Q4_0
+        cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED
+        cparams.offload_kqv = false
+        cparams.op_offload = false
+        cparams.swa_full = false
+        cparams.kv_unified = true
+        cparams.no_perf = true
+        let genThreads: Int32 = 2
+        let batchThreads = Int32(max(2, min(4, ProcessInfo.processInfo.processorCount - 2)))
+        cparams.n_threads = genThreads
+        cparams.n_threads_batch = batchThreads
 
         let loadedCtx = llama_init_from_model(loadedModel, cparams)
         guard let loadedCtx else {
@@ -676,7 +1061,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             llama_model_free(loadedModel)
             model = nil
             llama_backend_free()
-            return false
+            throw LocalLLMError.contextInitFailed
         }
         ctx = loadedCtx
 
@@ -689,15 +1074,14 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         llama_sampler_chain_add(chain, llama_sampler_init_dist(0))
         smpl = chain
 
-        print("[LocalLLM] Model loaded successfully. Threads: \(threadCount)")
-        return true
+        print("[LocalLLM] Model loaded. ctx=\(contextTokenLimit) gen_threads=\(genThreads) batch_threads=\(batchThreads)")
     }
 
     // MARK: - Generate
 
     func generate(prompt: String, maxTokens: Int, temperature: Float = 0.3) -> String? {
         lock.lock()
-        _cancelled = false
+        resetCancellation()
 
         guard let model, let ctx, let smpl else {
             lock.unlock()
@@ -715,19 +1099,22 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         // 2. Clear KV cache for fresh generation
         llama_memory_clear(llama_get_memory(ctx), false)
 
-        // 3. Decode prompt tokens
-        let reservedForGeneration = max(64, min(maxTokens, 256))
+        // 3. Decode prompt tokens. Reserve space for the generation window
+        // plus a 16-token safety margin so the final assistant token never
+        // overruns `n_ctx`. When the prompt is longer than the remaining
+        // budget, keep the most recent tail — the active user request and
+        // assistant tag survive truncation, which matters far more than the
+        // leading system prompt for chat-template-formatted input.
+        let reservedForGeneration = max(64, min(maxTokens, 320))
         let maxPromptTokens = max(128, contextTokenLimit - reservedForGeneration - 16)
         var boundedTokens = tokens
         if boundedTokens.count > maxPromptTokens {
-            // Keep the most recent prompt tail so the active user request and
-            // assistant tag survive; this prevents llama context overrun.
             boundedTokens = Array(boundedTokens.suffix(maxPromptTokens))
         }
 
         var decodeCursor = 0
         while decodeCursor < boundedTokens.count {
-            if _cancelled {
+            if isCancelled {
                 llama_sampler_reset(smpl)
                 lock.unlock()
                 return nil
@@ -751,8 +1138,10 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         var result = ""
 
         for i in 0..<maxTokens {
-            // Check cancellation every ~10 tokens
-            if i % 10 == 0 && _cancelled {
+            // Check cancellation every ~8 tokens. Tightened from 10 to keep
+            // the worst-case post-cancel latency under ~1s on CPU-bound runs
+            // so a memory-pressure abort completes before jetsam fires.
+            if i % 8 == 0 && isCancelled {
                 print("[LocalLLM] Generation cancelled")
                 break
             }
