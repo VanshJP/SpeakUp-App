@@ -24,7 +24,11 @@
       "Bash(osascript -e 'tell application \"System Events\" to tell process \"Simulator\" to get position of window 1')",
       "Bash(idb list-targets:*)",
       "Bash(osascript:*)",
-      "Bash(idb tap *)"
+      "Bash(idb tap *)",
+      "mcp__tokenuinely__query",
+      "Read(//Users/vanshpatel/.cargo/bin/**)",
+      "Bash(~/.cargo/bin/tokenuinely -V)",
+      "Bash(~/.cargo/bin/tokenuinely --version)"
     ]
   }
 }
