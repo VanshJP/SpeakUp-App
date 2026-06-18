@@ -374,17 +374,10 @@ struct ContentView: View {
         settings.dailyReminderHour = result.reminderHour
         settings.dailyReminderMinute = result.reminderMinute
 
-        // Narrow daily prompt categories to the goal's recommended mix on
-        // first run. We only override if the user hasn't already customised
-        // the list (i.e. it still equals the full default set).
-        let allCategories = Set(PromptCategory.allCases.map { $0.rawValue })
-        let currentCategories = Set(settings.enabledPromptCategories)
-        if currentCategories == allCategories || currentCategories.isEmpty {
-            let goalCategories = result.goal.defaultPromptCategoryNames
-            if !goalCategories.isEmpty {
-                settings.enabledPromptCategories = goalCategories
-            }
-        }
+        // Prompt categories are intentionally NOT narrowed by the onboarding
+        // goal — the goal is stored for reference but all categories stay
+        // enabled so the user sees the full prompt pool. Category selection is
+        // user-driven via PromptSettingsView.
 
         for word in result.vocabWords {
             settings.addVocabWord(word)

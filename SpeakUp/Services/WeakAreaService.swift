@@ -1,14 +1,5 @@
 import Foundation
 
-struct WeakArea: Identifiable {
-    let id: String
-    let metricName: String
-    let averageScore: Int
-    let trend: String
-    let suggestedDrillMode: String?
-    let suggestedExercises: [String]
-}
-
 struct SuggestedActivity {
     let title: String
     let description: String
@@ -24,7 +15,6 @@ struct SuggestedActivity {
 
 @Observable
 class WeakAreaService {
-    var weakAreas: [WeakArea] = []
     var suggestion: SuggestedActivity?
 
     func analyze(subscores: [SpeechSubscores]) {
@@ -68,17 +58,6 @@ class WeakAreaService {
 
         // Sort by score (weakest first)
         metrics.sort { $0.avg < $1.avg }
-
-        weakAreas = metrics.prefix(2).map { metric in
-            WeakArea(
-                id: metric.name,
-                metricName: metric.name,
-                averageScore: metric.avg,
-                trend: metric.avg < 60 ? "needs work" : "improving",
-                suggestedDrillMode: metric.drill?.rawValue,
-                suggestedExercises: []
-            )
-        }
 
         // Generate suggestion from weakest area
         if let weakest = metrics.first {

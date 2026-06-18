@@ -44,7 +44,7 @@ struct RingStatsView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [AppColors.scoreColor(for: score).opacity(0.25), Color.teal.opacity(0.08), .clear],
+                            colors: [AppColors.scoreColor(for: score).opacity(0.25), AppColors.primary.opacity(0.08), .clear],
                             center: .center,
                             startRadius: 10,
                             endRadius: 120
@@ -134,7 +134,7 @@ struct RingStatsView: View {
                 RoundedRectangle(cornerRadius: 24)
                     .fill(
                         LinearGradient(
-                            colors: [Color.teal.opacity(0.08), Color.cyan.opacity(0.03), .clear],
+                            colors: [AppColors.primary.opacity(0.08), AppColors.categoryBrandBright.opacity(0.03), .clear],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

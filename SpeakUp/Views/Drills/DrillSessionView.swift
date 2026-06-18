@@ -83,7 +83,7 @@ struct DrillSessionView: View {
             if viewModel.isActive {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(viewModel.audioLevel > -40 ? Color.green : Color.gray)
+                        .fill(viewModel.audioLevel > -40 ? AppColors.success : Color.gray)
                         .frame(width: 8, height: 8)
                         .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
 
@@ -157,14 +157,14 @@ struct DrillSessionView: View {
     private var paceDisplay: some View {
         HStack(spacing: 8) {
             Image(systemName: "speedometer")
-                .foregroundStyle(.blue)
+                .foregroundStyle(AppColors.info)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(Int(viewModel.liveWPM)) WPM")
                     .font(.title3.weight(.bold).monospacedDigit())
                     .foregroundStyle(
-                        viewModel.liveWPM >= 130 && viewModel.liveWPM <= 170 ? .green :
-                        viewModel.liveWPM >= 115 && viewModel.liveWPM <= 185 ? .yellow : .red
+                        viewModel.liveWPM >= 130 && viewModel.liveWPM <= 170 ? AppColors.success :
+                        viewModel.liveWPM >= 115 && viewModel.liveWPM <= 185 ? AppColors.warning : AppColors.error
                     )
                     .contentTransition(.numericText())
                     .animation(.default, value: Int(viewModel.liveWPM))
@@ -184,12 +184,12 @@ struct DrillSessionView: View {
             HStack(spacing: 10) {
                 Image(systemName: viewModel.pauseMarkerActive ? "pause.circle.fill" : "mic.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(viewModel.pauseMarkerActive ? .yellow : .purple)
+                    .foregroundStyle(viewModel.pauseMarkerActive ? AppColors.warning : AppColors.categoryBrandBright)
                     .contentTransition(.symbolEffect(.replace))
 
                 Text(viewModel.pauseMarkerActive ? "PAUSE NOW" : "Keep Speaking")
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(viewModel.pauseMarkerActive ? .yellow : .white)
+                    .foregroundStyle(viewModel.pauseMarkerActive ? AppColors.warning : .white)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -197,7 +197,7 @@ struct DrillSessionView: View {
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        Capsule().fill(viewModel.pauseMarkerActive ? Color.yellow.opacity(0.12) : .clear)
+                        Capsule().fill(viewModel.pauseMarkerActive ? AppColors.warning.opacity(0.12) : .clear)
                     }
             )
             .animation(.easeInOut(duration: 0.25), value: viewModel.pauseMarkerActive)
@@ -205,7 +205,7 @@ struct DrillSessionView: View {
             HStack(spacing: 8) {
                 ForEach(0..<viewModel.pauseMarkersTotal, id: \.self) { i in
                     Circle()
-                        .fill(i < viewModel.pauseMarkersHit ? Color.green : Color.white.opacity(0.2))
+                        .fill(i < viewModel.pauseMarkersHit ? AppColors.success : Color.white.opacity(0.2))
                         .frame(width: 10, height: 10)
                 }
 
@@ -228,10 +228,10 @@ struct DrillSessionView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.bubble.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppColors.warning)
                     Text("\(viewModel.liveFillerCount) filler\(viewModel.liveFillerCount == 1 ? "" : "s")")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppColors.warning)
                         .contentTransition(.numericText())
                 }
                 .padding(.horizontal, 12)

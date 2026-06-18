@@ -35,7 +35,7 @@ struct PromptSettingsView: View {
                                 Label("Hide Answered Prompts", systemImage: "checkmark.circle")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             Divider().padding(.vertical, 8)
@@ -82,7 +82,7 @@ struct PromptSettingsView: View {
                                                 Spacer()
                                                 if viewModel.isCategoryEnabled(category) {
                                                     Image(systemName: "checkmark.circle.fill")
-                                                        .foregroundStyle(.teal)
+                                                        .foregroundStyle(AppColors.primary)
                                                 } else {
                                                     Image(systemName: "circle")
                                                         .foregroundStyle(.tertiary)
@@ -98,11 +98,11 @@ struct PromptSettingsView: View {
                         }
                     }
 
-                    GlassCard(tint: .purple.opacity(0.06)) {
+                    GlassCard(tint: AppColors.categoryBrandBright.opacity(0.06)) {
                         Toggle(isOn: $viewModel.storyPracticeEnabled) {
                             HStack(spacing: 10) {
                                 Image(systemName: "book.pages")
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(AppColors.categoryBrandBright)
                                     .frame(width: 24)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Practice Stories")

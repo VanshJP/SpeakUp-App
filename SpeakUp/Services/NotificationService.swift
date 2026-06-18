@@ -69,30 +69,6 @@ class NotificationService {
         center.removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
     }
     
-    // MARK: - One-Time Notifications
-    
-    func scheduleOneTimeReminder(after seconds: TimeInterval, title: String, body: String) async {
-        guard hasPermission else { return }
-        
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: trigger
-        )
-        
-        do {
-            try await center.add(request)
-        } catch {
-            print("Failed to schedule notification: \(error)")
-        }
-    }
-    
     // MARK: - Achievement Notifications
     
     func sendStreakMilestoneNotification(days: Int) async {
@@ -107,23 +83,6 @@ class NotificationService {
             identifier: "streak_\(days)",
             content: content,
             trigger: nil // Immediate
-        )
-        
-        try? await center.add(request)
-    }
-    
-    func sendGoalCompletedNotification(goalTitle: String) async {
-        guard hasPermission else { return }
-        
-        let content = UNMutableNotificationContent()
-        content.title = "Goal Completed!"
-        content.body = "Congratulations! You've completed: \(goalTitle)"
-        content.sound = .default
-        
-        let request = UNNotificationRequest(
-            identifier: "goal_\(UUID().uuidString)",
-            content: content,
-            trigger: nil
         )
         
         try? await center.add(request)
@@ -163,15 +122,7 @@ class NotificationService {
     }
 
     // MARK: - Management
-    
-    func getScheduledNotifications() async -> [UNNotificationRequest] {
-        await center.pendingNotificationRequests()
-    }
-    
-    func cancelAllNotifications() {
-        center.removeAllPendingNotificationRequests()
-    }
-    
+
     func clearBadge() async {
         try? await center.setBadgeCount(0)
     }

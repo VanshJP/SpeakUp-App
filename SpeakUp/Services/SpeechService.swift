@@ -1786,22 +1786,6 @@ class SpeechService {
         )
     }
 
-    // MARK: - Trend Calculation
-    
-    func calculateTrend(currentScore: Int, historicalScores: [Int]) -> ScoreTrend {
-        guard !historicalScores.isEmpty else { return .stable }
-        
-        let recentAverage = historicalScores.suffix(5).reduce(0, +) / max(1, historicalScores.suffix(5).count)
-        let difference = currentScore - recentAverage
-        
-        if difference > 5 {
-            return .improving
-        } else if difference < -5 {
-            return .declining
-        }
-        return .stable
-    }
-
     // MARK: - LLM Score Stabilization
 
     private func stabilizedLLMScore(baseline: Int, candidate: Int, maxDelta: Int) -> Int {

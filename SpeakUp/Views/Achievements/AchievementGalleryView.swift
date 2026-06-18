@@ -91,7 +91,7 @@ struct AchievementGalleryView: View {
                 // Progress Ring
                 ZStack {
                     Circle()
-                        .stroke(Color.teal.opacity(0.15), lineWidth: 10)
+                        .stroke(AppColors.primary.opacity(0.15), lineWidth: 10)
 
                     Circle()
                         .trim(from: 0, to: progress)
@@ -130,7 +130,7 @@ struct AchievementGalleryView: View {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.teal.opacity(0.15))
+                                .fill(AppColors.primary.opacity(0.15))
 
                             Capsule()
                                 .fill(
@@ -148,7 +148,7 @@ struct AchievementGalleryView: View {
 
                     Text("\(Int(progress * 100))% complete")
                         .font(.caption2.weight(.medium))
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                 }
 
                 Spacer(minLength: 0)
@@ -165,9 +165,9 @@ private struct AchievementCard: View {
 
     var body: some View {
         GlassCard(
-            tint: achievement.isUnlocked ? .teal.opacity(0.1) : .clear,
+            tint: achievement.isUnlocked ? AppColors.primary.opacity(0.1) : .clear,
             padding: 16,
-            accentBorder: achievement.isUnlocked ? .teal.opacity(0.2) : nil
+            accentBorder: achievement.isUnlocked ? AppColors.primary.opacity(0.2) : nil
         ) {
             VStack(spacing: 12) {
                 // Icon with background
@@ -176,12 +176,12 @@ private struct AchievementCard: View {
                         .fill(
                             achievement.isUnlocked
                                 ? LinearGradient(
-                                    colors: [.teal.opacity(0.2), .cyan.opacity(0.1)],
+                                    colors: [AppColors.primary.opacity(0.2), AppColors.categoryBrandBright.opacity(0.1)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                                 : LinearGradient(
-                                    colors: [.gray.opacity(0.1), .gray.opacity(0.05)],
+                                    colors: [Color.gray.opacity(0.1), Color.gray.opacity(0.05)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -194,11 +194,11 @@ private struct AchievementCard: View {
                             achievement.isUnlocked
                                 ? AnyShapeStyle(
                                     LinearGradient(
-                                        colors: [.teal, .cyan],
+                                        colors: [AppColors.primary, AppColors.categoryBrandBright],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     ))
-                                : AnyShapeStyle(.gray.opacity(0.35))
+                                : AnyShapeStyle(Color.gray.opacity(0.35))
                         )
                 }
 
@@ -218,7 +218,7 @@ private struct AchievementCard: View {
                     if let date = achievement.unlockedDate {
                         Text(date.formatted(date: .abbreviated, time: .omitted))
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                     } else {
                         HStack(spacing: 3) {
                             Image(systemName: "lock.fill")

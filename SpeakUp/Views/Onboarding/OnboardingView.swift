@@ -164,35 +164,15 @@ struct OnboardingView: View {
                 orbNamespace: orbNamespace,
                 userName: viewModel.trimmedName,
                 selectedGoal: viewModel.selectedGoal,
-                onSelect: { goal in
-                    viewModel.selectGoal(goal)
-                    // Auto-advance after a short beat so the user sees their
-                    // pick highlighted before the page changes. Snapshot the
-                    // pick so a quick re-tap on a different goal cancels the
-                    // earlier pending advance.
-                    let snapshot = goal
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(500))
-                        guard viewModel.currentStep == .goal,
-                              viewModel.selectedGoal == snapshot else { return }
-                        viewModel.advance()
-                    }
-                }
+                onSelect: { viewModel.selectGoal($0) },
+                onContinue: viewModel.advance
             )
         case .level:
             OnboardingLevelStep(
                 orbNamespace: orbNamespace,
                 selected: viewModel.speakerLevel,
-                onSelect: { level in
-                    viewModel.selectLevel(level)
-                    let snapshot = level
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(500))
-                        guard viewModel.currentStep == .level,
-                              viewModel.speakerLevel == snapshot else { return }
-                        viewModel.advance()
-                    }
-                }
+                onSelect: { viewModel.selectLevel($0) },
+                onContinue: viewModel.advance
             )
         case .vocab:
             OnboardingVocabStep(
@@ -291,7 +271,7 @@ private struct OnboardingProgressBar: View {
 /// gentle pulse + opacity crossfade between pages.
 private struct OnboardingOrb: View {
     let size: CGFloat
-    var glowColor: Color = .teal
+    var glowColor: Color = AppColors.primary
     let namespace: Namespace.ID
     var pulses: Bool = true
 
@@ -330,13 +310,14 @@ private struct OnboardingWelcomeStep: View {
         VStack(spacing: 28) {
             Spacer(minLength: 0)
 
-            OnboardingOrb(size: 220, glowColor: .teal, namespace: orbNamespace)
+            OnboardingOrb(size: 220, glowColor: AppColors.primary, namespace: orbNamespace)
 
             VStack(spacing: 14) {
                 Text("Speak with confidence")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
                     .opacity(titleOpacity)
 
                 Text("Your private, on-device speech coach.\nLet's get you set up in under a minute.")
@@ -344,6 +325,7 @@ private struct OnboardingWelcomeStep: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.7))
                     .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
                     .opacity(subtitleOpacity)
                     .padding(.horizontal, 24)
             }
@@ -425,12 +407,14 @@ private struct OnboardingNameStep: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("Type your name. We'll add it to the on-device dictionary so transcripts spell it right when you say it.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 32)
             }
             .padding(.top, 28)
@@ -508,6 +492,7 @@ private struct OnboardingGoalStep: View {
     let userName: String
     let selectedGoal: OnboardingGoal?
     let onSelect: (OnboardingGoal) -> Void
+    let onContinue: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -519,11 +504,13 @@ private struct OnboardingGoalStep: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Why did you download Big Talk? Pick the closest fit — we'll tune your daily prompts to match. You can change this later in Settings.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 8)
             }
             .padding(.top, 16)
@@ -542,8 +529,35 @@ private struct OnboardingGoalStep: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
-                .padding(.bottom, 40)
+                .padding(.bottom, 16)
             }
+
+            let canAdvance = selectedGoal != nil
+            Button(action: onContinue) {
+                HStack(spacing: 8) {
+                    Text(canAdvance ? "Next" : "Pick a goal to continue")
+                        .font(.system(size: 16, weight: .semibold))
+                    if canAdvance {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background {
+                    Capsule()
+                        .fill(canAdvance
+                              ? AnyShapeStyle(AppColors.primary)
+                              : AnyShapeStyle(.ultraThinMaterial))
+                }
+                .opacity(canAdvance ? 1 : 0.6)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canAdvance)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 28)
+            .animation(.easeInOut(duration: 0.2), value: canAdvance)
         }
     }
 
@@ -611,6 +625,7 @@ private struct OnboardingLevelStep: View {
     let orbNamespace: Namespace.ID
     let selected: SpeakerLevel
     let onSelect: (SpeakerLevel) -> Void
+    let onContinue: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -622,34 +637,53 @@ private struct OnboardingLevelStep: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("We'll mix daily prompts to match. Change anytime in Settings.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 24)
             }
             .padding(.top, 16)
 
-            VStack(spacing: 12) {
-                ForEach(SpeakerLevel.allCases) { level in
-                    OnboardingLevelCard(
-                        level: level,
-                        isSelected: selected == level
-                    ) {
-                        onSelect(level)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 12) {
+                    ForEach(SpeakerLevel.allCases) { level in
+                        OnboardingLevelCard(
+                            level: level,
+                            isSelected: selected == level
+                        ) {
+                            onSelect(level)
+                        }
                     }
+
+                    PromptMixCard(weights: selected.dailyDifficultyWeights)
+                        .padding(.top, 6)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+                .padding(.bottom, 16)
+            }
+
+            Button(action: onContinue) {
+                HStack(spacing: 8) {
+                    Text("Next")
+                        .font(.system(size: 16, weight: .semibold))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background {
+                    Capsule().fill(AppColors.primary)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-
-            PromptMixCard(weights: selected.dailyDifficultyWeights)
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 28)
         }
-        .padding(.bottom, 24)
     }
 }
 
@@ -729,9 +763,9 @@ struct PromptMixCard: View {
             }
 
             VStack(spacing: 10) {
-                PromptMixRow(label: "Easy", count: weights.easy, total: total, color: .green)
-                PromptMixRow(label: "Medium", count: weights.medium, total: total, color: .orange)
-                PromptMixRow(label: "Hard", count: weights.hard, total: total, color: .red)
+                PromptMixRow(label: "Easy", count: weights.easy, total: total, color: AppColors.success)
+                PromptMixRow(label: "Medium", count: weights.medium, total: total, color: AppColors.warning)
+                PromptMixRow(label: "Hard", count: weights.hard, total: total, color: AppColors.error)
             }
         }
         .padding(16)
@@ -810,11 +844,13 @@ private struct OnboardingMicStep: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(subtitle)
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28)
             }
             .padding(.top, 24)
@@ -829,7 +865,7 @@ private struct OnboardingMicStep: View {
             if heardVoice {
                 Label("Sounds great!", systemImage: "checkmark.seal.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
                     .padding(.top, 16)
                     .transition(.scale.combined(with: .opacity))
             }
@@ -958,10 +994,12 @@ private struct OnboardingReminderStep: View {
                 Text("Stay on track")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("One nudge a day. Pick the time. Skip if you'd rather not.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.6))
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28)
             }
             .padding(.top, 24)
@@ -1087,10 +1125,12 @@ private struct OnboardingReadyStep: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Your setup is ready. Tap below to start your first practice session.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28)
             }
             .padding(.top, 28)
@@ -1198,10 +1238,12 @@ private struct OnboardingToolkitStep: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Everything you need to improve, in one private app.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28)
             }
             .padding(.top, 22)
@@ -1305,11 +1347,13 @@ private struct OnboardingVocabStep: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("These words boost your vocabulary score when you use them. We've seeded a starter set for your level — add your own or remove any you don't want.")
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 24)
             }
             .padding(.top, 16)

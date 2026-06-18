@@ -159,41 +159,6 @@ final class UserSettings {
         self.dictationBiasWords = dictationBiasWords
     }
     
-    var dailyReminderTime: DateComponents {
-        var components = DateComponents()
-        components.hour = dailyReminderHour
-        components.minute = dailyReminderMinute
-        return components
-    }
-    
-    var formattedReminderTime: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        
-        var components = DateComponents()
-        components.hour = dailyReminderHour
-        components.minute = dailyReminderMinute
-        
-        if let date = Calendar.current.date(from: components) {
-            return formatter.string(from: date)
-        }
-        return "\(dailyReminderHour):\(String(format: "%02d", dailyReminderMinute))"
-    }
-    
-    // Helper to check if a category is enabled
-    func isCategoryEnabled(_ category: PromptCategory) -> Bool {
-        enabledPromptCategories.contains(category.rawValue)
-    }
-    
-    // Helper to toggle a category
-    func toggleCategory(_ category: PromptCategory) {
-        if isCategoryEnabled(category) {
-            enabledPromptCategories.removeAll { $0 == category.rawValue }
-        } else {
-            enabledPromptCategories.append(category.rawValue)
-        }
-    }
-    
     // Helper to get enabled categories as enum values
     var enabledCategories: [PromptCategory] {
         enabledPromptCategories.compactMap { PromptCategory(rawValue: $0) }
@@ -208,10 +173,6 @@ final class UserSettings {
         vocabWords.append(trimmed)
     }
 
-    func removeVocabWord(_ word: String) {
-        vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
-    }
-
     // MARK: - Dictation Dictionary Helpers
 
     func addDictationBiasWord(_ word: String) {
@@ -221,31 +182,23 @@ final class UserSettings {
         dictationBiasWords.append(trimmed)
     }
 
-    func removeDictationBiasWord(_ word: String) {
-        dictationBiasWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
-    }
-
     // MARK: - Speaker Level
 
     var resolvedSpeakerLevel: SpeakerLevel {
         SpeakerLevel(rawValue: speakerLevel) ?? .intermediate
     }
 
-    // MARK: - Onboarding Goal
-
-    var resolvedOnboardingGoal: OnboardingGoal {
-        OnboardingGoal(rawValue: onboardingGoalRaw) ?? .everydayConfidence
-    }
-
     // MARK: - Transcription Bias
 
     /// Unified list of user-defined terms to bias Whisper transcription toward.
-    /// Combines the dictation dictionary, the vocabulary word bank, and custom
-    /// filler words (always-detected and context-dependent). De-duplicated
-    /// case-insensitively; the dictation dictionary wins ordering so the most
-    /// deliberate user entries lead the prompt.
+    /// Combines the user's name, the dictation dictionary, the vocabulary word
+    /// bank, and custom filler words (always-detected and context-dependent).
+    /// De-duplicated case-insensitively; the name leads, followed by the
+    /// dictation dictionary, so the most deliberate user entries front the
+    /// prompt. The name is always included so transcripts spell it correctly.
     var transcriptionBiasTerms: [String] {
         let sources: [[String]] = [
+            [userName],
             dictationBiasWords,
             vocabWords,
             customFillerWords,
@@ -300,11 +253,13 @@ enum SpeakerLevel: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Three distinct muted-jewel identities so the onboarding level picker
+    /// reads as a real choice between paths rather than a single tonal slide.
     var color: Color {
         switch self {
-        case .beginner: return .green
-        case .intermediate: return .orange
-        case .advanced: return .purple
+        case .beginner: return AppColors.categorySage
+        case .intermediate: return AppColors.categoryTeal
+        case .advanced: return AppColors.categoryPlum
         }
     }
 
@@ -362,30 +317,21 @@ enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// One muted-jewel tone per goal so the onboarding goal picker shows
+    /// five distinct identities. All tones live in the same desaturated band
+    /// so the screen stays cohesive on glass.
     var color: Color {
         switch self {
-        case .interviews: return .blue
-        case .meetings: return .orange
-        case .presentations: return .pink
-        case .everydayConfidence: return .teal
-        case .storytelling: return .purple
-        }
-    }
-
-    /// Recommended starter prompt categories for this goal. The user keeps
-    /// the ability to toggle others on later in `PromptSettingsView`.
-    var defaultPromptCategoryNames: [String] {
-        switch self {
         case .interviews:
-            return ["Professional Development", "Communication Skills", "Problem Solving"]
+            return AppColors.categoryTeal
         case .meetings:
-            return ["Professional Development", "Communication Skills", "Current Events & Opinions"]
+            return AppColors.categoryIndigo
         case .presentations:
-            return ["Communication Skills", "Personal Growth", "Problem Solving"]
+            return AppColors.categoryCopper
         case .everydayConfidence:
-            return ["Personal Growth", "Communication Skills", "Current Events & Opinions"]
+            return AppColors.categorySage
         case .storytelling:
-            return ["Personal Growth", "Communication Skills"]
+            return AppColors.categoryPlum
         }
     }
 }

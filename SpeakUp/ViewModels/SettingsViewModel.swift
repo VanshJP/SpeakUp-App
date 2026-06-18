@@ -12,6 +12,9 @@ class SettingsViewModel {
     var showingVoiceCalibration = false
     var clearDataAcknowledgement = ""
     
+    // Local state - Profile
+    var userName: String = ""
+
     // Local state for pickers - Recording Defaults
     var defaultDuration: RecordingDuration = .sixty
     
@@ -95,13 +98,6 @@ class SettingsViewModel {
     var dictationWordError: String? = nil
     private var dictationErrorDismissID = 0
 
-    /// Terms used to bias Whisper toward names/domain words.
-    var whisperDictionaryWords: [String] {
-        dictationBiasWords
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
     // Local state - Filler Words
     var customFillerWords: [String] = []
     var customContextFillerWords: [String] = []
@@ -141,15 +137,6 @@ class SettingsViewModel {
 
     var hasFillerCustomizations: Bool {
         !customFillerWords.isEmpty || !customContextFillerWords.isEmpty || !removedDefaultFillers.isEmpty
-    }
-
-    /// Build a FillerWordConfig from current state.
-    var fillerWordConfig: FillerWordConfig {
-        FillerWordConfig(
-            customFillers: Set(customFillerWords),
-            customContextFillers: Set(customContextFillerWords),
-            removedDefaults: Set(removedDefaultFillers)
-        )
     }
 
     private var modelContext: ModelContext?
@@ -197,6 +184,7 @@ class SettingsViewModel {
         isSyncing = true
         defer { isSyncing = false }
 
+        userName = settings.userName
         defaultDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
         dailyReminderEnabled = settings.dailyReminderEnabled
 
@@ -264,6 +252,7 @@ class SettingsViewModel {
     func saveSettings() async {
         guard let settings, let context = modelContext else { return }
 
+        settings.userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.defaultDuration = defaultDuration.rawValue
         settings.dailyReminderEnabled = dailyReminderEnabled
         
@@ -339,6 +328,15 @@ class SettingsViewModel {
         }
     }
     
+    /// Commit an edited display name. The name is permanently linked into the
+    /// transcription bias terms (see `UserSettings.transcriptionBiasTerms`), so
+    /// persisting it is enough to keep it in the dictation dictionary.
+    @MainActor
+    func commitUserName() async {
+        userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        await saveSettings()
+    }
+
     @MainActor
     func toggleCategory(_ category: PromptCategory) {
         if enabledPromptCategories.contains(category) {
@@ -397,12 +395,6 @@ class SettingsViewModel {
             guard currentID == vocabErrorDismissID else { return }
             vocabWordError = nil
         }
-    }
-
-    @MainActor
-    func removeVocabWord(at offsets: IndexSet) {
-        vocabWords.remove(atOffsets: offsets)
-        Task { await saveSettings() }
     }
 
     @MainActor
@@ -671,21 +663,6 @@ class SettingsViewModel {
         }
     }
 
-    @MainActor
-    func resetWeightsToDefaults() {
-        let defaults = ScoreWeights.defaults
-        clarityWeight = defaults.clarity
-        paceWeight = defaults.pace
-        fillerWeight = defaults.filler
-        pauseWeight = defaults.pause
-        vocalVarietyWeight = defaults.vocalVariety
-        deliveryWeight = defaults.delivery
-        vocabularyWeight = defaults.vocabulary
-        structureWeight = defaults.structure
-        relevanceWeight = defaults.relevance
-        Task { await saveSettings() }
-    }
-    
     @MainActor
     func clearAllData() async {
         guard let context = modelContext else { return }

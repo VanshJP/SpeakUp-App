@@ -12,13 +12,13 @@ struct DrillResultView: View {
             // Score circle
             ZStack {
                 Circle()
-                    .stroke(result.passed ? Color.green.opacity(0.2) : Color.red.opacity(0.2), lineWidth: 8)
+                    .stroke(result.passed ? AppColors.success.opacity(0.2) : AppColors.error.opacity(0.2), lineWidth: 8)
                     .frame(width: 140, height: 140)
 
                 Circle()
                     .trim(from: 0, to: Double(result.score) / 100)
                     .stroke(
-                        result.passed ? Color.green : Color.red,
+                        result.passed ? AppColors.success : AppColors.error,
                         style: StrokeStyle(lineWidth: 8, lineCap: .round)
                     )
                     .frame(width: 140, height: 140)
@@ -27,7 +27,7 @@ struct DrillResultView: View {
                 VStack(spacing: 4) {
                     Text("\(result.score)")
                         .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundStyle(result.passed ? .green : .red)
+                        .foregroundStyle(result.passed ? AppColors.success : AppColors.error)
 
                     Text(result.passed ? "Passed" : "Try Again")
                         .font(.caption.weight(.medium))

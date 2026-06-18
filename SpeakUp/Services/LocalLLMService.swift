@@ -12,8 +12,9 @@ enum LocalModelState: Equatable {
     case error(String)
 }
 
-enum ModelFamily {
+enum ModelFamily: Equatable {
     case gemma
+    case qwen
 }
 
 /// Typed errors surfaced from `LocalLLMService.loadModel()` so the UI can
@@ -71,10 +72,25 @@ final class LocalLLMService {
         case gemma3_1B
         case gemmaE2B
         case gemmaE4B
+        /// Qwen 3 0.6B — ultra-light ChatML model. ~0.4 GB on disk, ~600 MB
+        /// resident. Fits on every supported device with room to spare.
+        case qwen3_0_6B
+        /// Qwen 3 1.7B — compact ChatML model. ~1.1 GB on disk, ~1.5 GB
+        /// resident. Good balance of quality and memory footprint.
+        case qwen3_1_7B
+        /// Qwen 3 4B — capable ChatML model. ~2.6 GB on disk, ~3.2 GB
+        /// resident. Requires iPhone 12 Pro or later with increased-memory
+        /// entitlement.
+        case qwen3_4B
 
         var id: String { rawValue }
 
-        var modelFamily: ModelFamily { .gemma }
+        var modelFamily: ModelFamily {
+            switch self {
+            case .gemma3_1B, .gemmaE2B, .gemmaE4B: return .gemma
+            case .qwen3_0_6B, .qwen3_1_7B, .qwen3_4B: return .qwen
+            }
+        }
 
         var displayName: String {
             switch self {
@@ -84,6 +100,12 @@ final class LocalLLMService {
                 return "Gemma 4 E2B"
             case .gemmaE4B:
                 return "Gemma 4 E4B"
+            case .qwen3_0_6B:
+                return "Qwen 3 0.6B"
+            case .qwen3_1_7B:
+                return "Qwen 3 1.7B"
+            case .qwen3_4B:
+                return "Qwen 3 4B"
             }
         }
 
@@ -100,6 +122,12 @@ final class LocalLLMService {
                 // (Q3_K_S 4.7 GB, Q4_K_M 5.41 GB) push the Metal weight buffer
                 // past the `.warning` memory-pressure threshold.
                 return "google_gemma-4-E4B-it-IQ2_M.gguf"
+            case .qwen3_0_6B:
+                return "Qwen3-0.6B-Q4_K_M.gguf"
+            case .qwen3_1_7B:
+                return "Qwen3-1.7B-Q4_K_M.gguf"
+            case .qwen3_4B:
+                return "Qwen3-4B-Q4_K_M.gguf"
             }
         }
 
@@ -111,6 +139,12 @@ final class LocalLLMService {
                 return "~3.5 GB"
             case .gemmaE4B:
                 return "~4 GB"
+            case .qwen3_0_6B:
+                return "~0.4 GB"
+            case .qwen3_1_7B:
+                return "~1.1 GB"
+            case .qwen3_4B:
+                return "~2.6 GB"
             }
         }
 
@@ -146,20 +180,31 @@ final class LocalLLMService {
                 // ~20 MB KV (Q4_0 @ 512 ctx) + activations. Tuned for iPhone 14
                 // Pro and up with the increased-memory entitlement enabled.
                 return 2_400 * 1024 * 1024
+            case .qwen3_0_6B:
+                // ~0.4 GB Q4_K_M weights + ~20 MB KV (Q4_0 @ 1024 ctx) +
+                // ~120 MB activations. Fits on every supported device.
+                return 600 * 1024 * 1024
+            case .qwen3_1_7B:
+                // ~1.1 GB Q4_K_M weights + ~25 MB KV (Q4_0 @ 1024 ctx) +
+                // ~350 MB activations / compute buffer.
+                return 1_500 * 1024 * 1024
+            case .qwen3_4B:
+                // ~2.6 GB Q4_K_M weights (hot mmap pages) + ~30 MB KV
+                // (Q4_0 @ 512 ctx) + ~550 MB activations. Requires iPhone 12
+                // Pro or later with the increased-memory entitlement.
+                return 3_200 * 1024 * 1024
             }
         }
 
         /// llama_context `n_ctx`. Per-profile because the KV cache scales
-        /// linearly with context size and the larger Gemma 4 E4B quant has no
-        /// headroom for a bigger window. E2B / Gemma 3 1B comfortably fit a
-        /// 1024-token window with Q4_0 KV (~30 MB) which is enough to hold
-        /// the full coaching system prompt + speech summary + transcript tail
-        /// without truncation.
+        /// linearly with context size and the larger models have less headroom.
+        /// 1024 tokens covers the full coaching system prompt + speech summary +
+        /// transcript tail without truncation for the smaller models.
         nonisolated var contextTokenLimit: Int {
             switch self {
-            case .gemma3_1B, .gemmaE2B:
+            case .gemma3_1B, .gemmaE2B, .qwen3_0_6B, .qwen3_1_7B:
                 return 1024
-            case .gemmaE4B:
+            case .gemmaE4B, .qwen3_4B:
                 return 512
             }
         }
@@ -179,6 +224,21 @@ final class LocalLLMService {
             case .gemmaE4B:
                 guard let url = URL(string: "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-IQ2_M.gguf") else {
                     preconditionFailure("Invalid Gemma 4 E4B local model URL")
+                }
+                return url
+            case .qwen3_0_6B:
+                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf") else {
+                    preconditionFailure("Invalid Qwen 3 0.6B local model URL")
+                }
+                return url
+            case .qwen3_1_7B:
+                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf") else {
+                    preconditionFailure("Invalid Qwen 3 1.7B local model URL")
+                }
+                return url
+            case .qwen3_4B:
+                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf") else {
+                    preconditionFailure("Invalid Qwen 3 4B local model URL")
                 }
                 return url
             }
@@ -696,22 +756,31 @@ final class LocalLLMService {
     // MARK: - Chat Template
 
     private static func formatChatPrompt(systemPrompt: String, userPrompt: String, profile: ModelProfile) -> String {
-        // Gemma has no dedicated system role, so system instructions are
-        // prepended to the first user turn separated by a blank line. Turn
-        // markers and newline placement must match the official Gemma chat
-        // template exactly — any deviation (extra spaces, missing newlines)
-        // measurably degrades instruction-following. BOS is injected
-        // automatically by `llama_tokenize` with `add_special: true`, so it
-        // is intentionally omitted here.
-        switch profile {
-        case .gemma3_1B:
-            // Gemma 2 / 3 / 3n family template.
-            return "<start_of_turn>user\n\(systemPrompt)\n\n\(userPrompt)<end_of_turn>\n<start_of_turn>model\n"
-        case .gemmaE2B, .gemmaE4B:
-            // Gemma 4 template (HF `chat_template.jinja`): `<|turn>` opens a
-            // turn, `<turn|>` closes it. `parse_special: true` on tokenize
-            // ensures these are emitted as single special tokens.
-            return "<|turn>user\n\(systemPrompt)\n\n\(userPrompt)<turn|>\n<|turn>model\n"
+        switch profile.modelFamily {
+        case .gemma:
+            // Gemma has no dedicated system role — system instructions are
+            // prepended to the first user turn separated by a blank line. Turn
+            // markers must match the official Gemma chat template exactly.
+            // BOS is injected automatically by `llama_tokenize` with
+            // `add_special: true`, so it is intentionally omitted here.
+            switch profile {
+            case .gemma3_1B:
+                // Gemma 2 / 3 / 3n family template.
+                return "<start_of_turn>user\n\(systemPrompt)\n\n\(userPrompt)<end_of_turn>\n<start_of_turn>model\n"
+            default:
+                // Gemma 4 template (HF `chat_template.jinja`): `<|turn>` opens
+                // a turn, `<turn|>` closes it.
+                return "<|turn>user\n\(systemPrompt)\n\n\(userPrompt)<turn|>\n<|turn>model\n"
+            }
+        case .qwen:
+            // Qwen 2.5 / 3 use the ChatML format. The system role is a
+            // first-class participant here, unlike Gemma. BOS is injected
+            // automatically by `llama_tokenize` with `add_special: true`.
+            // `/no_think` is appended to the user turn for Qwen 3 models to
+            // disable the chain-of-thought reasoning mode — coaching insights
+            // don't benefit from it and it wastes the token budget.
+            let noThink = (profile == .qwen3_0_6B || profile == .qwen3_1_7B || profile == .qwen3_4B) ? " /no_think" : ""
+            return "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(userPrompt)\(noThink)<|im_end|>\n<|im_start|>assistant\n"
         }
     }
 

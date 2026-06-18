@@ -15,7 +15,7 @@ struct AnalysisSettingsView: View {
                                 Label("Track Pauses", systemImage: "pause.circle")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             Divider().padding(.vertical, 8)
@@ -24,7 +24,7 @@ struct AnalysisSettingsView: View {
                                 Label("Track Filler Words", systemImage: "text.bubble")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             Divider().padding(.vertical, 8)
@@ -36,7 +36,7 @@ struct AnalysisSettingsView: View {
                                     Spacer()
                                     Text("\(viewModel.targetWPM) WPM")
                                         .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(.teal)
+                                        .foregroundStyle(AppColors.primary)
                                 }
 
                                 Slider(
@@ -47,7 +47,7 @@ struct AnalysisSettingsView: View {
                                     in: 100...200,
                                     step: 5
                                 )
-                                .tint(.teal)
+                                .tint(AppColors.primary)
                             }
                             .frame(minHeight: 60)
 
@@ -64,10 +64,10 @@ struct AnalysisSettingsView: View {
                                     if viewModel.hasCustomWeights {
                                         Text("Custom")
                                             .font(.caption2.weight(.medium))
-                                            .foregroundStyle(.teal)
+                                            .foregroundStyle(AppColors.primary)
                                             .padding(.horizontal, 8)
                                             .padding(.vertical, 3)
-                                            .background { Capsule().fill(.teal.opacity(0.15)) }
+                                            .background { Capsule().fill(AppColors.primary.opacity(0.15)) }
                                     }
                                     Image(systemName: "chevron.right")
                                         .font(.caption2)

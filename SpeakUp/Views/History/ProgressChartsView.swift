@@ -131,8 +131,8 @@ struct ProgressChartsView: View {
         return VStack(spacing: 12) {
             // Hero highlight card
             FeaturedGlassCard(gradientColors: [
-                (totalImprovement >= 0 ? Color.teal : Color.orange).opacity(0.12),
-                .cyan.opacity(0.05)
+                (totalImprovement >= 0 ? AppColors.primary : AppColors.warning).opacity(0.12),
+                AppColors.categoryBrandBright.opacity(0.05)
             ]) {
                 HStack(spacing: 16) {
                     // Left: big number
@@ -168,17 +168,17 @@ struct ProgressChartsView: View {
                     VStack(spacing: 6) {
                         ZStack {
                             Circle()
-                                .fill(.yellow.opacity(0.15))
+                                .fill(AppColors.warning.opacity(0.15))
                                 .frame(width: 52, height: 52)
 
                             Image(systemName: "trophy.fill")
                                 .font(.title2)
-                                .foregroundStyle(.yellow)
+                                .foregroundStyle(AppColors.warning)
                         }
 
                         Text("\(bestScore)")
                             .font(.headline.weight(.bold))
-                            .foregroundStyle(.yellow)
+                            .foregroundStyle(AppColors.warning)
 
                         Text("Best")
                             .font(.caption2)
@@ -333,7 +333,7 @@ struct ScoreProgressChart: View {
 
                     if dataPoints.count >= 3 {
                         HStack(spacing: 4) {
-                            Circle().fill(.teal.opacity(0.4)).frame(width: 6, height: 6)
+                            Circle().fill(AppColors.primary.opacity(0.4)).frame(width: 6, height: 6)
                             Text("Trend")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -351,7 +351,7 @@ struct ScoreProgressChart: View {
                             )
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.teal.opacity(0.25), .teal.opacity(0.02)],
+                                    colors: [AppColors.primary.opacity(0.25), AppColors.primary.opacity(0.02)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -365,7 +365,7 @@ struct ScoreProgressChart: View {
                                 x: .value("Date", point.date),
                                 y: .value("Score", point.score)
                             )
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                             .lineStyle(StrokeStyle(lineWidth: 2.5))
                             .interpolationMethod(.catmullRom)
                         }
@@ -377,7 +377,7 @@ struct ScoreProgressChart: View {
                                 y: .value("Trend", point.score),
                                 series: .value("Series", "Trend")
                             )
-                            .foregroundStyle(.teal.opacity(0.35))
+                            .foregroundStyle(AppColors.primary.opacity(0.35))
                             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
                             .interpolationMethod(.catmullRom)
                         }
@@ -572,8 +572,8 @@ struct FillerTrendChart: View {
                             )
                             .foregroundStyle(
                                 selectedIndex == index
-                                    ? (point.avgFillers > 10 ? Color.red : point.avgFillers > 5 ? Color.orange : Color.green)
-                                    : (point.avgFillers > 10 ? Color.red.opacity(0.6) : point.avgFillers > 5 ? Color.orange.opacity(0.6) : Color.green.opacity(0.6))
+                                    ? (point.avgFillers > 10 ? AppColors.error : point.avgFillers > 5 ? AppColors.warning : AppColors.success)
+                                    : (point.avgFillers > 10 ? AppColors.error.opacity(0.6) : point.avgFillers > 5 ? AppColors.warning.opacity(0.6) : AppColors.success.opacity(0.6))
                             )
                             .cornerRadius(6)
                         }
@@ -749,16 +749,16 @@ struct PaceTrendChart: View {
                             yStart: .value("Low", optimalRange.lowerBound),
                             yEnd: .value("High", optimalRange.upperBound)
                         )
-                        .foregroundStyle(.teal.opacity(0.08))
+                        .foregroundStyle(AppColors.primary.opacity(0.08))
 
                         // Target line
                         RuleMark(y: .value("Target", targetWPM))
-                            .foregroundStyle(.teal.opacity(0.4))
+                            .foregroundStyle(AppColors.primary.opacity(0.4))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                             .annotation(position: .trailing, alignment: .leading) {
                                 Text("Target")
                                     .font(.system(size: 8))
-                                    .foregroundStyle(.teal.opacity(0.6))
+                                    .foregroundStyle(AppColors.primary.opacity(0.6))
                             }
 
                         // Line
@@ -767,7 +767,7 @@ struct PaceTrendChart: View {
                                 x: .value("Date", point.date),
                                 y: .value("WPM", point.wpm)
                             )
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(AppColors.categoryBrandBright)
                             .lineStyle(StrokeStyle(lineWidth: 2.5))
                             .interpolationMethod(.catmullRom)
                         }
@@ -865,21 +865,21 @@ struct PaceTrendChart: View {
 
                             Text(inRange ? "In range" : (point.wpm > targetWPM ? "Too fast" : "Too slow"))
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(inRange ? .green : .orange)
+                                .foregroundStyle(inRange ? AppColors.success : AppColors.warning)
                         }
                         .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else {
                         HStack(spacing: 16) {
                             HStack(spacing: 4) {
-                                RoundedRectangle(cornerRadius: 2).fill(.teal.opacity(0.2)).frame(width: 14, height: 8)
+                                RoundedRectangle(cornerRadius: 2).fill(AppColors.primary.opacity(0.2)).frame(width: 14, height: 8)
                                 Text("\(Int(optimalRange.lowerBound))-\(Int(optimalRange.upperBound)) optimal")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
 
                             HStack(spacing: 4) {
-                                Circle().fill(.cyan).frame(width: 6, height: 6)
+                                Circle().fill(AppColors.categoryBrandBright).frame(width: 6, height: 6)
                                 Text("Avg: \(Int(avgWPM))")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -1091,19 +1091,19 @@ struct SessionFrequencyChart: View {
                     if weeklyCounts.count >= 2 {
                         Text("\(goalHitRate)% goal hit")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(goalHitRate >= 70 ? .green : goalHitRate >= 40 ? .orange : .red)
+                            .foregroundStyle(goalHitRate >= 70 ? AppColors.success : goalHitRate >= 40 ? AppColors.warning : AppColors.error)
                     }
                 }
 
                 if weeklyCounts.count >= 2 {
                     Chart {
                         RuleMark(y: .value("Goal", weeklyGoal))
-                            .foregroundStyle(.teal.opacity(0.4))
+                            .foregroundStyle(AppColors.primary.opacity(0.4))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                             .annotation(position: .trailing, alignment: .leading) {
                                 Text("Goal")
                                     .font(.system(size: 8))
-                                    .foregroundStyle(.teal.opacity(0.6))
+                                    .foregroundStyle(AppColors.primary.opacity(0.6))
                             }
 
                         ForEach(Array(weeklyCounts.enumerated()), id: \.offset) { index, point in
@@ -1113,8 +1113,8 @@ struct SessionFrequencyChart: View {
                             )
                             .foregroundStyle(
                                 selectedIndex == index
-                                    ? (point.count >= weeklyGoal ? Color.teal : Color.white.opacity(0.5))
-                                    : (point.count >= weeklyGoal ? Color.teal.opacity(0.7) : Color.white.opacity(0.25))
+                                    ? (point.count >= weeklyGoal ? AppColors.primary : Color.white.opacity(0.5))
+                                    : (point.count >= weeklyGoal ? AppColors.primary.opacity(0.7) : Color.white.opacity(0.25))
                             )
                             .cornerRadius(6)
                         }
@@ -1181,7 +1181,7 @@ struct SessionFrequencyChart: View {
                             HStack(spacing: 4) {
                                 Text("\(week.count)")
                                     .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(week.count >= weeklyGoal ? .teal : .primary)
+                                    .foregroundStyle(week.count >= weeklyGoal ? AppColors.primary : .primary)
                                 Text("/ \(weeklyGoal)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -1190,7 +1190,7 @@ struct SessionFrequencyChart: View {
                             if week.count >= weeklyGoal {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.caption)
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(AppColors.success)
                             }
                         }
                         .padding(.horizontal, 4)
@@ -1198,7 +1198,7 @@ struct SessionFrequencyChart: View {
                     } else {
                         HStack(spacing: 12) {
                             HStack(spacing: 4) {
-                                RoundedRectangle(cornerRadius: 2).fill(.teal.opacity(0.7)).frame(width: 10, height: 10)
+                                RoundedRectangle(cornerRadius: 2).fill(AppColors.primary.opacity(0.7)).frame(width: 10, height: 10)
                                 Text("Goal met")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)

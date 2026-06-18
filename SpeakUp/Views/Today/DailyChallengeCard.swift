@@ -31,18 +31,18 @@ struct DailyChallengeCard: View {
                             Text("Done")
                                 .font(.caption.weight(.semibold))
                         }
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColors.success)
                     } else {
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(Color.orange)
+                                .fill(AppColors.warning)
                                 .frame(width: 7, height: 7)
                                 .scaleEffect(glowPulse ? 1.4 : 1.0)
                                 .opacity(glowPulse ? 0.6 : 1.0)
                             Text("Active")
                                 .font(.caption.weight(.semibold))
                         }
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppColors.warning)
                     }
                 }
 

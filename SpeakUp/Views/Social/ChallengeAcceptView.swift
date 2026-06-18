@@ -11,7 +11,7 @@ struct ChallengeAcceptView: View {
 
             Image(systemName: "trophy.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColors.warning)
 
             Text("You've Been Challenged!")
                 .font(.title2.weight(.bold))

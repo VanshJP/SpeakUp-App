@@ -114,14 +114,14 @@ struct JournalExportView: View {
                             Label("Include Achievements", systemImage: "trophy")
                                 .font(.subheadline)
                         }
-                        .tint(.teal)
+                        .tint(AppColors.primary)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Summary", systemImage: "chart.bar.fill")
                             .font(.headline)
 
-                        FeaturedGlassCard(gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]) {
+                        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.12), AppColors.categoryBrandBright.opacity(0.06)]) {
                             JournalSummaryView(
                                 totalSessions: filteredRecordings.count,
                                 totalMinutes: totalMinutes,
@@ -136,7 +136,7 @@ struct JournalExportView: View {
                         GlassCard {
                             Label(errorMessage, systemImage: "exclamationmark.triangle")
                                 .font(.subheadline)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(AppColors.error)
                         }
                     }
 

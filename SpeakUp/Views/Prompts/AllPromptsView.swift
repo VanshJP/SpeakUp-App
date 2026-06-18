@@ -321,25 +321,25 @@ extension AllPromptsView {
                     icon: "text.bubble.fill",
                     value: "\(allPrompts.count)",
                     label: "Total",
-                    color: .teal
+                    color: AppColors.categoryBrand
                 ),
                 .init(
                     icon: "checkmark.circle.fill",
                     value: "\(answeredPromptIDs.count)",
                     label: "Answered",
-                    color: .green
+                    color: AppColors.success
                 ),
                 .init(
                     icon: "circle.dashed",
                     value: "\(allPrompts.count - answeredPromptIDs.count)",
                     label: "Remaining",
-                    color: .orange
+                    color: AppColors.categoryNeutral
                 ),
                 .init(
                     icon: "person.fill",
                     value: "\(customCount)",
                     label: "Custom",
-                    color: .purple
+                    color: AppColors.categoryBrandBright
                 )
             ]
         )
@@ -399,7 +399,7 @@ extension AllPromptsView {
                         activeFilterTag(
                             icon: sortMode.icon,
                             label: sortMode.displayName,
-                            color: .teal
+                            color: AppColors.primary
                         ) {
                             withAnimation { sortMode = .category }
                         }
@@ -932,6 +932,7 @@ extension AllPromptsView {
         case .storytelling: return "Storytelling"
         case .elevatorPitch: return "Pitch"
         case .conversationStarters: return "Conversation"
+        case .describeExplain: return "Describe"
         }
     }
 }
@@ -1063,11 +1064,11 @@ struct PromptRow: View {
                         if prompt.isUserCreated {
                             Text("Custom")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.teal)
+                                .foregroundStyle(AppColors.primary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background {
-                                    Capsule().fill(.teal.opacity(0.15))
+                                    Capsule().fill(AppColors.primary.opacity(0.15))
                                 }
                         }
                     }
@@ -1078,11 +1079,11 @@ struct PromptRow: View {
                 if isAnswered {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.body)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColors.success)
                 } else if onTap != nil {
                     Image(systemName: "mic.fill")
                         .font(.body)
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.caption)
@@ -1119,7 +1120,7 @@ struct PromptRow: View {
     }
 
     private var categoryColor: Color {
-        PromptCategory(rawValue: prompt.category)?.color ?? .gray
+        PromptCategory(rawValue: prompt.category)?.color ?? AppColors.primary
     }
 
     private var categoryIcon: String {
@@ -1229,7 +1230,7 @@ struct PromptCard: View {
     }
 
     private var categoryColor: Color {
-        PromptCategory(rawValue: prompt.category)?.color ?? .gray
+        PromptCategory(rawValue: prompt.category)?.color ?? AppColors.primary
     }
 
     private var categoryIcon: String {
@@ -1250,6 +1251,7 @@ struct PromptCard: View {
         case .storytelling: return "Storytelling"
         case .elevatorPitch: return "Pitch"
         case .conversationStarters: return "Conversation"
+        case .describeExplain: return "Describe"
         }
     }
 }

@@ -70,12 +70,6 @@ class DrillViewModel {
         return 1.0 - Double(timeRemaining) / Double(totalDuration)
     }
 
-    // MARK: - Permissions
-
-    func checkPermissions() async -> Bool {
-        return await audioService.requestPermission()
-    }
-
     // MARK: - Start Drill
 
     func startDrill(mode: DrillMode) {

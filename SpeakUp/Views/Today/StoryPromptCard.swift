@@ -8,12 +8,12 @@ struct StoryPromptCard: View {
     @State private var isPulsing = false
 
     var body: some View {
-        GlassCard(tint: .purple.opacity(0.1), accentBorder: .purple.opacity(0.3)) {
+        GlassCard(tint: AppColors.categoryBrandBright.opacity(0.1), accentBorder: AppColors.categoryBrandBright.opacity(0.3)) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Label("Story", systemImage: "book.pages")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(AppColors.categoryBrandBright)
 
                     Spacer()
 
@@ -46,7 +46,7 @@ struct StoryPromptCard: View {
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(Color.purple)
+                            .fill(AppColors.categoryBrandBright)
                             .frame(width: 8, height: 8)
                             .scaleEffect(isPulsing ? 1.3 : 1.0)
                             .opacity(isPulsing ? 0.6 : 1.0)

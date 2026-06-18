@@ -15,7 +15,7 @@ struct FeedbackSettingsView: View {
                                 Label("Ask After Recording", systemImage: "checkmark.message")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             if viewModel.sessionFeedbackEnabled {
@@ -30,7 +30,7 @@ struct FeedbackSettingsView: View {
                                         HStack(spacing: 10) {
                                             Image(systemName: question.type == .scale ? "star.fill" : "hand.thumbsup.fill")
                                                 .font(.caption)
-                                                .foregroundStyle(.teal)
+                                                .foregroundStyle(AppColors.primary)
                                                 .frame(width: 16)
 
                                             VStack(alignment: .leading, spacing: 2) {

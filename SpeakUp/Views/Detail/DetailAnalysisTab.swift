@@ -308,7 +308,7 @@ struct DetailAnalysisTab: View {
                                     Spacer()
                                     Text("\(phrase.count)×")
                                         .font(.caption.weight(.medium))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(AppColors.warning)
                                 }
                             }
                         }
@@ -367,7 +367,7 @@ struct DetailAnalysisTab: View {
                             ForEach(sentence.restartExamples.prefix(2), id: \.self) { example in
                                 Text("\"\(example)\"")
                                     .font(.caption)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(AppColors.warning)
                                     .lineLimit(1)
                             }
                         }
@@ -400,7 +400,7 @@ struct DetailAnalysisTab: View {
                             HStack(spacing: 4) {
                                 Text("\(tq.powerWordCount)")
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(AppColors.success)
                                 Text("used")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -505,7 +505,7 @@ struct DetailAnalysisTab: View {
                         HStack(spacing: 6) {
                             Image(systemName: "star.fill")
                                 .font(.caption)
-                                .foregroundStyle(.yellow)
+                                .foregroundStyle(AppColors.warning)
                             Text("Dynamic range detected — your energy builds and releases effectively")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -581,7 +581,7 @@ struct DetailAnalysisTab: View {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(
                             LinearGradient(
-                                colors: [Color.teal.opacity(0.4), Color.teal],
+                                colors: [AppColors.primary.opacity(0.4), AppColors.primary],
                                 startPoint: .bottom,
                                 endPoint: .top
                             )

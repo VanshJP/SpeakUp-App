@@ -120,10 +120,6 @@ final class LLMService {
 
     // MARK: - Local Model Management (pass-through)
 
-    func downloadLocalModel() async {
-        await localLLM.downloadModel()
-    }
-
     func loadLocalModel() async {
         await localLLM.loadModel()
     }

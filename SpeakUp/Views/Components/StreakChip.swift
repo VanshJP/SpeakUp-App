@@ -14,7 +14,7 @@ struct StreakChip: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: isActive
-                            ? [Color.yellow, Color.orange, Color.red.opacity(0.85)]
+                            ? [AppColors.warning.opacity(0.85), AppColors.warning, AppColors.error.opacity(0.85)]
                             : [Color.white.opacity(0.4), Color.white.opacity(0.25)],
                         startPoint: .top,
                         endPoint: .bottom
@@ -37,13 +37,13 @@ struct StreakChip: View {
                 .fill(.ultraThinMaterial)
                 .overlay {
                     Capsule()
-                        .fill(isActive ? Color.orange.opacity(0.12) : Color.clear)
+                        .fill(isActive ? AppColors.warning.opacity(0.12) : Color.clear)
                 }
                 .overlay {
                     Capsule()
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 }
-                .shadow(color: isActive ? Color.orange.opacity(0.25) : .clear, radius: 8, y: 2)
+                .shadow(color: isActive ? AppColors.warning.opacity(0.25) : .clear, radius: 8, y: 2)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")

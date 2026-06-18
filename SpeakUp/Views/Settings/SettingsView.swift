@@ -30,6 +30,15 @@ struct SettingsView: View {
     private var settingsMenuCard: some View {
         VStack(spacing: 12) {
             settingsLink(
+                icon: "person.crop.circle",
+                iconColor: AppColors.primary,
+                title: "Profile",
+                subtitle: profileSubtitle
+            ) {
+                ProfileSettingsView(viewModel: viewModel)
+            }
+
+            settingsLink(
                 icon: "slider.horizontal.3",
                 iconColor: .teal,
                 title: "Session Defaults",
@@ -120,16 +129,16 @@ struct SettingsView: View {
     @State private var showingSyncRestartAlert = false
 
     private var iCloudSyncRow: some View {
-        GlassCard(tint: .blue.opacity(0.06), padding: 14) {
+        GlassCard(tint: AppColors.info.opacity(0.06), padding: 14) {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(.blue.opacity(0.15))
+                            .fill(AppColors.info.opacity(0.15))
                             .frame(width: 32, height: 32)
                         Image(systemName: "icloud.fill")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppColors.info)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -159,7 +168,7 @@ struct SettingsView: View {
                             }
                     } else {
                         Image(systemName: "exclamationmark.circle")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppColors.warning)
                     }
                 }
 
@@ -167,7 +176,7 @@ struct SettingsView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColors.success)
                         Text("Recordings and data sync across all your devices")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -197,6 +206,11 @@ struct SettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private var profileSubtitle: String {
+        let name = viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Set your name" : name
+    }
 
     private var wordsSubtitle: String {
         var parts: [String] = []

@@ -179,7 +179,7 @@ struct CountdownOverlayView: View {
 
     private func prominentPromptCard(_ prompt: Prompt) -> some View {
         FeaturedGlassCard(
-            gradientColors: [AppColors.primary.opacity(0.12), Color.cyan.opacity(0.06)]
+            gradientColors: [AppColors.primary.opacity(0.12), AppColors.categoryBrandBright.opacity(0.06)]
         ) {
             VStack(spacing: 16) {
                 HStack {

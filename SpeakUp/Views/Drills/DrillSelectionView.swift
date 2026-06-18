@@ -75,7 +75,7 @@ struct DrillSelectionView: View {
                                     VStack(spacing: 12) {
                                         Image(systemName: "text.book.closed")
                                             .font(.largeTitle)
-                                            .foregroundStyle(.indigo)
+                                            .foregroundStyle(AppColors.categoryNeutralCool)
 
                                         Text("Read Aloud")
                                             .font(.subheadline.weight(.semibold))
@@ -89,7 +89,7 @@ struct DrillSelectionView: View {
 
                                         Text("Clarity")
                                             .font(.caption.weight(.bold))
-                                            .foregroundStyle(.indigo)
+                                            .foregroundStyle(AppColors.categoryNeutralCool)
                                     }
                                     .padding(.vertical, 4)
                                     .frame(maxWidth: .infinity, minHeight: 140, maxHeight: 140)
@@ -150,7 +150,7 @@ struct DrillSelectionView: View {
         HStack(spacing: 10) {
             Image(systemName: "text.book.closed.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(AppColors.categoryNeutralCool)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Drilling from")
                     .font(.caption2.weight(.semibold))
@@ -164,20 +164,20 @@ struct DrillSelectionView: View {
             Spacer()
             Text("Impromptu")
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(AppColors.categoryNeutralCool)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background {
-                    Capsule().fill(Color.indigo.opacity(0.18))
+                    Capsule().fill(AppColors.categoryNeutralCool.opacity(0.18))
                 }
         }
         .padding(14)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.indigo.opacity(0.15))
+                .fill(AppColors.categoryNeutralCool.opacity(0.18))
                 .overlay {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.indigo.opacity(0.35), lineWidth: 0.5)
+                        .stroke(AppColors.categoryNeutralCool.opacity(0.35), lineWidth: 0.5)
                 }
         }
     }

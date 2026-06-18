@@ -168,7 +168,7 @@ struct AnalyzingView: View {
                 HStack {
                     Image(systemName: "checkmark.message")
                         .font(.body)
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
 
                     Text("Quick Self-Check")
                         .font(.footnote.weight(.semibold))
@@ -262,10 +262,10 @@ struct AnalyzingView: View {
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.mini)
-                    .tint(.teal)
+                    .tint(AppColors.primary)
                 Text("Saving...")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
             }
             .padding(.horizontal, 12)
             .transition(.opacity)
@@ -529,7 +529,7 @@ private struct WaveformOrb: View {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .stroke(
-                        Color.teal.opacity(0.08 - Double(i) * 0.02),
+                        AppColors.primary.opacity(0.08 - Double(i) * 0.02),
                         lineWidth: 1.5
                     )
                     .frame(width: 140 + CGFloat(i) * 30, height: 140 + CGFloat(i) * 30)
@@ -539,7 +539,7 @@ private struct WaveformOrb: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.teal.opacity(0.2), .teal.opacity(0.05), .clear],
+                        colors: [AppColors.primary.opacity(0.2), AppColors.primary.opacity(0.05), .clear],
                         center: .center,
                         startRadius: 20,
                         endRadius: 70
@@ -554,7 +554,7 @@ private struct WaveformOrb: View {
                 let barHeight = max(base, base + CGFloat(wave))
 
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.teal.opacity(0.6 + Double(i % 3) * 0.15))
+                    .fill(AppColors.primary.opacity(0.6 + Double(i % 3) * 0.15))
                     .frame(width: 3, height: barHeight)
                     .offset(y: -45)
                     .rotationEffect(.degrees(angle))
@@ -562,7 +562,7 @@ private struct WaveformOrb: View {
 
             Image(systemName: showCheckmark ? "checkmark" : "waveform")
                 .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.teal)
+                .foregroundStyle(AppColors.primary)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -579,7 +579,7 @@ private struct AnalyzingProgressDots: View {
         HStack(spacing: 8) {
             ForEach(0..<4, id: \.self) { i in
                 Capsule()
-                    .fill(i <= stage ? Color.teal : Color.white.opacity(0.15))
+                    .fill(i <= stage ? AppColors.primary : Color.white.opacity(0.15))
                     .frame(width: i == stage ? 24 : 8, height: 8)
             }
         }
@@ -702,10 +702,10 @@ private struct DetailSkeletonView: View {
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.mini)
-                    .tint(.teal)
+                    .tint(AppColors.primary)
                 Text("Analyzing")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
                 Spacer()
                 Text(recording.formattedDuration)
                     .font(.caption.monospacedDigit())

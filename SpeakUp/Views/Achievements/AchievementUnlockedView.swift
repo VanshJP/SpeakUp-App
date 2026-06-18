@@ -19,13 +19,13 @@ struct AchievementUnlockedView: View {
 
                 Image(systemName: achievement.icon)
                     .font(.system(size: 64))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
                     .symbolEffect(.bounce, value: showContent)
 
                 VStack(spacing: 8) {
                     Text("Achievement Unlocked!")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                         .textCase(.uppercase)
                         .tracking(1.5)
 
@@ -49,7 +49,7 @@ struct AchievementUnlockedView: View {
                         .padding(.vertical, 14)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.teal)
+                                .fill(AppColors.primary)
                         )
                 }
                 .padding(.horizontal, 40)

@@ -529,9 +529,6 @@ nonisolated struct SpeechAnalysis: Codable {
         return (Double(totalFillerCount) / Double(totalWords)) * 100
     }
 
-    var totalVocabWordsUsed: Int {
-        vocabWordsUsed.reduce(0) { $0 + $1.count }
-    }
 }
 
 // MARK: - Speech Score
@@ -636,7 +633,7 @@ nonisolated enum ScoreTrend: String, Codable {
     case improving
     case stable
     case declining
-    
+
     var iconName: String {
         switch self {
         case .improving: return "arrow.up.right"
@@ -644,7 +641,7 @@ nonisolated enum ScoreTrend: String, Codable {
         case .declining: return "arrow.down.right"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .improving: return .green

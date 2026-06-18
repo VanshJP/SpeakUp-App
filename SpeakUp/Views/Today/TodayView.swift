@@ -201,12 +201,12 @@ struct TodayView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Color.teal, Color.cyan.opacity(0.85), Color.teal.opacity(0.9)],
+                                colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85), AppColors.primary.opacity(0.9)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .shadow(color: .teal.opacity(0.4), radius: 12, y: 3)
+                        .shadow(color: AppColors.primary.opacity(0.4), radius: 12, y: 3)
                 }
                 .overlay {
                     Capsule()
@@ -240,12 +240,12 @@ struct TodayView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Color.teal.opacity(0.9), Color.cyan.opacity(0.75), Color.teal.opacity(0.85)],
+                                colors: [AppColors.primary.opacity(0.9), AppColors.categoryBrandBright.opacity(0.75), AppColors.primary.opacity(0.85)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .shadow(color: .teal.opacity(0.3), radius: 10, y: 3)
+                        .shadow(color: AppColors.primary.opacity(0.3), radius: 10, y: 3)
                 }
                 .overlay {
                     Capsule()
@@ -405,11 +405,11 @@ struct TodayView: View {
                         onStartRecording(nil, viewModel.selectedDuration)
                     }
                 } label: {
-                    FeaturedGlassCard(gradientColors: [.purple.opacity(0.12), .blue.opacity(0.06)]) {
+                    FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.12), AppColors.categoryBrandBright.opacity(0.06)]) {
                         HStack(spacing: 14) {
                             Image(systemName: suggestion.icon)
                                 .font(.title2)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(AppColors.primary)
                                 .frame(width: 32)
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -443,7 +443,7 @@ struct TodayView: View {
         NavigationLink {
             ProgressChartsView()
         } label: {
-            GlassCard(tint: .teal.opacity(0.06)) {
+            GlassCard(tint: AppColors.primary.opacity(0.06)) {
                 VStack(spacing: 14) {
                     HStack {
                         Label("Your Progress", systemImage: "chart.line.uptrend.xyaxis")
@@ -472,7 +472,7 @@ struct TodayView: View {
                                     x: .value("Date", point.date),
                                     y: .value("Score", point.score)
                                 )
-                                .foregroundStyle(.teal.opacity(0.8))
+                                .foregroundStyle(AppColors.primary.opacity(0.8))
                                 .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
                                 .interpolationMethod(.catmullRom)
 
@@ -482,7 +482,7 @@ struct TodayView: View {
                                 )
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.teal.opacity(0.2), .teal.opacity(0.01)],
+                                        colors: [AppColors.primary.opacity(0.2), AppColors.primary.opacity(0.01)],
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
@@ -505,17 +505,17 @@ struct TodayView: View {
                             progressStatItem(
                                 value: trendDelta >= 0 ? "+\(trendDelta)" : "\(trendDelta)",
                                 label: "Trend",
-                                color: trendDelta > 0 ? .green : trendDelta < 0 ? .red : .secondary
+                                color: trendDelta > 0 ? AppColors.success : trendDelta < 0 ? AppColors.error : .secondary
                             )
                             progressStatItem(
                                 value: topFillerDisplay,
                                 label: "Top Filler",
-                                color: .orange
+                                color: AppColors.warning
                             )
                             progressStatItem(
                                 value: viewModel.userStats.formattedPracticeTime,
                                 label: "Practice",
-                                color: .purple
+                                color: AppColors.categoryBrandBright
                             )
                         }
                     } else {
@@ -532,7 +532,7 @@ struct TodayView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "calendar")
                                 .font(.caption)
-                                .foregroundStyle(.teal)
+                                .foregroundStyle(AppColors.primary)
                             Text("This week: \(weeklyData.sessionsThisWeek) sessions")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -664,7 +664,7 @@ struct InteractivePromptCard: View {
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(Color.teal)
+                            .fill(AppColors.primary)
                             .frame(width: 8, height: 8)
                             .scaleEffect(isPulsing ? 1.3 : 1.0)
                             .opacity(isPulsing ? 0.6 : 1.0)
@@ -846,7 +846,7 @@ private struct AchievementsTile: View {
                             .trim(from: 0, to: progress)
                             .stroke(
                                 AngularGradient(
-                                    colors: [Color.yellow, Color.orange, Color.yellow],
+                                    colors: [AppColors.warning, AppColors.warning.opacity(0.7), AppColors.warning],
                                     center: .center
                                 ),
                                 style: StrokeStyle(lineWidth: 3, lineCap: .round)
@@ -859,12 +859,12 @@ private struct AchievementsTile: View {
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color.yellow, Color.orange],
+                                    colors: [AppColors.warning, AppColors.warning.opacity(0.75)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                            .shadow(color: .yellow.opacity(0.4), radius: 4, y: 1)
+                            .shadow(color: AppColors.warning.opacity(0.4), radius: 4, y: 1)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {

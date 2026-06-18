@@ -141,10 +141,6 @@ class ReadAloudViewModel {
     var accuracyPercentage: Double { service.accuracyPercentage }
     var isListening: Bool { service.isListening }
 
-    var isComplete: Bool {
-        service.isComplete
-    }
-
     // MARK: - Timer
 
     private func startTimer() {

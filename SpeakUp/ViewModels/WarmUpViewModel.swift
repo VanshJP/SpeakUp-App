@@ -24,11 +24,6 @@ class WarmUpViewModel {
         return exercise.steps[currentStepIndex]
     }
 
-    var progress: Double {
-        guard let exercise = currentExercise, !exercise.steps.isEmpty else { return 0 }
-        return Double(currentStepIndex) / Double(exercise.steps.count)
-    }
-
     /// True for breathing exercises where rounds can be adjusted.
     var canCustomizeRounds: Bool {
         baseExercise?.category == .breathing

@@ -193,7 +193,7 @@ struct WordBankView: View {
             HStack(spacing: 10) {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColors.warning)
 
                 PersistentTextField(
                     hint: "Add custom filler...",
@@ -310,7 +310,7 @@ struct WordBankView: View {
             HStack(spacing: 8) {
                 Image(systemName: "character.book.closed.fill")
                     .font(.caption)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
                 Text("Tracked vocab is highlighted and counted in transcript analytics.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -508,7 +508,7 @@ struct WordBankView: View {
             HStack(spacing: 8) {
                 Image(systemName: "waveform.badge.minus")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColors.warning)
                 Text("Manage which words are detected as fillers during analysis. Custom fillers are always detected; context-dependent ones use speech patterns.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -694,7 +694,7 @@ struct WordBankView: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.green.opacity(0.7))
+                    .foregroundStyle(AppColors.success.opacity(0.7))
             }
             .buttonStyle(.plain)
         }
@@ -718,7 +718,7 @@ struct WordBankView: View {
             Text(error)
                 .font(.caption)
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(AppColors.error)
         .padding(.horizontal, 4)
         .transition(.move(edge: .top).combined(with: .opacity))
     }

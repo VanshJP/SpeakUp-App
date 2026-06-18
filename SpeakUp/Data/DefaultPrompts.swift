@@ -2747,10 +2747,6 @@ enum DefaultPrompts {
 
     // MARK: - Helper Functions
 
-    static func getRandomPrompt() -> PromptData {
-        all.randomElement()!
-    }
-
     /// Random prompt biased by the user's self-reported speaker level.
     /// Beginners see more easy prompts; advanced users see more hard ones.
     static func getRandomPrompt(for level: SpeakerLevel) -> PromptData {
@@ -2767,27 +2763,6 @@ enum DefaultPrompts {
         if let pick = pool.randomElement() { return pick }
         let fallback = all.filter { enabledCategories.contains($0.category) }
         return fallback.randomElement() ?? all.randomElement()!
-    }
-
-    static func getPromptsByCategory(_ category: String) -> [PromptData] {
-        all.filter { $0.category == category }
-    }
-
-    static func getPromptsByDifficulty(_ difficulty: PromptDifficulty) -> [PromptData] {
-        all.filter { $0.difficulty == difficulty }
-    }
-
-    static var allCategories: [String] {
-        Array(Set(all.map { $0.category })).sorted()
-    }
-
-    static func getTodaysPrompt() -> PromptData {
-        // Use date as seed for consistent daily prompt
-        let today = Calendar.current.startOfDay(for: Date())
-        let components = Calendar.current.dateComponents([.year, .month, .day], from: today)
-        let seed = (components.year ?? 0) + (components.month ?? 0) + (components.day ?? 0)
-        let index = seed % all.count
-        return all[index]
     }
 
     /// Date-seeded daily prompt biased by the user's self-reported speaker

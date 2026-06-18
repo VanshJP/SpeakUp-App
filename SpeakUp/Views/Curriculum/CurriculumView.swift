@@ -40,7 +40,7 @@ struct CurriculumView: View {
                     showingAwards = true
                 } label: {
                     Image(systemName: "trophy.fill")
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(AppColors.warning)
                 }
             }
         }
@@ -56,7 +56,7 @@ struct CurriculumView: View {
     }
 
     private var progressHeader: some View {
-        FeaturedGlassCard(gradientColors: [.teal.opacity(0.15), .cyan.opacity(0.08)]) {
+        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), AppColors.categoryBrandBright.opacity(0.08)]) {
             VStack(spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -73,10 +73,10 @@ struct CurriculumView: View {
                     // Progress ring
                     ZStack {
                         Circle()
-                            .stroke(.gray.opacity(0.2), lineWidth: 6)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 6)
                         Circle()
                             .trim(from: 0, to: viewModel.overallProgress)
-                            .stroke(.teal, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                            .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                             .rotationEffect(.degrees(-90))
 
                         Text("\(Int(viewModel.overallProgress * 100))%")
@@ -86,7 +86,7 @@ struct CurriculumView: View {
                 }
 
                 ProgressView(value: viewModel.overallProgress)
-                    .tint(.teal)
+                    .tint(AppColors.primary)
             }
         }
     }
@@ -97,7 +97,7 @@ struct CurriculumView: View {
         NavigationLink {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
         } label: {
-            FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), .cyan.opacity(0.08)]) {
+            FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), AppColors.categoryBrandBright.opacity(0.08)]) {
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Continue Learning")
@@ -143,12 +143,12 @@ struct CurriculumView: View {
                 // Phase number badge
                 ZStack {
                     Circle()
-                        .fill(isPhaseComplete ? .green.opacity(0.2) : (!isPreviousPhaseComplete && phase.week > 1) ? .gray.opacity(0.1) : AppColors.primary.opacity(0.15))
+                        .fill(isPhaseComplete ? AppColors.success.opacity(0.2) : (!isPreviousPhaseComplete && phase.week > 1) ? Color.gray.opacity(0.1) : AppColors.primary.opacity(0.15))
                         .frame(width: 36, height: 36)
                     if isPhaseComplete {
                         Image(systemName: "checkmark")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColors.success)
                     } else if !isPreviousPhaseComplete && phase.week > 1 {
                         Image(systemName: "lock.fill")
                             .font(.caption)

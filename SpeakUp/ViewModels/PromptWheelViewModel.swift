@@ -14,18 +14,7 @@ class PromptWheelViewModel {
     var isSpinning = false
 
     private var modelContext: ModelContext?
-    
-    let categoryColors: [Color] = [
-        .blue,      // Professional Development
-        .purple,    // Communication Skills
-        .green,     // Personal Growth
-        .orange,    // Problem Solving
-        .teal,      // Current Events
-        .yellow,    // Quick Fire
-        .red,       // Debate & Persuasion
-        .pink       // Extra (if needed)
-    ]
-    
+
     func configure(with context: ModelContext) {
         self.modelContext = context
         Task { @MainActor in
@@ -108,15 +97,6 @@ class PromptWheelViewModel {
         // Pick a random prompt from this category
         let categoryPrompts = prompts.filter { $0.category == selectedCategory }
         selectedPrompt = categoryPrompts.randomElement()
-    }
-    
-    // MARK: - Helpers
-    
-    func colorForCategory(_ category: String) -> Color {
-        guard let index = categories.firstIndex(of: category) else {
-            return .gray
-        }
-        return categoryColors[index % categoryColors.count]
     }
     
 }

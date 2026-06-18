@@ -25,7 +25,7 @@ struct BeforeAfterReplayView: View {
                                 if viewModel.scoreImprovement > 0 {
                                     Text("+\(viewModel.scoreImprovement) points improvement!")
                                         .font(.headline)
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(AppColors.success)
                                 } else if viewModel.scoreImprovement < 0 {
                                     Text("Keep practicing — you've got this!")
                                         .font(.subheadline)
@@ -46,12 +46,12 @@ struct BeforeAfterReplayView: View {
                             VStack(spacing: 4) {
                                 Image(systemName: "arrow.down")
                                     .font(.title2.weight(.bold))
-                                    .foregroundStyle(.teal)
+                                    .foregroundStyle(AppColors.primary)
 
                                 if viewModel.scoreImprovement != 0 {
                                     Text(viewModel.scoreImprovement >= 0 ? "+\(viewModel.scoreImprovement)" : "\(viewModel.scoreImprovement)")
                                         .font(.title3.weight(.bold))
-                                        .foregroundStyle(viewModel.scoreImprovement >= 0 ? .green : .red)
+                                        .foregroundStyle(viewModel.scoreImprovement >= 0 ? AppColors.success : AppColors.error)
                                 }
                             }
                             .padding(.vertical, 4)
@@ -66,11 +66,11 @@ struct BeforeAfterReplayView: View {
 
                             // Motivational message
                             if viewModel.scoreImprovement > 20 {
-                                FeaturedGlassCard(gradientColors: [.green.opacity(0.15), .teal.opacity(0.08)]) {
+                                FeaturedGlassCard(gradientColors: [AppColors.success.opacity(0.15), AppColors.primary.opacity(0.08)]) {
                                     VStack(spacing: 8) {
                                         Image(systemName: "star.fill")
                                             .font(.title)
-                                            .foregroundStyle(.yellow)
+                                            .foregroundStyle(AppColors.warning)
 
                                         Text("Amazing Progress!")
                                             .font(.headline)
@@ -114,7 +114,7 @@ struct BeforeAfterReplayView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(title)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
 
                 if let recording {
                     HStack {
@@ -140,7 +140,7 @@ struct BeforeAfterReplayView: View {
                         Button(action: onPlay) {
                             Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
                                 .font(.largeTitle)
-                                .foregroundStyle(.teal)
+                                .foregroundStyle(AppColors.primary)
                         }
                         .buttonStyle(.plain)
                     }

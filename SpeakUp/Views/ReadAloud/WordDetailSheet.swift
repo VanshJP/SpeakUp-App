@@ -101,8 +101,8 @@ struct WordDetailSheet: View {
         case .mismatched(let spoken):
             HStack(spacing: 6) {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.red)
-                Text("You said: \(Text(spoken).bold().foregroundStyle(.red))")
+                    .foregroundStyle(AppColors.error)
+                Text("You said: \(Text(spoken).bold().foregroundStyle(AppColors.error))")
                     .foregroundStyle(.secondary)
             }
             .font(.subheadline)
@@ -110,9 +110,9 @@ struct WordDetailSheet: View {
         case .skipped:
             HStack(spacing: 6) {
                 Image(systemName: "forward.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColors.warning)
                 Text("Skipped")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColors.warning)
                     .bold()
             }
             .font(.subheadline)
@@ -120,9 +120,9 @@ struct WordDetailSheet: View {
         case .matched:
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
                 Text("Matched")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
                     .bold()
             }
             .font(.subheadline)

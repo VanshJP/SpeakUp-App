@@ -32,7 +32,7 @@ struct LessonContentView: View {
     // MARK: - Concepts
 
     private func conceptsSection(_ section: LessonSection) -> some View {
-        GlassCard(tint: Color.blue.opacity(0.08)) {
+        GlassCard(tint: AppColors.info.opacity(0.08)) {
             VStack(alignment: .leading, spacing: 14) {
                 if let title = section.title {
                     Label {
@@ -40,7 +40,7 @@ struct LessonContentView: View {
                             .font(.headline)
                     } icon: {
                         Image(systemName: section.icon ?? "book")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppColors.info)
                     }
                 }
 
@@ -49,7 +49,7 @@ struct LessonContentView: View {
                     ForEach(Array(bullets.enumerated()), id: \.offset) { _, bullet in
                         HStack(alignment: .top, spacing: 10) {
                             Circle()
-                                .fill(.blue.opacity(0.6))
+                                .fill(AppColors.info.opacity(0.6))
                                 .frame(width: 7, height: 7)
                                 .padding(.top, 7)
 
@@ -67,20 +67,20 @@ struct LessonContentView: View {
     // MARK: - Tip
 
     private func tipSection(_ section: LessonSection) -> some View {
-        GlassCard(tint: Color.orange.opacity(0.08)) {
+        GlassCard(tint: AppColors.warning.opacity(0.08)) {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(.orange)
+                    .fill(AppColors.warning)
                     .frame(width: 3)
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label {
                         Text(section.title ?? "Pro Tip")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppColors.warning)
                     } icon: {
                         Image(systemName: section.icon ?? "lightbulb.fill")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppColors.warning)
                     }
 
                     Text(section.body)
@@ -96,20 +96,20 @@ struct LessonContentView: View {
     // MARK: - Example
 
     private func exampleSection(_ section: LessonSection) -> some View {
-        GlassCard(tint: Color.indigo.opacity(0.08)) {
+        GlassCard(tint: AppColors.categoryNeutralCool.opacity(0.10)) {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(.indigo)
+                    .fill(AppColors.categoryNeutralCool)
                     .frame(width: 3)
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label {
                         Text(section.title ?? "Example")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(AppColors.categoryNeutralCool)
                     } icon: {
                         Image(systemName: section.icon ?? "quote.opening")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(AppColors.categoryNeutralCool)
                     }
 
                     Text(section.body)
@@ -126,7 +126,7 @@ struct LessonContentView: View {
     // MARK: - Key Takeaway
 
     private func keyTakeawaySection(_ section: LessonSection) -> some View {
-        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), .cyan.opacity(0.08)]) {
+        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), AppColors.categoryBrandBright.opacity(0.08)]) {
             HStack(spacing: 14) {
                 Image(systemName: section.icon ?? "star.fill")
                     .font(.title)
@@ -154,13 +154,13 @@ struct LessonContentView: View {
         GlassCard(tint: AppColors.glassTintSuccess) {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(.green)
+                    .fill(AppColors.success)
                     .frame(width: 3)
 
                 HStack(spacing: 12) {
                     Image(systemName: section.icon ?? "info.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColors.success)
 
                     VStack(alignment: .leading, spacing: 8) {
                         if let title = section.title {

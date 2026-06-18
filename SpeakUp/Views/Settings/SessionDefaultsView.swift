@@ -18,7 +18,7 @@ struct SessionDefaultsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .tint(.teal)
+                                .tint(AppColors.primary)
                             }
 
                             divider
@@ -30,7 +30,7 @@ struct SessionDefaultsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .tint(.teal)
+                                .tint(AppColors.primary)
                             }
 
                             divider
@@ -42,7 +42,7 @@ struct SessionDefaultsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .tint(.teal)
+                                .tint(AppColors.primary)
                             }
 
                             divider
@@ -54,7 +54,7 @@ struct SessionDefaultsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .tint(.teal)
+                                .tint(AppColors.primary)
                             }
 
                             divider
@@ -66,7 +66,7 @@ struct SessionDefaultsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .tint(.teal)
+                                .tint(AppColors.primary)
                             }
 
                             divider
@@ -75,7 +75,7 @@ struct SessionDefaultsView: View {
                                 Label("Haptic Coaching", systemImage: "hand.tap")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             divider
@@ -84,7 +84,7 @@ struct SessionDefaultsView: View {
                                 Label("Audio Cues", systemImage: "speaker.wave.2")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             divider

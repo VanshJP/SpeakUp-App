@@ -106,8 +106,6 @@ final class OnboardingViewModel {
         }
     }
 
-    static var defaultVocabSeeds: [String] { vocabSeeds(for: .intermediate) }
-
     // v3 keys: invalidate older saved state because vocab moved after level
     // (rawValues changed), which would otherwise restore to the wrong page.
     private static let resumeStepKey = "onboarding.lastReachedStep.v3"
@@ -126,8 +124,6 @@ final class OnboardingViewModel {
     }
 
     var canAdvanceFromName: Bool { !trimmedName.isEmpty }
-
-    var canAdvanceFromGoal: Bool { selectedGoal != nil }
 
     /// Bar fill progresses linearly across all steps. Even welcome shows a
     /// sliver of fill so the bar never reads as "empty" at first launch.
@@ -394,26 +390,6 @@ final class OnboardingViewModel {
     func removeVocabWord(_ word: String) {
         Haptics.light()
         vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
-    }
-
-    func addDictionaryWord(_ word: String) {
-        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard !dictionaryWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
-        Haptics.light()
-        dictionaryWords.append(trimmed)
-    }
-
-    func removeDictionaryWord(_ word: String) {
-        Haptics.light()
-        dictionaryWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
-    }
-
-    // MARK: Helpers
-
-    private func appendDictionaryWord(_ word: String) {
-        guard !dictionaryWords.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) else { return }
-        dictionaryWords.append(word)
     }
 
     private static func defaultReminderTime() -> Date {

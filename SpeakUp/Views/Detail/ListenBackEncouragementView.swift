@@ -11,7 +11,7 @@ struct ListenBackEncouragementView: View {
             VStack(spacing: 20) {
                 Image(systemName: "headphones")
                     .font(.system(size: 56))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
 
                 Text("About Hearing Your Voice")
                     .font(.title3.weight(.bold))
@@ -30,7 +30,7 @@ struct ListenBackEncouragementView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(.teal))
+                        .background(RoundedRectangle(cornerRadius: 14).fill(AppColors.primary))
                 }
             }
             .padding(24)

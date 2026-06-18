@@ -25,14 +25,14 @@ struct RecordButton: View {
                 if isRecording {
                     // Stop icon (rounded square)
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(.red)
+                        .fill(AppColors.recording)
                         .frame(width: 28, height: 28)
                 } else {
                     // Record icon (circle)
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color.red.opacity(0.9), Color.red],
+                                colors: [AppColors.recording.opacity(0.9), AppColors.recording],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -91,11 +91,11 @@ struct MiniRecordButton: View {
                 
                 if isRecording {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(.red)
+                        .fill(AppColors.recording)
                         .frame(width: 20, height: 20)
                 } else {
                     Circle()
-                        .fill(.red)
+                        .fill(AppColors.recording)
                         .frame(width: 44, height: 44)
                 }
             }

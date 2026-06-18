@@ -220,7 +220,7 @@ struct ScoreWeightsView: View {
 
                                 Text("\(Int(weightForSubscore(desc.key) * 100))%")
                                     .font(.caption.weight(.medium))
-                                    .foregroundStyle(.teal)
+                                    .foregroundStyle(AppColors.primary)
                             }
                         }
                         .tint(.secondary)
@@ -272,12 +272,12 @@ struct ScoreWeightsView: View {
 
                 Text("\(Int(value.wrappedValue * 100))%")
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
                     .frame(width: 36, alignment: .trailing)
             }
 
             Slider(value: value, in: 0.0...0.30, step: 0.01)
-                .tint(.teal)
+                .tint(AppColors.primary)
                 .onChange(of: value.wrappedValue) { _, _ in
                     didSave = false
                     Haptics.light()
@@ -296,13 +296,13 @@ struct ScoreWeightsView: View {
 
                 Text("\(totalPercent)%")
                     .font(.subheadline.weight(.bold).monospacedDigit())
-                    .foregroundStyle(totalIsValid ? .white : .orange)
+                    .foregroundStyle(totalIsValid ? Color.white : AppColors.warning)
             }
 
             if !totalIsValid {
                 Text("Total must equal 100% to save. Currently \(totalPercent > 100 ? "over" : "under") by \(abs(totalPercent - 100))%.")
                     .font(.caption2)
-                    .foregroundStyle(.orange.opacity(0.8))
+                    .foregroundStyle(AppColors.warning.opacity(0.8))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: totalIsValid)
@@ -323,7 +323,7 @@ struct ScoreWeightsView: View {
             if didSave {
                 Text("Saved!")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
                     .transition(.opacity)
             } else if hasUnsavedChanges && !totalIsValid {
                 Text("Adjust weights to total 100% before saving.")

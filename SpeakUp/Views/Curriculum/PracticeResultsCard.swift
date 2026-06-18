@@ -15,7 +15,7 @@ struct PracticeResultsCard: View {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColors.success)
                         .scaleEffect(appeared ? 1.0 : 0.5)
                         .opacity(appeared ? 1.0 : 0)
 
@@ -25,7 +25,7 @@ struct PracticeResultsCard: View {
 
                         Text(practiceEncouragement)
                             .font(.caption)
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                     }
 
                     Spacer()
@@ -80,7 +80,7 @@ struct PracticeResultsCard: View {
                 icon: "text.bubble",
                 label: "Fillers",
                 value: "\(analysis.totalFillerCount)",
-                color: analysis.totalFillerCount <= 2 ? .green : (analysis.totalFillerCount <= 5 ? .orange : .red)
+                color: analysis.totalFillerCount <= 2 ? AppColors.success : (analysis.totalFillerCount <= 5 ? AppColors.warning : AppColors.error)
             )
 
             Spacer()
@@ -89,7 +89,7 @@ struct PracticeResultsCard: View {
                 icon: "speedometer",
                 label: "Pace",
                 value: "\(Int(analysis.wordsPerMinute))",
-                color: (130...170).contains(Int(analysis.wordsPerMinute)) ? .green : .orange
+                color: (130...170).contains(Int(analysis.wordsPerMinute)) ? AppColors.success : AppColors.warning
             )
 
             Spacer()
@@ -98,7 +98,7 @@ struct PracticeResultsCard: View {
                 icon: "pause.circle",
                 label: "Pauses",
                 value: "\(analysis.strategicPauseCount)",
-                color: analysis.strategicPauseCount >= 2 ? .green : .orange
+                color: analysis.strategicPauseCount >= 2 ? AppColors.success : AppColors.warning
             )
         }
     }
@@ -108,7 +108,7 @@ struct PracticeResultsCard: View {
     private func scoreRing(score: Int) -> some View {
         ZStack {
             Circle()
-                .stroke(.gray.opacity(0.2), lineWidth: 5)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 5)
 
             Circle()
                 .trim(from: 0, to: appeared ? Double(score) / 100.0 : 0)
@@ -143,7 +143,7 @@ struct PracticeResultsCard: View {
     private var analyzingPlaceholder: some View {
         HStack(spacing: 12) {
             ProgressView()
-                .tint(.teal)
+                .tint(AppColors.primary)
 
             Text("Analyzing your recording...")
                 .font(.subheadline)

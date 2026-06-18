@@ -126,7 +126,7 @@ struct StreakDetailView: View {
                             endPoint: .bottom
                         )
                     )
-                    .shadow(color: isLit ? Color.orange.opacity(0.55) : .clear, radius: 14, y: 4)
+                    .shadow(color: isLit ? AppColors.warning.opacity(0.55) : .clear, radius: 14, y: 4)
                     .contentTransition(.numericText(value: Double(currentStreak)))
 
                 Text("DAY STREAK")
@@ -216,13 +216,13 @@ struct StreakDetailView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color.yellow, Color.orange, Color.red.opacity(0.85)],
+                                        colors: [AppColors.warning.opacity(0.85), AppColors.warning, AppColors.error.opacity(0.85)],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
                                 .frame(width: max(8, geo.size.width * milestoneProgress))
-                                .shadow(color: Color.orange.opacity(0.5), radius: 6, y: 1)
+                                .shadow(color: AppColors.warning.opacity(0.5), radius: 6, y: 1)
                         }
                     }
                     .frame(height: 10)
@@ -269,12 +269,12 @@ struct StreakDetailView: View {
     private func streakAchievementBadge(_ achievement: Achievement) -> some View {
         ZStack {
             Circle()
-                .fill(achievement.isUnlocked ? Color.orange.opacity(0.85) : Color.white.opacity(0.06))
+                .fill(achievement.isUnlocked ? AppColors.warning.opacity(0.85) : Color.white.opacity(0.06))
                 .overlay {
                     Circle()
                         .stroke(Color.white.opacity(0.15), lineWidth: 1)
                 }
-                .shadow(color: achievement.isUnlocked ? Color.orange.opacity(0.4) : .clear, radius: 4, y: 1)
+                .shadow(color: achievement.isUnlocked ? AppColors.warning.opacity(0.4) : .clear, radius: 4, y: 1)
 
             Image(systemName: achievement.isUnlocked ? achievement.icon : "lock.fill")
                 .font(.system(size: 11, weight: .bold))
@@ -286,7 +286,7 @@ struct StreakDetailView: View {
     // MARK: - Calendar
 
     private var calendarCard: some View {
-        GlassCard(tint: .teal.opacity(0.05)) {
+        GlassCard(tint: AppColors.primary.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 14) {
                 Label("Last 14 Days", systemImage: "calendar")
                     .font(.subheadline.weight(.semibold))
@@ -302,7 +302,7 @@ struct StreakDetailView: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(day.practiced
-                                          ? Color.orange.opacity(0.85)
+                                          ? AppColors.warning.opacity(0.85)
                                           : Color.white.opacity(0.06))
                                     .frame(height: 28)
                                     .overlay {
@@ -312,7 +312,7 @@ struct StreakDetailView: View {
                                                 .foregroundStyle(.white)
                                         }
                                     }
-                                    .shadow(color: day.practiced ? Color.orange.opacity(0.4) : .clear, radius: 4, y: 1)
+                                    .shadow(color: day.practiced ? AppColors.warning.opacity(0.4) : .clear, radius: 4, y: 1)
 
                                 if day.isToday {
                                     RoundedRectangle(cornerRadius: 6)

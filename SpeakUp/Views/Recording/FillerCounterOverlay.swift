@@ -6,7 +6,7 @@ struct FillerCounterOverlay: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.bubble.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColors.warning)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(count)")
@@ -27,7 +27,7 @@ struct FillerCounterOverlay: View {
                 .fill(.ultraThinMaterial)
                 .overlay {
                     Capsule()
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        .stroke(AppColors.warning.opacity(0.3), lineWidth: 1)
                 }
         }
     }

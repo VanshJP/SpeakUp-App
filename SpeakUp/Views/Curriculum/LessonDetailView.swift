@@ -116,7 +116,7 @@ struct LessonDetailView: View {
             HStack(spacing: 10) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
 
                 Text(message)
                     .font(.subheadline.weight(.medium))
@@ -288,13 +288,13 @@ struct LessonDetailView: View {
                     if let duration = activity.targetDuration {
                         Label("\(durationLabel(duration))", systemImage: "timer")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                     }
 
                     if let framework = activity.frameworkHint {
                         Label(framework, systemImage: "rectangle.3.group")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(AppColors.categoryNeutralCool)
                     }
                 }
 
@@ -322,7 +322,7 @@ struct LessonDetailView: View {
     }
 
     private func drillLaunchCard(activity: CurriculumActivity, mode: DrillMode) -> some View {
-        GlassCard(tint: Color.orange.opacity(0.08)) {
+        GlassCard(tint: AppColors.warning.opacity(0.08)) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
                     Image(systemName: mode.icon)
@@ -379,14 +379,14 @@ struct LessonDetailView: View {
     }
 
     private func warmUpLaunchCard(activity: CurriculumActivity, exercise: WarmUpExercise) -> some View {
-        GlassCard(tint: Color.green.opacity(0.08)) {
+        GlassCard(tint: AppColors.success.opacity(0.08)) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
                     Image(systemName: "figure.walk")
                         .font(.title2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColors.success)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(.green.opacity(0.15)))
+                        .background(Circle().fill(AppColors.success.opacity(0.15)))
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(exercise.title)
@@ -417,14 +417,14 @@ struct LessonDetailView: View {
     }
 
     private func confidenceLaunchCard(activity: CurriculumActivity, exercise: ConfidenceExercise) -> some View {
-        GlassCard(tint: Color.pink.opacity(0.08)) {
+        GlassCard(tint: AppColors.categoryBrandBright.opacity(0.08)) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
                     Image(systemName: "heart.fill")
                         .font(.title2)
-                        .foregroundStyle(.pink)
+                        .foregroundStyle(AppColors.categoryBrandBright)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(.pink.opacity(0.15)))
+                        .background(Circle().fill(AppColors.categoryBrandBright.opacity(0.15)))
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(exercise.title)
@@ -465,14 +465,14 @@ struct LessonDetailView: View {
         VStack(spacing: 16) {
             activityHeader(activity, isCompleted: isCompleted)
 
-            GlassCard(tint: Color.purple.opacity(0.08)) {
+            GlassCard(tint: AppColors.categoryNeutral.opacity(0.10)) {
                 VStack(spacing: 16) {
                     HStack(spacing: 12) {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.title2)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(AppColors.categoryNeutral)
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(.purple.opacity(0.15)))
+                            .background(Circle().fill(AppColors.categoryNeutral.opacity(0.15)))
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(activity.title)
@@ -512,7 +512,7 @@ struct LessonDetailView: View {
             if isCompleted {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.subheadline)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
                     .transition(.scale.combined(with: .opacity))
             }
 
@@ -526,12 +526,12 @@ struct LessonDetailView: View {
             HStack(spacing: 12) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Completed")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColors.success)
 
                     Text(activity.description)
                         .font(.caption)
@@ -660,11 +660,11 @@ struct LessonDetailView: View {
 
     private func activityColor(for type: CurriculumActivityType) -> Color {
         switch type {
-        case .lesson: return .blue
-        case .practice: return .teal
-        case .drill: return .orange
-        case .exercise: return .green
-        case .review: return .purple
+        case .lesson: return AppColors.info
+        case .practice: return AppColors.primary
+        case .drill: return AppColors.warning
+        case .exercise: return AppColors.success
+        case .review: return AppColors.categoryBrandBright
         }
     }
 

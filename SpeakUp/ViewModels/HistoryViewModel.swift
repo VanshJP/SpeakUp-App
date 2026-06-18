@@ -45,8 +45,6 @@ class HistoryViewModel {
     var recordingCountByDay: [Date: Int] = [:]
     var contributionIntensityByDay: [Date: Double] = [:]
 
-    var analyzedCount: Int { summaries.reduce(0) { $0 + ($1.overallScore != nil ? 1 : 0) } }
-
     private var modelContext: ModelContext?
     private var container: ModelContainer?
 

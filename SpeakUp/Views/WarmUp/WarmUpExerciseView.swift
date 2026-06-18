@@ -99,8 +99,8 @@ struct WarmUpExerciseView: View {
                         .font(.title)
                         .foregroundStyle(.white)
                         .frame(width: 72, height: 72)
-                        .background(Circle().fill(.teal))
-                        .shadow(color: .teal.opacity(0.4), radius: 8, y: 2)
+                        .background(Circle().fill(AppColors.primary))
+                        .shadow(color: AppColors.primary.opacity(0.4), radius: 8, y: 2)
                 }
                 .sensoryFeedback(.impact(flexibility: .soft), trigger: viewModel.isRunning)
 
@@ -168,7 +168,7 @@ struct WarmUpExerciseView: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppColors.success)
 
             Text("Exercise Complete!")
                 .font(.title2.weight(.bold))
@@ -189,7 +189,7 @@ struct WarmUpExerciseView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(.teal))
+                    .background(RoundedRectangle(cornerRadius: 16).fill(AppColors.primary))
             }
         }
     }

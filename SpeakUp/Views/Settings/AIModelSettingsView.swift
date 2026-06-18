@@ -66,9 +66,9 @@ struct AIModelSettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "cpu")
                     .font(.title2)
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(AppColors.primary)
                     .frame(width: 40, height: 40)
-                    .background(.purple.opacity(0.15))
+                    .background(AppColors.primary.opacity(0.15))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -87,7 +87,7 @@ struct AIModelSettingsView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(.green))
+                        .background(Capsule().fill(AppColors.success))
                 } else {
                     Text("Not Available")
                         .font(.caption2.weight(.bold))
@@ -103,15 +103,15 @@ struct AIModelSettingsView: View {
     // MARK: - Local Model Card
 
     private var localModelCard: some View {
-        GlassCard(tint: .cyan.opacity(0.05)) {
+        GlassCard(tint: AppColors.categoryBrandBright.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 14) {
                 // Header
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.down.circle")
                         .font(.title2)
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(AppColors.categoryBrandBright)
                         .frame(width: 40, height: 40)
-                        .background(.cyan.opacity(0.15))
+                        .background(AppColors.categoryBrandBright.opacity(0.15))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -131,7 +131,7 @@ struct AIModelSettingsView: View {
                 modelTierSection
 
                 if !llmService.appleIntelligenceAvailable {
-                    Text("Download a Gemma 4 model to enable on-device AI coherence scoring and coaching tips.")
+                    Text("Download a local model to enable on-device AI coherence scoring and coaching tips.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -196,9 +196,17 @@ struct AIModelSettingsView: View {
                     }
                 )
             ) {
-                ForEach(llmService.localLLM.availableProfiles) { profile in
-                    Text("\(profile.displayName) • \(profile.approximateModelSize)")
-                        .tag(profile)
+                Section("Gemma") {
+                    ForEach(llmService.localLLM.availableProfiles.filter { $0.modelFamily == .gemma }) { profile in
+                        Text("\(profile.displayName) • \(profile.approximateModelSize)")
+                            .tag(profile)
+                    }
+                }
+                Section("Qwen") {
+                    ForEach(llmService.localLLM.availableProfiles.filter { $0.modelFamily == .qwen }) { profile in
+                        Text("\(profile.displayName) • \(profile.approximateModelSize)")
+                            .tag(profile)
+                    }
                 }
             }
             .pickerStyle(.menu)
@@ -214,21 +222,21 @@ struct AIModelSettingsView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(llmService.appleIntelligenceAvailable ? .orange : .green))
+                .background(Capsule().fill(llmService.appleIntelligenceAvailable ? AppColors.warning : AppColors.success))
         case .loading:
             Text("Loading")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(.blue))
+                .background(Capsule().fill(AppColors.info))
         case .downloading:
             Text("Downloading")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(.blue))
+                .background(Capsule().fill(AppColors.info))
         case .downloaded:
             Text("Downloaded")
                 .font(.caption2.weight(.bold))
@@ -242,7 +250,7 @@ struct AIModelSettingsView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(.red))
+                .background(Capsule().fill(AppColors.error))
         case .notDownloaded:
             Text("Not Installed")
                 .font(.caption2.weight(.bold))
@@ -265,7 +273,7 @@ struct AIModelSettingsView: View {
         case .downloading(let progress):
             VStack(spacing: 8) {
                 ProgressView(value: progress)
-                    .tint(.cyan)
+                    .tint(AppColors.primary)
 
                 HStack {
                     Text("\(Int(progress * 100))%")
@@ -276,7 +284,7 @@ struct AIModelSettingsView: View {
                         llmService.localLLM.cancelDownload()
                     }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.error)
                 }
             }
 
@@ -302,7 +310,7 @@ struct AIModelSettingsView: View {
         case .loading:
             HStack(spacing: 12) {
                 ProgressView()
-                    .tint(.cyan)
+                    .tint(AppColors.primary)
                 Text("Loading model into memory...")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -331,7 +339,7 @@ struct AIModelSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(message)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(AppColors.error)
 
                 GlassButton(title: "Retry", icon: "arrow.clockwise", style: .primary, fullWidth: true) {
                     Task { await llmService.setupLocalModel() }
@@ -343,7 +351,7 @@ struct AIModelSettingsView: View {
     // MARK: - Features Card
 
     private var featuresCard: some View {
-        GlassCard(tint: .purple.opacity(0.05)) {
+        GlassCard(tint: AppColors.primary.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 10) {
                 Label("What does this power?", systemImage: "questionmark.circle")
                     .font(.subheadline.weight(.semibold))
@@ -376,7 +384,7 @@ struct AIModelSettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "lock.shield")
                     .font(.title3)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppColors.success)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("100% On-Device")
@@ -393,7 +401,7 @@ struct AIModelSettingsView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
                 .font(.caption)
-                .foregroundStyle(.purple)
+                .foregroundStyle(AppColors.primary)
                 .frame(width: 16)
             Text(text)
                 .font(.caption)

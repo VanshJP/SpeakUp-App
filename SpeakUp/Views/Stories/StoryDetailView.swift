@@ -115,10 +115,10 @@ struct StoryDetailView: View {
                             Text("Pinned")
                         }
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(AppColors.warning)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background { Capsule().fill(Color.yellow.opacity(0.15)) }
+                        .background { Capsule().fill(AppColors.warning.opacity(0.15)) }
                     }
 
                     Spacer()

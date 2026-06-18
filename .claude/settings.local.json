@@ -28,7 +28,10 @@
       "mcp__tokenuinely__query",
       "Read(//Users/vanshpatel/.cargo/bin/**)",
       "Bash(~/.cargo/bin/tokenuinely -V)",
-      "Bash(~/.cargo/bin/tokenuinely --version)"
+      "Bash(~/.cargo/bin/tokenuinely --version)",
+      "Bash(periphery scan *)",
+      "Bash(swift --version)",
+      "Bash(xcrun swift *)"
     ]
   }
 }

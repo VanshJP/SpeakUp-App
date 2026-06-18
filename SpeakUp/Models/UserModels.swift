@@ -104,16 +104,3 @@ nonisolated struct ScoreHistoryEntry: Codable, Identifiable, Sendable {
     let score: Int
 }
 
-// MARK: - Weekly Activity
-
-nonisolated struct WeeklyActivity: Identifiable {
-    var id: Date { weekStart }
-    let weekStart: Date
-    var sessions: Int
-    var totalMinutes: TimeInterval
-    var averageScore: Double
-
-    var formattedWeek: String {
-        weekStart.formatted(.dateTime.month(.abbreviated).day())
-    }
-}

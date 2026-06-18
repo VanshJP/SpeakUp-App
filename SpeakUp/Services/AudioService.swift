@@ -209,17 +209,6 @@ class AudioService: NSObject {
         displayLink?.isPaused = true
     }
 
-    func resume() {
-        guard let player = audioPlayer else { return }
-        player.play()
-        isPlaying = true
-        if displayLink == nil {
-            startDisplayLink()
-        } else {
-            displayLink?.isPaused = false
-        }
-    }
-
     func stop() {
         stopDisplayLink()
 
@@ -291,10 +280,6 @@ class AudioService: NSObject {
     }
     
     // MARK: - File Management
-    
-    func deleteRecording(at url: URL) {
-        try? FileManager.default.removeItem(at: url)
-    }
     
     func getAudioDuration(at url: URL) -> TimeInterval? {
         do {

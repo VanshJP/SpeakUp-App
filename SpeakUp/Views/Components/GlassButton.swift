@@ -101,7 +101,7 @@ struct GlassButton: View {
         case .secondary:
             return .primary
         case .outline:
-            return .teal
+            return AppColors.primary
         case .ghost:
             return .primary
         case .danger:
@@ -119,7 +119,7 @@ struct GlassButton: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Color.teal.opacity(0.9), Color.teal],
+                                colors: [AppColors.primary.opacity(0.9), AppColors.primary],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -133,7 +133,7 @@ struct GlassButton: View {
                 .fill(.clear)
                 .overlay {
                     Capsule()
-                        .strokeBorder(Color.teal, lineWidth: 1.5)
+                        .strokeBorder(AppColors.primary, lineWidth: 1.5)
                 }
         case .ghost:
             Capsule()
@@ -143,7 +143,7 @@ struct GlassButton: View {
                 .fill(.ultraThinMaterial)
                 .overlay {
                     Capsule()
-                        .fill(Color.red.opacity(0.9))
+                        .fill(AppColors.error.opacity(0.9))
                 }
         }
     }
@@ -192,7 +192,7 @@ struct GlassIconButton: View {
         
         HStack(spacing: 16) {
             GlassIconButton(icon: "mic.fill") {}
-            GlassIconButton(icon: "video.fill", tint: .teal) {}
+            GlassIconButton(icon: "video.fill", tint: AppColors.primary) {}
             GlassIconButton(icon: "arrow.clockwise") {}
         }
     }

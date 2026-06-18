@@ -120,6 +120,10 @@ enum WidgetDataProvider {
         defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
     }
 
+    static func updateLastPracticeDate(_ date: Date) {
+        defaults?.set(date.timeIntervalSince1970, forKey: "lastPracticeDate")
+    }
+
     // Story data
     static func updateLatestStory(title: String) {
         defaults?.set(title, forKey: "latestStoryTitle")

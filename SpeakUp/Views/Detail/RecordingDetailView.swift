@@ -387,11 +387,11 @@ struct RecordingDetailView: View {
                     if let prompt = recording.prompt {
                         Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(PromptCategory(rawValue: prompt.category)?.color ?? .teal)
+                            .foregroundStyle(PromptCategory(rawValue: prompt.category)?.color ?? AppColors.primary)
                     } else {
                         Label("Free Practice", systemImage: "waveform")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                     }
 
                     Spacer()
@@ -423,7 +423,7 @@ struct RecordingDetailView: View {
 
                             Image(systemName: "pencil.circle.fill")
                                 .font(.caption)
-                                .foregroundStyle(.teal.opacity(0.6))
+                                .foregroundStyle(AppColors.primary.opacity(0.6))
                         }
                     }
                     .buttonStyle(.plain)
@@ -454,11 +454,11 @@ struct RecordingDetailView: View {
                             Text(recording.storyTitle ?? "Story Practice")
                                 .font(.caption.weight(.medium))
                         }
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(AppColors.categoryBrandBright)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background {
-                            Capsule().fill(.purple.opacity(0.12))
+                            Capsule().fill(AppColors.categoryBrandBright.opacity(0.12))
                         }
                     }
                 }
@@ -550,7 +550,7 @@ struct RecordingDetailView: View {
 
                             Text("\(filler.count)×")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(AppColors.warning)
                         }
                     }
                 }
@@ -661,11 +661,11 @@ struct RecordingDetailView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "text.badge.checkmark")
                                 .font(.caption)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(AppColors.success)
 
                             Text("Vocab:")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.green)
+                                .foregroundStyle(AppColors.success)
 
                             Text(analysis.vocabWordsUsed.map { "\($0.word) (\($0.count))" }.joined(separator: ", "))
                                 .font(.caption)
@@ -783,7 +783,7 @@ struct RecordingDetailView: View {
                         Text("Share")
                     }
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
                 }
             }
         }
@@ -888,7 +888,7 @@ struct RecordingDetailView: View {
                 GlassCard {
                     HStack(spacing: 12) {
                         ProgressView()
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                         Text("Generating personalized insights...")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -897,7 +897,7 @@ struct RecordingDetailView: View {
                     .padding(.vertical, 8)
                 }
             } else if let insight = llmInsight {
-                GlassCard(tint: .purple.opacity(0.05)) {
+                GlassCard(tint: AppColors.categoryBrandBright.opacity(0.05)) {
                     let blocks = formattedAIInsightBlocks(insight)
                     VStack(alignment: .leading, spacing: 10) {
                         if blocks.isEmpty {
@@ -932,12 +932,12 @@ struct RecordingDetailView: View {
     // MARK: - Reflection Prompt Card
 
     private var reflectionPromptCard: some View {
-        FeaturedGlassCard(gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]) {
+        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.1), AppColors.categoryBrandBright.opacity(0.05)]) {
             VStack(spacing: 14) {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.message.fill")
                         .font(.title2)
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("How did you feel?")
@@ -1707,7 +1707,7 @@ private struct PlaybackDrawerContainer: View {
                             let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
 
                             RoundedRectangle(cornerRadius: 1.5)
-                                .fill(isPlayed ? Color.teal : Color.white.opacity(0.2))
+                                .fill(isPlayed ? AppColors.primary : Color.white.opacity(0.2))
                                 .frame(width: barWidth, height: height)
                         }
                     }
@@ -1751,7 +1751,7 @@ private struct PlaybackDrawerContainer: View {
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 52, height: 52)
-                        .background(Circle().fill(Color.teal))
+                        .background(Circle().fill(AppColors.primary))
                 }
                 .buttonStyle(.plain)
 
@@ -1772,7 +1772,7 @@ private struct PlaybackDrawerContainer: View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.teal)
+                .foregroundStyle(AppColors.primary)
 
             Text(playbackViewModel.isPlaying ? "Now Playing" : "Playback")
                 .font(.caption.weight(.semibold))
@@ -1791,7 +1791,7 @@ private struct PlaybackDrawerContainer: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
-                    .background(Circle().fill(.teal))
+                    .background(Circle().fill(AppColors.primary))
             }
             .buttonStyle(.plain)
         }
@@ -2008,11 +2008,11 @@ struct GoalProgressBadge: View {
 
     var body: some View {
         if let goal {
-            GlassCard(tint: .teal.opacity(0.08)) {
+            GlassCard(tint: AppColors.primary.opacity(0.08)) {
                 HStack(spacing: 12) {
                     Image(systemName: goal.type.iconName)
                         .font(.title3)
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 2) {

@@ -15,7 +15,7 @@ struct ReminderSettingsView: View {
                                 Label("Daily Reminder", systemImage: "bell.fill")
                                     .font(.subheadline)
                             }
-                            .tint(.teal)
+                            .tint(AppColors.primary)
                             .frame(minHeight: 40)
 
                             if viewModel.dailyReminderEnabled {
@@ -31,7 +31,7 @@ struct ReminderSettingsView: View {
                                         displayedComponents: .hourAndMinute
                                     )
                                     .labelsHidden()
-                                    .tint(.teal)
+                                    .tint(AppColors.primary)
                                 }
                                 .frame(minHeight: 40)
                             }

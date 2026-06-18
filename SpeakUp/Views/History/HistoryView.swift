@@ -323,12 +323,12 @@ struct HistoryView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                                     .frame(minWidth: 18, minHeight: 18)
-                                    .background(Circle().fill(.green))
+                                    .background(Circle().fill(AppColors.success))
                             }
                             .foregroundStyle(.primary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Capsule().fill(.green.opacity(0.12)))
+                            .background(Capsule().fill(AppColors.success.opacity(0.12)))
                         }
                     }
                 }
@@ -343,14 +343,14 @@ struct HistoryView: View {
         Button {
             onShowBeforeAfter()
         } label: {
-            FeaturedGlassCard(gradientColors: [.purple.opacity(0.15), .teal.opacity(0.08)]) {
+            FeaturedGlassCard(gradientColors: [AppColors.categoryBrandBright.opacity(0.15), AppColors.primary.opacity(0.08)]) {
                 HStack(spacing: 14) {
                     Image(systemName: "headphones")
                         .font(.title2)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(AppColors.categoryBrandBright)
                         .frame(width: 44, height: 44)
                         .background {
-                            Circle().fill(.purple.opacity(0.15))
+                            Circle().fill(AppColors.categoryBrandBright.opacity(0.15))
                         }
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -387,12 +387,12 @@ struct HistoryView: View {
         return NavigationLink {
             ProgressChartsView()
         } label: {
-            FeaturedGlassCard(gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]) {
+            FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.1), AppColors.categoryBrandBright.opacity(0.05)]) {
                 VStack(spacing: 12) {
                     HStack(spacing: 14) {
                         Image(systemName: "chart.xyaxis.line")
                             .font(.title2)
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                             .frame(width: 32)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -419,7 +419,7 @@ struct HistoryView: View {
                                     x: .value("Date", point.date),
                                     y: .value("Score", point.score)
                                 )
-                                .foregroundStyle(.teal.opacity(0.8))
+                                .foregroundStyle(AppColors.primary.opacity(0.8))
                                 .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
                                 .interpolationMethod(.catmullRom)
 
@@ -429,7 +429,7 @@ struct HistoryView: View {
                                 )
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.teal.opacity(0.2), .teal.opacity(0.01)],
+                                        colors: [AppColors.primary.opacity(0.2), AppColors.primary.opacity(0.01)],
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
@@ -511,11 +511,11 @@ struct HistoryView: View {
         Button {
             onShowGoals()
         } label: {
-            GlassCard(tint: .purple.opacity(0.06)) {
+            GlassCard(tint: AppColors.categoryBrandBright.opacity(0.06)) {
                 HStack(spacing: 12) {
                     Image(systemName: "target")
                         .font(.title3)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(AppColors.categoryBrandBright)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Goals")
@@ -542,11 +542,11 @@ struct HistoryView: View {
         Button {
             onShowJournalExport()
         } label: {
-            GlassCard(tint: .blue.opacity(0.06)) {
+            GlassCard(tint: AppColors.info.opacity(0.06)) {
                 HStack(spacing: 12) {
                     Image(systemName: "square.and.arrow.up")
                         .font(.title3)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(AppColors.info)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Export Progress Journal")
@@ -817,7 +817,7 @@ struct ContributionGraph: View {
         if intensity == 0 {
             return Color.gray.opacity(0.15)
         }
-        return Color.teal.opacity(0.25 + (intensity * 0.75))
+        return AppColors.primary.opacity(0.25 + (intensity * 0.75))
     }
 
     private func dateForCell(week: Int, day: Int) -> Date {
@@ -886,7 +886,7 @@ struct RecordingRow: View {
                         if summary.isFavorite {
                             Image(systemName: "heart.fill")
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(AppColors.error)
                         }
                     }
 
@@ -894,12 +894,12 @@ struct RecordingRow: View {
                         if let category = summary.promptCategory {
                             Text(category)
                                 .font(.caption2.weight(.medium))
-                                .foregroundStyle(PromptCategory(rawValue: category)?.color ?? .teal)
+                                .foregroundStyle(PromptCategory(rawValue: category)?.color ?? AppColors.primary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background {
                                     Capsule()
-                                        .fill((PromptCategory(rawValue: category)?.color ?? .teal).opacity(0.15))
+                                        .fill((PromptCategory(rawValue: category)?.color ?? AppColors.primary).opacity(0.15))
                                 }
                         }
 
@@ -910,12 +910,12 @@ struct RecordingRow: View {
                                 Text("Story")
                                     .font(.caption2.weight(.medium))
                             }
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(AppColors.categoryBrandBright)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background {
                                 Capsule()
-                                    .fill(.purple.opacity(0.15))
+                                    .fill(AppColors.categoryBrandBright.opacity(0.15))
                             }
                         }
                     }
@@ -932,7 +932,7 @@ struct RecordingRow: View {
                                     .font(.system(size: 8))
                                 Text("\(Int(wpm)) wpm")
                             }
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                         }
 
                         if let fillers = summary.fillerCount, fillers > 0 {
@@ -942,7 +942,7 @@ struct RecordingRow: View {
                                     .font(.system(size: 8))
                                 Text("\(fillers)")
                             }
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppColors.warning)
                         }
                     }
                     .font(.caption)

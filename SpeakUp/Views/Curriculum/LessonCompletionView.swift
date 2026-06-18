@@ -33,8 +33,8 @@ struct LessonCompletionView: View {
                     // Trophy icon with bounce animation
                     Image(systemName: "trophy.fill")
                         .font(.system(size: 56))
-                        .foregroundStyle(.yellow)
-                        .shadow(color: .yellow.opacity(0.4), radius: 12)
+                        .foregroundStyle(AppColors.warning)
+                        .shadow(color: AppColors.warning.opacity(0.4), radius: 12)
                         .scaleEffect(trophyScale)
                         .opacity(trophyOpacity)
 
@@ -49,7 +49,7 @@ struct LessonCompletionView: View {
 
                         Text(encouragement)
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(AppColors.primary)
                             .padding(.top, 2)
                     }
                     .opacity(contentOpacity)
@@ -64,7 +64,7 @@ struct LessonCompletionView: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.subheadline)
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(AppColors.success)
 
                                     Text(activity.title)
                                         .font(.subheadline)
@@ -83,7 +83,7 @@ struct LessonCompletionView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Up Next")
                                     .font(.caption.weight(.medium))
-                                    .foregroundStyle(.teal)
+                                    .foregroundStyle(AppColors.primary)
 
                                 Text(nextLesson.title)
                                     .font(.headline)

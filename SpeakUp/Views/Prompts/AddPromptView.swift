@@ -157,12 +157,12 @@ struct AddPromptView: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [Color.teal, Color.cyan.opacity(0.85), Color.teal.opacity(0.9)],
+                            colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85), AppColors.primary.opacity(0.9)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .shadow(color: .teal.opacity(0.5), radius: 16, y: 4)
+                    .shadow(color: AppColors.primary.opacity(0.5), radius: 16, y: 4)
             }
             .overlay {
                 Capsule()

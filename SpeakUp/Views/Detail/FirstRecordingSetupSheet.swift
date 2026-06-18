@@ -38,7 +38,7 @@ struct FirstRecordingSetupSheet: View {
                         dismiss()
                     }
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
                 }
             }
             .navigationDestination(isPresented: $showFullSettings) {

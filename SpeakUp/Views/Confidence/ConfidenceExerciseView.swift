@@ -92,7 +92,7 @@ struct ConfidenceExerciseView: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72))
-                .foregroundStyle(.green)
+                .foregroundStyle(AppColors.success)
 
             Text("Well done!")
                 .font(.title2.weight(.bold))
@@ -120,7 +120,7 @@ struct ConfidenceExerciseView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(.teal))
+                        .background(RoundedRectangle(cornerRadius: 16).fill(AppColors.primary))
                 }
             } else {
                 HStack(spacing: 12) {

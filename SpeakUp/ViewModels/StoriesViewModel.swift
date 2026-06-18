@@ -201,40 +201,8 @@ class StoriesViewModel {
         }
     }
 
-    func setEntryTypeFilter(_ type: StoryEntryType?) {
-        selectedEntryTypeFilter = type
-        selectedStageFilter = nil
-        selectedTagFilter = nil
-        selectedTagValue = nil
-        recomputeFilteredStories()
-    }
-
-    func setStageFilter(_ stage: StoryStage?) {
-        selectedStageFilter = stage
-        selectedTagFilter = nil
-        selectedTagValue = nil
-        recomputeFilteredStories()
-    }
-
-    func setTagFilter(_ type: StoryTagType?) {
-        selectedTagFilter = type
-        selectedStageFilter = nil
-        if type == nil { selectedTagValue = nil }
-        recomputeFilteredStories()
-    }
-
-    func setTagValue(_ value: String?) {
-        selectedTagValue = value
-        recomputeFilteredStories()
-    }
-
     func setSortOrder(_ order: StorySortOrder) {
         sortOrder = order
-        recomputeFilteredStories()
-    }
-
-    func toggleFavoritesOnly() {
-        favoritesOnly.toggle()
         recomputeFilteredStories()
     }
 

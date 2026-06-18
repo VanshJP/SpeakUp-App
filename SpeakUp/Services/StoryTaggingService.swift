@@ -3,18 +3,6 @@ import Foundation
 @MainActor @Observable
 final class StoryTaggingService {
 
-    enum TaggingError: LocalizedError {
-        case llmUnavailable
-        case parsingFailed
-
-        var errorDescription: String? {
-            switch self {
-            case .llmUnavailable: return "No language model is available for tag extraction."
-            case .parsingFailed: return "Could not parse tags from the response."
-            }
-        }
-    }
-
     var isExtracting = false
 
     /// Extracts tags from story text using the best available LLM backend.

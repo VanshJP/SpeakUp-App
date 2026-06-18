@@ -250,7 +250,7 @@ struct RecordingView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .frame(maxWidth: 140)
@@ -556,7 +556,7 @@ private struct VoiceActivityPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(isSpeaking ? Color.green : Color.gray)
+                .fill(isSpeaking ? AppColors.success : Color.gray)
                 .frame(width: 8, height: 8)
                 .animation(.easeInOut(duration: 0.15), value: isSpeaking)
 
@@ -608,7 +608,7 @@ struct VocabOverlayPanel: View {
                 HStack {
                     Label("Your Words", systemImage: "character.book.closed")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                     Spacer()
                     Button {
                         onDismiss()
@@ -628,10 +628,10 @@ struct VocabOverlayPanel: View {
                             .padding(.vertical, 5)
                             .background {
                                 Capsule()
-                                    .fill(.teal.opacity(0.2))
+                                    .fill(AppColors.primary.opacity(0.2))
                                     .overlay {
                                         Capsule()
-                                            .strokeBorder(.teal.opacity(0.3), lineWidth: 0.5)
+                                            .strokeBorder(AppColors.primary.opacity(0.3), lineWidth: 0.5)
                                     }
                             }
                     }

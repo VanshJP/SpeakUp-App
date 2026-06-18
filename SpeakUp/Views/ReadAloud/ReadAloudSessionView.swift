@@ -181,7 +181,7 @@ struct ReadAloudSessionView: View {
                     .background {
                         if index < states.count && states[index] == .current {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.teal.opacity(0.2))
+                                .fill(AppColors.primary.opacity(0.2))
                         }
                     }
                     .onTapGesture {
@@ -238,7 +238,7 @@ struct ReadAloudSessionView: View {
             // Mic indicator
             HStack(spacing: 8) {
                 Circle()
-                    .fill(viewModel.isListening ? Color.green : Color.gray)
+                    .fill(viewModel.isListening ? AppColors.success : Color.gray)
                     .frame(width: 10, height: 10)
                 Text(viewModel.isListening ? "Listening..." : "Not listening")
                     .font(.caption.weight(.medium))

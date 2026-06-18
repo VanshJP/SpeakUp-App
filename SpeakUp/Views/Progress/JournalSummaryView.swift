@@ -13,7 +13,7 @@ struct JournalSummaryView: View {
             HStack {
                 Image(systemName: "waveform.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(AppColors.primary)
 
                 Text("Big Talk")
                     .font(.title2.weight(.bold))
@@ -25,16 +25,16 @@ struct JournalSummaryView: View {
 
             // Stats grid
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                summaryStatCard(icon: "mic.fill", label: "Sessions", value: "\(totalSessions)", color: .teal)
-                summaryStatCard(icon: "clock.fill", label: "Minutes", value: "\(totalMinutes)", color: .blue)
-                summaryStatCard(icon: "chart.bar.fill", label: "Avg Score", value: "\(averageScore)", color: .green)
-                summaryStatCard(icon: "arrow.up.right", label: "Improvement", value: "\(improvement >= 0 ? "+" : "")\(improvement)", color: improvement >= 0 ? .green : .red)
+                summaryStatCard(icon: "mic.fill", label: "Sessions", value: "\(totalSessions)", color: AppColors.primary)
+                summaryStatCard(icon: "clock.fill", label: "Minutes", value: "\(totalMinutes)", color: AppColors.info)
+                summaryStatCard(icon: "chart.bar.fill", label: "Avg Score", value: "\(averageScore)", color: AppColors.success)
+                summaryStatCard(icon: "arrow.up.right", label: "Improvement", value: "\(improvement >= 0 ? "+" : "")\(improvement)", color: improvement >= 0 ? AppColors.success : AppColors.error)
             }
 
             if unlockedAchievements > 0 {
                 HStack {
                     Image(systemName: "trophy.fill")
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(AppColors.warning)
                     Text("\(unlockedAchievements) achievements unlocked")
                         .font(.subheadline.weight(.medium))
                     Spacer()

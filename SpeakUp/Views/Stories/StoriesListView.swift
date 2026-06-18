@@ -253,7 +253,7 @@ struct StoriesListView<Header: View>: View {
                     systemImage: story.isFavorite ? "pin.slash" : "pin"
                 )
             }
-            .tint(.yellow)
+            .tint(AppColors.warning)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
@@ -442,7 +442,7 @@ private struct CompactStoryRow: View {
                     if story.isFavorite {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 10))
-                            .foregroundStyle(.yellow)
+                            .foregroundStyle(AppColors.warning)
                     }
                     Text(story.title.isEmpty ? "Untitled" : story.title)
                         .font(.system(size: 16, weight: .semibold))

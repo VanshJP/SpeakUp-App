@@ -39,11 +39,7 @@ enum PromptDifficulty: String, Codable, CaseIterable {
     }
     
     var color: Color {
-        switch self {
-        case .easy: return .green
-        case .medium: return .orange
-        case .hard: return .red
-        }
+        AppColors.difficultyColor(self)
     }
 }
 
@@ -61,6 +57,7 @@ enum PromptCategory: String, CaseIterable {
     case storytelling = "Storytelling"
     case elevatorPitch = "Elevator Pitch"
     case conversationStarters = "Conversation Starters"
+    case describeExplain = "Describe & Explain"
 
     var displayName: String { rawValue }
 
@@ -77,22 +74,28 @@ enum PromptCategory: String, CaseIterable {
         case .storytelling: return "book.fill"
         case .elevatorPitch: return "arrow.up.right.circle.fill"
         case .conversationStarters: return "person.2.wave.2.fill"
+        case .describeExplain: return "text.justify.left"
         }
     }
 
+    /// Six muted-jewel identity tones. Each category gets a hue distinct
+    /// enough that two adjacent cards always read as different, while every
+    /// tone stays in the same desaturated band so the grid never feels like
+    /// a rainbow.
     var color: Color {
         switch self {
-        case .professionalDevelopment: return .blue
-        case .communicationSkills: return .purple
-        case .personalGrowth: return .green
-        case .problemSolving: return .orange
-        case .currentEvents: return .teal
-        case .quickFire: return .yellow
-        case .debatePersuasion: return .red
-        case .interviewPrep: return .indigo
-        case .storytelling: return .brown
-        case .elevatorPitch: return .mint
-        case .conversationStarters: return .pink
+        case .professionalDevelopment, .interviewPrep:
+            return AppColors.categoryTeal
+        case .communicationSkills, .elevatorPitch:
+            return AppColors.categoryIndigo
+        case .storytelling, .currentEvents, .describeExplain:
+            return AppColors.categoryPlum
+        case .quickFire:
+            return AppColors.categoryAmber
+        case .personalGrowth, .conversationStarters:
+            return AppColors.categorySage
+        case .problemSolving, .debatePersuasion:
+            return AppColors.categoryCopper
         }
     }
 }

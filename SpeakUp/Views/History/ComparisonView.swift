@@ -49,8 +49,8 @@ struct ComparisonView: View {
 
         return FeaturedGlassCard(
             gradientColors: [
-                (change >= 0 ? Color.green : Color.red).opacity(0.12),
-                (change >= 0 ? Color.teal : Color.orange).opacity(0.06)
+                (change >= 0 ? AppColors.success : AppColors.error).opacity(0.12),
+                (change >= 0 ? AppColors.primary : AppColors.warning).opacity(0.06)
             ]
         ) {
             VStack(spacing: 16) {
@@ -200,11 +200,11 @@ private struct ComparisonMetricRow: View {
                 // Icon
                 Image(systemName: metricIcon)
                     .font(.caption)
-                    .foregroundStyle(delta.arrowColor == .secondary ? .teal : delta.arrowColor)
+                    .foregroundStyle(delta.arrowColor == .secondary ? AppColors.primary : delta.arrowColor)
                     .frame(width: 28, height: 28)
                     .background {
                         Circle()
-                            .fill((delta.arrowColor == .secondary ? Color.teal : delta.arrowColor).opacity(0.15))
+                            .fill((delta.arrowColor == .secondary ? AppColors.primary : delta.arrowColor).opacity(0.15))
                     }
 
                 // Label

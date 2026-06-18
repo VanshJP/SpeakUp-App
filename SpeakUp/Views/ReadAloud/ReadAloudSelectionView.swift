@@ -184,7 +184,7 @@ private struct PassageCard: View {
 
                     Image(systemName: "play.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.teal)
+                        .foregroundStyle(AppColors.primary)
                 }
             }
         }
@@ -192,9 +192,9 @@ private struct PassageCard: View {
 
     private var difficultyColor: Color {
         switch passage.difficulty {
-        case .easy: return .green
-        case .medium: return .orange
-        case .hard: return .red
+        case .easy: return AppColors.success
+        case .medium: return AppColors.warning
+        case .hard: return AppColors.error
         }
     }
 }
