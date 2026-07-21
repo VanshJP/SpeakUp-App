@@ -4,8 +4,6 @@ import SwiftData
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = TodayViewModel()
-    @State private var weakAreaService = WeakAreaService()
-    @State private var curriculumViewModel = CurriculumViewModel()
 
     @Query private var userSettings: [UserSettings]
     @State private var showingFirstRecordingSetup = false
@@ -44,21 +42,10 @@ struct TodayView: View {
                     // 4. Quick actions
                     toolbarStrip
 
-                    // 5. Continue Learning
-                    if curriculumViewModel.currentLesson != nil {
-                        CurriculumProgressCard(
-                            viewModel: curriculumViewModel,
-                            onTap: { onShowCurriculum() }
-                        )
-                    }
-
-                    // 6. Daily challenge
+                    // 5. Daily challenge
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
                     }
-
-                    // 7. Suggested for you (weak areas)
-                    suggestedSection
                 }
                 .padding()
             }
@@ -72,12 +59,6 @@ struct TodayView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
-            curriculumViewModel.loadProgress(context: modelContext)
-        }
-        .onChange(of: viewModel.isLoading) { _, newValue in
-            if !newValue {
-                weakAreaService.analyze(subscores: viewModel.recentSubscores)
-            }
         }
         .task {
             await checkFirstRecordingSetup()
@@ -292,25 +273,23 @@ struct TodayView: View {
     // MARK: - Quick Actions Strip
 
     private var toolbarStrip: some View {
-        // 3x2 grid: all six practice tools visible without scrolling —
-        // previously Read Aloud had no entry point on this screen at all.
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-            quickActionTile(icon: "wind", label: "Warm Up", color: AppColors.categoryTeal) {
+        HStack(spacing: 8) {
+            quickActionTile(icon: "wind", label: "Warm Up", color: .blue) {
                 onShowWarmUps()
             }
-            quickActionTile(icon: "bolt.fill", label: "Drills", color: AppColors.categoryAmber) {
+            quickActionTile(icon: "bolt.fill", label: "Drills", color: .orange) {
                 onShowDrills()
             }
-            quickActionTile(icon: "heart.fill", label: "Calm", color: AppColors.categoryPlum) {
+            quickActionTile(icon: "heart.fill", label: "Calm", color: .pink) {
                 onShowConfidence()
             }
-            quickActionTile(icon: "shuffle", label: "Wheel", color: AppColors.categoryIndigo) {
+            quickActionTile(icon: "shuffle", label: "Wheel", color: .purple) {
                 onShowWheel()
             }
-            quickActionTile(icon: "character.book.closed", label: "Vocab", color: AppColors.categorySage) {
+            quickActionTile(icon: "character.book.closed", label: "Vocab", color: .green) {
                 onShowWordBank()
             }
-            quickActionTile(icon: "text.book.closed", label: "Read Aloud", color: AppColors.categoryCopper) {
+            quickActionTile(icon: "text.book.closed", label: "Read", color: .teal) {
                 onShowReadAloud()
             }
         }
@@ -357,52 +336,6 @@ struct TodayView: View {
                 .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
                 .brightness(configuration.isPressed ? 0.1 : 0)
                 .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
-        }
-    }
-
-    // MARK: - Suggested Section
-
-    @ViewBuilder
-    private var suggestedSection: some View {
-        if let suggestion = weakAreaService.suggestion {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Suggested For You", systemImage: "sparkles")
-                    .font(.headline)
-
-                Button {
-                    switch suggestion.type {
-                    case .drill:
-                        onShowDrills()
-                    case .exercise, .practice:
-                        onStartRecording(nil, viewModel.selectedDuration)
-                    }
-                } label: {
-                    FeaturedGlassCard {
-                        HStack(spacing: 14) {
-                            Image(systemName: suggestion.icon)
-                                .font(.title2)
-                                .foregroundStyle(AppColors.primary)
-                                .frame(width: 32)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(suggestion.title)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Text(suggestion.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
