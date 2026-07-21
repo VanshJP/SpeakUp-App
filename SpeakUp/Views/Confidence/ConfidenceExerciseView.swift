@@ -117,11 +117,13 @@ struct ConfidenceExerciseView: View {
                 } label: {
                     Text("Done")
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(AppColors.primary))
+                        .background(Capsule().fill(Color.white.opacity(0.94)))
+                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                 }
+                .buttonStyle(GlassPressStyle())
             } else {
                 HStack(spacing: 12) {
                     if currentStepIndex > 0 {
@@ -134,8 +136,13 @@ struct ConfidenceExerciseView: View {
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 16)
-                                .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+                                .background {
+                                    Capsule()
+                                        .fill(.ultraThinMaterial)
+                                        .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+                                }
                         }
+                        .buttonStyle(GlassPressStyle())
                     }
 
                     Button {
@@ -150,11 +157,13 @@ struct ConfidenceExerciseView: View {
                     } label: {
                         Text(currentStepIndex < exercise.steps.count - 1 ? "Next" : "Complete")
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(RoundedRectangle(cornerRadius: 16).fill(exercise.category.color))
+                            .background(Capsule().fill(Color.white.opacity(0.94)))
+                            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                     }
+                    .buttonStyle(GlassPressStyle())
                 }
             }
         }

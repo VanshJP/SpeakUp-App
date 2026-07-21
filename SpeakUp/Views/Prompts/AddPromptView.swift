@@ -141,43 +141,15 @@ struct AddPromptView: View {
     // MARK: - Save Button
 
     private var saveButton: some View {
-        Button {
+        GlassButton(
+            title: "Save Prompt",
+            icon: "plus.circle.fill",
+            style: .primary,
+            size: .large,
+            fullWidth: true
+        ) {
             savePrompt()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("Save Prompt")
-                    .font(.headline.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85), AppColors.primary.opacity(0.9)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .shadow(color: AppColors.primary.opacity(0.5), radius: 16, y: 4)
-            }
-            .overlay {
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.4), .white.opacity(0.1), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.5
-                    )
-            }
-            .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
         .disabled(promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .opacity(promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
         .padding(.top, 8)

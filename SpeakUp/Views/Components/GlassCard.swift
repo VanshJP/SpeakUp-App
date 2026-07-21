@@ -29,27 +29,31 @@ struct GlassCard<Content: View>: View {
             .padding(padding)
             .background {
                 ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
 
-                    // Tint overlay
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(AppColors.surfaceLift)
+
+                    // Tint overlay — felt, not seen
                     if let tint {
-                        RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(tint.opacity(0.12))
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(tint.opacity(0.08))
                     }
 
-                    // Subtle border
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                    // Uniform hairline
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
                 }
             }
             .overlay {
                 if let accentBorder {
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(accentBorder.opacity(0.4), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(accentBorder.opacity(0.35), lineWidth: 1)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(elevated ? 0.35 : 0.22), radius: elevated ? 18 : 10, y: elevated ? 9 : 5)
     }
 }
 
@@ -62,7 +66,7 @@ struct FeaturedGlassCard<Content: View>: View {
     var padding: CGFloat
 
     init(
-        gradientColors: [Color] = [.teal.opacity(0.15), .cyan.opacity(0.08)],
+        gradientColors: [Color] = [AppColors.primary.opacity(0.10), Color.white.opacity(0.02)],
         cornerRadius: CGFloat = 24,
         padding: CGFloat = 20,
         @ViewBuilder content: () -> Content
@@ -78,10 +82,10 @@ struct FeaturedGlassCard<Content: View>: View {
             .padding(padding)
             .background {
                 ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
 
-                    RoundedRectangle(cornerRadius: cornerRadius)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: gradientColors,
@@ -90,133 +94,39 @@ struct FeaturedGlassCard<Content: View>: View {
                             )
                         )
 
-                    // Subtle border
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    // Uniform hairline
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(0.3), radius: 18, y: 9)
     }
 }
 
-// MARK: - Stat Card
+// MARK: - Tick Meter
 
-struct StatCard: View {
-    let title: String
-    let value: String
-    var icon: String? = nil
-    var tint: Color = .teal
-    var trend: ScoreTrend? = nil
-    
+/// Discrete segmented meter — a row of thin ticks filled up to `fraction`.
+/// Reads as measured data rather than a decorative progress bar.
+struct TickMeter: View {
+    let fraction: Double
+    let color: Color
+    var tickCount: Int = 36
+
     var body: some View {
-        GlassCard(tint: tint.opacity(0.3)) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    if let icon {
-                        Image(systemName: icon)
-                            .foregroundStyle(tint)
-                    }
-                    Text(title)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    if let trend {
-                        Image(systemName: trend.iconName)
-                            .font(.caption)
-                            .foregroundStyle(trend.color)
-                    }
-                }
-                
-                Text(value)
-                    .font(.title.weight(.bold))
-                    .foregroundStyle(.primary)
+        Canvas { context, size in
+            let gap = size.width / CGFloat(tickCount)
+            let tickWidth = max(1.5, gap * 0.45)
+            let filled = Int((fraction * Double(tickCount)).rounded())
+
+            for i in 0..<tickCount {
+                let x = CGFloat(i) * gap + (gap - tickWidth) / 2
+                let rect = CGRect(x: x, y: 0, width: tickWidth, height: size.height)
+                let path = Path(roundedRect: rect, cornerRadius: tickWidth / 2)
+                context.fill(path, with: .color(i < filled ? color : .white.opacity(0.12)))
             }
         }
-    }
-}
-
-// MARK: - Score Display Card
-
-struct ScoreDisplayCard: View {
-    let score: Int
-    var trend: ScoreTrend = .stable
-    var showTrend: Bool = true
-    
-    var body: some View {
-        GlassCard(tint: AppColors.scoreColor(for: score).opacity(0.2)) {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Speech Score")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    if showTrend {
-                        HStack(spacing: 4) {
-                            Image(systemName: trend.iconName)
-                            Text(trend.rawValue.capitalized)
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(trend.color)
-                    }
-                }
-                
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(score)")
-                        .font(.system(size: 56, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppColors.scoreColor(for: score))
-                    
-                    Text("/100")
-                        .font(.title3.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                }
-                
-                // Score bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.gray.opacity(0.2))
-                        
-                        Capsule()
-                            .fill(AppColors.scoreGradient(for: score))
-                            .frame(width: geometry.size.width * CGFloat(score) / 100)
-                    }
-                }
-                .frame(height: 8)
-            }
-        }
-    }
-}
-
-// MARK: - Info Row
-
-struct GlassInfoRow: View {
-    let label: String
-    let value: String
-    var icon: String? = nil
-    
-    var body: some View {
-        HStack {
-            if let icon {
-                Image(systemName: icon)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24)
-            }
-            
-            Text(label)
-                .foregroundStyle(.secondary)
-            
-            Spacer()
-            
-            Text(value)
-                .fontWeight(.medium)
-        }
-        .font(.subheadline)
+        .accessibilityHidden(true)
     }
 }
 
@@ -231,21 +141,34 @@ struct EmptyStateCard: View {
     
     var body: some View {
         GlassCard {
-            VStack(spacing: 16) {
+            VStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 48))
+                    .font(.system(size: 26, weight: .medium))
                     .foregroundStyle(.secondary)
-                
-                Text(title)
-                    .font(.headline)
-                
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                
+                    .frame(width: 64, height: 64)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.04))
+                            .overlay {
+                                Circle()
+                                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
+                            }
+                    }
+
+                VStack(spacing: 6) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
                 if let buttonTitle, let buttonAction {
                     GlassButton(title: buttonTitle, style: .primary, action: buttonAction)
+                        .padding(.top, 6)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -259,23 +182,8 @@ struct EmptyStateCard: View {
 #Preview("Glass Cards") {
     ScrollView {
         VStack(spacing: 20) {
-            ScoreDisplayCard(score: 78, trend: .improving)
-            
-            HStack(spacing: 12) {
-                StatCard(title: "Streak", value: "7 days", icon: "flame.fill", tint: .orange)
-                StatCard(title: "Sessions", value: "23", icon: "mic.fill", tint: .teal)
-            }
-            
-            GlassCard {
-                VStack(spacing: 12) {
-                    GlassInfoRow(label: "Duration", value: "1:32", icon: "clock")
-                    Divider()
-                    GlassInfoRow(label: "Words", value: "245", icon: "text.word.spacing")
-                    Divider()
-                    GlassInfoRow(label: "WPM", value: "156", icon: "speedometer")
-                }
-            }
-            
+            GlassCard { Text("Standard card").foregroundStyle(.white) }
+            FeaturedGlassCard { Text("Featured card").foregroundStyle(.white) }
             EmptyStateCard(
                 icon: "mic.slash",
                 title: "No Recordings Yet",
@@ -286,5 +194,5 @@ struct EmptyStateCard: View {
         }
         .padding()
     }
-    .background(Color.gray.opacity(0.1))
+    .background(AppBackground())
 }

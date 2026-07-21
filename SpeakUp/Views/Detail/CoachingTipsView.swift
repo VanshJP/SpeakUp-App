@@ -104,10 +104,10 @@ private struct CoachingTipRow: View {
         case .pace: return .blue
         case .fillers: return .orange
         case .pauses: return .purple
-        case .clarity: return .teal
-        case .structure: return .indigo
-        case .delivery: return .cyan
-        case .relevance: return .indigo
+        case .clarity: return AppColors.primary
+        case .structure: return AppColors.categoryIndigo
+        case .delivery: return AppColors.categoryBrandBright
+        case .relevance: return AppColors.categoryIndigo
         case .encouragement: return .green
         }
     }

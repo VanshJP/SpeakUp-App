@@ -8,12 +8,18 @@ struct StoryPromptCard: View {
     @State private var isPulsing = false
 
     var body: some View {
-        GlassCard(tint: AppColors.categoryBrandBright.opacity(0.1), accentBorder: AppColors.categoryBrandBright.opacity(0.3)) {
-            VStack(alignment: .leading, spacing: 16) {
+        GlassCard(padding: 20, elevated: true) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Label("Story", systemImage: "book.pages")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(AppColors.categoryBrandBright)
+                    HStack(spacing: 5) {
+                        Image(systemName: "book.pages")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Story")
+                            .font(.system(size: 11, weight: .semibold))
+                            .textCase(.uppercase)
+                            .tracking(0.6)
+                    }
+                    .foregroundStyle(AppColors.primary)
 
                     Spacer()
 
@@ -25,11 +31,10 @@ struct StoryPromptCard: View {
                 }
 
                 Text(story.title.isEmpty ? "Untitled Story" : story.title)
-                    .font(.title3.weight(.medium))
+                    .font(.title3.weight(.semibold))
+                    .lineSpacing(3)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { Haptics.medium(); onTap() }
 
                 if !story.contentPreview.isEmpty {
                     Text(story.contentPreview)
@@ -46,7 +51,7 @@ struct StoryPromptCard: View {
 
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(AppColors.categoryBrandBright)
+                            .fill(AppColors.primary)
                             .frame(width: 8, height: 8)
                             .scaleEffect(isPulsing ? 1.3 : 1.0)
                             .opacity(isPulsing ? 0.6 : 1.0)
@@ -55,10 +60,11 @@ struct StoryPromptCard: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { Haptics.medium(); onTap() }
                 }
             }
+            // Whole card starts practice; the duration Menu still wins its own taps.
+            .contentShape(Rectangle())
+            .onTapGesture { Haptics.medium(); onTap() }
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {

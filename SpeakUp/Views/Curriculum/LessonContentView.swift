@@ -126,7 +126,7 @@ struct LessonContentView: View {
     // MARK: - Key Takeaway
 
     private func keyTakeawaySection(_ section: LessonSection) -> some View {
-        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), AppColors.categoryBrandBright.opacity(0.08)]) {
+        FeaturedGlassCard {
             HStack(spacing: 14) {
                 Image(systemName: section.icon ?? "star.fill")
                     .font(.title)

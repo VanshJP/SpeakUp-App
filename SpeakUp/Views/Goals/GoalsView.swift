@@ -5,6 +5,7 @@ struct GoalsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = GoalsViewModel()
+    @State private var goalToDelete: UserGoal?
 
     var body: some View {
         NavigationStack {
@@ -25,7 +26,7 @@ struct GoalsView: View {
 
                                 ForEach(viewModel.activeGoals) { goal in
                                     GoalCard(goal: goal, onDelete: {
-                                        Task { await viewModel.deleteGoal(goal) }
+                                        goalToDelete = goal
                                     })
                                 }
                             }
@@ -51,7 +52,7 @@ struct GoalsView: View {
 
                                 ForEach(viewModel.completedGoals) { goal in
                                     CompletedGoalRow(goal: goal, onDelete: {
-                                        Task { await viewModel.deleteGoal(goal) }
+                                        goalToDelete = goal
                                     })
                                 }
                             }
@@ -76,13 +77,27 @@ struct GoalsView: View {
             .onAppear {
                 viewModel.configure(with: modelContext)
             }
+            .alert("Delete Goal?", isPresented: Binding(
+                get: { goalToDelete != nil },
+                set: { if !$0 { goalToDelete = nil } }
+            )) {
+                Button("Cancel", role: .cancel) { goalToDelete = nil }
+                Button("Delete", role: .destructive) {
+                    if let goal = goalToDelete {
+                        Task { await viewModel.deleteGoal(goal) }
+                    }
+                    goalToDelete = nil
+                }
+            } message: {
+                Text("Progress on this goal will be lost.")
+            }
         }
     }
 
     // MARK: - Summary Card
 
     private var summaryCard: some View {
-        FeaturedGlassCard(gradientColors: [AppColors.glassTintPrimary, AppColors.glassTintAccent]) {
+        FeaturedGlassCard {
             HStack(spacing: 12) {
                 summaryMetric(
                     value: "\(viewModel.activeGoals.count)",
@@ -142,7 +157,7 @@ struct GoalCard: View {
     var onDelete: (() -> Void)?
 
     var body: some View {
-        GlassCard(tint: AppColors.glassTintPrimary.opacity(0.65)) {
+        GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: goal.type.iconName)
@@ -168,8 +183,9 @@ struct GoalCard: View {
 
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(goal.progressPercentage)%")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(AppColors.scoreColor(for: goal.progressPercentage))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText())
 
                         if goal.daysRemaining > 0 {
                             Text("\(goal.daysRemaining)d left")
@@ -183,18 +199,12 @@ struct GoalCard: View {
                     }
                 }
 
-                // Progress bar
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                        Capsule()
-                            .fill(AppColors.scoreGradient(for: goal.progressPercentage))
-                            .frame(width: geometry.size.width * goal.progress)
-                    }
-                }
-                .frame(height: 6)
-                .clipShape(Capsule())
+                TickMeter(
+                    fraction: goal.progress,
+                    color: AppColors.scoreColor(for: goal.progressPercentage),
+                    tickCount: 28
+                )
+                .frame(height: 10)
 
                 // Stats row
                 HStack {
@@ -387,7 +397,7 @@ class GoalsViewModel {
 
         do {
             try context.save()
-            Haptics.error()
+            Haptics.success()
             await loadGoals()
         } catch {
             print("Error deleting goal: \(error)")

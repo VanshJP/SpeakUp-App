@@ -160,10 +160,7 @@ struct AnalyzingView: View {
     // MARK: - All Questions Card
 
     private var allQuestionsCard: some View {
-        FeaturedGlassCard(
-            gradientColors: [.teal.opacity(0.08), .cyan.opacity(0.04)],
-            padding: 16
-        ) {
+        FeaturedGlassCard(padding: 16) {
             VStack(spacing: 14) {
                 HStack {
                     Image(systemName: "checkmark.message")
@@ -606,15 +603,13 @@ private struct MotivationalTipCard: View {
 
     var body: some View {
         let tip = Self.tips[tipIndex]
-        FeaturedGlassCard(
-            gradientColors: [.teal.opacity(0.1), .cyan.opacity(0.05)]
-        ) {
+        FeaturedGlassCard {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: tip.icon)
                     .font(.title2)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [.teal, .cyan],
+                            colors: [AppColors.primary, AppColors.categoryBrandBright],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

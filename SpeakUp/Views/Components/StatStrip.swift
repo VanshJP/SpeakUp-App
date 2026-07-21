@@ -80,13 +80,15 @@ private struct StatStripItem: View {
 
                 Text(item.value)
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(item.color)
+                    .foregroundStyle(.white)
                     .modifier(NumericTransitionModifier(enabled: animateNumericChanges))
             }
 
             Text(item.label)
-                .font(.caption2)
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }

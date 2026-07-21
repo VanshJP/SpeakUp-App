@@ -35,7 +35,7 @@ If the user explicitly asks "build it" or "run tests," still defer: respond with
 
 Big Talk = native iOS speech practice app. SwiftUI + SwiftData + WhisperKit. On-device transcription, multi-dimensional speech scoring, optional on-device LLM coherence pass. Features: recording, drills, warm-ups, confidence tools, structured curriculum, user-authored Stories (rich-text scripts), Read-Aloud passages with pronunciation scoring, social challenges, journal PDFs, achievements, iCloud sync, widgets.
 
-Bundle id: `com.vansh.Big TalkMore`. Deployment: iOS 17+. Liquid glass effects activate on iOS 26+.
+Bundle id: `com.vansh.SpeakUpMore` (widget: `com.vansh.SpeakUpMore.SpeakUpWidget`). Deployment target: iOS 26.0. "Big Talk" is the user-facing product name; code, files, and types still use the `SpeakUp` prefix.
 
 ## Architecture
 
@@ -58,21 +58,22 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 - **Views/** — grouped by feature (see table below). Shared pieces in `Components/`.
 - **Theme/** — `AppColors`, `GlassStyles`, `AppBackground`. All UI uses the glassmorphism system — no raw colors or inline styling.
 - **Extensions/** — `Date+Helpers.swift`, `Haptics.swift`, `View+Glass.swift` (iOS 26 liquid glass).
-- **Data/** — `DefaultPrompts`, `DefaultWarmUps`, `DefaultConfidenceExercises`, `DefaultCurriculum`, `DefaultReadAloudPassages`, `DefaultFeedbackQuestions`, `SchemaVersioning` (V1 → V16).
-- **Big TalkWidget/** — WidgetKit target. Widgets: `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget`. Reads via App Group from `WidgetDataProvider`.
+- **Data/** — `DefaultPrompts`, `DefaultWarmUps`, `DefaultConfidenceExercises`, `DefaultCurriculum`, `DefaultReadAloudPassages`, `DefaultFeedbackQuestions`, `SchemaVersioning` (V1 → V19).
+- **SpeakUpWidget/** — WidgetKit target. Widgets: `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget`. Reads via App Group from `WidgetDataProvider`.
 
 ### View groups
 
 | Folder | Key files | Purpose |
 |--------|-----------|---------|
-| `Today/` | `TodayView`, `DailyChallengeCard`, `WeeklyProgressCard`, `StoryPromptCard` | Home — stats rings, prompt card, quick-access toolbar, daily challenge, weekly progress, story prompt shortcut |
+| `Today/` | `TodayView`, `DailyChallengeCard`, `StoryPromptCard` | Home — stats rings, prompt card, quick-access toolbar, daily challenge, weekly progress, story prompt shortcut |
 | `Practice/` | `PracticeHubView` | **Library tab root** — unified browser across prompts, stories, warm-ups, drills, read-aloud |
 | `Prompts/` | `AllPromptsView`, `AddPromptView`, `BatchAddPromptsView` | Browse / add / CSV-import prompts |
 | `Stories/` | `StoriesListView`, `StoryDetailView`, `StoryEditorView`, `StoryFolderBar`, `StoryFolderEditorSheet` | User-authored rich-text scripts in folders; link Stories to recordings for script-aware relevance scoring |
 | `ReadAloud/` | `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `DictionaryView`, `WordDetailSheet` | Read-aloud practice with pronunciation score + word-level dictionary |
 | `Recording/` | `RecordingView`, `RecordButton`, `TimerView`, `CountdownOverlayView`, `FillerCounterOverlay`, `FrameworkOverlayView` | Full-screen recording; live fillers, framework cues, circular waveform |
-| `Detail/` | `RecordingDetailView`, `AnalyzingView`, `DetailAnalysisTab`, `CoachingTipsView`, `WPMChartView`, `ListenBackEncouragementView`, `ScoreCardPreview`, `FirstRecordingSetupSheet` | Post-recording analysis; tabbed scores / transcript / waveform / tips |
+| `Detail/` | `RecordingDetailView`, `AnalyzingView`, `DetailAnalysisTab`, `CoachingTipsView`, `WPMChartView`, `ListenBackEncouragementView`, `FirstRecordingSetupSheet` | Post-recording analysis; tabbed scores / transcript / waveform / tips |
 | `History/` | `HistoryView`, `ComparisonView`, `ProgressChartsView` | Contribution graph, streaks, searchable list, first-vs-latest, charted progress |
+| `Streak/` | `StreakDetailView`, `FlameAnimationView` | Streak detail sheet — animated flame, milestones, 14-day calendar |
 | `Achievements/` | `AchievementGalleryView`, `AchievementUnlockedView` | Grid + confetti celebrations (presented as sheet) |
 | `Goals/` | `GoalsView` | Goal management with templates + `GoalProgressService` |
 | `Curriculum/` | `CurriculumView`, `CurriculumProgressCard`, `LessonDetailView`, `LessonContentView`, `LessonCompletionView`, `PracticeResultsCard` | **Learn tab root** — weekly phases, lessons, signal-driven progression |
@@ -81,18 +82,18 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 | `Confidence/` | `ConfidenceToolsView`, `ConfidenceExerciseView` | Calming / Visualization / Progressive / Affirmation |
 | `Progress/` | `BeforeAfterReplayView`, `JournalExportView`, `JournalSummaryView` | Then-vs-Now replay, PDF journal export |
 | `Social/` | `ChallengeShareView`, `ChallengeAcceptView` | Deep-link friend challenges |
-| `Settings/` | `SettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` | Fully split settings surfaces |
+| `Settings/` | `SettingsView`, `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` | Fully split settings surfaces |
 | `PromptWheel/` | `PromptWheelView` | Spinning random prompt selector |
-| `Onboarding/` | `OnboardingView`, `OnboardingPageView` | First-launch flow |
-| `Components/` | `GlassCard`, `GlassButton`, `RingStatsView`, `ConfettiView`, `FlowLayout`, `PersistentTextField`, `RichTextEditor`, `PracticeHistoryChart` | Shared glass-styled building blocks |
+| `Onboarding/` | `OnboardingView` | First-launch flow (all steps live in this one file) |
+| `Components/` | `GlassCard`, `GlassButton`, `RingStatsView`, `ConfettiView`, `FlowLayout`, `PersistentTextField`, `RichTextEditor`, `PracticeHistoryChart`, `SectionPicker`, `StatStrip`, `StreakChip`, `SubscoreRadarChart`, `MetricExplainerSheet` | Shared glass-styled building blocks |
 
 ### Entry point
 
-`Big TalkApp.swift` — builds `ModelContainer` over `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. CloudKit sync toggled via `ICloudStorageService.resolvedSyncEnabledPreference`; falls back to local-only then in-memory if container creation fails. Injects `SpeechService`, `AudioService`, `LLMService` via `@Environment`. Seeds prompts, settings, achievements, curriculum progress, story folders concurrently. Background tasks: legacy URL migration, iCloud file migration, Whisper preload, local LLM auto-load.
+`SpeakUpApp.swift` — builds `ModelContainer` over `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. CloudKit sync toggled via `ICloudStorageService.resolvedSyncEnabledPreference`; falls back to local-only then in-memory if container creation fails. Injects `SpeechService`, `AudioService`, `LLMService` via `@Environment`. Seeds prompts, settings, achievements, curriculum progress, story folders concurrently. Background tasks: legacy URL migration, iCloud file migration, Whisper preload, local LLM auto-load.
 
 ### Navigation
 
-5-tab layout in `ContentView.swift` (iOS 17 `Tab { }` API). `AppTab` enum owns titles + SF Symbols:
+5-tab layout in `ContentView.swift` (`Tab { }` API). `AppTab` enum owns titles + SF Symbols:
 
 | Tab | Icon | Root View |
 |-----|------|-----------|
@@ -180,15 +181,15 @@ Shared between WhisperService, SpeechService, LiveTranscriptionService. Pause th
 ## UI Design System (follow this for all new views)
 
 ### Aesthetic philosophy
-Deep-navy glassmorphism, layered depth, subtle light. Every surface is translucent frosted glass over a dark gradient — no opaque cards, no flat fills, no system backgrounds. Cards float above radial ambient light (teal top-right, indigo bottom-left, cyan center-ish). Content is primarily white on glass; tint comes through material, not opaque fills. On iOS 26+ the system's Liquid Glass effect (`.glassEffect`) is adopted where supported; iOS 17–25 falls back to `.ultraThinMaterial` with inner glow + fine white stroke at the top edge. Motion is restrained: `.spring(response: 0.3)` or `.easeInOut(duration: 0.2)`.
+Neutral graphite + soft floating surfaces ("Bevel at night"). The canvas is a near-black neutral (`AppBackground`) with a single faint brand bloom at the top — color never lives in the chrome, only in the data (rings, charts, scores, state icons). Every card is translucent material lifted a step above the canvas (`AppColors.surfaceLift`) with a uniform hairline (`AppColors.cardStroke`) and a soft diffuse black shadow — no gradient strokes, no inner glows, no tinted orbs, no colored glow shadows. The one loud element per screen is the primary CTA: a light pill with ink text. Motion is restrained: `.spring(response: 0.3)` or `.easeInOut(duration: 0.2)`.
 
 Tab bar is tinted white (`.tint(.white)`), navigation titles inline, color scheme locked to `.dark` (`preferredColorScheme(.dark)`).
 
 ### Background — `AppBackground`
-Layered `ZStack` with radial gradient orbs on a near-black navy base (`rgb: 0.035, 0.04, 0.09`) + a primary navy gradient wash:
-- **`.primary`** — default for all tabs. Teal orb top-right (12%), indigo orb bottom-left (9%), cyan glow center (4%).
-- **`.recording`** — darker navy, stronger teal (18%) and cyan (6%) for focused recording sessions.
-- **`.subtle`** — slightly lighter navy for sheets and detail views.
+Flat neutral graphite base + soft vertical lift at the top + one faint teal bloom above the top edge. No orb fields, no navy, no multi-color gradients:
+- **`.primary`** — default for all tabs. `#0D0D0F` base, 5% bloom.
+- **`.recording`** — darker (`#08080A`), 8% bloom for focused recording sessions.
+- **`.subtle`** — slightly lifted (`#111114`) for sheets and detail views.
 
 Apply via `.appBackground(.primary)`. Every screen must have an `AppBackground` — never use plain `Color` or system backgrounds.
 
@@ -196,18 +197,17 @@ Apply via `.appBackground(.primary)`. Every screen must have an `AppBackground` 
 All cards, buttons, and containers use `.ultraThinMaterial` as the base. Never use opaque backgrounds.
 
 **Cards:**
-- `.glassCard(cornerRadius:tint:)` — standard card. `ultraThinMaterial` + optional color tint + white inner glow at top edge + subtle top stroke + shadow (`black 20%, radius 8, y:3`). Default corner radius: 16.
+- `.glassCard(cornerRadius:tint:)` — standard card. `ultraThinMaterial` + `surfaceLift` + optional faint tint + `cardStroke` hairline + soft diffuse shadow (`black 30%, radius 16, y:8`). Default corner radius: 20.
 - `GlassCard { }` — wrapper view applying the glass card modifier. Use this for most content blocks.
 - `FeaturedGlassCard` — hero/highlight card with a gradient tint overlay. Use for primary CTAs and featured content.
-- `StatCard` — compact stat display card.
-- `ScoreDisplayCard` — score presentation with colored accents.
+- `MetricTile` — Bevel-style stat tile (caption + big rounded value + optional status pill). Use in 2-col grids on analysis surfaces.
 - `EmptyStateCard` — centered icon + message for empty lists.
 
 **Buttons:**
 - `GlassButton(title:icon:style:size:action:)` — 5 styles:
-  - `.primary` — teal gradient capsule (main CTAs)
-  - `.secondary` — `ultraThinMaterial` capsule (secondary actions)
-  - `.outline` — teal border, clear fill
+  - `.primary` — light pill with ink text, the one high-contrast element (main CTAs)
+  - `.secondary` — `ultraThinMaterial` capsule with hairline (secondary actions)
+  - `.outline` — neutral white border, clear fill
   - `.ghost` — clear fill, no border (tertiary)
   - `.danger` — red fill (destructive actions)
 - `GlassIconButton` — circular icon-only button.
@@ -216,11 +216,8 @@ All cards, buttons, and containers use `.ultraThinMaterial` as the base. Never u
 **Modifiers:**
 - `.glassCard(cornerRadius:tint:)` — apply glass card styling to any view
 - `.glassBackground(cornerRadius:)` — simple `ultraThinMaterial` background
-- `.glassSegmented()` — segmented control background
-- `.animatedGlassBorder(cornerRadius:lineWidth:)` — rotating angular gradient border
 - `.shimmer()` — sweep highlight animation for loading states
-- `.glow(color:radius:)` — static double-shadow glow
-- `.pulsingGlow(color:isActive:)` — animated pulsing shadow
+- `.pulsingGlow(color:isActive:)` — animated pulsing shadow (recording indicators)
 - `.liquidGlass(tint:)` — native `.glassEffect()` on iOS 26+, falls back to `ultraThinMaterial`
 - `.prominentGlass()` — interactive glass effect on iOS 26+
 
@@ -240,12 +237,14 @@ All colors come from `AppColors`. Never use raw `Color.blue`, `Color.gray`, etc.
 
 **Score colors** — `AppColors.scoreColor(for:)`: red (0-39), orange (40-59), yellow (60-79), green (80-100). Also `scoreGradient(for:)` for linear gradient fills.
 
-**Glass tints** — used as card tint overlays:
-- `.glassTintPrimary` — teal 10% (default cards)
-- `.glassTintAccent` — white 5% (neutral cards)
-- `.glassTintWarning` — orange 10% (warning/filler cards)
-- `.glassTintError` — red 10% (error/danger cards)
-- `.glassTintSuccess` — green 10% (success/completed cards)
+**Surfaces** — `.surfaceLift` (white 3%, card lift over material), `.cardStroke` (white 7%, uniform hairline).
+
+**Glass tints** — used as card tint overlays, felt not seen:
+- `.glassTintPrimary` — teal 5% (default cards)
+- `.glassTintAccent` — white 3% (neutral cards)
+- `.glassTintWarning` — orange 5% (warning/filler cards)
+- `.glassTintError` — red 5% (error/danger cards)
+- `.glassTintSuccess` — green 5% (success/completed cards)
 
 **Other color functions:**
 - `difficultyColor(_:)` — easy=green, medium=orange, hard=red
@@ -282,9 +281,10 @@ Use typed haptic feedback for interactions:
 
 ### Reusable components
 Before building custom UI, check `Components/` for existing pieces:
-- `GlassCard` / `FeaturedGlassCard` / `StatCard` / `EmptyStateCard` — card layouts
-- `GlassButton` / `GlassIconButton` — buttons
-- `RingStatsView` — triple concentric progress rings with metrics row
+- `GlassCard` / `FeaturedGlassCard` / `MetricTile` / `EmptyStateCard` — card layouts
+- `GlassButton` / `GlassIconButton` — buttons; both use `GlassPressStyle` (shared pressed-state scale+dim, apply it to any custom Button)
+- `TickMeter` — discrete segmented meter (Canvas), use instead of continuous progress capsules
+- `RingStatsView` — three standalone gauges (value inside, label beneath) + best-score footer
 - `ConfettiView` — canvas-based celebration particles
 - `GlassSectionHeader(icon:title:)` — section header with icon
 - `FlowLayout` — wrapping chip/tag flow layout (used in Stories, prompt categories)
@@ -326,10 +326,18 @@ Before building custom UI, check `Components/` for existing pieces:
 - File name matches primary type name exactly
 
 ### SwiftData rules
-- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift` (latest: `Big TalkSchemaV16`)
+- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift` (latest: `SpeakUpSchemaV19`)
 - Never rename a `@Attribute` without a migration step
 - Describe schema changes so the developer can exercise the in-memory container path — AI does not run the simulator
-- Current schemas registered in `Big TalkApp.sharedModelContainer`: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`
+- Current schemas registered in `SpeakUpApp.sharedModelContainer`: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`
+
+### Performance patterns
+- Never decode `Recording.analysis` (or any Codable blob column) on the main thread inside a view `body`. List/chart surfaces fetch on a background `ModelContext` and project into lightweight `Sendable` structs — `RecordingSummary` (History), `ChartRecordingPoint` (Progress Charts) are the reference pattern.
+- `@Query` is fine only for tiny tables (`UserSettings`, `Achievement`, `UserGoal`). Anything iterating `Recording` belongs on a background context; fetch only needed columns via `propertiesToFetch` when possible (see `StreakDetailView`).
+- High-frequency observable writes (audio level, playback display-link ticks) stay isolated: pass snapshot values into small POD subviews so unrelated UI doesn't re-diff (`ScrubberBars`, `VoiceActivityPill`, `RecordButtonWaveformStack`); quantize continuous progress to discrete units where the UI is discrete; draw many-element visuals in a single `Canvas` (`CircularWaveformView`).
+- No filesystem checks in `body` — `resolvedAudioURL` / `fileExists` resolve once on load into `@State` (see `playableMediaAvailable` in `RecordingDetailView`).
+- `TodayViewModel` fingerprint-gates `WidgetCenter.reloadAllTimelines()`; don't add unconditional widget reloads.
+- Prompt seeding in `SpeakUpApp` is fingerprint-gated (`seededPromptFingerprint_v1` in UserDefaults); the full dedup pass only runs when the prompt row count or `DefaultPrompts.all.count` drifts.
 
 ## Common Pitfalls to Avoid
 

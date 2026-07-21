@@ -52,29 +52,15 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.05), .clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            )
+                            .fill(AppColors.surfaceLift)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.18), .white.opacity(0.04)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                ,
-                                lineWidth: 0.5
-                            )
+                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
                     }
             }
         }
-        .shadow(color: framed ? .black.opacity(0.2) : .clear, radius: framed ? 8 : 0, y: framed ? 3 : 0)
+        .shadow(color: framed ? .black.opacity(0.25) : .clear, radius: framed ? 14 : 0, y: framed ? 7 : 0)
     }
 
     private var row: some View {
@@ -106,28 +92,15 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
-            .foregroundStyle(isSelected ? .white : Color.white.opacity(0.55))
+            .foregroundStyle(isSelected ? Color(red: 0.07, green: 0.07, blue: 0.08) : Color.white.opacity(0.55))
             .frame(maxWidth: layout == .equalWidth ? .infinity : nil)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppColors.primary.opacity(0.85),
-                                    AppColors.primary.opacity(0.55)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
-                                .stroke(Color.white.opacity(0.22), lineWidth: 0.5)
-                        }
-                        .shadow(color: AppColors.primary.opacity(0.45), radius: 8, y: 3)
+                        .fill(Color.white.opacity(0.92))
+                        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
                         .matchedGeometryEffect(id: "sectionPickerSelection", in: pickerNamespace)
                 }
             }

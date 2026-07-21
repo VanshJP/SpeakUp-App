@@ -30,7 +30,7 @@ struct ChallengeAcceptView: View {
             }
 
             if !challenge.promptText.isEmpty {
-                GlassCard(tint: .teal.opacity(0.1)) {
+                GlassCard(tint: AppColors.primary.opacity(0.1)) {
                     Text(challenge.promptText)
                         .font(.subheadline)
                         .multilineTextAlignment(.center)

@@ -29,7 +29,7 @@ enum WarmUpCategory: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .breathing: return .cyan
+        case .breathing: return AppColors.categoryBrandBright
         case .tonguetwister: return .orange
         case .vocal: return .purple
         case .articulation: return .green

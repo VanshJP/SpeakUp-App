@@ -4,8 +4,7 @@ import UserNotifications
 @Observable
 class NotificationService {
     var hasPermission = false
-    var pendingNotifications: [UNNotificationRequest] = []
-    
+
     private let center = UNUserNotificationCenter.current()
     
     // MARK: - Permission

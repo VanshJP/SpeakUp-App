@@ -11,5 +11,8 @@ xcuserdata/
 # macOS
 .DS_Store
 
+# Debug artifacts
+*.heapsnapshot
+
 # IDE
 .vscode/

@@ -112,7 +112,7 @@ private struct FilterPill: View {
     let title: String
     var icon: String? = nil
     let isSelected: Bool
-    var color: Color = .teal
+    var color: Color = AppColors.primary
 
     let action: () -> Void
 

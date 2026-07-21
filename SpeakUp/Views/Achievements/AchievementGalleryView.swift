@@ -84,71 +84,38 @@ struct AchievementGalleryView: View {
     // MARK: - Progress Header
 
     private var achievementProgressHeader: some View {
-        FeaturedGlassCard(
-            gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)]
-        ) {
+        GlassCard(padding: 20) {
             HStack(spacing: 20) {
-                // Progress Ring
+                // Progress gauge — count lives inside the ring
                 ZStack {
                     Circle()
-                        .stroke(AppColors.primary.opacity(0.15), lineWidth: 10)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 9)
 
                     Circle()
                         .trim(from: 0, to: progress)
-                        .stroke(
-                            LinearGradient(
-                                colors: [.teal, .cyan],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
+                        .stroke(AppColors.warning, style: StrokeStyle(lineWidth: 9, lineCap: .round))
                         .rotationEffect(.degrees(-90))
 
-                    // Trophy icon in center
-                    Image(systemName: "trophy.fill")
-                        .font(.title2)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.yellow, .orange],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                    Text("\(unlockedCount)")
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
                 }
-                .frame(width: 80, height: 80)
+                .frame(width: 84, height: 84)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("\(unlockedCount) of \(totalCount)")
-                        .font(.title2.weight(.bold))
-
-                    Text("achievements unlocked")
-                        .font(.subheadline)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Achievements")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.6)
 
-                    // Progress bar
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(AppColors.primary.opacity(0.15))
+                    Text("\(unlockedCount) of \(totalCount) unlocked")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
 
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.teal.opacity(0.7), .teal],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: geometry.size.width * progress)
-                        }
-                    }
-                    .frame(height: 6)
-                    .clipShape(Capsule())
-
-                    Text("\(Int(progress * 100))% complete")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(AppColors.primary)
+                    TickMeter(fraction: progress, color: AppColors.warning)
+                        .frame(height: 10)
+                        .padding(.top, 4)
                 }
 
                 Spacer(minLength: 0)
@@ -164,43 +131,20 @@ private struct AchievementCard: View {
     @State private var appeared = false
 
     var body: some View {
-        GlassCard(
-            tint: achievement.isUnlocked ? AppColors.primary.opacity(0.1) : .clear,
-            padding: 16,
-            accentBorder: achievement.isUnlocked ? AppColors.primary.opacity(0.2) : nil
-        ) {
+        GlassCard(padding: 16) {
             VStack(spacing: 12) {
-                // Icon with background
-                ZStack {
-                    Circle()
-                        .fill(
-                            achievement.isUnlocked
-                                ? LinearGradient(
-                                    colors: [AppColors.primary.opacity(0.2), AppColors.categoryBrandBright.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                                : LinearGradient(
-                                    colors: [Color.gray.opacity(0.1), Color.gray.opacity(0.05)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                        )
-                        .frame(width: 52, height: 52)
-
-                    Image(systemName: achievement.icon)
-                        .font(.title2)
-                        .foregroundStyle(
-                            achievement.isUnlocked
-                                ? AnyShapeStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.primary, AppColors.categoryBrandBright],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ))
-                                : AnyShapeStyle(Color.gray.opacity(0.35))
-                        )
-                }
+                // Icon well — flat, unlocked earns the warm accent
+                Image(systemName: achievement.icon)
+                    .font(.title2)
+                    .foregroundStyle(achievement.isUnlocked ? AppColors.warning : Color.white.opacity(0.25))
+                    .frame(width: 52, height: 52)
+                    .background {
+                        Circle()
+                            .fill(achievement.isUnlocked ? AppColors.warning.opacity(0.1) : Color.white.opacity(0.03))
+                            .overlay {
+                                Circle().stroke(AppColors.cardStroke, lineWidth: 0.5)
+                            }
+                    }
 
                 Text(achievement.title)
                     .font(.subheadline.weight(.semibold))
@@ -218,7 +162,7 @@ private struct AchievementCard: View {
                     if let date = achievement.unlockedDate {
                         Text(date.formatted(date: .abbreviated, time: .omitted))
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
+                            .foregroundStyle(.secondary)
                     } else {
                         HStack(spacing: 3) {
                             Image(systemName: "lock.fill")

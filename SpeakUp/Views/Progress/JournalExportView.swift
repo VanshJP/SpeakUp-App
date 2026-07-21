@@ -121,7 +121,7 @@ struct JournalExportView: View {
                         Label("Summary", systemImage: "chart.bar.fill")
                             .font(.headline)
 
-                        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.12), AppColors.categoryBrandBright.opacity(0.06)]) {
+                        FeaturedGlassCard {
                             JournalSummaryView(
                                 totalSessions: filteredRecordings.count,
                                 totalMinutes: totalMinutes,

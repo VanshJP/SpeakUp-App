@@ -57,16 +57,13 @@ struct FirstRecordingSetupSheet: View {
     // MARK: - Subviews
 
     private var headerSection: some View {
-        FeaturedGlassCard(
-            gradientColors: [.teal.opacity(0.12), .cyan.opacity(0.06)],
-            padding: 20
-        ) {
+        FeaturedGlassCard(padding: 20) {
             VStack(spacing: 12) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [.teal, .cyan],
+                            colors: [AppColors.primary, AppColors.categoryBrandBright],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

@@ -139,24 +139,17 @@ struct CountdownOverlayView: View {
     private var countdownRing: some View {
         ZStack {
             Circle()
-                .fill(AppColors.primary.opacity(0.08))
+                .fill(Color.white.opacity(0.04))
                 .frame(width: 140, height: 140)
-                .scaleEffect(isPulsing ? 1.08 : 1.0)
+                .scaleEffect(isPulsing ? 1.06 : 1.0)
 
             Circle()
-                .stroke(Color.white.opacity(0.08), lineWidth: 5)
+                .stroke(Color.white.opacity(0.07), lineWidth: 5)
                 .frame(width: 110, height: 110)
 
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(
-                    LinearGradient(
-                        colors: [AppColors.primary, .cyan],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round)
-                )
+                .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .frame(width: 110, height: 110)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 1), value: progress)
@@ -169,8 +162,10 @@ struct CountdownOverlayView: View {
                     .animation(.spring(duration: 0.3), value: displayNumber)
 
                 Text("sec")
-                    .font(.caption2.weight(.medium))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
+                    .textCase(.uppercase)
+                    .tracking(1.0)
             }
         }
     }
@@ -178,9 +173,7 @@ struct CountdownOverlayView: View {
     // MARK: - Prominent Prompt Card
 
     private func prominentPromptCard(_ prompt: Prompt) -> some View {
-        FeaturedGlassCard(
-            gradientColors: [AppColors.primary.opacity(0.12), AppColors.categoryBrandBright.opacity(0.06)]
-        ) {
+        FeaturedGlassCard {
             VStack(spacing: 16) {
                 HStack {
                     Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")

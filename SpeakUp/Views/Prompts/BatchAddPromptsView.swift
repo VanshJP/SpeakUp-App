@@ -168,43 +168,15 @@ struct BatchAddPromptsView: View {
     // MARK: - Add Button
 
     private var addButton: some View {
-        Button {
+        GlassButton(
+            title: "Add \(promptLines.count) Prompt\(promptLines.count == 1 ? "" : "s")",
+            icon: "plus.circle.fill",
+            style: .primary,
+            size: .large,
+            fullWidth: true
+        ) {
             savePrompts()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("Add \(promptLines.count) Prompt\(promptLines.count == 1 ? "" : "s")")
-                    .font(.headline.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85), AppColors.primary.opacity(0.9)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .shadow(color: AppColors.primary.opacity(0.5), radius: 16, y: 4)
-            }
-            .overlay {
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.4), .white.opacity(0.1), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.5
-                    )
-            }
-            .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
         .disabled(promptLines.isEmpty)
         .opacity(promptLines.isEmpty ? 0.5 : 1)
         .padding(.top, 8)

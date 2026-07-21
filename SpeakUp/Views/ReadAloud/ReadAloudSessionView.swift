@@ -5,6 +5,7 @@ struct ReadAloudSessionView: View {
     let passage: ReadAloudPassage
     @Environment(\.dismiss) private var dismiss
     @State private var showingResult = false
+    @State private var showingExitConfirm = false
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
@@ -94,9 +95,13 @@ struct ReadAloudSessionView: View {
         HStack {
             Button {
                 Haptics.warning()
-                viewModel.stopSession()
-                viewModel.reset()
-                dismiss()
+                if viewModel.sessionState == .listening {
+                    showingExitConfirm = true
+                } else {
+                    viewModel.stopSession()
+                    viewModel.reset()
+                    dismiss()
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.title2.weight(.semibold))
@@ -105,6 +110,21 @@ struct ReadAloudSessionView: View {
                     .background {
                         Circle().fill(.ultraThinMaterial)
                     }
+            }
+            .accessibilityLabel("End session")
+            .confirmationDialog(
+                "End this session?",
+                isPresented: $showingExitConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("End Session", role: .destructive) {
+                    viewModel.stopSession()
+                    viewModel.reset()
+                    dismiss()
+                }
+                Button("Keep Reading", role: .cancel) {}
+            } message: {
+                Text("Your reading so far won't be scored.")
             }
 
             Spacer()
@@ -151,7 +171,7 @@ struct ReadAloudSessionView: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [.teal, .cyan],
+                            colors: [AppColors.primary, AppColors.categoryBrandBright],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -265,7 +285,7 @@ struct ReadAloudSessionView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [.teal, .cyan.opacity(0.85)],
+                                colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85)],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )

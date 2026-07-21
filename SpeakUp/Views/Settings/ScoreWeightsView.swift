@@ -361,7 +361,7 @@ struct ScoreWeightsView: View {
 
     private var weightItems: [WeightItem] {
         [
-            WeightItem(name: "Clarity", weight: draftClarity, color: .cyan),
+            WeightItem(name: "Clarity", weight: draftClarity, color: AppColors.categoryBrandBright),
             WeightItem(name: "Pace", weight: draftPace, color: .blue),
             WeightItem(name: "Filler", weight: draftFiller, color: .orange),
             WeightItem(name: "Pauses", weight: draftPause, color: .purple),
@@ -369,7 +369,7 @@ struct ScoreWeightsView: View {
             WeightItem(name: "Delivery", weight: draftDelivery, color: .red),
             WeightItem(name: "Vocab", weight: draftVocabulary, color: .green),
             WeightItem(name: "Structure", weight: draftStructure, color: .yellow),
-            WeightItem(name: "Relevance", weight: draftRelevance, color: .teal),
+            WeightItem(name: "Relevance", weight: draftRelevance, color: AppColors.primary),
         ]
     }
 

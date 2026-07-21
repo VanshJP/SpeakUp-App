@@ -120,13 +120,50 @@ struct SpeakUpApp: App {
         }
     }
 
+    private static let seededPromptCountKey = "seededPromptFingerprint_v1"
+
     @MainActor
     private func seedPromptsIfNeeded() async {
         let context = sharedModelContainer.mainContext
 
         do {
+            // Cheap gate: the full pass below hydrates every prompt and walks
+            // recording relationships. Skip it when nothing has drifted since
+            // the last successful pass — fingerprint covers the store row count
+            // (CloudKit re-imports, user add/delete) and the shipped defaults
+            // count (app update adding new prompts).
+            let currentCount = (try? context.fetchCount(FetchDescriptor<Prompt>())) ?? -1
+            let fingerprint = "\(currentCount)|\(DefaultPrompts.all.count)"
+            if currentCount > 0,
+               fingerprint == UserDefaults.standard.string(forKey: Self.seededPromptCountKey) {
+                return
+            }
+
             let existing = try context.fetch(FetchDescriptor<Prompt>())
-            let existingIDs = Set(existing.map(\.id))
+
+            // Heal duplicate rows: CloudKit sync can re-import prompts that were
+            // also seeded locally (unique constraints are unavailable with CloudKit).
+            // Keep one copy per id, moving any recordings onto the keeper.
+            var byID: [String: Prompt] = [:]
+            var duplicates: [Prompt] = []
+            for prompt in existing {
+                guard let keeper = byID[prompt.id] else {
+                    byID[prompt.id] = prompt
+                    continue
+                }
+                let kept = (keeper.recordings?.isEmpty == false || prompt.recordings?.isEmpty != false) ? keeper : prompt
+                let dropped = (kept === keeper) ? prompt : keeper
+                for recording in dropped.recordings ?? [] {
+                    recording.prompt = kept
+                }
+                byID[prompt.id] = kept
+                duplicates.append(dropped)
+            }
+            for duplicate in duplicates {
+                context.delete(duplicate)
+            }
+
+            let existingIDs = Set(byID.keys)
 
             var inserted = 0
             for promptData in DefaultPrompts.all {
@@ -141,9 +178,15 @@ struct SpeakUpApp: App {
                 inserted += 1
             }
 
-            if inserted > 0 {
+            if inserted > 0 || !duplicates.isEmpty {
                 try context.save()
             }
+
+            let finalCount = (try? context.fetchCount(FetchDescriptor<Prompt>())) ?? 0
+            UserDefaults.standard.set(
+                "\(finalCount)|\(DefaultPrompts.all.count)",
+                forKey: Self.seededPromptCountKey
+            )
         } catch {
             print("Error seeding prompts: \(error)")
         }

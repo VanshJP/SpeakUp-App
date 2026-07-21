@@ -5,6 +5,7 @@ struct CurriculumView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = CurriculumViewModel()
     @State private var showingAwards = false
+    @State private var showingLockedInfo = false
 
     var body: some View {
         ZStack {
@@ -42,6 +43,7 @@ struct CurriculumView: View {
                     Image(systemName: "trophy.fill")
                         .foregroundStyle(AppColors.warning)
                 }
+                .accessibilityLabel("Achievements")
             }
         }
         .sheet(isPresented: $showingAwards) {
@@ -53,10 +55,15 @@ struct CurriculumView: View {
         .onAppear {
             viewModel.loadProgress(context: modelContext)
         }
+        .alert("Lesson Locked", isPresented: $showingLockedInfo) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Finish the earlier lessons first — each one builds on the last.")
+        }
     }
 
     private var progressHeader: some View {
-        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), AppColors.categoryBrandBright.opacity(0.08)]) {
+        FeaturedGlassCard {
             VStack(spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -73,7 +80,7 @@ struct CurriculumView: View {
                     // Progress ring
                     ZStack {
                         Circle()
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 6)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 6)
                         Circle()
                             .trim(from: 0, to: viewModel.overallProgress)
                             .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 6, lineCap: .round))
@@ -85,8 +92,6 @@ struct CurriculumView: View {
                     .frame(width: 50, height: 50)
                 }
 
-                ProgressView(value: viewModel.overallProgress)
-                    .tint(AppColors.primary)
             }
         }
     }
@@ -97,7 +102,7 @@ struct CurriculumView: View {
         NavigationLink {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
         } label: {
-            FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.15), AppColors.categoryBrandBright.opacity(0.08)]) {
+            FeaturedGlassCard {
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Continue Learning")
@@ -163,7 +168,7 @@ struct CurriculumView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Week \(phase.week)")
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(isPhaseComplete ? .green : .teal)
+                        .foregroundStyle(isPhaseComplete ? AppColors.success : AppColors.primary)
 
                     Text(phase.title)
                         .font(.title3.weight(.bold))
@@ -174,10 +179,10 @@ struct CurriculumView: View {
 
                 Text("\(completedInPhase)/\(phase.lessons.count)")
                     .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(isPhaseComplete ? .green : .secondary)
+                    .foregroundStyle(isPhaseComplete ? AppColors.success : .secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Capsule().fill(isPhaseComplete ? .green.opacity(0.15) : Color.white.opacity(0.06)))
+                    .background(Capsule().fill(isPhaseComplete ? AppColors.success.opacity(0.15) : Color.white.opacity(0.06)))
             }
 
             // Phase progress bar
@@ -212,6 +217,7 @@ struct CurriculumView: View {
                 } else {
                     Button {
                         Haptics.warning()
+                        showingLockedInfo = true
                     } label: {
                         lessonCard(lesson, isLocked: true)
                     }
@@ -229,7 +235,7 @@ struct CurriculumView: View {
             HStack(spacing: 14) {
                 Image(systemName: isCompleted ? "checkmark.circle.fill" : (isLocked ? "lock.fill" : "circle"))
                     .font(.title2)
-                    .foregroundStyle(isCompleted ? .green : .secondary)
+                    .foregroundStyle(isCompleted ? AppColors.success : .secondary)
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {

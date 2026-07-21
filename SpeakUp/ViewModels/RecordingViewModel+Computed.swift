@@ -34,6 +34,6 @@ extension RecordingViewModel {
         } else if remainingTime <= 30 {
             return .orange
         }
-        return .teal
+        return AppColors.primary
     }
 }

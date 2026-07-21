@@ -6,12 +6,12 @@ struct CurriculumProgressCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            FeaturedGlassCard(gradientColors: [AppColors.categoryBrandBright.opacity(0.12), AppColors.primary.opacity(0.06)]) {
+            FeaturedGlassCard {
                 HStack(spacing: 14) {
                     // Progress ring
                     ZStack {
                         Circle()
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 4)
+                            .stroke(Color.white.opacity(0.07), lineWidth: 4)
                         Circle()
                             .trim(from: 0, to: viewModel.overallProgress)
                             .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 4, lineCap: .round))
@@ -36,7 +36,7 @@ struct CurriculumProgressCard: View {
 
                         Text("\(viewModel.completedLessonsCount)/\(viewModel.totalLessonsCount) lessons")
                             .font(.caption2)
-                            .foregroundStyle(AppColors.primary)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -47,6 +47,6 @@ struct CurriculumProgressCard: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 }

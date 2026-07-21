@@ -13,7 +13,7 @@ struct BreathingAnimationView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.teal.opacity(0.3), .clear],
+                        colors: [AppColors.primary.opacity(0.3), .clear],
                         center: .center,
                         startRadius: 40,
                         endRadius: 100
@@ -26,7 +26,7 @@ struct BreathingAnimationView: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [.teal.opacity(0.6), .cyan.opacity(0.4)],
+                        colors: [AppColors.primary.opacity(0.6), AppColors.categoryBrandBright.opacity(0.4)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

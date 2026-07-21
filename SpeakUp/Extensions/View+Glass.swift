@@ -95,15 +95,9 @@ extension View {
 // MARK: - Glow Effect
 
 extension View {
-    func glow(color: Color = .white, radius: CGFloat = 10) -> some View {
-        self
-            .shadow(color: color.opacity(0.5), radius: radius / 2)
-            .shadow(color: color.opacity(0.3), radius: radius)
-    }
-    
     func pulsingGlow(color: Color = .red, isActive: Bool) -> some View {
         self
-            .shadow(color: isActive ? color.opacity(0.6) : .clear, radius: isActive ? 15 : 0)
+            .shadow(color: isActive ? color.opacity(0.45) : .clear, radius: isActive ? 15 : 0)
             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isActive)
     }
 }

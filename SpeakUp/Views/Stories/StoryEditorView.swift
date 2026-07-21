@@ -20,6 +20,7 @@ struct StoryEditorView: View {
     private var userSettings: UserSettings? { settingsList.first }
 
     @State private var title = ""
+    @State private var showingDeleteConfirm = false
     @State private var attributedContent: NSAttributedString = NSAttributedString(string: "")
     @State private var plainText = ""
     @State private var tags: [StoryTag] = []
@@ -92,6 +93,18 @@ struct StoryEditorView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Delete Note?", isPresented: $showingDeleteConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                if let story = draftStory ?? existingStory {
+                    viewModel.deleteStory(story)
+                    Haptics.warning()
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("This note will be permanently deleted.")
+        }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Done") {
@@ -345,7 +358,10 @@ struct StoryEditorView: View {
                     .foregroundStyle(AppColors.primary)
                     .frame(width: 28, height: 28)
                     .background { Circle().fill(AppColors.primary.opacity(0.15)) }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("Tag type")
 
             TextField("Add tag…", text: $newTagValue)
                 .font(.subheadline)
@@ -628,12 +644,10 @@ struct StoryEditorView: View {
                 Label(selectedOccasion == nil ? "Occasion" : "Occasion: \(selectedOccasion!.rawValue)", systemImage: "sparkles")
             }
 
-            if let story = draftStory ?? existingStory {
+            if draftStory != nil || existingStory != nil {
                 Divider()
                 Button(role: .destructive) {
-                    viewModel.deleteStory(story)
-                    Haptics.warning()
-                    dismiss()
+                    showingDeleteConfirm = true
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }

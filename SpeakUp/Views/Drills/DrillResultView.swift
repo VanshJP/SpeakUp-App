@@ -12,7 +12,7 @@ struct DrillResultView: View {
             // Score circle
             ZStack {
                 Circle()
-                    .stroke(result.passed ? AppColors.success.opacity(0.2) : AppColors.error.opacity(0.2), lineWidth: 8)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 8)
                     .frame(width: 140, height: 140)
 
                 Circle()
@@ -27,11 +27,13 @@ struct DrillResultView: View {
                 VStack(spacing: 4) {
                     Text("\(result.score)")
                         .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundStyle(result.passed ? AppColors.success : AppColors.error)
+                        .foregroundStyle(.white)
 
                     Text(result.passed ? "Passed" : "Try Again")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(result.passed ? AppColors.success : AppColors.error)
+                        .textCase(.uppercase)
+                        .tracking(0.8)
                 }
             }
 
@@ -51,11 +53,13 @@ struct DrillResultView: View {
                 } label: {
                     Text("Try Again")
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(result.mode.color))
+                        .background(Capsule().fill(Color.white.opacity(0.94)))
+                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                 }
+                .buttonStyle(GlassPressStyle())
 
                 Button {
                     onDone()
@@ -65,8 +69,13 @@ struct DrillResultView: View {
                         .foregroundStyle(.white.opacity(0.7))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+                        .background {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+                        }
                 }
+                .buttonStyle(GlassPressStyle())
             }
             .padding(.bottom, 20)
         }

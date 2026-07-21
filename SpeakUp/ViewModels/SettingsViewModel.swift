@@ -91,7 +91,6 @@ class SettingsViewModel {
     var vocabWords: [String] = []
     var newVocabWord: String = ""
     var vocabWordError: String? = nil
-    var showingAddVocabWord: Bool = false
     private var vocabErrorDismissID = 0
     var dictationBiasWords: [String] = []
     var newDictationBiasWord: String = ""

@@ -56,7 +56,6 @@ nonisolated struct UserStats: Sendable {
     var averageScore: Double
     var bestScore: Int // highest overall score across all recordings
     var scoreHistory: [ScoreHistoryEntry]
-    var mostUsedFillers: [FillerWord]
     var improvementRate: Double // percentage change over last 7 days
     var weeklySessionCount: Int
     var weeklyGoalSessions: Int
@@ -69,7 +68,6 @@ nonisolated struct UserStats: Sendable {
         averageScore: Double = 0,
         bestScore: Int = 0,
         scoreHistory: [ScoreHistoryEntry] = [],
-        mostUsedFillers: [FillerWord] = [],
         improvementRate: Double = 0,
         weeklySessionCount: Int = 0,
         weeklyGoalSessions: Int = 5
@@ -81,21 +79,11 @@ nonisolated struct UserStats: Sendable {
         self.averageScore = averageScore
         self.bestScore = bestScore
         self.scoreHistory = scoreHistory
-        self.mostUsedFillers = mostUsedFillers
         self.improvementRate = improvementRate
         self.weeklySessionCount = weeklySessionCount
         self.weeklyGoalSessions = weeklyGoalSessions
     }
 
-    var formattedPracticeTime: String {
-        let hours = Int(totalPracticeTime) / 3600
-        let minutes = (Int(totalPracticeTime) % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        return "\(minutes)m"
-    }
 }
 
 nonisolated struct ScoreHistoryEntry: Codable, Identifiable, Sendable {

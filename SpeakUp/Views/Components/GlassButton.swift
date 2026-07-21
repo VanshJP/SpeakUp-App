@@ -90,62 +90,67 @@ struct GlassButton: View {
             }
             .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .disabled(isLoading)
     }
     
     private var foregroundColor: Color {
         switch style {
         case .primary:
-            return .white
+            // Ink text on the light pill
+            return Color(red: 0.07, green: 0.07, blue: 0.08)
         case .secondary:
             return .primary
         case .outline:
-            return AppColors.primary
+            return .white
         case .ghost:
             return .primary
         case .danger:
             return .white
         }
     }
-    
+
     @ViewBuilder
     private var backgroundView: some View {
         switch style {
         case .primary:
+            // High-contrast light pill — the one loud element on the graphite canvas
+            Capsule()
+                .fill(Color.white.opacity(0.94))
+        case .secondary:
             Capsule()
                 .fill(.ultraThinMaterial)
                 .overlay {
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.primary.opacity(0.9), AppColors.primary],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
                 }
-        case .secondary:
-            Capsule()
-                .fill(.ultraThinMaterial)
         case .outline:
             Capsule()
                 .fill(.clear)
                 .overlay {
                     Capsule()
-                        .strokeBorder(AppColors.primary, lineWidth: 1.5)
+                        .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
                 }
         case .ghost:
             Capsule()
                 .fill(Color.primary.opacity(0.05))
         case .danger:
             Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .fill(AppColors.error.opacity(0.9))
-                }
+                .fill(AppColors.error.opacity(0.9))
         }
+    }
+}
+
+// MARK: - Press Style
+
+/// Shared pressed-state feedback for glass controls — a subtle scale + dim,
+/// spring-animated. Keeps taps feeling physical without any layout shift.
+struct GlassPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -156,7 +161,7 @@ struct GlassIconButton: View {
     var size: CGFloat = 44
     var tint: Color? = nil
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
@@ -167,15 +172,23 @@ struct GlassIconButton: View {
                     Circle()
                         .fill(.ultraThinMaterial)
                         .overlay {
+                            Circle()
+                                .fill(AppColors.surfaceLift)
+                        }
+                        .overlay {
                             if let tint {
                                 Circle()
                                     .fill(tint.opacity(0.1))
                             }
                         }
+                        .overlay {
+                            Circle()
+                                .stroke(AppColors.cardStroke, lineWidth: 0.5)
+                        }
                 }
                 .clipShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 }
 

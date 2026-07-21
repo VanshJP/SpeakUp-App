@@ -66,7 +66,7 @@ struct BeforeAfterReplayView: View {
 
                             // Motivational message
                             if viewModel.scoreImprovement > 20 {
-                                FeaturedGlassCard(gradientColors: [AppColors.success.opacity(0.15), AppColors.primary.opacity(0.08)]) {
+                                FeaturedGlassCard {
                                     VStack(spacing: 8) {
                                         Image(systemName: "star.fill")
                                             .font(.title)

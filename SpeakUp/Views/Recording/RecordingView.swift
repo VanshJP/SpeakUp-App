@@ -11,6 +11,7 @@ struct RecordingView: View {
     @State private var showingVocabOverlay = false
     @State private var completedRecording: Recording?
     @State private var hasNavigated = false
+    @State private var showingDiscardConfirm = false
     @Query private var goals: [UserGoal]
 
     let prompt: Prompt?
@@ -200,10 +201,16 @@ struct RecordingView: View {
                 // Close button
                 Button {
                     Haptics.warning()
-                    if viewModel.isRecording {
-                        viewModel.cancelRecording()
+                    // A few seconds in, a mis-tap would destroy the take —
+                    // confirm before discarding anything substantial.
+                    if viewModel.isRecording && viewModel.recordingDuration > 5 {
+                        showingDiscardConfirm = true
+                    } else {
+                        if viewModel.isRecording {
+                            viewModel.cancelRecording()
+                        }
+                        onCancel()
                     }
-                    onCancel()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.title.weight(.semibold))
@@ -213,6 +220,20 @@ struct RecordingView: View {
                             Circle()
                                 .fill(.ultraThinMaterial)
                         }
+                }
+                .accessibilityLabel("Cancel recording")
+                .confirmationDialog(
+                    "Discard this recording?",
+                    isPresented: $showingDiscardConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Discard", role: .destructive) {
+                        viewModel.cancelRecording()
+                        onCancel()
+                    }
+                    Button("Keep Recording", role: .cancel) {}
+                } message: {
+                    Text("Your recording so far will be lost.")
                 }
 
                 Spacer()
@@ -238,7 +259,10 @@ struct RecordingView: View {
                             Circle()
                                 .fill(.ultraThinMaterial)
                         }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Speech framework")
 
                 // Goal badge (if goal selected)
                 if let goal = selectedGoal {
@@ -259,7 +283,7 @@ struct RecordingView: View {
                             .fill(.ultraThinMaterial)
                             .overlay {
                                 Capsule()
-                                    .strokeBorder(.teal.opacity(0.3), lineWidth: 0.5)
+                                    .strokeBorder(AppColors.primary.opacity(0.3), lineWidth: 0.5)
                             }
                     }
                     .layoutPriority(-1)
@@ -275,13 +299,16 @@ struct RecordingView: View {
                     } label: {
                         Image(systemName: "character.book.closed")
                             .font(.body.weight(.medium))
-                            .foregroundStyle(showingVocabOverlay ? .teal : .white)
+                            .foregroundStyle(showingVocabOverlay ? AppColors.primary : .white)
                             .frame(width: 36, height: 36)
                             .background {
                                 Circle()
                                     .fill(.ultraThinMaterial)
                             }
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Vocabulary words")
                 }
 
                 // Voice activity indicator — extracted so it only re-renders
@@ -500,7 +527,7 @@ struct CircularWaveformView: View {
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let time = context.date.timeIntervalSinceReferenceDate
                 let baseLevel: CGFloat = autoAnimate ? 0.55 : smoothedLevel
-                let gradient = Gradient(colors: [AppColors.primary, .cyan])
+                let gradient = Gradient(colors: [AppColors.primary, AppColors.categoryBrandBright])
 
                 for i in 0..<barCount {
                     let angle = (Double(i) / Double(barCount)) * 2 * .pi

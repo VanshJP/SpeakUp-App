@@ -127,7 +127,7 @@ struct VoiceCalibrationView: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [AppColors.primary, .cyan],
+                            colors: [AppColors.primary, AppColors.categoryBrandBright],
                             startPoint: .leading,
                             endPoint: .trailing
                         )

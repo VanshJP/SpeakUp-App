@@ -233,15 +233,6 @@ class WhisperService {
 
     // MARK: - Model Management
 
-    /// Available Whisper models (smaller = faster, larger = more accurate)
-    static let availableModels: [(variant: String, size: String, description: String)] = [
-        ("tiny", "~75 MB", "Fastest, lower accuracy"),
-        ("base", "~140 MB", "Good balance (recommended)"),
-        ("small", "~460 MB", "Better accuracy, slower"),
-        ("medium", "~1.5 GB", "High accuracy, requires more memory"),
-        ("large-v3", "~3 GB", "Best accuracy, slowest")
-    ]
-
     /// Unload model to free memory
     func unloadModel() {
         whisperKit = nil

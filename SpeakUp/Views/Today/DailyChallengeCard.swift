@@ -3,81 +3,59 @@ import SwiftUI
 struct DailyChallengeCard: View {
     let challenge: DailyChallenge
 
-    @State private var glowPulse = false
-
     private var accentColor: Color {
-        challenge.isCompleted ? .green : .orange
+        challenge.isCompleted ? AppColors.success : AppColors.warning
     }
 
     var body: some View {
-        FeaturedGlassCard(
-            gradientColors: challenge.isCompleted
-                ? [.green.opacity(0.15), .green.opacity(0.05)]
-                : [.orange.opacity(0.18), .yellow.opacity(0.08)]
-        ) {
+        GlassCard {
             VStack(alignment: .leading, spacing: 14) {
-                // Header row
+                // Header row: caption left, status pill right
                 HStack {
-                    Label("Daily Challenge", systemImage: "star.circle.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(accentColor)
+                    Text("Daily Challenge")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.6)
 
                     Spacer()
 
-                    if challenge.isCompleted {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.subheadline)
-                            Text("Done")
-                                .font(.caption.weight(.semibold))
-                        }
-                        .foregroundStyle(AppColors.success)
-                    } else {
-                        HStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        if challenge.isCompleted {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 8, weight: .bold))
+                        } else {
                             Circle()
-                                .fill(AppColors.warning)
-                                .frame(width: 7, height: 7)
-                                .scaleEffect(glowPulse ? 1.4 : 1.0)
-                                .opacity(glowPulse ? 0.6 : 1.0)
-                            Text("Active")
-                                .font(.caption.weight(.semibold))
+                                .fill(accentColor)
+                                .frame(width: 5, height: 5)
                         }
-                        .foregroundStyle(AppColors.warning)
+                        Text(challenge.isCompleted ? "Done" : "Active")
+                            .font(.caption2.weight(.semibold))
                     }
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(accentColor.opacity(0.12)))
                 }
 
                 // Challenge content
                 HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(accentColor.opacity(glowPulse ? 0.25 : 0.12))
-                            .frame(width: 56, height: 56)
-                            .blur(radius: 8)
-
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: challenge.isCompleted
-                                        ? [.green.opacity(0.3), .green.opacity(0.12)]
-                                        : [.orange.opacity(0.3), .yellow.opacity(0.12)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 48, height: 48)
-                            .overlay {
-                                Circle()
-                                    .stroke(accentColor.opacity(0.3), lineWidth: 0.5)
-                            }
-
-                        Image(systemName: challenge.icon)
-                            .font(.title3)
-                            .foregroundStyle(accentColor)
-                    }
+                    Image(systemName: challenge.icon)
+                        .font(.title3)
+                        .foregroundStyle(accentColor)
+                        .frame(width: 44, height: 44)
+                        .background {
+                            Circle()
+                                .fill(Color.white.opacity(0.04))
+                                .overlay {
+                                    Circle().stroke(AppColors.cardStroke, lineWidth: 0.5)
+                                }
+                        }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(challenge.title)
                             .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
 
                         Text(challenge.description)
                             .font(.caption)
@@ -89,11 +67,7 @@ struct DailyChallengeCard: View {
                 }
             }
         }
-        .onAppear {
-            guard !challenge.isCompleted else { return }
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                glowPulse = true
-            }
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Daily challenge: \(challenge.title), \(challenge.isCompleted ? "completed" : "active")")
     }
 }

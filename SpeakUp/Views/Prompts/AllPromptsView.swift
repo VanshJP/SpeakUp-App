@@ -2,19 +2,17 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-struct AllPromptsView<Header: View>: View {
+struct AllPromptsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Prompt.category) private var allPrompts: [Prompt]
 
     @State private var answeredPromptIDs: Set<String> = []
-    @State private var searchText = ""
     @State private var selectedFilter: PromptFilter = .all
     @State private var selectedCategory: PromptCategory?
     @State private var selectedDifficulty: PromptDifficulty?
     @State private var sortMode: PromptSortMode = .category
     @AppStorage("allPromptsLayoutMode") private var layoutMode: PromptLayoutMode = .list
     @State private var showingAddPrompt = false
-    @State private var showingBatchAdd = false
     @State private var showingFileImporter = false
     @State private var importConfirmation: ImportConfirmation?
     @State private var csvService = PromptCSVService()
@@ -24,20 +22,14 @@ struct AllPromptsView<Header: View>: View {
     @State private var showingPromptWheel = false
 
     let onSelectPrompt: ((Prompt) -> Void)?
-    private let pinnedHeader: Header
+    private let searchText: String
 
     init(
         onSelectPrompt: ((Prompt) -> Void)? = nil,
-        @ViewBuilder pinnedHeader: () -> Header
+        searchText: String = ""
     ) {
         self.onSelectPrompt = onSelectPrompt
-        self.pinnedHeader = pinnedHeader()
-    }
-}
-
-extension AllPromptsView where Header == EmptyView {
-    init(onSelectPrompt: ((Prompt) -> Void)? = nil) {
-        self.init(onSelectPrompt: onSelectPrompt, pinnedHeader: { EmptyView() })
+        self.searchText = searchText
     }
 }
 
@@ -89,49 +81,28 @@ extension AllPromptsView {
     // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView {
-                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
-                    Section {
-                        if selectedCategory == nil {
-                            VStack(spacing: 16) {
-                                statsCard
-                                filterChips
-                                landingContent
-                            }
-                            .transition(.asymmetric(
-                                insertion: .push(from: .leading),
-                                removal: .push(from: .trailing)
-                            ))
-                        } else {
-                            categoryDetailContent
-                                .transition(.asymmetric(
-                                    insertion: .push(from: .trailing),
-                                    removal: .push(from: .leading)
-                                ))
-                        }
-
-                        Color.clear.frame(height: 88) // FAB breathing room
-                    } header: {
-                        pinnedHeader
-                    }
+        VStack(spacing: 16) {
+            if selectedCategory == nil {
+                VStack(spacing: 16) {
+                    statsCard
+                    filterChips
+                    landingContent
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
+                .transition(.asymmetric(
+                    insertion: .push(from: .leading),
+                    removal: .push(from: .trailing)
+                ))
+            } else {
+                categoryDetailContent
+                    .transition(.asymmetric(
+                        insertion: .push(from: .trailing),
+                        removal: .push(from: .leading)
+                    ))
             }
-            .scrollIndicators(.hidden)
-
-            floatingActionButton
-                .padding(.trailing, 20)
-                .padding(.bottom, 24)
         }
-        .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarBackground(.hidden, for: .navigationBar)
         .task {
             await loadAnsweredPromptIDs()
         }
-        .searchable(text: $searchText, prompt: "Search prompts...")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 toolbarFilterMenu
@@ -139,9 +110,6 @@ extension AllPromptsView {
         }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()
-        }
-        .sheet(isPresented: $showingBatchAdd) {
-            BatchAddPromptsView()
         }
         .sheet(isPresented: $showingPromptWheel) {
             PromptWheelView { prompt in
@@ -275,40 +243,6 @@ extension AllPromptsView {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.body.weight(.semibold))
                 .symbolVariant(hasActiveFilters ? .fill : .none)
-        }
-    }
-
-    // MARK: - Floating Action Button
-
-    private var floatingActionButton: some View {
-        Menu {
-            Button {
-                Haptics.light()
-                showingAddPrompt = true
-            } label: {
-                Label("Add Single Prompt", systemImage: "plus")
-            }
-
-            Button {
-                Haptics.light()
-                showingBatchAdd = true
-            } label: {
-                Label("Add Multiple Prompts", systemImage: "text.badge.plus")
-            }
-        } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background {
-                    Circle()
-                        .fill(AppColors.primary)
-                        .shadow(color: AppColors.primary.opacity(0.4), radius: 12, y: 4)
-                }
-                .overlay {
-                    Circle()
-                        .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-                }
         }
     }
 
@@ -452,13 +386,13 @@ extension AllPromptsView {
                         Text(mode.displayName)
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(layoutMode == mode ? .white : .secondary)
+                    .foregroundStyle(layoutMode == mode ? AnyShapeStyle(Color(red: 0.07, green: 0.07, blue: 0.08)) : AnyShapeStyle(.secondary))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
                     .frame(maxWidth: .infinity)
                     .background {
                         if layoutMode == mode {
-                            Capsule().fill(AppColors.primary)
+                            Capsule().fill(Color.white.opacity(0.92))
                         } else {
                             Capsule().fill(.ultraThinMaterial)
                         }
@@ -489,14 +423,14 @@ extension AllPromptsView {
             Haptics.medium()
             showingPromptWheel = true
         } label: {
-            GlassCard(cornerRadius: 20, tint: AppColors.primary.opacity(0.18), padding: 16) {
+            GlassCard(cornerRadius: 20, padding: 16) {
                 HStack(spacing: 14) {
                     Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(AppColors.primary)
                         .frame(width: 44, height: 44)
                         .background {
-                            Circle().fill(AppColors.primary.opacity(0.18))
+                            Circle().fill(AppColors.primary.opacity(0.12))
                         }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -516,7 +450,7 @@ extension AllPromptsView {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 
     // MARK: - Quick Starts (Presets)
@@ -602,14 +536,14 @@ extension AllPromptsView {
                 selectedCategory = preset.category
             }
         } label: {
-            GlassCard(cornerRadius: 18, tint: color.opacity(0.18), padding: 14) {
+            GlassCard(cornerRadius: 18, padding: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     Image(systemName: preset.icon)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(color)
                         .frame(width: 36, height: 36)
                         .background {
-                            Circle().fill(color.opacity(0.18))
+                            Circle().fill(color.opacity(0.14))
                         }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -638,7 +572,7 @@ extension AllPromptsView {
                 .frame(width: 150, height: 152, alignment: .topLeading)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 
     // MARK: - Categories Grid
@@ -669,7 +603,7 @@ extension AllPromptsView {
                 selectedCategory = category
             }
         } label: {
-            GlassCard(cornerRadius: 18, tint: color.opacity(0.18), padding: 14) {
+            GlassCard(cornerRadius: 18, padding: 14) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Image(systemName: category.iconName)
@@ -677,7 +611,7 @@ extension AllPromptsView {
                             .foregroundStyle(color)
                             .frame(width: 36, height: 36)
                             .background {
-                                Circle().fill(color.opacity(0.18))
+                                Circle().fill(color.opacity(0.14))
                             }
 
                         Spacer(minLength: 0)
@@ -702,7 +636,7 @@ extension AllPromptsView {
                 .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 
     // MARK: - Category Detail Content
@@ -718,7 +652,10 @@ extension AllPromptsView {
             emptyState
         } else {
             switch layoutMode {
-            case .list: listSection(prompts: prompts)
+            case .list:
+                LazyVStack(spacing: 16) {
+                    listSection(prompts: prompts)
+                }
             case .card: cardSection(prompts: prompts)
             }
         }
@@ -1258,7 +1195,11 @@ struct PromptCard: View {
 
 #Preview {
     NavigationStack {
-        AllPromptsView()
+        ScrollView {
+            AllPromptsView()
+                .padding(.horizontal)
+        }
+        .appBackground(.primary)
     }
     .modelContainer(for: [Prompt.self, Recording.self], inMemory: true)
 }

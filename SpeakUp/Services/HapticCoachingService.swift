@@ -18,7 +18,6 @@ class HapticCoachingService {
     var highWPMThreshold: Double = 190
     var lowWPMThreshold: Double = 100
     var wpmWindowSeconds: TimeInterval = 15
-    var fillerBurstThreshold = 3  // fillers within burst window triggers cue
 
     // MARK: - Internal State
 
@@ -117,7 +116,7 @@ class HapticCoachingService {
             showCue(CoachingCue(
                 message: "Pick up the pace",
                 icon: "hare",
-                tint: .cyan
+                tint: AppColors.categoryBrandBright
             ))
         }
     }

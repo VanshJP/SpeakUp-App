@@ -21,6 +21,7 @@ struct WarmUpExerciseView: View {
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(.ultraThinMaterial))
                     }
+                    .accessibilityLabel("Close warm-up")
                     Spacer()
                 }
                 .padding(.top, 8)
@@ -91,18 +92,20 @@ struct WarmUpExerciseView: View {
                         .frame(width: 56, height: 56)
                         .background(Circle().fill(.ultraThinMaterial))
                 }
+                .accessibilityLabel("Restart exercise")
 
                 Button {
                     if viewModel.isRunning { viewModel.pause() } else { viewModel.start() }
                 } label: {
                     Image(systemName: viewModel.isRunning ? "pause.fill" : "play.fill")
                         .font(.title)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                         .frame(width: 72, height: 72)
-                        .background(Circle().fill(AppColors.primary))
-                        .shadow(color: AppColors.primary.opacity(0.4), radius: 8, y: 2)
+                        .background(Circle().fill(Color.white.opacity(0.94)))
+                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                 }
                 .sensoryFeedback(.impact(flexibility: .soft), trigger: viewModel.isRunning)
+                .accessibilityLabel(viewModel.isRunning ? "Pause" : "Start")
 
                 Button { viewModel.skip() } label: {
                     Image(systemName: "forward.fill")
@@ -111,6 +114,7 @@ struct WarmUpExerciseView: View {
                         .frame(width: 56, height: 56)
                         .background(Circle().fill(.ultraThinMaterial))
                 }
+                .accessibilityLabel("Skip step")
             }
         }
         .padding(.bottom, 20)
@@ -134,7 +138,10 @@ struct WarmUpExerciseView: View {
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(.white.opacity(0.15)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("Fewer rounds")
 
             Text("\(viewModel.selectedRounds)")
                 .font(.title3.weight(.bold))
@@ -153,7 +160,10 @@ struct WarmUpExerciseView: View {
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(.white.opacity(0.15)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel("More rounds")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -186,11 +196,13 @@ struct WarmUpExerciseView: View {
             } label: {
                 Text("Done")
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(AppColors.primary))
+                    .background(Capsule().fill(Color.white.opacity(0.94)))
+                    .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
             }
+            .buttonStyle(GlassPressStyle())
         }
     }
 }

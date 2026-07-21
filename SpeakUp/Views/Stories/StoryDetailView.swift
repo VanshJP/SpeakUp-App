@@ -213,7 +213,7 @@ struct StoryDetailView: View {
                 icon: "bolt.fill",
                 title: "Drill",
                 subtitle: "Impromptu sprint",
-                color: .indigo
+                color: AppColors.categoryIndigo
             ) {
                 guard let onSendToDrill else { return }
                 Haptics.medium()

@@ -123,13 +123,6 @@ struct StreakWidget: Widget {
     }
 }
 
-//
-//#Preview("Safe", as: .systemSmall) {
-//    StreakWidget()
-//} timeline: {
-//    StreakEntry(date: .now, streak: 7, hasPracticedToday: true)
-//}
-
 #Preview("At Risk", as: .systemSmall) {
     StreakWidget()
 } timeline: {

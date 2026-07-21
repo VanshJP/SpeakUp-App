@@ -140,7 +140,7 @@ struct ComparisonView: View {
                 RecordingPicker(
                     label: "First",
                     icon: "a.circle.fill",
-                    color: .teal,
+                    color: AppColors.primary,
                     selection: $viewModel.recordingA,
                     recordings: viewModel.allRecordings
                 )
@@ -153,7 +153,7 @@ struct ComparisonView: View {
                 RecordingPicker(
                     label: "Latest",
                     icon: "b.circle.fill",
-                    color: .cyan,
+                    color: AppColors.categoryBrandBright,
                     selection: $viewModel.recordingB,
                     recordings: viewModel.allRecordings
                 )

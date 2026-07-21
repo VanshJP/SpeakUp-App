@@ -28,29 +28,24 @@ struct ReadAloudResultView: View {
                     // Score ring
                     ZStack {
                         Circle()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 12)
+                            .stroke(Color.white.opacity(0.07), lineWidth: 11)
                             .frame(width: 140, height: 140)
 
                         Circle()
                             .trim(from: 0, to: Double(result.score) / 100.0)
-                            .stroke(
-                                LinearGradient(
-                                    colors: scoreGradientColors,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                            )
+                            .stroke(scoreColor, style: StrokeStyle(lineWidth: 11, lineCap: .round))
                             .frame(width: 140, height: 140)
                             .rotationEffect(.degrees(-90))
 
                         VStack(spacing: 2) {
                             Text("\(result.score)%")
                                 .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .foregroundStyle(scoreColor)
+                                .foregroundStyle(.white)
                             Text("Accuracy")
-                                .font(.caption)
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .tracking(0.8)
                         }
                     }
 
@@ -60,28 +55,28 @@ struct ReadAloudResultView: View {
                             icon: "checkmark.circle.fill",
                             value: "\(result.matchedWords)",
                             label: "Matched",
-                            color: .green
+                            color: AppColors.success
                         )
 
                         StatBadge(
                             icon: "xmark.circle.fill",
                             value: "\(result.mismatchedWords)",
                             label: "Missed",
-                            color: .red
+                            color: AppColors.error
                         )
 
                         StatBadge(
                             icon: "clock.fill",
                             value: formattedTime,
                             label: "Time",
-                            color: .blue
+                            color: AppColors.info
                         )
 
                         StatBadge(
                             icon: "text.word.spacing",
                             value: "\(result.totalWords)",
                             label: "Words",
-                            color: .purple
+                            color: AppColors.categoryPlum
                         )
                     }
 
@@ -150,9 +145,9 @@ struct ReadAloudResultView: View {
 
             // Legend
             HStack(spacing: 16) {
-                legendItem(color: .green, label: "Matched")
+                legendItem(color: AppColors.success, label: "Matched")
                 legendItem(color: .red, label: "Mismatched")
-                legendItem(color: .orange, label: "Skipped")
+                legendItem(color: AppColors.warning, label: "Skipped")
                 legendItem(color: .white.opacity(0.4), label: "Not reached")
             }
             .font(.caption2)
@@ -178,9 +173,9 @@ struct ReadAloudResultView: View {
     private func reviewWordColor(for index: Int) -> Color {
         guard index < result.wordStates.count else { return .white.opacity(0.4) }
         switch result.wordStates[index] {
-        case .matched: return .green
+        case .matched: return AppColors.success
         case .mismatched: return .red
-        case .skipped: return .orange
+        case .skipped: return AppColors.warning
         case .upcoming: return .white.opacity(0.4)
         case .current: return .white.opacity(0.4)
         }
@@ -205,11 +200,6 @@ struct ReadAloudResultView: View {
         AppColors.scoreColor(for: result.score)
     }
 
-    private var scoreGradientColors: [Color] {
-        if result.score >= 80 { return [.green, .cyan] }
-        if result.score >= 60 { return [.yellow, .orange] }
-        return [.orange, .red]
-    }
 }
 
 // MARK: - Stat Badge

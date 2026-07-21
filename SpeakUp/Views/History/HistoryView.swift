@@ -5,8 +5,6 @@ import Charts
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = HistoryViewModel()
-    @State private var selectedDate: Date?
-    @State private var showingDayDetail = false
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText = ""
     @State private var summaryToDelete: RecordingSummary?
@@ -44,9 +42,6 @@ struct HistoryView: View {
         return items
     }
 
-    private var analyzedSummaries: [RecordingSummary] {
-        viewModel.summaries.filter { $0.overallScore != nil }
-    }
 
     // MARK: - Body
 
@@ -54,16 +49,25 @@ struct HistoryView: View {
         ZStack {
             AppBackground()
 
-            ZStack {
-                switch selectedSection {
-                case .recordings:
-                    recordingsScrollView
-                        .transition(.opacity)
-                case .progress:
-                    progressScrollView
-                        .transition(.opacity)
+            ScrollView {
+                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        switch selectedSection {
+                        case .recordings:
+                            recordingsContent
+                                .transition(.opacity)
+                        case .progress:
+                            progressContent
+                                .transition(.opacity)
+                        }
+                    } header: {
+                        pinnedSectionPicker
+                    }
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 16)
             }
+            .scrollIndicators(.hidden)
         }
         .navigationTitle("History")
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -73,19 +77,6 @@ struct HistoryView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
-        }
-        .sheet(isPresented: $showingDayDetail) {
-            if let date = selectedDate {
-                DayDetailSheet(
-                    date: date,
-                    summaries: viewModel.summariesForDate(date),
-                    onSelectSummary: { summary in
-                        showingDayDetail = false
-                        onSelectRecording(summary.id.uuidString)
-                    }
-                )
-                .presentationDetents([.medium, .large])
-            }
         }
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
@@ -104,58 +95,84 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - Recordings Scroll View
+    // MARK: - Recordings Content
 
-    private var recordingsScrollView: some View {
-        ScrollView {
-            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    quickStatsStrip
-                    filterSection
-                    recordingsSection
-                } header: {
-                    pinnedSectionPicker
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 16)
-        }
-        .scrollIndicators(.hidden)
+    @ViewBuilder
+    private var recordingsContent: some View {
+        quickStatsStrip
+        filterSection
+        recordingsSection
     }
 
-    // MARK: - Progress Scroll View
+    // MARK: - Progress Content
 
-    private var progressScrollView: some View {
-        ScrollView {
-            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    contributionGraphSection
-                    streakSection
+    // The Progress tab now shows the charts directly — the same experience the
+    // old "Progress Charts" card used to navigate to. Secondary tools
+    // (compare, replay, goals, journal) are folded into one compact card.
+    @ViewBuilder
+    private var progressContent: some View {
+        ProgressChartsContent()
+        progressToolsSection
+        vocabUsageSection
+    }
 
-                    if analyzedSummaries.count >= 2 {
-                        progressChartsCard
-                    }
+    // MARK: - Progress Tools (compact secondary actions)
 
+    private var progressToolsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader("More", icon: "ellipsis.circle")
+
+            GlassCard(padding: 16) {
+                VStack(spacing: 0) {
                     if viewModel.summaries.count >= 2 {
-                        progressReplayBanner
+                        NavigationLink { ComparisonView() } label: {
+                            toolRowLabel(icon: "arrow.left.arrow.right", title: "Compare Sessions")
+                        }
+                        .buttonStyle(GlassPressStyle())
+                        toolDivider
+                        Button { onShowBeforeAfter() } label: {
+                            toolRowLabel(icon: "headphones", title: "Listen to Progress")
+                        }
+                        .buttonStyle(GlassPressStyle())
+                        toolDivider
                     }
 
-                    if analyzedSummaries.count >= 2 {
-                        compareProgressCard
+                    Button { onShowGoals() } label: {
+                        toolRowLabel(icon: "target", title: "Goals")
                     }
-
-                    goalsSection
-                    journalExportCard
-
-                    vocabUsageSection
-                } header: {
-                    pinnedSectionPicker
+                    .buttonStyle(GlassPressStyle())
+                    toolDivider
+                    Button { onShowJournalExport() } label: {
+                        toolRowLabel(icon: "square.and.arrow.up", title: "Export Journal")
+                    }
+                    .buttonStyle(GlassPressStyle())
                 }
             }
-            .padding(.horizontal)
-            .padding(.bottom, 16)
         }
-        .scrollIndicators(.hidden)
+    }
+
+    private var toolDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.06))
+            .frame(height: 0.5)
+    }
+
+    private func toolRowLabel(icon: String, title: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.body)
+                .foregroundStyle(AppColors.primary)
+                .frame(width: 26)
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Pinned Section Picker
@@ -175,14 +192,14 @@ struct HistoryView: View {
                     icon: "flame.fill",
                     value: "\(viewModel.currentStreak)",
                     label: "Streak",
-                    color: .orange,
+                    color: AppColors.warning,
                     isHighlighted: viewModel.currentStreak > 0
                 ),
                 .init(
                     icon: "mic.fill",
                     value: "\(viewModel.summaries.count)",
                     label: "Sessions",
-                    color: .teal
+                    color: AppColors.primary
                 ),
                 .init(
                     icon: "chart.line.uptrend.xyaxis",
@@ -205,90 +222,14 @@ struct HistoryView: View {
         )
     }
 
-    // MARK: - Contribution Graph Section
-
-    private var contributionGraphSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Activity", systemImage: "chart.dots.scatter")
-                    .font(.headline)
-
-                Spacer()
-
-                Text("Last 6 months")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            GlassCard(padding: 0) {
-                ContributionGraph(viewModel: viewModel) { date in
-                    selectedDate = date
-                    showingDayDetail = true
-                }
-                .padding(.top, 16)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
-            }
-        }
-    }
-
-    // MARK: - Streak Section
-
-    private var streakSection: some View {
-        StatStrip(
-            items: [
-                .init(
-                    icon: "flame.fill",
-                    value: "\(viewModel.currentStreak)",
-                    label: "Current",
-                    color: .orange,
-                    isHighlighted: viewModel.currentStreak > 0
-                ),
-                .init(
-                    icon: "trophy.fill",
-                    value: "\(viewModel.longestStreak)",
-                    label: "Best",
-                    color: .yellow
-                ),
-                .init(
-                    icon: "mic.fill",
-                    value: "\(viewModel.summaries.count)",
-                    label: "Sessions",
-                    color: .teal
-                ),
-                .init(
-                    icon: "clock.fill",
-                    value: totalPracticeTime,
-                    label: "Time",
-                    color: .purple
-                ),
-                .init(
-                    icon: "chart.line.uptrend.xyaxis",
-                    value: averageScoreText,
-                    label: "Avg",
-                    color: averageScoreColor
-                )
-            ]
-        )
-    }
-
     private var averageScoreText: String {
         guard let score = viewModel.averageScore else { return "—" }
         return "\(score)"
     }
 
     private var averageScoreColor: Color {
-        guard let score = viewModel.averageScore else { return .gray }
+        guard let score = viewModel.averageScore else { return AppColors.accent }
         return AppColors.scoreColor(for: score)
-    }
-
-    private var totalPracticeTime: String {
-        let totalSeconds = viewModel.totalPracticeTimeSeconds
-        let minutes = Int(totalSeconds) / 60
-        if minutes >= 60 {
-            return "\(minutes / 60)h\(minutes % 60)m"
-        }
-        return "\(minutes)m"
     }
 
     // MARK: - Vocab Usage Section
@@ -337,236 +278,6 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - Progress Replay Banner
-
-    private var progressReplayBanner: some View {
-        Button {
-            onShowBeforeAfter()
-        } label: {
-            FeaturedGlassCard(gradientColors: [AppColors.categoryBrandBright.opacity(0.15), AppColors.primary.opacity(0.08)]) {
-                HStack(spacing: 14) {
-                    Image(systemName: "headphones")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.categoryBrandBright)
-                        .frame(width: 44, height: 44)
-                        .background {
-                            Circle().fill(AppColors.categoryBrandBright.opacity(0.15))
-                        }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Listen to Your Progress")
-                            .font(.subheadline.weight(.semibold))
-
-                        Text("Compare your first and latest recordings")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Progress Charts Card
-
-    private var progressChartsCard: some View {
-        let recentScores: [(date: Date, score: Int)] = analyzedSummaries
-            .sorted { $0.date < $1.date }
-            .suffix(12)
-            .compactMap { r in
-                guard let score = r.overallScore else { return nil }
-                return (date: r.date, score: score)
-            }
-
-        return NavigationLink {
-            ProgressChartsView()
-        } label: {
-            FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.1), AppColors.categoryBrandBright.opacity(0.05)]) {
-                VStack(spacing: 12) {
-                    HStack(spacing: 14) {
-                        Image(systemName: "chart.xyaxis.line")
-                            .font(.title2)
-                            .foregroundStyle(AppColors.primary)
-                            .frame(width: 32)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Progress Charts")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text("View score trends, pace, fillers & more")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    // Inline sparkline preview
-                    if recentScores.count >= 3 {
-                        Chart {
-                            ForEach(Array(recentScores.enumerated()), id: \.offset) { _, point in
-                                LineMark(
-                                    x: .value("Date", point.date),
-                                    y: .value("Score", point.score)
-                                )
-                                .foregroundStyle(AppColors.primary.opacity(0.8))
-                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                                .interpolationMethod(.catmullRom)
-
-                                AreaMark(
-                                    x: .value("Date", point.date),
-                                    y: .value("Score", point.score)
-                                )
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.primary.opacity(0.2), AppColors.primary.opacity(0.01)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .interpolationMethod(.catmullRom)
-                            }
-                        }
-                        .chartXAxis(.hidden)
-                        .chartYAxis(.hidden)
-                        .chartYScale(domain: max(0, (recentScores.map(\.score).min() ?? 0) - 10)...min(100, (recentScores.map(\.score).max() ?? 100) + 10))
-                        .frame(height: 48)
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Compare Progress Card
-
-    private var compareProgressCard: some View {
-        let sorted = analyzedSummaries.sorted { $0.date < $1.date }
-        let firstScore = sorted.first?.overallScore ?? 0
-        let latestScore = sorted.last?.overallScore ?? 0
-        let change = latestScore - firstScore
-
-        return NavigationLink {
-            ComparisonView()
-        } label: {
-            FeaturedGlassCard(gradientColors: [.teal.opacity(0.15), .cyan.opacity(0.08)]) {
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("Compare Progress", systemImage: "arrow.left.arrow.right")
-                            .font(.subheadline.weight(.semibold))
-
-                        HStack(spacing: 8) {
-                            Text("\(firstScore)")
-                                .font(.title2.weight(.bold))
-                                .foregroundStyle(AppColors.scoreColor(for: firstScore))
-
-                            Image(systemName: "arrow.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.secondary)
-
-                            Text("\(latestScore)")
-                                .font(.title2.weight(.bold))
-                                .foregroundStyle(AppColors.scoreColor(for: latestScore))
-                        }
-
-                        Text("First vs Latest Session")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    VStack(spacing: 4) {
-                        Text(change >= 0 ? "+\(change)" : "\(change)")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(change >= 0 ? .green : .red)
-
-                        Text("change")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Goals Section
-
-    private var goalsSection: some View {
-        Button {
-            onShowGoals()
-        } label: {
-            GlassCard(tint: AppColors.categoryBrandBright.opacity(0.06)) {
-                HStack(spacing: 12) {
-                    Image(systemName: "target")
-                        .font(.title3)
-                        .foregroundStyle(AppColors.categoryBrandBright)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Goals")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Set and track your speaking goals")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Journal Export Card
-
-    private var journalExportCard: some View {
-        Button {
-            onShowJournalExport()
-        } label: {
-            GlassCard(tint: AppColors.info.opacity(0.06)) {
-                HStack(spacing: 12) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title3)
-                        .foregroundStyle(AppColors.info)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Export Progress Journal")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Generate a PDF summary of your journey")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Filter Section
 
     private var filterSection: some View {
@@ -579,6 +290,7 @@ struct HistoryView: View {
                         isSelected: selectedFilter == filter,
                         count: countForFilter(filter)
                     ) {
+                        Haptics.selection()
                         withAnimation(.spring(duration: 0.3)) {
                             selectedFilter = filter
                         }
@@ -708,22 +420,16 @@ struct FilterChip: View {
                 if let count, count > 0 {
                     Text("\(count)")
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+                        .foregroundStyle(isSelected ? Color(red: 0.07, green: 0.07, blue: 0.08).opacity(0.6) : Color.secondary)
                 }
             }
-            .foregroundStyle(isSelected ? .white : .primary)
+            .foregroundStyle(isSelected ? AnyShapeStyle(Color(red: 0.07, green: 0.07, blue: 0.08)) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background {
                 if isSelected {
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [.teal.opacity(0.9), .teal],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color.white.opacity(0.92))
                 } else {
                     Capsule()
                         .fill(.ultraThinMaterial)
@@ -736,96 +442,6 @@ struct FilterChip: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Contribution Graph
-
-struct ContributionGraph: View {
-    let viewModel: HistoryViewModel
-    var onDateSelected: ((Date) -> Void)?
-
-    private let columns = 26
-    private let rows = 7
-    private let cellSpacing: CGFloat = 3
-    private let weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    private let legendIntensities: [Double] = [0.0, 0.25, 0.5, 0.75, 1.0]
-
-    var body: some View {
-        GeometryReader { geometry in
-            let availableWidth = max(100, geometry.size.width - 28)
-            let cellSize = max(8, (availableWidth - CGFloat(columns - 1) * cellSpacing) / CGFloat(columns))
-            let cellHeight = cellSize * 1.4
-
-            if cellSize > 0 {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: cellSpacing) {
-                        VStack(alignment: .trailing, spacing: cellSpacing) {
-                            ForEach(0..<rows, id: \.self) { index in
-                                Text(index % 2 == 1 ? weekdayLabels[index] : "")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.secondary)
-                                    .frame(height: cellHeight)
-                            }
-                        }
-                        .frame(width: 24)
-
-                        HStack(spacing: cellSpacing) {
-                            ForEach(0..<columns, id: \.self) { week in
-                                VStack(spacing: cellSpacing) {
-                                    ForEach(0..<rows, id: \.self) { day in
-                                        let date = dateForCell(week: week, day: day)
-                                        let intensity = viewModel.activityLevel(for: date)
-
-                                        RoundedRectangle(cornerRadius: 2)
-                                            .fill(contributionColor(intensity: intensity))
-                                            .frame(width: cellSize, height: cellHeight)
-                                            .onTapGesture {
-                                                if intensity > 0 {
-                                                    onDateSelected?(date)
-                                                }
-                                            }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    HStack(spacing: 4) {
-                        Text("Less")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(0..<legendIntensities.count, id: \.self) { index in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(contributionColor(intensity: legendIntensities[index]))
-                                .frame(width: cellSize, height: cellSize)
-                        }
-
-                        Text("More")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-        }
-        .frame(height: 160)
-    }
-
-    private func contributionColor(intensity: Double) -> Color {
-        if intensity == 0 {
-            return Color.gray.opacity(0.15)
-        }
-        return AppColors.primary.opacity(0.25 + (intensity * 0.75))
-    }
-
-    private func dateForCell(week: Int, day: Int) -> Date {
-        let today = Date()
-        let startOfWeek = today.startOfWeek
-        let weeksBack = columns - 1 - week
-        let targetWeek = startOfWeek.adding(weeks: -weeksBack)
-        return targetWeek.adding(days: day)
     }
 }
 
@@ -844,162 +460,92 @@ struct RecordingRow: View {
         Self.detailedDateFormatter.string(from: summary.date)
     }
 
-    var body: some View {
-        GlassCard(padding: 12) {
-            HStack(spacing: 12) {
-                // Mini score ring
-                if let score = summary.overallScore {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.08), lineWidth: 3)
-                            .frame(width: 40, height: 40)
-                        Circle()
-                            .trim(from: 0, to: CGFloat(score) / 100)
-                            .stroke(
-                                AppColors.scoreColor(for: score),
-                                style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                            )
-                            .frame(width: 40, height: 40)
-                            .rotationEffect(.degrees(-90))
-                        Text("\(score)")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppColors.scoreColor(for: score))
-                    }
-                } else if summary.isProcessing {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .frame(width: 40, height: 40)
-                } else {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(
-                            (PromptCategory(rawValue: summary.promptCategory ?? "")?.color ?? .teal)
-                        )
-                        .frame(width: 4, height: 40)
-                }
+    /// One plain-language metadata line: date · duration · category. Color
+    /// and chips stay out of the list — the score gauge on the right is the
+    /// only colored element, so rows scan instead of shouting.
+    private var metadataLine: String {
+        var parts = [detailedDateString, summary.formattedDuration]
+        if summary.storyId != nil {
+            parts.append("Story")
+        } else if let category = summary.promptCategory {
+            parts.append(category)
+        }
+        return parts.joined(separator: " · ")
+    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+    var body: some View {
+        GlassCard(padding: 14) {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
                         Text(summary.displayTitle)
-                            .font(.subheadline.weight(.medium))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
                             .lineLimit(1)
 
                         if summary.isFavorite {
                             Image(systemName: "heart.fill")
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundStyle(AppColors.error)
                         }
                     }
 
-                    HStack(spacing: 6) {
-                        if let category = summary.promptCategory {
-                            Text(category)
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(PromptCategory(rawValue: category)?.color ?? AppColors.primary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background {
-                                    Capsule()
-                                        .fill((PromptCategory(rawValue: category)?.color ?? AppColors.primary).opacity(0.15))
-                                }
-                        }
+                    Text(metadataLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
 
-                        if summary.storyId != nil {
-                            HStack(spacing: 3) {
-                                Image(systemName: "book.pages")
-                                    .font(.system(size: 8))
-                                Text("Story")
-                                    .font(.caption2.weight(.medium))
-                            }
-                            .foregroundStyle(AppColors.categoryBrandBright)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background {
-                                Capsule()
-                                    .fill(AppColors.categoryBrandBright.opacity(0.15))
+                    if let wpm = summary.wpm {
+                        HStack(spacing: 8) {
+                            Text("\(Int(wpm)) wpm")
+                            if let fillers = summary.fillerCount, fillers > 0 {
+                                Text("\(fillers) filler\(fillers == 1 ? "" : "s")")
                             }
                         }
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                     }
-
-                    HStack(spacing: 6) {
-                        Text(detailedDateString)
-                        Text("·")
-                        Text(summary.formattedDuration)
-
-                        if let wpm = summary.wpm {
-                            Text("·")
-                            HStack(spacing: 2) {
-                                Image(systemName: "metronome")
-                                    .font(.system(size: 8))
-                                Text("\(Int(wpm)) wpm")
-                            }
-                            .foregroundStyle(AppColors.primary)
-                        }
-
-                        if let fillers = summary.fillerCount, fillers > 0 {
-                            Text("·")
-                            HStack(spacing: 2) {
-                                Image(systemName: "bubble.left")
-                                    .font(.system(size: 8))
-                                Text("\(fillers)")
-                            }
-                            .foregroundStyle(AppColors.warning)
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
+
+                // Score gauge — the row's single colored element
+                if let score = summary.overallScore {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.07), lineWidth: 3.5)
+                            .frame(width: 44, height: 44)
+                        Circle()
+                            .trim(from: 0, to: CGFloat(score) / 100)
+                            .stroke(
+                                AppColors.scoreColor(for: score),
+                                style: StrokeStyle(lineWidth: 3.5, lineCap: .round)
+                            )
+                            .frame(width: 44, height: 44)
+                            .rotationEffect(.degrees(-90))
+                        Text("\(score)")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                } else if summary.isProcessing {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.07), lineWidth: 3.5)
+                            .frame(width: 44, height: 44)
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
+                } else {
+                    Image(systemName: "waveform")
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 44, height: 44)
+                }
 
                 Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-        }
-    }
-}
-
-// MARK: - Day Detail Sheet
-
-struct DayDetailSheet: View {
-    let date: Date
-    let summaries: [RecordingSummary]
-    let onSelectSummary: (RecordingSummary) -> Void
-
-    private static let fullDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .full
-        return f
-    }()
-
-    private var formattedDate: String {
-        Self.fullDateFormatter.string(from: date)
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 12) {
-                    if summaries.isEmpty {
-                        ContentUnavailableView(
-                            "No Recordings",
-                            systemImage: "mic.slash",
-                            description: Text("No practice sessions on this day.")
-                        )
-                    } else {
-                        ForEach(summaries) { summary in
-                            Button {
-                                onSelectSummary(summary)
-                            } label: {
-                                RecordingRow(summary: summary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding()
-            }
-            .navigationTitle(formattedDate)
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

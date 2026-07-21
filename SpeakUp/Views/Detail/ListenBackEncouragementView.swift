@@ -27,11 +27,12 @@ struct ListenBackEncouragementView: View {
                 } label: {
                     Text("Got it, let's listen!")
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(AppColors.primary))
+                        .background(Capsule().fill(Color.white.opacity(0.94)))
                 }
+                .buttonStyle(GlassPressStyle())
             }
             .padding(24)
             .background {

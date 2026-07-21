@@ -69,21 +69,13 @@ struct OnboardingView: View {
     /// so the palette stays calm — no per-step color shifts that previously
     /// made the flow feel rainbow-y.
     private var ambientGradient: some View {
-        let tint = AppColors.primary
-        return ZStack {
-            RadialGradient(
-                colors: [tint.opacity(0.22), .clear],
-                center: .topTrailing,
-                startRadius: 60,
-                endRadius: 480
-            )
-            RadialGradient(
-                colors: [tint.opacity(0.12), .clear],
-                center: .bottomLeading,
-                startRadius: 40,
-                endRadius: 420
-            )
-        }
+        // Single quiet bloom, matching the AppBackground language.
+        RadialGradient(
+            colors: [AppColors.primary.opacity(0.10), .clear],
+            center: UnitPoint(x: 0.5, y: -0.15),
+            startRadius: 60,
+            endRadius: 480
+        )
     }
 
     /// Accent color used for the progress bar + selection highlights. Pinned
@@ -349,15 +341,15 @@ private struct OnboardingWelcomeStep: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 14, weight: .bold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
                     .background {
-                        Capsule().fill(AppColors.primary)
+                        Capsule().fill(Color.white.opacity(0.94))
                     }
-                    .shadow(color: AppColors.primary.opacity(0.35), radius: 14, y: 6)
+                    .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
             }
             .opacity(ctaOpacity)
             .padding(.horizontal, 24)
@@ -458,13 +450,13 @@ private struct OnboardingNameStep: View {
                             .font(.system(size: 13, weight: .bold))
                     }
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(canAdvance ? Color(red: 0.07, green: 0.07, blue: 0.08) : Color.white.opacity(0.6))
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
                 .background {
                     Capsule()
                         .fill(canAdvance
-                              ? AnyShapeStyle(AppColors.primary)
+                              ? AnyShapeStyle(Color.white.opacity(0.94))
                               : AnyShapeStyle(.ultraThinMaterial))
                 }
                 .opacity(canAdvance ? 1 : 0.6)
@@ -542,13 +534,13 @@ private struct OnboardingGoalStep: View {
                             .font(.system(size: 13, weight: .bold))
                     }
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(canAdvance ? Color(red: 0.07, green: 0.07, blue: 0.08) : Color.white.opacity(0.6))
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
                 .background {
                     Capsule()
                         .fill(canAdvance
-                              ? AnyShapeStyle(AppColors.primary)
+                              ? AnyShapeStyle(Color.white.opacity(0.94))
                               : AnyShapeStyle(.ultraThinMaterial))
                 }
                 .opacity(canAdvance ? 1 : 0.6)
@@ -673,11 +665,11 @@ private struct OnboardingLevelStep: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 13, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
                 .background {
-                    Capsule().fill(AppColors.primary)
+                    Capsule().fill(Color.white.opacity(0.94))
                 }
             }
             .buttonStyle(.plain)
@@ -880,11 +872,11 @@ private struct OnboardingMicStep: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 13, weight: .bold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
                     .background {
-                        Capsule().fill(heardVoice ? AppColors.success : AppColors.primary)
+                        Capsule().fill(Color.white.opacity(0.94))
                     }
                 }
                 .buttonStyle(.plain)
@@ -901,11 +893,11 @@ private struct OnboardingMicStep: View {
                         Text(isRequesting ? "Asking..." : "Enable mic & speech")
                             .font(.system(size: 16, weight: .semibold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
                     .background {
-                        Capsule().fill(AppColors.primary)
+                        Capsule().fill(Color.white.opacity(0.94))
                     }
                 }
                 .buttonStyle(.plain)
@@ -1061,11 +1053,11 @@ private struct OnboardingReminderStep: View {
                             Text(isRequesting ? "Asking..." : "Enable reminders")
                                 .font(.system(size: 16, weight: .semibold))
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                         .background {
-                            Capsule().fill(AppColors.primary)
+                            Capsule().fill(Color.white.opacity(0.94))
                         }
                     }
                     .buttonStyle(.plain)
@@ -1084,11 +1076,11 @@ private struct OnboardingReminderStep: View {
                         Image(systemName: "arrow.right")
                             .font(.system(size: 13, weight: .bold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
                     .background {
-                        Capsule().fill(AppColors.primary)
+                        Capsule().fill(Color.white.opacity(0.94))
                     }
                 }
                 .buttonStyle(.plain)
@@ -1160,15 +1152,15 @@ private struct OnboardingReadyStep: View {
                         Text(launchFirstRecording ? "Start first recording" : "Take me in")
                             .font(.system(size: 17, weight: .semibold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
                     .background {
-                        Capsule().fill(AppColors.primary)
+                        Capsule().fill(Color.white.opacity(0.94))
                     }
-                    .shadow(color: AppColors.primary.opacity(0.35), radius: 14, y: 6)
+                    .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
                 .padding(.horizontal, 24)
             }
             .padding(.bottom, 32)
@@ -1265,11 +1257,11 @@ private struct OnboardingToolkitStep: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 13, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
                 .background {
-                    Capsule().fill(AppColors.primary)
+                    Capsule().fill(Color.white.opacity(0.94))
                 }
             }
             .buttonStyle(.plain)
@@ -1465,11 +1457,11 @@ private struct OnboardingVocabStep: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 13, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
                 .background {
-                    Capsule().fill(AppColors.primary)
+                    Capsule().fill(Color.white.opacity(0.94))
                 }
             }
             .buttonStyle(.plain)

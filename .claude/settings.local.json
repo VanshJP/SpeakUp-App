@@ -31,7 +31,9 @@
       "Bash(~/.cargo/bin/tokenuinely --version)",
       "Bash(periphery scan *)",
       "Bash(swift --version)",
-      "Bash(xcrun swift *)"
+      "Bash(xcrun swift *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(git -C /Users/vanshpatel/SpeakUp diff --stat)"
     ]
   }
 }

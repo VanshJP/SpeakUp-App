@@ -19,7 +19,7 @@ struct StoryFolderBar: View {
                     selection: .pinned,
                     title: "Pinned",
                     symbol: "pin.fill",
-                    color: .yellow
+                    color: AppColors.warning
                 )
 
                 if !viewModel.folders.isEmpty {

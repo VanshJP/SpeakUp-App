@@ -294,17 +294,6 @@ class HistoryViewModel {
             filterCounts[.favorites, default: 0] = max(0, (filterCounts[.favorites] ?? 0) + delta)
         }
     }
-
-    // MARK: - Contribution Graph Helpers
-
-    func activityLevel(for date: Date) -> Double {
-        let day = Calendar.current.startOfDay(for: date)
-        return contributionIntensityByDay[day] ?? 0
-    }
-
-    func summariesForDate(_ date: Date) -> [RecordingSummary] {
-        summaries.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
-    }
 }
 
 nonisolated private struct LoadResult: Sendable {

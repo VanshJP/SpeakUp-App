@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Charts
 
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
@@ -8,7 +7,6 @@ struct TodayView: View {
     @State private var weakAreaService = WeakAreaService()
     @State private var curriculumViewModel = CurriculumViewModel()
 
-    @Query private var achievements: [Achievement]
     @Query private var userSettings: [UserSettings]
     @State private var showingFirstRecordingSetup = false
 
@@ -33,20 +31,20 @@ struct TodayView: View {
             ScrollView(.vertical) {
                 VStack(spacing: 20) {
 
-                    // 1. Top header (greeting + streak chip)
+                    // 1. Header — date + streak chip
                     topHeaderRow
 
-                    // 2. Ring stats hero (streak / weekly / score rings + metrics)
+                    // 2. This week's dashboard (tap → full Progress charts)
                     ringStatsSection
 
-                    // 3. Interactive Prompt Card + Start Buttons
+                    // 3. Core action — today's prompt + start buttons
                     interactivePromptSection
                     startButtonSection
 
-                    // 3. Quick Actions Strip
+                    // 4. Quick actions
                     toolbarStrip
 
-                    // 4. Continue Learning (Curriculum)
+                    // 5. Continue Learning
                     if curriculumViewModel.currentLesson != nil {
                         CurriculumProgressCard(
                             viewModel: curriculumViewModel,
@@ -54,22 +52,13 @@ struct TodayView: View {
                         )
                     }
 
-                    // 5. Your Progress (merged snapshot + insights + weekly)
-                    progressSummaryCard
-
-                    // 6. Streak & Achievements (compact row)
-                    streakAndAchievementsStrip
-
-                    // 7. Suggested For You (weak areas)
-                    suggestedSection
-
-                    // 8. Daily Challenge
+                    // 6. Daily challenge
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
                     }
 
-                    // 9. Daily Tip
-                    dailyTipSection
+                    // 7. Suggested for you (weak areas)
+                    suggestedSection
                 }
                 .padding()
             }
@@ -118,11 +107,13 @@ struct TodayView: View {
 
     private var topHeaderRow: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.55))
-                Text(greetingName)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .textCase(.uppercase)
+                    .tracking(0.8)
+                Text(headline)
                     .font(.title2.bold())
                     .foregroundStyle(.white)
             }
@@ -150,9 +141,9 @@ struct TodayView: View {
         }
     }
 
-    private var greetingName: String {
+    private var headline: String {
         let name = userSettings.first?.userName.trimmingCharacters(in: .whitespaces) ?? ""
-        return name.isEmpty ? "Ready to practice?" : "\(name)"
+        return name.isEmpty ? "Ready to practice?" : "\(greeting), \(name)"
     }
 
     // MARK: - Ring Stats Section
@@ -194,30 +185,13 @@ struct TodayView: View {
                     Text(viewModel.storyPracticeEnabled ? "With Story" : "With Prompt")
                         .font(.subheadline.weight(.semibold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background {
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85), AppColors.primary.opacity(0.9)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: AppColors.primary.opacity(0.4), radius: 12, y: 3)
-                }
-                .overlay {
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.4), .white.opacity(0.1), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
+                        .fill(Color.white.opacity(0.94))
+                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
                 }
                 .clipShape(Capsule())
             }
@@ -238,25 +212,16 @@ struct TodayView: View {
                 .padding(.vertical, 16)
                 .background {
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.primary.opacity(0.9), AppColors.categoryBrandBright.opacity(0.75), AppColors.primary.opacity(0.85)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: AppColors.primary.opacity(0.3), radius: 10, y: 3)
-                }
-                .overlay {
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.3), .white.opacity(0.08), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            Capsule()
+                                .fill(AppColors.surfaceLift)
+                        }
+                        .overlay {
+                            Capsule()
+                                .stroke(AppColors.cardStroke, lineWidth: 0.5)
+                        }
+                        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 }
                 .clipShape(Capsule())
             }
@@ -280,6 +245,7 @@ struct TodayView: View {
                             await viewModel.refreshStory()
                         }
                     }
+                    .accessibilityLabel("Different story")
                 }
 
                 StoryPromptCard(
@@ -301,6 +267,7 @@ struct TodayView: View {
                             await viewModel.refreshPrompt()
                         }
                     }
+                    .accessibilityLabel("Different prompt")
                 }
 
                 InteractivePromptCard(
@@ -325,21 +292,26 @@ struct TodayView: View {
     // MARK: - Quick Actions Strip
 
     private var toolbarStrip: some View {
-        HStack(spacing: 8) {
-            quickActionTile(icon: "wind", label: "Warm Up", color: .blue) {
+        // 3x2 grid: all six practice tools visible without scrolling —
+        // previously Read Aloud had no entry point on this screen at all.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+            quickActionTile(icon: "wind", label: "Warm Up", color: AppColors.categoryTeal) {
                 onShowWarmUps()
             }
-            quickActionTile(icon: "bolt.fill", label: "Drills", color: .orange) {
+            quickActionTile(icon: "bolt.fill", label: "Drills", color: AppColors.categoryAmber) {
                 onShowDrills()
             }
-            quickActionTile(icon: "heart.fill", label: "Calm", color: .pink) {
+            quickActionTile(icon: "heart.fill", label: "Calm", color: AppColors.categoryPlum) {
                 onShowConfidence()
             }
-            quickActionTile(icon: "shuffle", label: "Wheel", color: .purple) {
+            quickActionTile(icon: "shuffle", label: "Wheel", color: AppColors.categoryIndigo) {
                 onShowWheel()
             }
-            quickActionTile(icon: "character.book.closed", label: "Vocab", color: .green) {
+            quickActionTile(icon: "character.book.closed", label: "Vocab", color: AppColors.categorySage) {
                 onShowWordBank()
+            }
+            quickActionTile(icon: "text.book.closed", label: "Read Aloud", color: AppColors.categoryCopper) {
+                onShowReadAloud()
             }
         }
     }
@@ -362,19 +334,19 @@ struct TodayView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(color.opacity(0.08))
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppColors.surfaceLift)
                     }
                     .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
                     }
-                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                    .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(QuickActionTileStyle())
     }
@@ -405,7 +377,7 @@ struct TodayView: View {
                         onStartRecording(nil, viewModel.selectedDuration)
                     }
                 } label: {
-                    FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.12), AppColors.categoryBrandBright.opacity(0.06)]) {
+                    FeaturedGlassCard {
                         HStack(spacing: 14) {
                             Image(systemName: suggestion.icon)
                                 .font(.title2)
@@ -434,193 +406,6 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Progress Summary Card (merged snapshot + insights + weekly)
-
-    @ViewBuilder
-    private var progressSummaryCard: some View {
-        let recentScores = viewModel.sparklineScores
-
-        NavigationLink {
-            ProgressChartsView()
-        } label: {
-            GlassCard(tint: AppColors.primary.opacity(0.06)) {
-                VStack(spacing: 14) {
-                    HStack {
-                        Label("Your Progress", systemImage: "chart.line.uptrend.xyaxis")
-                            .font(.subheadline.weight(.semibold))
-
-                        Spacer()
-
-                        HStack(spacing: 4) {
-                            Text("Details")
-                                .font(.caption)
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.tertiary)
-                    }
-
-                    if recentScores.count >= 3 {
-                        let latestScore = recentScores.last?.score ?? 0
-                        let firstScore = recentScores.first?.score ?? 0
-                        let trendDelta = latestScore - firstScore
-
-                        // Sparkline
-                        Chart {
-                            ForEach(Array(recentScores.enumerated()), id: \.offset) { _, point in
-                                LineMark(
-                                    x: .value("Date", point.date),
-                                    y: .value("Score", point.score)
-                                )
-                                .foregroundStyle(AppColors.primary.opacity(0.8))
-                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                                .interpolationMethod(.catmullRom)
-
-                                AreaMark(
-                                    x: .value("Date", point.date),
-                                    y: .value("Score", point.score)
-                                )
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.primary.opacity(0.2), AppColors.primary.opacity(0.01)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .interpolationMethod(.catmullRom)
-                            }
-                        }
-                        .chartXAxis(.hidden)
-                        .chartYAxis(.hidden)
-                        .chartYScale(domain: max(0, (recentScores.map(\.score).min() ?? 0) - 10)...min(100, (recentScores.map(\.score).max() ?? 100) + 10))
-                        .frame(height: 48)
-
-                        // Stats row
-                        HStack(spacing: 0) {
-                            progressStatItem(
-                                value: "\(latestScore)",
-                                label: "Latest",
-                                color: AppColors.scoreColor(for: latestScore)
-                            )
-                            progressStatItem(
-                                value: trendDelta >= 0 ? "+\(trendDelta)" : "\(trendDelta)",
-                                label: "Trend",
-                                color: trendDelta > 0 ? AppColors.success : trendDelta < 0 ? AppColors.error : .secondary
-                            )
-                            progressStatItem(
-                                value: topFillerDisplay,
-                                label: "Top Filler",
-                                color: AppColors.warning
-                            )
-                            progressStatItem(
-                                value: viewModel.userStats.formattedPracticeTime,
-                                label: "Practice",
-                                color: AppColors.categoryBrandBright
-                            )
-                        }
-                    } else {
-                        Text("Complete 3 sessions to see your progress trend")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                    }
-
-                    if let weeklyData = viewModel.weeklyProgress {
-                        Divider().overlay(Color.white.opacity(0.06))
-
-                        HStack(spacing: 12) {
-                            Image(systemName: "calendar")
-                                .font(.caption)
-                                .foregroundStyle(AppColors.primary)
-                            Text("This week: \(weeklyData.sessionsThisWeek) sessions")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func progressStatItem(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var topFillerDisplay: String {
-        if let topFiller = viewModel.userStats.mostUsedFillers.first {
-            return "\"\(topFiller.word)\""
-        }
-        return "None"
-    }
-
-    // MARK: - Achievements Strip
-
-    private var streakAndAchievementsStrip: some View {
-        let unlocked = achievements.filter(\.isUnlocked).count
-        let total = achievements.count
-
-        return AchievementsTile(unlocked: unlocked, total: total) {
-            onShowAchievements()
-        }
-    }
-
-    // MARK: - Daily Tip Section
-
-    private var dailyTipSection: some View {
-        GlassCard(tint: .blue.opacity(0.05)) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "sparkles")
-                    .font(.title2)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 32)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Pro Tip")
-                        .font(.subheadline.weight(.semibold))
-
-                    Text(dailyTipText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    private var dailyTipText: String {
-        let tips = [
-            "Pause intentionally instead of using filler words. A brief silence sounds more confident than \"um.\"",
-            "Record yourself daily -- even 30 seconds builds awareness of your speaking patterns.",
-            "Speak at 140-160 words per minute for optimal clarity and engagement.",
-            "Start your response by restating the question. It buys you time to think.",
-            "Use the \"rule of three\" -- group your points in threes for memorable delivery.",
-            "Practice with harder prompts to push your comfort zone and grow faster.",
-            "Review your transcripts to catch filler patterns you don't notice while speaking."
-        ]
-        let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
-        return tips[dayOfYear % tips.count]
-    }
 }
 
 // MARK: - Interactive Prompt Card
@@ -634,12 +419,18 @@ struct InteractivePromptCard: View {
     @State private var isPulsing = false
 
     var body: some View {
-        GlassCard(tint: categoryColor.opacity(0.1), accentBorder: categoryColor.opacity(0.3)) {
-            VStack(alignment: .leading, spacing: 16) {
+        GlassCard(padding: 20, elevated: true) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Label(prompt?.category ?? "Loading...", systemImage: categoryIcon)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(categoryColor)
+                    HStack(spacing: 5) {
+                        Image(systemName: categoryIcon)
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(prompt?.category ?? "Loading...")
+                            .font(.system(size: 11, weight: .semibold))
+                            .textCase(.uppercase)
+                            .tracking(0.6)
+                    }
+                    .foregroundStyle(categoryColor)
 
                     Spacer()
 
@@ -649,13 +440,12 @@ struct InteractivePromptCard: View {
                 }
 
                 Text(prompt?.text ?? "Loading today's prompt...")
-                    .font(.title3.weight(.medium))
+                    .font(.title3.weight(.semibold))
+                    .lineSpacing(3)
                     .lineLimit(4)
                     .foregroundStyle(prompt == nil ? .secondary : .primary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { Haptics.medium(); onTap() }
 
                 HStack {
                     DurationPill(selectedDuration: $selectedDuration)
@@ -673,10 +463,12 @@ struct InteractivePromptCard: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { Haptics.medium(); onTap() }
                 }
             }
+            // Whole card starts the session; the duration Menu still wins
+            // its own taps because child controls take gesture priority.
+            .contentShape(Rectangle())
+            .onTapGesture { Haptics.medium(); onTap() }
         }
         .redacted(reason: prompt == nil ? .placeholder : [])
         .onAppear {
@@ -687,8 +479,8 @@ struct InteractivePromptCard: View {
     }
 
     private var categoryColor: Color {
-        guard let category = prompt?.category else { return .gray }
-        return PromptCategory(rawValue: category)?.color ?? .gray
+        guard let category = prompt?.category else { return AppColors.accent }
+        return PromptCategory(rawValue: category)?.color ?? AppColors.accent
     }
 
     private var categoryIcon: String {
@@ -704,7 +496,10 @@ struct SmallIconButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            Haptics.light()
+            action()
+        } label: {
             Image(systemName: icon)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -713,8 +508,10 @@ struct SmallIconButton: View {
                     Circle()
                         .fill(.ultraThinMaterial)
                 }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 }
 
@@ -817,84 +614,6 @@ struct PracticeToolCard: View {
         .buttonStyle(.plain)
     }
 }
-
-// MARK: - Achievements Tile
-
-private struct AchievementsTile: View {
-    let unlocked: Int
-    let total: Int
-    let action: () -> Void
-
-    private var progress: Double {
-        guard total > 0 else { return 0 }
-        return Double(unlocked) / Double(total)
-    }
-
-    var body: some View {
-        Button {
-            Haptics.light()
-            action()
-        } label: {
-            GlassCard(tint: .yellow.opacity(0.07), padding: 14) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.08), lineWidth: 3)
-                            .frame(width: 44, height: 44)
-
-                        Circle()
-                            .trim(from: 0, to: progress)
-                            .stroke(
-                                AngularGradient(
-                                    colors: [AppColors.warning, AppColors.warning.opacity(0.7), AppColors.warning],
-                                    center: .center
-                                ),
-                                style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                            )
-                            .frame(width: 44, height: 44)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.easeOut(duration: 0.8), value: progress)
-
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [AppColors.warning, AppColors.warning.opacity(0.75)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .shadow(color: AppColors.warning.opacity(0.4), radius: 4, y: 1)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Text("\(unlocked)")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .contentTransition(.numericText(value: Double(unlocked)))
-                            Text("/ \(total)")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.white.opacity(0.65))
-                        }
-                        Text("Achievements")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-    }
-}
-
 
 #Preview {
     NavigationStack {

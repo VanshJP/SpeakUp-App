@@ -17,7 +17,6 @@ struct RecordingDetailView: View {
     @State private var showSpeakerTurns = true
     @State private var waveformHeights: [CGFloat] = []
     @State private var scoreCardImage: UIImage?
-    @State private var animateScore = false
     @State private var selectedDetailTab: DetailTab = .analysis
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
@@ -33,6 +32,8 @@ struct RecordingDetailView: View {
     @State private var journalSaved = false
     @State private var storiesViewModel = StoriesViewModel()
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
+    @State private var coherenceEnhanceInFlight = false
+    @State private var playableMediaAvailable = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -101,6 +102,7 @@ struct RecordingDetailView: View {
                             recording.isProcessing = false
                             try? modelContext.save()
                         }
+                        runReadySetupIfNeeded()
                     },
                     analysisReady: recording.analysis != nil
                 )
@@ -162,30 +164,20 @@ struct RecordingDetailView: View {
         .task {
             settingsViewModel.configure(with: modelContext)
             await loadRecording()
-            if case .ready(let recording) = detailScreenState {
-                prepareDetailAssets(for: recording)
-                configurePlaybackState(for: recording)
+            if let recording {
                 enqueueProcessingIfNeeded(recording)
             }
-            populateWPMTimeSeriesIfNeeded()
-
-
-            // Post-analysis: enhance coherence in background — don't block the detail view
-            Task {
-                await enhanceCoherenceIfNeeded()
+            runReadySetupIfNeeded()
+        }
+        .onChange(of: recording?.isProcessing) { _, isProcessing in
+            // Analysis landed while this view was showing AnalyzingView —
+            // run the ready-state setup that .task skipped at appear time.
+            if isProcessing == false {
+                runReadySetupIfNeeded()
             }
         }
         .onDisappear {
             audioService.stop()
-        }
-        .onChange(of: audioService.currentPlaybackTime) { _, _ in
-            syncPlaybackStateIfNeeded()
-        }
-        .onChange(of: audioService.playbackDuration) { _, _ in
-            syncPlaybackStateIfNeeded()
-        }
-        .onChange(of: audioService.isPlaying) { _, _ in
-            syncPlaybackStateIfNeeded()
         }
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
@@ -235,6 +227,11 @@ struct RecordingDetailView: View {
                 if let analysis = recording.analysis {
                     heroScoreSection(analysis)
                     statsGrid(analysis)
+                } else {
+                    // Analysis never landed (transcription failed or was
+                    // interrupted) — say so and offer a way out instead of
+                    // leaving a silent dead-end.
+                    analysisUnavailableCard(recording)
                 }
 
                 if recording.goalId != nil {
@@ -263,8 +260,6 @@ struct RecordingDetailView: View {
                 case .coaching:
                     coachingTabContent(recording)
                 }
-
-                actionsSection(recording)
             }
             .padding()
         }
@@ -272,7 +267,7 @@ struct RecordingDetailView: View {
         .scrollBounceBehavior(.basedOnSize)
         .contentMargins(.horizontal, 0)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if hasPlayableMedia(recording) {
+            if playableMediaAvailable {
                 PlaybackDrawerContainer(
                     recording: recording,
                     waveformHeights: waveformHeights,
@@ -285,11 +280,51 @@ struct RecordingDetailView: View {
                 )
             }
         }
-        .task {
-            try? await Task.sleep(for: .milliseconds(300))
-            withAnimation(.easeOut(duration: 0.8)) {
-                animateScore = true
+    }
+
+    /// One-time setup for the ready state (waveform, playback, WPM series,
+    /// LLM coherence pass). Safe to call repeatedly — each step guards itself.
+    private func runReadySetupIfNeeded() {
+        guard case .ready(let recording) = detailScreenState else { return }
+        // Resolved once here instead of in body — hasPlayableMedia hits the
+        // filesystem (iCloud/local existence checks) on every call.
+        playableMediaAvailable = hasPlayableMedia(recording)
+        prepareDetailAssets(for: recording)
+        configurePlaybackState(for: recording)
+        populateWPMTimeSeriesIfNeeded()
+
+        // Post-analysis: enhance coherence in background — don't block the detail view
+        Task {
+            await enhanceCoherenceIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private func analysisUnavailableCard(_ recording: Recording) -> some View {
+        GlassCard {
+            VStack(spacing: 12) {
+                Image(systemName: "waveform.badge.exclamationmark")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                VStack(spacing: 4) {
+                    Text("Analysis Unavailable")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("This recording hasn't been analyzed yet. You can still listen back, or try analyzing again.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                GlassButton(title: "Analyze Again", icon: "arrow.clockwise", style: .secondary) {
+                    Haptics.medium()
+                    enqueueProcessingIfNeeded(recording, force: true)
+                }
+                .padding(.top, 4)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
         }
     }
 
@@ -334,8 +369,7 @@ struct RecordingDetailView: View {
 
                 SubscoreRadarChart(
                     axes: axes,
-                    overallScore: analysis.speechScore.overall,
-                    animate: animateScore
+                    overallScore: analysis.speechScore.overall
                 )
                 .frame(height: 300)
 
@@ -483,34 +517,48 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        StatStrip(
-            items: [
-                .init(
-                    icon: "speedometer",
-                    value: "\(Int(analysis.wordsPerMinute))",
-                    label: "WPM",
-                    color: .cyan
-                ),
-                .init(
-                    icon: "text.word.spacing",
-                    value: "\(analysis.totalWords)",
-                    label: "Words",
-                    color: .white
-                ),
-                .init(
-                    icon: "exclamationmark.bubble",
-                    value: "\(analysis.totalFillerCount)",
-                    label: "Fillers",
-                    color: analysis.totalFillerCount > 5 ? .orange : .green
-                ),
-                .init(
-                    icon: "pause.circle",
-                    value: "\(analysis.pauseCount)",
-                    label: "Pauses",
-                    color: .green
-                )
-            ]
-        )
+        // Bevel-style 2x2 metric grid — each tile interprets its number with
+        // a status pill so the screen reads as a verdict, not a data dump.
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            MetricTile(
+                icon: "speedometer",
+                label: "Pace",
+                value: "\(Int(analysis.wordsPerMinute))",
+                unit: "wpm",
+                status: paceStatus(for: analysis.wordsPerMinute)
+            )
+            MetricTile(
+                icon: "exclamationmark.bubble",
+                label: "Fillers",
+                value: "\(analysis.totalFillerCount)",
+                status: fillerStatus(for: analysis.totalFillerCount)
+            )
+            MetricTile(
+                icon: "text.word.spacing",
+                label: "Words",
+                value: "\(analysis.totalWords)"
+            )
+            MetricTile(
+                icon: "pause.circle",
+                label: "Pauses",
+                value: "\(analysis.pauseCount)"
+            )
+        }
+    }
+
+    private func paceStatus(for wpm: Double) -> MetricTile.Status {
+        let target = Double(userSettings.first?.targetWPM ?? 150)
+        if wpm < target - 40 { return .neutral("Slow") }
+        if wpm > target + 40 { return .caution("Fast") }
+        return .good("On pace")
+    }
+
+    private func fillerStatus(for count: Int) -> MetricTile.Status {
+        switch count {
+        case 0...2: return .good("Clean")
+        case 3...7: return .caution("A few")
+        default: return .bad("Many")
+        }
     }
 
     // MARK: - WPM Chart Section
@@ -608,7 +656,10 @@ struct RecordingDetailView: View {
                                     Circle()
                                         .fill(showSpeakerTurns ? AppColors.primary.opacity(0.15) : .clear)
                                 }
+                                .frame(width: 40, height: 40)
+                                .contentShape(Rectangle())
                         }
+                        .accessibilityLabel("Show speaker turns")
                     }
 
                     if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
@@ -617,13 +668,16 @@ struct RecordingDetailView: View {
                         } label: {
                             Image(systemName: showFillerHighlights ? "bubble.left.fill" : "bubble.left")
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(showFillerHighlights ? .orange : .secondary)
+                                .foregroundStyle(showFillerHighlights ? AppColors.warning : .secondary)
                                 .padding(6)
                                 .background {
                                     Circle()
-                                        .fill(showFillerHighlights ? .orange.opacity(0.1) : .clear)
+                                        .fill(showFillerHighlights ? AppColors.warning.opacity(0.1) : .clear)
                                 }
+                                .frame(width: 40, height: 40)
+                                .contentShape(Rectangle())
                         }
+                        .accessibilityLabel("Highlight filler words")
                     }
 
                     if let analysis = recording.analysis, !analysis.vocabWordsUsed.isEmpty {
@@ -632,13 +686,16 @@ struct RecordingDetailView: View {
                         } label: {
                             Image(systemName: showVocabHighlights ? "character.book.closed.fill" : "character.book.closed")
                                 .font(.caption.weight(.medium))
-                                .foregroundStyle(showVocabHighlights ? .green : .secondary)
+                                .foregroundStyle(showVocabHighlights ? AppColors.success : .secondary)
                                 .padding(6)
                                 .background {
                                     Circle()
-                                        .fill(showVocabHighlights ? .green.opacity(0.1) : .clear)
+                                        .fill(showVocabHighlights ? AppColors.success.opacity(0.1) : .clear)
                                 }
+                                .frame(width: 40, height: 40)
+                                .contentShape(Rectangle())
                         }
+                        .accessibilityLabel("Highlight vocabulary words")
                     }
                 }
             }
@@ -696,7 +753,10 @@ struct RecordingDetailView: View {
                         .fill(showCopiedConfirmation ? AppColors.success.opacity(0.1) : .clear)
                 }
                 .animation(.easeInOut(duration: 0.2), value: showCopiedConfirmation)
+                .frame(width: 40, height: 40)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel(showCopiedConfirmation ? "Copied" : "Copy transcript")
     }
 
     private func speakerTurns(from words: [TranscriptionWord]) -> [SpeakerTurn] {
@@ -762,7 +822,7 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func shareCTASection(_ recording: Recording) -> some View {
-        GlassCard(tint: .teal.opacity(0.1)) {
+        GlassCard(tint: AppColors.primary.opacity(0.1)) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Share your progress")
@@ -788,22 +848,6 @@ struct RecordingDetailView: View {
             }
         }
     }
-
-    // MARK: - Actions Section
-
-    @ViewBuilder
-    private func actionsSection(_ recording: Recording) -> some View {
-        GlassButton(
-            title: "Delete Recording",
-            icon: "trash",
-            style: .danger,
-            fullWidth: true
-        ) {
-            showingDeleteAlert = true
-        }
-        .padding(.top, 12)
-    }
-
 
     // MARK: - Tab Content
 
@@ -874,7 +918,7 @@ struct RecordingDetailView: View {
                                 LinearGradient(
                                     colors: isAppleIntelligence
                                         ? [.purple, .blue]
-                                        : [.cyan, .teal],
+                                        : [AppColors.categoryBrandBright, AppColors.primary],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -932,7 +976,7 @@ struct RecordingDetailView: View {
     // MARK: - Reflection Prompt Card
 
     private var reflectionPromptCard: some View {
-        FeaturedGlassCard(gradientColors: [AppColors.primary.opacity(0.1), AppColors.categoryBrandBright.opacity(0.05)]) {
+        FeaturedGlassCard {
             VStack(spacing: 14) {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.message.fill")
@@ -1290,11 +1334,6 @@ struct RecordingDetailView: View {
         playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
     }
 
-    private func syncPlaybackStateIfNeeded() {
-        guard let recording else { return }
-        playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-    }
-
     private func loadRecording() async {
         isLoading = true
         defer { isLoading = false }
@@ -1313,7 +1352,10 @@ struct RecordingDetailView: View {
             // this flag stays true in SwiftData but no task is actually running.
             // Clear it so the view doesn't get stuck on the AnalyzingView spinner.
             // enqueueProcessingIfNeeded() will re-process if analysis is still nil.
-            if let loadedRecording = recording, loadedRecording.isProcessing {
+            // Skip when the coordinator is actively processing this recording,
+            // otherwise the view flashes an empty "ready" state mid-transcription.
+            if let loadedRecording = recording, loadedRecording.isProcessing,
+               !RecordingProcessingCoordinator.shared.isProcessing(loadedRecording.id) {
                 loadedRecording.isProcessing = false
                 try? modelContext.save()
             }
@@ -1348,6 +1390,13 @@ struct RecordingDetailView: View {
     }
 
     private func enhanceCoherenceIfNeeded() async {
+        // Single writer: runReadySetupIfNeeded can fire from multiple triggers
+        // (.task, isProcessing change, feedback completion). Two concurrent LLM
+        // passes would both write recording.analysis and jump the visible score.
+        guard !coherenceEnhanceInFlight else { return }
+        coherenceEnhanceInFlight = true
+        defer { coherenceEnhanceInFlight = false }
+
         guard case .ready(let recording) = detailScreenState,
               var analysis = recording.analysis else { return }
 
@@ -1495,6 +1544,11 @@ private struct PlaybackDrawerContainer: View {
     let playbackViewModel: RecordingDetailPlaybackViewModel
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
+
+    // Playback ticks (30 fps display link) are observed here — not in
+    // RecordingDetailView — so only this drawer re-evaluates during playback,
+    // not the whole detail scroll content.
+    @Environment(AudioService.self) private var audioService
 
     @State private var drawerState: PlaybackDrawerState = .expanded
     @State private var dragOffset: CGFloat = 0
@@ -1650,6 +1704,15 @@ private struct PlaybackDrawerContainer: View {
                 }
             }
         }
+        .onChange(of: audioService.currentPlaybackTime) { _, _ in
+            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+        }
+        .onChange(of: audioService.playbackDuration) { _, _ in
+            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+        }
+        .onChange(of: audioService.isPlaying) { _, _ in
+            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+        }
     }
 
     /// Progressive resistance past `limit`: finger travel still moves the
@@ -1700,17 +1763,17 @@ private struct PlaybackDrawerContainer: View {
                     let barCount = max(1, Int(geometry.size.width / totalBarWidth))
                     let width = geometry.size.width
 
-                    HStack(spacing: spacing) {
-                        ForEach(0..<barCount, id: \.self) { i in
-                            let progress = Double(i) / Double(barCount)
-                            let isPlayed = progress < playbackViewModel.playbackProgress
-                            let height: CGFloat = waveformHeights.isEmpty ? 16 : waveformHeights[i % waveformHeights.count]
-
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(isPlayed ? AppColors.primary : Color.white.opacity(0.2))
-                                .frame(width: barWidth, height: height)
-                        }
-                    }
+                    // Progress quantized to whole bars: the bar row's inputs
+                    // only change when a new bar fills, so the ~100 bar views
+                    // re-diff once per bar instead of on every 30 fps
+                    // display-link tick.
+                    ScrubberBars(
+                        barCount: barCount,
+                        playedBars: min(barCount, Int((playbackViewModel.playbackProgress * Double(barCount)).rounded(.up))),
+                        heights: waveformHeights,
+                        barWidth: barWidth,
+                        spacing: spacing
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .contentShape(Rectangle())
                     .onTapGesture { location in
@@ -1741,19 +1804,24 @@ private struct PlaybackDrawerContainer: View {
                     Image(systemName: "gobackward.10")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Skip back 10 seconds")
 
                 Button {
                     onTogglePlayback()
                 } label: {
                     Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                         .frame(width: 52, height: 52)
-                        .background(Circle().fill(AppColors.primary))
+                        .background(Circle().fill(Color.white.opacity(0.94)))
+                        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
 
                 Button {
                     seekBy(seconds: 10)
@@ -1761,8 +1829,11 @@ private struct PlaybackDrawerContainer: View {
                     Image(systemName: "goforward.10")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Skip forward 10 seconds")
             }
         }
     }
@@ -1789,9 +1860,11 @@ private struct PlaybackDrawerContainer: View {
             } label: {
                 Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
                     .frame(width: 24, height: 24)
-                    .background(Circle().fill(AppColors.primary))
+                    .background(Circle().fill(Color.white.opacity(0.94)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -1814,6 +1887,26 @@ private struct PlaybackDrawerContainer: View {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+/// POD scrubber bar row. All inputs are plain values, so SwiftUI skips the
+/// whole row while `playedBars` is unchanged between display-link ticks.
+private struct ScrubberBars: View {
+    let barCount: Int
+    let playedBars: Int
+    let heights: [CGFloat]
+    let barWidth: CGFloat
+    let spacing: CGFloat
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(0..<barCount, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(i < playedBars ? AppColors.primary : Color.white.opacity(0.2))
+                    .frame(width: barWidth, height: heights.isEmpty ? 16 : heights[i % heights.count])
+            }
+        }
     }
 }
 
@@ -1866,24 +1959,16 @@ struct SubscoreRow: View {
 
             Spacer()
 
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.08))
-
-                    Capsule()
-                        .fill(AppColors.scoreColor(for: score))
-                        .frame(width: geometry.size.width * CGFloat(score) / 100)
-                }
-            }
-            .frame(width: 60, height: 6)
+            TickMeter(fraction: Double(score) / 100, color: AppColors.scoreColor(for: score), tickCount: 18)
+                .frame(width: 76, height: 10)
 
             Text("\(score)")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(AppColors.scoreColor(for: score))
+                .font(.subheadline.weight(.bold).monospacedDigit())
+                .foregroundStyle(.white)
                 .frame(width: 30, alignment: .trailing)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(score) out of 100")
     }
 }
 

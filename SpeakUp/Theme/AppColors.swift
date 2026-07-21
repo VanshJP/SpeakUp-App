@@ -10,11 +10,14 @@ enum AppColors {
     static let accent = Color(red: 0.392, green: 0.455, blue: 0.545) // #64748B
     
     // MARK: - Semantic Colors
-    
-    static let success = Color.green
-    static let warning = Color.orange
-    static let error = Color.red
-    static let info = Color.blue
+    //
+    // Softened one notch from the pure system hues so state color reads as
+    // data, not alarm. Same hue family — meaning is unchanged.
+
+    static let success = Color(red: 0.30, green: 0.78, blue: 0.47)  // soft green
+    static let warning = Color(red: 0.95, green: 0.61, blue: 0.28)  // soft orange
+    static let error = Color(red: 0.93, green: 0.38, blue: 0.36)    // soft red
+    static let info = Color(red: 0.38, green: 0.62, blue: 0.94)     // soft blue
     
     // MARK: - Recording Colors
     
@@ -30,7 +33,7 @@ enum AppColors {
         case 40..<60:
             return warning
         case 60..<80:
-            return Color.yellow
+            return Color(red: 0.94, green: 0.78, blue: 0.34) // soft amber
         case 80...100:
             return success
         default:
@@ -115,13 +118,24 @@ enum AppColors {
         return success.opacity(0.3 + (intensity * 0.7))
     }
 
-    // MARK: - Glass Tints
+    // MARK: - Surfaces
 
-    static let glassTintPrimary = primary.opacity(0.10)
-    static let glassTintAccent = Color.white.opacity(0.05)
-    static let glassTintWarning = warning.opacity(0.10)
-    static let glassTintError = error.opacity(0.10)
-    static let glassTintSuccess = success.opacity(0.10)
+    /// Faint lift applied over the material fill of every card so surfaces
+    /// read a step lighter than the graphite canvas.
+    static let surfaceLift = Color.white.opacity(0.03)
+
+    /// Uniform hairline stroke around cards and controls.
+    static let cardStroke = Color.white.opacity(0.07)
+
+    // MARK: - Glass Tints
+    //
+    // Halved from the previous values — tint should be felt, not seen.
+
+    static let glassTintPrimary = primary.opacity(0.05)
+    static let glassTintAccent = Color.white.opacity(0.03)
+    static let glassTintWarning = warning.opacity(0.05)
+    static let glassTintError = error.opacity(0.05)
+    static let glassTintSuccess = success.opacity(0.05)
 }
 
 // MARK: - Color Extensions

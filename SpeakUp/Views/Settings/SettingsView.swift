@@ -29,6 +29,8 @@ struct SettingsView: View {
 
     private var settingsMenuCard: some View {
         VStack(spacing: 12) {
+            GlassSectionHeader("You", icon: "person.crop.circle")
+
             settingsLink(
                 icon: "person.crop.circle",
                 iconColor: AppColors.primary,
@@ -40,7 +42,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "slider.horizontal.3",
-                iconColor: .teal,
+                iconColor: AppColors.primary,
                 title: "Session Defaults",
                 subtitle: viewModel.defaultDuration.displayName + ", " + viewModel.countdownDuration.displayName + " countdown"
             ) {
@@ -48,8 +50,20 @@ struct SettingsView: View {
             }
 
             settingsLink(
+                icon: "bell.fill",
+                iconColor: AppColors.categoryAmber,
+                title: "Reminders",
+                subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
+            ) {
+                ReminderSettingsView(viewModel: viewModel)
+            }
+
+            GlassSectionHeader("Practice & Scoring", icon: "waveform")
+                .padding(.top, 8)
+
+            settingsLink(
                 icon: "waveform.badge.magnifyingglass",
-                iconColor: .blue,
+                iconColor: AppColors.categoryNeutralCool,
                 title: "Analysis",
                 subtitle: "Target: \(viewModel.targetWPM) WPM"
             ) {
@@ -58,7 +72,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "character.book.closed",
-                iconColor: .green,
+                iconColor: AppColors.categorySage,
                 title: "Words",
                 subtitle: wordsSubtitle
             ) {
@@ -66,17 +80,8 @@ struct SettingsView: View {
             }
 
             settingsLink(
-                icon: "bubble.left.and.text.bubble.right",
-                iconColor: .purple,
-                title: "Session Feedback",
-                subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
-            ) {
-                FeedbackSettingsView(viewModel: viewModel)
-            }
-
-            settingsLink(
                 icon: "text.quote",
-                iconColor: .orange,
+                iconColor: AppColors.categoryCopper,
                 title: "Prompts",
                 subtitle: "\(viewModel.enabledPromptCategories.count) categories"
             ) {
@@ -84,17 +89,20 @@ struct SettingsView: View {
             }
 
             settingsLink(
-                icon: "bell.fill",
-                iconColor: .yellow,
-                title: "Reminders",
-                subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
+                icon: "bubble.left.and.text.bubble.right",
+                iconColor: AppColors.categoryPlum,
+                title: "Session Feedback",
+                subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
             ) {
-                ReminderSettingsView(viewModel: viewModel)
+                FeedbackSettingsView(viewModel: viewModel)
             }
+
+            GlassSectionHeader("Intelligence & Data", icon: "cpu")
+                .padding(.top, 8)
 
             settingsLink(
                 icon: "cpu",
-                iconColor: .purple,
+                iconColor: AppColors.categoryIndigo,
                 title: "AI Features",
                 subtitle: aiModelSubtitle
             ) {
@@ -105,7 +113,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "externaldrive.fill",
-                iconColor: .gray,
+                iconColor: AppColors.accent,
                 title: "Data Management",
                 subtitle: "Export, reset, or manage data"
             ) {
@@ -114,7 +122,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "info.circle",
-                iconColor: .secondary,
+                iconColor: AppColors.accent,
                 title: "About",
                 subtitle: "v\(viewModel.appVersion) (\(viewModel.buildNumber))"
             ) {

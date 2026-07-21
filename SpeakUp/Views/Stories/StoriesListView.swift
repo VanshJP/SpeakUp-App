@@ -1,114 +1,72 @@
 import SwiftUI
 import SwiftData
 
-struct StoriesListView<Header: View>: View {
+struct StoriesListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var viewModel: StoriesViewModel
-    @State private var showingEditor = false
-    @State private var editingStory: Story?
-    @State private var selectedStory: Story?
+    @Binding var selectedStory: Story?
     @State private var showingDeleteAlert = false
     @State private var storyToDelete: Story?
-    @State private var searchBinding = ""
     @State private var folderEditorPresentation: FolderEditorPresentation?
     @State private var movingStory: Story?
 
     var onStartPractice: ((Story) -> Void)?
     var onSendToWarmUp: ((Story) -> Void)?
     var onSendToDrill: ((Story) -> Void)?
-    private let pinnedHeader: Header
 
     init(
         viewModel: StoriesViewModel,
+        selectedStory: Binding<Story?>,
         onStartPractice: ((Story) -> Void)? = nil,
         onSendToWarmUp: ((Story) -> Void)? = nil,
-        onSendToDrill: ((Story) -> Void)? = nil,
-        @ViewBuilder pinnedHeader: () -> Header
+        onSendToDrill: ((Story) -> Void)? = nil
     ) {
         self.viewModel = viewModel
+        self._selectedStory = selectedStory
         self.onStartPractice = onStartPractice
         self.onSendToWarmUp = onSendToWarmUp
         self.onSendToDrill = onSendToDrill
-        self.pinnedHeader = pinnedHeader()
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView {
-                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
-                    Section {
-                        if !viewModel.stories.isEmpty {
-                            statsStrip
-                        }
-
-                        StoryFolderBar(
-                            viewModel: viewModel,
-                            onCreateFolder: {
-                                folderEditorPresentation = .create
-                            },
-                            onEditFolder: { folder in
-                                folderEditorPresentation = .edit(folder)
-                            }
-                        )
-
-                        if viewModel.stories.isEmpty {
-                            EmptyStateCard(
-                                icon: "note.text",
-                                title: "Your Notebook",
-                                message: "Jot drafts, capture quick ideas, and reflect on practice sessions. Tap + to start."
-                            )
-                            .padding(.top, 20)
-                        } else if viewModel.filteredStories.isEmpty {
-                            EmptyStateCard(
-                                icon: "magnifyingglass",
-                                title: "Nothing Here",
-                                message: "No notes match this filter. Try another folder or search."
-                            )
-                            .padding(.top, 20)
-                        } else {
-                            storyList
-                        }
-
-                        Color.clear.frame(height: 88) // FAB breathing room
-                    } header: {
-                        pinnedHeader
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
+        VStack(spacing: 16) {
+            if !viewModel.stories.isEmpty {
+                statsStrip
             }
-            .scrollIndicators(.hidden)
 
-            floatingActionButton
-                .padding(.trailing, 20)
-                .padding(.bottom, 24)
-        }
-        .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: $searchBinding, prompt: "Search notes…")
-        .onChange(of: searchBinding) { _, newValue in
-            viewModel.setSearch(newValue)
+            StoryFolderBar(
+                viewModel: viewModel,
+                onCreateFolder: {
+                    folderEditorPresentation = .create
+                },
+                onEditFolder: { folder in
+                    folderEditorPresentation = .edit(folder)
+                }
+            )
+
+            if viewModel.stories.isEmpty {
+                EmptyStateCard(
+                    icon: "note.text",
+                    title: "Your Notebook",
+                    message: "Jot drafts, capture quick ideas, and reflect on practice sessions. Tap + to start."
+                )
+                .padding(.top, 20)
+            } else if viewModel.filteredStories.isEmpty {
+                EmptyStateCard(
+                    icon: "magnifyingglass",
+                    title: "Nothing Here",
+                    message: "No notes match this filter. Try another folder or search."
+                )
+                .padding(.top, 20)
+            } else {
+                storyList
+            }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 toolbarSortMenu
             }
-        }
-        .sheet(isPresented: $showingEditor) {
-            NavigationStack {
-                StoryEditorView(
-                    viewModel: viewModel,
-                    existingStory: editingStory,
-                    initialFolderId: currentFolderId,
-                    onStartPractice: onStartPractice,
-                    onSendToWarmUp: onSendToWarmUp,
-                    onSendToDrill: onSendToDrill
-                )
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         .sheet(item: $folderEditorPresentation) { presentation in
             NavigationStack {
@@ -129,15 +87,6 @@ struct StoriesListView<Header: View>: View {
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
-        }
-        .navigationDestination(item: $selectedStory) { story in
-            StoryDetailView(
-                story: story,
-                viewModel: viewModel,
-                onStartPractice: onStartPractice,
-                onSendToWarmUp: onSendToWarmUp,
-                onSendToDrill: onSendToDrill
-            )
         }
         .alert("Delete Note?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
@@ -170,26 +119,26 @@ struct StoriesListView<Header: View>: View {
                     icon: "note.text",
                     value: "\(viewModel.stories.count)",
                     label: "Notes",
-                    color: .teal
+                    color: AppColors.primary
                 ),
                 .init(
                     icon: "pin.fill",
                     value: "\(viewModel.stories.filter(\.isFavorite).count)",
                     label: "Pinned",
-                    color: .yellow,
+                    color: AppColors.warning,
                     isHighlighted: viewModel.stories.contains(where: \.isFavorite)
                 ),
                 .init(
                     icon: "folder.fill",
                     value: "\(viewModel.folders.count)",
                     label: "Folders",
-                    color: .blue
+                    color: AppColors.categoryIndigo
                 ),
                 .init(
                     icon: "tag.fill",
                     value: "\(viewModel.stories.filter { !$0.tags.isEmpty }.count)",
                     label: "Tagged",
-                    color: .purple
+                    color: AppColors.categoryPlum
                 )
             ]
         )
@@ -242,7 +191,7 @@ struct StoriesListView<Header: View>: View {
         } label: {
             CompactStoryRow(story: story)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 viewModel.toggleFavorite(story)
@@ -321,31 +270,6 @@ struct StoriesListView<Header: View>: View {
         }
     }
 
-    // MARK: - Floating Action Button
-
-    private var floatingActionButton: some View {
-        Button {
-            Haptics.heavy()
-            editingStory = nil
-            showingEditor = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background {
-                    Circle()
-                        .fill(AppColors.primary)
-                        .shadow(color: AppColors.primary.opacity(0.4), radius: 12, y: 4)
-                }
-                .overlay {
-                    Circle()
-                        .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Toolbar
 
     private var toolbarSortMenu: some View {
@@ -380,29 +304,6 @@ struct StoriesListView<Header: View>: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private var currentFolderId: UUID? {
-        if case .folder(let id) = viewModel.folderSelection { return id }
-        return nil
-    }
-}
-
-extension StoriesListView where Header == EmptyView {
-    init(
-        viewModel: StoriesViewModel,
-        onStartPractice: ((Story) -> Void)? = nil,
-        onSendToWarmUp: ((Story) -> Void)? = nil,
-        onSendToDrill: ((Story) -> Void)? = nil
-    ) {
-        self.init(
-            viewModel: viewModel,
-            onStartPractice: onStartPractice,
-            onSendToWarmUp: onSendToWarmUp,
-            onSendToDrill: onSendToDrill,
-            pinnedHeader: { EmptyView() }
-        )
-    }
 }
 
 // MARK: - Folder Editor Presentation
@@ -556,11 +457,11 @@ struct StoryTagPill: View {
 
     private var tagColor: Color {
         switch tag.type {
-        case .friend: return .blue
-        case .date: return .orange
-        case .location: return .green
-        case .topic: return .purple
-        case .custom: return .gray
+        case .friend: return AppColors.categoryIndigo
+        case .date: return AppColors.categoryAmber
+        case .location: return AppColors.categorySage
+        case .topic: return AppColors.categoryPlum
+        case .custom: return AppColors.accent
         }
     }
 }

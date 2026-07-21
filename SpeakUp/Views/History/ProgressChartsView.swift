@@ -2,8 +2,27 @@ import SwiftUI
 import SwiftData
 import Charts
 
-struct ProgressChartsView: View {
-    @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
+/// Lightweight per-recording projection for charts. Loaded once on a
+/// background ModelContext so chart body evals never decode SpeechAnalysis
+/// blobs on the main thread (only analyzed recordings are included).
+nonisolated struct ChartRecordingPoint: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let date: Date
+    let score: Int
+    let wpm: Double
+    let fillerCount: Int
+}
+
+/// The full charts experience — highlights hero, chart-type picker, time
+/// range, and the selected chart. No background / scroll / nav of its own so
+/// it can be embedded (History Progress tab) or wrapped (`ProgressChartsView`).
+struct ProgressChartsContent: View {
+    @Environment(\.modelContext) private var modelContext
+
+    // Sorted date-descending, analyzed recordings only.
+    @State private var points: [ChartRecordingPoint] = []
+    @State private var latestSubscores: SpeechSubscores?
+    @State private var isLoading = true
 
     @State private var selectedTab: ChartTab = .score
     @State private var timeRange: TimeRange = .thirtyDays
@@ -46,94 +65,112 @@ struct ProgressChartsView: View {
         }
     }
 
-    private var filteredRecordings: [Recording] {
-        let analyzed = recordings.filter { $0.analysis != nil }
-        guard let days = timeRange.days else { return analyzed }
+    private var filteredPoints: [ChartRecordingPoint] {
+        guard let days = timeRange.days else { return points }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
-        return analyzed.filter { $0.date >= cutoff }
-    }
-
-    private var allAnalyzedRecordings: [Recording] {
-        recordings.filter { $0.analysis != nil }
+        return points.filter { $0.date >= cutoff }
     }
 
     var body: some View {
-        ZStack {
-            AppBackground(style: .subtle)
-
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Highlights hero section
-                    if allAnalyzedRecordings.count >= 2 {
-                        highlightsSection
-                    }
-
-                    // Tab picker
-                    SectionPicker(
-                        sections: ChartTab.allCases,
-                        selection: $selectedTab,
-                        label: { $0.rawValue },
-                        icon: { $0.icon },
-                        layout: .scrollable
-                    )
-
-                    // Time range picker (not for skills)
-                    if selectedTab != .skills {
-                        SectionPicker(
-                            sections: TimeRange.allCases,
-                            selection: $timeRange,
-                            label: { $0.rawValue },
-                            icon: { _ in nil },
-                            style: .compact
-                        )
-                    }
-
-                    // Chart content
-                    if filteredRecordings.isEmpty {
-                        emptyState
-                    } else {
-                        switch selectedTab {
-                        case .score:
-                            ScoreProgressChart(recordings: filteredRecordings)
-                        case .fillers:
-                            FillerTrendChart(recordings: filteredRecordings)
-                        case .pace:
-                            PaceTrendChart(recordings: filteredRecordings)
-                        case .skills:
-                            SubscoreRadarView(recordings: filteredRecordings)
-                        case .activity:
-                            SessionFrequencyChart(recordings: filteredRecordings)
-                        }
-                    }
-                }
-                .padding()
+        VStack(spacing: 20) {
+            // Highlights hero section
+            if points.count >= 2 {
+                highlightsSection
             }
-            .scrollIndicators(.hidden)
+
+            // Tab picker
+            SectionPicker(
+                sections: ChartTab.allCases,
+                selection: $selectedTab,
+                label: { $0.rawValue },
+                icon: { $0.icon },
+                layout: .scrollable
+            )
+
+            // Time range picker (not for skills)
+            if selectedTab != .skills {
+                SectionPicker(
+                    sections: TimeRange.allCases,
+                    selection: $timeRange,
+                    label: { $0.rawValue },
+                    icon: { _ in nil },
+                    style: .compact
+                )
+            }
+
+            // Chart content
+            if filteredPoints.isEmpty {
+                if !isLoading {
+                    emptyState
+                }
+            } else {
+                switch selectedTab {
+                case .score:
+                    ScoreProgressChart(points: filteredPoints)
+                case .fillers:
+                    FillerTrendChart(points: filteredPoints)
+                case .pace:
+                    PaceTrendChart(points: filteredPoints)
+                case .skills:
+                    SubscoreRadarView(subscores: latestSubscores)
+                case .activity:
+                    SessionFrequencyChart(points: filteredPoints)
+                }
+            }
         }
-        .navigationTitle("Progress Charts")
-        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadPoints() }
+    }
+
+    // MARK: - Background Load
+
+    private func loadPoints() async {
+        let container = modelContext.container
+        let result = await Task.detached(priority: .userInitiated) { () -> ([ChartRecordingPoint], SpeechSubscores?) in
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            guard let recordings = try? context.fetch(descriptor) else { return ([], nil) }
+
+            var pts: [ChartRecordingPoint] = []
+            pts.reserveCapacity(recordings.count)
+            var latest: SpeechSubscores?
+
+            for r in recordings where !r.isDeleted {
+                guard let analysis = r.analysis else { continue }
+                if latest == nil { latest = analysis.speechScore.subscores }
+                pts.append(ChartRecordingPoint(
+                    id: r.id,
+                    date: r.date,
+                    score: analysis.speechScore.overall,
+                    wpm: analysis.wordsPerMinute,
+                    fillerCount: analysis.totalFillerCount
+                ))
+            }
+            return (pts, latest)
+        }.value
+
+        points = result.0
+        latestSubscores = result.1
+        isLoading = false
     }
 
     // MARK: - Highlights Section
 
     private var highlightsSection: some View {
-        let sorted = allAnalyzedRecordings.sorted { $0.date < $1.date }
-        let scores = sorted.compactMap { $0.analysis?.speechScore.overall }
+        // `points` is date-descending: first = latest, last = first session.
+        let scores = points.map(\.score)
         let bestScore = scores.max() ?? 0
-        let latestScore = scores.last ?? 0
-        let firstScore = scores.first ?? 0
+        let latestScore = scores.first ?? 0
+        let firstScore = scores.last ?? 0
         let totalImprovement = latestScore - firstScore
 
         // Find best subscore
-        let latestSubscores = sorted.last?.analysis?.speechScore.subscores
         let bestSubscore = bestSubscoreInfo(from: latestSubscores)
 
         return VStack(spacing: 12) {
             // Hero highlight card
-            FeaturedGlassCard(gradientColors: [
-                (totalImprovement >= 0 ? AppColors.primary : AppColors.warning).opacity(0.12),
-                AppColors.categoryBrandBright.opacity(0.05)
-            ]) {
+            FeaturedGlassCard {
                 HStack(spacing: 16) {
                     // Left: big number
                     VStack(alignment: .leading, spacing: 4) {
@@ -144,7 +181,7 @@ struct ProgressChartsView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text("\(latestScore)")
                                 .font(.system(size: 42, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppColors.scoreColor(for: latestScore))
+                                .foregroundStyle(.white)
 
                             Text("pts")
                                 .font(.subheadline.weight(.medium))
@@ -158,7 +195,7 @@ struct ProgressChartsView: View {
                                 Text("\(totalImprovement > 0 ? "+" : "")\(totalImprovement) since first session")
                                     .font(.caption)
                             }
-                            .foregroundStyle(totalImprovement > 0 ? .green : .red)
+                            .foregroundStyle(totalImprovement > 0 ? AppColors.success : AppColors.error)
                         }
                     }
 
@@ -177,8 +214,8 @@ struct ProgressChartsView: View {
                         }
 
                         Text("\(bestScore)")
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(AppColors.warning)
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
 
                         Text("Best")
                             .font(.caption2)
@@ -192,8 +229,8 @@ struct ProgressChartsView: View {
                 HighlightStatCard(
                     icon: "number",
                     label: "Sessions",
-                    value: "\(allAnalyzedRecordings.count)",
-                    color: .teal
+                    value: "\(points.count)",
+                    color: AppColors.primary
                 )
 
                 HighlightStatCard(
@@ -221,18 +258,18 @@ struct ProgressChartsView: View {
 
     private func bestSubscoreInfo(from subscores: SpeechSubscores?) -> SubscoreInfo {
         guard let s = subscores else {
-            return SubscoreInfo(name: "—", icon: "star.fill", color: .teal)
+            return SubscoreInfo(name: "—", icon: "star.fill", color: AppColors.primary)
         }
 
         let all: [(String, Int, String, Color)] = [
-            ("Clarity", s.clarity, "waveform", .blue),
-            ("Pace", s.pace, "metronome", .cyan),
-            ("Fillers", s.fillerUsage, "bubble.left.fill", .orange),
-            ("Pauses", s.pauseQuality, "pause.circle.fill", .purple),
-            ("Vocal", s.vocalVariety ?? 0, "speaker.wave.3.fill", .pink),
-            ("Delivery", s.delivery ?? 0, "person.fill", .red),
-            ("Vocab", s.vocabulary ?? 0, "character.book.closed", .green),
-            ("Structure", s.structure ?? 0, "list.bullet", .yellow),
+            ("Clarity", s.clarity, "waveform", AppColors.categoryTeal),
+            ("Pace", s.pace, "metronome", AppColors.categoryBrandBright),
+            ("Fillers", s.fillerUsage, "bubble.left.fill", AppColors.categoryAmber),
+            ("Pauses", s.pauseQuality, "pause.circle.fill", AppColors.categoryIndigo),
+            ("Vocal", s.vocalVariety ?? 0, "speaker.wave.3.fill", AppColors.categoryPlum),
+            ("Delivery", s.delivery ?? 0, "person.fill", AppColors.categoryCopper),
+            ("Vocab", s.vocabulary ?? 0, "character.book.closed", AppColors.categorySage),
+            ("Structure", s.structure ?? 0, "list.bullet", AppColors.categoryNeutralCool),
         ]
 
         let best = all.max(by: { $0.1 < $1.1 }) ?? all[0]
@@ -259,6 +296,24 @@ struct ProgressChartsView: View {
     }
 }
 
+// MARK: - Progress Charts View (standalone / navigation destination)
+
+struct ProgressChartsView: View {
+    var body: some View {
+        ZStack {
+            AppBackground(style: .subtle)
+
+            ScrollView {
+                ProgressChartsContent()
+                    .padding()
+            }
+            .scrollIndicators(.hidden)
+        }
+        .navigationTitle("Progress Charts")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - Highlight Stat Card
 
 private struct HighlightStatCard: View {
@@ -268,7 +323,7 @@ private struct HighlightStatCard: View {
     let color: Color
 
     var body: some View {
-        GlassCard(tint: color.opacity(0.06), padding: 12) {
+        GlassCard(padding: 12) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption.weight(.semibold))
@@ -291,16 +346,13 @@ private struct HighlightStatCard: View {
 // MARK: - Score Progress Chart
 
 struct ScoreProgressChart: View {
-    let recordings: [Recording]
+    let points: [ChartRecordingPoint]
 
     @State private var selectedIndex: Int?
 
     private var dataPoints: [(date: Date, score: Int, id: UUID)] {
-        recordings
-            .compactMap { r in
-                guard let score = r.analysis?.speechScore.overall else { return nil }
-                return (date: r.date, score: score, id: r.id)
-            }
+        points
+            .map { (date: $0.date, score: $0.score, id: $0.id) }
             .sorted { $0.date < $1.date }
     }
 
@@ -391,7 +443,7 @@ struct ScoreProgressChart: View {
                             .foregroundStyle(
                                 selectedIndex == index
                                     ? AppColors.scoreColor(for: point.score)
-                                    : .teal
+                                    : AppColors.primary
                             )
                             .symbolSize(selectedIndex == index ? 60 : 24)
                         }
@@ -481,7 +533,7 @@ struct ScoreProgressChart: View {
                                     Text("\(delta >= 0 ? "+" : "")\(delta)")
                                         .font(.caption.weight(.bold))
                                 }
-                                .foregroundStyle(delta >= 0 ? .green : .red)
+                                .foregroundStyle(delta >= 0 ? AppColors.success : AppColors.error)
                             }
                         }
                         .padding(.horizontal, 4)
@@ -489,8 +541,8 @@ struct ScoreProgressChart: View {
                     } else if !dataPoints.isEmpty {
                         HStack(spacing: 16) {
                             chartStat("Latest", value: "\(dataPoints.last?.score ?? 0)", color: AppColors.scoreColor(for: dataPoints.last?.score ?? 0))
-                            chartStat("Average", value: "\(dataPoints.map(\.score).reduce(0, +) / dataPoints.count)", color: .teal)
-                            chartStat("Best", value: "\(dataPoints.map(\.score).max() ?? 0)", color: .yellow)
+                            chartStat("Average", value: "\(dataPoints.map(\.score).reduce(0, +) / dataPoints.count)", color: AppColors.primary)
+                            chartStat("Best", value: "\(dataPoints.map(\.score).max() ?? 0)", color: AppColors.warning)
                         }
                     }
                 } else {
@@ -503,7 +555,7 @@ struct ScoreProgressChart: View {
         }
     }
 
-    private func chartStat(_ label: String, value: String, color: Color = .teal) -> some View {
+    private func chartStat(_ label: String, value: String, color: Color = AppColors.primary) -> some View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.headline.weight(.bold))
@@ -519,18 +571,18 @@ struct ScoreProgressChart: View {
 // MARK: - Filler Trend Chart
 
 struct FillerTrendChart: View {
-    let recordings: [Recording]
+    let points: [ChartRecordingPoint]
 
     @State private var selectedIndex: Int?
 
     private var weeklyData: [(weekStart: Date, avgFillers: Double, sessionCount: Int)] {
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: recordings) { r in
-            calendar.startOfDay(for: r.date.startOfWeek)
+        let grouped = Dictionary(grouping: points) { p in
+            calendar.startOfDay(for: p.date.startOfWeek)
         }
 
         return grouped.map { (weekStart, recs) in
-            let totalFillers = recs.compactMap { $0.analysis?.totalFillerCount }.reduce(0, +)
+            let totalFillers = recs.map(\.fillerCount).reduce(0, +)
             let avg = recs.isEmpty ? 0 : Double(totalFillers) / Double(recs.count)
             return (weekStart: weekStart, avgFillers: avg, sessionCount: recs.count)
         }
@@ -559,7 +611,7 @@ struct FillerTrendChart: View {
                             Text(overallTrend < -1 ? "Improving" : overallTrend > 1 ? "Rising" : "Steady")
                                 .font(.caption2.weight(.semibold))
                         }
-                        .foregroundStyle(overallTrend < -1 ? .green : overallTrend > 1 ? .orange : .secondary)
+                        .foregroundStyle(overallTrend < -1 ? AppColors.success : overallTrend > 1 ? AppColors.warning : .secondary)
                     }
                 }
 
@@ -639,7 +691,7 @@ struct FillerTrendChart: View {
                             HStack(spacing: 4) {
                                 Text(String(format: "%.1f", week.avgFillers))
                                     .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(week.avgFillers > 10 ? .red : week.avgFillers > 5 ? .orange : .green)
+                                    .foregroundStyle(week.avgFillers > 10 ? AppColors.error : week.avgFillers > 5 ? AppColors.warning : AppColors.success)
                                 Text("avg fillers")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -656,9 +708,9 @@ struct FillerTrendChart: View {
                     } else {
                         // Legend
                         HStack(spacing: 12) {
-                            fillerLegendItem(color: .green, label: "0-5")
-                            fillerLegendItem(color: .orange, label: "5-10")
-                            fillerLegendItem(color: .red, label: "10+")
+                            fillerLegendItem(color: AppColors.success, label: "0-5")
+                            fillerLegendItem(color: AppColors.warning, label: "5-10")
+                            fillerLegendItem(color: AppColors.error, label: "10+")
                         }
                     }
                 } else {
@@ -686,16 +738,16 @@ struct FillerTrendChart: View {
 // MARK: - Pace Trend Chart
 
 struct PaceTrendChart: View {
-    let recordings: [Recording]
+    let points: [ChartRecordingPoint]
 
     @Query private var userSettings: [UserSettings]
     @State private var selectedIndex: Int?
 
     private var dataPoints: [(date: Date, wpm: Double)] {
-        recordings
-            .compactMap { r in
-                guard let wpm = r.analysis?.wordsPerMinute, wpm > 0 else { return nil }
-                return (date: r.date, wpm: wpm)
+        points
+            .compactMap { p in
+                guard p.wpm > 0 else { return nil }
+                return (date: p.date, wpm: p.wpm)
             }
             .sorted { $0.date < $1.date }
     }
@@ -739,7 +791,7 @@ struct PaceTrendChart: View {
 
                     Text("\(inRangePercent)% in range")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(inRangePercent >= 70 ? .green : inRangePercent >= 40 ? .orange : .red)
+                        .foregroundStyle(inRangePercent >= 70 ? AppColors.success : inRangePercent >= 40 ? AppColors.warning : AppColors.error)
                 }
 
                 if dataPoints.count >= 2 {
@@ -780,8 +832,8 @@ struct PaceTrendChart: View {
                             )
                             .foregroundStyle(
                                 optimalRange.contains(point.wpm)
-                                    ? .green
-                                    : (point.wpm > optimalRange.upperBound ? .orange : .orange)
+                                    ? AppColors.success
+                                    : (point.wpm > optimalRange.upperBound ? AppColors.warning : AppColors.warning)
                             )
                             .symbolSize(selectedIndex == index ? 60 : 24)
                         }
@@ -855,7 +907,7 @@ struct PaceTrendChart: View {
                             HStack(spacing: 4) {
                                 Text("\(Int(point.wpm))")
                                     .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(inRange ? .green : .orange)
+                                    .foregroundStyle(inRange ? AppColors.success : AppColors.warning)
                                 Text("WPM")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -900,13 +952,11 @@ struct PaceTrendChart: View {
 // MARK: - Subscore Radar View
 
 struct SubscoreRadarView: View {
-    let recordings: [Recording]
+    let subscores: SpeechSubscores?
 
     @State private var animateBars = false
 
-    private var latestSubscores: SpeechSubscores? {
-        recordings.first(where: { $0.analysis != nil })?.analysis?.speechScore.subscores
-    }
+    private var latestSubscores: SpeechSubscores? { subscores }
 
     private struct RadarPoint: Identifiable {
         let label: String
@@ -920,14 +970,14 @@ struct SubscoreRadarView: View {
     private var radarPoints: [RadarPoint] {
         guard let s = latestSubscores else { return [] }
         return [
-            RadarPoint(label: "Clarity", value: Double(s.clarity), color: .blue, icon: "waveform"),
-            RadarPoint(label: "Pace", value: Double(s.pace), color: .cyan, icon: "metronome"),
-            RadarPoint(label: "Fillers", value: Double(s.fillerUsage), color: .orange, icon: "bubble.left.fill"),
-            RadarPoint(label: "Pauses", value: Double(s.pauseQuality), color: .purple, icon: "pause.circle.fill"),
-            RadarPoint(label: "Vocal", value: Double(s.vocalVariety ?? 50), color: .pink, icon: "speaker.wave.3.fill"),
-            RadarPoint(label: "Delivery", value: Double(s.delivery ?? 50), color: .red, icon: "person.fill"),
-            RadarPoint(label: "Vocab", value: Double(s.vocabulary ?? 50), color: .green, icon: "character.book.closed"),
-            RadarPoint(label: "Structure", value: Double(s.structure ?? 50), color: .yellow, icon: "list.bullet"),
+            RadarPoint(label: "Clarity", value: Double(s.clarity), color: AppColors.categoryTeal, icon: "waveform"),
+            RadarPoint(label: "Pace", value: Double(s.pace), color: AppColors.categoryBrandBright, icon: "metronome"),
+            RadarPoint(label: "Fillers", value: Double(s.fillerUsage), color: AppColors.warning, icon: "bubble.left.fill"),
+            RadarPoint(label: "Pauses", value: Double(s.pauseQuality), color: AppColors.categoryIndigo, icon: "pause.circle.fill"),
+            RadarPoint(label: "Vocal", value: Double(s.vocalVariety ?? 50), color: AppColors.categoryPlum, icon: "speaker.wave.3.fill"),
+            RadarPoint(label: "Delivery", value: Double(s.delivery ?? 50), color: AppColors.error, icon: "person.fill"),
+            RadarPoint(label: "Vocab", value: Double(s.vocabulary ?? 50), color: AppColors.success, icon: "character.book.closed"),
+            RadarPoint(label: "Structure", value: Double(s.structure ?? 50), color: AppColors.warning, icon: "list.bullet"),
         ]
     }
 
@@ -1052,7 +1102,7 @@ struct SubscoreRadarView: View {
 // MARK: - Session Frequency Chart
 
 struct SessionFrequencyChart: View {
-    let recordings: [Recording]
+    let points: [ChartRecordingPoint]
 
     @Query private var userSettings: [UserSettings]
     @State private var selectedIndex: Int?
@@ -1063,8 +1113,8 @@ struct SessionFrequencyChart: View {
 
     private var weeklyCounts: [(weekStart: Date, count: Int)] {
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: recordings) { r in
-            calendar.startOfDay(for: r.date.startOfWeek)
+        let grouped = Dictionary(grouping: points) { p in
+            calendar.startOfDay(for: p.date.startOfWeek)
         }
 
         return grouped.map { (weekStart, recs) in

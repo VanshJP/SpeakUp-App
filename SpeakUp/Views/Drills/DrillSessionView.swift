@@ -3,6 +3,7 @@ import SwiftUI
 struct DrillSessionView: View {
     var viewModel: DrillViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingExitConfirm = false
 
     var body: some View {
         ZStack {
@@ -59,14 +60,33 @@ struct DrillSessionView: View {
     private var topBar: some View {
         HStack {
             Button {
-                viewModel.cleanup()
-                dismiss()
+                if viewModel.isActive {
+                    Haptics.warning()
+                    showingExitConfirm = true
+                } else {
+                    viewModel.cleanup()
+                    dismiss()
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(.ultraThinMaterial))
+            }
+            .accessibilityLabel("End drill")
+            .confirmationDialog(
+                "End this drill?",
+                isPresented: $showingExitConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("End Drill", role: .destructive) {
+                    viewModel.cleanup()
+                    dismiss()
+                }
+                Button("Keep Going", role: .cancel) {}
+            } message: {
+                Text("Progress in this drill won't be saved.")
             }
 
             Spacer()
@@ -119,7 +139,7 @@ struct DrillSessionView: View {
                 remainingTime: TimeInterval(viewModel.timeRemaining),
                 totalTime: TimeInterval(viewModel.selectedMode?.defaultDurationSeconds ?? 60),
                 progress: viewModel.progress,
-                color: viewModel.selectedMode?.color ?? .teal,
+                color: viewModel.selectedMode?.color ?? AppColors.primary,
                 isRecording: viewModel.isActive,
                 timerLabel: "remaining"
             )

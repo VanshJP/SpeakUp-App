@@ -111,7 +111,7 @@ struct WordBankView: View {
     private var bottomVocabInput: some View {
         HStack(spacing: 10) {
             // Mic button
-            micButton(tint: .teal)
+            micButton(tint: AppColors.primary)
 
             // Text input
             HStack(spacing: 8) {
@@ -319,7 +319,7 @@ struct WordBankView: View {
 
             // Live dictation preview
             if dictationEngine.isListening {
-                dictationPreview(tint: .teal)
+                dictationPreview(tint: AppColors.primary)
             }
 
             // Word chips
@@ -487,7 +487,7 @@ struct WordBankView: View {
 
                     FlowLayout(spacing: 6) {
                         ForEach(viewModel.vocabWords, id: \.self) { word in
-                            chipView(word, tint: .teal) {
+                            chipView(word, tint: AppColors.primary) {
                                 withAnimation(.spring(duration: 0.25)) {
                                     viewModel.removeVocabWord(word)
                                 }

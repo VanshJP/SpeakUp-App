@@ -50,13 +50,6 @@ struct PracticeHistoryChart: View {
                             )
                         )
                         .interpolationMethod(.catmullRom)
-
-                        PointMark(
-                            x: .value("Session", point.index),
-                            y: .value("Score", point.score)
-                        )
-                        .foregroundStyle(accentColor)
-                        .symbolSize(24)
                     }
                     .chartYScale(domain: 0...100)
                     .chartXAxis(.hidden)
@@ -134,7 +127,7 @@ struct PracticeMetricsRow: View {
                     icon: "clock",
                     value: totalDuration,
                     label: "Total Time",
-                    color: .blue
+                    color: AppColors.info
                 )
             }
         }

@@ -16,7 +16,6 @@ class TodayViewModel {
     var weeklyGoalSessions: Int = 5
     var storyPracticeEnabled: Bool = false
     var todaysStory: Story?
-    var sparklineScores: [DatedScore] = []
     var recentSubscores: [SpeechSubscores] = []
     private var modelContext: ModelContext?
     private var answeredPromptIDs: Set<String> = []
@@ -52,7 +51,6 @@ class TodayViewModel {
 
         self.userStats = heavy.userStats
         self.weeklyProgress = heavy.weeklyProgress
-        self.sparklineScores = heavy.sparklineScores
         self.recentSubscores = heavy.recentSubscores
         self.answeredPromptIDs = heavy.answeredPromptIDs
 
@@ -116,17 +114,6 @@ class TodayViewModel {
                 return ScoreHistoryEntry(date: rec.date, score: score)
             }
 
-            var fillerCounts: [String: Int] = [:]
-            for r in recordings {
-                for f in r.analysis?.fillerWords ?? [] {
-                    fillerCounts[f.word, default: 0] += f.count
-                }
-            }
-            let mostUsedFillers = fillerCounts
-                .sorted { $0.value > $1.value }
-                .prefix(5)
-                .map { FillerWord(word: $0.key, count: $0.value) }
-
             // Improvement rate (inline)
             let improvementRate: Double = {
                 guard recentRecordings.count >= 2 else { return 0 }
@@ -154,7 +141,6 @@ class TodayViewModel {
                 averageScore: averageScore,
                 bestScore: bestScore,
                 scoreHistory: scoreHistory,
-                mostUsedFillers: Array(mostUsedFillers),
                 improvementRate: improvementRate,
                 weeklySessionCount: weeklySessionCount,
                 weeklyGoalSessions: weeklyGoalSessions
@@ -169,17 +155,6 @@ class TodayViewModel {
             let challengeCompleted = todayRecordings.contains {
                 DailyChallengeService.evaluate(challenge: challengeTemplate, recording: $0)
             }
-
-            // Sparkline (last 20 with analysis, oldest-first)
-            let sparkline: [DatedScore] = Array(
-                recordings
-                    .prefix(20)
-                    .compactMap { r -> DatedScore? in
-                        guard let s = r.analysis?.speechScore.overall else { return nil }
-                        return DatedScore(date: r.date, score: s)
-                    }
-                    .reversed()
-            )
 
             // Recent subscores for weak area (last 10)
             let recentSubscores: [SpeechSubscores] = recordings
@@ -199,7 +174,6 @@ class TodayViewModel {
                 userStats: userStats,
                 weeklyProgress: weeklyProgress,
                 answeredPromptIDs: answered,
-                sparklineScores: sparkline,
                 recentSubscores: recentSubscores,
                 dailyChallengeCompleted: challengeCompleted,
                 skillMastery: skillMastery
@@ -464,11 +438,6 @@ class TodayViewModel {
 
 // MARK: - Sendable result types
 
-nonisolated struct DatedScore: Sendable, Hashable {
-    let date: Date
-    let score: Int
-}
-
 nonisolated struct SkillMastery: Sendable {
     let clarity: Int
     let pace: Int
@@ -480,7 +449,6 @@ nonisolated private struct TodayHeavyResult: Sendable {
     let userStats: UserStats
     let weeklyProgress: WeeklyProgressData?
     let answeredPromptIDs: Set<String>
-    let sparklineScores: [DatedScore]
     let recentSubscores: [SpeechSubscores]
     let dailyChallengeCompleted: Bool
     let skillMastery: SkillMastery?

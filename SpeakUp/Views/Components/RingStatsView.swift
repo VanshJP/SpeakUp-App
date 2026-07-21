@@ -9,7 +9,7 @@ struct RingStatsView: View {
     /// negative = regressing, 0 = no data or flat.
     var improvement: Double = 0
 
-    /// Improvement magnitude that fills the outer ring completely.
+    /// Improvement magnitude that fills the trend gauge completely.
     private let improvementTarget: Double = 30
 
     @State private var animateRings = false
@@ -30,96 +30,54 @@ struct RingStatsView: View {
         return "\(sign)\(Int(improvement.rounded()))%"
     }
 
-    private var improvementIcon: String {
-        if improvement > 0.5 { return "arrow.up.right" }
-        if improvement < -0.5 { return "arrow.down.right" }
-        return "minus"
-    }
-
     var body: some View {
-        VStack(spacing: 20) {
-            // Centered rings section - bigger and more dramatic
-            ZStack {
-                // Ambient glow behind rings (stronger on dark gradient background)
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [AppColors.scoreColor(for: score).opacity(0.25), AppColors.primary.opacity(0.08), .clear],
-                            center: .center,
-                            startRadius: 10,
-                            endRadius: 120
-                        )
-                    )
-                    .frame(width: 240, height: 240)
-
-                // Outer ring - 7-day improvement (green if up, red if down)
-                RingProgress(
-                    progress: animateRings ? improvementRingProgress : 0,
-                    color: improvementColor,
-                    lineWidth: 14
-                )
-                .frame(width: 170, height: 170)
-
-                // Middle ring - Sessions this week / weekly goal (teal)
-                RingProgress(
-                    progress: animateRings ? Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)) : 0,
-                    color: .teal,
-                    lineWidth: 14
-                )
-                .frame(width: 130, height: 130)
-
-                // Inner ring - Score (dynamic color)
-                RingProgress(
+        VStack(spacing: 18) {
+            // Three standalone gauges — value inside, label beneath.
+            HStack(spacing: 0) {
+                GaugeItem(
                     progress: animateRings ? Double(score) / 100 : 0,
                     color: AppColors.scoreColor(for: score),
-                    lineWidth: 14
+                    value: score > 0 ? "\(score)" : "—",
+                    label: "Avg Score"
                 )
-                .frame(width: 90, height: 90)
 
-                // Center score display
-                VStack(spacing: 0) {
-                    Text("\(score)")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppColors.scoreColor(for: score))
-                    Text("avg")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
+                GaugeItem(
+                    progress: animateRings ? Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)) : 0,
+                    color: AppColors.primary,
+                    value: "\(sessions)/\(sessionsGoal)",
+                    label: "This Week"
+                )
+
+                GaugeItem(
+                    progress: animateRings ? improvementRingProgress : 0,
+                    color: improvementColor,
+                    value: improvementText,
+                    label: "Trend"
+                )
             }
-            .frame(height: 180)
 
-            // Metrics row - integrated into the same card surface via a
-            // hairline separator instead of a nested background.
-            VStack(spacing: 14) {
+            // Best-score footer under a hairline, integrated into the card.
+            VStack(spacing: 12) {
                 Rectangle()
                     .fill(.white.opacity(0.08))
                     .frame(height: 0.5)
 
-                HStack(spacing: 0) {
-                    MetricItem(
-                        icon: improvementIcon,
-                        color: improvementColor,
-                        value: improvementText,
-                        label: "Trend"
-                    )
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trophy.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColors.scoreColor(for: bestScore))
+                        Text("Best score")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
-                    MetricDivider()
+                    Spacer()
 
-                    MetricItem(
-                        icon: "mic.fill",
-                        color: .teal,
-                        value: "\(sessions)/\(sessionsGoal)",
-                        label: "This Week"
-                    )
-
-                    MetricDivider()
-
-                    MetricItem(
-                        icon: "trophy.fill",
-                        color: AppColors.scoreColor(for: bestScore),
-                        value: bestScore > 0 ? "\(bestScore)" : "—",
-                        label: "Best Score"
-                    )
+                    Text(bestScore > 0 ? "\(bestScore)" : "—")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText(value: Double(bestScore)))
                 }
             }
         }
@@ -127,43 +85,18 @@ struct RingStatsView: View {
         .frame(maxWidth: .infinity)
         .background {
             ZStack {
-                RoundedRectangle(cornerRadius: 24)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(.ultraThinMaterial)
 
-                // Gradient tint
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(
-                        LinearGradient(
-                            colors: [AppColors.primary.opacity(0.08), AppColors.categoryBrandBright.opacity(0.03), .clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(AppColors.surfaceLift)
 
-                // Inner glow
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(
-                        LinearGradient(
-                            colors: [.white.opacity(0.06), .clear],
-                            startPoint: .top,
-                            endPoint: .center
-                        )
-                    )
-
-                // Top edge highlight
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.3), .white.opacity(0.08), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.5
-                    )
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.3), radius: 18, y: 9)
         .onAppear {
             withAnimation(.easeOut(duration: 1.2)) {
                 animateRings = true
@@ -174,39 +107,33 @@ struct RingStatsView: View {
     }
 }
 
-// MARK: - Metric Divider
+// MARK: - Gauge Item (standalone ring + label beneath)
 
-private struct MetricDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 0.5, height: 32)
-    }
-}
-
-// MARK: - Metric Item (compact row style)
-
-private struct MetricItem: View {
-    let icon: String
+private struct GaugeItem: View {
+    let progress: Double
     let color: Color
     let value: String
     let label: String
 
     var body: some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(color)
+        VStack(spacing: 10) {
+            ZStack {
+                RingProgress(progress: progress, color: color, lineWidth: 8)
+                    .frame(width: 78, height: 78)
 
                 Text(value)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(color)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 12)
             }
 
             Text(label)
-                .font(.caption2)
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
         }
         .frame(maxWidth: .infinity)
     }
@@ -221,20 +148,13 @@ struct RingProgress: View {
 
     var body: some View {
         ZStack {
+            // Neutral recessed track — color belongs to progress only
             Circle()
-                .stroke(color.opacity(0.15), lineWidth: lineWidth)
+                .stroke(Color.white.opacity(0.07), lineWidth: lineWidth)
 
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(
-                    AngularGradient(
-                        colors: [color.opacity(0.5), color],
-                        center: .center,
-                        startAngle: .degrees(0),
-                        endAngle: .degrees(360 * progress)
-                    ),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.easeOut(duration: 1.2), value: progress)
         }
@@ -248,5 +168,5 @@ struct RingProgress: View {
         RingStatsView(sessions: 0, sessionsGoal: 5, score: 0, bestScore: 0, improvement: 0)
     }
     .padding()
-    .background(Color.gray.opacity(0.1))
+    .background(AppBackground())
 }

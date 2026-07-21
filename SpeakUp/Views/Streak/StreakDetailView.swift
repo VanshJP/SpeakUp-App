@@ -2,8 +2,13 @@ import SwiftUI
 import SwiftData
 
 struct StreakDetailView: View {
-    @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
+    @Environment(\.modelContext) private var modelContext
     @Query private var achievements: [Achievement]
+
+    // Only dates are needed here. Fetched once on a background context so
+    // opening the streak sheet never hydrates every Recording on the main
+    // thread just to compute day math.
+    @State private var recordingDates: [Date] = []
 
     private var streakAchievements: [Achievement] {
         achievements
@@ -23,18 +28,18 @@ struct StreakDetailView: View {
     }
 
     private var currentStreak: Int {
-        Date.calculateStreak(from: recordings.map(\.date))
+        Date.calculateStreak(from: recordingDates)
     }
 
     private var longestStreak: Int {
-        Self.calculateLongestStreak(from: recordings.map(\.date))
+        Self.calculateLongestStreak(from: recordingDates)
     }
 
     private var lastFourteenDays: [DayCell] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let practiced: Set<Date> = Set(
-            recordings.map { calendar.startOfDay(for: $0.date) }
+            recordingDates.map { calendar.startOfDay(for: $0) }
         )
         return (0..<14).reversed().map { offset in
             let date = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
@@ -96,6 +101,16 @@ struct StreakDetailView: View {
         .navigationTitle("Streak")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .task {
+            let container = modelContext.container
+            recordingDates = await Task.detached(priority: .userInitiated) {
+                let context = ModelContext(container)
+                var descriptor = FetchDescriptor<Recording>()
+                descriptor.propertiesToFetch = [\.date]
+                let recordings = (try? context.fetch(descriptor)) ?? []
+                return recordings.map(\.date)
+            }.value
+        }
     }
 
     // MARK: - Hero
@@ -222,7 +237,6 @@ struct StreakDetailView: View {
                                     )
                                 )
                                 .frame(width: max(8, geo.size.width * milestoneProgress))
-                                .shadow(color: AppColors.warning.opacity(0.5), radius: 6, y: 1)
                         }
                     }
                     .frame(height: 10)
@@ -367,16 +381,25 @@ struct StreakDetailView: View {
 
         var id: Date { date }
 
-        var weekdayShort: String {
+        // DateFormatter is expensive to allocate — shared per type, not per cell.
+        private static let weekdayFormatter: DateFormatter = {
             let f = DateFormatter()
             f.dateFormat = "EEEEE" // S, M, T, W, T, F, S
-            return f.string(from: date)
+            return f
+        }()
+
+        private static let dayNumberFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "d"
+            return f
+        }()
+
+        var weekdayShort: String {
+            Self.weekdayFormatter.string(from: date)
         }
 
         var dayNumber: String {
-            let f = DateFormatter()
-            f.dateFormat = "d"
-            return f.string(from: date)
+            Self.dayNumberFormatter.string(from: date)
         }
     }
 

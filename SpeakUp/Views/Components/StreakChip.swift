@@ -11,15 +11,7 @@ struct StreakChip: View {
         HStack(spacing: 6) {
             Image(systemName: "flame.fill")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: isActive
-                            ? [AppColors.warning.opacity(0.85), AppColors.warning, AppColors.error.opacity(0.85)]
-                            : [Color.white.opacity(0.4), Color.white.opacity(0.25)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .foregroundStyle(isActive ? AppColors.warning : Color.white.opacity(0.35))
 
             Text("\(streak)")
                 .font(.subheadline.weight(.bold))
@@ -37,13 +29,13 @@ struct StreakChip: View {
                 .fill(.ultraThinMaterial)
                 .overlay {
                     Capsule()
-                        .fill(isActive ? AppColors.warning.opacity(0.12) : Color.clear)
+                        .fill(AppColors.surfaceLift)
                 }
                 .overlay {
                     Capsule()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
                 }
-                .shadow(color: isActive ? AppColors.warning.opacity(0.25) : .clear, radius: 8, y: 2)
+                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")

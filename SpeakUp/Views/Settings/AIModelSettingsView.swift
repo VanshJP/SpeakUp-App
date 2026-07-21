@@ -29,7 +29,7 @@ struct AIModelSettingsView: View {
     // MARK: - Dictation Card
 
     private var dictationCard: some View {
-        GlassCard(tint: .teal.opacity(0.05)) {
+        GlassCard(tint: AppColors.primary.opacity(0.05)) {
             HStack(spacing: 12) {
                 Image(systemName: "waveform")
                     .font(.title3)

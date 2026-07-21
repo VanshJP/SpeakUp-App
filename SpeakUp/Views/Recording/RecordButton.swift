@@ -76,46 +76,13 @@ extension View {
     }
 }
 
-// MARK: - Mini Record Button (for other uses)
-
-struct MiniRecordButton: View {
-    let isRecording: Bool
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 56, height: 56)
-                
-                if isRecording {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppColors.recording)
-                        .frame(width: 20, height: 20)
-                } else {
-                    Circle()
-                        .fill(AppColors.recording)
-                        .frame(width: 44, height: 44)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 #Preview("Record Button") {
     ZStack {
         Color.black.ignoresSafeArea()
-        
+
         VStack(spacing: 40) {
             RecordButton(isRecording: false, onTap: {})
             RecordButton(isRecording: true, onTap: {})
-            
-            HStack(spacing: 20) {
-                MiniRecordButton(isRecording: false, onTap: {})
-                MiniRecordButton(isRecording: true, onTap: {})
-            }
         }
     }
 }
