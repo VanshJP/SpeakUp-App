@@ -31,10 +31,9 @@ struct StoriesListView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            if !viewModel.stories.isEmpty {
-                statsStrip
-            }
-
+            // No stats strip — folder counts and tag counts were inventory
+            // numbers nobody acts on. The folder bar and the list already say
+            // how much is here.
             StoryFolderBar(
                 viewModel: viewModel,
                 onCreateFolder: {
@@ -48,15 +47,15 @@ struct StoriesListView: View {
             if viewModel.stories.isEmpty {
                 EmptyStateCard(
                     icon: "note.text",
-                    title: "Your Notebook",
-                    message: "Jot drafts, capture quick ideas, and reflect on practice sessions. Tap + to start."
+                    title: "Your Stories",
+                    message: "Write scripts, capture quick notes, and reflect on practice sessions. Tap + to start."
                 )
                 .padding(.top, 20)
             } else if viewModel.filteredStories.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
                     title: "Nothing Here",
-                    message: "No notes match this filter. Try another folder or search."
+                    message: "No stories match this filter. Try another folder or search."
                 )
                 .padding(.top, 20)
             } else {
@@ -88,7 +87,7 @@ struct StoriesListView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .alert("Delete Note?", isPresented: $showingDeleteAlert) {
+        .alert("Delete Story?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 if let story = storyToDelete {
                     viewModel.deleteStory(story)
@@ -97,7 +96,7 @@ struct StoriesListView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This note and its tags will be permanently deleted. Linked recordings will not be removed.")
+            Text("This story and its tags will be permanently deleted. Linked recordings will not be removed.")
         }
         .onAppear {
             viewModel.configure(with: modelContext)
@@ -110,40 +109,6 @@ struct StoriesListView: View {
         }
     }
 
-    // MARK: - Stats Strip
-
-    private var statsStrip: some View {
-        StatStrip(
-            items: [
-                .init(
-                    icon: "note.text",
-                    value: "\(viewModel.stories.count)",
-                    label: "Notes",
-                    color: AppColors.primary
-                ),
-                .init(
-                    icon: "pin.fill",
-                    value: "\(viewModel.stories.filter(\.isFavorite).count)",
-                    label: "Pinned",
-                    color: AppColors.warning,
-                    isHighlighted: viewModel.stories.contains(where: \.isFavorite)
-                ),
-                .init(
-                    icon: "folder.fill",
-                    value: "\(viewModel.folders.count)",
-                    label: "Folders",
-                    color: AppColors.categoryIndigo
-                ),
-                .init(
-                    icon: "tag.fill",
-                    value: "\(viewModel.stories.filter { !$0.tags.isEmpty }.count)",
-                    label: "Tagged",
-                    color: AppColors.categoryPlum
-                )
-            ]
-        )
-    }
-
     // MARK: - Story List
 
     private var storyList: some View {
@@ -154,7 +119,7 @@ struct StoriesListView: View {
 
             if !viewModel.unpinnedStories.isEmpty {
                 section(
-                    title: viewModel.pinnedStories.isEmpty ? "All Notes" : "Notes",
+                    title: viewModel.pinnedStories.isEmpty ? "All Stories" : "Stories",
                     icon: "note.text",
                     stories: viewModel.unpinnedStories
                 )

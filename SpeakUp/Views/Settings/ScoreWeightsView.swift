@@ -359,17 +359,21 @@ struct ScoreWeightsView: View {
         var id: String { name }
     }
 
+    /// Identity tones, not judgement. These distinguish nine weights from one
+    /// another — they must never be read as good/bad, which is why they come
+    /// from the muted jewel set rather than the score ramp. The previous
+    /// mapping used seven raw system hues and rendered as a rainbow.
     private var weightItems: [WeightItem] {
         [
-            WeightItem(name: "Clarity", weight: draftClarity, color: AppColors.categoryBrandBright),
-            WeightItem(name: "Pace", weight: draftPace, color: .blue),
-            WeightItem(name: "Filler", weight: draftFiller, color: .orange),
-            WeightItem(name: "Pauses", weight: draftPause, color: .purple),
-            WeightItem(name: "Vocal", weight: draftVocalVariety, color: .pink),
-            WeightItem(name: "Delivery", weight: draftDelivery, color: .red),
-            WeightItem(name: "Vocab", weight: draftVocabulary, color: .green),
-            WeightItem(name: "Structure", weight: draftStructure, color: .yellow),
-            WeightItem(name: "Relevance", weight: draftRelevance, color: AppColors.primary),
+            WeightItem(name: "Clarity", weight: draftClarity, color: AppColors.subscoreTone(0)),
+            WeightItem(name: "Pace", weight: draftPace, color: AppColors.subscoreTone(1)),
+            WeightItem(name: "Filler", weight: draftFiller, color: AppColors.subscoreTone(2)),
+            WeightItem(name: "Pauses", weight: draftPause, color: AppColors.subscoreTone(3)),
+            WeightItem(name: "Vocal", weight: draftVocalVariety, color: AppColors.subscoreTone(4)),
+            WeightItem(name: "Delivery", weight: draftDelivery, color: AppColors.subscoreTone(5)),
+            WeightItem(name: "Vocab", weight: draftVocabulary, color: AppColors.subscoreTone(6)),
+            WeightItem(name: "Structure", weight: draftStructure, color: AppColors.subscoreTone(7)),
+            WeightItem(name: "Relevance", weight: draftRelevance, color: AppColors.subscoreTone(8)),
         ]
     }
 

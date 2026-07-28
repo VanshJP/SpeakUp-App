@@ -24,8 +24,6 @@ struct ContentView: View {
     @State private var showingBeforeAfter = false
     @State private var showingJournalExport = false
     @State private var showingAchievements = false
-    @State private var showingWordBank = false
-    @State private var showingReadAloud = false
     @State private var showingStoryEditor = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
@@ -81,12 +79,6 @@ struct ContentView: View {
                     onShowAchievements: {
                         showingAchievements = true
                     },
-                    onShowWordBank: {
-                        showingWordBank = true
-                    },
-                    onShowReadAloud: {
-                        showingReadAloud = true
-                    },
                     onStartStoryPractice: { story in
                         recordingPrompt = nil
                         recordingStoryId = story.id
@@ -135,10 +127,18 @@ struct ContentView: View {
                     }
                 )
                 .navigationDestination(item: $selectedRecordingId) { recordingId in
-                    RecordingDetailView(recordingId: recordingId)
-                        .onDisappear {
-                            selectedRecordingId = nil
+                    RecordingDetailView(
+                        recordingId: recordingId,
+                        onPracticeAgain: { prompt in
+                            recordingPrompt = prompt
+                            recordingStoryId = nil
+                            recordingDuration = .sixty
+                            showingCountdown = true
                         }
+                    )
+                    .onDisappear {
+                        selectedRecordingId = nil
+                    }
                 }
             }
         case .learn:
@@ -156,12 +156,16 @@ struct ContentView: View {
         ZStack {
             TabView(selection: $selectedTab) {
                 ForEach(AppTab.allCases) { tab in
-                    Tab(tab.title, systemImage: tab.icon, value: tab) {
+                    Tab(tab.title, systemImage: tab == selectedTab ? tab.selectedIcon : tab.icon, value: tab) {
                         tabContent(for: tab)
                     }
                 }
             }
-             .tint(.white)
+            // Stop SwiftUI from auto-filling every tab symbol; we supply the
+            // filled variant explicitly for the selected tab only, so inactive
+            // tabs stay outline.
+            .environment(\.symbolVariants, .none)
+            .tint(.white)
             
             if showingCountdown {
                 CountdownOverlayView(
@@ -258,13 +262,6 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingWordBank) {
-            NavigationStack {
-                WordBankView(viewModel: settingsViewModel)
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $showingBeforeAfter) {
             BeforeAfterReplayView()
         }
@@ -272,11 +269,6 @@ struct ContentView: View {
             NavigationStack {
                 JournalExportView()
             }
-        }
-        .sheet(isPresented: $showingReadAloud) {
-            ReadAloudSelectionView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingStoryEditor) {
             NavigationStack {
@@ -453,13 +445,25 @@ enum AppTab: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Outline variant — shown when the tab is not selected.
     var icon: String {
         switch self {
-        case .today: return "mic.badge.plus"
-        case .library: return "books.vertical.fill"
-        case .history: return "clock.fill"
+        case .today: return "mic"
+        case .library: return "books.vertical"
+        case .history: return "clock"
         case .learn: return "book"
         case .settings: return "gearshape"
+        }
+    }
+
+    /// Filled variant — shown when the tab is selected.
+    var selectedIcon: String {
+        switch self {
+        case .today: return "mic.fill"
+        case .library: return "books.vertical.fill"
+        case .history: return "clock.fill"
+        case .learn: return "book.fill"
+        case .settings: return "gearshape.fill"
         }
     }
 }

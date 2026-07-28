@@ -87,7 +87,7 @@ struct StoryDetailView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .alert("Delete Note?", isPresented: $showingDeleteAlert) {
+        .alert("Delete Story?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 viewModel.deleteStory(story)
                 Haptics.warning()
@@ -95,7 +95,7 @@ struct StoryDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This note will be permanently deleted.")
+            Text("This story will be permanently deleted.")
         }
         .onAppear {
             linkedRecordings = viewModel.linkedRecordings(for: story)
@@ -154,7 +154,7 @@ struct StoryDetailView: View {
             HStack(spacing: 5) {
                 Image(systemName: currentFolder?.systemImage ?? "tray.full")
                     .font(.system(size: 10, weight: .semibold))
-                Text(currentFolder?.name ?? "All Notes")
+                Text(currentFolder?.name ?? "All Stories")
                     .font(.caption2.weight(.semibold))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
@@ -190,7 +190,7 @@ struct StoryDetailView: View {
             PracticeToolCard(
                 icon: "mic.fill",
                 title: "Practice",
-                subtitle: "Record from this note",
+                subtitle: "Record from this story",
                 color: AppColors.primary
             ) {
                 guard let onStartPractice else { return }
@@ -202,7 +202,7 @@ struct StoryDetailView: View {
                 icon: "flame.fill",
                 title: "Warm-Up",
                 subtitle: "Prep your voice",
-                color: .orange
+                color: AppColors.toolWarmUp
             ) {
                 guard let onSendToWarmUp else { return }
                 Haptics.medium()

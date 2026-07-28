@@ -33,17 +33,12 @@ nonisolated struct VocabCount: Hashable, Sendable {
 @MainActor @Observable
 class HistoryViewModel {
     var summaries: [RecordingSummary] = []
-    var currentStreak: Int = 0
-    var longestStreak: Int = 0
     var isLoading = true
 
-    // Derived stats precomputed once per load.
-    var averageScore: Int?
-    var totalPracticeTimeSeconds: TimeInterval = 0
+    /// Vocab-word usage totals, the one derived stat the History screen still
+    /// renders. Streak / average / per-day counts moved out with the stats
+    /// strip and contribution graph — no view read them any more.
     var aggregatedVocab: [VocabCount] = []
-    var filterCounts: [HistoryFilter: Int] = [:]
-    var recordingCountByDay: [Date: Int] = [:]
-    var contributionIntensityByDay: [Date: Double] = [:]
 
     private var modelContext: ModelContext?
     private var container: ModelContainer?
@@ -67,14 +62,7 @@ class HistoryViewModel {
         let result = await Self.fetchSummaries(container: container)
 
         self.summaries = result.summaries
-        self.averageScore = result.averageScore
-        self.totalPracticeTimeSeconds = result.totalPracticeTimeSeconds
         self.aggregatedVocab = result.aggregatedVocab
-        self.filterCounts = result.filterCounts
-        self.recordingCountByDay = result.recordingCountByDay
-        self.contributionIntensityByDay = result.contributionIntensityByDay
-        self.currentStreak = result.currentStreak
-        self.longestStreak = result.longestStreak
     }
 
     // MARK: - Background Load
@@ -92,14 +80,7 @@ class HistoryViewModel {
 
             var summaries: [RecordingSummary] = []
             summaries.reserveCapacity(recordings.count)
-            var scoreSum = 0
-            var scoreCount = 0
-            var totalDuration: TimeInterval = 0
             var vocabCounts: [String: Int] = [:]
-            var filterCounts: [HistoryFilter: Int] = [:]
-            var countByDay: [Date: Int] = [:]
-            let calendar = Calendar.current
-            let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
 
             for r in recordings {
                 if r.isDeleted { continue }
@@ -138,22 +119,6 @@ class HistoryViewModel {
                     )
                 )
 
-                totalDuration += r.actualDuration
-
-                if let score {
-                    scoreSum += score
-                    scoreCount += 1
-                    if score >= 80 {
-                        filterCounts[.highScore, default: 0] += 1
-                    }
-                }
-                if r.isFavorite { filterCounts[.favorites, default: 0] += 1 }
-                if r.storyId != nil { filterCounts[.stories, default: 0] += 1 }
-                if r.date >= weekAgo { filterCounts[.recent, default: 0] += 1 }
-
-                let day = calendar.startOfDay(for: r.date)
-                countByDay[day, default: 0] += 1
-
                 if let usage = r.analysis?.vocabWordsUsed {
                     for item in usage {
                         vocabCounts[item.word, default: 0] += item.count
@@ -161,62 +126,12 @@ class HistoryViewModel {
                 }
             }
 
-            let contributionIntensity = countByDay.mapValues(Self.intensityLevel(for:))
             let aggregatedVocab = vocabCounts
                 .sorted { $0.value > $1.value }
                 .map { VocabCount(word: $0.key, count: $0.value) }
-            let averageScore = scoreCount > 0 ? scoreSum / scoreCount : nil
 
-            let dates = summaries.map(\.date)
-            let currentStreak = Date.calculateStreak(from: dates)
-            let longestStreak = Self.calculateLongestStreak(from: dates)
-
-            return LoadResult(
-                summaries: summaries,
-                currentStreak: currentStreak,
-                longestStreak: longestStreak,
-                averageScore: averageScore,
-                totalPracticeTimeSeconds: totalDuration,
-                aggregatedVocab: aggregatedVocab,
-                filterCounts: filterCounts,
-                recordingCountByDay: countByDay,
-                contributionIntensityByDay: contributionIntensity
-            )
+            return LoadResult(summaries: summaries, aggregatedVocab: aggregatedVocab)
         }.value
-    }
-
-    nonisolated private static func intensityLevel(for count: Int) -> Double {
-        switch count {
-        case 0: return 0
-        case 1: return 0.25
-        case 2: return 0.5
-        case 3: return 0.75
-        default: return 1.0
-        }
-    }
-
-    nonisolated private static func calculateLongestStreak(from dates: [Date]) -> Int {
-        guard !dates.isEmpty else { return 0 }
-
-        let uniqueDays = Set(dates.map { Calendar.current.startOfDay(for: $0) })
-        let sortedDays = uniqueDays.sorted()
-
-        var maxStreak = 1
-        var currentStreakCount = 1
-
-        for i in 1..<sortedDays.count {
-            let previousDay = sortedDays[i - 1]
-            let currentDay = sortedDays[i]
-
-            if Calendar.current.isDate(currentDay, inSameDayAs: previousDay.adding(days: 1)) {
-                currentStreakCount += 1
-                maxStreak = max(maxStreak, currentStreakCount)
-            } else {
-                currentStreakCount = 1
-            }
-        }
-
-        return maxStreak
     }
 
     // MARK: - Mutations
@@ -239,13 +154,7 @@ class HistoryViewModel {
             ICloudStorageService.shared.removeFile(at: thumbnailURL)
         }
 
-        let day = Calendar.current.startOfDay(for: recording.date)
         summaries.removeAll { $0.id == id }
-        if let existing = recordingCountByDay[day] {
-            let newCount = max(0, existing - 1)
-            recordingCountByDay[day] = newCount
-            contributionIntensityByDay[day] = Self.intensityLevel(for: newCount)
-        }
 
         context.delete(recording)
 
@@ -288,22 +197,11 @@ class HistoryViewModel {
                 fillerCount: s.fillerCount,
                 searchableText: s.searchableText
             )
-
-            let wasAlreadyFavorite = s.isFavorite
-            let delta = wasAlreadyFavorite ? -1 : 1
-            filterCounts[.favorites, default: 0] = max(0, (filterCounts[.favorites] ?? 0) + delta)
         }
     }
 }
 
 nonisolated private struct LoadResult: Sendable {
     var summaries: [RecordingSummary] = []
-    var currentStreak: Int = 0
-    var longestStreak: Int = 0
-    var averageScore: Int?
-    var totalPracticeTimeSeconds: TimeInterval = 0
     var aggregatedVocab: [VocabCount] = []
-    var filterCounts: [HistoryFilter: Int] = [:]
-    var recordingCountByDay: [Date: Int] = [:]
-    var contributionIntensityByDay: [Date: Double] = [:]
 }

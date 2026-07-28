@@ -103,7 +103,7 @@ struct DrillSessionView: View {
             if viewModel.isActive {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(viewModel.audioLevel > -40 ? AppColors.success : Color.gray)
+                        .fill(viewModel.audioLevel > -40 ? AppColors.success : AppColors.scoreEmpty)
                         .frame(width: 8, height: 8)
                         .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
 

@@ -12,8 +12,6 @@ struct RingStatsView: View {
     /// Improvement magnitude that fills the trend gauge completely.
     private let improvementTarget: Double = 30
 
-    @State private var animateRings = false
-
     private var improvementRingProgress: Double {
         min(1.0, abs(improvement) / improvementTarget)
     }
@@ -35,21 +33,21 @@ struct RingStatsView: View {
             // Three standalone gauges — value inside, label beneath.
             HStack(spacing: 0) {
                 GaugeItem(
-                    progress: animateRings ? Double(score) / 100 : 0,
+                    progress: Double(score) / 100,
                     color: AppColors.scoreColor(for: score),
                     value: score > 0 ? "\(score)" : "—",
                     label: "Avg Score"
                 )
 
                 GaugeItem(
-                    progress: animateRings ? Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)) : 0,
+                    progress: Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)),
                     color: AppColors.primary,
                     value: "\(sessions)/\(sessionsGoal)",
                     label: "This Week"
                 )
 
                 GaugeItem(
-                    progress: animateRings ? improvementRingProgress : 0,
+                    progress: improvementRingProgress,
                     color: improvementColor,
                     value: improvementText,
                     label: "Trend"
@@ -97,11 +95,6 @@ struct RingStatsView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 18, y: 9)
-        .onAppear {
-            withAnimation(.easeOut(duration: 1.2)) {
-                animateRings = true
-            }
-        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Stats: 7-day trend \(improvementText), \(sessions) of \(sessionsGoal) sessions this week, average score \(score) out of 100, best score \(bestScore)")
     }
@@ -156,7 +149,6 @@ struct RingProgress: View {
                 .trim(from: 0, to: progress)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 1.2), value: progress)
         }
     }
 }

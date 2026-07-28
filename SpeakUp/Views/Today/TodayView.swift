@@ -8,6 +8,12 @@ struct TodayView: View {
     @Query private var userSettings: [UserSettings]
     @State private var showingFirstRecordingSetup = false
 
+    // Focus-card routing — mirrors the post-session NextStep sheets in
+    // RecordingDetailView so both entry points land on the same tool.
+    @State private var focusDrill: DrillMode?
+    @State private var showingFocusWarmUp = false
+    @State private var showingFocusReadAloud = false
+
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowWheel: () -> Void
     var onShowWarmUps: () -> Void
@@ -15,8 +21,6 @@ struct TodayView: View {
     var onShowConfidence: () -> Void
     var onShowCurriculum: () -> Void
     var onShowAchievements: () -> Void = {}
-    var onShowWordBank: () -> Void = {}
-    var onShowReadAloud: () -> Void = {}
     var onStartStoryPractice: ((Story) -> Void)?
 
     var body: some View {
@@ -32,17 +36,22 @@ struct TodayView: View {
                     // 1. Header — date + streak chip
                     topHeaderRow
 
-                    // 2. This week's dashboard (tap → full Progress charts)
+                    // 2. Where you stand (tap → full Progress charts).
                     ringStatsSection
 
-                    // 3. Core action — today's prompt + start buttons
+                    // 3. What to do about it. Reads as the conclusion drawn
+                    //    from the rings directly above, which is why it sits
+                    //    between the stats and the generic prompt path.
+                    focusSection
+
+                    // 4. Core action — today's prompt + start buttons
                     interactivePromptSection
                     startButtonSection
 
-                    // 4. Quick actions
+                    // 5. Quick actions
                     toolbarStrip
 
-                    // 5. Daily challenge
+                    // 6. Daily challenge
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
                     }
@@ -67,6 +76,52 @@ struct TodayView: View {
             FirstRecordingSetupSheet()
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $focusDrill) { mode in
+            DrillSelectionView(initialMode: mode)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingFocusWarmUp) {
+            WarmUpListView()
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingFocusReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+        }
+    }
+
+    // MARK: - Focus Section
+
+    /// Hidden until there is something to average. One analyzed session is a
+    /// mood, not a pattern — below the threshold the prompt card is the honest
+    /// primary action.
+    private static let focusMinimumSessions = 2
+
+    @ViewBuilder
+    private var focusSection: some View {
+        let samples = viewModel.recentSubscores
+
+        if samples.count >= Self.focusMinimumSessions,
+           let rolling = SpeechSubscores.rollingAverage(samples) {
+            TodayFocusCard(
+                step: NextStep.from(rolling),
+                sessionCount: samples.count,
+                onAction: self.handleFocusAction
+            )
+        }
+    }
+
+    private func handleFocusAction(_ action: NextStep.Action) {
+        switch action {
+        case .drill(let mode):
+            focusDrill = mode
+        case .warmUp:
+            showingFocusWarmUp = true
+        case .readAloud:
+            showingFocusReadAloud = true
+        case .practiceAgain:
+            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
         }
     }
 
@@ -272,25 +327,21 @@ struct TodayView: View {
 
     // MARK: - Quick Actions Strip
 
+    // Four shortcuts, not six — Vocab lives in Settings and Read-Aloud in the
+    // Library's Tools section, so Today keeps only what starts a session now.
     private var toolbarStrip: some View {
         HStack(spacing: 8) {
-            quickActionTile(icon: "wind", label: "Warm Up", color: .blue) {
+            quickActionTile(icon: "wind", label: "Warm Up", color: AppColors.toolWarmUp) {
                 onShowWarmUps()
             }
-            quickActionTile(icon: "bolt.fill", label: "Drills", color: .orange) {
+            quickActionTile(icon: "bolt.fill", label: "Drills", color: AppColors.toolDrill) {
                 onShowDrills()
             }
-            quickActionTile(icon: "heart.fill", label: "Calm", color: .pink) {
+            quickActionTile(icon: "heart.fill", label: "Calm", color: AppColors.toolCalm) {
                 onShowConfidence()
             }
-            quickActionTile(icon: "shuffle", label: "Wheel", color: .purple) {
+            quickActionTile(icon: "shuffle", label: "Wheel", color: AppColors.toolWheel) {
                 onShowWheel()
-            }
-            quickActionTile(icon: "character.book.closed", label: "Vocab", color: .green) {
-                onShowWordBank()
-            }
-            quickActionTile(icon: "text.book.closed", label: "Read", color: .teal) {
-                onShowReadAloud()
             }
         }
     }
@@ -558,8 +609,6 @@ struct PracticeToolCard: View {
             onShowConfidence: {},
             onShowCurriculum: {},
             onShowAchievements: {},
-            onShowWordBank: {},
-            onShowReadAloud: {},
             onStartStoryPractice: { _ in }
         )
     }

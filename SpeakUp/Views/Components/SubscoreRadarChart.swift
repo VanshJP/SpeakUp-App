@@ -29,17 +29,35 @@ struct SubscoreRadarChart: View {
     let axes: [Axis]
     let overallScore: Int
     var animate: Bool
+    /// Set false when the composite score is already displayed next to the
+    /// chart — the central numeral would otherwise be a second copy of it.
+    var showsCenterScore: Bool
+    /// Optional best/worst callout. When either is set, the two named axes
+    /// render at full opacity with a direction marker and every other label
+    /// dims, so the chart carries the "strongest / weakest" story on its own.
+    var emphasizedAxisIDs: (strongest: String?, weakest: String?)
 
     @State private var drawProgress: CGFloat
     @State private var selectedAxis: Axis?
     @State private var isAnimatingIn = false
 
-    private let labelInset: CGFloat = 52
+    /// Room reserved outside the annulus for the orbiting labels. Tightened
+    /// from 52 — the labels were parked far enough out that the donut shrank
+    /// and the card gained a ring of dead space.
+    private let labelInset: CGFloat = 42
 
-    init(axes: [Axis], overallScore: Int, animate: Bool = true) {
+    init(
+        axes: [Axis],
+        overallScore: Int,
+        animate: Bool = true,
+        showsCenterScore: Bool = true,
+        emphasizedAxisIDs: (strongest: String?, weakest: String?) = (nil, nil)
+    ) {
         self.axes = axes
         self.overallScore = overallScore
         self.animate = animate
+        self.showsCenterScore = showsCenterScore
+        self.emphasizedAxisIDs = emphasizedAxisIDs
         self._drawProgress = State(initialValue: animate ? 0.0 : 1.0)
     }
 
@@ -54,7 +72,9 @@ struct SubscoreRadarChart: View {
                 wedgeCanvas(outerRadius: radius, innerRadius: inner)
                 hitTestLayer(outerRadius: radius, innerRadius: inner)
                 axisLabels(center: center, radius: radius)
-                centerScore
+                if showsCenterScore {
+                    centerScore
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -85,81 +105,105 @@ struct SubscoreRadarChart: View {
 
     // MARK: - Layers
 
-    /// Draws all wedge ring fills in a single Canvas pass instead of one
-    /// SwiftUI Shape view per ring. Reduces per-frame view count from
-    /// `axes.count * ringCount` to one during the draw-in animation.
+    /// Draws every wedge in a single Canvas pass rather than one SwiftUI Shape
+    /// per ring, so the view count stays flat during the draw-in animation.
+    ///
+    /// Radius encodes the value continuously. It used to quantize into six
+    /// buckets aligned to the score bands, which meant everything from 60 to 79
+    /// drew an identical shape — five different subscores rendering the same
+    /// made the chart decorative rather than informative. The concentric rings
+    /// survive as a *scale grid* drawn across the full annulus: they are
+    /// graph paper now, not the encoding.
     private func wedgeCanvas(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
         let count = max(axes.count, 1)
         let step = 2 * Double.pi / Double(count)
         let angularGap: Double = step * 0.04
-        let ringCount = 6
-        let radialGap: CGFloat = 2.5
+        let gridRings = 4
         let progress = drawProgress
         let selectedID = selectedAxis?.id
 
-        // Hoist per-axis trig + color lookups to one O(axes) pass per body
-        // re-evaluation instead of recomputing inside the Canvas closure on
-        // every frame of the draw-in animation.
+        // Hoist per-axis trig to one O(axes) pass per body re-evaluation
+        // instead of recomputing inside the Canvas closure on every frame.
         let table: [WedgeGeometry] = axes.enumerated().map { index, axis in
             let mid = -.pi / 2 + step * Double(index)
             let start = Angle(radians: mid - step / 2 + angularGap / 2)
             let end = Angle(radians: mid + step / 2 - angularGap / 2)
-            let filled: Int = {
-                let v = axis.value
-                if v == 0 { return 0 }
-                if v < 40 { return v < 20 ? 1 : 2 }
-                if v < 60 { return 3 }
-                if v < 80 { return 4 }
-                return v < 90 ? 5 : 6
-            }()
             return WedgeGeometry(
                 start: start,
                 end: end,
-                color: AppColors.scoreColor(for: axis.value),
-                filledRings: filled,
+                fraction: CGFloat(max(0, min(100, axis.value))) / 100,
                 axisID: axis.id
             )
         }
 
         return Canvas(rendersAsynchronously: true) { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
+
             for wedge in table {
                 let isSelected = selectedID == wedge.axisID
                 let bump: CGFloat = isSelected ? 4 : 0
-                let span = ((outerRadius + bump) - innerRadius) * progress
+                let outer = outerRadius + bump
+                let fullSpan = outer - innerRadius
 
-                for ring in 0..<ringCount {
-                    let ringInner = innerRadius + span * CGFloat(ring) / CGFloat(ringCount) + radialGap / 2
-                    let ringOuter = innerRadius + span * CGFloat(ring + 1) / CGFloat(ringCount) - radialGap / 2
-                    guard ringOuter > ringInner else { continue }
-                    let isFilled = ring < wedge.filledRings
-                    let ringFraction = Double(ring) / Double(max(ringCount - 1, 1))
-                    let filledOpacity = isSelected
-                        ? 0.55 + 0.45 * ringFraction
-                        : 0.45 + 0.47 * ringFraction
-                    let fillColor: Color = isFilled
-                        ? wedge.color.opacity(filledOpacity)
-                        : Color.white.opacity(isSelected ? 0.09 : 0.055)
-
-                    let path = AnnularWedge.makePath(
+                // 1. Track — the wedge's full extent, so an empty axis still
+                //    reads as a slot rather than as missing geometry.
+                context.fill(
+                    AnnularWedge.makePath(
                         center: center,
-                        innerRadius: ringInner,
-                        outerRadius: ringOuter,
+                        innerRadius: innerRadius,
+                        outerRadius: outer,
                         startAngle: wedge.start,
                         endAngle: wedge.end
-                    )
-                    context.fill(path, with: .color(fillColor))
-                }
+                    ),
+                    with: .color(Color.white.opacity(isSelected ? 0.09 : 0.05))
+                )
+
+                // 2. Fill — one continuous wedge whose outer edge lands at the
+                //    value. Opacity rises with the value too, so a strong axis
+                //    reads brighter as well as longer.
+                let filledSpan = fullSpan * wedge.fraction * progress
+                guard filledSpan > 0.5 else { continue }
+
+                let opacity = 0.40 + 0.50 * Double(wedge.fraction) + (isSelected ? 0.10 : 0)
+                context.fill(
+                    AnnularWedge.makePath(
+                        center: center,
+                        innerRadius: innerRadius,
+                        outerRadius: innerRadius + filledSpan,
+                        startAngle: wedge.start,
+                        endAngle: wedge.end
+                    ),
+                    with: .color(Self.wedgeHue.opacity(min(1.0, opacity)))
+                )
+            }
+
+            // 3. Scale grid — thin concentric separators across the whole
+            //    annulus, drawn last so they read as graph paper over the fill
+            //    instead of chunking it into buckets.
+            for ring in 1..<gridRings {
+                let r = innerRadius + (outerRadius - innerRadius) * CGFloat(ring) / CGFloat(gridRings)
+                let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+                context.stroke(
+                    Path(ellipseIn: rect),
+                    with: .color(Color.black.opacity(0.28)),
+                    lineWidth: 1
+                )
             }
         }
         .allowsHitTesting(false)
     }
 
+    /// One hue for every wedge. Eight score-colored wedges became a rainbow
+    /// once the palette brightened; length and opacity carry the value, and
+    /// the only color accents left on the chart are the strongest/weakest
+    /// markers on the labels.
+    private static let wedgeHue = AppColors.categoryBrandBright
+
     private struct WedgeGeometry {
         let start: Angle
         let end: Angle
-        let color: Color
-        let filledRings: Int
+        /// Value mapped to 0...1 of the annulus span.
+        let fraction: CGFloat
         let axisID: String
     }
 
@@ -192,7 +236,7 @@ struct SubscoreRadarChart: View {
     @ViewBuilder
     private func axisLabels(center: CGPoint, radius: CGFloat) -> some View {
         ForEach(Array(axes.enumerated()), id: \.element.id) { index, axis in
-            let anchorPoint = vertex(at: index, center: center, radius: radius + 26, scaled: 1.0)
+            let anchorPoint = vertex(at: index, center: center, radius: radius + 21, scaled: 1.0)
             axisLabel(axis: axis)
                 .contentShape(Rectangle())
                 .onTapGesture { selectAxis(axis) }
@@ -202,16 +246,43 @@ struct SubscoreRadarChart: View {
 
     @ViewBuilder
     private func axisLabel(axis: Axis) -> some View {
+        let isStrongest = emphasizedAxisIDs.strongest != nil && axis.id == emphasizedAxisIDs.strongest
+        let isWeakest = emphasizedAxisIDs.weakest != nil && axis.id == emphasizedAxisIDs.weakest
+        let hasEmphasis = emphasizedAxisIDs.strongest != nil || emphasizedAxisIDs.weakest != nil
+
+        // The value is neutral unless this axis is one of the two callouts.
+        // Score-coloring all eight numbers put the rainbow back in the text
+        // after it had been taken out of the wedges.
+        let valueTint: Color = {
+            if isStrongest { return AppColors.success }
+            if isWeakest { return AppColors.warning }
+            return .white
+        }()
+
         VStack(spacing: 1) {
             Text("\(axis.value)")
                 .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(AppColors.scoreColor(for: axis.value))
-            Text(axis.label)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
-                .tracking(0.3)
-                .lineLimit(1)
+                .foregroundStyle(valueTint)
+            HStack(spacing: 2) {
+                if isStrongest {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundStyle(AppColors.success)
+                } else if isWeakest {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundStyle(AppColors.warning)
+                }
+                Text(axis.label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .tracking(0.3)
+                    .lineLimit(1)
+            }
         }
+        // The two callouts stay at full strength and everything else recedes,
+        // which is what lets the marker read without a legend.
+        .opacity(hasEmphasis && !isStrongest && !isWeakest ? 0.55 : 1)
         .fixedSize()
     }
 

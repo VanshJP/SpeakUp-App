@@ -342,23 +342,8 @@ struct AboutSettingsView: View {
                         }
                     }
 
-                    NavigationLink {
-                        JournalExportView()
-                    } label: {
-                        GlassCard(padding: 14) {
-                            HStack {
-                                Label("Export Progress Journal", systemImage: "doc.richtext")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .frame(minHeight: 32)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                    // Journal export lives in History → Progress → More,
+                    // next to the data it exports.
                 }
                 .padding()
             }

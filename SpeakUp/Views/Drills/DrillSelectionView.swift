@@ -8,9 +8,11 @@ struct DrillSelectionView: View {
     @State private var showingSession = false
     @State private var showingCountdown = false
     @State private var selectedDrillMode: DrillMode?
-    @State private var showingReadAloud = false
 
     var sourceStory: Story?
+    /// Arms a specific drill on open — used when a session's weakest subscore
+    /// routes the user straight to the drill that targets it.
+    var initialMode: DrillMode?
 
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -67,35 +69,6 @@ struct DrillSelectionView: View {
                                 .buttonStyle(.plain)
                             }
 
-                            // Read Aloud drill card
-                            Button {
-                                showingReadAloud = true
-                            } label: {
-                                GlassCard {
-                                    VStack(spacing: 12) {
-                                        Image(systemName: "text.book.closed")
-                                            .font(.largeTitle)
-                                            .foregroundStyle(AppColors.categoryNeutralCool)
-
-                                        Text("Read Aloud")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.primary)
-
-                                        Text("Read text out loud — real-time accuracy tracking")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .multilineTextAlignment(.center)
-                                            .lineLimit(2)
-
-                                        Text("Clarity")
-                                            .font(.caption.weight(.bold))
-                                            .foregroundStyle(AppColors.categoryNeutralCool)
-                                    }
-                                    .padding(.vertical, 4)
-                                    .frame(maxWidth: .infinity, minHeight: 140, maxHeight: 140)
-                                }
-                            }
-                            .buttonStyle(.plain)
                         }
                         .padding(.horizontal)
                     }
@@ -140,8 +113,10 @@ struct DrillSelectionView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: showingCountdown)
-            .sheet(isPresented: $showingReadAloud) {
-                ReadAloudSelectionView()
+            .task {
+                guard let initialMode else { return }
+                selectedDrillMode = initialMode
+                showingCountdown = true
             }
         }
     }
@@ -156,7 +131,7 @@ struct DrillSelectionView: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
-                Text(story.title.isEmpty ? "Untitled note" : story.title)
+                Text(story.title.isEmpty ? "Untitled story" : story.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)

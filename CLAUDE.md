@@ -181,15 +181,15 @@ Shared between WhisperService, SpeechService, LiveTranscriptionService. Pause th
 ## UI Design System (follow this for all new views)
 
 ### Aesthetic philosophy
-Neutral graphite + soft floating surfaces ("Bevel at night"). The canvas is a near-black neutral (`AppBackground`) with a single faint brand bloom at the top — color never lives in the chrome, only in the data (rings, charts, scores, state icons). Every card is translucent material lifted a step above the canvas (`AppColors.surfaceLift`) with a uniform hairline (`AppColors.cardStroke`) and a soft diffuse black shadow — no gradient strokes, no inner glows, no tinted orbs, no colored glow shadows. The one loud element per screen is the primary CTA: a light pill with ink text. Motion is restrained: `.spring(response: 0.3)` or `.easeInOut(duration: 0.2)`.
+Deep navy canvas + soft floating surfaces. The canvas is a dark navy gradient (`AppBackground`) carrying three low-opacity ambient orbs — teal top-right, indigo bottom-left, cyan center — which give the glass surfaces something to refract instead of sitting on flat black. Ambient color lives in the canvas; *meaningful* color still lives only in the data (rings, charts, scores, state icons), and the score ramp is pitched bright so a verdict reads at a glance over the navy. Every card is translucent material lifted a step above the canvas (`AppColors.surfaceLift`) with a uniform hairline (`AppColors.cardStroke`) and a soft diffuse black shadow — no gradient strokes, no inner glows, no colored glow shadows. The one loud element per screen is the primary CTA: a light pill with ink text. Motion is restrained: `.spring(response: 0.3)` or `.easeInOut(duration: 0.2)`.
 
 Tab bar is tinted white (`.tint(.white)`), navigation titles inline, color scheme locked to `.dark` (`preferredColorScheme(.dark)`).
 
 ### Background — `AppBackground`
-Flat neutral graphite base + soft vertical lift at the top + one faint teal bloom above the top edge. No orb fields, no navy, no multi-color gradients:
-- **`.primary`** — default for all tabs. `#0D0D0F` base, 5% bloom.
-- **`.recording`** — darker (`#08080A`), 8% bloom for focused recording sessions.
-- **`.subtle`** — slightly lifted (`#111114`) for sheets and detail views.
+Layered, not flat. A deep navy base (`rgb 0.035, 0.04, 0.09`) + a diagonal top-leading → bottom-trailing gradient wash + three radial ambient orbs: teal at `(0.85, 0.08)`, indigo at `(0.12, 0.88)`, and a soft cyan glow at `(0.5, 0.42)`. Style only changes the wash colors and the three orb opacities:
+- **`.primary`** — default for all tabs. Navy-blue wash, teal 12% / indigo 9% / cyan 4%.
+- **`.recording`** — darkest wash for focused recording sessions; teal pushed to 18% and cyan to 6%, indigo pulled back to 6%.
+- **`.subtle`** — lightest wash, orbs dialed down (teal 10% / indigo 8% / cyan 3%) for sheets and detail views.
 
 Apply via `.appBackground(.primary)`. Every screen must have an `AppBackground` — never use plain `Color` or system backgrounds.
 
@@ -228,14 +228,22 @@ All colors come from `AppColors`. Never use raw `Color.blue`, `Color.gray`, etc.
 |-------|-------|-------|
 | `.primary` | Muted teal `#0D8488` | Brand color, primary buttons, progress rings, active states |
 | `.accent` | Warm gray `#64748B` | Secondary text, subtle UI elements |
-| `.success` | Green | Positive scores, completed states |
-| `.warning` | Orange | Filler words, medium scores, streaks |
-| `.error` | Red | Recording indicator, danger actions, low scores |
-| `.info` | Blue | Informational badges |
-| `.recording` | Red | Active recording states |
-| `.recordingPulse` | Red 30% | Recording button pulse ring |
+| `.success` | Vivid emerald `#38CC80` | Positive scores, completed states (matches `scoreHigh`) |
+| `.warning` | Bright amber `#F5A93C` | Filler words, caution states, streaks |
+| `.error` | Vivid coral `#F5544A` | Danger actions, failures (matches `scoreLow`) |
+| `.info` | Muted steel `#5B87C2` | Informational badges only — never a score band |
+| `.recording` | Live red `#D94B45` | Active recording states — the one intentionally hot color |
+| `.recordingPulse` | Recording 30% | Recording button pulse ring |
 
-**Score colors** — `AppColors.scoreColor(for:)`: red (0-39), orange (40-59), yellow (60-79), green (80-100). Also `scoreGradient(for:)` for linear gradient fills.
+**No system colors.** `Color.green` / `.orange` / `.red` / `.yellow` are tuned for light UI and drift muddy over the navy canvas. Every tone is hand-picked in `AppColors` — bright ones for state and scores, muted jewel tones for category/tool identity, so state always out-reads identity.
+
+**Score colors** — `AppColors.scoreColor(for:)` uses its own ramp, *not* the state colors (a 70 is not a "warning"): `scoreLow` coral `#F5544A` (0-39), `scoreMid` orange `#FF9036` (40-59), `scoreGood` gold `#F5C542` (60-79), `scoreHigh` emerald `#38CC80` (80-100), `scoreEmpty` `#6A6F76` (unscored). Deliberately vivid — a verdict has to read at ring and chip size. `scoreGood` is a warm gold rather than `Color.yellow`; pure yellow can't hold contrast under white text. Pair with `AppColors.scoreVerdict(for:)` for the matching one-word verdict. Also `scoreGradient(for:)` for linear gradient fills.
+
+**Meters** — `AppColors.meterTrack` is the recessed track behind any ring, meter, or progress capsule. Don't re-hardcode `Color.white.opacity(0.07)`.
+
+**Tool tones** — `toolWarmUp` / `toolDrill` / `toolReadAloud` / `toolCalm` / `toolWheel` give each practice tool one identity tone shared by the Today quick-action strip and the Library tools list, so the two surfaces can't drift.
+
+**Subscore tones** — `AppColors.subscoreTone(_:)` distinguishes subscores as *categories* (weight editor, legends). These never encode good or bad; judgement is always `scoreColor(for:)`.
 
 **Surfaces** — `.surfaceLift` (white 3%, card lift over material), `.cardStroke` (white 7%, uniform hairline).
 

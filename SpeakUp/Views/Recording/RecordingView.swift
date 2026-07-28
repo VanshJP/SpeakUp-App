@@ -583,7 +583,7 @@ private struct VoiceActivityPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(isSpeaking ? AppColors.success : Color.gray)
+                .fill(isSpeaking ? AppColors.success : AppColors.scoreEmpty)
                 .frame(width: 8, height: 8)
                 .animation(.easeInOut(duration: 0.15), value: isSpeaking)
 

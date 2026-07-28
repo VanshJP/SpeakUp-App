@@ -5,10 +5,17 @@ struct PracticeHubView: View {
     @State private var selectedSection: PracticeSection = .prompts
     @State private var promptsSearchText = ""
     @State private var storiesSearchText = ""
+    @State private var toolsSearchText = ""
     @State private var selectedStory: Story?
     @State private var showingAddPrompt = false
     @State private var showingBatchAdd = false
     @State private var showingNewStory = false
+
+    // Practice tools — presented locally; each is a self-contained sheet.
+    @State private var showingWarmUps = false
+    @State private var showingDrills = false
+    @State private var showingReadAloud = false
+    @State private var showingConfidence = false
 
     let onSelectPrompt: (Prompt) -> Void
     var onStartStoryPractice: ((Story) -> Void)? = nil
@@ -32,7 +39,7 @@ struct PracticeHubView: View {
                                 searchText: promptsSearchText
                             )
                             .transition(.opacity)
-                        case .journal:
+                        case .stories:
                             StoriesListView(
                                 viewModel: storiesViewModel,
                                 selectedStory: $selectedStory,
@@ -41,6 +48,9 @@ struct PracticeHubView: View {
                                 onSendToDrill: onSendToDrill
                             )
                             .transition(.opacity)
+                        case .tools:
+                            toolsSection
+                                .transition(.opacity)
                         }
 
                         Color.clear.frame(height: 88) // FAB breathing room
@@ -93,6 +103,118 @@ struct PracticeHubView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingWarmUps) {
+            WarmUpListView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingDrills) {
+            DrillSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingConfidence) {
+            ConfidenceToolsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: - Tools
+
+    /// The practice tools used to live only behind six small tiles on Today.
+    /// They belong in the Library — this is the browsable list of everything
+    /// you can practice with.
+    private var tools: [PracticeTool] {
+        [
+            PracticeTool(icon: "wind", color: AppColors.toolWarmUp, title: "Warm-Ups",
+                         subtitle: "Breathing, tongue twisters, vocal reps",
+                         meta: Self.countMeta(DefaultWarmUps.all.count, "exercise",
+                                              seconds: DefaultWarmUps.all.map(\.durationSeconds))) { showingWarmUps = true },
+            PracticeTool(icon: "bolt.fill", color: AppColors.toolDrill, title: "Drills",
+                         subtitle: "Short reps against one weakness",
+                         meta: Self.countMeta(DrillMode.allCases.count, "mode",
+                                              seconds: DrillMode.allCases.map(\.defaultDurationSeconds))) { showingDrills = true },
+            PracticeTool(icon: "text.book.closed", color: AppColors.toolReadAloud, title: "Read Aloud",
+                         subtitle: "Passages scored for pronunciation",
+                         meta: "\(DefaultReadAloudPassages.all.count) passages · scored") { showingReadAloud = true },
+            PracticeTool(icon: "heart.fill", color: AppColors.toolCalm, title: "Calm",
+                         subtitle: "Settle nerves before you speak",
+                         meta: Self.countMeta(DefaultConfidenceExercises.all.count, "exercise",
+                                              seconds: DefaultConfidenceExercises.all.map { $0.durationMinutes * 60 })) { showingConfidence = true }
+        ]
+    }
+
+    /// "4 exercises · 1–3 min" — count plus the real time range, so a row says
+    /// what it costs before you tap it. Computed from the seed data rather than
+    /// written down, so it can't drift when exercises are added.
+    private static func countMeta(_ count: Int, _ noun: String, seconds: [Int]) -> String {
+        let countText = "\(count) \(noun)\(count == 1 ? "" : "s")"
+        guard let low = seconds.min(), let high = seconds.max(), low > 0 else { return countText }
+
+        func format(_ value: Int) -> String {
+            value < 60 ? "\(value)s" : "\(Int((Double(value) / 60).rounded())) min"
+        }
+
+        let range = low == high ? format(low) : "\(format(low))–\(format(high))"
+        return "\(countText) · \(range)"
+    }
+
+    private var toolsSection: some View {
+        let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
+        let visible = query.isEmpty
+            ? tools
+            : tools.filter {
+                $0.title.localizedStandardContains(query) || $0.subtitle.localizedStandardContains(query)
+            }
+
+        return VStack(spacing: 12) {
+            ForEach(visible) { tool in
+                toolRow(tool)
+            }
+        }
+    }
+
+    private func toolRow(_ tool: PracticeTool) -> some View {
+        Button {
+            Haptics.medium()
+            tool.action()
+        } label: {
+            GlassCard(cornerRadius: 16, padding: 14) {
+                HStack(spacing: 14) {
+                    Image(systemName: tool.icon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(tool.color)
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(tool.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text(tool.subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(tool.meta)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(GlassPressStyle())
     }
 
     // MARK: - Floating Action Button
@@ -119,7 +241,7 @@ struct PracticeHubView: View {
                 fabLabel
             }
             .accessibilityLabel("Add prompt")
-        case .journal:
+        case .stories:
             Button {
                 Haptics.heavy()
                 showingNewStory = true
@@ -127,7 +249,9 @@ struct PracticeHubView: View {
                 fabLabel
             }
             .buttonStyle(GlassPressStyle())
-            .accessibilityLabel("New note")
+            .accessibilityLabel("New story")
+        case .tools:
+            EmptyView()
         }
     }
 
@@ -152,14 +276,16 @@ struct PracticeHubView: View {
     private var activeSearchText: Binding<String> {
         switch selectedSection {
         case .prompts: return $promptsSearchText
-        case .journal: return $storiesSearchText
+        case .stories: return $storiesSearchText
+        case .tools: return $toolsSearchText
         }
     }
 
     private var searchPrompt: String {
         switch selectedSection {
-        case .prompts: return "Search prompts..."
-        case .journal: return "Search notes…"
+        case .prompts: return "Search prompts…"
+        case .stories: return "Search stories…"
+        case .tools: return "Search tools…"
         }
     }
 
@@ -190,25 +316,42 @@ struct PracticeHubView: View {
     }
 }
 
+// MARK: - Practice Tool
+
+private struct PracticeTool: Identifiable {
+    let icon: String
+    let color: Color
+    let title: String
+    let subtitle: String
+    /// Count + time cost. The line that makes a mixed-type list navigable.
+    let meta: String
+    let action: () -> Void
+
+    var id: String { title }
+}
+
 // MARK: - Practice Section Enum
 
 enum PracticeSection: String, CaseIterable, Identifiable {
     case prompts
-    case journal
+    case stories
+    case tools
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .prompts: return "Prompts"
-        case .journal: return "Journal"
+        case .stories: return "Stories"
+        case .tools: return "Tools"
         }
     }
 
     var icon: String {
         switch self {
         case .prompts: return "text.bubble.fill"
-        case .journal: return "text.book.closed.fill"
+        case .stories: return "text.book.closed.fill"
+        case .tools: return "wrench.and.screwdriver.fill"
         }
     }
 }

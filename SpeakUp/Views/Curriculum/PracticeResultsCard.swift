@@ -108,7 +108,7 @@ struct PracticeResultsCard: View {
     private func scoreRing(score: Int) -> some View {
         ZStack {
             Circle()
-                .stroke(Color.gray.opacity(0.2), lineWidth: 5)
+                .stroke(AppColors.meterTrack, lineWidth: 5)
 
             Circle()
                 .trim(from: 0, to: appeared ? Double(score) / 100.0 : 0)

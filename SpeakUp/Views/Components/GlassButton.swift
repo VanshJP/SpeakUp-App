@@ -210,5 +210,5 @@ struct GlassIconButton: View {
         }
     }
     .padding()
-    .background(Color.gray.opacity(0.1))
+    .background(AppBackground())
 }

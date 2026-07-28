@@ -146,7 +146,7 @@ struct ReadAloudResultView: View {
             // Legend
             HStack(spacing: 16) {
                 legendItem(color: AppColors.success, label: "Matched")
-                legendItem(color: .red, label: "Mismatched")
+                legendItem(color: AppColors.error, label: "Mismatched")
                 legendItem(color: AppColors.warning, label: "Skipped")
                 legendItem(color: .white.opacity(0.4), label: "Not reached")
             }

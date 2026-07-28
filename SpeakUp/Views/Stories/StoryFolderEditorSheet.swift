@@ -180,7 +180,7 @@ struct StoryMoveFolderSheet: View {
             ScrollView {
                 VStack(spacing: 10) {
                     destinationRow(
-                        title: "All Notes",
+                        title: "All Stories",
                         symbol: "tray.full.fill",
                         color: AppColors.primary,
                         isSelected: story.folderId == nil

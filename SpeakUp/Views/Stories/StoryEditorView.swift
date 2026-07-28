@@ -93,7 +93,7 @@ struct StoryEditorView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Delete Note?", isPresented: $showingDeleteConfirm) {
+        .alert("Delete Story?", isPresented: $showingDeleteConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 if let story = draftStory ?? existingStory {
@@ -103,7 +103,7 @@ struct StoryEditorView: View {
                 }
             }
         } message: {
-            Text("This note will be permanently deleted.")
+            Text("This story will be permanently deleted.")
         }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -196,7 +196,7 @@ struct StoryEditorView: View {
             HStack(spacing: 6) {
                 Image(systemName: currentFolder?.systemImage ?? "tray.full")
                     .font(.system(size: 11, weight: .semibold))
-                Text(currentFolder?.name ?? "All Notes")
+                Text(currentFolder?.name ?? "All Stories")
                     .font(.system(size: 13, weight: .semibold))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))

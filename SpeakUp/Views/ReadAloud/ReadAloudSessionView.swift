@@ -258,7 +258,7 @@ struct ReadAloudSessionView: View {
             // Mic indicator
             HStack(spacing: 8) {
                 Circle()
-                    .fill(viewModel.isListening ? AppColors.success : Color.gray)
+                    .fill(viewModel.isListening ? AppColors.success : AppColors.scoreEmpty)
                     .frame(width: 10, height: 10)
                 Text(viewModel.isListening ? "Listening..." : "Not listening")
                     .font(.caption.weight(.medium))

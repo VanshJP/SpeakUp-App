@@ -63,6 +63,15 @@ struct ProgressChartsContent: View {
             case .all: return nil
             }
         }
+
+        var menuLabel: String {
+            switch self {
+            case .sevenDays: return "Last 7 days"
+            case .thirtyDays: return "Last 30 days"
+            case .ninetyDays: return "Last 90 days"
+            case .all: return "All time"
+            }
+        }
     }
 
     private var filteredPoints: [ChartRecordingPoint] {
@@ -78,24 +87,30 @@ struct ProgressChartsContent: View {
                 highlightsSection
             }
 
-            // Tab picker
-            SectionPicker(
-                sections: ChartTab.allCases,
-                selection: $selectedTab,
-                label: { $0.rawValue },
-                icon: { $0.icon },
-                layout: .scrollable
-            )
-
-            // Time range picker (not for skills)
-            if selectedTab != .skills {
+            // Chart picker + time range. The range used to be a second
+            // full-width picker row; as a menu it costs one control instead
+            // of four and only appears where it applies.
+            //
+            // The picker is unframed because the History screen already stacks
+            // a framed picker directly above this row. It is bounded to the
+            // leftover width (and yields it via the low layout priority) so the
+            // menu keeps its intrinsic width instead of being pushed off-screen.
+            HStack(spacing: 10) {
                 SectionPicker(
-                    sections: TimeRange.allCases,
-                    selection: $timeRange,
+                    sections: ChartTab.allCases,
+                    selection: $selectedTab,
                     label: { $0.rawValue },
-                    icon: { _ in nil },
-                    style: .compact
+                    icon: { $0.icon },
+                    layout: .scrollable,
+                    framed: false
                 )
+                .frame(maxWidth: .infinity)
+                .layoutPriority(0)
+
+                if selectedTab != .skills {
+                    timeRangeMenu
+                        .fixedSize()
+                }
             }
 
             // Chart content
@@ -119,6 +134,35 @@ struct ProgressChartsContent: View {
             }
         }
         .task { await loadPoints() }
+    }
+
+    private var timeRangeMenu: some View {
+        Menu {
+            ForEach(TimeRange.allCases) { range in
+                Button {
+                    Haptics.light()
+                    timeRange = range
+                } label: {
+                    HStack {
+                        Text(range.menuLabel)
+                        if timeRange == range { Spacer(); Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(timeRange.rawValue)
+                    .font(.caption.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background { Capsule().fill(.ultraThinMaterial) }
+            .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+        }
+        .accessibilityLabel("Time range")
     }
 
     // MARK: - Background Load

@@ -12,17 +12,17 @@ struct CurriculumView: View {
             AppBackground()
 
             ScrollView {
-                VStack(spacing: 20) {
-                    // Overall progress
+                // Same grammar as Today: where you stand, then the one thing
+                // to do next, then the browsable list. Previously two gradient
+                // hero cards stacked here and competed for the same attention.
+                LazyVStack(spacing: 20) {
                     progressHeader
 
-                    // Continue where you left off
                     if let currentLesson = viewModel.currentLesson,
                        let currentPhase = viewModel.currentPhase {
                         continueCard(lesson: currentLesson, phase: currentPhase)
                     }
 
-                    // Phase list
                     ForEach(viewModel.phases) { phase in
                         phaseSection(phase)
                     }
@@ -40,8 +40,8 @@ struct CurriculumView: View {
                     Haptics.light()
                     showingAwards = true
                 } label: {
-                    Image(systemName: "trophy.fill")
-                        .foregroundStyle(AppColors.warning)
+                    Image(systemName: "trophy")
+                        .font(.body.weight(.semibold))
                 }
                 .accessibilityLabel("Achievements")
             }
@@ -62,147 +62,128 @@ struct CurriculumView: View {
         }
     }
 
-    private var progressHeader: some View {
-        FeaturedGlassCard {
-            VStack(spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Your Progress")
-                            .font(.headline)
+    // MARK: - Progress Header
 
-                        Text("\(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons completed")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+    /// Stats card, not a hero. Same shape as the score hero on the detail
+    /// screen: one dominant numeral, a tick meter, supporting counts.
+    private var progressHeader: some View {
+        GlassCard(padding: 20) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Course progress")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
 
                     Spacer()
 
-                    // Progress ring
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.08), lineWidth: 6)
-                        Circle()
-                            .trim(from: 0, to: viewModel.overallProgress)
-                            .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-
-                        Text("\(Int(viewModel.overallProgress * 100))%")
-                            .font(.caption.weight(.bold))
+                    if let week = viewModel.currentPhase?.week {
+                        Text("Week \(week)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                     }
-                    .frame(width: 50, height: 50)
                 }
 
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("\(Int(viewModel.overallProgress * 100))")
+                            .font(.system(size: 46, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .contentTransition(.numericText(value: viewModel.overallProgress))
+
+                        Text("%")
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Text("\(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 0)
+                }
+
+                TickMeter(fraction: viewModel.overallProgress, color: AppColors.primary)
+                    .frame(height: 18)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Course progress: \(Int(viewModel.overallProgress * 100)) percent, \(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons complete")
     }
 
     // MARK: - Continue Card
 
+    /// The single action on this screen, styled like every other primary CTA
+    /// in the app: light pill, ink text.
     private func continueCard(lesson: CurriculumLesson, phase: CurriculumPhase) -> some View {
         NavigationLink {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
         } label: {
-            FeaturedGlassCard {
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Continue Learning")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.primary)
+            GlassCard(padding: 18, elevated: true) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Up next")
+                            .font(.system(size: 10, weight: .semibold))
+                            .textCase(.uppercase)
+                            .tracking(0.6)
+                        Spacer()
+                        Text("Week \(phase.week)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .foregroundStyle(.secondary)
 
+                    VStack(alignment: .leading, spacing: 5) {
                         Text(lesson.title)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
 
-                        Text("Week \(phase.week) · \(lesson.activities.count) activities")
-                            .font(.caption)
+                        Text(lesson.objective)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Spacer()
-
-                    ZStack {
-                        Circle()
-                            .fill(AppColors.primary.opacity(0.2))
-                            .frame(width: 44, height: 44)
+                    HStack(spacing: 8) {
                         Image(systemName: "play.fill")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(AppColors.primary)
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Continue · \(Self.lessonMeta(lesson))")
+                            .font(.subheadline.weight(.semibold))
                     }
+                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background { Capsule().fill(Color.white.opacity(0.94)) }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
     }
 
     // MARK: - Phase Section
 
     private func phaseSection(_ phase: CurriculumPhase) -> some View {
         let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
-        let isPreviousPhaseComplete = isPreviousPhaseCompleted(before: phase)
-        let isPhaseComplete = completedInPhase == phase.lessons.count
+        let isLocked = !isPreviousPhaseCompleted(before: phase) && phase.week > 1
+        let isPhaseComplete = completedInPhase == phase.lessons.count && !phase.lessons.isEmpty
         let phaseProgress = phase.lessons.isEmpty ? 0.0 : Double(completedInPhase) / Double(phase.lessons.count)
 
         return VStack(alignment: .leading, spacing: 12) {
-            // Phase header
-            HStack(spacing: 12) {
-                // Phase number badge
-                ZStack {
-                    Circle()
-                        .fill(isPhaseComplete ? AppColors.success.opacity(0.2) : (!isPreviousPhaseComplete && phase.week > 1) ? Color.gray.opacity(0.1) : AppColors.primary.opacity(0.15))
-                        .frame(width: 36, height: 36)
-                    if isPhaseComplete {
-                        Image(systemName: "checkmark")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.success)
-                    } else if !isPreviousPhaseComplete && phase.week > 1 {
-                        Image(systemName: "lock.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("\(phase.week)")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(AppColors.primary)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Week \(phase.week)")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(isPhaseComplete ? AppColors.success : AppColors.primary)
-
-                    Text(phase.title)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle((!isPreviousPhaseComplete && phase.week > 1) ? .secondary : .primary)
-                }
-
-                Spacer()
-
-                Text("\(completedInPhase)/\(phase.lessons.count)")
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(isPhaseComplete ? AppColors.success : .secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(isPhaseComplete ? AppColors.success.opacity(0.15) : Color.white.opacity(0.06)))
-            }
-
-            // Phase progress bar
-            if !isPhaseComplete {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.08))
-                        Capsule()
-                            .fill(AppColors.primary)
-                            .frame(width: geo.size.width * phaseProgress)
-                    }
-                }
-                .frame(height: 3)
-                .padding(.leading, 48)
-            }
-
-            Text(phase.description)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.leading, 48)
+            phaseHeader(
+                phase,
+                completed: completedInPhase,
+                isLocked: isLocked,
+                isComplete: isPhaseComplete,
+                progress: phaseProgress
+            )
 
             ForEach(phase.lessons) { lesson in
                 let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)
@@ -211,70 +192,162 @@ struct CurriculumView: View {
                     NavigationLink {
                         LessonDetailView(lesson: lesson, viewModel: viewModel)
                     } label: {
-                        lessonCard(lesson, isLocked: false)
+                        lessonRow(lesson, isLocked: false)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(GlassPressStyle())
                 } else {
                     Button {
                         Haptics.warning()
                         showingLockedInfo = true
                     } label: {
-                        lessonCard(lesson, isLocked: true)
+                        lessonRow(lesson, isLocked: true)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(GlassPressStyle())
                 }
             }
         }
     }
 
-    private func lessonCard(_ lesson: CurriculumLesson, isLocked: Bool) -> some View {
-        let isCompleted = viewModel.isLessonCompleted(lesson.id)
-        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
-
-        return GlassCard(padding: 16, accentBorder: isCurrent ? AppColors.primary : nil) {
-            HStack(spacing: 14) {
-                Image(systemName: isCompleted ? "checkmark.circle.fill" : (isLocked ? "lock.fill" : "circle"))
-                    .font(.title2)
-                    .foregroundStyle(isCompleted ? AppColors.success : .secondary)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text(lesson.title)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(isLocked ? .secondary : .primary)
-
-                        if isCurrent {
-                            Text("Continue")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(AppColors.primary))
-                        }
-                    }
-
-                    Text(lesson.objective)
+    /// One line of identity, one line of meaning, one meter. The old header
+    /// carried a badge, a week label, a title, a count pill, a progress bar,
+    /// and a description — six competing elements repeated per phase.
+    private func phaseHeader(
+        _ phase: CurriculumPhase,
+        completed: Int,
+        isLocked: Bool,
+        isComplete: Bool,
+        progress: Double
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                if isComplete {
+                    Image(systemName: "checkmark.circle.fill")
                         .font(.subheadline)
-                        .foregroundStyle(isLocked ? .tertiary : .secondary)
-                        .lineLimit(2)
-
-                    Text("\(lesson.activities.count) activities")
+                        .foregroundStyle(AppColors.success)
+                } else if isLocked {
+                    Image(systemName: "lock.fill")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
 
-                Spacer()
+                Text("Week \(phase.week)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
+                    .foregroundStyle(.tertiary)
 
-                Image(systemName: isLocked ? "lock.fill" : "chevron.right")
+                Text(phase.title)
+                    .font(.headline)
+                    .foregroundStyle(isLocked ? Color.secondary : Color.white)
+
+                Spacer(minLength: 0)
+
+                Text("\(completed)/\(phase.lessons.count)")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(isComplete ? AppColors.success : .secondary)
+            }
+
+            // Description only where it can still change a decision — on a
+            // finished phase it is just noise above a list of checkmarks.
+            if !isComplete {
+                Text(phase.description)
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                TickMeter(
+                    fraction: progress,
+                    color: isLocked ? AppColors.scoreEmpty : AppColors.primary,
+                    tickCount: 24
+                )
+                .frame(height: 10)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - Lesson Row
+
+    private func lessonRow(_ lesson: CurriculumLesson, isLocked: Bool) -> some View {
+        let isCompleted = viewModel.isLessonCompleted(lesson.id)
+        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
+
+        return GlassCard(padding: 14, accentBorder: isCurrent ? AppColors.primary : nil) {
+            HStack(spacing: 13) {
+                statusIcon(isCompleted: isCompleted, isLocked: isLocked, isCurrent: isCurrent)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(lesson.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(isLocked ? Color.secondary : Color.white)
+                        .multilineTextAlignment(.leading)
+
+                    Text(lesson.objective)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    // Same metadata grammar as the Library tool rows: what it
+                    // is and what it costs, before you tap.
+                    Text(Self.lessonMeta(lesson))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-            .frame(minHeight: 60)
         }
-        .opacity(isLocked ? 0.6 : 1.0)
+        .opacity(isLocked ? 0.55 : 1.0)
+    }
+
+    private func statusIcon(isCompleted: Bool, isLocked: Bool, isCurrent: Bool) -> some View {
+        ZStack {
+            Circle()
+                .fill(isCompleted ? AppColors.success.opacity(0.15) : Color.white.opacity(0.05))
+                .frame(width: 30, height: 30)
+
+            if isCompleted {
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(AppColors.success)
+            } else if isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else if isCurrent {
+                Image(systemName: "play.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(AppColors.primary)
+            } else {
+                Circle()
+                    .stroke(AppColors.cardStroke, lineWidth: 1)
+                    .frame(width: 12, height: 12)
+            }
+        }
     }
 
     // MARK: - Helpers
+
+    /// "3 activities · 4 min practice". Practice minutes come from the real
+    /// `targetDuration` values, so the estimate never claims time the
+    /// curriculum does not actually schedule.
+    private static func lessonMeta(_ lesson: CurriculumLesson) -> String {
+        let count = lesson.activities.count
+        var parts = ["\(count) activit\(count == 1 ? "y" : "ies")"]
+
+        let practiceSeconds = lesson.activities.compactMap(\.targetDuration).reduce(0, +)
+        if practiceSeconds > 0 {
+            let minutes = max(1, Int((Double(practiceSeconds) / 60).rounded()))
+            parts.append("\(minutes) min practice")
+        }
+
+        return parts.joined(separator: " · ")
+    }
 
     private func isPreviousPhaseCompleted(before phase: CurriculumPhase) -> Bool {
         guard let index = viewModel.phases.firstIndex(where: { $0.id == phase.id }),

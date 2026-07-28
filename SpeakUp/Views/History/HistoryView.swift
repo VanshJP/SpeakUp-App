@@ -26,11 +26,6 @@ struct HistoryView: View {
         case .all: break
         case .favorites:
             items = items.filter(\.isFavorite)
-        case .highScore:
-            items = items.filter { ($0.overallScore ?? 0) >= 80 }
-        case .recent:
-            let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
-            items = items.filter { $0.date >= weekAgo }
         case .stories:
             items = items.filter { $0.storyId != nil }
         }
@@ -54,7 +49,16 @@ struct HistoryView: View {
                     Section {
                         switch selectedSection {
                         case .recordings:
-                            recordingsContent
+                            // The strip earns its place back by being
+                            // switchable — showing up and doing well are
+                            // different questions, and one grid answers both.
+                            // Suppressed while searching or filtering, where
+                            // the list is the answer and the grid is noise.
+                            if searchText.isEmpty, selectedFilter == .all, !viewModel.summaries.isEmpty {
+                                ActivityStrip(summaries: viewModel.summaries)
+                            }
+
+                            recordingsSection
                                 .transition(.opacity)
                         case .progress:
                             progressContent
@@ -71,6 +75,13 @@ struct HistoryView: View {
         }
         .navigationTitle("History")
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            if selectedSection == .recordings {
+                ToolbarItem(placement: .topBarTrailing) {
+                    filterMenu
+                }
+            }
+        }
         .searchable(text: $searchText, prompt: "Search recordings...")
         .refreshable {
             await viewModel.loadData()
@@ -93,15 +104,6 @@ struct HistoryView: View {
         } message: {
             Text("This recording and its audio will be permanently deleted.")
         }
-    }
-
-    // MARK: - Recordings Content
-
-    @ViewBuilder
-    private var recordingsContent: some View {
-        quickStatsStrip
-        filterSection
-        recordingsSection
     }
 
     // MARK: - Progress Content
@@ -183,34 +185,6 @@ struct HistoryView: View {
             .padding(.bottom, 10)
     }
 
-    // MARK: - Quick Stats Strip
-
-    private var quickStatsStrip: some View {
-        StatStrip(
-            items: [
-                .init(
-                    icon: "flame.fill",
-                    value: "\(viewModel.currentStreak)",
-                    label: "Streak",
-                    color: AppColors.warning,
-                    isHighlighted: viewModel.currentStreak > 0
-                ),
-                .init(
-                    icon: "mic.fill",
-                    value: "\(viewModel.summaries.count)",
-                    label: "Sessions",
-                    color: AppColors.primary
-                ),
-                .init(
-                    icon: "chart.line.uptrend.xyaxis",
-                    value: averageScoreText,
-                    label: "Avg Score",
-                    color: averageScoreColor
-                )
-            ]
-        )
-    }
-
     // MARK: - Section Picker
 
     private var sectionPicker: some View {
@@ -220,16 +194,6 @@ struct HistoryView: View {
             label: { $0.label },
             icon: { $0.icon }
         )
-    }
-
-    private var averageScoreText: String {
-        guard let score = viewModel.averageScore else { return "—" }
-        return "\(score)"
-    }
-
-    private var averageScoreColor: Color {
-        guard let score = viewModel.averageScore else { return AppColors.accent }
-        return AppColors.scoreColor(for: score)
     }
 
     // MARK: - Vocab Usage Section
@@ -278,53 +242,56 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - Filter Section
+    // MARK: - Filter Menu
 
-    private var filterSection: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(HistoryFilter.allCases) { filter in
-                    FilterChip(
-                        title: filter.title,
-                        icon: filter.icon,
-                        isSelected: selectedFilter == filter,
-                        count: countForFilter(filter)
-                    ) {
-                        Haptics.selection()
-                        withAnimation(.spring(duration: 0.3)) {
-                            selectedFilter = filter
-                        }
+    /// Filters live in the toolbar, not in a chip row above the list — three
+    /// options don't justify a scrolling row between you and your sessions.
+    private var filterMenu: some View {
+        Menu {
+            ForEach(HistoryFilter.allCases) { filter in
+                Button {
+                    Haptics.selection()
+                    withAnimation(.spring(duration: 0.3)) {
+                        selectedFilter = filter
+                    }
+                } label: {
+                    HStack {
+                        Label(filter.title, systemImage: filter.icon)
+                        if selectedFilter == filter { Spacer(); Image(systemName: "checkmark") }
                     }
                 }
             }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.body.weight(.semibold))
+                .symbolVariant(selectedFilter == .all ? .none : .fill)
         }
-        .scrollIndicators(.hidden)
-    }
-
-    private func countForFilter(_ filter: HistoryFilter) -> Int? {
-        switch filter {
-        case .all: return nil
-        case .favorites: return viewModel.filterCounts[.favorites] ?? 0
-        case .highScore: return viewModel.filterCounts[.highScore] ?? 0
-        case .recent: return nil
-        case .stories: return viewModel.filterCounts[.stories] ?? 0
-        }
+        .accessibilityLabel("Filter sessions")
     }
 
     // MARK: - Recordings Section
 
     private var recordingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Sessions", systemImage: "list.bullet")
-                    .font(.headline)
-
-                Spacer()
-
-                if !filteredSummaries.isEmpty {
-                    Text("\(filteredSummaries.count) \(selectedFilter == .all ? "total" : "found")")
-                        .font(.subheadline)
+            // Only speak up when a filter is narrowing the list — the tab is
+            // already called History, so "Sessions · 42 total" said nothing.
+            if selectedFilter != .all && !filteredSummaries.isEmpty {
+                HStack(spacing: 6) {
+                    Text("\(filteredSummaries.count) \(selectedFilter.title.lowercased())")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Button {
+                        Haptics.light()
+                        withAnimation(.spring(duration: 0.3)) { selectedFilter = .all }
+                    } label: {
+                        Text("Clear")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 0)
                 }
             }
 
@@ -373,8 +340,11 @@ struct HistoryView: View {
 
 // MARK: - History Filter
 
+/// Three filters, not five. "High Score" and "This Week" were slicing a list
+/// that is already reverse-chronological and searchable — scrolling answered
+/// both faster than a chip did.
 enum HistoryFilter: String, CaseIterable, Identifiable {
-    case all, favorites, highScore, recent, stories
+    case all, favorites, stories
 
     var id: String { rawValue }
 
@@ -382,8 +352,6 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return "All"
         case .favorites: return "Favorites"
-        case .highScore: return "High Score"
-        case .recent: return "This Week"
         case .stories: return "Stories"
         }
     }
@@ -392,8 +360,6 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return "square.grid.2x2"
         case .favorites: return "heart.fill"
-        case .highScore: return "star.fill"
-        case .recent: return "clock"
         case .stories: return "book.pages"
         }
     }

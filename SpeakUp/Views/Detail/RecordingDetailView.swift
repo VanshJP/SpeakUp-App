@@ -7,6 +7,9 @@ struct RecordingDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let recordingId: String
+    /// Re-runs the session that produced this recording. Owned by ContentView
+    /// because the countdown + recording covers live at the app root.
+    var onPracticeAgain: ((Prompt?) -> Void)? = nil
 
     @State private var recording: Recording?
     @State private var isLoading = true
@@ -17,7 +20,7 @@ struct RecordingDetailView: View {
     @State private var showSpeakerTurns = true
     @State private var waveformHeights: [CGFloat] = []
     @State private var scoreCardImage: UIImage?
-    @State private var selectedDetailTab: DetailTab = .analysis
+    @State private var selectedDetailTab: DetailTab = .breakdown
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
@@ -34,6 +37,14 @@ struct RecordingDetailView: View {
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
     @State private var coherenceEnhanceInFlight = false
     @State private var playableMediaAvailable = false
+    /// Rolling average of recent prior sessions, used to contextualize this
+    /// session's score. Nil until loaded or when this is the first scored run.
+    @State private var personalAverage: Int?
+
+    // Next-step routing — the practice tool that targets this session's weakest area.
+    @State private var nextStepDrill: DrillMode?
+    @State private var showingNextStepWarmUp = false
+    @State private var showingNextStepReadAloud = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -200,6 +211,18 @@ struct RecordingDetailView: View {
                 ScoreWeightsView(viewModel: settingsViewModel)
             }
         }
+        .sheet(item: $nextStepDrill) { mode in
+            DrillSelectionView(initialMode: mode)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingNextStepWarmUp) {
+            WarmUpListView()
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingNextStepReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+        }
         .onChange(of: showingShareSheet) { _, show in
             if show, case .ready(let recording) = detailScreenState {
                 exportService.shareRecording(recording, scoreCardImage: scoreCardImage)
@@ -221,44 +244,34 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func readyContent(_ recording: Recording) -> some View {
         ScrollView(.vertical) {
+            // Three blocks, then tabs. Context → score → what to do about it.
+            // Every metric surface (radar, stat tiles, pace chart, goal) moved
+            // under Breakdown: they are evidence for the score, and stacking
+            // them above the tabs gave the page a six-card preamble that
+            // buried the one number the user came here to read.
             VStack(spacing: 20) {
-                promptHeader(recording)
+                contextStrip(recording)
 
                 if let analysis = recording.analysis {
-                    heroScoreSection(analysis)
-                    statsGrid(analysis)
+                    scoreHero(analysis)
+                    nextStepSection(analysis, recording: recording)
+
+                    detailTabPicker
+
+                    switch selectedDetailTab {
+                    case .breakdown:
+                        breakdownTabContent(recording, analysis: analysis)
+                    case .transcript:
+                        transcriptTabContent(recording)
+                    case .coaching:
+                        coachingTabContent(recording)
+                    }
                 } else {
                     // Analysis never landed (transcription failed or was
                     // interrupted) — say so and offer a way out instead of
-                    // leaving a silent dead-end.
+                    // leaving a silent dead-end. A transcript may still exist.
                     analysisUnavailableCard(recording)
-                }
-
-                if recording.goalId != nil {
-                    goalProgressCard(recording)
-                }
-
-                if let wpmData = recording.analysis?.wpmTimeSeries, wpmData.count >= 2 {
-                    wpmChartSection(wpmData)
-                }
-
-                if recording.analysis != nil {
-                    Picker("Detail", selection: $selectedDetailTab) {
-                        ForEach(DetailTab.allCases, id: \.self) { tab in
-                            Text(tab.rawValue).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 4)
-                }
-
-                switch selectedDetailTab {
-                case .analysis:
-                    analysisTabContent(recording)
-                case .transcript:
                     transcriptTabContent(recording)
-                case .coaching:
-                    coachingTabContent(recording)
                 }
             }
             .padding()
@@ -297,7 +310,49 @@ struct RecordingDetailView: View {
         Task {
             await enhanceCoherenceIfNeeded()
         }
+
+        loadPersonalAverageIfNeeded(excluding: recording.id)
     }
+
+    /// Averages the overall score of the most recent prior sessions.
+    ///
+    /// Bounded to a rolling window rather than all-time: decoding every
+    /// `analysis` blob would make this cost grow without limit, and a rolling
+    /// baseline is the more useful comparison anyway — "better than I've been
+    /// lately" beats "better than I was a year ago".
+    private func loadPersonalAverageIfNeeded(excluding currentID: UUID) {
+        guard personalAverage == nil else { return }
+        let container = modelContext.container
+
+        Task {
+            let average = await Task.detached(priority: .utility) { () -> Int? in
+                let context = ModelContext(container)
+                var descriptor = FetchDescriptor<Recording>(
+                    sortBy: [SortDescriptor(\.date, order: .reverse)]
+                )
+                // One extra row so excluding the current session still leaves
+                // a full window.
+                descriptor.fetchLimit = Self.personalAverageWindow + 1
+
+                guard let recent = try? context.fetch(descriptor) else { return nil }
+
+                let scores = recent
+                    .filter { $0.id != currentID && !$0.isDeleted }
+                    .prefix(Self.personalAverageWindow)
+                    .compactMap { $0.analysis?.speechScore.overall }
+
+                guard !scores.isEmpty else { return nil }
+                return Int((Double(scores.reduce(0, +)) / Double(scores.count)).rounded())
+            }.value
+
+            await MainActor.run { personalAverage = average }
+        }
+    }
+
+    /// `nonisolated` because the rolling-average fetch reads it from inside a
+    /// detached task. The project defaults actor isolation to MainActor, so
+    /// without this the access is a Swift 6 error.
+    nonisolated private static let personalAverageWindow = 20
 
     @ViewBuilder
     private func analysisUnavailableCard(_ recording: Recording) -> some View {
@@ -345,159 +400,96 @@ struct RecordingDetailView: View {
         )
     }
 
-    // MARK: - Hero Score Section
+    // MARK: - Score Hero
 
-    @ViewBuilder
-    private func heroScoreSection(_ analysis: SpeechAnalysis) -> some View {
-        let axes = SubscoreRadarChart.Axis.from(
+    private func subscoreAxes(_ analysis: SpeechAnalysis) -> [SubscoreRadarChart.Axis] {
+        SubscoreRadarChart.Axis.from(
             subscores: analysis.speechScore.subscores,
             isPromptRelevance: analysis.promptRelevanceScore != nil && recording?.prompt != nil
         )
+    }
 
-        GlassCard(tint: AppColors.glassTintPrimary) {
-            VStack(spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Performance Profile")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.5)
-                    Spacer()
-                    Text(heroSummary(for: axes))
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
+    @ViewBuilder
+    private func scoreHero(_ analysis: SpeechAnalysis) -> some View {
+        let axes = subscoreAxes(analysis)
+        let strongest = axes.max(by: { $0.value < $1.value })
+        let weakest = axes.min(by: { $0.value < $1.value })
+        // With one axis, strongest and weakest are the same metric — showing
+        // it twice under opposing labels would be nonsense.
+        let hasSpread = strongest?.id != weakest?.id
 
-                SubscoreRadarChart(
-                    axes: axes,
-                    overallScore: analysis.speechScore.overall
-                )
-                .frame(height: 300)
+        ScoreHeroCard(
+            score: analysis.speechScore.overall,
+            personalAverage: personalAverage,
+            axes: axes,
+            strongestAxisID: hasSpread ? strongest?.id : nil,
+            weakestAxisID: hasSpread ? weakest?.id : nil,
+            onShowWeights: { showingScoreWeights = true }
+        )
+    }
 
-                if let textQuality = analysis.textQuality {
-                    HStack(spacing: 8) {
-                        scoreSignalChip(title: "Conciseness", score: textQuality.concisenessScore, icon: "scissors")
-                        scoreSignalChip(title: "Engagement", score: textQuality.engagementScore, icon: "person.3.sequence")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+    // MARK: - Tab Picker
+
+    private var detailTabPicker: some View {
+        SectionPicker(
+            sections: DetailTab.allCases,
+            selection: $selectedDetailTab,
+            label: { $0.rawValue },
+            icon: { $0.icon }
+        )
+    }
+
+    // MARK: - Context Strip
+
+    /// What you were doing, in two lines and no card.
+    ///
+    /// This is metadata, not content — giving it a glass surface of its own
+    /// made it compete with the score for the top of the page. Category, date,
+    /// time, duration, and difficulty collapse into one caption line; the
+    /// prompt itself stays legible because it is the only thing here the user
+    /// actually re-reads.
+    @ViewBuilder
+    private func contextStrip(_ recording: Recording) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: contextIcon(recording))
+                    .font(.system(size: 10, weight: .semibold))
+                Text(contextMetaLine(recording))
+                    .font(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+
+                Spacer(minLength: 0)
             }
-        }
-    }
+            .foregroundStyle(.secondary)
 
-    private func heroSummary(for axes: [SubscoreRadarChart.Axis]) -> String {
-        guard let strongest = axes.max(by: { $0.value < $1.value }),
-              let weakest = axes.min(by: { $0.value < $1.value }),
-              strongest.id != weakest.id else {
-            return ""
-        }
-        return "↑ \(strongest.label) · ↓ \(weakest.label)"
-    }
+            if let prompt = recording.prompt {
+                Text(prompt.text)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Button {
+                    Haptics.light()
+                    editingTitleText = recording.customTitle ?? ""
+                    isEditingTitle = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(recording.customTitle?.isEmpty == false ? recording.displayTitle : "Name this session")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(recording.customTitle?.isEmpty == false ? .white : .secondary)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
 
-    @ViewBuilder
-    private func scoreSignalChip(title: String, score: Int, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-            Text("\(title) \(score)")
-                .font(.caption.weight(.semibold))
-        }
-        .foregroundStyle(AppColors.scoreColor(for: score))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background {
-            Capsule()
-                .fill(AppColors.scoreColor(for: score).opacity(0.15))
-        }
-    }
-
-
-    // MARK: - Prompt Header
-
-    @ViewBuilder
-    private func promptHeader(_ recording: Recording) -> some View {
-        GlassCard(padding: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    if let prompt = recording.prompt {
-                        Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(PromptCategory(rawValue: prompt.category)?.color ?? AppColors.primary)
-                    } else {
-                        Label("Free Practice", systemImage: "waveform")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(recording.date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Text(recording.date.formatted(date: .omitted, time: .shortened))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary.opacity(0.85))
-                    }
-                }
-
-                if let prompt = recording.prompt {
-                    Text(prompt.text)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                } else {
-                    // Editable title for free practice sessions
-                    Button {
-                        editingTitleText = recording.customTitle ?? ""
-                        isEditingTitle = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(recording.displayTitle)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.primary)
-
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.caption)
-                                .foregroundStyle(AppColors.primary.opacity(0.6))
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    if recording.customTitle == nil {
-                        Text("Tap to add a title or question")
-                            .font(.caption2)
+                        Image(systemName: "pencil")
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
                     }
                 }
-
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock")
-                        Text(recording.formattedDuration)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                    if let difficulty = recording.prompt?.difficulty {
-                        DifficultyBadge(difficulty: difficulty)
-                    }
-
-                    if recording.storyId != nil {
-                        HStack(spacing: 4) {
-                            Image(systemName: "book.pages")
-                                .font(.caption2)
-                            Text(recording.storyTitle ?? "Story Practice")
-                                .font(.caption.weight(.medium))
-                        }
-                        .foregroundStyle(AppColors.categoryBrandBright)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background {
-                            Capsule().fill(AppColors.categoryBrandBright.opacity(0.12))
-                        }
-                    }
-                }
+                .buttonStyle(.plain)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .alert("Name This Session", isPresented: $isEditingTitle) {
             TextField("e.g. Elevator pitch practice", text: $editingTitleText)
             Button("Save") {
@@ -511,7 +503,57 @@ struct RecordingDetailView: View {
         }
     }
 
+    private func contextIcon(_ recording: Recording) -> String {
+        if recording.storyId != nil { return "book.pages" }
+        if let category = recording.prompt?.category {
+            return PromptCategory(rawValue: category)?.iconName ?? "text.bubble"
+        }
+        return "waveform"
+    }
+
+    /// "Storytelling · Hard · Mar 14, 9:41 AM · 1:04"
+    private func contextMetaLine(_ recording: Recording) -> String {
+        var parts: [String] = []
+
+        if recording.storyId != nil {
+            parts.append(recording.storyTitle ?? "Story Practice")
+        } else if let category = recording.prompt?.category {
+            parts.append(PromptCategory(rawValue: category)?.shortName ?? category)
+        } else {
+            parts.append("Free Practice")
+        }
+
+        if let difficulty = recording.prompt?.difficulty {
+            parts.append(difficulty.displayName)
+        }
+
+        parts.append(recording.date.formatted(date: .abbreviated, time: .shortened))
+        parts.append(recording.formattedDuration)
+
+        return parts.joined(separator: " · ")
+    }
+
     // MARK: - Processing Section (moved to AnalyzingView)
+
+    // MARK: - Next Step
+
+    /// Closes the practice loop: names the weakest area and routes to the tool
+    /// that trains it, so the screen ends in an action instead of metrics.
+    @ViewBuilder
+    private func nextStepSection(_ analysis: SpeechAnalysis, recording: Recording) -> some View {
+        NextStepCard(
+            step: NextStep.from(analysis.speechScore.subscores),
+            onAction: { action in
+                switch action {
+                case .drill(let mode): nextStepDrill = mode
+                case .warmUp: showingNextStepWarmUp = true
+                case .readAloud: showingNextStepReadAloud = true
+                case .practiceAgain: onPracticeAgain?(recording.prompt)
+                }
+            },
+            onPracticeAgain: { onPracticeAgain?(recording.prompt) }
+        )
+    }
 
     // MARK: - Stats Grid
 
@@ -566,8 +608,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func wpmChartSection(_ wpmData: [WPMDataPoint]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Pace Over Time", systemImage: "chart.line.uptrend.xyaxis")
-                .font(.headline)
+            GlassSectionHeader("Pace Over Time", icon: "chart.line.uptrend.xyaxis")
 
             GlassCard {
                 WPMChartView(
@@ -584,8 +625,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Filler Words Used", systemImage: "exclamationmark.bubble.fill")
-                .font(.headline)
+            GlassSectionHeader("Filler Words Used", icon: "exclamationmark.bubble.fill")
 
             GlassCard {
                 VStack(spacing: 12) {
@@ -612,10 +652,8 @@ struct RecordingDetailView: View {
     private func transcriptSection(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Transcript", systemImage: "doc.text.fill")
-                    .font(.headline)
-
-                Spacer()
+                // GlassSectionHeader supplies its own trailing Spacer.
+                GlassSectionHeader("Transcript", icon: "doc.text.fill")
 
                 copyTranscriptButton(text: text)
             }
@@ -636,10 +674,8 @@ struct RecordingDetailView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Transcript", systemImage: "doc.text.fill")
-                    .font(.headline)
-
-                Spacer()
+                // GlassSectionHeader supplies its own trailing Spacer.
+                GlassSectionHeader("Transcript", icon: "doc.text.fill")
 
                 HStack(spacing: 6) {
                     copyTranscriptButton(text: words.map(\.word).joined(separator: " "))
@@ -851,9 +887,23 @@ struct RecordingDetailView: View {
 
     // MARK: - Tab Content
 
+    /// Evidence for the score that the hero card does not already show: the
+    /// headline numbers, pace over time, and goal progress.
+    ///
+    /// The subscore radar lives in the hero card now, and the old pause /
+    /// vocal-variety / advanced-metrics stack under this tab restated axes the
+    /// radar already labels — duplicated detail nobody opened.
     @ViewBuilder
-    private func analysisTabContent(_ recording: Recording) -> some View {
-        DetailAnalysisTab(recording: recording, showingScoreWeights: $showingScoreWeights)
+    private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
+        statsGrid(analysis)
+
+        if let wpmData = analysis.wpmTimeSeries, wpmData.count >= 2 {
+            wpmChartSection(wpmData)
+        }
+
+        if recording.goalId != nil {
+            goalProgressCard(recording)
+        }
     }
 
     @ViewBuilder
@@ -1117,8 +1167,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func selfAssessmentSection(_ feedback: SessionFeedback) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Self-Assessment", systemImage: "checkmark.message")
-                .font(.headline)
+            GlassSectionHeader("Self-Assessment", icon: "checkmark.message")
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 14) {
@@ -1550,7 +1599,10 @@ private struct PlaybackDrawerContainer: View {
     // not the whole detail scroll content.
     @Environment(AudioService.self) private var audioService
 
-    @State private var drawerState: PlaybackDrawerState = .expanded
+    // Collapsed by default: the collapsed row already shows the waveform and a
+    // play button, which is the whole job most of the time, at a third of the
+    // height the transport controls cost.
+    @State private var drawerState: PlaybackDrawerState = .collapsed
     @State private var dragOffset: CGFloat = 0
 
     // Gesture tuning. Distances in points, velocities in points/sec.
@@ -1582,7 +1634,7 @@ private struct PlaybackDrawerContainer: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(drawerState == .expanded ? 0.55 : 0.35))
                         .rotationEffect(.degrees(drawerState == .expanded ? 180 : 0))
-                        .padding(.top, 8)
+                        .padding(.top, 3)
                         .padding(.horizontal, 40)
                         .contentShape(Rectangle())
                 }
@@ -1697,13 +1749,6 @@ private struct PlaybackDrawerContainer: View {
                     }
                 }
         )
-        .onChange(of: playbackViewModel.isPlaying) { _, isPlaying in
-            if isPlaying {
-                withAnimation(drawerSpring) {
-                    drawerState = .expanded
-                }
-            }
-        }
         .onChange(of: audioService.currentPlaybackTime) { _, _ in
             playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
         }
@@ -1723,73 +1768,56 @@ private struct PlaybackDrawerContainer: View {
         return limit + (offset - limit) * factor
     }
 
+    /// Seekable waveform, shared by both drawer states so the collapsed row
+    /// shows exactly the audio the expanded one does.
+    private func scrubber(height: CGFloat) -> some View {
+        GeometryReader { geometry in
+            let barWidth: CGFloat = 3
+            let spacing: CGFloat = 2
+            let totalBarWidth = barWidth + spacing
+            let barCount = max(1, Int(geometry.size.width / totalBarWidth))
+            let width = geometry.size.width
+
+            // Progress quantized to whole bars: the bar row's inputs
+            // only change when a new bar fills, so the ~100 bar views
+            // re-diff once per bar instead of on every 30 fps
+            // display-link tick.
+            ScrubberBars(
+                barCount: barCount,
+                playedBars: min(barCount, Int((playbackViewModel.playbackProgress * Double(barCount)).rounded(.up))),
+                heights: waveformHeights,
+                barWidth: barWidth,
+                spacing: spacing
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .contentShape(Rectangle())
+            .onTapGesture { location in
+                let progress = max(0, min(1, location.x / max(1, width)))
+                onSeek(progress)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        let progress = max(0, min(1, value.location.x / max(1, width)))
+                        onSeek(progress)
+                    }
+            )
+        }
+        .frame(height: height)
+        .accessibilityLabel("Playback position")
+    }
+
     @ViewBuilder
     private var playbackControlSection: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Label(
-                    playbackViewModel.isPlaying ? "Now Playing" : "Playback",
-                    systemImage: playbackViewModel.isPlaying ? "waveform.circle.fill" : "waveform"
-                )
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-
-                Spacer()
-
-                Button {
-                    Haptics.light()
-                    withAnimation(drawerSpring) {
-                        drawerState = .collapsed
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(6)
-                }
-                .buttonStyle(.plain)
-            }
-
             HStack(spacing: 10) {
                 Text(formatTime(playbackViewModel.currentTime))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 40, alignment: .leading)
 
-                GeometryReader { geometry in
-                    let barWidth: CGFloat = 3
-                    let spacing: CGFloat = 2
-                    let totalBarWidth = barWidth + spacing
-                    let barCount = max(1, Int(geometry.size.width / totalBarWidth))
-                    let width = geometry.size.width
-
-                    // Progress quantized to whole bars: the bar row's inputs
-                    // only change when a new bar fills, so the ~100 bar views
-                    // re-diff once per bar instead of on every 30 fps
-                    // display-link tick.
-                    ScrubberBars(
-                        barCount: barCount,
-                        playedBars: min(barCount, Int((playbackViewModel.playbackProgress * Double(barCount)).rounded(.up))),
-                        heights: waveformHeights,
-                        barWidth: barWidth,
-                        spacing: spacing
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        let progress = max(0, min(1, location.x / max(1, width)))
-                        onSeek(progress)
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 4)
-                            .onChanged { value in
-                                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                                let progress = max(0, min(1, value.location.x / max(1, width)))
-                                onSeek(progress)
-                            }
-                    )
-                }
-                .frame(height: 32)
+                scrubber(height: 32)
 
                 Text(formatTime(playbackViewModel.playbackDuration > 0 ? playbackViewModel.playbackDuration : recording.actualDuration))
                     .font(.caption.monospacedDigit())
@@ -1838,36 +1866,33 @@ private struct PlaybackDrawerContainer: View {
         }
     }
 
+    /// Play button + the actual waveform + elapsed time in one 56pt row. A
+    /// waveform next to a play button does not need a "Playback" caption, and
+    /// showing the audio only in the tallest state was backwards.
     @ViewBuilder
     private var collapsedPlaybackBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(AppColors.primary)
-
-            Text(playbackViewModel.isPlaying ? "Now Playing" : "Playback")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-
-            Spacer()
-
-            Text(formatTime(playbackViewModel.currentTime))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-
+        HStack(spacing: 12) {
             Button {
                 onTogglePlayback()
             } label: {
                 Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                    .frame(width: 24, height: 24)
+                    .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.94)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
+
+            scrubber(height: 28)
+
+            Text(formatTime(playbackViewModel.currentTime))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
         }
+        .frame(height: 56)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(drawerSpring) {
@@ -1936,39 +1961,6 @@ private struct TranscriptContentView: View {
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-    }
-}
-
-// MARK: - Subscore Row
-
-struct SubscoreRow: View {
-    let title: String
-    let score: Int
-    let icon: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-
-            Spacer()
-
-            TickMeter(fraction: Double(score) / 100, color: AppColors.scoreColor(for: score), tickCount: 18)
-                .frame(width: 76, height: 10)
-
-            Text("\(score)")
-                .font(.subheadline.weight(.bold).monospacedDigit())
-                .foregroundStyle(.white)
-                .frame(width: 30, alignment: .trailing)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title): \(score) out of 100")
     }
 }
 
@@ -2063,10 +2055,22 @@ struct WordView: View {
 
 // MARK: - Detail Tab Enum
 
-enum DetailTab: String, CaseIterable {
-    case analysis = "Analysis"
+enum DetailTab: String, CaseIterable, Identifiable {
+    /// Renamed from "Analysis": the tab now holds the evidence behind the
+    /// score rather than being one of three peer sections.
+    case breakdown = "Breakdown"
     case transcript = "Transcript"
     case coaching = "Coaching"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .breakdown: return "chart.bar.fill"
+        case .transcript: return "text.alignleft"
+        case .coaching: return "lightbulb.fill"
+        }
+    }
 }
 
 private enum PlaybackDrawerState {
