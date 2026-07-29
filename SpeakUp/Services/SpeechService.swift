@@ -162,11 +162,12 @@ class SpeechService {
                 }
 
                 var finalWords = wordsAfterFillerRetagging
-                // Pre-load audio once for speaker isolation (avoids redundant file I/O)
-                let preloaded = ConversationIsolationService.loadMonoPCM(url: transcriptionURL)
+                // Speaker acoustics from the raw capture — isolation preprocess can
+                // flatten energy/F0 and mis-label the primary speaker.
+                let preloaded = ConversationIsolationService.loadMonoPCM(url: audioURL)
                 let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
                     words: finalWords,
-                    audioURL: transcriptionURL,
+                    audioURL: audioURL,
                     totalDuration: result.duration,
                     persistentProfile: voiceProfile,
                     preloadedSamples: preloaded.map { ($0.samples, $0.sampleRate) }
