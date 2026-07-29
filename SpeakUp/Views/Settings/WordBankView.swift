@@ -565,11 +565,11 @@ struct WordBankView: View {
                 .padding(.vertical, 4)
                 .background {
                     Capsule()
-                        .fill(isSelected ? .orange.opacity(0.25) : .white.opacity(0.05))
+                        .fill(isSelected ? AppColors.warning.opacity(0.25) : Color.white.opacity(0.05))
                         .overlay {
                             Capsule()
                                 .strokeBorder(
-                                    isSelected ? .orange.opacity(0.5) : .white.opacity(0.08),
+                                    isSelected ? AppColors.warning.opacity(0.5) : Color.white.opacity(0.08),
                                     lineWidth: 0.5
                                 )
                         }

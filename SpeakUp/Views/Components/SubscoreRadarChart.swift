@@ -293,12 +293,13 @@ struct SubscoreRadarChart: View {
         let clamped = min(1.0, max(0.0, drawProgress))
         let displayed = Int((Double(overallScore) * Double(clamped)).rounded())
         return VStack(spacing: 0) {
+            // Now the card's only score numeral, so it carries the weight the
+            // 68pt one above it used to.
             Text("\(displayed)")
-                .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.system(size: 46, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(color)
                 .contentTransition(.numericText())
-            Text("/ 100")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.5))
                 .tracking(0.5)
         }
@@ -332,7 +333,7 @@ struct SubscoreRadarChart: View {
         withTransaction(resetTx) {
             drawProgress = 0
         }
-        withAnimation(.easeOut(duration: 0.9)) {
+        withAnimation(AppMotion.reveal) {
             drawProgress = 1
         }
         Task { @MainActor in

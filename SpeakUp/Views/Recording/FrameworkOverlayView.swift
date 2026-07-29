@@ -47,14 +47,14 @@ struct FrameworkOverlayView: View {
                             .foregroundStyle(index == currentSectionIndex ? .white : .white.opacity(0.4))
 
                         Circle()
-                            .fill(index < currentSectionIndex ? .green :
-                                    index == currentSectionIndex ? .white : .white.opacity(0.3))
+                            .fill(index < currentSectionIndex ? AppColors.success :
+                                    index == currentSectionIndex ? Color.white : Color.white.opacity(0.3))
                             .frame(width: 6, height: 6)
                     }
 
                     if index < framework.sections.count - 1 {
                         Rectangle()
-                            .fill(index < currentSectionIndex ? .green.opacity(0.6) : .white.opacity(0.15))
+                            .fill(index < currentSectionIndex ? AppColors.success.opacity(0.6) : Color.white.opacity(0.15))
                             .frame(height: 1)
                             .frame(maxWidth: 20)
                     }

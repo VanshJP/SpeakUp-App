@@ -150,45 +150,7 @@ struct GlassPressStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Icon Button
-
-struct GlassIconButton: View {
-    let icon: String
-    var size: CGFloat = 44
-    var tint: Color? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: size * 0.45, weight: .semibold))
-                .foregroundStyle(tint ?? .primary)
-                .frame(width: size, height: size)
-                .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Circle()
-                                .fill(AppColors.surfaceLift)
-                        }
-                        .overlay {
-                            if let tint {
-                                Circle()
-                                    .fill(tint.opacity(0.1))
-                            }
-                        }
-                        .overlay {
-                            Circle()
-                                .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                        }
-                }
-                .clipShape(Circle())
-        }
-        .buttonStyle(GlassPressStyle())
+            .animation(AppMotion.snap, value: configuration.isPressed)
     }
 }
 
@@ -202,12 +164,6 @@ struct GlassIconButton: View {
         GlassButton(title: "Ghost", style: .ghost) {}
         GlassButton(title: "Danger", icon: "trash", style: .danger) {}
         GlassButton(title: "Full Width", style: .primary, fullWidth: true) {}
-        
-        HStack(spacing: 16) {
-            GlassIconButton(icon: "mic.fill") {}
-            GlassIconButton(icon: "video.fill", tint: AppColors.primary) {}
-            GlassIconButton(icon: "arrow.clockwise") {}
-        }
     }
     .padding()
     .background(AppBackground())

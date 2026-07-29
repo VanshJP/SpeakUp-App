@@ -27,15 +27,12 @@ struct ReadAloudResultView: View {
 
                     // Score ring
                     ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.07), lineWidth: 11)
-                            .frame(width: 140, height: 140)
-
-                        Circle()
-                            .trim(from: 0, to: Double(result.score) / 100.0)
-                            .stroke(scoreColor, style: StrokeStyle(lineWidth: 11, lineCap: .round))
-                            .frame(width: 140, height: 140)
-                            .rotationEffect(.degrees(-90))
+                        RingProgress(
+                            progress: Double(result.score) / 100.0,
+                            color: scoreColor,
+                            lineWidth: 11
+                        )
+                        .frame(width: 140, height: 140)
 
                         VStack(spacing: 2) {
                             Text("\(result.score)%")
@@ -174,7 +171,7 @@ struct ReadAloudResultView: View {
         guard index < result.wordStates.count else { return .white.opacity(0.4) }
         switch result.wordStates[index] {
         case .matched: return AppColors.success
-        case .mismatched: return .red
+        case .mismatched: return AppColors.error
         case .skipped: return AppColors.warning
         case .upcoming: return .white.opacity(0.4)
         case .current: return .white.opacity(0.4)

@@ -115,10 +115,8 @@ struct CountdownOverlayView: View {
                 onComplete()
             }
         }
+        .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
             if selectedGoalId == nil, let firstGoal = activeGoals.first {
                 selectedGoalId = firstGoal.id
             }
@@ -143,16 +141,9 @@ struct CountdownOverlayView: View {
                 .frame(width: 140, height: 140)
                 .scaleEffect(isPulsing ? 1.06 : 1.0)
 
-            Circle()
-                .stroke(Color.white.opacity(0.07), lineWidth: 5)
+            RingProgress(progress: progress, color: AppColors.primary, lineWidth: 5)
                 .frame(width: 110, height: 110)
-
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .frame(width: 110, height: 110)
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 1), value: progress)
+                .motion(.linear(duration: 1), value: progress)
 
             VStack(spacing: 2) {
                 Text("\(displayNumber)")

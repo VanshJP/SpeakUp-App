@@ -174,8 +174,18 @@ struct PracticeHubView: View {
             }
 
         return VStack(spacing: 12) {
-            ForEach(visible) { tool in
-                toolRow(tool)
+            if visible.isEmpty {
+                // Search that matches nothing used to render a silent blank
+                // scroll, which reads as a broken screen rather than a result.
+                EmptyStateCard(
+                    icon: "magnifyingglass",
+                    title: "No tools match",
+                    message: "Nothing here matches \"\(query)\". Try a different search."
+                )
+            } else {
+                ForEach(visible) { tool in
+                    toolRow(tool)
+                }
             }
         }
     }

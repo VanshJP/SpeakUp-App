@@ -66,10 +66,6 @@ struct StoryPromptCard: View {
             .contentShape(Rectangle())
             .onTapGesture { Haptics.medium(); onTap() }
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
-        }
+        .ambientLoop(AppMotion.ambient(duration: 1.2)) { isPulsing = true }
     }
 }

@@ -12,7 +12,10 @@ struct RecordingView: View {
     @State private var completedRecording: Recording?
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
-    @Query private var goals: [UserGoal]
+    /// Set once analysis lands, to hold the score reveal on screen before the
+    /// detail page. Nil when there is nothing worth revealing.
+    @State private var revealRecording: Recording?
+    @State private var revealBaselines = PersonalAverage.Baselines()
 
     let prompt: Prompt?
     let duration: RecordingDuration
@@ -23,14 +26,13 @@ struct RecordingView: View {
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
-    private var selectedGoal: UserGoal? {
-        guard let goalId else { return nil }
-        return goals.first { $0.id == goalId }
-    }
-
     var body: some View {
         ZStack {
-            if let completedRecording {
+            if let revealRecording {
+                scoreReveal(for: revealRecording)
+                    .transition(.opacity)
+                    .zIndex(10)
+            } else if let completedRecording {
                 feedbackGateContent(for: completedRecording)
                     .transition(.opacity)
                     .zIndex(5)
@@ -39,7 +41,8 @@ struct RecordingView: View {
             }
         }
         .ignoresSafeArea()
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: completedRecording?.id)
+        .animation(AppMotion.settle, value: completedRecording?.id)
+        .animation(AppMotion.settle, value: revealRecording?.id)
         .task {
             viewModel.configure(
                 with: modelContext,
@@ -181,7 +184,57 @@ struct RecordingView: View {
         ]
     }
 
+    // MARK: - Score Reveal
+
+    @ViewBuilder
+    private func scoreReveal(for recording: Recording) -> some View {
+        ScoreRevealView(
+            score: recording.analysis?.speechScore.overall ?? 0,
+            baselines: revealBaselines,
+            weakestAxisLabel: weakestAxisLabel(for: recording),
+            onDismiss: { navigate(to: recording) }
+        )
+    }
+
+    /// Only the building band names a lever, so this is nil above 60 — the
+    /// reveal shows the delta there instead.
+    private func weakestAxisLabel(for recording: Recording) -> String? {
+        guard let analysis = recording.analysis,
+              analysis.speechScore.overall < 60 else { return nil }
+
+        let axes = SubscoreRadarChart.Axis.from(
+            subscores: analysis.speechScore.subscores,
+            isPromptRelevance: analysis.promptRelevanceScore != nil && prompt != nil
+        )
+        return axes.min(by: { $0.value < $1.value })?.label
+    }
+
+    /// Holds on the reveal when there is a score to show, then hands off to the
+    /// detail page. A session with no analysis (transcription failed, silence)
+    /// skips straight through — there is nothing to reveal.
     private func finishAndNavigate(_ recording: Recording) {
+        guard !hasNavigated, revealRecording == nil else { return }
+
+        guard recording.analysis?.speechScore.overall != nil else {
+            navigate(to: recording)
+            return
+        }
+
+        let container = modelContext.container
+        let id = recording.id
+        Task {
+            // Resolve the baseline *before* the reveal appears. The context
+            // line reads it about a second in, and letting it pop mid-animation
+            // is exactly the jitter this screen exists to avoid.
+            revealBaselines = await PersonalAverage.all(
+                excluding: id,
+                container: container
+            )
+            withAnimation(AppMotion.settle) { revealRecording = recording }
+        }
+    }
+
+    private func navigate(to recording: Recording) {
         guard !hasNavigated else { return }
         hasNavigated = true
         onComplete(recording)
@@ -238,82 +291,11 @@ struct RecordingView: View {
 
                 Spacer()
 
-                // Framework picker button
-                Menu {
-                    Button("None") {
-                        selectedFramework = nil
-                    }
-                    ForEach(SpeechFramework.allCases) { framework in
-                        Button {
-                            selectedFramework = framework
-                        } label: {
-                            Label(framework.displayName, systemImage: framework.icon)
-                        }
-                    }
-                } label: {
-                    Image(systemName: selectedFramework?.icon ?? "list.bullet.rectangle")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                        }
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Speech framework")
-
-                // Goal badge (if goal selected)
-                if let goal = selectedGoal {
-                    HStack(spacing: 4) {
-                        Image(systemName: goal.type.iconName)
-                            .font(.caption2.weight(.semibold))
-                        Text(goal.title)
-                            .font(.caption2.weight(.medium))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                    .foregroundStyle(AppColors.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: 140)
-                    .background {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(AppColors.primary.opacity(0.3), lineWidth: 0.5)
-                            }
-                    }
-                    .layoutPriority(-1)
-                }
-
-                // Vocab overlay button (only if user has vocab words)
-                if let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
-                    Button {
-                        Haptics.light()
-                        withAnimation(.spring(response: 0.3)) {
-                            showingVocabOverlay.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "character.book.closed")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(showingVocabOverlay ? AppColors.primary : .white)
-                            .frame(width: 36, height: 36)
-                            .background {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                            }
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Vocabulary words")
-                }
-
                 // Voice activity indicator — extracted so it only re-renders
                 // when the boolean flips, not on every 0.1 s audioLevel write.
                 VoiceActivityPill(isSpeaking: viewModel.audioLevel > -40)
+
+                sessionOptionsMenu
             }
 
             // Compact prompt card at top (during recording)
@@ -322,6 +304,39 @@ struct RecordingView: View {
             }
         }
         .padding(.top, 50)
+    }
+
+    /// Framework and vocab used to sit in the top bar as their own circular
+    /// buttons, alongside a read-only goal badge — five controls competing with
+    /// the timer and waveform for a screen whose entire job is "talk now".
+    /// They're mid-session adjustments, not primary actions, so they collapse
+    /// into one overflow. The goal badge is gone outright: it was pure context,
+    /// and the countdown screen showed it seconds earlier.
+    private var sessionOptionsMenu: some View {
+        Menu {
+            Picker("Framework", selection: $selectedFramework) {
+                Text("No framework").tag(SpeechFramework?.none)
+                ForEach(SpeechFramework.allCases) { framework in
+                    Label(framework.displayName, systemImage: framework.icon)
+                        .tag(SpeechFramework?.some(framework))
+                }
+            }
+
+            if let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
+                Toggle(isOn: $showingVocabOverlay) {
+                    Label("Vocabulary words", systemImage: "character.book.closed")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background { Circle().fill(.ultraThinMaterial) }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Session options")
     }
 
     private func compactPromptCard(_ prompt: Prompt) -> some View {
@@ -364,11 +379,6 @@ struct RecordingView: View {
                 isOvertime: viewModel.isOvertime,
                 timerLabel: viewModel.timerLabel
             )
-
-            // Prompt Card (if available) - show only before recording starts
-            if let prompt, !viewModel.isRecording {
-                promptCard(prompt)
-            }
         }
     }
 
@@ -394,36 +404,11 @@ struct RecordingView: View {
         }
     }
 
-    private func promptCard(_ prompt: Prompt) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(prompt.category)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.7))
-
-                Spacer()
-
-                Text(prompt.difficulty.displayName)
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background {
-                        Capsule()
-                            .fill(AppColors.difficultyColor(prompt.difficulty).opacity(0.3))
-                    }
-                    .foregroundStyle(AppColors.difficultyColor(prompt.difficulty))
-            }
-
-            Text(prompt.text)
-                .font(.body)
-                .foregroundStyle(.white)
-                .lineLimit(3)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: 16)
-        .padding(.horizontal)
-    }
+    // `promptCard` lived here, rendered only `if !viewModel.isRecording`. But
+    // `.task` auto-starts recording on appear, so it flashed for milliseconds
+    // while the permission check ran, duplicating the prompt card the countdown
+    // screen had shown two seconds earlier. Deleted rather than fixed — there
+    // was no moment at which the user was meant to read it.
 
     // MARK: - Bottom Controls
 
@@ -493,7 +478,7 @@ struct RecordingView: View {
             llmService: llmService
         )
         Haptics.success()
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+        withAnimation(AppMotion.settle) {
             completedRecording = recording
         }
     }
@@ -505,12 +490,8 @@ struct RecordingView: View {
 /// One draw per frame, 48 capsule paths, no per-bar view diffing.
 ///
 /// - `audioLevel`: incoming dB reading, smoothed to avoid jitter.
-/// - `autoAnimate`: when true, ignores `audioLevel` and renders a synthetic
-///   resting motion. Used by the post-recording skeleton so the visual reads
-///   as "same screen, just processing."
 struct CircularWaveformView: View {
     var audioLevel: Float = 0
-    var autoAnimate: Bool = false
 
     private let barCount = 54
     private let baseRadius: CGFloat = 72
@@ -526,7 +507,7 @@ struct CircularWaveformView: View {
             Canvas { graphics, size in
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let time = context.date.timeIntervalSinceReferenceDate
-                let baseLevel: CGFloat = autoAnimate ? 0.55 : smoothedLevel
+                let baseLevel: CGFloat = smoothedLevel
                 let gradient = Gradient(colors: [AppColors.primary, AppColors.categoryBrandBright])
 
                 for i in 0..<barCount {
@@ -566,7 +547,6 @@ struct CircularWaveformView: View {
         .frame(width: canvasSize, height: canvasSize)
         .allowsHitTesting(false)
         .onChange(of: audioLevel) { _, newLevel in
-            guard !autoAnimate else { return }
             let normalized = CGFloat(max(0, min(1, (Double(newLevel) + 60) / 60)))
             smoothedLevel = smoothedLevel * 0.72 + normalized * 0.28
         }

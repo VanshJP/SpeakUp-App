@@ -10,12 +10,11 @@ struct CurriculumProgressCard: View {
                 HStack(spacing: 14) {
                     // Progress ring
                     ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.07), lineWidth: 4)
-                        Circle()
-                            .trim(from: 0, to: viewModel.overallProgress)
-                            .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
+                        RingProgress(
+                            progress: viewModel.overallProgress,
+                            color: AppColors.primary,
+                            lineWidth: 4
+                        )
 
                         Image(systemName: "book.fill")
                             .font(.caption)

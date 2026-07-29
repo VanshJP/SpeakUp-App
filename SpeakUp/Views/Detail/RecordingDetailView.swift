@@ -37,9 +37,9 @@ struct RecordingDetailView: View {
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
     @State private var coherenceEnhanceInFlight = false
     @State private var playableMediaAvailable = false
-    /// Rolling average of recent prior sessions, used to contextualize this
-    /// session's score. Nil until loaded or when this is the first scored run.
-    @State private var personalAverage: Int?
+    /// Rolling baselines every number on this screen is read against. Loads in
+    /// the background, so all fields start nil and fill in together.
+    @State private var baselines = PersonalAverage.Baselines()
 
     // Next-step routing — the practice tool that targets this session's weakest area.
     @State private var nextStepDrill: DrillMode?
@@ -314,45 +314,17 @@ struct RecordingDetailView: View {
         loadPersonalAverageIfNeeded(excluding: recording.id)
     }
 
-    /// Averages the overall score of the most recent prior sessions.
-    ///
-    /// Bounded to a rolling window rather than all-time: decoding every
-    /// `analysis` blob would make this cost grow without limit, and a rolling
-    /// baseline is the more useful comparison anyway — "better than I've been
-    /// lately" beats "better than I was a year ago".
+    /// Loads the baselines the hero delta and the metric tiles read against.
+    /// See `PersonalAverage` for why the window is bounded.
     private func loadPersonalAverageIfNeeded(excluding currentID: UUID) {
-        guard personalAverage == nil else { return }
+        guard baselines.score == nil else { return }
         let container = modelContext.container
 
         Task {
-            let average = await Task.detached(priority: .utility) { () -> Int? in
-                let context = ModelContext(container)
-                var descriptor = FetchDescriptor<Recording>(
-                    sortBy: [SortDescriptor(\.date, order: .reverse)]
-                )
-                // One extra row so excluding the current session still leaves
-                // a full window.
-                descriptor.fetchLimit = Self.personalAverageWindow + 1
-
-                guard let recent = try? context.fetch(descriptor) else { return nil }
-
-                let scores = recent
-                    .filter { $0.id != currentID && !$0.isDeleted }
-                    .prefix(Self.personalAverageWindow)
-                    .compactMap { $0.analysis?.speechScore.overall }
-
-                guard !scores.isEmpty else { return nil }
-                return Int((Double(scores.reduce(0, +)) / Double(scores.count)).rounded())
-            }.value
-
-            await MainActor.run { personalAverage = average }
+            let loaded = await PersonalAverage.all(excluding: currentID, container: container)
+            await MainActor.run { baselines = loaded }
         }
     }
-
-    /// `nonisolated` because the rolling-average fetch reads it from inside a
-    /// detached task. The project defaults actor isolation to MainActor, so
-    /// without this the access is a Swift 6 error.
-    nonisolated private static let personalAverageWindow = 20
 
     @ViewBuilder
     private func analysisUnavailableCard(_ recording: Recording) -> some View {
@@ -420,7 +392,7 @@ struct RecordingDetailView: View {
 
         ScoreHeroCard(
             score: analysis.speechScore.overall,
-            personalAverage: personalAverage,
+            personalAverage: baselines.score,
             axes: axes,
             strongestAxisID: hasSpread ? strongest?.id : nil,
             weakestAxisID: hasSpread ? weakest?.id : nil,
@@ -559,43 +531,81 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        // Bevel-style 2x2 metric grid — each tile interprets its number with
-        // a status pill so the screen reads as a verdict, not a data dump.
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-            MetricTile(
+        // One stat sheet, not four boxes. The 2×2 tile grid stacked label,
+        // value, baseline, and pill vertically in each cell, which left the
+        // right half of every tile empty and made the section twice as tall as
+        // the numbers warranted.
+        MetricRowGroup {
+            MetricRow(
                 icon: "speedometer",
                 label: "Pace",
                 value: "\(Int(analysis.wordsPerMinute))",
                 unit: "wpm",
+                baseline: baselines.paceLabel,
                 status: paceStatus(for: analysis.wordsPerMinute)
             )
-            MetricTile(
+            MetricRowDivider()
+            MetricRow(
                 icon: "exclamationmark.bubble",
                 label: "Fillers",
                 value: "\(analysis.totalFillerCount)",
+                baseline: baselines.fillerLabel,
                 status: fillerStatus(for: analysis.totalFillerCount)
             )
-            MetricTile(
+            MetricRowDivider()
+            MetricRow(
                 icon: "text.word.spacing",
                 label: "Words",
-                value: "\(analysis.totalWords)"
+                value: "\(analysis.totalWords)",
+                baseline: baselines.wordsLabel,
+                status: lengthStatus(for: analysis)
             )
-            MetricTile(
+            MetricRowDivider()
+            MetricRow(
                 icon: "pause.circle",
                 label: "Pauses",
-                value: "\(analysis.pauseCount)"
+                value: "\(analysis.pauseCount)",
+                baseline: baselines.pauseLabel,
+                status: pauseStatus(for: analysis)
             )
         }
     }
 
-    private func paceStatus(for wpm: Double) -> MetricTile.Status {
+    /// Whether the pauses were deliberate or stumbles. Two sessions can both
+    /// show "9 pauses" and mean opposite things, so the count alone was the
+    /// least useful number on the grid — this is the part worth reading.
+    private func pauseStatus(for analysis: SpeechAnalysis) -> MetricRow.Status {
+        guard analysis.pauseCount > 0 else { return .neutral("None") }
+        if analysis.hesitationPauseCount > analysis.strategicPauseCount { return .caution("Hesitant") }
+        if analysis.strategicPauseCount > 0 { return .good("Strategic") }
+        return .neutral("Even")
+    }
+
+    /// Whether there was enough here to say something, from the scoring
+    /// engine's own substance composite.
+    ///
+    /// Deliberately not words-per-minute — that is the Pace tile, and grading
+    /// this one by rate too would print the same judgement twice. Substance
+    /// blends word count, duration, lexical variety, and run length, which is
+    /// the question a raw word count actually raises.
+    private func lengthStatus(for analysis: SpeechAnalysis) -> MetricRow.Status? {
+        guard analysis.totalWords > 0 else { return .bad("Silent") }
+        guard let substance = analysis.enhancedMetrics?.substanceScore else { return nil }
+        switch substance {
+        case ..<30: return .caution("Brief")
+        case ..<75: return .good("Solid")
+        default: return .good("Full")
+        }
+    }
+
+    private func paceStatus(for wpm: Double) -> MetricRow.Status {
         let target = Double(userSettings.first?.targetWPM ?? 150)
         if wpm < target - 40 { return .neutral("Slow") }
         if wpm > target + 40 { return .caution("Fast") }
         return .good("On pace")
     }
 
-    private func fillerStatus(for count: Int) -> MetricTile.Status {
+    private func fillerStatus(for count: Int) -> MetricRow.Status {
         switch count {
         case 0...2: return .good("Clean")
         case 3...7: return .caution("A few")
@@ -897,6 +907,14 @@ struct RecordingDetailView: View {
     private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
         statsGrid(analysis)
 
+        // Attaches the filler count above to the words that produced it.
+        // Renders nothing on a clean take.
+        if let words = recording.transcriptionWords, !words.isEmpty {
+            TranscriptExcerptCard(words: words) {
+                withAnimation(AppMotion.slide) { selectedDetailTab = .transcript }
+            }
+        }
+
         if let wpmData = analysis.wpmTimeSeries, wpmData.count >= 2 {
             wpmChartSection(wpmData)
         }
@@ -1195,7 +1213,7 @@ struct RecordingDetailView: View {
                             } else if answer.type == .yesNo, let value = answer.boolValue {
                                 HStack(spacing: 6) {
                                     Image(systemName: value ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                        .foregroundStyle(value ? .green : .orange)
+                                        .foregroundStyle(value ? AppColors.success : AppColors.warning)
                                     Text(value ? "Yes" : "No")
                                         .font(.subheadline.weight(.medium))
                                 }
@@ -1585,474 +1603,6 @@ struct RecordingDetailView: View {
 
 }
 
-// MARK: - Playback Drawer Container
-
-private struct PlaybackDrawerContainer: View {
-    let recording: Recording
-    let waveformHeights: [CGFloat]
-    let playbackViewModel: RecordingDetailPlaybackViewModel
-    let onTogglePlayback: () -> Void
-    let onSeek: (Double) -> Void
-
-    // Playback ticks (30 fps display link) are observed here — not in
-    // RecordingDetailView — so only this drawer re-evaluates during playback,
-    // not the whole detail scroll content.
-    @Environment(AudioService.self) private var audioService
-
-    // Collapsed by default: the collapsed row already shows the waveform and a
-    // play button, which is the whole job most of the time, at a third of the
-    // height the transport controls cost.
-    @State private var drawerState: PlaybackDrawerState = .collapsed
-    @State private var dragOffset: CGFloat = 0
-
-    // Gesture tuning. Distances in points, velocities in points/sec.
-    private let drawerSpring: Animation = .spring(response: 0.26, dampingFraction: 0.90)
-    private let collapseDistance: CGFloat = 50      // drag-to-close threshold
-    private let expandDistance: CGFloat = 40        // drag-to-open threshold
-    private let flickVelocity: CGFloat = 320        // points/sec to snap on a flick
-    private let rubberBandLimit: CGFloat = 56       // resistance sets in past this
-    private let rubberBandFactor: CGFloat = 0.32    // smaller = stiffer past limit
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                // Grabber — widens and brightens when the drawer is already at
-                // its maximum (expanded) height so the user reads the affordance
-                // as "pull down to collapse" instead of "pull up for more".
-                // Wrapped in a Button so VoiceOver users can toggle the drawer
-                // without needing the drag gesture.
-                Button {
-                    Haptics.selection()
-                    withAnimation(drawerSpring) {
-                        drawerState = drawerState == .expanded ? .collapsed : .expanded
-                    }
-                } label: {
-                    // Single chevron rotated in-place so the affordance flips
-                    // smoothly in sync with the drawer's spring, instead of
-                    // cross-fading between two separate SF Symbols.
-                    Image(systemName: "chevron.compact.up")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(drawerState == .expanded ? 0.55 : 0.35))
-                        .rotationEffect(.degrees(drawerState == .expanded ? 180 : 0))
-                        .padding(.top, 3)
-                        .padding(.horizontal, 40)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(drawerState == .expanded ? "Collapse playback drawer" : "Expand playback drawer")
-                .accessibilityAddTraits(.isButton)
-
-                if drawerState == .expanded {
-                    playbackControlSection
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    collapsedPlaybackBar
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-                        .transition(.opacity)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .background(
-                UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea(edges: .bottom)
-            )
-            .overlay(alignment: .top) {
-                UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                    .stroke(.white.opacity(0.12), lineWidth: 0.5)
-                    .ignoresSafeArea(edges: .bottom)
-            }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
-        .ignoresSafeArea(edges: .bottom)
-        .contentShape(Rectangle())
-        .animation(drawerSpring, value: drawerState)
-        .offset(y: dragOffset)
-        .simultaneousGesture(
-            // minimumDistance 3 keeps the grabber button tappable while still
-            // picking up finger travel almost immediately — prevents the
-            // "drag starts 10pt in" lag the old 10pt gate produced.
-            DragGesture(minimumDistance: 3)
-                .onChanged { value in
-                    let translation = value.translation.height
-                    // Direction filter: ignore drags that are mostly horizontal
-                    // so the gesture does not fight sibling scroll/list views.
-                    guard abs(translation) > abs(value.translation.width) else { return }
-                    switch drawerState {
-                    case .expanded:
-                        // Top is the natural floor in this state: strictly
-                        // clamp upward (negative) pulls to 0 — the drawer
-                        // never peeks above its maximum height. Downward
-                        // travel tracks the finger 1:1 until `rubberBandLimit`,
-                        // then resistance climbs so the drawer feels tethered.
-                        if translation <= 0 {
-                            dragOffset = 0
-                        } else {
-                            dragOffset = Self.rubberBanded(
-                                translation,
-                                limit: rubberBandLimit,
-                                factor: rubberBandFactor
-                            )
-                        }
-                    case .collapsed:
-                        // Inverse: upward is "open", downward is already past
-                        // the floor of the collapsed state so rubber-band it
-                        // firmly to signal the boundary.
-                        if translation >= 0 {
-                            dragOffset = Self.rubberBanded(
-                                translation,
-                                limit: 4,
-                                factor: 0.18
-                            )
-                        } else {
-                            dragOffset = -Self.rubberBanded(
-                                -translation,
-                                limit: rubberBandLimit,
-                                factor: rubberBandFactor
-                            )
-                        }
-                    }
-                }
-                .onEnded { value in
-                    let translation = value.translation.height
-                    let velocity = value.velocity.height     // points/sec, iOS 17+
-                    let previousState = drawerState
-
-                    // Snap decision blends distance and velocity:
-                    //   — a short swipe with a strong flick still commits,
-                    //   — a long slow drag also commits,
-                    //   — everything else returns to its origin.
-                    // Using the same spring as the state `.animation(_:value:)`
-                    // so the offset release and the state change unwind as
-                    // one motion, with no visible seam at the hand-off.
-                    withAnimation(drawerSpring) {
-                        switch drawerState {
-                        case .expanded:
-                            if translation > collapseDistance || velocity > flickVelocity {
-                                drawerState = .collapsed
-                            }
-                        case .collapsed:
-                            if translation < -expandDistance || velocity < -flickVelocity {
-                                drawerState = .expanded
-                            }
-                        }
-                        dragOffset = 0
-                    }
-
-                    // Physical confirmation only when the drawer actually
-                    // commits to a new state — no haptic on return-to-origin.
-                    if drawerState != previousState {
-                        Haptics.light()
-                    }
-                }
-        )
-        .onChange(of: audioService.currentPlaybackTime) { _, _ in
-            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-        }
-        .onChange(of: audioService.playbackDuration) { _, _ in
-            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-        }
-        .onChange(of: audioService.isPlaying) { _, _ in
-            playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
-        }
-    }
-
-    /// Progressive resistance past `limit`: finger travel still moves the
-    /// drawer but each additional point contributes `factor` as much. Keeps
-    /// the drag feeling alive without letting the drawer slide unbounded.
-    private static func rubberBanded(_ offset: CGFloat, limit: CGFloat, factor: CGFloat) -> CGFloat {
-        guard offset > limit else { return offset }
-        return limit + (offset - limit) * factor
-    }
-
-    /// Seekable waveform, shared by both drawer states so the collapsed row
-    /// shows exactly the audio the expanded one does.
-    private func scrubber(height: CGFloat) -> some View {
-        GeometryReader { geometry in
-            let barWidth: CGFloat = 3
-            let spacing: CGFloat = 2
-            let totalBarWidth = barWidth + spacing
-            let barCount = max(1, Int(geometry.size.width / totalBarWidth))
-            let width = geometry.size.width
-
-            // Progress quantized to whole bars: the bar row's inputs
-            // only change when a new bar fills, so the ~100 bar views
-            // re-diff once per bar instead of on every 30 fps
-            // display-link tick.
-            ScrubberBars(
-                barCount: barCount,
-                playedBars: min(barCount, Int((playbackViewModel.playbackProgress * Double(barCount)).rounded(.up))),
-                heights: waveformHeights,
-                barWidth: barWidth,
-                spacing: spacing
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .contentShape(Rectangle())
-            .onTapGesture { location in
-                let progress = max(0, min(1, location.x / max(1, width)))
-                onSeek(progress)
-            }
-            .gesture(
-                DragGesture(minimumDistance: 4)
-                    .onChanged { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                        let progress = max(0, min(1, value.location.x / max(1, width)))
-                        onSeek(progress)
-                    }
-            )
-        }
-        .frame(height: height)
-        .accessibilityLabel("Playback position")
-    }
-
-    @ViewBuilder
-    private var playbackControlSection: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Text(formatTime(playbackViewModel.currentTime))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, alignment: .leading)
-
-                scrubber(height: 32)
-
-                Text(formatTime(playbackViewModel.playbackDuration > 0 ? playbackViewModel.playbackDuration : recording.actualDuration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, alignment: .trailing)
-            }
-
-            HStack(spacing: 22) {
-                Button {
-                    seekBy(seconds: -10)
-                } label: {
-                    Image(systemName: "gobackward.10")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Skip back 10 seconds")
-
-                Button {
-                    onTogglePlayback()
-                } label: {
-                    Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(Color.white.opacity(0.94)))
-                        .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
-
-                Button {
-                    seekBy(seconds: 10)
-                } label: {
-                    Image(systemName: "goforward.10")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Skip forward 10 seconds")
-            }
-        }
-    }
-
-    /// Play button + the actual waveform + elapsed time in one 56pt row. A
-    /// waveform next to a play button does not need a "Playback" caption, and
-    /// showing the audio only in the tallest state was backwards.
-    @ViewBuilder
-    private var collapsedPlaybackBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                onTogglePlayback()
-            } label: {
-                Image(systemName: playbackViewModel.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.94)))
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(playbackViewModel.isPlaying ? "Pause" : "Play")
-
-            scrubber(height: 28)
-
-            Text(formatTime(playbackViewModel.currentTime))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 40, alignment: .trailing)
-        }
-        .frame(height: 56)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(drawerSpring) {
-                drawerState = .expanded
-            }
-        }
-    }
-
-    private func seekBy(seconds: TimeInterval) {
-        let duration = max(playbackViewModel.playbackDuration, recording.actualDuration)
-        guard duration > 0 else { return }
-        let targetTime = min(max(playbackViewModel.currentTime + seconds, 0), duration)
-        onSeek(targetTime / duration)
-    }
-
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-/// POD scrubber bar row. All inputs are plain values, so SwiftUI skips the
-/// whole row while `playedBars` is unchanged between display-link ticks.
-private struct ScrubberBars: View {
-    let barCount: Int
-    let playedBars: Int
-    let heights: [CGFloat]
-    let barWidth: CGFloat
-    let spacing: CGFloat
-
-    var body: some View {
-        HStack(spacing: spacing) {
-            ForEach(0..<barCount, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(i < playedBars ? AppColors.primary : Color.white.opacity(0.2))
-                    .frame(width: barWidth, height: heights.isEmpty ? 16 : heights[i % heights.count])
-            }
-        }
-    }
-}
-
-// MARK: - Transcript Content (filler/vocab highlights)
-
-private struct TranscriptContentView: View {
-    let words: [TranscriptionWord]
-    let turns: [SpeakerTurn]
-    let showFillerHighlights: Bool
-    let showVocabHighlights: Bool
-    let showSpeakerTurns: Bool
-    let hasSpeakerSeparation: Bool
-
-    var body: some View {
-        if showSpeakerTurns && hasSpeakerSeparation {
-            SpeakerTurnTranscriptView(
-                turns: turns,
-                showFillerHighlights: showFillerHighlights,
-                showVocabHighlights: showVocabHighlights
-            )
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        } else {
-            HighlightedTranscriptView(
-                words: words,
-                showFillerHighlights: showFillerHighlights,
-                showVocabHighlights: showVocabHighlights
-            )
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-    }
-}
-
-// MARK: - Highlighted Transcript View
-
-struct HighlightedTranscriptView: View {
-    let words: [TranscriptionWord]
-    let showFillerHighlights: Bool
-    let showVocabHighlights: Bool
-
-    var body: some View {
-        FlowLayout(spacing: 4) {
-            ForEach(words) { word in
-                WordView(
-                    word: word,
-                    showFillerHighlight: showFillerHighlights && word.isFiller,
-                    showVocabHighlight: showVocabHighlights && word.isVocabWord
-                )
-            }
-        }
-    }
-}
-
-private struct SpeakerTurn: Identifiable {
-    let id: Int
-    let isPrimarySpeaker: Bool
-    let words: [TranscriptionWord]
-}
-
-private struct SpeakerTurnTranscriptView: View {
-    let turns: [SpeakerTurn]
-    let showFillerHighlights: Bool
-    let showVocabHighlights: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(turns) { turn in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: turn.isPrimarySpeaker ? "person.fill.checkmark" : "person.2.fill")
-                            .font(.caption)
-                            .foregroundStyle(turn.isPrimarySpeaker ? AppColors.primary : .secondary)
-
-                        Text(turn.isPrimarySpeaker ? "You" : "Other speaker")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(turn.isPrimarySpeaker ? AppColors.primary : .secondary)
-                    }
-
-                    HighlightedTranscriptView(
-                        words: turn.words,
-                        showFillerHighlights: showFillerHighlights,
-                        showVocabHighlights: showVocabHighlights
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(turn.isPrimarySpeaker ? AppColors.primary.opacity(0.12) : .white.opacity(0.05))
-                )
-            }
-        }
-    }
-}
-
-struct WordView: View {
-    let word: TranscriptionWord
-    let showFillerHighlight: Bool
-    let showVocabHighlight: Bool
-
-    private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
-    private var highlightColor: Color { showFillerHighlight ? .orange : .green }
-
-    private var foreground: Color {
-        isHighlighted ? highlightColor : .primary
-    }
-
-    var body: some View {
-        Text(word.word)
-            .font(.body)
-            .foregroundStyle(foreground)
-            .padding(.horizontal, isHighlighted ? 4 : 0)
-            .padding(.vertical, isHighlighted ? 2 : 0)
-            .background {
-                if isHighlighted {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(highlightColor.opacity(0.2))
-                }
-            }
-    }
-}
-
 // MARK: - Detail Tab Enum
 
 enum DetailTab: String, CaseIterable, Identifiable {
@@ -2073,10 +1623,6 @@ enum DetailTab: String, CaseIterable, Identifiable {
     }
 }
 
-private enum PlaybackDrawerState {
-    case expanded
-    case collapsed
-}
 
 private enum AIInsightBlock {
     case heading(AttributedString)
@@ -2114,15 +1660,8 @@ struct GoalProgressBadge: View {
 
                     Spacer()
 
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.08), lineWidth: 3)
-                        Circle()
-                            .trim(from: 0, to: goal.progress)
-                            .stroke(AppColors.primary, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                    }
-                    .frame(width: 32, height: 32)
+                    RingProgress(progress: goal.progress, color: AppColors.primary, lineWidth: 3)
+                        .frame(width: 32, height: 32)
                 }
             }
         }

@@ -78,7 +78,7 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
         Button {
             guard selection != section else { return }
             Haptics.selection()
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            withAnimation(AppMotion.slide) {
                 selection = section
             }
         } label: {

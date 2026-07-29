@@ -99,16 +99,20 @@ private struct CoachingTipRow: View {
         }
     }
 
+    /// Category identity, not judgement — these name which area a tip is about,
+    /// so they come from the jewel/tool tones rather than the state colors.
+    /// The four raw system colors these replace were pitched for light UI.
     private var tintColor: Color {
         switch tip.category {
-        case .pace: return .blue
-        case .fillers: return .orange
-        case .pauses: return .purple
+        // Not `categoryTeal` — it aliases `primary`, which `.clarity` holds.
+        case .pace: return AppColors.categoryNeutralCool
+        case .fillers: return AppColors.warning
+        case .pauses: return AppColors.categoryPlum
         case .clarity: return AppColors.primary
         case .structure: return AppColors.categoryIndigo
         case .delivery: return AppColors.categoryBrandBright
         case .relevance: return AppColors.categoryIndigo
-        case .encouragement: return .green
+        case .encouragement: return AppColors.success
         }
     }
 

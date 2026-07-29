@@ -38,33 +38,51 @@ struct ScoreHeroCard: View {
     }
 
     var body: some View {
-        GlassCard(padding: 20, elevated: true) {
-            VStack(alignment: .leading, spacing: 18) {
+        GlassCard(padding: 16, elevated: true) {
+            VStack(alignment: .leading, spacing: 10) {
                 eyebrow
-                scoreRow
 
                 if axes.isEmpty {
-                    // No breakdown to anchor, so the meter is the only thing
-                    // giving the number a sense of position on the scale.
+                    // No donut to hold the number, so it leads on its own and
+                    // the meter gives it a position on the scale.
+                    soloScoreRow
                     TickMeter(fraction: Double(score) / 100, color: scoreColor)
-                        .frame(height: 22)
+                        .frame(height: 18)
                 } else {
-                    // The meter is dropped here on purpose: with the numeral
-                    // above and the score anchoring the donut, a third copy of
-                    // the same value was one encoding too many.
+                    // The score lives in the middle of the ring. It used to
+                    // also print at 68pt directly above, which said the same
+                    // number twice inches apart and made this the tallest card
+                    // on the screen by far. One numeral, inside the donut it
+                    // belongs to.
                     SubscoreRadarChart(
                         axes: axes,
                         overallScore: score,
                         emphasizedAxisIDs: (strongestAxisID, weakestAxisID)
                     )
-                    .frame(height: 280)
+                    .frame(height: 260)
                     .frame(maxWidth: .infinity)
+
+                    verdictLine
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
+    }
+
+    /// Verdict and delta on one centred line beneath the ring — the context the
+    /// number needs, at caption weight so it supports the ring instead of
+    /// competing with it.
+    private var verdictLine: some View {
+        HStack(spacing: 8) {
+            Text(AppColors.scoreVerdict(for: score))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(scoreColor)
+
+            deltaLabel
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Subviews
@@ -94,23 +112,24 @@ struct ScoreHeroCard: View {
         }
     }
 
-    private var scoreRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 14) {
+    /// Only used when there is no breakdown to anchor the number.
+    private var soloScoreRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text("\(score)")
-                    .font(.system(size: 68, weight: .bold, design: .rounded))
+                    .font(.system(size: 44, weight: .bold, design: .rounded))
                     .foregroundStyle(scoreColor)
                     .contentTransition(.numericText(value: Double(score)))
                     .monospacedDigit()
 
                 Text("/100")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.tertiary)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(AppColors.scoreVerdict(for: score))
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
 
                 deltaLabel

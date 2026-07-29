@@ -224,9 +224,9 @@ struct ReadAloudSessionView: View {
         switch state {
         case .upcoming: return .white.opacity(0.4)
         case .current: return .white
-        case .matched: return .green
-        case .mismatched: return .red
-        case .skipped: return .orange
+        case .matched: return AppColors.success
+        case .mismatched: return AppColors.error
+        case .skipped: return AppColors.warning
         }
     }
 
@@ -245,10 +245,9 @@ struct ReadAloudSessionView: View {
     }
 
     private var accuracyColor: Color {
-        let acc = viewModel.accuracyPercentage
-        if acc >= 80 { return .green }
-        if acc >= 60 { return .yellow }
-        return .red
+        // Accuracy is a score, so it rides the score ramp rather than the
+        // state colors — a 70 is not a "warning".
+        AppColors.scoreColor(for: Int(viewModel.accuracyPercentage))
     }
 
     // MARK: - Bottom Controls

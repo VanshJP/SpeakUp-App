@@ -107,14 +107,12 @@ struct PracticeResultsCard: View {
 
     private func scoreRing(score: Int) -> some View {
         ZStack {
-            Circle()
-                .stroke(AppColors.meterTrack, lineWidth: 5)
-
-            Circle()
-                .trim(from: 0, to: appeared ? Double(score) / 100.0 : 0)
-                .stroke(AppColors.scoreColor(for: score), style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 0.8).delay(0.2), value: appeared)
+            RingProgress(
+                progress: appeared ? Double(score) / 100.0 : 0,
+                color: AppColors.scoreColor(for: score),
+                lineWidth: 5
+            )
+            .motion(AppMotion.reveal.delay(0.2), value: appeared)
 
             Text("\(score)")
                 .font(.system(size: 20, weight: .bold, design: .rounded))

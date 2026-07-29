@@ -31,7 +31,7 @@ struct ReadAloudSelectionView: View {
                                     FilterPill(
                                         title: difficulty.displayName,
                                         isSelected: viewModel.selectedDifficulty == difficulty,
-                                        color: difficultyColor(difficulty)
+                                        color: AppColors.difficultyColor(difficulty)
                                     ) {
                                         withAnimation {
                                             viewModel.selectedDifficulty = viewModel.selectedDifficulty == difficulty ? nil : difficulty
@@ -62,14 +62,22 @@ struct ReadAloudSelectionView: View {
 
                         // Passage cards
                         LazyVStack(spacing: 12) {
-                            ForEach(viewModel.passages) { passage in
-                                Button {
-                                    viewModel.selectedPassage = passage
-                                    showingSession = true
-                                } label: {
-                                    PassageCard(passage: passage)
+                            if viewModel.passages.isEmpty {
+                                EmptyStateCard(
+                                    icon: "text.book.closed",
+                                    title: "Nothing here",
+                                    message: "No passages match these filters. Try clearing one."
+                                )
+                            } else {
+                                ForEach(viewModel.passages) { passage in
+                                    Button {
+                                        viewModel.selectedPassage = passage
+                                        showingSession = true
+                                    } label: {
+                                        PassageCard(passage: passage)
+                                    }
+                                    .buttonStyle(GlassPressStyle())
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal)
@@ -97,48 +105,6 @@ struct ReadAloudSelectionView: View {
         }
     }
 
-    private func difficultyColor(_ difficulty: ReadAloudDifficulty) -> Color {
-        switch difficulty {
-        case .easy: return .green
-        case .medium: return .orange
-        case .hard: return .red
-        }
-    }
-}
-
-// MARK: - Filter Pill
-
-private struct FilterPill: View {
-    let title: String
-    var icon: String? = nil
-    let isSelected: Bool
-    var color: Color = AppColors.primary
-
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.caption2)
-                }
-                Text(title)
-                    .font(.caption.weight(.medium))
-            }
-            .foregroundStyle(isSelected ? .white : .primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background {
-                if isSelected {
-                    Capsule().fill(color)
-                } else {
-                    Capsule().fill(.ultraThinMaterial)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Passage Card
@@ -156,14 +122,11 @@ private struct PassageCard: View {
 
                     Spacer()
 
-                    Text(passage.difficulty.displayName)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background {
-                            Capsule().fill(difficultyColor.opacity(0.2))
-                        }
-                        .foregroundStyle(difficultyColor)
+                    StatusPill(
+                        text: passage.difficulty.displayName,
+                        color: difficultyColor,
+                        fillOpacity: 0.2
+                    )
                 }
 
                 Text(passage.title)
@@ -190,11 +153,5 @@ private struct PassageCard: View {
         }
     }
 
-    private var difficultyColor: Color {
-        switch passage.difficulty {
-        case .easy: return AppColors.success
-        case .medium: return AppColors.warning
-        case .hard: return AppColors.error
-        }
-    }
+    private var difficultyColor: Color { AppColors.difficultyColor(passage.difficulty) }
 }

@@ -9,6 +9,13 @@ struct ConfidenceToolsView: View {
         DefaultConfidenceExercises.all.filter { $0.category == selectedCategory }
     }
 
+    /// Denominator for every row's duration arc, scoped to the visible
+    /// category — within one category the relative lengths are what's worth
+    /// comparing.
+    private var longestExerciseMinutes: Double {
+        Double(exercises.map(\.durationMinutes).max() ?? 0)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -20,71 +27,44 @@ struct ConfidenceToolsView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(ConfidenceCategory.allCases) { category in
-                                    Button {
-                                        withAnimation { selectedCategory = category }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: category.icon)
-                                                .font(.caption2)
-                                            Text(category.displayName)
-                                                .font(.caption.weight(.medium))
-                                        }
-                                        .foregroundStyle(selectedCategory == category ? .white : .primary)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background {
-                                            if selectedCategory == category {
-                                                Capsule().fill(category.color)
-                                            } else {
-                                                Capsule().fill(.ultraThinMaterial)
-                                            }
+                                    FilterPill(
+                                        title: category.displayName,
+                                        icon: category.icon,
+                                        isSelected: selectedCategory == category,
+                                        color: category.color
+                                    ) {
+                                        withAnimation(AppMotion.slide) {
+                                            selectedCategory = category
                                         }
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
 
                         // Exercise cards
-                        LazyVStack(spacing: 12) {
-                            ForEach(exercises) { exercise in
-                                Button {
-                                    showingExercise = exercise
-                                } label: {
-                                    GlassCard {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: exercise.category.icon)
-                                                .font(.title2)
-                                                .foregroundStyle(exercise.category.color)
-                                                .frame(width: 44, height: 44)
-                                                .background {
-                                                    Circle().fill(exercise.category.color.opacity(0.15))
-                                                }
-
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(exercise.title)
-                                                    .font(.subheadline.weight(.semibold))
-                                                    .foregroundStyle(.primary)
-
-                                                Text(exercise.description)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(2)
-
-                                                Text("\(exercise.durationMinutes) min")
-                                                    .font(.caption2.weight(.medium))
-                                                    .foregroundStyle(exercise.category.color)
-                                            }
-
-                                            Spacer()
-
-                                            Image(systemName: "chevron.right")
-                                                .font(.caption)
-                                                .foregroundStyle(.tertiary)
-                                        }
+                        if exercises.isEmpty {
+                            EmptyStateCard(
+                                icon: "heart.circle",
+                                title: "Nothing here",
+                                message: "No exercises in this category yet. Try another one."
+                            )
+                        } else {
+                            LazyVStack(spacing: 12) {
+                                ForEach(exercises) { exercise in
+                                    PracticeItemRow(
+                                        title: exercise.title,
+                                        subtitle: exercise.description,
+                                        icon: exercise.category.icon,
+                                        tint: exercise.category.color,
+                                        durationFraction: PracticeItemRow.fraction(
+                                            Double(exercise.durationMinutes),
+                                            longest: longestExerciseMinutes
+                                        ),
+                                        durationLabel: "\(exercise.durationMinutes)m"
+                                    ) {
+                                        showingExercise = exercise
                                     }
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }

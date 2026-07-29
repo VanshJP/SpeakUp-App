@@ -169,7 +169,7 @@ struct PromptWheelView: View {
 
                     Spacer()
 
-                    DifficultyBadge(difficulty: prompt.difficulty)
+                    StatusPill.difficulty(prompt.difficulty)
                 }
                 .foregroundStyle(color)
 

@@ -66,49 +66,42 @@ struct CurriculumView: View {
 
     /// Stats card, not a hero. Same shape as the score hero on the detail
     /// screen: one dominant numeral, a tick meter, supporting counts.
+    /// One row, not a card-sized dashboard.
+    ///
+    /// This used to be an eyebrow, a 46pt percentage, a lesson count, a week
+    /// chip, and a full-width meter stacked in 20pt padding — the tallest thing
+    /// on a screen whose actual content is the path below it. A small ring
+    /// carries the fraction and the numeral at once, so the whole header costs
+    /// one line.
     private var progressHeader: some View {
-        GlassCard(padding: 20) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Course progress")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.7)
-
-                    Spacer()
-
-                    if let week = viewModel.currentPhase?.week {
-                        Text("Week \(week)")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
+        GlassCard(padding: 14) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RingProgress(
+                        progress: viewModel.overallProgress,
+                        color: AppColors.primary,
+                        lineWidth: 4
+                    )
+                    Text("\(Int(viewModel.overallProgress * 100))")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .contentTransition(.numericText(value: viewModel.overallProgress))
                 }
+                .frame(width: 40, height: 40)
 
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("\(Int(viewModel.overallProgress * 100))")
-                            .font(.system(size: 46, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .monospacedDigit()
-                            .contentTransition(.numericText(value: viewModel.overallProgress))
+                Text("\(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
 
-                        Text("%")
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.tertiary)
-                    }
+                Spacer(minLength: 0)
 
-                    Text("\(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons")
-                        .font(.subheadline)
+                if let week = viewModel.currentPhase?.week {
+                    Text("Week \(week)")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-
-                    Spacer(minLength: 0)
                 }
-
-                TickMeter(fraction: viewModel.overallProgress, color: AppColors.primary)
-                    .frame(height: 18)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Course progress: \(Int(viewModel.overallProgress * 100)) percent, \(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons complete")
@@ -174,49 +167,105 @@ struct CurriculumView: View {
         let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
         let isLocked = !isPreviousPhaseCompleted(before: phase) && phase.week > 1
         let isPhaseComplete = completedInPhase == phase.lessons.count && !phase.lessons.isEmpty
-        let phaseProgress = phase.lessons.isEmpty ? 0.0 : Double(completedInPhase) / Double(phase.lessons.count)
 
         return VStack(alignment: .leading, spacing: 12) {
             phaseHeader(
                 phase,
                 completed: completedInPhase,
                 isLocked: isLocked,
-                isComplete: isPhaseComplete,
-                progress: phaseProgress
+                isComplete: isPhaseComplete
             )
 
-            ForEach(phase.lessons) { lesson in
-                let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)
+            VStack(spacing: 0) {
+                ForEach(Array(phase.lessons.enumerated()), id: \.element.id) { index, lesson in
+                    let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)
 
-                if isAccessible {
-                    NavigationLink {
-                        LessonDetailView(lesson: lesson, viewModel: viewModel)
-                    } label: {
-                        lessonRow(lesson, isLocked: false)
+                    if isAccessible {
+                        NavigationLink {
+                            LessonDetailView(lesson: lesson, viewModel: viewModel)
+                        } label: {
+                            lessonPathRow(lesson, at: index, in: phase, isLocked: false)
+                        }
+                        .buttonStyle(GlassPressStyle())
+                    } else {
+                        Button {
+                            Haptics.warning()
+                            showingLockedInfo = true
+                        } label: {
+                            lessonPathRow(lesson, at: index, in: phase, isLocked: true)
+                        }
+                        .buttonStyle(GlassPressStyle())
                     }
-                    .buttonStyle(GlassPressStyle())
-                } else {
-                    Button {
-                        Haptics.warning()
-                        showingLockedInfo = true
-                    } label: {
-                        lessonRow(lesson, isLocked: true)
-                    }
-                    .buttonStyle(GlassPressStyle())
                 }
             }
+            .padding(.top, 4)
         }
     }
 
-    /// One line of identity, one line of meaning, one meter. The old header
-    /// carried a badge, a week label, a title, a count pill, a progress bar,
-    /// and a description — six competing elements repeated per phase.
+    /// Nodes alternate sides down the scroll. The side is derived from the
+    /// index rather than stored, so the rail and the node can never disagree.
+    private func isLeading(_ index: Int) -> Bool { index.isMultiple(of: 2) }
+
+    private func lessonPathRow(
+        _ lesson: CurriculumLesson,
+        at index: Int,
+        in phase: CurriculumPhase,
+        isLocked: Bool
+    ) -> some View {
+        let isCompleted = viewModel.isLessonCompleted(lesson.id)
+        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
+
+        let state: LessonNodeState = {
+            if isCompleted { return .completed }
+            if isLocked { return .locked }
+            if isCurrent { return .current }
+            return .available
+        }()
+
+        return LessonPathRow(
+            state: state,
+            icon: "text.book.closed",
+            isLeading: isLeading(index),
+            hasNext: index < phase.lessons.count - 1,
+            nextIsLeading: isLeading(index + 1)
+        ) {
+            lessonLabel(lesson, isLocked: isLocked, alignedLeading: isLeading(index))
+        }
+    }
+
+    /// Text hugs the node, so it flips alignment with it.
+    private func lessonLabel(
+        _ lesson: CurriculumLesson,
+        isLocked: Bool,
+        alignedLeading: Bool
+    ) -> some View {
+        VStack(alignment: alignedLeading ? .leading : .trailing, spacing: 3) {
+            Text(lesson.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isLocked ? Color.secondary : Color.white)
+
+            // The "N activities · M min practice" line was dropped from here.
+            // Repeated down all 36 rows it read as texture rather than
+            // information, and the Continue CTA above already states it for the
+            // one lesson you're about to open — which is the only place the
+            // number can still change a decision.
+            Text(lesson.objective)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .multilineTextAlignment(alignedLeading ? .leading : .trailing)
+        .opacity(isLocked ? 0.55 : 1.0)
+    }
+
+    /// One line of identity, one line of meaning. The original header carried a
+    /// badge, a week label, a title, a count pill, a progress bar, and a
+    /// description — six competing elements repeated per phase.
     private func phaseHeader(
         _ phase: CurriculumPhase,
         completed: Int,
         isLocked: Bool,
-        isComplete: Bool,
-        progress: Double
+        isComplete: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
@@ -249,86 +298,19 @@ struct CurriculumView: View {
 
             // Description only where it can still change a decision — on a
             // finished phase it is just noise above a list of checkmarks.
+            //
+            // The phase tick meter used to sit here too. With the course meter
+            // in the header above and a "1/4" count on this very row, the page
+            // was drawing the same fraction three ways before you reached a
+            // single lesson. The count stays; the second meter goes.
             if !isComplete {
                 Text(phase.description)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-
-                TickMeter(
-                    fraction: progress,
-                    color: isLocked ? AppColors.scoreEmpty : AppColors.primary,
-                    tickCount: 24
-                )
-                .frame(height: 10)
             }
         }
         .padding(.top, 4)
-    }
-
-    // MARK: - Lesson Row
-
-    private func lessonRow(_ lesson: CurriculumLesson, isLocked: Bool) -> some View {
-        let isCompleted = viewModel.isLessonCompleted(lesson.id)
-        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
-
-        return GlassCard(padding: 14, accentBorder: isCurrent ? AppColors.primary : nil) {
-            HStack(spacing: 13) {
-                statusIcon(isCompleted: isCompleted, isLocked: isLocked, isCurrent: isCurrent)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(lesson.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isLocked ? Color.secondary : Color.white)
-                        .multilineTextAlignment(.leading)
-
-                    Text(lesson.objective)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    // Same metadata grammar as the Library tool rows: what it
-                    // is and what it costs, before you tap.
-                    Text(Self.lessonMeta(lesson))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .opacity(isLocked ? 0.55 : 1.0)
-    }
-
-    private func statusIcon(isCompleted: Bool, isLocked: Bool, isCurrent: Bool) -> some View {
-        ZStack {
-            Circle()
-                .fill(isCompleted ? AppColors.success.opacity(0.15) : Color.white.opacity(0.05))
-                .frame(width: 30, height: 30)
-
-            if isCompleted {
-                Image(systemName: "checkmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(AppColors.success)
-            } else if isLocked {
-                Image(systemName: "lock.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            } else if isCurrent {
-                Image(systemName: "play.fill")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(AppColors.primary)
-            } else {
-                Circle()
-                    .stroke(AppColors.cardStroke, lineWidth: 1)
-                    .frame(width: 12, height: 12)
-            }
-        }
     }
 
     // MARK: - Helpers

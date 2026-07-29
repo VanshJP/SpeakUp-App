@@ -14,13 +14,12 @@ struct MetricExplainerSheet: View {
             ?? ("No description available for this metric.", "")
     }
 
+    /// One source for the verdict word. This used to be a local switch saying
+    /// "Great" at 80+, while `AppColors.scoreVerdict` — used by the hero card
+    /// and everywhere else — says "Strong" for the same number. The same score
+    /// got two different names depending on which surface you were looking at.
     private var bandLabel: String {
-        switch axis.value {
-        case 80...: return "Great"
-        case 60..<80: return "Solid"
-        case 40..<60: return "Developing"
-        default: return "Needs work"
-        }
+        AppColors.scoreVerdict(for: axis.value)
     }
 
     var body: some View {
@@ -50,15 +49,14 @@ struct MetricExplainerSheet: View {
         return GlassCard(tint: AppColors.glassTintPrimary) {
             VStack(spacing: 16) {
                 ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.08), lineWidth: 8)
-                    Circle()
-                        .trim(from: 0, to: CGFloat(axis.value) / 100)
-                        .stroke(
-                            AppColors.scoreGradient(for: axis.value),
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
+                    // Solid, not the score gradient: every other ring in the
+                    // app reads its band as one flat color, and a lone gradient
+                    // here made the same value look like a different metric.
+                    RingProgress(
+                        progress: Double(axis.value) / 100,
+                        color: color,
+                        lineWidth: 8
+                    )
                     Text("\(axis.value)")
                         .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(color)

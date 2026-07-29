@@ -93,8 +93,10 @@ struct AnalyzingView: View {
             }
         }
         .animation(.spring(response: 0.35), value: shouldShowFeedback)
-        .task { await animateWaveform() }
-        .task { await animatePulse() }
+        .ambientLoop(.linear(duration: 2).repeatForever(autoreverses: false)) {
+            waveformPhase = .pi * 2
+        }
+        .ambientLoop(AppMotion.ambient(duration: 1.5)) { pulseScale = 1.06 }
         .task { await cycleTips() }
         .task { await cycleStages() }
         .onDisappear {
@@ -323,18 +325,11 @@ struct AnalyzingView: View {
     }
 
     // MARK: - Animations (task-based, auto-cancelled on disappear)
-
-    private func animateWaveform() async {
-        withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-            waveformPhase = .pi * 2
-        }
-    }
-
-    private func animatePulse() async {
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            pulseScale = 1.06
-        }
-    }
+    //
+    // The waveform and pulse loops moved to `.ambientLoop` — they never used
+    // the async context for anything (a `repeatForever` animation lives on the
+    // view, not the task, so cancellation never reached them) and they now go
+    // still under Reduce Motion.
 
     private func cycleTips() async {
         while !Task.isCancelled {
@@ -852,14 +847,8 @@ private struct SkeletonBar: View {
 private struct SkeletonRing: View {
     var body: some View {
         ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.08), lineWidth: 10)
+            RingProgress(progress: 0.35, color: .white.opacity(0.14), lineWidth: 10)
                 .frame(width: 112, height: 112)
-            Circle()
-                .trim(from: 0, to: 0.35)
-                .stroke(Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                .frame(width: 112, height: 112)
-                .rotationEffect(.degrees(-90))
 
             VStack(spacing: 4) {
                 SkeletonBar(width: 50, height: 22)

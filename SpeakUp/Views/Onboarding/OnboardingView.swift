@@ -278,11 +278,9 @@ private struct OnboardingOrb: View {
             .shadow(color: glowColor.opacity(0.55), radius: size * 0.18, y: 6)
             .shadow(color: glowColor.opacity(0.30), radius: size * 0.40, y: 12)
             .scaleEffect(pulseScale)
-            .onAppear {
+            .ambientLoop(AppMotion.ambient(duration: 2.8)) {
                 guard pulses else { return }
-                withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
-                    pulseScale = 1.04
-                }
+                pulseScale = 1.04
             }
             .animation(.easeInOut(duration: 0.6), value: glowColor)
     }
@@ -956,10 +954,8 @@ private struct OnboardingWaveform: View {
                 .fill(AppColors.primary)
                 .frame(height: height)
                 .frame(maxHeight: .infinity, alignment: .center)
-                .onAppear {
-                    withAnimation(.linear(duration: 0.6).repeatForever(autoreverses: false)) {
-                        phase = .pi * 2
-                    }
+                .ambientLoop(.linear(duration: 0.6).repeatForever(autoreverses: false)) {
+                    phase = .pi * 2
                 }
         }
     }

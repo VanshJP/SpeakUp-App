@@ -88,13 +88,7 @@ struct AchievementGalleryView: View {
             HStack(spacing: 20) {
                 // Progress gauge — count lives inside the ring
                 ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.07), lineWidth: 9)
-
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(AppColors.warning, style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
+                    RingProgress(progress: progress, color: AppColors.warning, lineWidth: 9)
 
                     Text("\(unlockedCount)")
                         .font(.system(size: 26, weight: .bold, design: .rounded))

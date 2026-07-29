@@ -1,38 +1,5 @@
 import SwiftUI
 
-// MARK: - Liquid Glass Effects (iOS 26+)
-
-extension View {
-    /// Applies a liquid glass effect with optional tint
-    /// This will use the native .glassEffect() modifier on iOS 26+
-    @ViewBuilder
-    func liquidGlass(tint: Color? = nil) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .glassEffect()
-                .overlay {
-                    if let tint {
-                        Color.clear
-                            .background(tint.opacity(0.1))
-                    }
-                }
-        } else {
-            self
-                .background(.ultraThinMaterial)
-        }
-    }
-    
-    /// Applies a prominent liquid glass effect for important UI elements
-    @ViewBuilder
-    func prominentGlass() -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(true))
-        } else {
-            self.background(.thickMaterial)
-        }
-    }
-}
-
 // MARK: - Shimmer Effect
 //
 // Wrap a block of shimmering primitives in `ShimmerHost` so one animation +
@@ -58,10 +25,10 @@ struct ShimmerHost<Content: View>: View {
     var body: some View {
         content
             .environment(\.shimmerPhase, phase)
-            .onAppear {
-                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
+            // Under Reduce Motion the sweep never starts and the highlight
+            // stays parked off-frame, leaving plain skeleton bars.
+            .ambientLoop(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                phase = 1
             }
     }
 }
@@ -95,9 +62,9 @@ extension View {
 // MARK: - Glow Effect
 
 extension View {
-    func pulsingGlow(color: Color = .red, isActive: Bool) -> some View {
+    func pulsingGlow(color: Color = AppColors.recording, isActive: Bool) -> some View {
         self
             .shadow(color: isActive ? color.opacity(0.45) : .clear, radius: isActive ? 15 : 0)
-            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isActive)
+            .motion(AppMotion.ambient, value: isActive)
     }
 }

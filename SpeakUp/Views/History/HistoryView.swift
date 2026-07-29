@@ -478,17 +478,12 @@ struct RecordingRow: View {
                 // Score gauge — the row's single colored element
                 if let score = summary.overallScore {
                     ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.07), lineWidth: 3.5)
-                            .frame(width: 44, height: 44)
-                        Circle()
-                            .trim(from: 0, to: CGFloat(score) / 100)
-                            .stroke(
-                                AppColors.scoreColor(for: score),
-                                style: StrokeStyle(lineWidth: 3.5, lineCap: .round)
-                            )
-                            .frame(width: 44, height: 44)
-                            .rotationEffect(.degrees(-90))
+                        RingProgress(
+                            progress: Double(score) / 100,
+                            color: AppColors.scoreColor(for: score),
+                            lineWidth: 3.5
+                        )
+                        .frame(width: 44, height: 44)
                         Text("\(score)")
                             .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)

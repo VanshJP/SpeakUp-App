@@ -419,7 +419,7 @@ struct InteractivePromptCard: View {
                     Spacer()
 
                     if let difficulty = prompt?.difficulty {
-                        DifficultyBadge(difficulty: difficulty)
+                        StatusPill.difficulty(difficulty)
                     }
                 }
 
@@ -455,11 +455,7 @@ struct InteractivePromptCard: View {
             .onTapGesture { Haptics.medium(); onTap() }
         }
         .redacted(reason: prompt == nil ? .placeholder : [])
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
-        }
+        .ambientLoop(AppMotion.ambient(duration: 1.2)) { isPulsing = true }
     }
 
     private var categoryColor: Color {
@@ -537,24 +533,6 @@ struct DurationPill: View {
                     .fill(.ultraThinMaterial)
             }
         }
-    }
-}
-
-// MARK: - Difficulty Badge
-
-struct DifficultyBadge: View {
-    let difficulty: PromptDifficulty
-
-    var body: some View {
-        Text(difficulty.displayName)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background {
-                Capsule()
-                    .fill(AppColors.difficultyColor(difficulty).opacity(0.2))
-            }
-            .foregroundStyle(AppColors.difficultyColor(difficulty))
     }
 }
 

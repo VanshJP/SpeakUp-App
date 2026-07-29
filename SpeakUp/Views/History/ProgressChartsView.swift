@@ -515,39 +515,7 @@ struct ScoreProgressChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartOverlay { proxy in
-                        GeometryReader { geometry in
-                            Rectangle()
-                                .fill(.clear)
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { value in
-                                            let xPos = value.location.x
-                                            guard let plotFrame = proxy.plotFrame else { return }
-                                            let origin = geometry[plotFrame].origin.x
-                                            let relX = xPos - origin
-                                            guard let date: Date = proxy.value(atX: relX) else { return }
-
-                                            // Find nearest data point
-                                            var closestIdx = 0
-                                            var closestDist = Double.infinity
-                                            for (i, dp) in dataPoints.enumerated() {
-                                                let dist = abs(dp.date.timeIntervalSince(date))
-                                                if dist < closestDist {
-                                                    closestDist = dist
-                                                    closestIdx = i
-                                                }
-                                            }
-                                            selectedIndex = closestIdx
-                                            Haptics.selection()
-                                        }
-                                        .onEnded { _ in
-                                            selectedIndex = nil
-                                        }
-                                )
-                        }
-                    }
+                    .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
                     .frame(height: 220)
 
                     // Selected point detail or summary stats
@@ -590,10 +558,10 @@ struct ScoreProgressChart: View {
                         }
                     }
                 } else {
-                    Text("Need at least 2 recordings to show trend")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 100)
+                    EmptyStateInline(
+                        icon: "chart.line.uptrend.xyaxis",
+                        message: "Two sessions and this starts tracking your score."
+                    )
                 }
             }
         }
@@ -688,40 +656,7 @@ struct FillerTrendChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartOverlay { proxy in
-                        GeometryReader { geometry in
-                            Rectangle()
-                                .fill(.clear)
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { value in
-                                            let xPos = value.location.x
-                                            guard let plotFrame = proxy.plotFrame else { return }
-                                            let origin = geometry[plotFrame].origin.x
-                                            let relX = xPos - origin
-                                            guard let date: Date = proxy.value(atX: relX) else { return }
-
-                                            var closestIdx = 0
-                                            var closestDist = Double.infinity
-                                            for (i, dp) in weeklyData.enumerated() {
-                                                let dist = abs(dp.weekStart.timeIntervalSince(date))
-                                                if dist < closestDist {
-                                                    closestDist = dist
-                                                    closestIdx = i
-                                                }
-                                            }
-                                            if selectedIndex != closestIdx {
-                                                selectedIndex = closestIdx
-                                                Haptics.selection()
-                                            }
-                                        }
-                                        .onEnded { _ in
-                                            selectedIndex = nil
-                                        }
-                                )
-                        }
-                    }
+                    .chartDateScrub(over: weeklyData, selection: $selectedIndex) { $0.weekStart }
                     .frame(height: 200)
 
                     // Selected week detail
@@ -758,10 +693,10 @@ struct FillerTrendChart: View {
                         }
                     }
                 } else {
-                    Text("Need more recordings across different weeks")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 100)
+                    EmptyStateInline(
+                        icon: "exclamationmark.bubble",
+                        message: "Practice across a couple of weeks to see filler trends."
+                    )
                 }
             }
         }
@@ -904,40 +839,7 @@ struct PaceTrendChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartOverlay { proxy in
-                        GeometryReader { geometry in
-                            Rectangle()
-                                .fill(.clear)
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { value in
-                                            let xPos = value.location.x
-                                            guard let plotFrame = proxy.plotFrame else { return }
-                                            let origin = geometry[plotFrame].origin.x
-                                            let relX = xPos - origin
-                                            guard let date: Date = proxy.value(atX: relX) else { return }
-
-                                            var closestIdx = 0
-                                            var closestDist = Double.infinity
-                                            for (i, dp) in dataPoints.enumerated() {
-                                                let dist = abs(dp.date.timeIntervalSince(date))
-                                                if dist < closestDist {
-                                                    closestDist = dist
-                                                    closestIdx = i
-                                                }
-                                            }
-                                            if selectedIndex != closestIdx {
-                                                selectedIndex = closestIdx
-                                                Haptics.selection()
-                                            }
-                                        }
-                                        .onEnded { _ in
-                                            selectedIndex = nil
-                                        }
-                                )
-                        }
-                    }
+                    .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
                     .frame(height: 220)
 
                     if let idx = selectedIndex, idx < dataPoints.count {
@@ -983,10 +885,10 @@ struct PaceTrendChart: View {
                         }
                     }
                 } else {
-                    Text("Need at least 2 recordings to show pace trend")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 100)
+                    EmptyStateInline(
+                        icon: "speedometer",
+                        message: "Two sessions and this starts tracking your pace."
+                    )
                 }
             }
         }
@@ -1227,40 +1129,7 @@ struct SessionFrequencyChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartOverlay { proxy in
-                        GeometryReader { geometry in
-                            Rectangle()
-                                .fill(.clear)
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { value in
-                                            let xPos = value.location.x
-                                            guard let plotFrame = proxy.plotFrame else { return }
-                                            let origin = geometry[plotFrame].origin.x
-                                            let relX = xPos - origin
-                                            guard let date: Date = proxy.value(atX: relX) else { return }
-
-                                            var closestIdx = 0
-                                            var closestDist = Double.infinity
-                                            for (i, dp) in weeklyCounts.enumerated() {
-                                                let dist = abs(dp.weekStart.timeIntervalSince(date))
-                                                if dist < closestDist {
-                                                    closestDist = dist
-                                                    closestIdx = i
-                                                }
-                                            }
-                                            if selectedIndex != closestIdx {
-                                                selectedIndex = closestIdx
-                                                Haptics.selection()
-                                            }
-                                        }
-                                        .onEnded { _ in
-                                            selectedIndex = nil
-                                        }
-                                )
-                        }
-                    }
+                    .chartDateScrub(over: weeklyCounts, selection: $selectedIndex) { $0.weekStart }
                     .frame(height: 200)
 
                     if let idx = selectedIndex, idx < weeklyCounts.count {
@@ -1306,10 +1175,10 @@ struct SessionFrequencyChart: View {
                         }
                     }
                 } else {
-                    Text("Need more recording weeks to show frequency trend")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 100)
+                    EmptyStateInline(
+                        icon: "calendar",
+                        message: "Practice across a couple of weeks to see your rhythm."
+                    )
                 }
             }
         }

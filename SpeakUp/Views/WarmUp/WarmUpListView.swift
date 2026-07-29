@@ -7,6 +7,13 @@ struct WarmUpListView: View {
 
     var sourceStory: Story?
 
+    /// Denominator for every row's duration arc. Scoped to the visible
+    /// category, so the arcs re-scale as you filter — within one category the
+    /// relative lengths are what's worth comparing.
+    private var longestExerciseSeconds: Double {
+        Double(viewModel.exercises.map(\.durationSeconds).max() ?? 0)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -22,72 +29,46 @@ struct WarmUpListView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(WarmUpCategory.allCases) { category in
-                                    Button {
-                                        withAnimation { viewModel.selectedCategory = category }
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: category.icon)
-                                                .font(.caption2)
-                                            Text(category.displayName)
-                                                .font(.caption.weight(.medium))
-                                        }
-                                        .foregroundStyle(viewModel.selectedCategory == category ? .white : .primary)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background {
-                                            if viewModel.selectedCategory == category {
-                                                Capsule().fill(category.color)
-                                            } else {
-                                                Capsule().fill(.ultraThinMaterial)
-                                            }
+                                    FilterPill(
+                                        title: category.displayName,
+                                        icon: category.icon,
+                                        isSelected: viewModel.selectedCategory == category,
+                                        color: category.color
+                                    ) {
+                                        withAnimation(AppMotion.slide) {
+                                            viewModel.selectedCategory = category
                                         }
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
 
                         // Exercise cards
-                        LazyVStack(spacing: 12) {
-                            ForEach(viewModel.exercises) { exercise in
-                                Button {
-                                    viewModel.selectExercise(exercise)
-                                    showingExercise = true
-                                } label: {
-                                    GlassCard {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: exercise.category.icon)
-                                                .font(.title2)
-                                                .foregroundStyle(exercise.category.color)
-                                                .frame(width: 44, height: 44)
-                                                .background {
-                                                    Circle().fill(exercise.category.color.opacity(0.15))
-                                                }
-
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(exercise.title)
-                                                    .font(.subheadline.weight(.semibold))
-                                                    .foregroundStyle(.primary)
-
-                                                Text(exercise.instructions)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(2)
-
-                                                Text("\(exercise.durationSeconds)s")
-                                                    .font(.caption2.weight(.medium))
-                                                    .foregroundStyle(exercise.category.color)
-                                            }
-
-                                            Spacer()
-
-                                            Image(systemName: "play.circle.fill")
-                                                .font(.title2)
-                                                .foregroundStyle(exercise.category.color)
-                                        }
+                        if viewModel.exercises.isEmpty {
+                            EmptyStateCard(
+                                icon: "wind",
+                                title: "Nothing here",
+                                message: "No warm-ups in this category yet. Try another one."
+                            )
+                        } else {
+                            LazyVStack(spacing: 12) {
+                                ForEach(viewModel.exercises) { exercise in
+                                    PracticeItemRow(
+                                        title: exercise.title,
+                                        subtitle: exercise.instructions,
+                                        icon: exercise.category.icon,
+                                        tint: exercise.category.color,
+                                        durationFraction: PracticeItemRow.fraction(
+                                            Double(exercise.durationSeconds),
+                                            longest: longestExerciseSeconds
+                                        ),
+                                        durationLabel: "\(exercise.durationSeconds)s",
+                                        accessory: .play
+                                    ) {
+                                        viewModel.selectExercise(exercise)
+                                        showingExercise = true
                                     }
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }

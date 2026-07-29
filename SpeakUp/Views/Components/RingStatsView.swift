@@ -115,41 +115,16 @@ private struct GaugeItem: View {
                     .frame(width: 78, height: 78)
 
                 Text(value)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.statValue)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .padding(.horizontal, 12)
             }
 
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .tracking(0.5)
+            Text(label).eyebrowStyle()
         }
         .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Ring Progress
-
-struct RingProgress: View {
-    let progress: Double
-    let color: Color
-    let lineWidth: CGFloat
-
-    var body: some View {
-        ZStack {
-            // Neutral recessed track — color belongs to progress only
-            Circle()
-                .stroke(Color.white.opacity(0.07), lineWidth: lineWidth)
-
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
     }
 }
 

@@ -122,6 +122,19 @@ enum AppColors {
         }
     }
 
+    /// Read-aloud carries its own difficulty enum but means the same three
+    /// bands. Same tones, so the two surfaces can't drift apart.
+    static func difficultyColor(_ difficulty: ReadAloudDifficulty) -> Color {
+        switch difficulty {
+        case .easy:
+            return success
+        case .medium:
+            return warning
+        case .hard:
+            return error
+        }
+    }
+
     // MARK: - Category Tones
     //
     // Two layers:

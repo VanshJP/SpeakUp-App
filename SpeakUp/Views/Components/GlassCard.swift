@@ -9,9 +9,11 @@ struct GlassCard<Content: View>: View {
     var elevated: Bool
 
     init(
-        cornerRadius: CGFloat = 20,
+        cornerRadius: CGFloat = 18,
         tint: Color? = nil,
-        padding: CGFloat = 16,
+        // Tightened from 16. Every card in the app inherits this, so it is the
+        // single highest-leverage control over how large the app feels.
+        padding: CGFloat = 13,
         accentBorder: Color? = nil,
         elevated: Bool = false,
         @ViewBuilder content: () -> Content
@@ -67,8 +69,8 @@ struct FeaturedGlassCard<Content: View>: View {
 
     init(
         gradientColors: [Color] = [AppColors.primary.opacity(0.10), Color.white.opacity(0.02)],
-        cornerRadius: CGFloat = 24,
-        padding: CGFloat = 20,
+        cornerRadius: CGFloat = 20,
+        padding: CGFloat = 16,
         @ViewBuilder content: () -> Content
     ) {
         self.content = content()
@@ -174,6 +176,34 @@ struct EmptyStateCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
         }
+    }
+}
+
+// MARK: - Inline Empty State
+
+/// Empty state for a slot that already sits inside a card — a chart well, a
+/// section body. `EmptyStateCard` would nest a `GlassCard` in a `GlassCard`.
+///
+/// Exists because four chart fallbacks were each a bare `Text` in a
+/// `minHeight: 100` frame: technically an empty state, visibly an oversight
+/// next to the designed ones elsewhere in the app.
+struct EmptyStateInline: View {
+    let icon: String
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 28))
+                .foregroundStyle(.white.opacity(0.15))
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, minHeight: 100)
+        .accessibilityElement(children: .combine)
     }
 }
 

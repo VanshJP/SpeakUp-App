@@ -62,27 +62,25 @@ struct ComparisonView: View {
 
                         Text(change >= 0 ? "+\(change) points" : "\(change) points")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .foregroundStyle(change >= 0 ? .green : .red)
+                            .foregroundStyle(change >= 0 ? AppColors.success : AppColors.error)
                     }
 
                     Spacer()
 
                     Image(systemName: change >= 0 ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
                         .font(.system(size: 36))
-                        .foregroundStyle(change >= 0 ? .green : .red)
+                        .foregroundStyle(change >= 0 ? AppColors.success : AppColors.error)
                         .opacity(0.8)
                 }
 
                 // Score comparison bar
                 HStack(spacing: 12) {
-                    VStack(spacing: 4) {
-                        Text("\(scoreA)")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(AppColors.scoreColor(for: scoreA))
-                        Text("First")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    StatPair(
+                        value: "\(scoreA)",
+                        label: "First",
+                        valueColor: AppColors.scoreColor(for: scoreA),
+                        valueFont: .title3.weight(.bold)
+                    )
                     .frame(maxWidth: .infinity)
 
                     // Progress arrow
@@ -106,14 +104,12 @@ struct ComparisonView: View {
                     }
                     .frame(maxWidth: .infinity)
 
-                    VStack(spacing: 4) {
-                        Text("\(scoreB)")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(AppColors.scoreColor(for: scoreB))
-                        Text("Latest")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    StatPair(
+                        value: "\(scoreB)",
+                        label: "Latest",
+                        valueColor: AppColors.scoreColor(for: scoreB),
+                        valueFont: .title3.weight(.bold)
+                    )
                     .frame(maxWidth: .infinity)
                 }
                 .padding(.vertical, 10)

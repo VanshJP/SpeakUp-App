@@ -11,18 +11,12 @@ struct DrillResultView: View {
 
             // Score circle
             ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.07), lineWidth: 8)
-                    .frame(width: 140, height: 140)
-
-                Circle()
-                    .trim(from: 0, to: Double(result.score) / 100)
-                    .stroke(
-                        result.passed ? AppColors.success : AppColors.error,
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 140, height: 140)
-                    .rotationEffect(.degrees(-90))
+                RingProgress(
+                    progress: Double(result.score) / 100,
+                    color: result.passed ? AppColors.success : AppColors.error,
+                    lineWidth: 8
+                )
+                .frame(width: 140, height: 140)
 
                 VStack(spacing: 4) {
                     Text("\(result.score)")
