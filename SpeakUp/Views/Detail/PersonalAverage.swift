@@ -11,7 +11,9 @@ import SwiftData
 /// blob would make the cost grow without limit, and a rolling baseline is the
 /// more useful comparison anyway — "better than I've been lately" beats "better
 /// than I was a year ago".
-enum PersonalAverage {
+// Opt out of default MainActor isolation — baselines decode off-main in
+// `Task.detached`, so window / Baselines must be callable from any isolation.
+nonisolated enum PersonalAverage {
 
     static let window = 20
 

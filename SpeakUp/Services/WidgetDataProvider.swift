@@ -33,13 +33,6 @@ enum WidgetDataProvider {
         defaults.set(improvementRate, forKey: "weeklyImprovementRate")
     }
 
-    static func updateSkillMastery(clarity: Int, pace: Int, filler: Int, pause: Int) {
-        defaults.set(clarity, forKey: "skillClarity")
-        defaults.set(pace, forKey: "skillPace")
-        defaults.set(filler, forKey: "skillFiller")
-        defaults.set(pause, forKey: "skillPause")
-    }
-
     static func updateDailyChallenge(title: String, description: String, icon: String, isCompleted: Bool) {
         defaults.set(title, forKey: "dailyChallengeTitle")
         defaults.set(description, forKey: "dailyChallengeDescription")

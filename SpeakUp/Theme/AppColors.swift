@@ -38,7 +38,6 @@ enum AppColors {
     /// slightly deeper so it stays legible under the pulsing glow instead of
     /// blooming out, and so "live" never reads as "something went wrong".
     static let recording = Color(red: 0.851, green: 0.294, blue: 0.271) // #D94B45
-    static let recordingPulse = recording.opacity(0.30)
 
     // MARK: - Score Colors
     //
@@ -100,15 +99,6 @@ enum AppColors {
     /// hardcoded as `Color.white.opacity(0.07)` in a dozen places.
     static let meterTrack = Color.white.opacity(0.07)
 
-    static func scoreGradient(for score: Int) -> LinearGradient {
-        let color = scoreColor(for: score)
-        return LinearGradient(
-            colors: [color.opacity(0.8), color],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     // MARK: - Difficulty Colors
 
     static func difficultyColor(_ difficulty: PromptDifficulty) -> Color {
@@ -139,9 +129,9 @@ enum AppColors {
     //
     // Two layers:
     //
-    // 1. Brand tonal tokens (`categoryBrand`, `categoryBrandBright`,
-    //    `categoryNeutral`, `categoryNeutralCool`) — used widely as gradient
-    //    companions and utility accents on glass surfaces.
+    // 1. Brand tonal tokens (`categoryBrandBright`, `categoryNeutral`,
+    //    `categoryNeutralCool`) — used widely as gradient companions and
+    //    utility accents on glass surfaces.
     //
     // 2. Muted-jewel identity tones (`categoryTeal`, `categoryIndigo`,
     //    `categoryPlum`, `categoryAmber`, `categorySage`, `categoryCopper`)
@@ -150,9 +140,6 @@ enum AppColors {
     //    at ~40–55% saturation and ~55–65% brightness so adjacent cards read
     //    as distinct identities without screaming on the dark glass.
     //    Functional `success` / `warning` / `error` stay reserved for state.
-
-    /// Brand teal at full saturation. Identity / primary category bucket.
-    static let categoryBrand = primary
 
     /// Brighter teal-leaning tone — used widely as a gradient companion to `primary`.
     static let categoryBrandBright = Color(red: 0.169, green: 0.659, blue: 0.659)
@@ -163,7 +150,7 @@ enum AppColors {
     /// Cooler accent for analytical utility surfaces.
     static let categoryNeutralCool = Color(red: 0.298, green: 0.388, blue: 0.494)
 
-    /// Brand teal as an identity tone (alias of `categoryBrand`).
+    /// Brand teal as an identity tone (alias of `primary`).
     static let categoryTeal = primary
 
     /// Muted blue-violet. Interpersonal / decision categories.
@@ -240,8 +227,6 @@ enum AppColors {
 
     static let glassTintPrimary = primary.opacity(0.10)
     static let glassTintAccent = Color.white.opacity(0.05)
-    static let glassTintWarning = warning.opacity(0.10)
-    static let glassTintError = error.opacity(0.10)
     static let glassTintSuccess = success.opacity(0.10)
 }
 

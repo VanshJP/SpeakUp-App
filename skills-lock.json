@@ -1,11 +1,23 @@
 {
   "version": 1,
   "skills": {
+    "apple-appstore-reviewer": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/apple-appstore-reviewer/SKILL.md",
+      "computedHash": "848a1946f838e1b36f4af8b65caeea9e5bfa486d6059325520bb6124c05b0526"
+    },
     "aso-appstore-screenshots": {
       "source": "adamlyttleapps/claude-skill-aso-appstore-screenshots",
       "sourceType": "github",
       "skillPath": "SKILL.md",
       "computedHash": "4fd0d6b1bb4c16b98dbc05050168e99f1c8d52369598214cf83ad46c05019931"
+    },
+    "axiom-media": {
+      "source": "charleswiltgen/axiom",
+      "sourceType": "github",
+      "skillPath": ".claude-plugin/plugins/axiom/skills/axiom-media/SKILL.md",
+      "computedHash": "a73015d240da80e06692526f1c28be4054e9f1276a53657e5d79dfa2b3a0ac8a"
     },
     "caveman": {
       "source": "juliusbrussee/caveman",
@@ -17,10 +29,40 @@
       "sourceType": "github",
       "computedHash": "c94165bbbbd7f3d9e2e690d8d86cc95fbe841454b9a1f8da34ea39fee413dd1d"
     },
+    "ios-accessibility": {
+      "source": "dpearson2699/swift-ios-skills",
+      "sourceType": "github",
+      "skillPath": "skills/ios-accessibility/SKILL.md",
+      "computedHash": "b7d8e7a257de72382f524a6cd59b8230cc852cd487d476c50d7b60b678ba1f4d"
+    },
+    "swift-concurrency": {
+      "source": "avdlee/swift-concurrency-agent-skill",
+      "sourceType": "github",
+      "skillPath": "swift-concurrency/SKILL.md",
+      "computedHash": "5e1f6433159038c49135028eeeea3a7b9a0a6001c8a4cc8227e391caf35cd985"
+    },
+    "swiftdata-pro": {
+      "source": "twostraws/swiftdata-agent-skill",
+      "sourceType": "github",
+      "skillPath": "swiftdata-pro/SKILL.md",
+      "computedHash": "2f979bad98ea3a6744084c5f93e27897f02e8d0ffe15dd03042e88aaae4da14c"
+    },
     "swiftui-expert-skill": {
       "source": "avdlee/swiftui-agent-skill",
       "sourceType": "github",
       "computedHash": "2266f713890104352fe8eca44fc546c096e3459cc25e7e21bc57514f57d2e5a4"
+    },
+    "swiftui-pro": {
+      "source": "twostraws/swiftui-agent-skill",
+      "sourceType": "github",
+      "skillPath": "swiftui-pro/SKILL.md",
+      "computedHash": "07033426e384295a4b49cf0b2ffdefd4098cae4af53fef16bc1f2d9281118c41"
+    },
+    "widgetkit": {
+      "source": "dpearson2699/swift-ios-skills",
+      "sourceType": "github",
+      "skillPath": "skills/widgetkit/SKILL.md",
+      "computedHash": "e6a255aa3c5a7bc70e114aaf9bf6ed24d4156f786ef0bd1c906058638535bd6f"
     }
   }
 }

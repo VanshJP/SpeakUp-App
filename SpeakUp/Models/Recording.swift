@@ -136,16 +136,6 @@ final class Recording {
         return ICloudStorageService.shared.resolveFile(named: filename)
     }
 
-    // Computed property to check if media file is available
-    var isDownloaded: Bool {
-        (resolvedVideoURL ?? resolvedAudioURL) != nil
-    }
-    
-    // Formatted date string
-    var formattedDate: String {
-        date.formatted(date: .abbreviated, time: .shortened)
-    }
-    
     // Formatted duration string
     var formattedDuration: String {
         let minutes = Int(actualDuration) / 60

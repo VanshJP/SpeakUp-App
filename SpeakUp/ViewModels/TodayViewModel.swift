@@ -73,7 +73,7 @@ class TodayViewModel {
         await scheduleStreakNotificationIfNeeded()
 
         // Update widget data
-        updateWidgetData(skillMastery: heavy.skillMastery)
+        updateWidgetData()
     }
 
     // MARK: - Background fetch
@@ -161,27 +161,17 @@ class TodayViewModel {
                 .prefix(10)
                 .compactMap { $0.analysis?.speechScore.subscores }
 
-            // Skill mastery from last 5
-            let top5 = recordings.prefix(5).compactMap { $0.analysis?.speechScore.subscores }
-            let skillMastery: SkillMastery? = top5.isEmpty ? nil : SkillMastery(
-                clarity: top5.map(\.clarity).reduce(0, +) / top5.count,
-                pace: top5.map(\.pace).reduce(0, +) / top5.count,
-                filler: top5.map(\.fillerUsage).reduce(0, +) / top5.count,
-                pause: top5.map(\.pauseQuality).reduce(0, +) / top5.count
-            )
-
             return TodayHeavyResult(
                 userStats: userStats,
                 weeklyProgress: weeklyProgress,
                 answeredPromptIDs: answered,
                 recentSubscores: recentSubscores,
-                dailyChallengeCompleted: challengeCompleted,
-                skillMastery: skillMastery
+                dailyChallengeCompleted: challengeCompleted
             )
         }.value
     }
 
-    private func updateWidgetData(skillMastery: SkillMastery?) {
+    private func updateWidgetData() {
         WidgetDataProvider.updateStreak(userStats.currentStreak)
         if let prompt = todaysPrompt {
             WidgetDataProvider.updateTodaysPrompt(text: prompt.text, category: prompt.category, id: prompt.id)
@@ -213,18 +203,6 @@ class TodayViewModel {
         // Track last practice date for streak-at-risk widget
         if let latestRecording = userStats.scoreHistory.first {
             WidgetDataProvider.updateLastPracticeDate(latestRecording.date)
-        }
-
-        // Skill mastery (pre-computed off-main)
-        if let skillMastery {
-            WidgetDataProvider.updateSkillMastery(
-                clarity: skillMastery.clarity,
-                pace: skillMastery.pace,
-                filler: skillMastery.filler,
-                pause: skillMastery.pause
-            )
-        } else {
-            WidgetDataProvider.updateSkillMastery(clarity: 0, pace: 0, filler: 0, pause: 0)
         }
 
         WidgetCenter.shared.reloadAllTimelines()
@@ -438,18 +416,10 @@ class TodayViewModel {
 
 // MARK: - Sendable result types
 
-nonisolated struct SkillMastery: Sendable {
-    let clarity: Int
-    let pace: Int
-    let filler: Int
-    let pause: Int
-}
-
 nonisolated private struct TodayHeavyResult: Sendable {
     let userStats: UserStats
     let weeklyProgress: WeeklyProgressData?
     let answeredPromptIDs: Set<String>
     let recentSubscores: [SpeechSubscores]
     let dailyChallengeCompleted: Bool
-    let skillMastery: SkillMastery?
 }

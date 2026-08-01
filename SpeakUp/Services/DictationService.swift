@@ -61,7 +61,17 @@ class DictationService {
         self.recognitionRequest = request
 
         let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        // Prefer inputFormat; outputFormat can report 0 Hz before the graph
+        // is wired — starting then raises an uncaught NSException.
+        var recordingFormat = inputNode.inputFormat(forBus: 0)
+        if recordingFormat.sampleRate <= 0 {
+            recordingFormat = inputNode.outputFormat(forBus: 0)
+        }
+        guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+            print("DictationService: invalid input format \(recordingFormat)")
+            cleanup()
+            return
+        }
         let storage = self.levelStorage
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
@@ -83,6 +93,7 @@ class DictationService {
         }
 
         do {
+            engine.prepare()
             try engine.start()
         } catch {
             print("DictationService: audio engine failed to start: \(error)")

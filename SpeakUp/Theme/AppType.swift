@@ -30,12 +30,6 @@ extension Font {
     /// Small-caps section label. Prefer `.eyebrowStyle()`, which also applies
     /// the casing, tracking, and color this token is always paired with.
     static let eyebrow = Font.system(.caption2).weight(.semibold)
-
-    /// Title line of a card or list row.
-    static let cardTitle = Font.system(.headline)
-
-    /// Supporting metadata under a title — date, duration, category.
-    static let meta = Font.system(.caption).weight(.medium)
 }
 
 extension View {

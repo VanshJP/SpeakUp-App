@@ -276,12 +276,11 @@ struct TodayView: View {
 
                     Spacer()
 
-                    SmallIconButton(icon: "arrow.clockwise") {
+                    SmallIconButton(icon: "arrow.clockwise", label: "Different story") {
                         Task {
                             await viewModel.refreshStory()
                         }
                     }
-                    .accessibilityLabel("Different story")
                 }
 
                 StoryPromptCard(
@@ -298,12 +297,11 @@ struct TodayView: View {
 
                     Spacer()
 
-                    SmallIconButton(icon: "arrow.clockwise") {
+                    SmallIconButton(icon: "arrow.clockwise", label: "Different prompt") {
                         Task {
                             await viewModel.refreshPrompt()
                         }
                     }
-                    .accessibilityLabel("Different prompt")
                 }
 
                 InteractivePromptCard(
@@ -453,6 +451,10 @@ struct InteractivePromptCard: View {
             // its own taps because child controls take gesture priority.
             .contentShape(Rectangle())
             .onTapGesture { Haptics.medium(); onTap() }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(prompt.map { "Daily prompt: \($0.text)" } ?? "Loading today's prompt")
+            .accessibilityHint("Starts a practice recording")
         }
         .redacted(reason: prompt == nil ? .placeholder : [])
         .ambientLoop(AppMotion.ambient(duration: 1.2)) { isPulsing = true }
@@ -473,24 +475,25 @@ struct InteractivePromptCard: View {
 
 struct SmallIconButton: View {
     let icon: String
+    /// VoiceOver / Voice Control name — required so icon-only control is not silent.
+    var label: String
     let action: () -> Void
 
     var body: some View {
-        Button {
+        Button(label, systemImage: icon) {
             Haptics.light()
             action()
-        } label: {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-                .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                }
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
         }
+        .labelStyle(.iconOnly)
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.secondary)
+        .frame(width: 32, height: 32)
+        .background {
+            Circle()
+                .fill(.ultraThinMaterial)
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
         .buttonStyle(GlassPressStyle())
     }
 }

@@ -33,12 +33,6 @@ enum AppMotion {
     static func ambient(duration: Double, autoreverses: Bool = true) -> Animation {
         .easeInOut(duration: duration).repeatForever(autoreverses: autoreverses)
     }
-
-    /// Nil under Reduce Motion, so the accompanying change applies instantly.
-    /// Only safe for one-shot transitions — see `ambient` for why loops differ.
-    static func resolve(_ animation: Animation, reduceMotion: Bool) -> Animation? {
-        reduceMotion ? nil : animation
-    }
 }
 
 // MARK: - Reduce-Motion-aware modifiers

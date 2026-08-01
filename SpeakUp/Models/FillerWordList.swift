@@ -9,24 +9,6 @@ struct FillerWordConfig: Sendable {
     let removedDefaults: Set<String>      // default fillers the user disabled
 
     nonisolated static let `default` = FillerWordConfig(customFillers: [], customContextFillers: [], removedDefaults: [])
-
-    /// All fillers that should actually be detected, given user customizations.
-    var effectiveUnconditionalFillers: Set<String> {
-        FillerWordList.unconditionalFillers
-            .subtracting(removedDefaults)
-            .union(customFillers)
-    }
-
-    var effectiveContextDependentFillers: Set<String> {
-        FillerWordList.contextDependentFillers
-            .subtracting(removedDefaults)
-            .union(customContextFillers)
-    }
-
-    /// Combined active fillers (unconditional + context-dependent, minus removed).
-    var allDefaultFillers: Set<String> {
-        FillerWordList.unconditionalFillers.union(FillerWordList.contextDependentFillers)
-    }
 }
 
 // MARK: - Filler Words List

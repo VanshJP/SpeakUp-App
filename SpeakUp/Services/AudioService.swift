@@ -65,10 +65,12 @@ class AudioService: NSObject {
     private func configureRecordingSession() throws {
         let session = recordingSession ?? AVAudioSession.sharedInstance()
         recordingSession = session
+        // `.bluetoothHighQualityRecording` (iOS 26+) prefers AirPods HQ capture
+        // when available; HFP remains for classic BT headsets.
         try session.setCategory(
             .playAndRecord,
             mode: .voiceChat,
-            options: [.defaultToSpeaker, .allowBluetoothHFP]
+            options: [.defaultToSpeaker, .allowBluetoothHFP, .bluetoothHighQualityRecording]
         )
         // Prefer a speech-friendly rate; hardware may still negotiate lower on HFP.
         try? session.setPreferredSampleRate(44_100)
@@ -292,7 +294,55 @@ class AudioService: NSObject {
                 self.displayLink?.isPaused = false
             }
         }
-        lifecycleObservers = [resign, active]
+        let interruption = center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleSessionInterruption(notification)
+        }
+        let routeChange = center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleRouteChange(notification)
+        }
+        lifecycleObservers = [resign, active, interruption, routeChange]
+    }
+
+    /// Phone calls / Siri yank the session. Playback pauses here.
+    /// Recording has no pause UX — `RecordingViewModel` finalizes the take
+    /// on interruption so the timer and UI never lie about still capturing.
+    private func handleSessionInterruption(_ notification: Notification) {
+        guard
+            let info = notification.userInfo,
+            let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+            type == .began,
+            isPlaying
+        else { return }
+
+        audioPlayer?.pause()
+        isPlaying = false
+        displayLink?.isPaused = true
+    }
+
+    /// Unplugged headphones mid-take: keep recording on the built-in mic.
+    private func handleRouteChange(_ notification: Notification) {
+        guard
+            let info = notification.userInfo,
+            let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue),
+            reason == .oldDeviceUnavailable,
+            isRecording
+        else { return }
+        // Recorder keeps writing after route change; re-assert category so
+        // `.defaultToSpeaker` wins over a dead BT/HFP path.
+        try? configureRecordingSession()
+        if audioRecorder?.isRecording == false {
+            _ = audioRecorder?.record()
+        }
     }
     
     // MARK: - File Management

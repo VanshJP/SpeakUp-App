@@ -26,9 +26,32 @@ class LiveTranscriptionService {
     private var recognitionGeneration = 0
     /// `removeTap` crashes if no tap is installed — track it explicitly.
     private var isTapInstalled = false
+    /// Token only — touched from `deinit` (nonisolated) and init.
+    nonisolated(unsafe) private var interruptionObserver: NSObjectProtocol?
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard
+                let info = notification.userInfo,
+                let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+                type == .began
+            else { return }
+            Task { @MainActor [weak self] in
+                self?.stop()
+            }
+        }
+    }
+
+    deinit {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
     }
 
     /// Request speech recognition authorization (must be called before start).
@@ -42,6 +65,11 @@ class LiveTranscriptionService {
 
     /// Start live transcription using its own audio engine tap.
     /// Call this AFTER the AVAudioRecorder has started so the session is active.
+    ///
+    /// Wire input + tap *before* `engine.start()`. Starting an empty graph
+    /// while AVAudioRecorder already owns the mic (common on "Start Now"
+    /// during countdown) makes `AVAudioEngineGraph::Initialize` raise an
+    /// NSException that Swift `do/catch` cannot catch — abort.
     @MainActor
     func start() {
         guard let recognizer, recognizer.isAvailable else { return }
@@ -64,20 +92,31 @@ class LiveTranscriptionService {
         segmentTimeOffset = 0
         isActive = true
 
-        do {
-            // Ensure the input node has a negotiated format before we read it.
-            // A 0 Hz format installs a dead tap and can starve AVAudioRecorder
-            // of mic buffers for the rest of the take.
-            let session = AVAudioSession.sharedInstance()
-            try? session.setPreferredSampleRate(session.sampleRate > 0 ? session.sampleRate : 44_100)
-            try engine.start()
-        } catch {
-            print("LiveTranscription: audio engine failed to start: \(error)")
+        // Touch inputNode so the graph negotiates a hardware format before
+        // we start. A 0 Hz format → Initialize exception / silent m4a.
+        let session = AVAudioSession.sharedInstance()
+        try? session.setPreferredSampleRate(session.sampleRate > 0 ? session.sampleRate : 44_100)
+        let inputNode = engine.inputNode
+        var format = inputNode.inputFormat(forBus: 0)
+        if format.sampleRate <= 0 {
+            format = inputNode.outputFormat(forBus: 0)
+        }
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            print("LiveTranscription: invalid input format \(format), skipping live fillers")
             stopInternal()
             return
         }
 
         guard attachRecognition(on: engine) else {
+            stopInternal()
+            return
+        }
+
+        do {
+            engine.prepare()
+            try engine.start()
+        } catch {
+            print("LiveTranscription: audio engine failed to start: \(error)")
             stopInternal()
             return
         }

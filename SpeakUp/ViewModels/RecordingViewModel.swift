@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 import UIKit
+import AVFoundation
 
 @Observable
 @MainActor
@@ -13,7 +14,6 @@ class RecordingViewModel {
 
     // State
     var isRecording = false
-    var isPaused = false
     var recordingDuration: TimeInterval = 0
     var targetDuration: RecordingDuration = .sixty
     var prompt: Prompt?
@@ -75,6 +75,9 @@ class RecordingViewModel {
     var timer: Timer?
     var modelContext: ModelContext?
 
+    /// Call / Siri interruption — recording has no pause, so we save & stop.
+    @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
+
     func configure(
         with context: ModelContext,
         prompt: Prompt?,
@@ -89,11 +92,43 @@ class RecordingViewModel {
         self.timerEndBehavior = timerEndBehavior
         self.countdownStyle = countdownStyle
         self.progress = countdownStyle == .countDown ? 1.0 : 0.0
+        installInterruptionHandling()
+    }
+
+    // MARK: - Interruptions
+
+    private func installInterruptionHandling() {
+        guard interruptionObserver == nil else { return }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard
+                let info = notification.userInfo,
+                let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+                type == .began
+            else { return }
+            Task { @MainActor [weak self] in
+                await self?.finalizeAfterInterruption()
+            }
+        }
+    }
+
+    /// No pause mode in this app — a phone call ends the take like Stop.
+    private func finalizeAfterInterruption() async {
+        guard isRecording else { return }
+        autoSavedRecording = await stopRecording()
     }
 
     // MARK: - Cleanup
 
     func cleanup() {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
         timer?.invalidate()
         timer = nil
         stopAudioLevelMonitoring()

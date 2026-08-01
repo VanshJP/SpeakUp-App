@@ -31,7 +31,6 @@ class SettingsViewModel {
     var targetWPM: Int = 150
     
     // Local state - Prompt Settings
-    var showDailyPrompt: Bool = true
     var enabledPromptCategories: Set<PromptCategory> = Set(PromptCategory.allCases)
 
     // Local state - Prompt Filtering
@@ -200,7 +199,6 @@ class SettingsViewModel {
         targetWPM = settings.targetWPM
 
         // Prompt settings
-        showDailyPrompt = settings.showDailyPrompt
         hideAnsweredPrompts = settings.hideAnsweredPrompts
         enabledPromptCategories = Set(settings.enabledCategories)
         storyPracticeEnabled = settings.storyPracticeEnabled
@@ -267,7 +265,6 @@ class SettingsViewModel {
         settings.targetWPM = targetWPM
         
         // Prompt settings
-        settings.showDailyPrompt = showDailyPrompt
         settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
         settings.storyPracticeEnabled = storyPracticeEnabled
@@ -621,7 +618,6 @@ class SettingsViewModel {
         settings.trackPauses = true
         settings.trackFillerWords = true
         settings.targetWPM = 150
-        settings.showDailyPrompt = true
         settings.hideAnsweredPrompts = true
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15

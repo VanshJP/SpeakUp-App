@@ -261,7 +261,9 @@ class WhisperService {
 
 /// Minimal counting semaphore for async critical sections.
 /// Synchronous `signal()` so it is safe to call from `defer`.
-private final class AsyncSemaphore: @unchecked Sendable {
+/// Locking stays inside non-async closures — NSLock is unavailable from
+/// asynchronous contexts under Swift 6.
+nonisolated private final class AsyncSemaphore: @unchecked Sendable {
     private var permits: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private let lock = NSLock()
@@ -271,15 +273,16 @@ private final class AsyncSemaphore: @unchecked Sendable {
     }
 
     func wait() async {
-        lock.lock()
-        if permits > 0 {
-            permits -= 1
-            lock.unlock()
-            return
-        }
         await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-            lock.unlock()
+            lock.lock()
+            if permits > 0 {
+                permits -= 1
+                lock.unlock()
+                continuation.resume()
+            } else {
+                waiters.append(continuation)
+                lock.unlock()
+            }
         }
     }
 
@@ -295,7 +298,7 @@ private final class AsyncSemaphore: @unchecked Sendable {
         }
     }
 }
-}
+
 
 // MARK: - Errors
 
