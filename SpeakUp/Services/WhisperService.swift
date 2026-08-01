@@ -18,6 +18,12 @@ class WhisperService {
     // WhisperKit instance
     private var whisperKit: WhisperKit?
 
+    /// Serializes loadModel / transcribe / unloadModel. WhisperKit is not
+    /// reentrant — two recordings processed concurrently (coordinator jobs for
+    /// different recordingIDs) would race one shared instance: torn-down model
+    /// under live inference, double model loads.
+    private let semaphore = AsyncSemaphore(value: 1)
+
     // Filler word prompt to encourage capturing hesitations
     // This prompt biases the model toward transcribing filler sounds
     // The transcript style with hesitations helps Whisper recognize and output them
@@ -37,6 +43,13 @@ class WhisperService {
     /// Load the Whisper model (call this early, e.g., on app launch)
     /// - Parameter modelVariant: Model variant to use (tiny, base, small, medium, large-v3)
     func loadModel(modelVariant: String = "base") async {
+        await semaphore.wait()
+        defer { semaphore.signal() }
+        await loadModelLocked(modelVariant: modelVariant)
+    }
+
+    /// Precondition: semaphore held.
+    private func loadModelLocked(modelVariant: String = "base") async {
         // Allow re-initialization if model exists but isn't fully loaded
         guard whisperKit == nil || !isModelLoaded else { return }
 
@@ -69,9 +82,12 @@ class WhisperService {
 
     /// Transcribe audio file with filler word detection and optional preferred terms.
     func transcribe(audioURL: URL, preferredTerms: [String] = []) async throws -> SpeechTranscriptionResult {
+        await semaphore.wait()
+        defer { semaphore.signal() }
+
         // Load model if not loaded
         if whisperKit == nil {
-            await loadModel()
+            await loadModelLocked()
         }
 
         guard let whisperKit else {
@@ -234,11 +250,51 @@ class WhisperService {
     // MARK: - Model Management
 
     /// Unload model to free memory
-    func unloadModel() {
+    func unloadModel() async {
+        await semaphore.wait()
+        defer { semaphore.signal() }
         whisperKit = nil
         isModelLoaded = false
         modelLoadProgress = 0
     }
+}
+
+/// Minimal counting semaphore for async critical sections.
+/// Synchronous `signal()` so it is safe to call from `defer`.
+private final class AsyncSemaphore: @unchecked Sendable {
+    private var permits: Int
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private let lock = NSLock()
+
+    init(value: Int) {
+        permits = value
+    }
+
+    func wait() async {
+        lock.lock()
+        if permits > 0 {
+            permits -= 1
+            lock.unlock()
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+            lock.unlock()
+        }
+    }
+
+    func signal() {
+        lock.lock()
+        if !waiters.isEmpty {
+            let waiter = waiters.removeFirst()
+            lock.unlock()
+            waiter.resume()
+        } else {
+            permits += 1
+            lock.unlock()
+        }
+    }
+}
 }
 
 // MARK: - Errors

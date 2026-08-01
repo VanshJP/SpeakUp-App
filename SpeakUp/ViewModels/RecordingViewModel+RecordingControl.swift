@@ -84,9 +84,8 @@ extension RecordingViewModel {
                     story.practiceCount += 1
                     story.lastPracticeDate = Date()
                     story.updatedAt = Date()
-                    if let score = recording.analysis?.speechScore.overall, score > story.bestScore {
-                        story.bestScore = score
-                    }
+                    // bestScore updates in RecordingProcessingCoordinator once
+                    // analysis exists — it is always nil at this point.
                     try? context.save()
                 }
             }

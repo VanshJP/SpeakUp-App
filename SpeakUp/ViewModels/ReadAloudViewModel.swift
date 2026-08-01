@@ -114,7 +114,10 @@ class ReadAloudViewModel {
         )
 
         sessionState = .finished
-        CurriculumActivitySignalStore.markReadAloudCompleted()
+        // Bailing out before matching a word shouldn't advance curriculum signals
+        if service.matchedWordCount > 0 {
+            CurriculumActivitySignalStore.markReadAloudCompleted()
+        }
         Haptics.success()
     }
 

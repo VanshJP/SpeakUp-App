@@ -79,7 +79,7 @@ class SpeechService {
         }
 
         // Retry once with a fresh model in case WhisperKit got into a bad state.
-        whisperService.unloadModel()
+        await whisperService.unloadModel()
         await whisperService.loadModel(modelVariant: "base")
 
         do {
@@ -150,7 +150,7 @@ class SpeechService {
             }
         } catch {
             // Retry once: unload and reload the model
-            whisperService.unloadModel()
+            await whisperService.unloadModel()
             await whisperService.loadModel(modelVariant: "base")
 
             do {
@@ -230,20 +230,33 @@ class SpeechService {
         // about cleaning up raw speech and removing filler words
         request.addsPunctuation = false
 
-        return try await withCheckedThrowingContinuation { continuation in
-            var hasResumed = false
-            recognizer.recognitionTask(with: request) { [weak self] result, error in
-                guard !hasResumed else { return }
+        // Thread-safe resume-once gate — the recognition callback and the
+        // timeout task race on different queues.
+        final class ResumeGate: @unchecked Sendable {
+            private var resumed = false
+            private let lock = NSLock()
+            func claim() -> Bool {
+                lock.lock()
+                defer { lock.unlock() }
+                if resumed { return false }
+                resumed = true
+                return true
+            }
+        }
 
+        return try await withCheckedThrowingContinuation { continuation in
+            let gate = ResumeGate()
+
+            let recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 if let error {
-                    hasResumed = true
+                    guard gate.claim() else { return }
                     continuation.resume(throwing: SpeechServiceError.transcriptionFailed(error))
                     return
                 }
 
                 guard let result, result.isFinal else { return }
+                guard gate.claim() else { return }
 
-                hasResumed = true
                 let transcription = self?.processAppleTranscription(result) ?? SpeechTranscriptionResult(
                     text: result.bestTranscription.formattedString,
                     words: [],
@@ -251,6 +264,21 @@ class SpeechService {
                 )
 
                 continuation.resume(returning: transcription)
+            }
+
+            // Apple Speech can stall with no final result and no error, leaking
+            // the continuation (and hanging dictation) forever. Force-resume.
+            Task {
+                try? await Task.sleep(for: .seconds(90))
+                guard gate.claim() else { return }
+                recognitionTask.cancel()
+                continuation.resume(throwing: SpeechServiceError.transcriptionFailed(
+                    NSError(
+                        domain: "SpeechService",
+                        code: -3,
+                        userInfo: [NSLocalizedDescriptionKey: "Speech recognition timed out"]
+                    )
+                ))
             }
         }
     }
@@ -1655,9 +1683,11 @@ class SpeechService {
                 let volLocalAvg = volSlice.reduce(Float(0), +) / Float(volSlice.count)
 
                 let pitchSpike = pitchLocalAvg > 0 ? contour[pitchIdx] / pitchLocalAvg : 1.0
-                let volSpike = volLocalAvg < -60 ? Float(1.0) : audioLevelSamples[volIdx] / volLocalAvg
+                // Levels are dB (negative) — a ratio inverts the comparison.
+                // Use a dB difference: 6 dB above the local average = emphasis.
+                let volSpikeDb = volLocalAvg < -60 ? Float(0) : audioLevelSamples[volIdx] - volLocalAvg
 
-                if pitchSpike > 1.2 && volSpike > 1.2 {
+                if pitchSpike > 1.2 && volSpikeDb > 6 {
                     emphasisPositions.append(normalizedPos)
                 }
             }

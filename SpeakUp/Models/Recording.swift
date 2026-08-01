@@ -100,7 +100,18 @@ final class Recording {
 
     /// Converts a full file URL to a relative-only URL for storage.
     static func relativeURL(from url: URL) -> URL {
-        URL(string: url.lastPathComponent)!
+        let filename = url.lastPathComponent
+        if let relative = URL(string: filename) {
+            return relative
+        }
+        // Filenames with spaces/unsafe chars fail URL(string:) — percent-encode
+        // rather than trap. Falls back to the original absolute URL if all else
+        // fails; resolveStoredURL handles the legacy-absolute branch.
+        if let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+           let relative = URL(string: encoded) {
+            return relative
+        }
+        return url
     }
 
     /// Resolves a stored URL: if it's already absolute and the file exists, returns it as-is.

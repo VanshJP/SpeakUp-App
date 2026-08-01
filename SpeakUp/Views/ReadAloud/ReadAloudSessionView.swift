@@ -9,6 +9,7 @@ struct ReadAloudSessionView: View {
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
+    @State private var didAutoStartSession = false
 
     var body: some View {
         ZStack {
@@ -47,6 +48,11 @@ struct ReadAloudSessionView: View {
         }
         .ignoresSafeArea()
         .task {
+            // .task re-fires when the result fullScreenCover dismisses — without
+            // this guard it would double-start the audio engine on Retry and
+            // spin up a ghost session on Done.
+            guard !didAutoStartSession else { return }
+            didAutoStartSession = true
             await viewModel.startSession(passage: passage)
             lastAutoScrolledWordIndex = 0
         }

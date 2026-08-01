@@ -72,7 +72,9 @@ final class ICloudStorageService {
     /// Returns the directory where new recordings should be stored.
     /// Uses iCloud ubiquity container when available, local Documents otherwise.
     var recordingsDirectory: URL {
-        if let ubiquityURL = ubiquityContainerURL {
+        // Respect the sync opt-out — without this check, audio still lands in
+        // the ubiquity container (and uploads) after the user disables sync.
+        if isSyncEnabled, let ubiquityURL = ubiquityContainerURL {
             return ubiquityURL
                 .appendingPathComponent("Documents")
                 .appendingPathComponent(recordingsSubdirectory)

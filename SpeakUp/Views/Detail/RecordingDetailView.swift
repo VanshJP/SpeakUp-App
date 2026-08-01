@@ -1488,11 +1488,25 @@ struct RecordingDetailView: View {
 
         let weights = scoreWeights(from: userSettings.first)
 
+        // Story-linked recordings score against the script, matching the base
+        // analysis in RecordingProcessingCoordinator — story wins over prompt.
+        let effectivePrompt: String? = {
+            if let storyId = recording.storyId {
+                var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
+                descriptor.fetchLimit = 1
+                if let story = (try? modelContext.fetch(descriptor))?.first {
+                    let trimmed = story.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty { return trimmed }
+                }
+            }
+            return recording.prompt?.text
+        }()
+
         await speechService.enhanceWithLLM(
             analysis: &analysis,
             transcript: transcript,
             llmService: llmService,
-            promptText: recording.prompt?.text,
+            promptText: effectivePrompt,
             scoreWeights: weights
         )
 
@@ -1500,6 +1514,16 @@ struct RecordingDetailView: View {
         guard !Task.isCancelled else { return }
 
         recording.analysis = analysis
+        if let storyId = recording.storyId {
+            let enhancedScore = analysis.speechScore.overall
+            var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
+            descriptor.fetchLimit = 1
+            if let story = (try? modelContext.fetch(descriptor))?.first,
+               enhancedScore > story.bestScore {
+                story.bestScore = enhancedScore
+                story.updatedAt = Date()
+            }
+        }
         try? modelContext.save()
 
         // Auto-generate coaching insight so it's ready on the coaching tab.

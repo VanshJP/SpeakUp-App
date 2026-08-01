@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
     @State private var recordingStoryId: UUID?
+    @State private var hasEvaluatedOnboarding = false
 
     private var countdownDuration: Int {
         userSettings.first?.countdownDuration ?? 15
@@ -58,6 +59,7 @@ struct ContentView: View {
                 TodayView(
                     onStartRecording: { prompt, duration in
                         recordingPrompt = prompt
+                        recordingStoryId = nil
                         recordingDuration = duration
                         showingCountdown = true
                     },
@@ -92,6 +94,7 @@ struct ContentView: View {
                 PracticeHubView(
                     onSelectPrompt: { prompt in
                         recordingPrompt = prompt
+                        recordingStoryId = nil
                         recordingDuration = .sixty
                         showingCountdown = true
                     },
@@ -180,6 +183,11 @@ struct ContentView: View {
                     },
                     onCancel: {
                         showingCountdown = false
+                        // Clear session context so a later free/prompt practice
+                        // doesn't inherit a stale story link or prompt.
+                        recordingPrompt = nil
+                        recordingStoryId = nil
+                        recordingGoalId = nil
                     }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 1.05)))
@@ -291,9 +299,11 @@ struct ContentView: View {
         .onAppear {
             settingsViewModel.configure(with: modelContext)
             storiesViewModel.configure(with: modelContext)
-            if userSettings.first?.hasCompletedOnboarding != true {
-                showOnboarding = true
-            }
+            evaluateOnboardingIfNeeded()
+        }
+        .onChange(of: userSettings.first?.hasCompletedOnboarding) { _, _ in
+            // @Query may not be hydrated on first onAppear — re-evaluate once it lands
+            evaluateOnboardingIfNeeded()
         }
         .fullScreenCover(isPresented: $showingChallengeAccept) {
             if let challenge = socialChallengeService.incomingChallenge {
@@ -385,6 +395,18 @@ struct ContentView: View {
         if !settings.hasShownFirstRecordingSetup {
             let count = (try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
             if count > 0 { settings.hasShownFirstRecordingSetup = true }
+        }
+    }
+
+    // MARK: - Onboarding
+
+    /// Show onboarding only for confirmed first-launch users. Evaluating before
+    /// `@Query` hydrates would flash onboarding over a returning user's home.
+    private func evaluateOnboardingIfNeeded() {
+        guard !hasEvaluatedOnboarding, let settings = userSettings.first else { return }
+        hasEvaluatedOnboarding = true
+        if !settings.hasCompletedOnboarding {
+            showOnboarding = true
         }
     }
 

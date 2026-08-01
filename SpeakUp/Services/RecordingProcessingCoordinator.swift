@@ -134,13 +134,17 @@ final class RecordingProcessingCoordinator {
                     return first
                 }
 
+                // Transcription ran up to 90s — confirm the recording still exists
+                // before touching its properties (deleted SwiftData objects trap).
+                guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+
                 let analyzed = await analyzeTranscript(
                     transcription: transcription,
-                    recording: recording,
+                    recording: persisted,
                     vocabWords: vocabWords,
                     scoreWeights: scoreWeights,
                     settings: settings,
-                    promptText: effectivePromptText(for: recording, modelContext: modelContext)
+                    promptText: effectivePromptText(for: persisted, modelContext: modelContext)
                 )
                 computed = (
                     analyzed.analysis,
@@ -166,18 +170,39 @@ final class RecordingProcessingCoordinator {
                 }
             }
 
+            // Re-fetch before writing — the user may have deleted the recording
+            // while transcription/analysis ran (up to 90s+). Writing to a deleted
+            // SwiftData object traps.
+            guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             if let text = computed.2 {
-                recording.transcriptionText = text
+                persisted.transcriptionText = text
             }
-            recording.transcriptionWords = computed.1
-            recording.analysis = computed.0
-            recording.isProcessing = false
+            persisted.transcriptionWords = computed.1
+            persisted.analysis = computed.0
+            persisted.isProcessing = false
+            updateStoryBestScore(for: persisted, modelContext: modelContext)
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
         } catch {
             logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .private(mask: .hash))")
-            recording.isProcessing = false
+            guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+            persisted.isProcessing = false
             save(modelContext, context: "clearing processing flag after error \(recordingID.uuidString)")
         }
+    }
+
+    /// Keep the linked story's best score in sync once analysis is available.
+    /// `RecordingViewModel.stopRecording()` runs before analysis exists, so the
+    /// score half of story stats can only be updated here.
+    private func updateStoryBestScore(for recording: Recording, modelContext: ModelContext) {
+        guard let storyId = recording.storyId,
+              let score = recording.analysis?.speechScore.overall,
+              score > 0 else { return }
+        var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
+        descriptor.fetchLimit = 1
+        guard let story = (try? modelContext.fetch(descriptor))?.first,
+              score > story.bestScore else { return }
+        story.bestScore = score
+        story.updatedAt = Date()
     }
 
     private func analyzeTranscript(
