@@ -50,20 +50,42 @@ class AudioService: NSObject {
 
     func requestPermission() async -> Bool {
         do {
-            try recordingSession?.setCategory(
-                .playAndRecord,
-                mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetoothHFP]
-            )
-            try recordingSession?.setActive(true)
-            
+            try configureRecordingSession()
             hasPermission = await AVAudioApplication.requestRecordPermission()
-            
             return hasPermission
         } catch {
             print("Failed to set up audio session: \(error)")
             return false
         }
+    }
+
+    /// Shared session config for capture. Matches recorder sample rate to the
+    /// hardware IO rate — a hardcoded 44.1 kHz under `.voiceChat` / HFP (often
+    /// 8–16 kHz) was producing silent or time-stretched m4a files.
+    private func configureRecordingSession() throws {
+        let session = recordingSession ?? AVAudioSession.sharedInstance()
+        recordingSession = session
+        try session.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.defaultToSpeaker, .allowBluetoothHFP]
+        )
+        // Prefer a speech-friendly rate; hardware may still negotiate lower on HFP.
+        try? session.setPreferredSampleRate(44_100)
+        try? session.setPreferredIOBufferDuration(0.005)
+        try session.setActive(true)
+    }
+
+    private func recorderSettings(matching session: AVAudioSession) -> [String: Any] {
+        let hardwareRate = session.sampleRate
+        // Fall back only when the session has not published a rate yet.
+        let sampleRate = hardwareRate > 0 ? hardwareRate : 44_100
+        return [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
     }
     
     // MARK: - Recording
@@ -76,24 +98,15 @@ class AudioService: NSObject {
             }
         }
         
-        // Generate file URL — store in iCloud container when available, local Documents otherwise
+        // Always capture to local Documents. iCloud promotion happens after stop.
         let storageDir = ICloudStorageService.shared.recordingsDirectory
+        try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
         let audioFilename = storageDir.appendingPathComponent("\(UUID().uuidString).m4a")
         
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        
         do {
-            try recordingSession?.setCategory(
-                .playAndRecord,
-                mode: .voiceChat,
-                options: [.defaultToSpeaker, .allowBluetoothHFP]
-            )
-            try recordingSession?.setActive(true)
+            try configureRecordingSession()
+            let session = recordingSession ?? AVAudioSession.sharedInstance()
+            let settings = recorderSettings(matching: session)
 
             audioRecorder = try AVAudioRecorder(url: audioFilename, settings: settings)
             audioRecorder?.delegate = self
@@ -143,9 +156,12 @@ class AudioService: NSObject {
 
         guard success else { return nil }
 
-        let url = recordingURL
+        let localURL = recordingURL
         recordingURL = nil
         audioRecorder = nil
+
+        // Promote to iCloud only after the file is fully finalized locally.
+        let url = localURL.map { ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: $0) }
 
         // Duration comes from the finalized file, not recorder.currentTime —
         // the latter drifts under audio-session interruptions and sample-rate

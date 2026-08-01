@@ -140,25 +140,13 @@ class SpeechService {
             }
         }
 
-        let result: SpeechTranscriptionResult
-
-        do {
-            // Use WhisperKit for accurate filler word detection
-            result = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
-            await MainActor.run {
-                transcriptionProgress = whisperService.transcriptionProgress
-            }
-        } catch {
-            // Retry once: unload and reload the model
-            await whisperService.unloadModel()
-            await whisperService.loadModel(modelVariant: "base")
-
-            do {
-                let retryResult = try await whisperService.transcribe(audioURL: transcriptionURL, preferredTerms: preferredTerms)
-                result = retryResult
-            } catch {
-                result = try await transcribeWithAppleSpeech(audioURL: transcriptionURL)
-            }
+        let result: SpeechTranscriptionResult = try await transcribeWithFallbacks(
+            preferredURL: transcriptionURL,
+            originalURL: audioURL,
+            preferredTerms: preferredTerms
+        )
+        await MainActor.run {
+            transcriptionProgress = whisperService.transcriptionProgress
         }
 
         let postProcessed: SpeechTranscriptionResult = await withCheckedContinuation { continuation in
@@ -174,11 +162,12 @@ class SpeechService {
                 }
 
                 var finalWords = wordsAfterFillerRetagging
-                // Pre-load audio once for speaker isolation (avoids redundant file I/O)
-                let preloaded = ConversationIsolationService.loadMonoPCM(url: transcriptionURL)
+                // Speaker acoustics from the raw capture — isolation preprocess can
+                // flatten energy/F0 and mis-label the primary speaker.
+                let preloaded = ConversationIsolationService.loadMonoPCM(url: audioURL)
                 let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
                     words: finalWords,
-                    audioURL: transcriptionURL,
+                    audioURL: audioURL,
                     totalDuration: result.duration,
                     persistentProfile: voiceProfile,
                     preloadedSamples: preloaded.map { ($0.samples, $0.sampleRate) }
@@ -207,6 +196,73 @@ class SpeechService {
         }
 
         return postProcessed
+    }
+
+    /// Whisper → reload retry → original-URL retry (if isolation ran) → Apple Speech.
+    /// Treats an empty transcript as failure so over-gated isolation audio cannot
+    /// permanently produce a Silent session when the raw recording still has speech.
+    private func transcribeWithFallbacks(
+        preferredURL: URL,
+        originalURL: URL,
+        preferredTerms: [String]
+    ) async throws -> SpeechTranscriptionResult {
+        let trim: (String) -> String = {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let isUsable: (SpeechTranscriptionResult) -> Bool = { result in
+            !trim(result.text).isEmpty || !result.words.isEmpty
+        }
+
+        do {
+            let primary = try await whisperService.transcribe(
+                audioURL: preferredURL,
+                preferredTerms: preferredTerms
+            )
+            if isUsable(primary) { return primary }
+        } catch {
+            // Retry path below.
+        }
+
+        // Isolation may have over-suppressed speech — try the raw capture before
+        // paying for a model reload.
+        if preferredURL != originalURL {
+            do {
+                let raw = try await whisperService.transcribe(
+                    audioURL: originalURL,
+                    preferredTerms: preferredTerms
+                )
+                if isUsable(raw) { return raw }
+            } catch {
+                // Continue to model reload.
+            }
+        }
+
+        await whisperService.unloadModel()
+        await whisperService.loadModel(modelVariant: "base")
+
+        let reloadURL = preferredURL != originalURL ? originalURL : preferredURL
+        do {
+            let retry = try await whisperService.transcribe(
+                audioURL: reloadURL,
+                preferredTerms: preferredTerms
+            )
+            if isUsable(retry) { return retry }
+        } catch {
+            // Fall through to Apple Speech.
+        }
+
+        // Prefer the original file for Apple Speech — it never saw the
+        // isolation preprocess and is the closest match to what was recorded.
+        let apple = try await transcribeWithAppleSpeech(audioURL: originalURL)
+        if isUsable(apple) { return apple }
+
+        throw SpeechServiceError.transcriptionFailed(
+            NSError(
+                domain: "SpeechService",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "No speech detected in recording."]
+            )
+        )
     }
 
     /// Fallback transcription using Apple's SFSpeechRecognizer

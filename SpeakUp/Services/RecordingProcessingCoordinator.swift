@@ -57,10 +57,29 @@ final class RecordingProcessingCoordinator {
             return
         }
 
-        guard let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL,
-              FileManager.default.fileExists(atPath: mediaURL.path) else {
+        guard let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             recording.isProcessing = false
             save(modelContext, context: "clearing processing flag for missing media \(recordingID.uuidString)")
+            return
+        }
+
+        // Newly promoted iCloud files can briefly report a non-current download
+        // status; kick the download and wait a beat before giving up.
+        if !FileManager.default.fileExists(atPath: mediaURL.path)
+            || !ICloudStorageService.shared.isFileDownloaded(at: mediaURL) {
+            ICloudStorageService.shared.ensureDownloaded(at: mediaURL)
+            for _ in 0..<10 {
+                if FileManager.default.fileExists(atPath: mediaURL.path),
+                   ICloudStorageService.shared.isFileDownloaded(at: mediaURL) {
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+        }
+
+        guard FileManager.default.fileExists(atPath: mediaURL.path) else {
+            recording.isProcessing = false
+            save(modelContext, context: "clearing processing flag for undownloaded media \(recordingID.uuidString)")
             return
         }
 

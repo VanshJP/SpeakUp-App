@@ -18,6 +18,14 @@ class LiveTranscriptionService {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var lastProcessedSegmentCount = 0
+    /// Cumulative offset so `lastSegmentEndTime` stays monotonic across
+    /// recognition restarts (SFSpeech resets timestamps per request).
+    private var segmentTimeOffset: TimeInterval = 0
+    /// Bumped on every restart/stop so cancelled-task error callbacks cannot
+    /// re-enter `restartRecognitionPreservingEngine` in a tight loop.
+    private var recognitionGeneration = 0
+    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    private var isTapInstalled = false
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -42,34 +50,26 @@ class LiveTranscriptionService {
         // from the view-model before the previous session has fully torn
         // down, would otherwise install a second tap on a new engine while
         // the old tap is still delivering buffers into a nilled request,
-        // crashing AudioToolbox on the next buffer.
-        if isActive { stopInternal() }
+        // crashing AudioToolbox on the next buffer. Also clears an engine
+        // left running after a failed mid-session recognition re-arm.
+        if isActive || audioEngine != nil { stopInternal() }
 
         let engine = AVAudioEngine()
         self.audioEngine = engine
-
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        recognitionRequest = request
 
         liveFillerCount = 0
         liveWordCount = 0
         lastSegmentEndTime = 0
         lastProcessedSegmentCount = 0
+        segmentTimeOffset = 0
         isActive = true
 
-        let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-
-        // Capture the request locally so the real-time audio I/O thread never
-        // reaches into main-actor-isolated state. The tap (and this closure's
-        // strong reference to `request`) is released by stopInternal()'s
-        // removeTap call.
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            request.append(buffer)
-        }
-
         do {
+            // Ensure the input node has a negotiated format before we read it.
+            // A 0 Hz format installs a dead tap and can starve AVAudioRecorder
+            // of mic buffers for the rest of the take.
+            let session = AVAudioSession.sharedInstance()
+            try? session.setPreferredSampleRate(session.sampleRate > 0 ? session.sampleRate : 44_100)
             try engine.start()
         } catch {
             print("LiveTranscription: audio engine failed to start: \(error)")
@@ -77,20 +77,9 @@ class LiveTranscriptionService {
             return
         }
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            // Hop onto the main actor before touching any state so teardown
-            // and partial-result writes never race the 10 Hz recording timer
-            // that reads `isActive` / `lastSegmentEndTime`. The recognizer
-            // auto-finalizes after an extended pause — running stopInternal
-            // on its private queue was tearing down AVAudioEngine off its
-            // owning thread and crashing on the next buffer.
-            let hadError = error != nil
-            let isFinal = result?.isFinal ?? false
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if let result { self.processPartialResult(result) }
-                if hadError || isFinal { self.stopInternal() }
-            }
+        guard attachRecognition(on: engine) else {
+            stopInternal()
+            return
         }
     }
 
@@ -102,19 +91,129 @@ class LiveTranscriptionService {
 
     @MainActor
     private func stopInternal() {
-        // Idempotent: the recognizer's auto-finalization and the view-model's
-        // explicit stop() can both fire on the same tick. Tearing the engine
-        // down twice was the source of the crash.
-        guard isActive else { return }
-        isActive = false
+        // Idempotent across explicit stop() + cancelled-task callbacks.
+        // Cleanup runs whenever an engine or request is still held — including
+        // the orphaned-engine case after a failed recognition re-arm.
+        let hasWork = isActive || audioEngine != nil || recognitionRequest != nil
+        guard hasWork else { return }
 
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
+        isActive = false
+        recognitionGeneration += 1
+
+        removeTapIfNeeded()
+        if let engine = audioEngine {
+            engine.stop()
+        }
         audioEngine = nil
 
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
+    }
+
+    @MainActor
+    private func removeTapIfNeeded() {
+        guard isTapInstalled, let engine = audioEngine else {
+            isTapInstalled = false
+            return
+        }
+        engine.inputNode.removeTap(onBus: 0)
+        isTapInstalled = false
+    }
+
+    /// Installs a tap + recognition task on an already-running engine.
+    /// Returns false when the input format is unusable.
+    @MainActor
+    @discardableResult
+    private func attachRecognition(on engine: AVAudioEngine) -> Bool {
+        guard let recognizer, recognizer.isAvailable else { return false }
+
+        let inputNode = engine.inputNode
+        // Prefer inputFormat — outputFormat can report 0 Hz before the graph
+        // is fully wired even after engine.start().
+        var format = inputNode.inputFormat(forBus: 0)
+        if format.sampleRate <= 0 {
+            format = inputNode.outputFormat(forBus: 0)
+        }
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            print("LiveTranscription: invalid input format \(format), skipping tap")
+            return false
+        }
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        // On-device keeps latency low and avoids network pauses that force
+        // early isFinal → recognition restart cycles.
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+        recognitionRequest = request
+        lastProcessedSegmentCount = 0
+        recognitionGeneration += 1
+        let generation = recognitionGeneration
+
+        removeTapIfNeeded()
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            request.append(buffer)
+        }
+        isTapInstalled = true
+
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            // Hop onto the main actor before touching any state so teardown
+            // and partial-result writes never race the 10 Hz recording timer
+            // that reads `isActive` / `lastSegmentEndTime`.
+            let hadError = error != nil
+            let isFinal = result?.isFinal ?? false
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Ignore callbacks from cancelled generations (restart/stop).
+                guard self.isActive, self.recognitionGeneration == generation else { return }
+                if let result { self.processPartialResult(result) }
+
+                // SFSpeech auto-finalizes after a pause. Previously we tore
+                // down AVAudioEngine here, which yanked the shared input graph
+                // out from under AVAudioRecorder mid-take and left the rest of
+                // the m4a silent — Whisper then scored the session as Silent.
+                // Keep the engine running and open a fresh recognition request.
+                if hadError || isFinal {
+                    self.restartRecognitionPreservingEngine()
+                }
+            }
+        }
+        return true
+    }
+
+    /// Re-arms speech recognition without stopping AVAudioEngine, so the
+    /// concurrent AVAudioRecorder keeps a stable mic route.
+    @MainActor
+    private func restartRecognitionPreservingEngine() {
+        guard isActive, let engine = audioEngine else {
+            stopInternal()
+            return
+        }
+
+        // Carry forward the furthest end time so sentence-boundary detection
+        // still works across request boundaries.
+        segmentTimeOffset = max(segmentTimeOffset, lastSegmentEndTime)
+
+        // Invalidate in-flight callbacks before cancelling so the cancel error
+        // cannot recurse into another restart.
+        recognitionGeneration += 1
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+
+        removeTapIfNeeded()
+
+        guard attachRecognition(on: engine) else {
+            // Leave the audio graph alone for AVAudioRecorder — only drop
+            // live-transcription state so metering / capture keep working.
+            isActive = false
+            recognitionTask = nil
+            recognitionRequest = nil
+            return
+        }
     }
 
     @MainActor
@@ -152,7 +251,7 @@ class LiveTranscriptionService {
         // display regress mid-utterance produces a flicker. Post-recording
         // analysis computes the authoritative count.
         liveFillerCount = max(liveFillerCount, fillerCount)
-        liveWordCount = wordCount
-        lastSegmentEndTime = endTime
+        liveWordCount = max(liveWordCount, wordCount)
+        lastSegmentEndTime = max(lastSegmentEndTime, segmentTimeOffset + endTime)
     }
 }

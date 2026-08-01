@@ -66,15 +66,12 @@ enum SpeechIsolationService {
 
     // MARK: - Processing
 
-    private static func applyHighPassFilter(to samples: [Float], alpha: Float = 0.97) -> [Float] {
-        // Lowered alpha from 0.995 to 0.97.
-        // alpha = 0.995 corresponds to a cutoff of ~(1-0.995)*sampleRate/(2π) ≈ 50 Hz at 44.1 kHz.
-        // This was barely filtering anything — 50 Hz is below the fundamental of any human voice.
-        // alpha = 0.97 corresponds to ~210 Hz cutoff, which:
-        //   - Removes low-frequency rumble, HVAC hum, and handling noise (all below 200 Hz)
-        //   - Preserves all speech fundamentals (male: 85-180 Hz, female: 165-255 Hz)
-        //   - Improves SNR for the noise gate stage that follows
-        // Note: This is a first-order IIR high-pass. The -3dB point is approximate.
+    private static func applyHighPassFilter(to samples: [Float], alpha: Float = 0.99) -> [Float] {
+        // alpha = 0.99 → cutoff ~(1-0.99)*sampleRate/(2π) ≈ 70 Hz at 44.1 kHz.
+        // The previous 0.97 (~210 Hz) sat inside the male fundamental band (85–180 Hz)
+        // and, combined with the adaptive noise gate, could suppress near-field speech
+        // enough that Whisper returned an empty transcript ("Silent").
+        // 70 Hz still strips rumble / HVAC while leaving speech fundamentals intact.
         guard !samples.isEmpty else { return samples }
         var output = [Float](repeating: 0, count: samples.count)
         var previousInput: Float = samples[0]
@@ -100,10 +97,9 @@ enum SpeechIsolationService {
         // The 20th percentile includes some low-energy speech frames (soft consonants, pauses).
         // The 15th percentile more accurately captures the true noise floor.
         let noiseFloor = percentile(frameRMS, p: 0.15)
-        // Raised threshold multiplier from 1.8x to 2.2x noise floor.
-        // 1.8x was too close to the noise floor, causing the gate to partially suppress
-        // quiet speech segments. 2.2x provides a cleaner separation between noise and speech.
-        let threshold = max(noiseFloor * 2.2, 0.00012)
+        // 2.0× noise floor — enough to separate stationary noise without
+        // gating soft consonants / quiet near-field speech into the floor.
+        let threshold = max(noiseFloor * 2.0, 0.00012)
 
         var output = samples
         var smoothedGain: Float = 1.0
@@ -117,13 +113,14 @@ enum SpeechIsolationService {
             let rms = frameRMS[min(frameIndex, frameRMS.count - 1)]
             let targetGain: Float
 
+            // Floor gain at 0.35 (was 0.18) so gated frames stay audible to ASR.
             if rms <= threshold * 0.6 {
-                targetGain = 0.18
+                targetGain = 0.35
             } else if rms >= threshold * 2.0 {
                 targetGain = 1.0
             } else {
                 let normalized = (rms - threshold * 0.6) / (threshold * 1.4)
-                targetGain = 0.18 + normalized * 0.82
+                targetGain = 0.35 + normalized * 0.65
             }
 
             if targetGain > smoothedGain {

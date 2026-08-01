@@ -69,17 +69,22 @@ final class ICloudStorageService {
 
     // MARK: - Storage Directory
 
-    /// Returns the directory where new recordings should be stored.
-    /// Uses iCloud ubiquity container when available, local Documents otherwise.
+    /// Directory for active AVAudioRecorder captures.
+    ///
+    /// Always local Documents — never the ubiquity container. Writing an open
+    /// recorder directly into iCloud Drive races the daemon and can finalize
+    /// empty / silent m4a files that later transcribe as "Silent". Sync happens
+    /// after stop via `promoteToICloudIfNeeded(localURL:)` / migration.
     var recordingsDirectory: URL {
-        // Respect the sync opt-out — without this check, audio still lands in
-        // the ubiquity container (and uploads) after the user disables sync.
-        if isSyncEnabled, let ubiquityURL = ubiquityContainerURL {
-            return ubiquityURL
-                .appendingPathComponent("Documents")
-                .appendingPathComponent(recordingsSubdirectory)
-        }
-        return Self.localDocumentsDirectory
+        Self.localDocumentsDirectory
+    }
+
+    /// iCloud Recordings folder when the ubiquity container is resolved, else nil.
+    var iCloudRecordingsDirectory: URL? {
+        guard let ubiquityURL = ubiquityContainerURL else { return nil }
+        return ubiquityURL
+            .appendingPathComponent("Documents")
+            .appendingPathComponent(recordingsSubdirectory)
     }
 
     /// Local-only Documents directory (always available).
@@ -124,13 +129,34 @@ final class ICloudStorageService {
 
     // MARK: - Migration
 
+    /// Moves a freshly finished local recording into the iCloud container when
+    /// sync is enabled. Returns the ubiquitous URL on success, otherwise the
+    /// original local URL so callers always have a readable path.
+    @discardableResult
+    func promoteToICloudIfNeeded(localURL: URL) -> URL {
+        guard isICloudAvailable, let iCloudDir = iCloudRecordingsDirectory else {
+            return localURL
+        }
+
+        let fm = FileManager.default
+        try? fm.createDirectory(at: iCloudDir, withIntermediateDirectories: true)
+
+        let destination = iCloudDir.appendingPathComponent(localURL.lastPathComponent)
+        guard !fm.fileExists(atPath: destination.path) else { return destination }
+
+        do {
+            try fm.setUbiquitous(true, itemAt: localURL, destinationURL: destination)
+            return destination
+        } catch {
+            print("Failed to promote \(localURL.lastPathComponent) to iCloud: \(error)")
+            return localURL
+        }
+    }
+
     /// Moves existing local recordings to iCloud container.
     /// Called once when iCloud becomes available.
     func migrateLocalFilesToICloud() async {
-        guard let ubiquityURL = ubiquityContainerURL else { return }
-        let iCloudRecordingsDir = ubiquityURL
-            .appendingPathComponent("Documents")
-            .appendingPathComponent(recordingsSubdirectory)
+        guard isICloudAvailable, let iCloudRecordingsDir = iCloudRecordingsDirectory else { return }
 
         let localDir = Self.localDocumentsDirectory
         let fm = FileManager.default
