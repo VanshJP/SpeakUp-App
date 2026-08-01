@@ -65,6 +65,10 @@ struct StoryPromptCard: View {
             // Whole card starts practice; the duration Menu still wins its own taps.
             .contentShape(Rectangle())
             .onTapGesture { Haptics.medium(); onTap() }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Story: \(story.title.isEmpty ? "Untitled Story" : story.title)")
+            .accessibilityHint("Starts a practice recording with this story")
         }
         .ambientLoop(AppMotion.ambient(duration: 1.2)) { isPulsing = true }
     }

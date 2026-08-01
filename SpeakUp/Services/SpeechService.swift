@@ -569,18 +569,11 @@ class SpeechService {
         )
 
         // ── Enhanced Gibberish Gate ──────────────────────────────────────────────────
-        // Multi-signal gibberish detection replaces the old binary isLikelyGibberish check.
-        // Uses confidence score for graduated capping rather than a hard binary.
+        // Graduated 5-signal confidence (0–1) from SpeechScoringEngine.
         overallScore = SpeechScoringEngine.applyGibberishGate(
             score: overallScore,
             gibberishConfidence: enhancedMetrics.gibberishConfidence
         )
-
-        // NOTE: The legacy binary isLikelyGibberish gate has been removed.
-        // SpeechScoringEngine.applyGibberishGate uses a graduated 5-signal confidence
-        // score (0.0-1.0) which is strictly more accurate and less prone to false positives.
-        // PromptRelevanceService.isLikelyGibberish is retained as a standalone utility
-        // for other callers (e.g., UI pre-flight checks) but no longer gates scoring.
 
         let clarity = Double(subscores.clarity)
 

@@ -8,19 +8,6 @@ struct SocialChallenge: Identifiable {
     let challengerScore: Int
     let date: Date
 
-    /// Generate a deep link for sharing.
-    var deepLink: URL? {
-        var components = URLComponents()
-        components.scheme = "speakup"
-        components.host = "challenge"
-        components.queryItems = [
-            URLQueryItem(name: "prompt", value: promptId),
-            URLQueryItem(name: "score", value: "\(challengerScore)"),
-            URLQueryItem(name: "name", value: challengerName),
-        ]
-        return components.url
-    }
-
     /// Parse an incoming deep link.
     static func from(url: URL) -> SocialChallenge? {
         guard url.scheme == "speakup", url.host == "challenge",

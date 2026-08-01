@@ -69,20 +69,6 @@ enum AudioWaveformGenerator {
         return peaks
     }
 
-    /// Legacy entry point retained for callers that want heights directly.
-    static func generate(
-        from url: URL,
-        binCount: Int,
-        minHeight: CGFloat = 12,
-        maxHeight: CGFloat = 36
-    ) -> [CGFloat] {
-        let peaks = generatePeaks(from: url, binCount: binCount)
-        if peaks.isEmpty {
-            return fallbackHeights(count: binCount, minHeight: minHeight, maxHeight: maxHeight)
-        }
-        return heights(from: peaks, minHeight: minHeight, maxHeight: maxHeight)
-    }
-
     private static func fallbackHeights(count: Int, minHeight: CGFloat, maxHeight: CGFloat) -> [CGFloat] {
         let mid = (minHeight + maxHeight) / 2
         return Array(repeating: mid, count: max(count, 1))

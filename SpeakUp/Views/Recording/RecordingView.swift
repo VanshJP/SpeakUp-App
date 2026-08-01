@@ -617,13 +617,12 @@ struct VocabOverlayPanel: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(AppColors.primary)
                     Spacer()
-                    Button {
+                    Button("Dismiss vocabulary overlay", systemImage: "xmark") {
                         onDismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white.opacity(0.5))
                     }
+                    .labelStyle(.iconOnly)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.5))
                 }
 
                 FlowLayout(spacing: 6) {

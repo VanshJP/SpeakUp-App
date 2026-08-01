@@ -129,14 +129,6 @@ final class Story {
         return "\(minutes)m \(remaining)s"
     }
 
-    func tags(ofType type: StoryTagType) -> [StoryTag] {
-        tags.filter { $0.type == type }
-    }
-
-    var tagTypes: Set<StoryTagType> {
-        Set(tags.map(\.type))
-    }
-
     var resolvedEntryType: StoryEntryType {
         StoryEntryType(rawValue: entryType) ?? .story
     }

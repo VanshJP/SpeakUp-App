@@ -675,7 +675,7 @@ enum SpeechScoringEngine {
     // MARK: - Gibberish Score Gate
 
     /// Hard score gate for gibberish speech.
-    /// More aggressive than the previous isLikelyGibberish check.
+    /// Graduated gibberish confidence gate.
     static func applyGibberishGate(score: Int, gibberishConfidence: Double) -> Int {
         if gibberishConfidence >= 0.85 {
             // Definitely gibberish — score collapses to ≤8

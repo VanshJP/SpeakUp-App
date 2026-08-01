@@ -37,10 +37,6 @@ nonisolated extension Date {
         Calendar.current.date(byAdding: .day, value: days, to: self) ?? self
     }
 
-    func adding(weeks: Int) -> Date {
-        Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: self) ?? self
-    }
-
     // MARK: - Formatting
     
     var relativeFormatted: String {
@@ -89,15 +85,5 @@ nonisolated extension Date {
         }
         
         return streak
-    }
-}
-
-// MARK: - TimeInterval Extensions
-
-nonisolated extension TimeInterval {
-    var formattedDuration: String {
-        let minutes = Int(self) / 60
-        let seconds = Int(self) % 60
-        return String(format: "%d:%02d", minutes, seconds)
     }
 }

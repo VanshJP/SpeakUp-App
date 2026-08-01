@@ -633,21 +633,5 @@ nonisolated enum ScoreTrend: String, Codable {
     case improving
     case stable
     case declining
-
-    var iconName: String {
-        switch self {
-        case .improving: return "arrow.up.right"
-        case .stable: return "arrow.right"
-        case .declining: return "arrow.down.right"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .improving: return .green
-        case .stable: return .gray
-        case .declining: return .red
-        }
-    }
 }
 

@@ -3,17 +3,12 @@ import Foundation
 @MainActor @Observable
 final class StoryTaggingService {
 
-    var isExtracting = false
-
     /// Extracts tags from story text using the best available LLM backend.
     /// Returns an empty array if no LLM is available (graceful degradation).
     /// Conservative: only tags things explicitly and clearly mentioned in the text.
     func extractTags(from text: String, using llmService: LLMService) async -> [StoryTag] {
         guard llmService.isAvailable else { return [] }
         guard text.trimmingCharacters(in: .whitespacesAndNewlines).count >= 20 else { return [] }
-
-        isExtracting = true
-        defer { isExtracting = false }
 
         let truncated = String(text.prefix(1500))
 

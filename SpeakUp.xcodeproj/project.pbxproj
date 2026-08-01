@@ -485,8 +485,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Talk";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "To speak into and get the user recording of the session";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says (this is NOT collected)";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Big Talk records your practice sessions on this device to score pace, fillers, pauses, and delivery.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Big Talk uses on-device speech recognition for live filler counting and coaching transcripts. Audio stays on your device.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -533,8 +533,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Big Talk";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "To speak into and get the user recording of the session";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To make a transcript of what the user says (this is NOT collected)";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Big Talk records your practice sessions on this device to score pace, fillers, pauses, and delivery.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Big Talk uses on-device speech recognition for live filler counting and coaching transcripts. Audio stays on your device.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;

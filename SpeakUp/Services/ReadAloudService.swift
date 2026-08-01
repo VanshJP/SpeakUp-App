@@ -95,13 +95,21 @@ class ReadAloudService {
         self.recognitionRequest = request
 
         let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        var recordingFormat = inputNode.inputFormat(forBus: 0)
+        if recordingFormat.sampleRate <= 0 {
+            recordingFormat = inputNode.outputFormat(forBus: 0)
+        }
+        guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+            stopInternal()
+            throw ReadAloudError.audioEngineFailure("Invalid microphone format \(recordingFormat)")
+        }
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
 
         do {
+            engine.prepare()
             try engine.start()
         } catch {
             stopInternal()

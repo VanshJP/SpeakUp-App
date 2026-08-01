@@ -18,7 +18,6 @@ struct GlassButton: View {
         case primary
         case secondary
         case outline
-        case ghost
         case danger
     }
     
@@ -103,8 +102,6 @@ struct GlassButton: View {
             return .primary
         case .outline:
             return .white
-        case .ghost:
-            return .primary
         case .danger:
             return .white
         }
@@ -131,9 +128,6 @@ struct GlassButton: View {
                     Capsule()
                         .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
                 }
-        case .ghost:
-            Capsule()
-                .fill(Color.primary.opacity(0.05))
         case .danger:
             Capsule()
                 .fill(AppColors.error.opacity(0.9))
@@ -161,7 +155,6 @@ struct GlassPressStyle: ButtonStyle {
         GlassButton(title: "Primary", icon: "mic.fill", style: .primary) {}
         GlassButton(title: "Secondary", icon: "play.fill", style: .secondary) {}
         GlassButton(title: "Outline", icon: "arrow.clockwise", style: .outline) {}
-        GlassButton(title: "Ghost", style: .ghost) {}
         GlassButton(title: "Danger", icon: "trash", style: .danger) {}
         GlassButton(title: "Full Width", style: .primary, fullWidth: true) {}
     }
