@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Welcome
 
-/// Hero step. Runs its own centred layout rather than `OnboardingPage` — this
+/// Hero step. Runs its own centred layout rather than `OnboardingPage`. This
 /// is the one screen that should feel like a cover, not a form.
 struct OnboardingWelcomeStep: View {
     let onContinue: () -> Void
@@ -29,7 +29,7 @@ struct OnboardingWelcomeStep: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(titleOpacity)
 
-                Text("Big Talk listens while you practice, scores how you actually sound, and tells you what to fix next — all on this iPhone.")
+                Text("Big Talk listens while you practice, scores how you actually sound, and tells you what to fix next, all on this iPhone.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -45,7 +45,7 @@ struct OnboardingWelcomeStep: View {
 
             VStack(spacing: 16) {
                 // Three pills fit one row at default type and on the narrowest
-                // phone, but not at accessibility sizes — fall back to two rows
+                // phone, but not at accessibility sizes, so fall back to two rows
                 // rather than letting them clip.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
@@ -99,10 +99,77 @@ struct OnboardingWelcomeStep: View {
 
 // MARK: - How It Works
 
-/// The explainer the flow was missing. Covers the practice loop, what actually
-/// gets measured, what else is in the app, and the privacy model — so a new
-/// user knows what they are agreeing to before the questions start.
+/// Beat one of the explainer: what a single session actually is.
+///
+/// Laid out with `LessonPathRow`, the same node-and-rail the Learn tab uses for
+/// a lesson path. A session is a sequence, so the rail carries the ordering the
+/// numbered circles used to, and the beats sit straight on the canvas instead
+/// of in three stacked cards.
+///
+/// Every node stays on the leading side rather than alternating like Learn
+/// does. Alternating only works when labels are short enough to right-align
+/// without looking stranded, and these carry real copy.
+///
+/// Copy is kept to one title line and two detail lines on purpose: the node is
+/// a fixed 58pt, and a label taller than that pushes the rail away from the
+/// node it is supposed to leave.
 struct OnboardingHowItWorksStep: View {
+    let counter: String?
+    let onContinue: () -> Void
+
+    private let beats: [(icon: String, title: String, detail: String)] = [
+        ("mic.fill",
+         "Speak for 30–120 seconds",
+         "Answer a prompt, run a drill, or free-practice. No script required."),
+        ("chart.bar.fill",
+         "Get scored, not transcribed",
+         "Transcribed on this device, then scored on clarity, pace, fillers, pauses and five more."),
+        ("target",
+         "Fix one thing at a time",
+         "Specific tips after each session, and you can replay your first take against today's.")
+    ]
+
+    var body: some View {
+        OnboardingPage(
+            counter: counter,
+            title: "How Big Talk works",
+            subtitle: "One short session is enough to get a full read on your speaking."
+        ) {
+            VStack(spacing: 0) {
+                ForEach(Array(beats.enumerated()), id: \.offset) { index, beat in
+                    LessonPathRow(
+                        state: .available,
+                        icon: beat.icon,
+                        isLeading: true,
+                        hasNext: index < beats.count - 1,
+                        nextIsLeading: true
+                    ) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(beat.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Text(beat.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    .onboardingReveal(index)
+                }
+            }
+            .padding(.top, 6)
+        } footer: {
+            OnboardingCTA(title: "Continue", action: onContinue)
+        }
+    }
+}
+
+// MARK: - What's Inside
+
+/// Beat two: the app inventory and the privacy model, which is what
+/// the user is actually agreeing to before the questions start.
+struct OnboardingWhatsInsideStep: View {
     let counter: String?
     let onContinue: () -> Void
 
@@ -122,43 +189,22 @@ struct OnboardingHowItWorksStep: View {
     var body: some View {
         OnboardingPage(
             counter: counter,
-            title: "How Big Talk works",
-            subtitle: "One short session is enough to get a full read on your speaking.",
-            icon: "waveform.circle.fill"
+            title: "What's inside",
+            subtitle: "Ten ways to practice, all built on the same scoring. Everything runs on this iPhone."
         ) {
-            GlassCard(tint: AppColors.glassTintPrimary, padding: 14) {
-                VStack(alignment: .leading, spacing: 14) {
-                    OnboardingNumberedRow(
-                        number: 1,
-                        title: "Speak for 30–120 seconds",
-                        detail: "Answer a prompt, run a drill, or free-practice. No script required."
-                    )
-                    OnboardingNumberedRow(
-                        number: 2,
-                        title: "Get scored, not just transcribed",
-                        detail: "Your audio is transcribed on this device, then rated on clarity, pace, filler words, pause quality, vocal variety, vocabulary, structure, and how well you stayed on topic."
-                    )
-                    OnboardingNumberedRow(
-                        number: 3,
-                        title: "Fix one thing at a time",
-                        detail: "Each session ends with specific tips, and you can replay your first take against today's to hear the difference."
-                    )
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader("What's inside", icon: "square.grid.2x2.fill")
-
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
-                    spacing: 10
-                ) {
-                    ForEach(features, id: \.label) { feature in
-                        featureTile(icon: feature.icon, label: feature.label)
-                    }
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
+                ForEach(Array(features.enumerated()), id: \.offset) { index, feature in
+                    featureTile(icon: feature.icon, label: feature.label)
+                        // Halved so ten tiles finish arriving in about the time
+                        // three cards do. A full-speed stagger over a grid
+                        // reads as a stutter, not a cascade.
+                        .onboardingReveal(index / 2)
                 }
             }
 
@@ -168,14 +214,15 @@ struct OnboardingHowItWorksStep: View {
                         .font(.subheadline)
                         .foregroundStyle(AppColors.success)
                     // iCloud sync turns itself on for signed-in accounts, so
-                    // this cannot claim audio never leaves the device — only
+                    // this cannot claim audio never leaves the device, only
                     // that nothing is processed off-device or sent to us.
-                    Text("Recording, transcription, and scoring all happen on this iPhone — no Big Talk account, no third-party servers, works in airplane mode. With iCloud sync on, sessions back up to your own private iCloud; turn it off any time in Settings.")
+                    Text("Recording, transcription, and scoring all happen on this iPhone. No Big Talk account, no third-party servers, works in airplane mode. With iCloud sync on, sessions back up to your own private iCloud; turn it off any time in Settings.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .onboardingReveal(features.count / 2 + 1)
         } footer: {
             OnboardingCTA(title: "Continue", action: onContinue)
         }
@@ -214,8 +261,7 @@ struct OnboardingNameStep: View {
         OnboardingPage(
             counter: counter,
             title: "What should we call you?",
-            subtitle: "Your name is added to the on-device dictionary so transcripts spell it correctly when you say it out loud.",
-            icon: "person.fill"
+            subtitle: "Your name is added to the on-device dictionary so transcripts spell it correctly when you say it out loud."
         ) {
             GlassCard(padding: 6, accentBorder: focused ? AppColors.primary : nil) {
                 TextField(
@@ -270,22 +316,20 @@ struct OnboardingGoalStep: View {
         OnboardingPage(
             counter: counter,
             title: title,
-            subtitle: "Pick the closest fit. It shapes the prompts you see on Today and the tips you get after a session.",
-            icon: "scope"
+            subtitle: "Pick the closest fit. It shapes the prompts you see on Today and the tips you get after a session."
         ) {
             VStack(spacing: 10) {
                 ForEach(OnboardingGoal.allCases) { goal in
                     OnboardingChoiceCard(
-                        icon: goal.icon,
                         title: goal.displayName,
                         subtitle: goal.subtitle,
-                        tint: goal.color,
                         isSelected: selectedGoal == goal
                     ) {
                         onSelect(goal)
                     }
                 }
             }
+            .motion(AppMotion.snap, value: selectedGoal)
         } footer: {
             OnboardingCTA(
                 title: selectedGoal == nil ? "Pick a focus" : "Continue",
@@ -317,8 +361,7 @@ struct OnboardingLevelStep: View {
         OnboardingPage(
             counter: counter,
             title: "Where are you starting from?",
-            subtitle: "This sets how hard your daily prompts are and which starter vocabulary we seed.",
-            icon: "chart.bar.fill"
+            subtitle: "This sets how hard your daily prompts are and which starter vocabulary we seed."
         ) {
             SectionPicker(
                 sections: SpeakerLevel.allCases,
@@ -326,15 +369,13 @@ struct OnboardingLevelStep: View {
                 label: { $0.displayName }
             )
 
-            GlassCard(tint: selected.color, padding: 14) {
+            GlassCard(tint: AppColors.glassTintPrimary, padding: 14) {
                 VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 10) {
-                        OnboardingGlyph(icon: selected.icon, tint: selected.color, size: 34)
-                        Text(selected.subtitle)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.85))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text(selected.subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Divider().overlay(AppColors.cardStroke)
 
@@ -416,18 +457,29 @@ struct OnboardingVocabStep: View {
 
     @State private var newWord: String = ""
     @State private var dictationEngine = DictationService()
+    /// Why the last typed word didn't land. `addVocabWord` rejects unknown
+    /// spellings and duplicates with an error haptic and nothing else, which
+    /// reads as the field eating your word.
+    @State private var rejectionNote: String?
     @FocusState private var inputFocused: Bool
 
     var body: some View {
         OnboardingPage(
             counter: counter,
             title: "Words you want to use more",
-            subtitle: "Using these in a session lifts your vocabulary score. We've seeded a starter set for your level — edit it however you like.",
-            icon: "textformat.abc"
+            subtitle: "Using these in a session lifts your vocabulary score. We've seeded a starter set for your level. Edit it however you like."
         ) {
             GlassCard(padding: 12) {
                 VStack(alignment: .leading, spacing: 12) {
                     inputRow
+
+                    if let rejectionNote {
+                        Text(rejectionNote)
+                            .font(.caption2)
+                            .foregroundStyle(AppColors.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .transition(.opacity)
+                    }
 
                     if dictationEngine.isListening, !dictationEngine.recognizedWords.isEmpty {
                         heardWords
@@ -446,6 +498,8 @@ struct OnboardingVocabStep: View {
                         }
                     }
                 }
+                .motion(AppMotion.snap, value: vocabWords)
+                .motion(AppMotion.snap, value: rejectionNote)
             }
 
             Text("Tap the mic to add words by speaking them. Manage the full word bank later in Settings.")
@@ -453,10 +507,15 @@ struct OnboardingVocabStep: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
         } footer: {
-            OnboardingCTA(title: "Continue", action: onContinue)
+            OnboardingCTA(title: "Continue") {
+                commitPending()
+                onContinue()
+            }
         }
         .onDisappear {
-            dictationEngine.stop()
+            // Also covers Back and the top-bar Skip, which never route through
+            // the footer.
+            commitPending()
         }
     }
 
@@ -476,6 +535,7 @@ struct OnboardingVocabStep: View {
             .submitLabel(.done)
             .focused($inputFocused)
             .onSubmit(commitNewWord)
+            .onChange(of: newWord) { rejectionNote = nil }
             .padding(.vertical, 11)
             .padding(.horizontal, 14)
             .background {
@@ -556,7 +616,18 @@ struct OnboardingVocabStep: View {
         guard !trimmed.isEmpty else { return }
         if onAdd(trimmed) {
             newWord = ""
+            rejectionNote = nil
+        } else {
+            rejectionNote = "\"\(trimmed)\" wasn't added. Check the spelling, or it's already on the list."
         }
+    }
+
+    /// Flush whatever the user typed or dictated but never committed. Leaving
+    /// the page used to silently drop a half-entered word and every word still
+    /// sitting in an open dictation session.
+    private func commitPending() {
+        if dictationEngine.isListening { toggleDictation() }
+        commitNewWord()
     }
 
     private func toggleDictation() {

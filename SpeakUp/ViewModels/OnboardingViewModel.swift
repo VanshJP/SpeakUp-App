@@ -13,6 +13,7 @@ import UIKit
 enum OnboardingStep: Int, CaseIterable, Identifiable {
     case welcome = 0
     case howItWorks
+    case whatsInside
     case name
     case goal
     case level
@@ -26,7 +27,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
 
     /// Whether the user can navigate back from this step. The terminal
-    /// `ready` step is one-way — once they hit it, they're done.
+    /// `ready` step is one-way: once they hit it, they're done.
     var allowsBack: Bool {
         switch self {
         case .welcome, .ready: return false
@@ -41,7 +42,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     }
 
     /// Steps that put a labelled decline action in their own footer
-    /// ("Skip — learn it as I record", "Not now"). The global Skip in the top
+    /// ("Skip and learn it as I record", "Not now"). The global Skip in the top
     /// bar would be a second, vaguer copy of the same escape hatch.
     var providesOwnSkip: Bool {
         switch self {
@@ -66,7 +67,7 @@ struct OnboardingResult {
     let reminderMinute: Int
     let launchFirstRecording: Bool
     /// Baseline voice signature captured on the calibration step. Nil when the
-    /// user skipped it — the profile is then learned from real recordings.
+    /// user skipped it, in which case the profile is learned from recordings.
     let voiceProfile: VoiceProfile?
 }
 
@@ -103,7 +104,7 @@ final class OnboardingViewModel {
 
     // Speech recognition permission. Requested alongside the mic so the
     // Apple Speech fallback transcriber (used when WhisperKit is unavailable
-    // or recovering) is pre-authorized. Denial is non-blocking — WhisperKit
+    // or recovering) is pre-authorized. Denial is non-blocking, since WhisperKit
     // remains the primary transcriber and does not require this permission.
     var hasSpeechPermission = false
 
@@ -135,13 +136,14 @@ final class OnboardingViewModel {
         }
     }
 
-    // v4 keys: invalidate older saved state because the calibration and AI
-    // steps shifted every rawValue after `.mic`, which would otherwise restore
-    // a returning user to the wrong page.
-    private static let resumeStepKey = "onboarding.lastReachedStep.v4"
-    private static let resumeNameKey = "onboarding.draftName.v4"
-    private static let resumeGoalKey = "onboarding.draftGoal.v4"
-    private static let resumeLevelKey = "onboarding.draftLevel.v4"
+    // v5 keys: splitting the explainer into `.howItWorks` + `.whatsInside`
+    // shifted every rawValue after it. Bumping invalidates older saved state,
+    // which would otherwise restore a returning user to the wrong page, the
+    // same reason v4 existed.
+    private static let resumeStepKey = "onboarding.lastReachedStep.v5"
+    private static let resumeNameKey = "onboarding.draftName.v5"
+    private static let resumeGoalKey = "onboarding.draftGoal.v5"
+    private static let resumeLevelKey = "onboarding.draftLevel.v5"
 
     // MARK: Lifecycle
 
@@ -155,20 +157,29 @@ final class OnboardingViewModel {
 
     var canAdvanceFromName: Bool { !trimmedName.isEmpty }
 
-    /// Bar fill progresses linearly across all steps. Even welcome shows a
-    /// sliver of fill so the bar never reads as "empty" at first launch.
-    var stepProgress: Double {
-        Double(stepNumber) / Double(stepCount)
+    /// The steps that carry a counter and a tick. The hero cover and the
+    /// terminal recap bookend the flow rather than being part of it. Counting
+    /// them meant the user never saw the last number ("Step 10 of 11" was the
+    /// highest label the flow could ever show).
+    private static let countedSteps = OnboardingStep.allCases.filter { !$0.isHero }
+
+    var stepCount: Int { max(1, Self.countedSteps.count) }
+
+    private var countedIndex: Int? {
+        Self.countedSteps.firstIndex(of: currentStep)
     }
 
-    var stepNumber: Int { currentStep.rawValue + 1 }
-
-    var stepCount: Int { max(1, OnboardingStep.allCases.count) }
+    /// Ticks fill across the counted steps only. The terminal step reads full.
+    var stepProgress: Double {
+        if currentStep == .ready { return 1 }
+        guard let index = countedIndex else { return 0 }
+        return Double(index + 1) / Double(stepCount)
+    }
 
     /// Small-caps counter shown above each page title. Hero steps opt out.
     var stepCounterLabel: String? {
-        guard !currentStep.isHero else { return nil }
-        return "Step \(stepNumber) of \(stepCount)"
+        guard let index = countedIndex else { return nil }
+        return "Step \(index + 1) of \(stepCount)"
     }
 
     // MARK: Persistence
@@ -218,12 +229,15 @@ final class OnboardingViewModel {
 
     // MARK: Step Navigation
 
+    // Note: none of these wrap their mutation in `withAnimation`. The views own
+    // the motion through `.motion(_:value:)`, which is the only path that goes
+    // still under Reduce Motion. A `withAnimation` here animated regardless,
+    // and fought the view-level curve for the same state change.
+
     func advance() {
         guard let next = OnboardingStep(rawValue: currentStep.rawValue + 1) else { return }
         Haptics.medium()
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-            currentStep = next
-        }
+        currentStep = next
         persistProgress()
     }
 
@@ -232,17 +246,13 @@ final class OnboardingViewModel {
               let previous = OnboardingStep(rawValue: currentStep.rawValue - 1)
         else { return }
         Haptics.light()
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            currentStep = previous
-        }
+        currentStep = previous
         persistProgress()
     }
 
     func selectGoal(_ goal: OnboardingGoal) {
         Haptics.selection()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            selectedGoal = goal
-        }
+        selectedGoal = goal
         persistProgress()
     }
 
@@ -251,9 +261,7 @@ final class OnboardingViewModel {
     func selectLevel(_ level: SpeakerLevel, haptic: Bool = true) {
         if haptic { Haptics.selection() }
         let oldSeeds = Self.vocabSeeds(for: speakerLevel)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            speakerLevel = level
-        }
+        speakerLevel = level
         if vocabWords == oldSeeds {
             vocabWords = Self.vocabSeeds(for: level)
         }
@@ -303,8 +311,8 @@ final class OnboardingViewModel {
         hasSpeechPermission = status == .authorized
     }
 
-    /// Re-enter the mic test if the user already granted permission. Idempotent
-    /// — safe to call every time the mic step appears. No-op when permission
+    /// Re-enter the mic test if the user already granted permission. Idempotent,
+    /// so safe to call every time the mic step appears. No-op when permission
     /// hasn't been granted yet (the user must tap "Enable microphone" first).
     func resumeMicTestIfPermitted() async {
         guard hasMicPermission, levelMonitorTask == nil else { return }
@@ -328,13 +336,9 @@ final class OnboardingViewModel {
                 // Map -60dB → 0, 0dB → 1 with a gentle ease.
                 let normalized = max(0, min(1, (Double(dbfs) + 60) / 60))
                 let smoothed = Float(pow(normalized, 0.7))
-                await MainActor.run {
-                    self.micLevel = smoothed
-                    if smoothed > 0.18, !self.hasHeardVoice {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            self.hasHeardVoice = true
-                        }
-                    }
+                self.micLevel = smoothed
+                if smoothed > 0.18, !self.hasHeardVoice {
+                    self.hasHeardVoice = true
                 }
                 try? await Task.sleep(for: .milliseconds(60))
             }

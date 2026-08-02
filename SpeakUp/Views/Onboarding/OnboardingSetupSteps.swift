@@ -4,23 +4,24 @@ import SwiftUI
 
 struct OnboardingMicStep: View {
     let counter: String?
-    let hasPermission: Bool
-    let isRequesting: Bool
-    let level: Float
-    let heardVoice: Bool
-    let onEnable: () -> Void
+    let viewModel: OnboardingViewModel
     let onContinue: () -> Void
+
+    private var hasPermission: Bool { viewModel.hasMicPermission }
+    private var isRequesting: Bool { viewModel.isRequestingMicPermission }
+    private var heardVoice: Bool { viewModel.hasHeardVoice }
 
     var body: some View {
         OnboardingPage(
             counter: counter,
             title: hasPermission ? "Say something" : "Let's hear your voice",
-            subtitle: subtitle,
-            icon: "mic.fill"
+            subtitle: subtitle
         ) {
             GlassCard(tint: hasPermission ? AppColors.glassTintPrimary : nil, padding: 16) {
                 VStack(spacing: 14) {
-                    OnboardingWaveform(level: hasPermission ? level : 0)
+                    // Isolated so the 16 Hz meter only redraws the bars, not
+                    // this card, its copy, or the page's footer button.
+                    LiveMicWaveform(viewModel: viewModel, isLive: hasPermission)
                         .frame(height: 104)
                         .opacity(hasPermission ? 1 : 0.3)
 
@@ -38,6 +39,7 @@ struct OnboardingMicStep: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .motion(AppMotion.settle, value: heardVoice)
             }
 
             GlassCard(padding: 12) {
@@ -65,10 +67,13 @@ struct OnboardingMicStep: View {
                     title: isRequesting ? "Asking…" : "Allow microphone",
                     icon: isRequesting ? nil : "arrow.right",
                     isLoading: isRequesting,
-                    action: onEnable
+                    action: { Task { await viewModel.requestMicAndStartTest() } }
                 )
             }
         }
+        // Granting permission rewrites the title, subtitle, card tint and CTA
+        // at once. Without this the whole page snaps between two layouts.
+        .motion(AppMotion.settle, value: hasPermission)
     }
 
     private var subtitle: String {
@@ -82,54 +87,65 @@ struct OnboardingMicStep: View {
     }
 }
 
-/// Live input meter. Centre bars react hardest so the shape reads as a voice
-/// rather than a level bar.
-struct OnboardingWaveform: View {
-    let level: Float
-    private let barCount = 28
+/// The only view that reads `micLevel`, so the ~16 Hz meter updates stop here
+/// instead of invalidating the whole mic page.
+private struct LiveMicWaveform: View {
+    let viewModel: OnboardingViewModel
+    let isLive: Bool
 
     var body: some View {
-        GeometryReader { geo in
-            HStack(spacing: 4) {
-                ForEach(0..<barCount, id: \.self) { index in
-                    BarView(index: index, total: barCount, level: level, geoHeight: geo.size.height)
+        OnboardingWaveform(level: isLive ? viewModel.micLevel : 0)
+    }
+}
+
+/// Live input meter. Centre bars react hardest so the shape reads as a voice
+/// rather than a level bar.
+///
+/// Drawn as one `Canvas` on a `TimelineView` clock. It used to be 28 sibling
+/// views, each holding its own `@State` phase on a `repeatForever` animation:
+/// 28 view bodies re-evaluating every frame for what is a single picture.
+struct OnboardingWaveform: View {
+    let level: Float
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let barCount = 28
+    private let spacing: CGFloat = 4
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+                // Matches the old 0→2π-per-0.6s linear loop.
+                let phase = context.date.timeIntervalSinceReferenceDate * (2 * Double.pi / 0.6)
+                let barWidth = max(1, (size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
+
+                for index in 0..<barCount {
+                    let position = Double(index) / Double(barCount - 1)
+                    // Distance from middle (0 at center, 1 at edges).
+                    let distance = abs(position - 0.5) * 2
+                    let centerWeight = 1 - distance * 0.7
+                    let noise = (sin(phase + Double(index) * 0.4) + 1) / 2
+                    let amplitude = max(0.05, Double(level)) * centerWeight * (0.6 + noise * 0.6)
+                    let height = max(5, CGFloat(amplitude) * size.height)
+                    let rect = CGRect(
+                        x: CGFloat(index) * (barWidth + spacing),
+                        y: (size.height - height) / 2,
+                        width: barWidth,
+                        height: height
+                    )
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: barWidth / 2), with: .color(AppColors.primary))
                 }
             }
         }
         .accessibilityHidden(true)
     }
-
-    private struct BarView: View {
-        let index: Int
-        let total: Int
-        let level: Float
-        let geoHeight: CGFloat
-        @State private var phase: Double = 0
-
-        var body: some View {
-            let position = Double(index) / Double(total - 1)
-            // Distance from middle (0 at center, 1 at edges).
-            let distance = abs(position - 0.5) * 2
-            let centerWeight = 1 - distance * 0.7
-            let noise = (sin(phase + Double(index) * 0.4) + 1) / 2
-            let amplitude = max(0.05, Double(level)) * centerWeight * (0.6 + noise * 0.6)
-            let height = max(5, CGFloat(amplitude) * geoHeight)
-            return Capsule()
-                .fill(AppColors.primary)
-                .frame(height: height)
-                .frame(maxHeight: .infinity, alignment: .center)
-                .ambientLoop(.linear(duration: 0.6).repeatForever(autoreverses: false)) {
-                    phase = .pi * 2
-                }
-        }
-    }
 }
 
 // MARK: - Voice Calibration
 
-/// Captures a baseline pitch/energy signature. Optional — the profile is also
-/// learned automatically from quality-gated recordings — but doing it once up
-/// front means speaker separation works on the very first conversation.
+/// Captures a baseline pitch/energy signature. Optional, since the profile is
+/// also learned automatically from quality-gated recordings, but doing it once
+/// up front means speaker separation works on the very first conversation.
 struct OnboardingCalibrationStep: View {
     let counter: String?
     let hasMicPermission: Bool
@@ -146,9 +162,7 @@ struct OnboardingCalibrationStep: View {
             title: hasCalibrated ? "Voice profile saved" : "Teach Big Talk your voice",
             subtitle: hasCalibrated
                 ? "You can recalibrate any time from Settings → Data Management."
-                : "Read a short passage out loud. It takes about 30 seconds and only has to happen once.",
-            icon: hasCalibrated ? "checkmark.seal.fill" : "waveform.badge.person.crop",
-            iconTint: hasCalibrated ? AppColors.success : AppColors.primary
+                : "Read a short passage out loud. It takes about 30 seconds and only has to happen once."
         ) {
             if hasCalibrated {
                 GlassCard(tint: AppColors.glassTintSuccess, padding: 14) {
@@ -168,19 +182,22 @@ struct OnboardingCalibrationStep: View {
                 }
             }
 
-            GlassCard(padding: 12) {
-                VStack(alignment: .leading, spacing: 9) {
+            // One line each. These were full sentences that each wrapped to
+            // two lines, so three bullets read as a six-line paragraph with
+            // icons in it rather than three separate facts.
+            GlassCard(padding: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     OnboardingBullet(
                         icon: "waveform",
-                        text: "Measures the pitch and energy that make your voice yours."
+                        text: "Learns the pitch and energy of your voice."
                     )
                     OnboardingBullet(
                         icon: "person.2.fill",
-                        text: "Lets Big Talk score you — not the other people in the room — when a session picks up a conversation."
+                        text: "Scores you, not whoever else is in the room."
                     )
                     OnboardingBullet(
                         icon: "arrow.trianglehead.2.clockwise",
-                        text: "Keeps sharpening itself from every recording you make afterwards."
+                        text: "Sharpens itself with every recording after this."
                     )
                 }
             }
@@ -202,7 +219,7 @@ struct OnboardingCalibrationStep: View {
                 OnboardingCTA(title: "Continue", action: onContinue)
             } else if hasMicPermission {
                 OnboardingCTA(title: "Start calibration", icon: "mic.fill", action: onCalibrate)
-                OnboardingTextButton(title: "Skip — learn it as I record", action: onSkip)
+                OnboardingTextButton(title: "Skip and learn it as I record", action: onSkip)
             } else {
                 OnboardingCTA(
                     title: isRequestingMic ? "Asking…" : "Allow microphone",
@@ -213,6 +230,9 @@ struct OnboardingCalibrationStep: View {
                 OnboardingTextButton(title: "Skip for now", action: onSkip)
             }
         }
+        // The sheet dismisses and this page flips to its saved state behind it.
+        .motion(AppMotion.settle, value: hasCalibrated)
+        .motion(AppMotion.settle, value: hasMicPermission)
     }
 }
 
@@ -237,9 +257,7 @@ struct OnboardingIntelligenceStep: View {
             title: appleIntelligenceAvailable ? "AI coaching is ready" : "Add AI coaching",
             subtitle: appleIntelligenceAvailable
                 ? "This iPhone has Apple Intelligence, so the smarter half of your feedback is already switched on."
-                : "This iPhone doesn't have Apple Intelligence. You can download a small language model instead — it runs entirely offline.",
-            icon: "sparkles",
-            iconTint: appleIntelligenceAvailable ? AppColors.success : AppColors.primary
+                : "This iPhone doesn't have Apple Intelligence. You can download a small language model instead. It runs entirely offline."
         ) {
             backendCard
 
@@ -265,7 +283,7 @@ struct OnboardingIntelligenceStep: View {
                     )
                     OnboardingBullet(
                         icon: "checkmark.circle",
-                        text: "Everything else — transcription, scoring, drills — works without any of this.",
+                        text: "Everything else (transcription, scoring, drills) works without any of this.",
                         tint: AppColors.success
                     )
                 }
@@ -381,7 +399,7 @@ struct OnboardingIntelligenceStep: View {
                     .foregroundStyle(AppColors.error)
                 }
 
-                Text("Keep going — the download continues in the background.")
+                Text("Keep going. The download continues in the background.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -420,7 +438,7 @@ struct OnboardingIntelligenceStep: View {
             }
 
         case .notDownloaded:
-            Text("Optional — Big Talk still transcribes, scores, and coaches you without it. This is the size we picked for your device's memory; Settings → AI Features has smaller and larger options.")
+            Text("Optional. Big Talk still transcribes, scores, and coaches you without it. This is the size we picked for your device's memory; Settings → AI Features has smaller and larger options.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -467,8 +485,7 @@ struct OnboardingReminderStep: View {
         OnboardingPage(
             counter: counter,
             title: "Build the habit",
-            subtitle: "Speaking improves with reps, not marathons. One nudge a day is usually enough.",
-            icon: "bell.badge.fill"
+            subtitle: "Speaking improves with reps, not marathons. One nudge a day is usually enough."
         ) {
             if hasPermission {
                 GlassCard(padding: 14) {
@@ -520,6 +537,8 @@ struct OnboardingReminderStep: View {
                 OnboardingTextButton(title: "Continue without reminders", action: onContinue)
             }
         }
+        .motion(AppMotion.settle, value: reminderEnabled)
+        .motion(AppMotion.settle, value: hasPermission)
     }
 }
 

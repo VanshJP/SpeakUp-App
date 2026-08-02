@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Interactive first-launch flow. Two hero screens bookend nine working pages
+/// Interactive first-launch flow. Two hero screens bookend ten working pages
 /// that explain the app, capture practice intent, and switch on the four
 /// things Big Talk needs to do its job: microphone, voice profile, an AI
 /// backend, and a daily reminder.
@@ -11,6 +11,7 @@ import UIKit
 /// each step inventing its own layout.
 struct OnboardingView: View {
     @State private var viewModel = OnboardingViewModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var onComplete: (OnboardingResult) -> Void
 
@@ -27,10 +28,19 @@ struct OnboardingView: View {
                 ZStack {
                     stepContent
                         .id(viewModel.currentStep)
-                        .transition(.opacity)
+                        // The arriving page rises as it fades in; the outgoing
+                        // one only fades. Deliberately direction-agnostic: a
+                        // horizontal push would need the removal transition to
+                        // know which way it is leaving, and SwiftUI resolves a
+                        // removed view's transition from the state it was
+                        // created with, so Back would exit the wrong way.
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: 14)),
+                            removal: .opacity
+                        ))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .motion(.easeInOut(duration: 0.3), value: viewModel.currentStep)
+                .motion(AppMotion.settle, value: viewModel.currentStep)
             }
         }
         .preferredColorScheme(.dark)
@@ -52,7 +62,7 @@ struct OnboardingView: View {
                 to: nil, from: nil, for: nil
             )
             // Centralised mic-test lifecycle so leaving via Back/Skip/Continue
-            // always tears down the recording — the calibration step that
+            // always tears down the recording. The calibration step that
             // follows drives its own session and cannot share the device.
             if oldStep == .mic, newStep != .mic {
                 viewModel.stopMicTest()
@@ -61,12 +71,28 @@ struct OnboardingView: View {
                 Task { await viewModel.resumeMicTestIfPermitted() }
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            // The mic test holds a live recording. Leaving it running while the
+            // app is backgrounded keeps the system recording indicator lit and
+            // burns battery for a meter nobody can see.
+            guard viewModel.currentStep == .mic else { return }
+            if phase == .active {
+                Task { await viewModel.resumeMicTestIfPermitted() }
+            } else {
+                viewModel.stopMicTest()
+            }
+        }
         .onDisappear {
             viewModel.stopMicTest()
         }
     }
 
     // MARK: - Top Bar
+
+    /// Both gutters are fixed and equal so the tick meter keeps one width and
+    /// one centre across every step. "Skip" is wider than the back chevron,
+    /// and letting the row self-size made the meter twitch on each transition.
+    private static let topBarGutter: CGFloat = 44
 
     private var topBar: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -85,18 +111,19 @@ struct OnboardingView: View {
                         }
                 }
                 .buttonStyle(GlassPressStyle())
+                .frame(width: Self.topBarGutter, alignment: .leading)
                 .accessibilityLabel("Back")
                 .transition(.scale.combined(with: .opacity))
             } else {
-                Color.clear.frame(width: 34, height: 34)
+                Color.clear.frame(width: Self.topBarGutter, height: 34)
             }
 
-            // Ticks read as discrete steps rather than a loading bar — one
+            // Ticks read as discrete steps rather than a loading bar: one
             // tick per page, using the app's shared meter primitive. Hidden on
             // the cover so the first screen reads as a cover, not a form.
             //
             // Decorative to VoiceOver on purpose: every non-hero page already
-            // announces "Step N of 11" as the first line of its header, so
+            // announces "Step N of 10" as the first line of its header, so
             // labelling the meter too would read the position twice.
             TickMeter(
                 fraction: viewModel.stepProgress,
@@ -115,12 +142,12 @@ struct OnboardingView: View {
                 }
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .frame(minWidth: 34, minHeight: 34)
+                .frame(width: Self.topBarGutter, height: 34, alignment: .trailing)
             } else {
-                Color.clear.frame(width: 34, height: 34)
+                Color.clear.frame(width: Self.topBarGutter, height: 34)
             }
         }
-        .motion(.easeInOut(duration: 0.25), value: viewModel.currentStep)
+        .motion(AppMotion.settle, value: viewModel.currentStep)
     }
 
     // MARK: - Step Routing
@@ -133,6 +160,12 @@ struct OnboardingView: View {
 
         case .howItWorks:
             OnboardingHowItWorksStep(
+                counter: viewModel.stepCounterLabel,
+                onContinue: viewModel.advance
+            )
+
+        case .whatsInside:
+            OnboardingWhatsInsideStep(
                 counter: viewModel.stepCounterLabel,
                 onContinue: viewModel.advance
             )
@@ -172,15 +205,13 @@ struct OnboardingView: View {
             )
 
         case .mic:
+            // Takes the view model rather than a `level:` snapshot on purpose.
+            // Reading `micLevel` here would re-evaluate this whole body (top
+            // bar, tick meter, every page) 16 times a second while the meter
+            // runs. The step keeps that read inside its own waveform subview.
             OnboardingMicStep(
                 counter: viewModel.stepCounterLabel,
-                hasPermission: viewModel.hasMicPermission,
-                isRequesting: viewModel.isRequestingMicPermission,
-                level: viewModel.micLevel,
-                heardVoice: viewModel.hasHeardVoice,
-                onEnable: {
-                    Task { await viewModel.requestMicAndStartTest() }
-                },
+                viewModel: viewModel,
                 onContinue: viewModel.advance
             )
 

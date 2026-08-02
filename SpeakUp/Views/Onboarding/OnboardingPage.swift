@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Page Scaffold
 
 /// Shared layout for every non-hero onboarding step: a left-aligned header
-/// (step counter, glyph, title, subtitle), a scrolling body, and a pinned
-/// footer that holds the call to action.
+/// (step counter, title, subtitle), a scrolling body, and a pinned footer that
+/// holds the call to action.
 ///
 /// Every step used to hand-roll its own centred stack with bespoke font sizes,
 /// which is what made the flow read as a template rather than part of the app.
@@ -14,8 +14,6 @@ struct OnboardingPage<Content: View, Footer: View>: View {
     private let counter: String?
     private let title: String
     private let subtitle: String?
-    private let icon: String?
-    private let iconTint: Color
     private let content: Content
     private let footer: Footer
 
@@ -23,16 +21,12 @@ struct OnboardingPage<Content: View, Footer: View>: View {
         counter: String? = nil,
         title: String,
         subtitle: String? = nil,
-        icon: String? = nil,
-        iconTint: Color = AppColors.primary,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
         self.counter = counter
         self.title = title
         self.subtitle = subtitle
-        self.icon = icon
-        self.iconTint = iconTint
         self.content = content()
         self.footer = footer()
     }
@@ -49,6 +43,10 @@ struct OnboardingPage<Content: View, Footer: View>: View {
                 .padding(.top, 14)
                 .padding(.bottom, 24)
             }
+            // Short pages (mic, name) shouldn't rubber-band against nothing,
+            // and the two pages with a keyboard should let a scroll drop it.
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
 
             VStack(spacing: 10) {
                 footer
@@ -61,44 +59,81 @@ struct OnboardingPage<Content: View, Footer: View>: View {
 
     // MARK: - Subviews
 
+    /// Type only. The header used to carry a tinted rounded-square glyph, but
+    /// the same badge on every single page is decoration that says nothing. The
+    /// title already names the step. Icons still appear where they carry
+    /// meaning (goal choices, backend status), never as a page stamp.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let icon {
-                OnboardingGlyph(icon: icon, tint: iconTint)
+        VStack(alignment: .leading, spacing: 6) {
+            if let counter {
+                Text(counter)
+                    .eyebrowStyle()
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                if let counter {
-                    Text(counter)
-                        .eyebrowStyle()
-                }
+            Text(title)
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+                .accessibilityAddTraits(.isHeader)
 
-                Text(title)
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                    .accessibilityAddTraits(.isHeader)
-
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(2)
-                }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
             }
-            .fixedSize(horizontal: false, vertical: true)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Staggered Reveal
+
+/// Fades and lifts a row into place on a per-index delay, so a dense page
+/// arrives as a sequence you read down instead of a wall that lands at once.
+///
+/// Deliberately not a container that indexes its own children. The pages that
+/// need this interleave cards, headers, and grid items, and a container would
+/// have to flatten all of that to count. Tagging each row is the smaller thing.
+private struct OnboardingRevealModifier: ViewModifier {
+    let index: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 10)
+            .onAppear {
+                guard !reduceMotion else {
+                    shown = true
+                    return
+                }
+                withAnimation(.easeOut(duration: 0.35).delay(0.06 + Double(index) * 0.07)) {
+                    shown = true
+                }
+            }
+    }
+}
+
+extension View {
+    /// Position in the page's reading order, starting at 0.
+    func onboardingReveal(_ index: Int) -> some View {
+        modifier(OnboardingRevealModifier(index: index))
     }
 }
 
 // MARK: - Glyph
 
 /// Tinted rounded-square icon. Same treatment the settings surfaces use for
-/// section glyphs, so the onboarding header reads as the same product.
+/// section glyphs. Row-level only: it identifies a *choice* (a goal, a level,
+/// an AI backend) sitting next to its label. It is deliberately no longer
+/// stamped at the top of every page.
 struct OnboardingGlyph: View {
     let icon: String
     var tint: Color = AppColors.primary
-    var size: CGFloat = 44
+    var size: CGFloat = 38
 
     var body: some View {
         Image(systemName: icon)
@@ -120,7 +155,7 @@ struct OnboardingGlyph: View {
 // MARK: - Primary CTA
 
 /// The one loud element on every page. Wraps `GlassButton` so the disabled
-/// treatment and the trailing chevron stay identical across all eleven steps.
+/// treatment and the trailing chevron stay identical across all twelve steps.
 struct OnboardingCTA: View {
     let title: String
     var icon: String? = "arrow.right"
@@ -168,24 +203,28 @@ struct OnboardingTextButton: View {
 /// Selectable row used by the goal step. Selection is carried by the card's
 /// accent border and tint rather than a coloured glow, matching how selection
 /// reads everywhere else in the app.
+///
+/// No leading glyph, and one selection colour for every row. Five tinted icon
+/// badges stacked down one screen is the look the flow was trying to get away
+/// from, and per-row tints made selection read as five different states
+/// instead of one. Selection is a state, so it gets the brand tone; identity
+/// lives in the label.
 struct OnboardingChoiceCard: View {
-    let icon: String
     let title: String
     let subtitle: String
-    let tint: Color
     let isSelected: Bool
     let action: () -> Void
+
+    private var tint: Color { AppColors.primary }
 
     var body: some View {
         Button(action: action) {
             GlassCard(
                 tint: isSelected ? tint : nil,
-                padding: 12,
+                padding: 14,
                 accentBorder: isSelected ? tint : nil
             ) {
                 HStack(spacing: 12) {
-                    OnboardingGlyph(icon: icon, tint: tint, size: 38)
-
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
                             .font(.subheadline.weight(.semibold))
@@ -223,51 +262,19 @@ struct OnboardingBullet: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // Width is fixed so the copy left-aligns across bullets; height is
+            // not, so the glyph sits on the first text line instead of being
+            // centred in a box taller than the line.
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-                .frame(width: 18, height: 18)
+                .frame(width: 18, alignment: .center)
 
             Text(text)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - Numbered Step Row
-
-/// One beat of the "how it works" explainer.
-struct OnboardingNumberedRow: View {
-    let number: Int
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(number)")
-                .font(.statValue)
-                .foregroundStyle(AppColors.primary)
-                .frame(width: 30, height: 30)
-                .background {
-                    Circle()
-                        .fill(AppColors.primary.opacity(0.15))
-                        .overlay { Circle().stroke(AppColors.cardStroke, lineWidth: 0.5) }
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
     }
@@ -308,7 +315,7 @@ struct OnboardingSummaryRow: View {
 // MARK: - Brand Orb
 
 /// The brand orb, used only on the two hero steps. Elsewhere the header glyph
-/// carries the page identity — repeating the orb on every page was the single
+/// carries the page identity. Repeating the orb on every page was the single
 /// biggest reason the flow felt generated rather than designed.
 struct OnboardingOrb: View {
     let size: CGFloat

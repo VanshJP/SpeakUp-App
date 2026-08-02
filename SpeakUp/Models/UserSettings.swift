@@ -329,23 +329,29 @@ enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
 
     var id: Int { rawValue }
 
+    /// Plain nouns naming the situation. These used to be verb phrases ("Ace
+    /// Interviews", "Nail Presentations") mixed with one noun phrase, which is
+    /// pitch-deck voice rather than product voice.
     var displayName: String {
         switch self {
-        case .interviews: return "Ace Interviews"
-        case .meetings: return "Lead Meetings"
-        case .presentations: return "Nail Presentations"
-        case .everydayConfidence: return "Everyday Confidence"
-        case .storytelling: return "Tell Better Stories"
+        case .interviews: return "Interviews"
+        case .meetings: return "Meetings"
+        case .presentations: return "Presentations"
+        case .everydayConfidence: return "Everyday talk"
+        case .storytelling: return "Storytelling"
         }
     }
 
+    /// What the prompts for this goal are actually like. Every one of these
+    /// used to be a three-item comma list, and five identical rhythms stacked
+    /// in a picker is the thing that reads as generated.
     var subtitle: String {
         switch self {
-        case .interviews: return "Crisp answers, no filler, calm under pressure."
-        case .meetings: return "Speak up, stay concise, drive the room."
-        case .presentations: return "Pace, structure, and stage-ready delivery."
-        case .everydayConfidence: return "Sound clearer in any conversation."
-        case .storytelling: return "Narrative arc, beats, and emotion."
+        case .interviews: return "Questions you have to answer well the first time."
+        case .meetings: return "Say your piece without padding it."
+        case .presentations: return "Longer answers you shape before you speak."
+        case .everydayConfidence: return "Ordinary topics, nothing riding on it."
+        case .storytelling: return "Tell what happened and keep them listening."
         }
     }
 
