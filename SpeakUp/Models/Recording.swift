@@ -16,6 +16,7 @@ final class Recording {
     var transcriptionWords: [TranscriptionWord]?
     var analysis: SpeechAnalysis?
     var isProcessing: Bool = false
+    var lastProcessingError: String?
     var isFavorite: Bool = false
     var customTitle: String?
     var drillMode: String?
@@ -138,9 +139,7 @@ final class Recording {
 
     // Formatted duration string
     var formattedDuration: String {
-        let minutes = Int(actualDuration) / 60
-        let seconds = Int(actualDuration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        actualDuration.minutesSeconds
     }
 }
 

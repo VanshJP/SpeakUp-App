@@ -43,6 +43,11 @@ final class UserSettings {
     // Target Pace
     var targetWPM: Int = 150
 
+    // Auto Pace Calibration — learned from every quality-gated recording.
+    // calibratedWPM is an EMA of observed WPM, clamped to the coaching band.
+    var autoPaceTarget: Bool = true
+    var calibratedWPM: Double?
+
     // Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 
@@ -164,6 +169,16 @@ final class UserSettings {
         enabledPromptCategories.compactMap { PromptCategory(rawValue: $0) }
     }
 
+    // MARK: - Pace Target Resolution
+
+    /// The effective pace target for scoring AND charts — the single source of
+    /// truth replacing scattered `targetWPM ?? 150` fallbacks. Auto mode uses
+    /// the per-recording calibrated value once one exists.
+    var resolvedTargetWPM: Int {
+        guard autoPaceTarget, let calibrated = calibratedWPM else { return targetWPM }
+        return Int(calibrated.rounded())
+    }
+
     // MARK: - Word Bank Helpers
 
     func addVocabWord(_ word: String) {
@@ -217,6 +232,33 @@ final class UserSettings {
             }
         }
         return unique
+    }
+}
+
+extension Optional where Wrapped == UserSettings {
+    /// Settings may not exist yet (first launch, background contexts) — keep
+    /// the 150 WPM default in exactly one place.
+    var resolvedTargetWPM: Int { self?.resolvedTargetWPM ?? 150 }
+}
+
+extension ScoreWeights {
+    /// User-tuned weights from settings; defaults when settings don't exist yet.
+    init(from settings: UserSettings?) {
+        guard let settings else {
+            self = .defaults
+            return
+        }
+        self.init(
+            clarity: settings.clarityWeight,
+            pace: settings.paceWeight,
+            filler: settings.fillerWeight,
+            pause: settings.pauseWeight,
+            vocalVariety: settings.vocalVarietyWeight,
+            delivery: settings.deliveryWeight,
+            vocabulary: settings.vocabularyWeight,
+            structure: settings.structureWeight,
+            relevance: settings.relevanceWeight
+        )
     }
 }
 

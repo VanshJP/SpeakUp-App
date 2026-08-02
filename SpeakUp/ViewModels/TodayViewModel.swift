@@ -18,6 +18,7 @@ class TodayViewModel {
     var todaysStory: Story?
     var recentSubscores: [SpeechSubscores] = []
     private var modelContext: ModelContext?
+    private var lastPracticeDate: Date?
     private var answeredPromptIDs: Set<String> = []
     private var enabledPromptCategoryNames: Set<String> = []
     private var hasRerolledPrompt = false
@@ -53,6 +54,7 @@ class TodayViewModel {
         self.weeklyProgress = heavy.weeklyProgress
         self.recentSubscores = heavy.recentSubscores
         self.answeredPromptIDs = heavy.answeredPromptIDs
+        self.lastPracticeDate = heavy.lastPracticeDate
 
         var challenge = DailyChallengeService.todaysChallenge()
         challenge.isCompleted = heavy.dailyChallengeCompleted
@@ -99,7 +101,6 @@ class TodayViewModel {
             let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
             let recordingDates = recordings.map(\.date)
             let currentStreak = Date.calculateStreak(from: recordingDates)
-            let longestStreak = max(currentStreak, recordings.isEmpty ? 0 : 1)
 
             let scoresWithAnalysis = recordings.compactMap { $0.analysis?.speechScore.overall }
             let averageScore: Double = scoresWithAnalysis.isEmpty
@@ -137,7 +138,6 @@ class TodayViewModel {
                 totalRecordings: totalRecordings,
                 totalPracticeTime: totalPracticeTime,
                 currentStreak: currentStreak,
-                longestStreak: longestStreak,
                 averageScore: averageScore,
                 bestScore: bestScore,
                 scoreHistory: scoreHistory,
@@ -166,7 +166,10 @@ class TodayViewModel {
                 weeklyProgress: weeklyProgress,
                 answeredPromptIDs: answered,
                 recentSubscores: recentSubscores,
-                dailyChallengeCompleted: challengeCompleted
+                dailyChallengeCompleted: challengeCompleted,
+                // Recordings are date-descending; first = latest practice of
+                // any kind, analyzed or not (feeds the streak widget).
+                lastPracticeDate: recordings.first?.date
             )
         }.value
     }
@@ -187,7 +190,8 @@ class TodayViewModel {
             sessionCount: userStats.weeklySessionCount,
             goalSessions: userStats.weeklyGoalSessions,
             averageScore: avgScore,
-            practiceMinutes: Int(weeklyProgress?.totalMinutes ?? 0)
+            practiceMinutes: Int(weeklyProgress?.totalMinutes ?? 0),
+            improvementRate: Int(userStats.improvementRate.rounded())
         )
 
         // Daily challenge
@@ -200,9 +204,10 @@ class TodayViewModel {
             )
         }
 
-        // Track last practice date for streak-at-risk widget
-        if let latestRecording = userStats.scoreHistory.first {
-            WidgetDataProvider.updateLastPracticeDate(latestRecording.date)
+        // Track last practice date for streak-at-risk widget. Any recording
+        // counts — a session whose transcription failed is still practice.
+        if let lastPracticeDate {
+            WidgetDataProvider.updateLastPracticeDate(lastPracticeDate)
         }
 
         WidgetCenter.shared.reloadAllTimelines()
@@ -210,7 +215,7 @@ class TodayViewModel {
 
     private func scheduleStreakNotificationIfNeeded() async {
         let streak = userStats.currentStreak
-        guard streak >= 2 else { return }
+        guard streak >= 1 else { return }
 
         // Check if user has already recorded today
         guard let context = modelContext else { return }
@@ -422,4 +427,5 @@ nonisolated private struct TodayHeavyResult: Sendable {
     let answeredPromptIDs: Set<String>
     let recentSubscores: [SpeechSubscores]
     let dailyChallengeCompleted: Bool
+    let lastPracticeDate: Date?
 }

@@ -496,6 +496,11 @@ struct RecordingRow: View {
                         ProgressView()
                             .scaleEffect(0.7)
                     }
+                } else if summary.hasError {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.body)
+                        .foregroundStyle(AppColors.warning)
+                        .frame(width: 44, height: 44)
                 } else {
                     Image(systemName: "waveform")
                         .font(.body)

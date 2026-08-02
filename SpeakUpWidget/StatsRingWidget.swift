@@ -50,12 +50,18 @@ struct StatsRingWidgetView: View {
     private let streakTarget = 7
 
     var body: some View {
-        switch family {
-        case .systemSmall:
-            smallLayout
-        default:
-            mediumLayout
+        Group {
+            switch family {
+            case .systemSmall:
+                smallLayout
+            default:
+                mediumLayout
+            }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Stats: score \(entry.score), \(entry.streak) day streak, \(entry.sessions) of \(entry.sessionsGoal) sessions this week, improvement \(entry.improvement) percent."
+        )
     }
 
     // MARK: - Small Layout
@@ -201,12 +207,7 @@ struct StatsRingWidgetView: View {
     }
 
     private var scoreColor: Color {
-        switch entry.score {
-        case 80...100: return .green
-        case 60..<80: return .yellow
-        case 40..<60: return .orange
-        default: return .red
-        }
+        widgetScoreColor(for: entry.score)
     }
 
     private var improvementColor: Color {

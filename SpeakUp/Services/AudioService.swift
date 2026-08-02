@@ -145,6 +145,10 @@ class AudioService: NSObject {
             return nil
         }
 
+        // A stop is already in flight — overwriting recordingCompletion would
+        // leak its continuation and hang the first caller forever.
+        guard recordingCompletion == nil else { return nil }
+
         // Wait for the recorder to properly finalize the file
         let success = await withCheckedContinuation { continuation in
             recordingCompletion = { success in
@@ -156,11 +160,17 @@ class AudioService: NSObject {
         isRecording = false
         try? await Task.sleep(for: .milliseconds(100))
 
-        guard success else { return nil }
-
         let localURL = recordingURL
         recordingURL = nil
         audioRecorder = nil
+
+        guard success else {
+            if let localURL {
+                try? FileManager.default.removeItem(at: localURL)
+            }
+            recordingDuration = 0
+            return nil
+        }
 
         // Promote to iCloud only after the file is fully finalized locally.
         let url = localURL.map { ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: $0) }

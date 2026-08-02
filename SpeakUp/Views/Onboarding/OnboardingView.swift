@@ -491,6 +491,7 @@ private struct OnboardingGoalStep: View {
 
             VStack(spacing: 8) {
                 Text(greeting)
+                    .accessibilityAddTraits(.isHeader)
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -606,6 +607,9 @@ private struct OnboardingGoalCard: View {
             .shadow(color: isSelected ? goal.color.opacity(0.20) : .clear, radius: 12, y: 4)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(goal.displayName). \(goal.subtitle)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -624,6 +628,7 @@ private struct OnboardingLevelStep: View {
 
             VStack(spacing: 8) {
                 Text("How would you describe yourself?")
+                    .accessibilityAddTraits(.isHeader)
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -727,6 +732,9 @@ struct OnboardingLevelCard: View {
             .shadow(color: isSelected ? level.color.opacity(0.20) : .clear, radius: 12, y: 4)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(level.displayName). \(level.subtitle)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -769,6 +777,10 @@ struct PromptMixCard: View {
                 }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: total)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Daily prompt mix: \(weights.easy) easy, \(weights.medium) medium, \(weights.hard) hard out of \(total)"
+        )
     }
 }
 
@@ -831,6 +843,7 @@ private struct OnboardingMicStep: View {
 
             VStack(spacing: 10) {
                 Text(hasPermission ? "Say something" : "Let's hear your voice")
+                    .accessibilityAddTraits(.isHeader)
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -980,6 +993,7 @@ private struct OnboardingReminderStep: View {
 
             VStack(spacing: 10) {
                 Text("Stay on track")
+                    .accessibilityAddTraits(.isHeader)
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1223,6 +1237,7 @@ private struct OnboardingToolkitStep: View {
 
             VStack(spacing: 10) {
                 Text("Your speaking toolkit")
+                    .accessibilityAddTraits(.isHeader)
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
@@ -1332,6 +1347,7 @@ private struct OnboardingVocabStep: View {
 
             VStack(spacing: 8) {
                 Text("Your power vocabulary")
+                    .accessibilityAddTraits(.isHeader)
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)

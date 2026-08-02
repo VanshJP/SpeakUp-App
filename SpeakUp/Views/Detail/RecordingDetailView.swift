@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import UIKit
 
 struct RecordingDetailView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,17 +15,14 @@ struct RecordingDetailView: View {
     @State private var recording: Recording?
     @State private var isLoading = true
     @State private var showingDeleteAlert = false
-    @State private var showingShareSheet = false
     @State private var showFillerHighlights = true
     @State private var showVocabHighlights = true
     @State private var showSpeakerTurns = true
     @State private var waveformHeights: [CGFloat] = []
-    @State private var scoreCardImage: UIImage?
     @State private var selectedDetailTab: DetailTab = .breakdown
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
-    @State private var exportService = ExportService()
     @State private var showingScoreWeights = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var llmInsight: String?
@@ -131,9 +129,8 @@ struct RecordingDetailView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Button {
                         if case .ready(let recording) = detailScreenState {
-                            scoreCardImage = ScoreCardRenderer.render(recording: recording)
+                            presentScoreCardShare(for: recording)
                         }
-                        showingShareSheet = true
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                             .font(.body)
@@ -222,12 +219,6 @@ struct RecordingDetailView: View {
         .sheet(isPresented: $showingNextStepReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
-        }
-        .onChange(of: showingShareSheet) { _, show in
-            if show, case .ready(let recording) = detailScreenState {
-                exportService.shareRecording(recording, scoreCardImage: scoreCardImage)
-                showingShareSheet = false
-            }
         }
         .overlay {
             if showingListenBackEncouragement {
@@ -335,10 +326,10 @@ struct RecordingDetailView: View {
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 4) {
-                    Text("Analysis Unavailable")
+                    Text(recording.lastProcessingError == nil ? "Analysis Unavailable" : "Analysis Failed")
                         .font(.headline)
                         .foregroundStyle(.white)
-                    Text("This recording hasn't been analyzed yet. You can still listen back, or try analyzing again.")
+                    Text(recording.lastProcessingError ?? "This recording hasn't been analyzed yet. You can still listen back, or try analyzing again.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -355,14 +346,27 @@ struct RecordingDetailView: View {
         }
     }
 
+    /// Renders the score card and hands it to the system share sheet.
+    private func presentScoreCardShare(for recording: Recording) {
+        guard let image = ScoreCardRenderer.render(recording: recording) else { return }
+        let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else { return }
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = rootVC.view
+            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        rootVC.present(activityVC, animated: true)
+    }
+
     private func enqueueProcessingIfNeeded(_ recording: Recording, force: Bool = false) {
+        // Never mark an already-analyzed recording as processing — doing so
+        // before this guard used to strand the screen on AnalyzingView forever.
+        guard recording.analysis == nil else { return }
         if force {
             recording.isProcessing = true
             try? modelContext.save()
-            if recording.analysis != nil { return }
-        }
-        if recording.analysis != nil {
-            return
         }
         RecordingProcessingCoordinator.shared.enqueue(
             recordingID: recording.id,
@@ -599,7 +603,7 @@ struct RecordingDetailView: View {
     }
 
     private func paceStatus(for wpm: Double) -> MetricRow.Status {
-        let target = Double(userSettings.first?.targetWPM ?? 150)
+        let target = Double(userSettings.first.resolvedTargetWPM)
         if wpm < target - 40 { return .neutral("Slow") }
         if wpm > target + 40 { return .caution("Fast") }
         return .good("On pace")
@@ -623,7 +627,7 @@ struct RecordingDetailView: View {
             GlassCard {
                 WPMChartView(
                     dataPoints: wpmData,
-                    targetWPM: userSettings.first?.targetWPM ?? 150,
+                    targetWPM: userSettings.first.resolvedTargetWPM,
                     averageWPM: recording?.analysis?.wordsPerMinute ?? 0
                 )
             }
@@ -881,8 +885,7 @@ struct RecordingDetailView: View {
                 Spacer()
 
                 Button {
-                    scoreCardImage = ScoreCardRenderer.render(recording: recording)
-                    showingShareSheet = true
+                    presentScoreCardShare(for: recording)
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "square.and.arrow.up")
@@ -1064,8 +1067,10 @@ struct RecordingDetailView: View {
 
                 GlassButton(title: "Answer Quick Questions", icon: "pencil.line", style: .primary, fullWidth: true) {
                     Haptics.medium()
+                    // Reopen the feedback gate — detailScreenState flips back to
+                    // .processing and AnalyzingView shows the questionnaire.
                     if case .ready(let recording) = detailScreenState {
-                        enqueueProcessingIfNeeded(recording, force: true)
+                        SessionFeedbackGateStore.reopen(recording.id)
                     }
                 }
             }
@@ -1243,21 +1248,6 @@ struct RecordingDetailView: View {
     private var feedbackQuestionsForAnalyzing: [FeedbackQuestion] {
         let custom = userSettings.first?.customFeedbackQuestions ?? []
         return DefaultFeedbackQuestions.questions + custom
-    }
-
-    private func scoreWeights(from settings: UserSettings?) -> ScoreWeights {
-        guard let settings else { return .defaults }
-        return ScoreWeights(
-            clarity: settings.clarityWeight,
-            pace: settings.paceWeight,
-            filler: settings.fillerWeight,
-            pause: settings.pauseWeight,
-            vocalVariety: settings.vocalVarietyWeight,
-            delivery: settings.deliveryWeight,
-            vocabulary: settings.vocabularyWeight,
-            structure: settings.structureWeight,
-            relevance: settings.relevanceWeight
-        )
     }
 
     private func resolvedTranscript(for recording: Recording) -> String {
@@ -1443,6 +1433,8 @@ struct RecordingDetailView: View {
             let durationSnapshot = recording.actualDuration
             let wpmData = await withCheckedContinuation { continuation in
                 DispatchQueue.global(qos: .utility).async {
+                    // computeWPMTimeSeries never touches the Whisper model; a
+                    // throwaway instance avoids hopping the MainActor service.
                     let data = SpeechService().computeWPMTimeSeries(
                         words: wordsSnapshot,
                         actualDuration: durationSnapshot
@@ -1486,7 +1478,7 @@ struct RecordingDetailView: View {
 
         guard llmService.isAvailable else { return }
 
-        let weights = scoreWeights(from: userSettings.first)
+        let weights = ScoreWeights(from: userSettings.first)
 
         // Story-linked recordings score against the script, matching the base
         // analysis in RecordingProcessingCoordinator — story wins over prompt.

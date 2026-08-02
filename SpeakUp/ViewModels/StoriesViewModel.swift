@@ -338,7 +338,8 @@ class StoriesViewModel {
             recomputeFilteredStories()
 
             WidgetDataProvider.updateLatestStory(
-                title: title.isEmpty ? "Untitled Spark" : title
+                title: title.isEmpty ? "Untitled Spark" : title,
+                storyCount: stories.count
             )
 
             return story
@@ -441,6 +442,11 @@ class StoriesViewModel {
             try context.save()
             stories.removeAll { $0.id == story.id }
             recomputeFilteredStories()
+
+            WidgetDataProvider.updateLatestStory(
+                title: stories.first?.title ?? "",
+                storyCount: stories.count
+            )
         } catch {
             context.rollback()
             errorMessage = "Failed to delete story: \(error.localizedDescription)"

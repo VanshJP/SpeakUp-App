@@ -87,6 +87,10 @@ struct QuickStoryWidgetView: View {
         }
         .padding()
         .widgetURL(URL(string: "speakup://story/new"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Story bank, \(entry.storyCount) stories. Tap for quick capture."
+        )
     }
 }
 

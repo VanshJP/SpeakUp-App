@@ -65,7 +65,7 @@ struct SettingsView: View {
                 icon: "waveform.badge.magnifyingglass",
                 iconColor: AppColors.categoryNeutralCool,
                 title: "Analysis",
-                subtitle: "Target: \(viewModel.targetWPM) WPM"
+                subtitle: "Target: \(viewModel.displayTargetWPM) WPM"
             ) {
                 AnalysisSettingsView(viewModel: viewModel)
             }

@@ -46,8 +46,8 @@ enum WidgetDataProvider {
 
     // MARK: - Story Data
 
-    static func updateLatestStory(title: String) {
+    static func updateLatestStory(title: String, storyCount: Int) {
         defaults.set(title, forKey: "latestStoryTitle")
-        defaults.set(defaults.integer(forKey: "storyCount") + 1, forKey: "storyCount")
+        defaults.set(storyCount, forKey: "storyCount")
     }
 }

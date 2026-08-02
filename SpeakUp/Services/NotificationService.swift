@@ -90,7 +90,9 @@ class NotificationService {
     // MARK: - Streak At Risk
 
     func scheduleStreakAtRiskNotification(currentStreak: Int) async {
-        guard hasPermission, currentStreak >= 2 else { return }
+        // >= 1: a user who practiced yesterday for the first time is exactly
+        // the one worth nudging before the habit dies.
+        guard hasPermission, currentStreak >= 1 else { return }
 
         // Cancel any existing streak-at-risk notification
         center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
@@ -118,6 +120,24 @@ class NotificationService {
 
     func cancelStreakAtRiskNotification() {
         center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
+    }
+
+    // MARK: - Lapsed User Re-engagement
+
+    /// Rescheduled on every app foreground, so it only ever fires after the
+    /// user has actually been away for 3 full days.
+    func scheduleLapsedUserNudge() async {
+        guard hasPermission else { return }
+        center.removePendingNotificationRequests(withIdentifiers: ["lapsed_nudge"])
+
+        let content = UNMutableNotificationContent()
+        content.title = "Your speaking practice misses you"
+        content.body = "It's been a few days. One 60-second session gets you back on track."
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3 * 24 * 3600, repeats: false)
+        let request = UNNotificationRequest(identifier: "lapsed_nudge", content: content, trigger: trigger)
+        try? await center.add(request)
     }
 
     // MARK: - Management

@@ -40,15 +40,9 @@ struct TimerView: View {
 
     private var formattedTime: String {
         if isOvertime {
-            let overtimeSeconds = Int(abs(remainingTime))
-            let minutes = overtimeSeconds / 60
-            let seconds = overtimeSeconds % 60
-            return String(format: "+%d:%02d", minutes, seconds)
+            return "+" + abs(remainingTime).minutesSeconds
         }
-        let totalSeconds = Int(max(0, remainingTime))
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        return max(0, remainingTime).minutesSeconds
     }
 }
 

@@ -29,27 +29,48 @@ struct AnalysisSettingsView: View {
 
                             Divider().padding(.vertical, 8)
 
-                            VStack(spacing: 8) {
+                            Toggle(isOn: $viewModel.autoPaceTarget) {
+                                Label("Auto Pace Target", systemImage: "wand.and.stars")
+                                    .font(.subheadline)
+                            }
+                            .tint(AppColors.primary)
+                            .frame(minHeight: 40)
+
+                            if viewModel.autoPaceTarget {
                                 HStack {
                                     Label("Target Pace", systemImage: "speedometer")
                                         .font(.subheadline)
                                     Spacer()
-                                    Text("\(viewModel.targetWPM) WPM")
+                                    Text(viewModel.hasCalibratedWPM
+                                         ? "Learned: \(viewModel.displayTargetWPM) WPM"
+                                         : "Learning from your sessions…")
                                         .font(.subheadline.weight(.medium))
                                         .foregroundStyle(AppColors.primary)
                                 }
+                                .frame(minHeight: 40)
+                            } else {
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        Label("Target Pace", systemImage: "speedometer")
+                                            .font(.subheadline)
+                                        Spacer()
+                                        Text("\(viewModel.targetWPM) WPM")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(AppColors.primary)
+                                    }
 
-                                Slider(
-                                    value: Binding(
-                                        get: { Double(viewModel.targetWPM) },
-                                        set: { viewModel.targetWPM = Int($0) }
-                                    ),
-                                    in: 100...200,
-                                    step: 5
-                                )
-                                .tint(AppColors.primary)
+                                    Slider(
+                                        value: Binding(
+                                            get: { Double(viewModel.targetWPM) },
+                                            set: { viewModel.targetWPM = Int($0) }
+                                        ),
+                                        in: 100...200,
+                                        step: 5
+                                    )
+                                    .tint(AppColors.primary)
+                                }
+                                .frame(minHeight: 60)
                             }
-                            .frame(minHeight: 60)
 
                             Divider().padding(.vertical, 8)
 
@@ -79,7 +100,7 @@ struct AnalysisSettingsView: View {
                         }
                     }
 
-                    Text("Analyze your speech patterns for pauses and filler words. Target pace sets the ideal WPM for your pace score (default 150). Score weights let you customize how each metric contributes to your overall score.")
+                    Text("Analyze your speech patterns for pauses and filler words. Auto pace target learns your natural speaking rate from every recording; turn it off to set a fixed WPM target instead. Score weights let you customize how each metric contributes to your overall score.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
@@ -99,6 +120,10 @@ struct AnalysisSettingsView: View {
             Task { await viewModel.saveSettings() }
         }
         .onChange(of: viewModel.targetWPM) { _, _ in
+            guard !viewModel.isSyncing else { return }
+            Task { await viewModel.saveSettings() }
+        }
+        .onChange(of: viewModel.autoPaceTarget) { _, _ in
             guard !viewModel.isSyncing else { return }
             Task { await viewModel.saveSettings() }
         }
