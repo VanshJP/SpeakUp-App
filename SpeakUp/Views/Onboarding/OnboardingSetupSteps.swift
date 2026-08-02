@@ -52,7 +52,7 @@ struct OnboardingMicStep: View {
                     )
                     OnboardingBullet(
                         icon: "lock.fill",
-                        text: "Audio never leaves your iPhone, and recording only runs while you are on a session screen.",
+                        text: "Audio is transcribed on this device and recording only runs while you're on a session screen.",
                         tint: AppColors.success
                     )
                 }
@@ -420,7 +420,7 @@ struct OnboardingIntelligenceStep: View {
             }
 
         case .notDownloaded:
-            Text("Optional. Skip it and Big Talk still transcribes, scores, and coaches you with its built-in analysis.")
+            Text("Optional — Big Talk still transcribes, scores, and coaches you without it. This is the size we picked for your device's memory; Settings → AI Features has smaller and larger options.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

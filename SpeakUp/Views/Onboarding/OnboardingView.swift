@@ -94,6 +94,10 @@ struct OnboardingView: View {
             // Ticks read as discrete steps rather than a loading bar — one
             // tick per page, using the app's shared meter primitive. Hidden on
             // the cover so the first screen reads as a cover, not a form.
+            //
+            // Decorative to VoiceOver on purpose: every non-hero page already
+            // announces "Step N of 11" as the first line of its header, so
+            // labelling the meter too would read the position twice.
             TickMeter(
                 fraction: viewModel.stepProgress,
                 color: AppColors.primary,
@@ -102,11 +106,10 @@ struct OnboardingView: View {
             .frame(height: 12)
             .opacity(viewModel.currentStep == .welcome ? 0 : 1)
             .motion(AppMotion.settle, value: viewModel.stepProgress)
-            .accessibilityElement()
-            .accessibilityLabel("Step \(viewModel.stepNumber) of \(viewModel.stepCount)")
 
-            // Skip makes no sense on the cover or the terminal step.
-            if !viewModel.currentStep.isHero {
+            // Skip makes no sense on the cover or the terminal step, and would
+            // duplicate the footer action on steps that decline explicitly.
+            if !viewModel.currentStep.isHero, !viewModel.currentStep.providesOwnSkip {
                 Button("Skip") {
                     viewModel.advance()
                 }
@@ -232,4 +235,12 @@ struct OnboardingView: View {
             )
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Onboarding") {
+    OnboardingView { _ in }
+        .environment(LLMService())
+        .environment(AudioService())
 }

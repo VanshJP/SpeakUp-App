@@ -47,7 +47,7 @@ struct OnboardingWelcomeStep: View {
                 HStack(spacing: 8) {
                     StatusPill(text: "On-device", color: AppColors.primary, glyph: .icon("lock.fill"))
                     StatusPill(text: "Works offline", color: AppColors.primary, glyph: .icon("wifi.slash"))
-                    StatusPill(text: "No account", color: AppColors.primary, glyph: .icon("person.slash.fill"))
+                    StatusPill(text: "No account", color: AppColors.primary, glyph: .icon("person.fill.xmark"))
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("On-device, works offline, no account required")
@@ -87,8 +87,10 @@ struct OnboardingHowItWorksStep: View {
         ("book.pages.fill", "Read-aloud"),
         ("doc.richtext.fill", "Your own scripts"),
         ("graduationcap.fill", "Guided curriculum"),
+        ("heart.fill", "Calm-down tools"),
         ("chart.line.uptrend.xyaxis", "Progress charts"),
-        ("flame.fill", "Streaks & goals")
+        ("flame.fill", "Goals & streaks"),
+        ("trophy.fill", "Achievements")
     ]
 
     var body: some View {
@@ -139,7 +141,10 @@ struct OnboardingHowItWorksStep: View {
                     Image(systemName: "lock.shield.fill")
                         .font(.subheadline)
                         .foregroundStyle(AppColors.success)
-                    Text("Recordings, transcripts, and scores stay on your iPhone. No account, no server, works in airplane mode.")
+                    // iCloud sync turns itself on for signed-in accounts, so
+                    // this cannot claim audio never leaves the device — only
+                    // that nothing is processed off-device or sent to us.
+                    Text("Recording, transcription, and scoring all happen on this iPhone. No Big Talk account, no third-party servers, works in airplane mode. With iCloud sync on, your sessions back up to your own private iCloud — you can turn that off in Settings.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -464,6 +469,7 @@ struct OnboardingVocabStep: View {
                 isActive: dictationEngine.isListening,
                 action: toggleDictation
             )
+            .symbolEffect(.pulse, isActive: dictationEngine.isListening)
             .accessibilityLabel(dictationEngine.isListening ? "Stop dictation" : "Add words by voice")
 
             circleButton(icon: "plus", isActive: canAdd, action: commitNewWord)

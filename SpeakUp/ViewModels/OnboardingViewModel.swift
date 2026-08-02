@@ -39,6 +39,16 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     var isHero: Bool {
         self == .welcome || self == .ready
     }
+
+    /// Steps that put a labelled decline action in their own footer
+    /// ("Skip — learn it as I record", "Not now"). The global Skip in the top
+    /// bar would be a second, vaguer copy of the same escape hatch.
+    var providesOwnSkip: Bool {
+        switch self {
+        case .calibrate, .intelligence, .reminder: return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - Result
