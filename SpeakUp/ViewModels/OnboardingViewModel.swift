@@ -7,17 +7,19 @@ import UIKit
 
 // MARK: - Step Machine
 
-/// Ordered steps in the redesigned interactive onboarding. Each step owns its
-/// own dedicated view and inline action (no pinned button bar). Steps that the
+/// Ordered steps in the interactive onboarding. Each step owns its own
+/// dedicated view and inline action (no pinned button bar). Steps that the
 /// user has already addressed in a previous launch are skippable on resume.
 enum OnboardingStep: Int, CaseIterable, Identifiable {
     case welcome = 0
-    case toolkit
+    case howItWorks
     case name
     case goal
     case level
     case vocab
     case mic
+    case calibrate
+    case intelligence
     case reminder
     case ready
 
@@ -30,6 +32,12 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         case .welcome, .ready: return false
         default: return true
         }
+    }
+
+    /// Hero steps run their own full-bleed layout instead of the shared
+    /// `OnboardingPage` scaffold, and carry no step counter.
+    var isHero: Bool {
+        self == .welcome || self == .ready
     }
 }
 
@@ -47,6 +55,9 @@ struct OnboardingResult {
     let reminderHour: Int
     let reminderMinute: Int
     let launchFirstRecording: Bool
+    /// Baseline voice signature captured on the calibration step. Nil when the
+    /// user skipped it — the profile is then learned from real recordings.
+    let voiceProfile: VoiceProfile?
 }
 
 // MARK: - View Model
@@ -71,6 +82,14 @@ final class OnboardingViewModel {
     var hasHeardVoice = false
     private let audioService = AudioService()
     private var levelMonitorTask: Task<Void, Never>? = nil
+
+    // Voice calibration. The calibration sheet reuses `VoiceCalibrationView`,
+    // which returns the extracted profile; onboarding holds it until the
+    // result is applied to `UserSettings` so a cancelled flow writes nothing.
+    var voiceProfile: VoiceProfile?
+    var showingCalibration = false
+
+    var hasCalibratedVoice: Bool { voiceProfile != nil }
 
     // Speech recognition permission. Requested alongside the mic so the
     // Apple Speech fallback transcriber (used when WhisperKit is unavailable
@@ -106,12 +125,13 @@ final class OnboardingViewModel {
         }
     }
 
-    // v3 keys: invalidate older saved state because vocab moved after level
-    // (rawValues changed), which would otherwise restore to the wrong page.
-    private static let resumeStepKey = "onboarding.lastReachedStep.v3"
-    private static let resumeNameKey = "onboarding.draftName.v3"
-    private static let resumeGoalKey = "onboarding.draftGoal.v3"
-    private static let resumeLevelKey = "onboarding.draftLevel.v3"
+    // v4 keys: invalidate older saved state because the calibration and AI
+    // steps shifted every rawValue after `.mic`, which would otherwise restore
+    // a returning user to the wrong page.
+    private static let resumeStepKey = "onboarding.lastReachedStep.v4"
+    private static let resumeNameKey = "onboarding.draftName.v4"
+    private static let resumeGoalKey = "onboarding.draftGoal.v4"
+    private static let resumeLevelKey = "onboarding.draftLevel.v4"
 
     // MARK: Lifecycle
 
@@ -128,8 +148,17 @@ final class OnboardingViewModel {
     /// Bar fill progresses linearly across all steps. Even welcome shows a
     /// sliver of fill so the bar never reads as "empty" at first launch.
     var stepProgress: Double {
-        let total = max(1, OnboardingStep.allCases.count)
-        return Double(currentStep.rawValue + 1) / Double(total)
+        Double(stepNumber) / Double(stepCount)
+    }
+
+    var stepNumber: Int { currentStep.rawValue + 1 }
+
+    var stepCount: Int { max(1, OnboardingStep.allCases.count) }
+
+    /// Small-caps counter shown above each page title. Hero steps opt out.
+    var stepCounterLabel: String? {
+        guard !currentStep.isHero else { return nil }
+        return "Step \(stepNumber) of \(stepCount)"
     }
 
     // MARK: Persistence
@@ -207,8 +236,10 @@ final class OnboardingViewModel {
         persistProgress()
     }
 
-    func selectLevel(_ level: SpeakerLevel) {
-        Haptics.selection()
+    /// `haptic: false` is used by the level `SectionPicker`, which already
+    /// fires its own selection haptic before writing through the binding.
+    func selectLevel(_ level: SpeakerLevel, haptic: Bool = true) {
+        if haptic { Haptics.selection() }
         let oldSeeds = Self.vocabSeeds(for: speakerLevel)
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             speakerLevel = level
@@ -228,6 +259,15 @@ final class OnboardingViewModel {
     }
 
     func requestMicAndStartTest() async {
+        await requestMicPermissionOnly()
+        guard hasMicPermission else { return }
+        await startMicTest()
+    }
+
+    /// Mic + speech authorization without arming the live meter. Used by the
+    /// calibration step, which needs permission but drives its own recording
+    /// through `VoiceCalibrationView`.
+    func requestMicPermissionOnly() async {
         if !hasMicPermission {
             isRequestingMicPermission = true
             let granted = await audioService.requestPermission()
@@ -242,7 +282,6 @@ final class OnboardingViewModel {
         if !hasSpeechPermission {
             await requestSpeechPermission()
         }
-        await startMicTest()
     }
 
     private func requestSpeechPermission() async {
@@ -299,6 +338,19 @@ final class OnboardingViewModel {
         micLevel = 0
     }
 
+    // MARK: Voice Calibration
+
+    func startCalibration() {
+        Haptics.medium()
+        showingCalibration = true
+    }
+
+    /// Stores the baseline profile returned by `VoiceCalibrationView`. Written
+    /// to `UserSettings` only once onboarding completes.
+    func applyCalibration(_ profile: VoiceProfile) {
+        voiceProfile = profile
+    }
+
     // MARK: Notification Permission
 
     func checkNotificationPermission() async {
@@ -341,7 +393,8 @@ final class OnboardingViewModel {
             reminderEnabled: reminderEnabled && hasNotificationPermission,
             reminderHour: comps.hour ?? 9,
             reminderMinute: comps.minute ?? 0,
-            launchFirstRecording: launchFirstRecording
+            launchFirstRecording: launchFirstRecording,
+            voiceProfile: voiceProfile
         )
     }
 

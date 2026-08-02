@@ -359,6 +359,17 @@ struct ContentView: View {
         // enabled so the user sees the full prompt pool. Category selection is
         // user-driven via PromptSettingsView.
 
+        // Voice calibration captured during onboarding. Matches
+        // `SettingsViewModel.saveCalibrationProfile`: a deliberate "this is my
+        // voice" reading earns full blend trust rather than starting at one
+        // sample, so speaker separation works on the very first conversation.
+        if let profile = result.voiceProfile {
+            settings.voiceProfileF0Hz = profile.f0Hz
+            settings.voiceProfileEnergyDb = profile.energyDb
+            settings.voiceProfileSampleCount = max(settings.voiceProfileSampleCount, 3)
+            settings.voiceProfileLastUpdated = Date()
+        }
+
         for word in result.vocabWords {
             settings.addVocabWord(word)
         }
