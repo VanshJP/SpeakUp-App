@@ -44,10 +44,22 @@ struct OnboardingWelcomeStep: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 16) {
-                HStack(spacing: 8) {
-                    StatusPill(text: "On-device", color: AppColors.primary, glyph: .icon("lock.fill"))
-                    StatusPill(text: "Works offline", color: AppColors.primary, glyph: .icon("wifi.slash"))
-                    StatusPill(text: "No account", color: AppColors.primary, glyph: .icon("person.fill.xmark"))
+                // Three pills fit one row at default type and on the narrowest
+                // phone, but not at accessibility sizes — fall back to two rows
+                // rather than letting them clip.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        onDevicePill
+                        offlinePill
+                        noAccountPill
+                    }
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            onDevicePill
+                            offlinePill
+                        }
+                        noAccountPill
+                    }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("On-device, works offline, no account required")
@@ -68,6 +80,20 @@ struct OnboardingWelcomeStep: View {
             withAnimation(.easeOut(duration: 0.5).delay(0.35)) { subtitleOpacity = 1 }
             withAnimation(.easeOut(duration: 0.45).delay(0.55)) { ctaOpacity = 1 }
         }
+    }
+
+    // MARK: - Subviews
+
+    private var onDevicePill: some View {
+        StatusPill(text: "On-device", color: AppColors.primary, glyph: .icon("lock.fill"))
+    }
+
+    private var offlinePill: some View {
+        StatusPill(text: "Works offline", color: AppColors.primary, glyph: .icon("wifi.slash"))
+    }
+
+    private var noAccountPill: some View {
+        StatusPill(text: "No account", color: AppColors.primary, glyph: .icon("person.fill.xmark"))
     }
 }
 
@@ -144,7 +170,7 @@ struct OnboardingHowItWorksStep: View {
                     // iCloud sync turns itself on for signed-in accounts, so
                     // this cannot claim audio never leaves the device — only
                     // that nothing is processed off-device or sent to us.
-                    Text("Recording, transcription, and scoring all happen on this iPhone. No Big Talk account, no third-party servers, works in airplane mode. With iCloud sync on, your sessions back up to your own private iCloud — you can turn that off in Settings.")
+                    Text("Recording, transcription, and scoring all happen on this iPhone — no Big Talk account, no third-party servers, works in airplane mode. With iCloud sync on, sessions back up to your own private iCloud; turn it off any time in Settings.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
