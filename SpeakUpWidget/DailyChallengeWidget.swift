@@ -78,6 +78,10 @@ struct DailyChallengeWidgetView: View {
         }
         .padding(8)
         .widgetURL(URL(string: "speakup://record"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Daily challenge: \(entry.title). \(entry.isCompleted ? "Completed" : "Not completed yet")."
+        )
     }
 }
 

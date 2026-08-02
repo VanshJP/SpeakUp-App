@@ -517,6 +517,9 @@ struct ScoreProgressChart: View {
                     }
                     .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
                     .frame(height: 220)
+                    .accessibilityLabel(
+                        "Overall score over time, \(dataPoints.count) sessions, latest \(dataPoints.last?.score ?? 0), best \(dataPoints.map(\.score).max() ?? 0)."
+                    )
 
                     // Selected point detail or summary stats
                     if let idx = selectedIndex, idx < dataPoints.count {
@@ -658,6 +661,9 @@ struct FillerTrendChart: View {
                     }
                     .chartDateScrub(over: weeklyData, selection: $selectedIndex) { $0.weekStart }
                     .frame(height: 200)
+                    .accessibilityLabel(
+                        "Average filler words per session by week, \(weeklyData.count) weeks, latest \(String(format: "%.1f", weeklyData.last?.avgFillers ?? 0))."
+                    )
 
                     // Selected week detail
                     if let idx = selectedIndex, idx < weeklyData.count {
@@ -732,7 +738,7 @@ struct PaceTrendChart: View {
     }
 
     private var targetWPM: Double {
-        Double(userSettings.first?.targetWPM ?? 150)
+        Double(userSettings.first.resolvedTargetWPM)
     }
 
     /// Optimal speaking range (140-160 WPM)
@@ -841,6 +847,9 @@ struct PaceTrendChart: View {
                     }
                     .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
                     .frame(height: 220)
+                    .accessibilityLabel(
+                        "Speaking pace over time, \(dataPoints.count) sessions, \(inRangePercent) percent within target range."
+                    )
 
                     if let idx = selectedIndex, idx < dataPoints.count {
                         let point = dataPoints[idx]
@@ -1131,6 +1140,9 @@ struct SessionFrequencyChart: View {
                     }
                     .chartDateScrub(over: weeklyCounts, selection: $selectedIndex) { $0.weekStart }
                     .frame(height: 200)
+                    .accessibilityLabel(
+                        "Sessions per week, \(weeklyCounts.count) weeks, \(goalHitRate) percent of weeks hit the goal."
+                    )
 
                     if let idx = selectedIndex, idx < weeklyCounts.count {
                         let week = weeklyCounts[idx]

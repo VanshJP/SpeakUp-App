@@ -82,6 +82,8 @@ struct DailyPromptWidgetView: View {
         }
         .padding()
         .widgetURL(URL(string: "speakup://record?prompt=\(entry.promptId)"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Daily prompt: \(entry.promptText). Tap to practice.")
     }
 }
 

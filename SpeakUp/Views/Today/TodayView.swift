@@ -39,6 +39,9 @@ struct TodayView: View {
                     // 2. Where you stand (tap → full Progress charts).
                     ringStatsSection
 
+                    // 2b. What changed since last week — once per week, dismissable.
+                    weeklyRecapSection
+
                     // 3. What to do about it. Reads as the conclusion drawn
                     //    from the rings directly above, which is why it sits
                     //    between the stats and the generic prompt path.
@@ -89,6 +92,28 @@ struct TodayView: View {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
+    }
+
+    // MARK: - Weekly Recap
+
+    @ViewBuilder
+    private var weeklyRecapSection: some View {
+        if let progress = viewModel.weeklyProgress, progress.hasRecap, shouldShowWeeklyRecap {
+            WeeklyRecapCard(progress: progress) {
+                userSettings.first?.lastWeeklySummaryDate = Date()
+                try? modelContext.save()
+            }
+        }
+    }
+
+    /// Visible until dismissed; a dismissal stamps lastWeeklySummaryDate, which
+    /// hides the card until the next calendar week starts.
+    private var shouldShowWeeklyRecap: Bool {
+        guard let weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start else {
+            return false
+        }
+        guard let dismissed = userSettings.first?.lastWeeklySummaryDate else { return true }
+        return dismissed < weekStart
     }
 
     // MARK: - Focus Section

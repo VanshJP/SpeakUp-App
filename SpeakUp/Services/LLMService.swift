@@ -118,19 +118,7 @@ final class LLMService {
         return true
     }
 
-    // MARK: - Local Model Management (pass-through)
-
-    func loadLocalModel() async {
-        await localLLM.loadModel()
-    }
-
-    func unloadLocalModel() {
-        localLLM.unloadModel()
-    }
-
-    func deleteLocalModel() {
-        localLLM.deleteModel()
-    }
+    // MARK: - Local Model Management
 
     /// Download and immediately load the local model.
     func setupLocalModel() async {

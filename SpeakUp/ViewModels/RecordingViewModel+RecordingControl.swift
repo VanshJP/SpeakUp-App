@@ -32,6 +32,10 @@ extension RecordingViewModel {
     }
 
     func stopRecording() async -> Recording? {
+        // Serializes the stop-button / timer-expiry / interruption races —
+        // everything below up to the first await runs synchronously on MainActor.
+        guard isRecording else { return nil }
+
         timer?.invalidate()
         timer = nil
         stopAudioLevelMonitoring()
@@ -49,6 +53,15 @@ extension RecordingViewModel {
         let actualDuration = audioService.recordingDuration
 
         guard let url = finalURL, let context = modelContext else {
+            if finalURL == nil {
+                self.error = AudioServiceError.recordingFailed(
+                    NSError(
+                        domain: "SpeakUp",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Recording could not be saved."]
+                    )
+                )
+            }
             return nil
         }
 
@@ -59,6 +72,7 @@ extension RecordingViewModel {
             mediaType: .audio,
             audioURL: url,
             isProcessing: true,
+            audioLevelSamples: audioLevelSamples,
             goalId: goalId
         )
 

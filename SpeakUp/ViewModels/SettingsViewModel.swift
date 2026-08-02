@@ -29,6 +29,7 @@ class SettingsViewModel {
     var trackPauses: Bool = true
     var trackFillerWords: Bool = true
     var targetWPM: Int = 150
+    var autoPaceTarget: Bool = true
     
     // Local state - Prompt Settings
     var enabledPromptCategories: Set<PromptCategory> = Set(PromptCategory.allCases)
@@ -197,6 +198,7 @@ class SettingsViewModel {
         trackPauses = settings.trackPauses
         trackFillerWords = settings.trackFillerWords
         targetWPM = settings.targetWPM
+        autoPaceTarget = settings.autoPaceTarget
 
         // Prompt settings
         hideAnsweredPrompts = settings.hideAnsweredPrompts
@@ -263,6 +265,7 @@ class SettingsViewModel {
         settings.trackPauses = trackPauses
         settings.trackFillerWords = trackFillerWords
         settings.targetWPM = targetWPM
+        settings.autoPaceTarget = autoPaceTarget
         
         // Prompt settings
         settings.hideAnsweredPrompts = hideAnsweredPrompts
@@ -618,6 +621,8 @@ class SettingsViewModel {
         settings.trackPauses = true
         settings.trackFillerWords = true
         settings.targetWPM = 150
+        settings.autoPaceTarget = true
+        settings.calibratedWPM = nil
         settings.hideAnsweredPrompts = true
         settings.enabledPromptCategories = PromptCategory.allCases.map { $0.rawValue }
         settings.countdownDuration = 15
@@ -717,6 +722,17 @@ class SettingsViewModel {
         }
     }
     
+    // MARK: - Pace Target
+
+    /// Effective target shown in UI — learned value in auto mode, slider value otherwise.
+    var displayTargetWPM: Int {
+        settings.resolvedTargetWPM
+    }
+
+    var hasCalibratedWPM: Bool {
+        settings?.calibratedWPM != nil
+    }
+
     // MARK: - Voice Profile
 
     var voiceProfileSampleCount: Int {
@@ -742,7 +758,9 @@ class SettingsViewModel {
         guard let settings, let context = modelContext else { return }
         settings.voiceProfileF0Hz = profile.f0Hz
         settings.voiceProfileEnergyDb = profile.energyDb
-        settings.voiceProfileSampleCount = 1
+        // Manual calibration is a deliberate "this is my voice" — grant full
+        // blend trust (3 = 0.7 weight) instead of resetting accumulated trust.
+        settings.voiceProfileSampleCount = max(settings.voiceProfileSampleCount, 3)
         settings.voiceProfileLastUpdated = Date()
         try? context.save()
     }

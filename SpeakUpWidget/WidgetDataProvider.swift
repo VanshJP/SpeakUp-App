@@ -1,4 +1,18 @@
 import Foundation
+import SwiftUI
+
+/// Score ramp mirroring the app's `AppColors.scoreColor(for:)`. The widget
+/// target cannot import app types, so the hex values are duplicated here —
+/// keep in sync with AppColors (scoreHigh #38CC80, scoreGood #F5C542,
+/// scoreMid #FF9036, scoreLow #F5544A).
+func widgetScoreColor(for score: Int) -> Color {
+    switch score {
+    case 80...100: return Color(red: 56/255, green: 204/255, blue: 128/255)  // #38CC80
+    case 60..<80: return Color(red: 245/255, green: 197/255, blue: 66/255)   // #F5C542
+    case 40..<60: return Color(red: 255/255, green: 144/255, blue: 54/255)   // #FF9036
+    default: return Color(red: 245/255, green: 84/255, blue: 74/255)         // #F5544A
+    }
+}
 
 /// Shared data access via App Group for widgets.
 /// The main app writes; this extension only reads.

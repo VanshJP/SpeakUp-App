@@ -168,8 +168,6 @@ class ReadAloudViewModel {
     }
 
     var formattedElapsedTime: String {
-        let minutes = Int(elapsedTime) / 60
-        let seconds = Int(elapsedTime) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        elapsedTime.minutesSeconds
     }
 }

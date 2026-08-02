@@ -33,7 +33,7 @@ If the user explicitly asks "build it" or "run tests," still defer: respond with
 
 ## Project Overview
 
-Big Talk = native iOS speech practice app. SwiftUI + SwiftData + WhisperKit. On-device transcription, multi-dimensional speech scoring, optional on-device LLM coherence pass. Features: recording, drills, warm-ups, confidence tools, structured curriculum, user-authored Stories (rich-text scripts), Read-Aloud passages with pronunciation scoring, social challenges, journal PDFs, achievements, iCloud sync, widgets.
+Big Talk = native iOS speech practice app. SwiftUI + SwiftData + WhisperKit. On-device transcription, multi-dimensional speech scoring, optional on-device LLM coherence pass. Features: recording, drills, warm-ups, confidence tools, structured curriculum, user-authored Stories (rich-text scripts), Read-Aloud passages with pronunciation scoring, journal PDFs, achievements, iCloud sync, widgets.
 
 Bundle id: `com.vansh.SpeakUpMore` (widget: `com.vansh.SpeakUpMore.SpeakUpWidget`). Deployment target: iOS 26.0. "Big Talk" is the user-facing product name; code, files, and types still use the `SpeakUp` prefix.
 
@@ -46,19 +46,19 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 
 ### Layer responsibilities
 
-- **Models/** — SwiftData entities: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. Pure structs / value types: `SpeechAnalysis` (metrics + `EnhancedSpeechMetrics` + subscores + scoring), `DrillMode`, `WarmUpExercise`, `ConfidenceExercise`, `SocialChallenge`, `DailyChallenge`, `SpeechFramework`, `CurriculumModels`, `LessonContent`, `ReadAloudPassage`, `FillerWordList`, `UserModels`.
+- **Models/** — SwiftData entities: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`. Pure structs / value types: `SpeechAnalysis` (metrics + `EnhancedSpeechMetrics` + subscores + scoring), `DrillMode`, `WarmUpExercise`, `ConfidenceExercise`, `DailyChallenge`, `SpeechFramework`, `CurriculumModels`, `LessonContent`, `ReadAloudPassage`, `FillerWordList`, `UserModels`.
 - **Services/** — `@Observable`, no UI, own error enum. Current roster:
   - **Transcription & audio:** `SpeechService` (orchestrator), `WhisperService` (WhisperKit), `AudioService` (AVFoundation record/play/metering), `LiveTranscriptionService` (real-time fillers), `DictationService` (Apple Speech fallback), `SpeechIsolationService` (on-device AVAudioEngine voice isolation), `ConversationIsolationService` (primary-speaker labeling when multi-speaker), `AudioWaveformGenerator`.
   - **Analysis pipeline:** `SpeechScoringEngine` (subscores + overall + gates), `TextAnalysisService` (authority, hedges, power words, sentence structure, coherence), `PromptRelevanceService` (keyword + semantic + sentence alignment), `PitchAnalysisService` (vDSP autocorrelation F0 contour), `FillerDetectionPipeline` (shared pause-aware filler tagging for Whisper / Apple Speech / live).
   - **LLM:** `LLMService` (Apple Intelligence / FoundationModels front-door + memory-pressure monitor), `LocalLLMService` (llama.cpp via `LlamaSwift` — download, load, generate on devices without Apple Intelligence), `StoryTaggingService` (conservative LLM tag extraction for Stories), `RecordingProcessingCoordinator` (idempotent per-recording transcribe → analyze → LLM enhance job queue).
   - **Practice & coaching:** `HapticCoachingService`, `ChirpPlayer`, `CoachingTipService`, `DailyChallengeService`, `WeeklyProgressService`, `CurriculumService`, `CurriculumActivitySignalStore`, `GoalProgressService`, `AchievementService`.
   - **Read-Aloud:** `ReadAloudService` (scores delivered passage vs reference), `PronunciationService` (AVSpeechSynthesizer + UIReferenceLibrary dictionary lookups).
-  - **Platform / IO:** `NotificationService`, `ExportService` (UIActivityViewController share), `ScoreCardRenderer` (UIKit-drawn shareable PNG), `JournalExportService` (PDF), `SocialChallengeService` (deep-link challenges), `PromptCSVService` (bulk prompt import/export), `ICloudStorageService` (audio file migration + CloudKit sync preference resolution), `WidgetDataProvider` (App Group shared data).
+  - **Platform / IO:** `NotificationService`, `ScoreCardRenderer` (UIKit-drawn shareable PNG), `JournalExportService` (PDF), `PromptCSVService` (bulk prompt import/export), `ICloudStorageService` (audio file migration + CloudKit sync preference resolution), `WidgetDataProvider` (App Group shared data).
 - **ViewModels/** — `@MainActor @Observable`. Own UI state, call services, never import SwiftData types: `TodayViewModel`, `RecordingViewModel` (split across `+AudioMonitoring`, `+Computed`, `+Permissions`, `+RecordingControl`, `+Timer`), `HistoryViewModel`, `SettingsViewModel`, `OnboardingViewModel`, `PromptWheelViewModel`, `ComparisonViewModel`, `ProgressReplayViewModel`, `DrillViewModel`, `WarmUpViewModel`, `CurriculumViewModel`, `ReadAloudViewModel`, `RecordingDetailPlaybackViewModel`, `StoriesViewModel`.
 - **Views/** — grouped by feature (see table below). Shared pieces in `Components/`.
 - **Theme/** — `AppColors`, `GlassStyles`, `AppBackground`. All UI uses the glassmorphism system — no raw colors or inline styling.
 - **Extensions/** — `Date+Helpers.swift`, `Haptics.swift`, `View+Glass.swift` (iOS 26 liquid glass).
-- **Data/** — `DefaultPrompts`, `DefaultWarmUps`, `DefaultConfidenceExercises`, `DefaultCurriculum`, `DefaultReadAloudPassages`, `DefaultFeedbackQuestions`, `SchemaVersioning` (V1 → V19).
+- **Data/** — `DefaultPrompts`, `DefaultWarmUps`, `DefaultConfidenceExercises`, `DefaultCurriculum`, `DefaultReadAloudPassages`, `DefaultFeedbackQuestions`.
 - **SpeakUpWidget/** — WidgetKit target. Widgets: `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget`. Reads via App Group from `WidgetDataProvider`.
 
 ### View groups
@@ -81,7 +81,6 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 | `Drills/` | `DrillSelectionView`, `DrillSessionView`, `DrillResultView` | Filler Elimination / Pace Control / Pause Practice / Impromptu Sprint; can be linked to a Story |
 | `Confidence/` | `ConfidenceToolsView`, `ConfidenceExerciseView` | Calming / Visualization / Progressive / Affirmation |
 | `Progress/` | `BeforeAfterReplayView`, `JournalExportView`, `JournalSummaryView` | Then-vs-Now replay, PDF journal export |
-| `Social/` | `ChallengeAcceptView` | Deep-link friend challenges |
 | `Settings/` | `SettingsView`, `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` | Fully split settings surfaces |
 | `PromptWheel/` | `PromptWheelView` | Spinning random prompt selector |
 | `Onboarding/` | `OnboardingView` | First-launch flow (all steps live in this one file) |
@@ -103,11 +102,10 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 | Learn | `book` | `CurriculumView` |
 | Settings | `gearshape` | `SettingsView` |
 
-Achievements moved off the tab bar — presented as a sheet from Today. Global overlays/sheets at `ContentView`: countdown, recording `fullScreenCover`, prompt wheel, goals, warm-ups (optionally with `sourceStory`), drills (optionally with `sourceStory`), confidence tools, before/after replay, journal export, read-aloud selection, story editor, achievement unlock, onboarding `fullScreenCover`, challenge accept `fullScreenCover`.
+Achievements moved off the tab bar — presented as a sheet from Today. Global overlays/sheets at `ContentView`: countdown, recording `fullScreenCover`, prompt wheel, goals, warm-ups (optionally with `sourceStory`), drills (optionally with `sourceStory`), confidence tools, before/after replay, journal export, read-aloud selection, story editor, achievement unlock, onboarding `fullScreenCover`.
 
 Deep link schemes:
 - `speakup://record?prompt=<id>` — start recording, optionally pre-fill prompt
-- `speakup://challenge?...` — accept incoming social challenge
 - `speakup://story` / `speakup://story/new` — open Library / story editor
 
 ## Speak Algorithm (speech scoring pipeline)
@@ -334,8 +332,8 @@ Before building custom UI, check `Components/` for existing pieces:
 - File name matches primary type name exactly
 
 ### SwiftData rules
-- Schema changes require a new `VersionedSchema` in `SchemaVersioning.swift` (latest: `SpeakUpSchemaV19`)
-- Never rename a `@Attribute` without a migration step
+- Schema changes must be additive fields that are optional or have a default value — that keeps both SwiftData lightweight migration and CloudKit schema evolution safe. No `VersionedSchema` ceremony (the old `SchemaVersioning.swift` was never wired to the `ModelContainer` and was deleted).
+- Never rename or remove a stored `@Attribute`; never make an existing field non-optional
 - Describe schema changes so the developer can exercise the in-memory container path — AI does not run the simulator
 - Current schemas registered in `SpeakUpApp.sharedModelContainer`: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`
 

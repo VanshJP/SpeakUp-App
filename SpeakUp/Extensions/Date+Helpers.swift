@@ -73,7 +73,7 @@ nonisolated extension Date {
         
         var streak = 1
         var previousDate = mostRecent
-        
+
         for date in uniqueDates.dropFirst() {
             let expectedPrevious = previousDate.adding(days: -1)
             if date == expectedPrevious {
@@ -83,7 +83,14 @@ nonisolated extension Date {
                 break
             }
         }
-        
+
         return streak
+    }
+}
+
+nonisolated extension TimeInterval {
+    /// "M:SS" — the one duration formatter, shared by every surface.
+    var minutesSeconds: String {
+        String(format: "%d:%02d", Int(self) / 60, Int(self) % 60)
     }
 }

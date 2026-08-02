@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import WidgetKit
 import os
 
 @MainActor
@@ -59,6 +60,7 @@ final class RecordingProcessingCoordinator {
 
         guard let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             recording.isProcessing = false
+            recording.lastProcessingError = "Audio file is missing."
             save(modelContext, context: "clearing processing flag for missing media \(recordingID.uuidString)")
             return
         }
@@ -79,16 +81,18 @@ final class RecordingProcessingCoordinator {
 
         guard FileManager.default.fileExists(atPath: mediaURL.path) else {
             recording.isProcessing = false
+            recording.lastProcessingError = "Audio file hasn't downloaded from iCloud yet."
             save(modelContext, context: "clearing processing flag for undownloaded media \(recordingID.uuidString)")
             return
         }
 
         recording.isProcessing = true
+        recording.lastProcessingError = nil
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
         let settings = fetchSettings(from: modelContext)
         let vocabWords = settings?.vocabWords ?? []
-        let scoreWeights = scoreWeights(from: settings)
+        let scoreWeights = ScoreWeights(from: settings)
 
         do {
             let computed: (SpeechAnalysis, [TranscriptionWord], String?, VoiceProfileUpdate?)
@@ -126,32 +130,19 @@ final class RecordingProcessingCoordinator {
                 }()
 
                 if llmService.localLLM.isModelReady {
-                    llmService.unloadLocalModel()
+                    llmService.localLLM.unloadModel()
                 }
 
-                let transcription = try await withThrowingTaskGroup(of: SpeechTranscriptionResult.self) { group in
-                    group.addTask {
-                        try await speechService.transcribe(
-                            audioURL: mediaURL,
-                            fillerConfig: fillerConfig,
-                            preferredTerms: preferredTerms,
-                            voiceProfile: voiceProfile
-                        )
-                    }
-                    group.addTask {
-                        try await Task.sleep(for: .seconds(90))
-                        throw SpeechServiceError.transcriptionFailed(
-                            NSError(
-                                domain: "SpeakUp",
-                                code: -1,
-                                userInfo: [NSLocalizedDescriptionKey: "Transcription timed out"]
-                            )
-                        )
-                    }
-                    let first = try await group.next()!
-                    group.cancelAll()
-                    return first
-                }
+                // No outer timeout: every fallback leg self-bounds (WhisperKit
+                // has an internal 90s timeout per attempt, Apple Speech force-
+                // resumes at 90s). An outer race here killed the fallback chain
+                // whenever the first attempt used its full window.
+                let transcription = try await speechService.transcribe(
+                    audioURL: mediaURL,
+                    fillerConfig: fillerConfig,
+                    preferredTerms: preferredTerms,
+                    voiceProfile: voiceProfile
+                )
 
                 // Transcription ran up to 90s — confirm the recording still exists
                 // before touching its properties (deleted SwiftData objects trap).
@@ -172,20 +163,12 @@ final class RecordingProcessingCoordinator {
                     transcription.voiceProfileUpdate
                 )
 
-                if let update = computed.3, let settings {
-                    let conversationDetected = transcription.speakerIsolationMetrics?.conversationDetected ?? false
-                    if !conversationDetected || update.separationConfidence >= 50 {
-                        let alpha = 0.3
-                        if let existing = settings.voiceProfileF0Hz, settings.voiceProfileSampleCount > 0 {
-                            settings.voiceProfileF0Hz = existing * (1 - alpha) + update.sessionF0Hz * alpha
-                            settings.voiceProfileEnergyDb = (settings.voiceProfileEnergyDb ?? 0) * (1 - alpha) + update.sessionEnergyDb * alpha
-                        } else {
-                            settings.voiceProfileF0Hz = update.sessionF0Hz
-                            settings.voiceProfileEnergyDb = update.sessionEnergyDb
-                        }
-                        settings.voiceProfileSampleCount += 1
-                        settings.voiceProfileLastUpdated = Date()
-                    }
+                if let settings {
+                    applyAutoCalibration(
+                        transcription: transcription,
+                        analysis: analyzed.analysis,
+                        settings: settings
+                    )
                 }
             }
 
@@ -199,13 +182,68 @@ final class RecordingProcessingCoordinator {
             persisted.transcriptionWords = computed.1
             persisted.analysis = computed.0
             persisted.isProcessing = false
+            persisted.lastProcessingError = nil
             updateStoryBestScore(for: persisted, modelContext: modelContext)
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
+            // Once per completed recording — keeps widgets fresh for users who
+            // record from Library/History and never open the Today tab.
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .private(mask: .hash))")
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             persisted.isProcessing = false
+            persisted.lastProcessingError = error.localizedDescription
             save(modelContext, context: "clearing processing flag after error \(recordingID.uuidString)")
+        }
+    }
+
+    /// Per-recording auto-calibration: every quality-gated session nudges the
+    /// voice profile (speaker isolation) and the learned pace target. Runs only
+    /// on the fresh-transcription path — re-analyzing the same audio would
+    /// double-weight that session in the EMA. Persistence rides the analysis
+    /// save that follows.
+    private func applyAutoCalibration(
+        transcription: SpeechTranscriptionResult,
+        analysis: SpeechAnalysis,
+        settings: UserSettings
+    ) {
+        // Never learn from junk sessions.
+        guard analysis.enhancedMetrics?.isDefinitelyGibberish != true,
+              analysis.speechScore.overall > 0 else { return }
+
+        let conversationDetected = transcription.speakerIsolationMetrics?.conversationDetected ?? false
+        let alpha = 0.3
+
+        // Voice profile (speaker isolation). Sourced from voiceProfileUpdate —
+        // the same PCM-derived measurement chain its consumer compares against,
+        // unlike whole-file pitchMetrics/volumeMetrics.
+        if let update = transcription.voiceProfileUpdate,
+           !conversationDetected || update.separationConfidence >= 50 {
+            if let existingF0 = settings.voiceProfileF0Hz, settings.voiceProfileSampleCount > 0 {
+                settings.voiceProfileF0Hz = existingF0 * (1 - alpha) + update.sessionF0Hz * alpha
+                // Seed nil energy instead of blending toward 0 dB.
+                settings.voiceProfileEnergyDb = settings.voiceProfileEnergyDb.map {
+                    $0 * (1 - alpha) + update.sessionEnergyDb * alpha
+                } ?? update.sessionEnergyDb
+            } else {
+                settings.voiceProfileF0Hz = update.sessionF0Hz
+                settings.voiceProfileEnergyDb = update.sessionEnergyDb
+            }
+            settings.voiceProfileSampleCount += 1
+            settings.voiceProfileLastUpdated = Date()
+        }
+
+        // Learned pace target — EMA of observed WPM, clamped to the coaching
+        // band so the target adapts to the speaker without endorsing racing or
+        // crawling. Conversations skipped: elapsed-time WPM is distorted when
+        // someone else holds the floor.
+        if !conversationDetected,
+           transcription.duration >= 30,
+           analysis.totalWords >= 40,
+           (60...260).contains(analysis.wordsPerMinute) {
+            let previous = settings.calibratedWPM ?? Double(settings.targetWPM)
+            let blended = previous * (1 - alpha) + analysis.wordsPerMinute * alpha
+            settings.calibratedWPM = min(max(blended, 110), 190)
         }
     }
 
@@ -236,12 +274,14 @@ final class RecordingProcessingCoordinator {
         let actualDuration = recording.actualDuration
         let audioLevelSamples = recording.audioLevelSamples ?? []
         let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
-        let targetWPM = settings?.targetWPM ?? 150
+        let targetWPM = settings.resolvedTargetWPM
         let trackFillerWords = settings?.trackFillerWords ?? true
         let trackPauses = settings?.trackPauses ?? true
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
+                // analyze() never touches the Whisper model; a throwaway
+                // instance avoids hopping the MainActor-isolated shared service.
                 let analyzer = SpeechService()
                 let analysis = analyzer.analyze(
                     transcription: resultSnapshot,
@@ -278,21 +318,6 @@ final class RecordingProcessingCoordinator {
             }
         }
         return recording.prompt?.text
-    }
-
-    private func scoreWeights(from settings: UserSettings?) -> ScoreWeights {
-        guard let settings else { return .defaults }
-        return ScoreWeights(
-            clarity: settings.clarityWeight,
-            pace: settings.paceWeight,
-            filler: settings.fillerWeight,
-            pause: settings.pauseWeight,
-            vocalVariety: settings.vocalVarietyWeight,
-            delivery: settings.deliveryWeight,
-            vocabulary: settings.vocabularyWeight,
-            structure: settings.structureWeight,
-            relevance: settings.relevanceWeight
-        )
     }
 
     private func fetchRecording(

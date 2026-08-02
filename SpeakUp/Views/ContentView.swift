@@ -14,8 +14,6 @@ struct ContentView: View {
     @State private var pendingRecordingNavigation: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
-    @State private var socialChallengeService = SocialChallengeService()
-    @State private var showingChallengeAccept = false
 
     // Feature sheets
     @State private var showingWarmUps = false
@@ -305,26 +303,6 @@ struct ContentView: View {
             // @Query may not be hydrated on first onAppear — re-evaluate once it lands
             evaluateOnboardingIfNeeded()
         }
-        .fullScreenCover(isPresented: $showingChallengeAccept) {
-            if let challenge = socialChallengeService.incomingChallenge {
-                ChallengeAcceptView(
-                    challenge: challenge,
-                    onAccept: {
-                        showingChallengeAccept = false
-                        let descriptor = FetchDescriptor<Prompt>()
-                        if let prompts = try? modelContext.fetch(descriptor) {
-                            recordingPrompt = prompts.first { $0.id == challenge.promptId }
-                        }
-                        socialChallengeService.clearIncoming()
-                        showingCountdown = true
-                    },
-                    onDismiss: {
-                        showingChallengeAccept = false
-                        socialChallengeService.clearIncoming()
-                    }
-                )
-            }
-        }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView { result in
                 Task { @MainActor in
@@ -417,6 +395,11 @@ struct ContentView: View {
 
         switch url.host {
         case "record":
+            // Fresh session context — never inherit a story/goal/prompt from
+            // whatever was recorded last.
+            recordingPrompt = nil
+            recordingStoryId = nil
+            recordingGoalId = nil
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                 let promptId = components.queryItems?.first(where: { $0.name == "prompt" })?.value
             {
@@ -424,15 +407,8 @@ struct ContentView: View {
                 if let prompts = try? modelContext.fetch(descriptor) {
                     recordingPrompt = prompts.first { $0.id == promptId }
                 }
-            } else {
-                recordingPrompt = nil
             }
             showingCountdown = true
-
-        case "challenge":
-            if socialChallengeService.handleIncomingURL(url) {
-                showingChallengeAccept = true
-            }
 
         case "story":
             selectedTab = .library

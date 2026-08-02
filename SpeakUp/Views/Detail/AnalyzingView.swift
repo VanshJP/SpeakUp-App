@@ -8,15 +8,24 @@ import SwiftUI
 // gate inside RecordingDetailView so the user is not prompted twice.
 
 @MainActor
-enum SessionFeedbackGateStore {
-    private static var dismissedIds: Set<UUID> = []
+@Observable
+final class SessionFeedbackGateStore {
+    // Observable so views reading isDismissed() re-render when the gate reopens
+    // (the reflection card's "Answer Quick Questions" path).
+    static let shared = SessionFeedbackGateStore()
+    private var dismissedIds: Set<UUID> = []
+    private init() {}
 
     static func markDismissed(_ id: UUID) {
-        dismissedIds.insert(id)
+        shared.dismissedIds.insert(id)
     }
 
     static func isDismissed(_ id: UUID) -> Bool {
-        dismissedIds.contains(id)
+        shared.dismissedIds.contains(id)
+    }
+
+    static func reopen(_ id: UUID) {
+        shared.dismissedIds.remove(id)
     }
 }
 

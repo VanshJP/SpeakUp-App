@@ -79,6 +79,10 @@ struct SpeakUpApp: App {
                     // Settings must exist before anything else reads them
                     await ensureSettingsExist()
 
+                    // App killed mid-analysis leaves isProcessing stranded true;
+                    // clear it so History rows don't spin forever.
+                    await resetStaleProcessingFlags()
+
                     // Seed remaining data concurrently — all independent of each other
                     async let p: () = seedPromptsIfNeeded()
                     async let a: () = seedAchievementsIfNeeded()
@@ -114,7 +118,11 @@ struct SpeakUpApp: App {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 Task {
-                    await NotificationService().clearBadge()
+                    let notifications = NotificationService()
+                    await notifications.clearBadge()
+                    await notifications.checkPermission()
+                    // Re-arms the 3-day lapse timer on every foreground.
+                    await notifications.scheduleLapsedUserNudge()
                 }
             }
         }
@@ -232,6 +240,21 @@ struct SpeakUpApp: App {
             }
         } catch {
             print("Error ensuring settings: \(error)")
+        }
+    }
+
+    @MainActor
+    private func resetStaleProcessingFlags() async {
+        let context = sharedModelContainer.mainContext
+        let descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.isProcessing == true })
+        guard let stuck = try? context.fetch(descriptor), !stuck.isEmpty else { return }
+        var changed = false
+        for recording in stuck where !RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
+            recording.isProcessing = false
+            changed = true
+        }
+        if changed {
+            try? context.save()
         }
     }
 

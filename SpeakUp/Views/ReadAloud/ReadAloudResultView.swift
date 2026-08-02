@@ -188,9 +188,7 @@ struct ReadAloudResultView: View {
     // MARK: - Helpers
 
     private var formattedTime: String {
-        let minutes = Int(result.timeTaken) / 60
-        let seconds = Int(result.timeTaken) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        result.timeTaken.minutesSeconds
     }
 
     private var scoreColor: Color {

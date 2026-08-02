@@ -11,6 +11,7 @@ nonisolated struct RecordingSummary: Identifiable, Hashable, Sendable {
     let displayTitle: String
     let isFavorite: Bool
     let isProcessing: Bool
+    var hasError: Bool = false
     let storyId: UUID?
     let promptCategory: String?
     let overallScore: Int?
@@ -19,9 +20,7 @@ nonisolated struct RecordingSummary: Identifiable, Hashable, Sendable {
     let searchableText: String
 
     var formattedDuration: String {
-        let minutes = Int(actualDuration) / 60
-        let seconds = Int(actualDuration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        actualDuration.minutesSeconds
     }
 }
 
@@ -110,6 +109,7 @@ class HistoryViewModel {
                         displayTitle: displayTitle,
                         isFavorite: r.isFavorite,
                         isProcessing: r.isProcessing,
+                        hasError: r.lastProcessingError != nil,
                         storyId: r.storyId,
                         promptCategory: r.prompt?.category,
                         overallScore: score,
@@ -190,6 +190,7 @@ class HistoryViewModel {
                 displayTitle: s.displayTitle,
                 isFavorite: !s.isFavorite,
                 isProcessing: s.isProcessing,
+                hasError: s.hasError,
                 storyId: s.storyId,
                 promptCategory: s.promptCategory,
                 overallScore: s.overallScore,

@@ -54,15 +54,16 @@ struct QuickPracticeWidgetView: View {
                 .foregroundStyle(.white)
         }
         .widgetURL(URL(string: "speakup://record"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            entry.lastScore > 0
+                ? "Practice now. Last score \(entry.lastScore)."
+                : "Practice now."
+        )
     }
 
     private func scoreColor(for score: Int) -> Color {
-        switch score {
-        case 80...100: return .green
-        case 60..<80: return .yellow
-        case 40..<60: return .orange
-        default: return .red
-        }
+        widgetScoreColor(for: score)
     }
 }
 
