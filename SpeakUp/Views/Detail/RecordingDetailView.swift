@@ -244,11 +244,9 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func readyContent(_ recording: Recording) -> some View {
         ScrollView(.vertical) {
-            // Three blocks, then tabs. Context → score → what to do about it.
-            // Every metric surface (radar, stat tiles, pace chart, goal) moved
-            // under Breakdown: they are evidence for the score, and stacking
-            // them above the tabs gave the page a six-card preamble that
-            // buried the one number the user came here to read.
+            // Three blocks, then tabs. Context → compact score → what to do.
+            // Radar and metric evidence live under Breakdown so the above-fold
+            // stack stays answer → next action → tabs.
             VStack(spacing: 20) {
                 contextStrip(recording)
 
@@ -384,20 +382,29 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func scoreHero(_ analysis: SpeechAnalysis) -> some View {
         let axes = subscoreAxes(analysis)
-        let strongest = axes.max(by: { $0.value < $1.value })
-        let weakest = axes.min(by: { $0.value < $1.value })
-        // With one axis, strongest and weakest are the same metric — showing
-        // it twice under opposing labels would be nonsense.
-        let hasSpread = strongest?.id != weakest?.id
+        let (strongestID, weakestID) = strongestWeakestIDs(axes)
 
         ScoreHeroCard(
             score: analysis.speechScore.overall,
             personalAverage: baselines.score,
             axes: axes,
-            strongestAxisID: hasSpread ? strongest?.id : nil,
-            weakestAxisID: hasSpread ? weakest?.id : nil,
-            onShowWeights: { showingScoreWeights = true }
+            strongestAxisID: strongestID,
+            weakestAxisID: weakestID,
+            onShowWeights: { showingScoreWeights = true },
+            showRadar: false
         )
+    }
+
+    /// Strongest / weakest axis ids, or nils when there is no meaningful spread.
+    private func strongestWeakestIDs(
+        _ axes: [SubscoreRadarChart.Axis]
+    ) -> (String?, String?) {
+        let strongest = axes.max(by: { $0.value < $1.value })
+        let weakest = axes.min(by: { $0.value < $1.value })
+        // With one axis, strongest and weakest are the same metric — showing
+        // it twice under opposing labels would be nonsense.
+        let hasSpread = strongest?.id != weakest?.id
+        return (hasSpread ? strongest?.id : nil, hasSpread ? weakest?.id : nil)
     }
 
     // MARK: - Tab Picker
@@ -897,14 +904,13 @@ struct RecordingDetailView: View {
 
     // MARK: - Tab Content
 
-    /// Evidence for the score that the hero card does not already show: the
-    /// headline numbers, pace over time, and goal progress.
-    ///
-    /// The subscore radar lives in the hero card now, and the old pause /
-    /// vocal-variety / advanced-metrics stack under this tab restated axes the
-    /// radar already labels — duplicated detail nobody opened.
+    /// Evidence for the score: radar, headline numbers, pace over time, goals.
+    /// Radar used to live in the hero; moving it here keeps above-fold to
+    /// score + next action so the page answers before it explains.
     @ViewBuilder
     private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
+        subscoreRadarSection(analysis)
+
         statsGrid(analysis)
 
         // Attaches the filler count above to the words that produced it.
@@ -922,6 +928,51 @@ struct RecordingDetailView: View {
         if recording.goalId != nil {
             goalProgressCard(recording)
         }
+    }
+
+    /// Full subscore radar — evidence for the compact hero score.
+    @ViewBuilder
+    private func subscoreRadarSection(_ analysis: SpeechAnalysis) -> some View {
+        let axes = subscoreAxes(analysis)
+        if !axes.isEmpty {
+            let (strongestID, weakestID) = strongestWeakestIDs(axes)
+
+            GlassCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Subscores")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+
+                    SubscoreRadarChart(
+                        axes: axes,
+                        overallScore: analysis.speechScore.overall,
+                        emphasizedAxisIDs: (strongestID, weakestID)
+                    )
+                    .frame(height: 260)
+                    .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(subscoreRadarAccessibilityLabel(axes, strongestID: strongestID, weakestID: weakestID))
+        }
+    }
+
+    private func subscoreRadarAccessibilityLabel(
+        _ axes: [SubscoreRadarChart.Axis],
+        strongestID: String?,
+        weakestID: String?
+    ) -> String {
+        var parts = ["Subscore breakdown"]
+        if let id = strongestID, let axis = axes.first(where: { $0.id == id }) {
+            parts.append("strongest \(axis.label) \(axis.value)")
+        }
+        if let id = weakestID, let axis = axes.first(where: { $0.id == id }) {
+            parts.append("weakest \(axis.label) \(axis.value)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -954,10 +1005,7 @@ struct RecordingDetailView: View {
             reflectionPromptCard
         }
 
-        if recording.analysis != nil {
-            shareCTASection(recording)
-        }
-
+        // Share lives in the toolbar — keep one path so Coaching stays advice.
         journalReflectionSection(recording)
     }
 

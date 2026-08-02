@@ -14,7 +14,8 @@ struct TodayFocusCard: View {
     let onAction: (NextStep.Action) -> Void
 
     var body: some View {
-        GlassCard(padding: 18, elevated: true) {
+        // Not elevated — coaching nudge, not a second hero vs. Practice.
+        GlassCard(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
                 header
 

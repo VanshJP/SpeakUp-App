@@ -7,10 +7,9 @@ import SwiftUI
 /// the band in words, and the delta supplies the only context that makes the
 /// number actionable. Everything else on the page is evidence for this card.
 ///
-/// The full subscore breakdown rides along as a radar directly under the
-/// number: seeing every axis at once is what makes the composite score legible,
-/// and the strongest/weakest callouts live on the chart itself rather than as a
-/// separate labeled row.
+/// Compact mode (default for the detail hero) shows number + verdict + delta
+/// only. The full subscore radar lives under Breakdown as evidence for “why,”
+/// so the above-fold stack stays answer → next action → tabs.
 struct ScoreHeroCard: View {
     let score: Int
     /// Rolling average of recent sessions, excluding this one. Nil until it
@@ -21,6 +20,9 @@ struct ScoreHeroCard: View {
     let strongestAxisID: String?
     let weakestAxisID: String?
     let onShowWeights: () -> Void
+    /// When false, skip the radar and show a compact number + verdict row.
+    /// Breakdown tab hosts the radar when this is false on the hero.
+    var showRadar: Bool = true
 
     private var scoreColor: Color { AppColors.scoreColor(for: score) }
 
@@ -37,23 +39,19 @@ struct ScoreHeroCard: View {
         weakestAxisID.flatMap { id in axes.first { $0.id == id } }
     }
 
+    /// Radar only when the caller asked for it and there are axes to plot.
+    private var showsRadarChart: Bool {
+        showRadar && !axes.isEmpty
+    }
+
     var body: some View {
         GlassCard(padding: 16, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
                 eyebrow
 
-                if axes.isEmpty {
-                    // No donut to hold the number, so it leads on its own and
-                    // the meter gives it a position on the scale.
-                    soloScoreRow
-                    TickMeter(fraction: Double(score) / 100, color: scoreColor)
-                        .frame(height: 18)
-                } else {
-                    // The score lives in the middle of the ring. It used to
-                    // also print at 68pt directly above, which said the same
-                    // number twice inches apart and made this the tallest card
-                    // on the screen by far. One numeral, inside the donut it
-                    // belongs to.
+                if showsRadarChart {
+                    // Score lives in the middle of the ring — one numeral,
+                    // inside the donut it belongs to.
                     SubscoreRadarChart(
                         axes: axes,
                         overallScore: score,
@@ -63,6 +61,10 @@ struct ScoreHeroCard: View {
                     .frame(maxWidth: .infinity)
 
                     verdictLine
+                } else {
+                    soloScoreRow
+                    TickMeter(fraction: Double(score) / 100, color: scoreColor)
+                        .frame(height: 18)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,7 +114,7 @@ struct ScoreHeroCard: View {
         }
     }
 
-    /// Only used when there is no breakdown to anchor the number.
+    /// Compact hero (and empty-axes fallback): big number + verdict + delta.
     private var soloScoreRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -164,15 +166,16 @@ struct ScoreHeroCard: View {
         }
     }
 
-    /// The radar carries strongest/weakest visually, so VoiceOver has to say it
-    /// here or that information disappears entirely for non-visual users.
+    /// Strongest/weakest only when the radar (or its callouts) are on this card.
     private var accessibilitySummary: String {
         var parts = ["Session score \(score) out of 100, \(AppColors.scoreVerdict(for: score))"]
         if let delta, abs(delta) > 2 {
             parts.append("\(abs(delta)) points \(delta > 0 ? "above" : "below") your average")
         }
-        if let strongestAxis { parts.append("strongest \(strongestAxis.label) \(strongestAxis.value)") }
-        if let weakestAxis { parts.append("weakest \(weakestAxis.label) \(weakestAxis.value)") }
+        if showsRadarChart {
+            if let strongestAxis { parts.append("strongest \(strongestAxis.label) \(strongestAxis.value)") }
+            if let weakestAxis { parts.append("weakest \(weakestAxis.label) \(weakestAxis.value)") }
+        }
         return parts.joined(separator: ", ")
     }
 }
@@ -197,7 +200,17 @@ struct ScoreHeroCard: View {
                     axes: axes,
                     strongestAxisID: "clarity",
                     weakestAxisID: "fillers",
-                    onShowWeights: {}
+                    onShowWeights: {},
+                    showRadar: false
+                )
+                ScoreHeroCard(
+                    score: 78,
+                    personalAverage: 72,
+                    axes: axes,
+                    strongestAxisID: "clarity",
+                    weakestAxisID: "fillers",
+                    onShowWeights: {},
+                    showRadar: true
                 )
                 ScoreHeroCard(
                     score: 91,

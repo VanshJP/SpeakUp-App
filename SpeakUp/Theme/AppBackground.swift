@@ -80,25 +80,26 @@ struct AppBackground: View {
 
     private var tealOrbColor: Color {
         switch style {
-        case .primary:   return Color.teal.opacity(0.12)
-        case .recording: return Color.teal.opacity(0.18)
-        case .subtle:    return Color.teal.opacity(0.10)
+        // Quieter canvas so glass cards read clearer; card shadows stay untouched.
+        case .primary:   return Color.teal.opacity(0.06)
+        case .recording: return Color.teal.opacity(0.14)
+        case .subtle:    return Color.teal.opacity(0.05)
         }
     }
 
     private var indigoOrbColor: Color {
         switch style {
-        case .primary:   return Color.indigo.opacity(0.09)
-        case .recording: return Color.indigo.opacity(0.06)
-        case .subtle:    return Color.indigo.opacity(0.08)
+        case .primary:   return Color.indigo.opacity(0.045)
+        case .recording: return Color.indigo.opacity(0.05)
+        case .subtle:    return Color.indigo.opacity(0.04)
         }
     }
 
     private var cyanGlowColor: Color {
         switch style {
-        case .primary:   return Color.cyan.opacity(0.04)
-        case .recording: return Color.cyan.opacity(0.06)
-        case .subtle:    return Color.cyan.opacity(0.03)
+        case .primary:   return Color.cyan.opacity(0.02)
+        case .recording: return Color.cyan.opacity(0.045)
+        case .subtle:    return Color.cyan.opacity(0.015)
         }
     }
 }

@@ -39,22 +39,23 @@ struct TodayView: View {
                     // 2. Where you stand (tap → full Progress charts).
                     ringStatsSection
 
-                    // 3. What to do about it. Reads as the conclusion drawn
-                    //    from the rings directly above, which is why it sits
-                    //    between the stats and the generic prompt path.
-                    focusSection
-
-                    // 4. Core action — today's prompt + start buttons
+                    // 3. Core action — one prompt/story block + one primary CTA.
+                    //    Free Practice sits under the primary as a secondary path.
                     interactivePromptSection
                     startButtonSection
 
-                    // 5. Quick actions
-                    toolbarStrip
+                    // 4. Coaching nudge from recent sessions — secondary weight,
+                    //    not a second hero competing with Practice.
+                    focusSection
 
-                    // 6. Daily challenge
+                    // 5. Daily challenge
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
                     }
+
+                    // 6. Quick tools — after the primary practice path so they
+                    //    read as shortcuts, not competing start buttons.
+                    toolbarStrip
                 }
                 .padding()
             }
@@ -202,66 +203,41 @@ struct TodayView: View {
 
     // MARK: - Start Button Section
 
+    /// One primary Practice path. Free Practice stays reachable as a quieter
+    /// secondary control so the fold does not present two equal start buttons.
     private var startButtonSection: some View {
-        HStack(spacing: 12) {
-            Button {
-                Haptics.medium()
-                if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
-                    onStartStoryPractice?(story)
-                } else {
-                    onStartRecording(
-                        viewModel.todaysPrompt,
-                        viewModel.selectedDuration
-                    )
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: viewModel.storyPracticeEnabled ? "book.pages" : "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(viewModel.storyPracticeEnabled ? "With Story" : "With Prompt")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background {
-                    Capsule()
-                        .fill(Color.white.opacity(0.94))
-                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
-                }
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
+        VStack(spacing: 10) {
+            GlassButton(
+                title: viewModel.storyPracticeEnabled ? "Practice Story" : "Practice",
+                icon: viewModel.storyPracticeEnabled ? "book.pages" : "mic.fill",
+                style: .primary,
+                size: .large,
+                fullWidth: true,
+                action: startPrimaryPractice
+            )
 
-            Button {
+            GlassButton(
+                title: "Free Practice",
+                icon: "waveform",
+                style: .secondary,
+                size: .medium,
+                fullWidth: true
+            ) {
                 Haptics.medium()
                 onStartRecording(nil, viewModel.selectedDuration)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Free Practice")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule()
-                                .fill(AppColors.surfaceLift)
-                        }
-                        .overlay {
-                            Capsule()
-                                .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                        }
-                        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                }
-                .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
+        }
+    }
+
+    private func startPrimaryPractice() {
+        Haptics.medium()
+        if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
+            onStartStoryPractice?(story)
+        } else {
+            onStartRecording(
+                viewModel.todaysPrompt,
+                viewModel.selectedDuration
+            )
         }
     }
 
