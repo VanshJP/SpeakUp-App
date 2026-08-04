@@ -17,7 +17,7 @@
 			<array>
 				<!-- CA92.1: settings, resume drafts, and the analytics log, all
 				     private to the app. 1C8F.1: entitlement and widget payloads
-				     in the group.com.vansh.SpeakUpMore suite, shared only with
+				     in the group.com.speakup.shared suite, shared only with
 				     this app's own widget extension. -->
 				<string>CA92.1</string>
 				<string>1C8F.1</string>
