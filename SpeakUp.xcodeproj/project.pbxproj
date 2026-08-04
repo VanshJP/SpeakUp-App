@@ -22,6 +22,13 @@
 			remoteGlobalIDString = BB20805B2F61F09800D509F0;
 			remoteInfo = SpeakUpWidgetExtension;
 		};
+		BBAA00072F70000100AA0007 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BBCE3AD72F285A2B005C1EB3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BBCE3ADE2F285A2B005C1EB3;
+			remoteInfo = SpeakUp;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -42,6 +49,7 @@
 		BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpeakUpWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB20805D2F61F09800D509F0 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		BB20805F2F61F09800D509F0 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		BBAA00022F70000100AA0002 /* SpeakUpTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpeakUpTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpeakUp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/SharedVersion.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -72,6 +80,11 @@
 			path = SpeakUpWidget;
 			sourceTree = "<group>";
 		};
+		BBAA00032F70000100AA0003 /* SpeakUpTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SpeakUpTests;
+			sourceTree = "<group>";
+		};
 		BBCE3AE12F285A2B005C1EB3 /* SpeakUp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -89,6 +102,13 @@
 			files = (
 				BB2080602F61F09800D509F0 /* SwiftUI.framework in Frameworks */,
 				BB20805E2F61F09800D509F0 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BBAA00052F70000100AA0005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +138,7 @@
 			children = (
 				BBCE3AE12F285A2B005C1EB3 /* SpeakUp */,
 				BB2080612F61F09800D509F0 /* SpeakUpWidget */,
+				BBAA00032F70000100AA0003 /* SpeakUpTests */,
 				BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */,
 				BB49FAB32F5F5CD300D298F1 /* Frameworks */,
 				BBCE3AE02F285A2B005C1EB3 /* Products */,
@@ -129,6 +150,7 @@
 			children = (
 				BBCE3ADF2F285A2B005C1EB3 /* SpeakUp.app */,
 				BB20805C2F61F09800D509F0 /* SpeakUpWidgetExtension.appex */,
+				BBAA00022F70000100AA0002 /* SpeakUpTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -136,6 +158,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		BBAA00012F70000100AA0001 /* SpeakUpTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BBAA000B2F70000100AA000B /* Build configuration list for PBXNativeTarget "SpeakUpTests" */;
+			buildPhases = (
+				BBAA00042F70000100AA0004 /* Sources */,
+				BBAA00052F70000100AA0005 /* Frameworks */,
+				BBAA00062F70000100AA0006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BBAA00082F70000100AA0008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BBAA00032F70000100AA0003 /* SpeakUpTests */,
+			);
+			name = SpeakUpTests;
+			packageProductDependencies = (
+			);
+			productName = SpeakUpTests;
+			productReference = BBAA00022F70000100AA0002 /* SpeakUpTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BB2080732F61F09900D509F0 /* Build configuration list for PBXNativeTarget "SpeakUpWidgetExtension" */;
@@ -197,6 +242,10 @@
 					BB20805B2F61F09800D509F0 = {
 						CreatedOnToolsVersion = 26.3;
 					};
+					BBAA00012F70000100AA0001 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = BBCE3ADE2F285A2B005C1EB3;
+					};
 					BBCE3ADE2F285A2B005C1EB3 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -222,11 +271,19 @@
 			targets = (
 				BBCE3ADE2F285A2B005C1EB3 /* SpeakUp */,
 				BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */,
+				BBAA00012F70000100AA0001 /* SpeakUpTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		BBAA00062F70000100AA0006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BB20805A2F61F09800D509F0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -244,6 +301,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		BBAA00042F70000100AA0004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BB2080582F61F09800D509F0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -261,6 +325,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		BBAA00082F70000100AA0008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BBCE3ADE2F285A2B005C1EB3 /* SpeakUp */;
+			targetProxy = BBAA00072F70000100AA0007 /* PBXContainerItemProxy */;
+		};
 		BB20806E2F61F09900D509F0 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = BB20805B2F61F09800D509F0 /* SpeakUpWidgetExtension */;
@@ -269,6 +338,52 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		BBAA00092F70000100AA0009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(APP_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = F9MZJ6MU5W;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = "$(APP_MARKETING_VERSION)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore.SpeakUpTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SpeakUp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SpeakUp";
+			};
+			name = Debug;
+		};
+		BBAA000A2F70000100AA000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(APP_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = F9MZJ6MU5W;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = "$(APP_MARKETING_VERSION)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.vansh.SpeakUpMore.SpeakUpTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SpeakUp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SpeakUp";
+			};
+			name = Release;
+		};
 		BB2080712F61F09900D509F0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = BBF472AFAE8F4A9E878A0636 /* Config/SharedVersion.xcconfig */;
@@ -281,7 +396,7 @@
 				DEVELOPMENT_TEAM = F9MZJ6MU5W;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUpWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = SpeakUpWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Talk";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -316,7 +431,7 @@
 				DEVELOPMENT_TEAM = F9MZJ6MU5W;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SpeakUpWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = SpeakUpWidget;
+				INFOPLIST_KEY_CFBundleDisplayName = "Big Talk";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -563,6 +678,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		BBAA000B2F70000100AA000B /* Build configuration list for PBXNativeTarget "SpeakUpTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BBAA00092F70000100AA0009 /* Debug */,
+				BBAA000A2F70000100AA000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BB2080732F61F09900D509F0 /* Build configuration list for PBXNativeTarget "SpeakUpWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
