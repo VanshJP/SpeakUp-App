@@ -122,6 +122,7 @@ struct ContentView: View {
                         showingBeforeAfter = true
                     },
                     onShowJournalExport: {
+                        guard PaywallCoordinator.allow(.journalExport, trigger: "journal_export") else { return }
                         showingJournalExport = true
                     },
                     onShowGoals: {

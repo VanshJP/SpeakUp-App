@@ -257,6 +257,9 @@ struct RecordingDetailView: View {
                     case .coaching:
                         coachingTabContent(recording)
                     }
+                } else if recording.analysisBlockedByAllowance {
+                    // Held back by the free allowance, not broken.
+                    analysisDeferredCard(recording)
                 } else {
                     // Analysis never landed (transcription failed or was
                     // interrupted) — say so and offer a way out instead of
@@ -290,6 +293,11 @@ struct RecordingDetailView: View {
     /// LLM coherence pass). Safe to call repeatedly — each step guards itself.
     private func runReadySetupIfNeeded() {
         guard case .ready(let recording) = detailScreenState else { return }
+        // The paywall is allowed to exist from here on: the user has seen a
+        // complete result, which is what earns the right to ask.
+        if recording.analysis != nil {
+            PaywallCoordinator.shared.markFirstResultSeen()
+        }
         // Resolved once here instead of in body — hasPlayableMedia hits the
         // filesystem (iCloud/local existence checks) on every call.
         playableMediaAvailable = hasPlayableMedia(recording)
@@ -315,6 +323,53 @@ struct RecordingDetailView: View {
             let loaded = await PersonalAverage.all(excluding: currentID, container: container)
             await MainActor.run { baselines = loaded }
         }
+    }
+
+    /// The recording is saved and playable; only the scoring is waiting. Said
+    /// plainly, because "analysis failed" for a paywall reason reads as a bug.
+    @ViewBuilder
+    private func analysisDeferredCard(_ recording: Recording) -> some View {
+        let decision = AllowanceGate.decision(modelContext: modelContext)
+
+        GlassCard(tint: AppColors.glassTintPrimary) {
+            VStack(spacing: 12) {
+                Image(systemName: "clock.badge.checkmark")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(AppColors.primary)
+
+                VStack(spacing: 4) {
+                    Text("Saved, not scored yet")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(deferredMessage(for: decision))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(spacing: 8) {
+                    GlassButton(title: "Unlock Lifetime", icon: "sparkles", style: .primary) {
+                        Haptics.medium()
+                        PaywallCoordinator.shared.present(.unlimitedAnalyses, trigger: "deferred_analysis")
+                    }
+                    GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .secondary, size: .small) {
+                        Haptics.light()
+                        enqueueProcessingIfNeeded(recording, force: true)
+                    }
+                }
+                .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func deferredMessage(for decision: AllowanceDecision) -> String {
+        guard case .exhausted(let resetsOn) = decision else {
+            return "This recording is safe. Tap Try Again to score it now."
+        }
+        let date = resetsOn.formatted(date: .abbreviated, time: .omitted)
+        return "Your free analyses are used up for now. The audio is safe — it scores automatically on \(date), or the moment you unlock Lifetime."
     }
 
     @ViewBuilder

@@ -96,6 +96,7 @@ final class RecordingProcessingCoordinator {
             recording.lastProcessingError = nil
             recording.analysisBlockedByAllowance = true
             save(modelContext, context: "deferring analysis past free allowance \(recordingID.uuidString)")
+            AnalyticsService.shared.log(.allowanceExhausted())
             return
         }
         if recording.analysisBlockedByAllowance {
@@ -106,6 +107,7 @@ final class RecordingProcessingCoordinator {
         recording.lastProcessingError = nil
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
+        let startedAt = Date()
         let vocabWords = settings?.vocabWords ?? []
         let scoreWeights = ScoreWeights(from: settings)
 
@@ -204,16 +206,61 @@ final class RecordingProcessingCoordinator {
             // free analysis.
             AllowanceGate.consume(settings: settings)
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
+            logCompletion(
+                startedAt: startedAt,
+                backend: speechService.lastTranscriptionBackend,
+                modelContext: modelContext
+            )
             // Once per completed recording — keeps widgets fresh for users who
             // record from Library/History and never open the Today tab.
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
             logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .private(mask: .hash))")
+            AnalyticsService.shared.log(.analysisFailed(reason: Self.failureCategory(for: error)))
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             persisted.isProcessing = false
             persisted.lastProcessingError = error.localizedDescription
             save(modelContext, context: "clearing processing flag after error \(recordingID.uuidString)")
         }
+    }
+
+    // MARK: - Measurement
+
+    /// Time to value is the launch gate the whole onboarding plan is judged on,
+    /// so it is measured where the work actually finishes rather than where the
+    /// UI happens to notice.
+    private func logCompletion(startedAt: Date, backend: String, modelContext: ModelContext) {
+        let elapsed = Date().timeIntervalSince(startedAt)
+        let analyzedCount = analyzedRecordingCount(modelContext)
+
+        AnalyticsService.shared.log(
+            .analysisCompleted(
+                sessionNumber: analyzedCount,
+                processingPath: backend,
+                elapsed: elapsed
+            )
+        )
+        AnalyticsService.shared.logOnce(
+            .activated(minutesFromFirstOpen: AttributionStore.shared.minutesSinceFirstOpen),
+            key: "activated"
+        )
+    }
+
+    private func analyzedRecordingCount(_ modelContext: ModelContext) -> Int {
+        let descriptor = FetchDescriptor<Recording>(
+            predicate: #Predicate { $0.analysis != nil }
+        )
+        return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
+
+    /// Coarse reason only — an error string can contain a file path.
+    private static func failureCategory(for error: Error) -> String {
+        let text = error.localizedDescription.lowercased()
+        if text.contains("timed out") || text.contains("timeout") { return "timeout" }
+        if text.contains("model") { return "model" }
+        if text.contains("permission") || text.contains("denied") { return "permission" }
+        if text.contains("audio") || text.contains("file") { return "audio" }
+        return "other"
     }
 
     /// Per-recording auto-calibration: every quality-gated session nudges the

@@ -47,4 +47,15 @@ final class PaywallCoordinator {
     func dismiss() {
         request = nil
     }
+
+    /// The gate every locked feature should call. Returns true when the caller
+    /// may proceed.
+    ///
+    /// If the paywall is suppressed — the user has not seen a first result yet —
+    /// the feature is allowed through rather than doing nothing. A button that
+    /// neither works nor explains itself is worse than an unsold feature.
+    static func allow(_ feature: PaidFeature, trigger: String) -> Bool {
+        if EntitlementStore.shared.isUnlocked(feature) { return true }
+        return !shared.present(feature, trigger: trigger)
+    }
 }

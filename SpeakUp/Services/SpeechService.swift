@@ -11,6 +11,11 @@ class SpeechService {
     var transcriptionProgress: Double = 0
     var isModelLoaded: Bool { whisperService.isModelLoaded }
 
+    /// Which leg of the fallback chain produced the last transcript. Reported
+    /// as a coarse analytics dimension so a rise in Apple Speech fallbacks (a
+    /// Whisper regression) is visible without inspecting any transcript.
+    private(set) var lastTranscriptionBackend = "unknown"
+
     // Transcription backend
     private let whisperService = WhisperService()
 
@@ -218,7 +223,10 @@ class SpeechService {
                 audioURL: preferredURL,
                 preferredTerms: preferredTerms
             )
-            if isUsable(primary) { return primary }
+            if isUsable(primary) {
+                lastTranscriptionBackend = "whisper"
+                return primary
+            }
         } catch {
             // Retry path below.
         }
@@ -231,7 +239,10 @@ class SpeechService {
                     audioURL: originalURL,
                     preferredTerms: preferredTerms
                 )
-                if isUsable(raw) { return raw }
+                if isUsable(raw) {
+                    lastTranscriptionBackend = "whisper_raw"
+                    return raw
+                }
             } catch {
                 // Continue to model reload.
             }
@@ -246,7 +257,10 @@ class SpeechService {
                 audioURL: reloadURL,
                 preferredTerms: preferredTerms
             )
-            if isUsable(retry) { return retry }
+            if isUsable(retry) {
+                lastTranscriptionBackend = "whisper_reload"
+                return retry
+            }
         } catch {
             // Fall through to Apple Speech.
         }
@@ -254,7 +268,10 @@ class SpeechService {
         // Prefer the original file for Apple Speech — it never saw the
         // isolation preprocess and is the closest match to what was recorded.
         let apple = try await transcribeWithAppleSpeech(audioURL: originalURL)
-        if isUsable(apple) { return apple }
+        if isUsable(apple) {
+            lastTranscriptionBackend = "apple_speech"
+            return apple
+        }
 
         throw SpeechServiceError.transcriptionFailed(
             NSError(
