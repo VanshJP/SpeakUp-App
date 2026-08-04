@@ -32,5 +32,7 @@
 	<string></string>
 	<key>BTTermsURL</key>
 	<string></string>
+	<key>BTUniversalLinkDomain</key>
+	<string>$(BT_UNIVERSAL_LINK_DOMAIN)</string>
 </dict>
 </plist>

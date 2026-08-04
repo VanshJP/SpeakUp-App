@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["F9MZJ6MU5W.com.vansh.SpeakUpMore"],
+        "components": [
+          { "/": "/", "comment": "Bare campaign link — opens Today and captures source/campaign." },
+          { "/": "/open", "comment": "Attribution-only entry point." },
+          { "/": "/record", "comment": "Starts a session, optionally with ?prompt=<id>." },
+          { "/": "/story", "comment": "Opens the Library." },
+          { "/": "/story/new", "comment": "Opens the story editor." },
+          { "/": "/*", "exclude": true, "comment": "Everything else stays on the website." }
+        ]
+      }
+    ]
+  }
+}

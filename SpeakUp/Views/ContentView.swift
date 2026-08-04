@@ -293,6 +293,12 @@ struct ContentView: View {
         .onOpenURL { url in
             handleDeepLink(url)
         }
+        // Universal links arrive as a browsing activity rather than an open-URL
+        // callback, but resolve to the same routes.
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            guard let url = activity.webpageURL else { return }
+            handleDeepLink(url)
+        }
         .overlay {
             if let achievement = achievementService.newlyUnlocked {
                 AchievementUnlockedView(achievement: achievement) {
@@ -428,6 +434,9 @@ struct ContentView: View {
     // MARK: - Deep Links
 
     private func handleDeepLink(_ url: URL) {
+        // A campaign link arrives as https on our own domain; normalise it into
+        // the custom-scheme form so both entry points route identically.
+        let url = UniversalLink.route(from: url) ?? url
         guard url.scheme == "speakup" else { return }
 
         // Any link can carry campaign parameters, so attribution is captured
