@@ -717,6 +717,11 @@ class SettingsViewModel {
             removedDefaultFillers = []
 
             try context.save()
+
+            // The FAQ calls this a full data reset, so it has to include the
+            // usage log. It lives in a file rather than the store, so deleting
+            // rows never touched it.
+            AnalyticsService.shared.reset()
         } catch {
             print("Error clearing data: \(error)")
         }
