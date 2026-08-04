@@ -98,10 +98,11 @@ struct LifetimeFAQView: View {
             answer: """
             Three full analyses straight away, then three per month. Every free \
             analysis is the complete result — score, subscores, transcript, and \
-            your recommended next step. You also keep the daily prompt, a starter \
-            warm-up, drill, and read-aloud passage, your goal and target pace, \
-            reminders, your recent sessions, your streak, and the score card you \
-            can share.
+            your recommended next step. Everything built around those results is \
+            free too: all the drills, warm-ups, and read-aloud passages, the \
+            first week of the curriculum, your stories, your full history with \
+            charts and the first-versus-latest replay, your goal and target pace, \
+            reminders, your streak, and the cards you can share.
             """
         ),
         Entry(

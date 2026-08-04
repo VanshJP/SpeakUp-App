@@ -163,18 +163,18 @@ struct PaywallView: View {
         ),
         IncludedRow(
             icon: "book.closed",
-            title: "The full improvement plan",
-            detail: "Eight-week curriculum, every drill, warm-up, and read-aloud passage."
-        ),
-        IncludedRow(
-            icon: "chart.line.uptrend.xyaxis",
-            title: "Your complete history",
-            detail: "Every session, charts, comparisons, and the first-versus-latest replay."
+            title: "The full eight-week curriculum",
+            detail: "Every phase past the first, with lessons that respond to your own sessions."
         ),
         IncludedRow(
             icon: "icloud",
-            title: "Sync and export",
-            detail: "iCloud sync across your devices and journal export you can keep."
+            title: "iCloud sync",
+            detail: "Your practice on every device, in your own iCloud account."
+        ),
+        IncludedRow(
+            icon: "square.and.arrow.down",
+            title: "Journal export",
+            detail: "Your sessions, scores, and notes as a PDF you keep."
         )
     ]
 
