@@ -4,7 +4,7 @@ import Foundation
 
 /// The single paid SKU. One non-consumable, no tiers — the ownership offer is
 /// meant to be a one-decision purchase.
-enum LifetimeProduct {
+nonisolated enum LifetimeProduct {
     /// Must match the product identifier configured in App Store Connect and
     /// in `Products.storekit`.
     static let identifier = "com.vansh.SpeakUpMore.lifetime"
@@ -18,7 +18,7 @@ enum LifetimeProduct {
 /// serves, so `deadline` must be moved and the App Store Connect price raised
 /// on the same day. It ships as `nil` on purpose: an unset deadline shows no
 /// urgency at all, which is the only safe default for a claim about scarcity.
-enum FoundingOffer {
+nonisolated enum FoundingOffer {
     static let deadline: Date? = nil
 
     /// The price the offer says it reverts to. StoreKit cannot supply a price
@@ -56,7 +56,7 @@ enum FoundingOffer {
 /// Everything that can sit behind the Lifetime purchase. Membership of the
 /// gated set lives in `FreeTierPolicy`, not at the call site, so the boundary
 /// can be moved in one place after launch measurement.
-enum PaidFeature: String, CaseIterable, Sendable {
+nonisolated enum PaidFeature: String, CaseIterable, Sendable {
     /// Practice beyond the free analysis allowance.
     case unlimitedAnalyses
     /// Curriculum phases past the first.
@@ -100,7 +100,7 @@ enum PaidFeature: String, CaseIterable, Sendable {
 /// The free/paid boundary in one value. Deliberately a stored policy rather
 /// than scattered `if isLifetime` literals so the boundary can be tuned from
 /// launch measurement without touching feature code.
-struct FreeTierPolicy: Sendable, Equatable {
+nonisolated struct FreeTierPolicy: Sendable, Equatable {
     /// Full analyses a new user gets immediately, before any monthly cycle
     /// starts. The first result has to be free for the score to earn trust.
     var introAnalyses: Int
@@ -138,14 +138,14 @@ struct FreeTierPolicy: Sendable, Equatable {
 
 /// Persisted counters behind the free analysis allowance. Kept separate from
 /// `UserSettings` so the arithmetic is testable without SwiftData.
-struct AllowanceState: Sendable, Equatable {
+nonisolated struct AllowanceState: Sendable, Equatable {
     var introUsed: Int = 0
     var cycleStart: Date?
     var cycleUsed: Int = 0
 }
 
 /// What the user is allowed to do right now.
-enum AllowanceDecision: Sendable, Equatable {
+nonisolated enum AllowanceDecision: Sendable, Equatable {
     /// Part of the immediate intro allowance.
     case intro(remaining: Int)
     /// Part of the current monthly cycle.
@@ -199,7 +199,7 @@ enum AllowanceDecision: Sendable, Equatable {
 
 /// Pure allowance arithmetic. No StoreKit, no SwiftData, no clock of its own —
 /// `now` is always injected so the rollover is testable.
-enum PracticeAllowance {
+nonisolated enum PracticeAllowance {
     /// A month here is a rolling 30-day window from first paid-tier use, not a
     /// calendar month. A calendar reset would hand a user who installs on the
     /// 30th two allowances in two days.

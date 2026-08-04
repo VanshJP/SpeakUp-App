@@ -5,7 +5,7 @@ import Foundation
 /// A value type rather than two `Recording`s on purpose: the card physically
 /// cannot leak a transcript, a prompt, a story title, or an audio URL, because
 /// none of them exist on this struct. Dates, counts, and scores only.
-struct ProgressCardData: Equatable, Sendable {
+nonisolated struct ProgressCardData: Equatable, Sendable {
     struct Row: Equatable, Sendable {
         let label: String
         let before: Int

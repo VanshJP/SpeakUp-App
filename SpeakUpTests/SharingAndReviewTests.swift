@@ -9,6 +9,7 @@ import Foundation
 private let day: TimeInterval = 24 * 60 * 60
 private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
+@MainActor
 struct ReviewEligibilityTests {
     private func shouldAsk(
         askedThisLaunch: Bool = false,
@@ -68,6 +69,7 @@ struct ReviewEligibilityTests {
     }
 }
 
+@MainActor
 struct ProgressCardDataTests {
     private func card(
         firstScore: Int = 52,

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Funnel
 
 /// The six funnels the launch scorecard is built from.
-enum AnalyticsFunnel: String, Codable, CaseIterable, Sendable {
+nonisolated enum AnalyticsFunnel: String, Codable, CaseIterable, Sendable {
     case acquisition
     case activation
     case outcome
@@ -20,7 +20,7 @@ enum AnalyticsFunnel: String, Codable, CaseIterable, Sendable {
 /// funnel, and a dictionary of *bucketed* dimensions. Audio, transcripts,
 /// prompt or story text, exact scores, contacts, and share recipients have no
 /// representation here, so they cannot be logged by accident.
-struct AnalyticsEvent: Sendable, Equatable {
+nonisolated struct AnalyticsEvent: Sendable, Equatable {
     let name: String
     let funnel: AnalyticsFunnel
     let dimensions: [String: String]
@@ -174,7 +174,7 @@ extension AnalyticsEvent {
 
 /// Continuous values are always reported as ranges. A precise duration or score
 /// attached to a small cohort is re-identifying; a bucket is not.
-enum AnalyticsBucket {
+nonisolated enum AnalyticsBucket {
     static func elapsed(_ seconds: TimeInterval) -> String {
         switch seconds {
         case ..<10: return "0-10s"
@@ -223,7 +223,7 @@ enum AnalyticsBucket {
 
 // MARK: - Environment
 
-enum AnalyticsEnvironment {
+nonisolated enum AnalyticsEnvironment {
     static var appVersion: String {
         let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
@@ -234,7 +234,7 @@ enum AnalyticsEnvironment {
 // MARK: - Recorded Event
 
 /// An event plus the timestamp it happened at. Persisted form.
-struct RecordedAnalyticsEvent: Codable, Sendable, Identifiable {
+nonisolated struct RecordedAnalyticsEvent: Codable, Sendable, Identifiable {
     var id: UUID = UUID()
     var name: String
     var funnel: String

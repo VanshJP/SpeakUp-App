@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The system allows three prompts per user per year. Every rule here exists to
 /// stop the app spending one on somebody who is not delighted.
-enum ReviewEligibility {
+nonisolated enum ReviewEligibility {
     /// Two months between asks. Apple already caps the count; this keeps the
     /// app from burning the whole yearly budget in a single good week.
     static let minimumInterval: TimeInterval = 60 * 24 * 60 * 60

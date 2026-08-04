@@ -17,6 +17,7 @@ private func route(_ string: String) -> URL? {
     return UniversalLink.route(from: url, domain: domain)
 }
 
+@MainActor
 struct UniversalLinkTests {
     @Test func firstPathSegmentBecomesTheRoute() {
         #expect(route("https://bigtalk.app/record")?.absoluteString == "speakup://record")

@@ -65,7 +65,11 @@ final class PurchaseService {
     /// The storefront's currency, nil until the product loads. Used to decide
     /// whether a hardcoded comparison price can honestly be shown next to it.
     var currencyCode: String? {
-        product?.priceFormatStyle.currencyCode
+        // Prefer the locale attached to the price format — that is the
+        // storefront's currency, not the device's. Fall back to the format
+        // style's own code when the locale has none.
+        guard let style = product?.priceFormatStyle else { return nil }
+        return style.locale.currency?.identifier ?? style.currencyCode
     }
 
     var isBusy: Bool {
@@ -245,7 +249,7 @@ final class PurchaseService {
 
 // MARK: - Errors
 
-enum PurchaseError: LocalizedError {
+nonisolated enum PurchaseError: LocalizedError {
     case productUnavailable
     case loadFailed(Error)
     case purchaseFailed(Error)

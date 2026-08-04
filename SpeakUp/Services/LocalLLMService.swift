@@ -21,7 +21,7 @@ enum ModelFamily: Equatable {
 /// distinguish recoverable problems (missing file → re-download) from
 /// transient ones (insufficient RAM → close other apps and retry) from
 /// hard llama backend failures.
-enum LocalLLMError: LocalizedError {
+nonisolated enum LocalLLMError: LocalizedError, Sendable {
     case fileNotFound(path: String)
     case downloadFailed(status: Int)
     case insufficientMemory(availableBytes: Int, requiredBytes: Int)

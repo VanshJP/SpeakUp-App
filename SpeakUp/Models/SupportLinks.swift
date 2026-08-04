@@ -7,7 +7,7 @@ import Foundation
 /// simply hides those rows instead of shipping a dead link. The in-app
 /// `LifetimeFAQView` carries the ownership scope and storage disclosure, so a
 /// missing website degrades the experience rather than breaking a requirement.
-enum SupportLinks {
+nonisolated enum SupportLinks {
     private static func url(for key: String) -> URL? {
         guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

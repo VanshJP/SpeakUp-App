@@ -9,6 +9,7 @@ import Foundation
 private let day: TimeInterval = 24 * 60 * 60
 private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
+@MainActor
 struct FreeTierPolicyTests {
     @Test func defaultPolicyMatchesTheShippedOffer() {
         #expect(FreeTierPolicy.default.introAnalyses == 3)
@@ -35,6 +36,7 @@ struct FreeTierPolicyTests {
 
 // A comparison price is a claim about money, and the only one in the app that
 // StoreKit cannot supply. These pin the conditions under which it may be shown.
+@MainActor
 struct FoundingComparisonPriceTests {
     private let future = t0.addingTimeInterval(30 * day)
 
@@ -64,6 +66,7 @@ struct FoundingComparisonPriceTests {
 // The limit has to be legible before it is spent, not only after. These pin the
 // copy that says so, including the plural that reads wrong exactly once — at
 // one remaining, which is the moment it matters most.
+@MainActor
 struct AllowanceDisclosureTests {
     @Test func anEntitledUserIsToldNothing() {
         #expect(AllowanceDecision.unlimited.shortSummary == nil)
@@ -89,6 +92,7 @@ struct AllowanceDisclosureTests {
     }
 }
 
+@MainActor
 struct PracticeAllowanceTests {
     @Test func entitledUsersAreNeverCounted() {
         let decision = PracticeAllowance.decision(state: AllowanceState(), isEntitled: true, now: t0)
@@ -186,6 +190,7 @@ struct PracticeAllowanceTests {
     }
 }
 
+@MainActor
 struct AnalyticsPrivacyTests {
     @Test func continuousValuesAreBucketed() {
         #expect(AnalyticsBucket.elapsed(5) == "0-10s")
@@ -242,6 +247,7 @@ struct AnalyticsPrivacyTests {
     }
 }
 
+@MainActor
 struct FoundingOfferTests {
     /// Shipping urgency the developer never configured would be a false claim.
     @Test func urgencyIsOffUntilADeadlineIsSet() {

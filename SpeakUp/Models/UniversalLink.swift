@@ -17,7 +17,7 @@ import Foundation
 /// source, for the same reason the support and legal URLs do: the site can be
 /// stood up without a code change, and a build with the key unset ignores web
 /// links instead of claiming domains it does not own.
-enum UniversalLink {
+nonisolated enum UniversalLink {
     static let infoPlistKey = "BTUniversalLinkDomain"
 
     /// The configured universal-link host, or nil when none is set.

@@ -4,10 +4,15 @@ import os
 
 /// Where recorded events go. One implementation ships (on-device); a network
 /// sink can be added later without touching a single call site.
+///
+/// Requirements are `nonisolated` because the local sink owns a background
+/// queue — under the project's default MainActor isolation, plain protocol
+/// requirements would force every implementation onto the main actor and
+/// break the file writes.
 protocol AnalyticsSink: AnyObject {
-    func record(_ event: RecordedAnalyticsEvent)
-    func allEvents() -> [RecordedAnalyticsEvent]
-    func reset()
+    nonisolated func record(_ event: RecordedAnalyticsEvent)
+    nonisolated func allEvents() -> [RecordedAnalyticsEvent]
+    nonisolated func reset()
 }
 
 /// Coarse behavioural measurement that keeps the no-account, nothing-uploaded
@@ -83,7 +88,11 @@ final class AnalyticsService {
 
 /// Append-only on-device log with a hard cap. Writes are debounced to avoid a
 /// file write per event during a burst.
-final class LocalAnalyticsSink: AnalyticsSink {
+///
+/// Explicitly off the main actor: the project's `SWIFT_DEFAULT_ACTOR_ISOLATION`
+/// is MainActor, and without `nonisolated` every `queue.async` body would be a
+/// concurrency error for touching `events` off-actor.
+nonisolated final class LocalAnalyticsSink: AnalyticsSink, @unchecked Sendable {
     static let retainedEventLimit = 2000
 
     private let queue = DispatchQueue(label: "com.vansh.SpeakUpMore.analytics", qos: .utility)
@@ -153,7 +162,7 @@ final class LocalAnalyticsSink: AnalyticsSink {
 
 /// The launch metrics the plan governs stage gates with, derived from the
 /// local event log. Pure computation over a snapshot — no I/O.
-struct AnalyticsScorecard {
+nonisolated struct AnalyticsScorecard {
     let firstOpens: Int
     let activations: Int
     let practiceStarts: Int
