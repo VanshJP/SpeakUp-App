@@ -192,8 +192,11 @@ struct CurriculumView: View {
                         Button {
                             if needsPurchase {
                                 Haptics.medium()
-                                PaywallCoordinator.shared.present(.fullCurriculum, trigger: "curriculum_phase")
-                                showingLockedInfo = !PaywallCoordinator.shared.hasCompletedFirstResult
+                                PaywallCoordinator.shared.present(
+                                    .fullCurriculum,
+                                    trigger: "curriculum_phase",
+                                    userInitiated: true
+                                )
                             } else {
                                 Haptics.warning()
                                 showingLockedInfo = true

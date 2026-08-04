@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 /// Purchase state at the top of Settings: what you own, how to buy, and how to
@@ -7,6 +8,7 @@ struct LifetimeStatusRow: View {
     private var entitlements: EntitlementStore { EntitlementStore.shared }
     private var purchases: PurchaseService { PurchaseService.shared }
 
+    @Query private var userSettings: [UserSettings]
     @State private var showingFAQ = false
     @State private var restoreMessage: String?
 
@@ -39,7 +41,11 @@ struct LifetimeStatusRow: View {
                     if !entitlements.isLifetime {
                         GlassButton(title: "Unlock", style: .primary, size: .small) {
                             Haptics.medium()
-                            PaywallCoordinator.shared.present(.unlimitedAnalyses, trigger: "settings")
+                            PaywallCoordinator.shared.present(
+                                .unlimitedAnalyses,
+                                trigger: "settings",
+                                userInitiated: true
+                            )
                         }
                     }
 
@@ -80,7 +86,18 @@ struct LifetimeStatusRow: View {
             }
             return "Owned since \(date.formatted(date: .abbreviated, time: .omitted))"
         }
-        return "\(FreeTierPolicy.default.monthlyAnalyses) analyses a month · one-time upgrade available"
+        // The live count, not the policy number. A card that says "3 analyses a
+        // month" to someone who has none left is describing the plan rather
+        // than answering the question they opened Settings to ask.
+        guard let settings = userSettings.first,
+            let summary = PracticeAllowance.decision(
+                state: settings.allowanceState,
+                isEntitled: false
+            ).shortSummary
+        else {
+            return "\(FreeTierPolicy.default.monthlyAnalyses) analyses a month · one-time upgrade available"
+        }
+        return summary
     }
 
     private func restore() async {
@@ -97,4 +114,5 @@ struct LifetimeStatusRow: View {
         AppBackground()
         LifetimeStatusRow().padding()
     }
+    .modelContainer(for: UserSettings.self, inMemory: true)
 }

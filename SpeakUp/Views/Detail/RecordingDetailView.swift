@@ -398,7 +398,11 @@ struct RecordingDetailView: View {
                 VStack(spacing: 8) {
                     GlassButton(title: "Unlock Lifetime", icon: "sparkles", style: .primary) {
                         Haptics.medium()
-                        PaywallCoordinator.shared.present(.unlimitedAnalyses, trigger: "deferred_analysis")
+                        PaywallCoordinator.shared.present(
+                            .unlimitedAnalyses,
+                            trigger: "deferred_analysis",
+                            userInitiated: true
+                        )
                     }
                     GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .secondary, size: .small) {
                         Haptics.light()

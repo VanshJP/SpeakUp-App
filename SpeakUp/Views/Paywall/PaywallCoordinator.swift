@@ -17,24 +17,45 @@ struct PaywallRequest: Identifiable, Equatable {
 final class PaywallCoordinator {
     static let shared = PaywallCoordinator()
 
-    var request: PaywallRequest?
-
-    /// Set once the user has seen a finished analysis. Until then the paywall
-    /// stays shut: the free result is what earns the right to ask.
-    private(set) var hasCompletedFirstResult = false
-
-    private init() {}
-
-    func markFirstResultSeen() {
-        hasCompletedFirstResult = true
+    private enum Key {
+        static let firstResultSeen = "paywall.firstResultSeen.v1"
     }
 
-    /// Raise the paywall. Returns false when it was suppressed because the user
-    /// has not yet seen a complete result.
+    var request: PaywallRequest?
+
+    /// Set once the user has seen a finished analysis. Until then the app does
+    /// not raise the paywall on its own: the free result is what earns the
+    /// right to ask.
+    ///
+    /// Persisted, because it describes something the user has already done. Held
+    /// only in memory it reset on every cold launch, which silently disarmed
+    /// every paywall entry point until the user happened to open another result.
+    private(set) var hasCompletedFirstResult: Bool
+
+    private let defaults: UserDefaults
+
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        hasCompletedFirstResult = defaults.bool(forKey: Key.firstResultSeen)
+    }
+
+    func markFirstResultSeen() {
+        guard !hasCompletedFirstResult else { return }
+        hasCompletedFirstResult = true
+        defaults.set(true, forKey: Key.firstResultSeen)
+    }
+
+    /// Raise the paywall. Returns false when it was suppressed.
+    ///
+    /// `userInitiated` is for entry points the user tapped to see the offer — a
+    /// button reading "Unlock", or a lesson that is locked because it is paid.
+    /// The first-result rule exists to stop the *app* asking before it has
+    /// earned it; applying it to a button the user pressed just makes the
+    /// button do nothing.
     @discardableResult
-    func present(_ feature: PaidFeature, trigger: String) -> Bool {
+    func present(_ feature: PaidFeature, trigger: String, userInitiated: Bool = false) -> Bool {
         guard !EntitlementStore.shared.isLifetime else { return false }
-        guard hasCompletedFirstResult else { return false }
+        guard userInitiated || hasCompletedFirstResult else { return false }
         guard request == nil else { return true }
 
         request = PaywallRequest(feature: feature, trigger: trigger)
