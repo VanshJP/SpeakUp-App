@@ -8,10 +8,6 @@ enum LifetimeProduct {
     /// Must match the product identifier configured in App Store Connect and
     /// in `Products.storekit`.
     static let identifier = "com.vansh.SpeakUpMore.lifetime"
-
-    /// Shown while StoreKit has not returned a localized price yet. Never used
-    /// as the price of record — `Product.displayPrice` always wins once loaded.
-    static let fallbackDisplayPrice = "$99.99"
 }
 
 // MARK: - Founding Offer
@@ -25,6 +21,11 @@ enum LifetimeProduct {
 enum FoundingOffer {
     static let deadline: Date? = nil
 
+    /// The price the offer says it reverts to. StoreKit cannot supply a price
+    /// for a product it is not currently selling, so this literal is the one
+    /// unavoidable hardcoded price in the app — and it is only correct on the
+    /// US storefront. Setting `deadline` while shipping internationally means
+    /// showing some users a comparison in the wrong currency.
     static let standardDisplayPrice = "$99.99"
 
     static func isActive(now: Date = Date()) -> Bool {

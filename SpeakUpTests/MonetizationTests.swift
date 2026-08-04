@@ -164,6 +164,15 @@ struct AnalyticsPrivacyTests {
         #expect(feedback.dimensions == ["sentiment": "positive"])
     }
 
+    /// The paywall shows no price until StoreKit returns one, so a purchase
+    /// attempt can be logged before there is a price to log. That must read as
+    /// its own outcome rather than dropping out of the dimension set.
+    @Test func aPurchaseLoggedBeforeStoreKitAnsweredIsMarkedUnpriced() {
+        let event = AnalyticsEvent.purchaseResult("failed", price: nil, source: nil)
+        #expect(event.dimensions["price_tier"] == "unpriced")
+        #expect(event.dimensions["source"] == "organic")
+    }
+
     @Test func emptyDimensionsAreDropped() {
         let event = AnalyticsEvent("t", funnel: .quality, dimensions: ["a": "", "b": "x"])
         #expect(event.dimensions.count == 1)

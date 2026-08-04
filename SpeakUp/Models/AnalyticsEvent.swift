@@ -133,11 +133,11 @@ extension AnalyticsEvent {
         ])
     }
 
-    static func purchaseResult(_ result: String, price: String, source: String?) -> AnalyticsEvent {
+    static func purchaseResult(_ result: String, price: String?, source: String?) -> AnalyticsEvent {
         AnalyticsEvent("purchase_result", funnel: .monetization, dimensions: [
             "result": result,
             "product": LifetimeProduct.identifier,
-            "price_tier": price,
+            "price_tier": price ?? "unpriced",
             "source": source ?? "organic"
         ])
     }

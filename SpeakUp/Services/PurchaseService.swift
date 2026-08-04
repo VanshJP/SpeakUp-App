@@ -47,10 +47,19 @@ final class PurchaseService {
 
     // MARK: - Display
 
-    /// Localized price from StoreKit, or the planned price while loading so the
-    /// paywall never renders a blank button.
-    var displayPrice: String {
-        product?.displayPrice ?? LifetimeProduct.fallbackDisplayPrice
+    /// The localized, storefront-correct price, or nil until StoreKit answers.
+    ///
+    /// There is deliberately no hardcoded fallback. A literal price is only ever
+    /// right for one storefront and one price change, and a paywall that shows
+    /// the wrong currency is worse than one that shows no number yet.
+    var displayPrice: String? {
+        product?.displayPrice
+    }
+
+    /// Whether a purchase can be attempted. False until the product loads, so
+    /// the button cannot ask for money the App Store has not priced.
+    var canPurchase: Bool {
+        product != nil
     }
 
     var isBusy: Bool {

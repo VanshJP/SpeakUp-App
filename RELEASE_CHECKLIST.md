@@ -19,7 +19,11 @@ These change shipped copy and shipped behaviour, so settle them first.
 - [ ] **Price and founding-offer framing.** `FoundingOffer.deadline` ships
       `nil`, which shows no urgency copy at all. If a founding price is used,
       set the deadline and raise the App Store Connect price on the same day —
-      the app never sets a price, it only describes one.
+      the app never sets a price, it only describes one. Note that
+      `FoundingOffer.standardDisplayPrice` is a US-storefront literal, because
+      StoreKit cannot price a product it is not selling yet; leave the deadline
+      unset while shipping internationally, or the "after" price shows in the
+      wrong currency.
 - [ ] **Analytics transport.** `LocalAnalyticsSink` keeps events on device and
       uploads nothing. If a hosted sink is adopted, it is a
       `AnalyticsService.use(sink:)` swap plus a privacy-label update, not an
@@ -101,8 +105,8 @@ Then, on a device:
 
 ## 6. Launch measurement
 
-`Settings → Analytics Diagnostics` renders the scorecard from the local event
-log and exports the raw JSON.
+`Settings → Usage Diagnostics` renders the scorecard from the local event log
+and exports the raw JSON.
 
 - [ ] Confirm `first_open` carries the campaign source when the build is opened
       through a campaign deep link (`speakup://open?source=…&campaign=…`).

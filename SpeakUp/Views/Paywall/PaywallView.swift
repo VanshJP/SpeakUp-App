@@ -193,19 +193,20 @@ struct PaywallView: View {
             }
 
             GlassButton(
-                title: didSucceed ? "Unlocked" : "Unlock Lifetime · \(purchases.displayPrice)",
+                title: buyButtonTitle,
                 icon: didSucceed ? "checkmark" : nil,
                 style: .primary,
                 size: .large,
-                isLoading: purchases.phase == .purchasing,
+                isLoading: purchases.phase == .purchasing || purchases.loadState == .loading,
                 fullWidth: true
             ) {
                 Haptics.medium()
                 Task { await buy() }
             }
             // Restoring counts as busy: tapping Buy mid-restore would start a
-            // second StoreKit flow for something the user may already own.
-            .disabled(didSucceed || purchases.isBusy)
+            // second StoreKit flow for something the user may already own. And
+            // until StoreKit prices the product there is nothing to agree to.
+            .disabled(didSucceed || purchases.isBusy || !purchases.canPurchase)
 
             Text("One payment. No subscription.")
                 .font(.caption)
@@ -223,6 +224,14 @@ struct PaywallView: View {
                 statusLine(icon: "exclamationmark.triangle", text: message, color: AppColors.error)
             }
         }
+    }
+
+    /// The price is only ever the one StoreKit returned for this storefront.
+    /// Until it arrives the button names the purchase without pricing it.
+    private var buyButtonTitle: String {
+        if didSucceed { return "Unlocked" }
+        guard let price = purchases.displayPrice else { return "Unlock Lifetime" }
+        return "Unlock Lifetime · \(price)"
     }
 
     private func statusLine(icon: String, text: String, color: Color) -> some View {

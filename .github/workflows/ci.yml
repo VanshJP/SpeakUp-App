@@ -4,8 +4,8 @@ name: CI
 #
 # Needs a runner image with Xcode 26 or newer: the project's deployment target
 # is iOS 26.0 and it uses file-system synchronized groups (objectVersion 77).
-# `macos-26` defaults to Xcode 26.6, so no explicit xcode-select is pinned —
-# pinning a point release breaks the day the image rotates.
+# Every Xcode on the `macos-26` image is a 26.x, so no explicit xcode-select is
+# pinned — pinning a point release breaks the day the image rotates.
 
 on:
   push:
