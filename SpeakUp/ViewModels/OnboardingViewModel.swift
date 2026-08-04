@@ -50,6 +50,20 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         default: return false
         }
     }
+
+    /// Steps a first run walks before the first recording.
+    ///
+    /// Calibration, the on-device model download, and the reminder prompt are
+    /// deliberately absent. Each one asks for effort, storage, or a system
+    /// permission before the user has seen a single score, and the score is the
+    /// only thing that has earned any of it. All three are offered again on
+    /// `FirstRecordingSetupSheet`, immediately after the first session.
+    static let firstRunSteps: [OnboardingStep] = [
+        .welcome, .howItWorks, .whatsInside, .name, .goal, .level, .vocab, .mic, .ready
+    ]
+
+    /// Steps moved out of the first run and offered after the first result.
+    static let deferredSteps: [OnboardingStep] = [.calibrate, .intelligence, .reminder]
 }
 
 // MARK: - Result
@@ -111,7 +125,10 @@ final class OnboardingViewModel {
     // Notification permission + reminder time
     var hasNotificationPermission = false
     var isRequestingNotificationPermission = false
-    var reminderEnabled = true
+    /// Off until the user asks for it. The reminder step is no longer part of
+    /// the first run, so defaulting this on would fire a notification
+    /// permission prompt nobody agreed to.
+    var reminderEnabled = false
     var reminderTime: Date = OnboardingViewModel.defaultReminderTime()
 
     // Vocab + dictionary seeds (still populated; surfaced on the ready step
@@ -136,14 +153,13 @@ final class OnboardingViewModel {
         }
     }
 
-    // v5 keys: splitting the explainer into `.howItWorks` + `.whatsInside`
-    // shifted every rawValue after it. Bumping invalidates older saved state,
-    // which would otherwise restore a returning user to the wrong page, the
-    // same reason v4 existed.
-    private static let resumeStepKey = "onboarding.lastReachedStep.v5"
-    private static let resumeNameKey = "onboarding.draftName.v5"
-    private static let resumeGoalKey = "onboarding.draftGoal.v5"
-    private static let resumeLevelKey = "onboarding.draftLevel.v5"
+    // v6 keys: calibration, the model download, and reminders left the first
+    // run, so a v5 resume could land on a step this flow no longer walks.
+    // Bumping invalidates that saved state, the same reason v5 existed.
+    private static let resumeStepKey = "onboarding.lastReachedStep.v6"
+    private static let resumeNameKey = "onboarding.draftName.v6"
+    private static let resumeGoalKey = "onboarding.draftGoal.v6"
+    private static let resumeLevelKey = "onboarding.draftLevel.v6"
 
     // MARK: Lifecycle
 
@@ -157,16 +173,20 @@ final class OnboardingViewModel {
 
     var canAdvanceFromName: Bool { !trimmedName.isEmpty }
 
+    /// The flow this run walks. Navigation indexes into this rather than
+    /// walking `rawValue + 1`, so deferring a step is a change to one array.
+    var steps: [OnboardingStep] { OnboardingStep.firstRunSteps }
+
     /// The steps that carry a counter and a tick. The hero cover and the
     /// terminal recap bookend the flow rather than being part of it. Counting
     /// them meant the user never saw the last number ("Step 10 of 11" was the
     /// highest label the flow could ever show).
-    private static let countedSteps = OnboardingStep.allCases.filter { !$0.isHero }
+    private var countedSteps: [OnboardingStep] { steps.filter { !$0.isHero } }
 
-    var stepCount: Int { max(1, Self.countedSteps.count) }
+    var stepCount: Int { max(1, countedSteps.count) }
 
     private var countedIndex: Int? {
-        Self.countedSteps.firstIndex(of: currentStep)
+        countedSteps.firstIndex(of: currentStep)
     }
 
     /// Ticks fill across the counted steps only. The terminal step reads full.
@@ -190,7 +210,8 @@ final class OnboardingViewModel {
     func restoreFromDefaults() {
         let defaults = UserDefaults.standard
         if let raw = defaults.object(forKey: Self.resumeStepKey) as? Int,
-           let step = OnboardingStep(rawValue: raw) {
+           let step = OnboardingStep(rawValue: raw),
+           steps.contains(step) {
             currentStep = step
         }
         if let savedName = defaults.string(forKey: Self.resumeNameKey) {
@@ -235,18 +256,19 @@ final class OnboardingViewModel {
     // and fought the view-level curve for the same state change.
 
     func advance() {
-        guard let next = OnboardingStep(rawValue: currentStep.rawValue + 1) else { return }
+        guard let index = steps.firstIndex(of: currentStep),
+              index + 1 < steps.count else { return }
         Haptics.medium()
-        currentStep = next
+        currentStep = steps[index + 1]
         persistProgress()
     }
 
     func goBack() {
         guard currentStep.allowsBack,
-              let previous = OnboardingStep(rawValue: currentStep.rawValue - 1)
-        else { return }
+              let index = steps.firstIndex(of: currentStep),
+              index > 0 else { return }
         Haptics.light()
-        currentStep = previous
+        currentStep = steps[index - 1]
         persistProgress()
     }
 

@@ -35,6 +35,10 @@ struct RecordingDetailView: View {
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
     @State private var coherenceEnhanceInFlight = false
     @State private var playableMediaAvailable = false
+    /// The first score has to be the first thing the user sees. A questionnaire
+    /// in front of it costs the moment the whole install was for. Resolved once
+    /// on load — a fetch count in `body` would run on every redraw.
+    @State private var isFirstAnalyzedSession = false
     /// Rolling baselines every number on this screen is read against. Loads in
     /// the background, so all fields start nil and fill in together.
     @State private var baselines = PersonalAverage.Baselines()
@@ -73,6 +77,7 @@ struct RecordingDetailView: View {
 
     private func shouldGateFeedback(for recording: Recording) -> Bool {
         feedbackEnabled &&
+        !isFirstAnalyzedSession &&
         recording.analysis != nil &&
         recording.sessionFeedback == nil &&
         !SessionFeedbackGateStore.isDismissed(recording.id)
@@ -1459,6 +1464,11 @@ struct RecordingDetailView: View {
         do {
             let recordings = try modelContext.fetch(descriptor)
             recording = recordings.first
+
+            let analyzedCount = (try? modelContext.fetchCount(
+                FetchDescriptor<Recording>(predicate: #Predicate { $0.analysis != nil })
+            )) ?? 0
+            isFirstAnalyzedSession = analyzedCount <= 1
 
             // Reset stale isProcessing flag — if the app crashed mid-transcription,
             // this flag stays true in SwiftData but no task is actually running.

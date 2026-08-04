@@ -49,9 +49,23 @@ class WhisperService {
     }
 
     /// Precondition: semaphore held.
+    /// Whether the speech model has ever finished loading on this device.
+    ///
+    /// The difference matters to the user: a first load downloads roughly
+    /// 150 MB and can take minutes on a slow connection, while every load after
+    /// it is seconds. Without this the same spinner covers both, and the first
+    /// run looks broken.
+    private static let firstLoadCompletedKey = "whisper.firstLoadCompleted.v1"
+
+    static var hasCompletedFirstLoad: Bool {
+        UserDefaults.standard.bool(forKey: firstLoadCompletedKey)
+    }
+
     private func loadModelLocked(modelVariant: String = "base") async {
         // Allow re-initialization if model exists but isn't fully loaded
         guard whisperKit == nil || !isModelLoaded else { return }
+
+        let isFirstLoad = !Self.hasCompletedFirstLoad
 
         do {
             modelLoadProgress = 0.1
@@ -71,10 +85,27 @@ class WhisperService {
 
             modelLoadProgress = 1.0
             isModelLoaded = true
+
+            if isFirstLoad {
+                UserDefaults.standard.set(true, forKey: Self.firstLoadCompletedKey)
+                await MainActor.run {
+                    AnalyticsService.shared.log(
+                        .modelDownload(tier: modelVariant, result: "success")
+                    )
+                }
+            }
         } catch {
             errorMessage = "Failed to load Whisper model: \(error.localizedDescription)"
             isModelLoaded = false
             modelLoadProgress = 0
+
+            if isFirstLoad {
+                await MainActor.run {
+                    AnalyticsService.shared.log(
+                        .modelDownload(tier: modelVariant, result: "failed")
+                    )
+                }
+            }
         }
     }
 

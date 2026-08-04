@@ -77,7 +77,7 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showingFirstRecordingSetup) {
             FirstRecordingSetupSheet()
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(item: $focusDrill) { mode in

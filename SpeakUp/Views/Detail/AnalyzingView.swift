@@ -66,12 +66,23 @@ struct AnalyzingView: View {
         }
     }
 
+    /// A first load is a ~150 MB download; every load after it takes seconds.
+    /// Showing the same spinner for both is what makes a slow first run read as
+    /// a hang rather than a download.
+    private var isFirstTimeModelDownload: Bool {
+        isModelLoading && !WhisperService.hasCompletedFirstLoad
+    }
+
     private var statusTitle: String {
-        isModelLoading ? "Preparing Speech Engine..." : stages[progressStage]
+        if isFirstTimeModelDownload { return "Downloading Speech Model..." }
+        return isModelLoading ? "Preparing Speech Engine..." : stages[progressStage]
     }
 
     private var statusSubtitle: String {
-        isModelLoading ? "Loading the AI model for first-time use" : "Sit tight — we're crunching the numbers"
+        if isFirstTimeModelDownload {
+            return "One-time download, about 150 MB. Your recording is already saved — leave this screen and it will score itself when the download finishes."
+        }
+        return isModelLoading ? "Loading the AI model for first-time use" : "Sit tight — we're crunching the numbers"
     }
 
     private let stages = [
