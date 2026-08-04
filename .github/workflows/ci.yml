@@ -1,0 +1,80 @@
+name: CI
+
+# Builds the app and runs the SpeakUpTests bundle on every pull request.
+#
+# Needs a runner image with Xcode 26 or newer: the project's deployment target
+# is iOS 26.0 and it uses file-system synchronized groups (objectVersion 77).
+# `macos-26` defaults to Xcode 26.6, so no explicit xcode-select is pinned —
+# pinning a point release breaks the day the image rotates.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # WhisperKit and llama.swift are the slow part of a cold build, and
+      # neither changes between runs unless the pins move.
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: .spm-cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('SpeakUp.xcodeproj/project.pbxproj', 'SpeakUp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project SpeakUp.xcodeproj \
+            -scheme SpeakUp \
+            -clonedSourcePackagesDirPath .spm-cache
+
+      # Resolved at runtime rather than hardcoded: simulator device names move
+      # with every Xcode release, and a stale name fails the job for a reason
+      # that has nothing to do with the code.
+      - name: Pick a simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];\
+          print(next(dev['udid'] for rt,devs in sorted(d.items()) if 'iOS' in rt for dev in devs if dev.get('isAvailable') and 'iPhone' in dev['name']))")
+          echo "Using simulator $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project SpeakUp.xcodeproj \
+            -scheme SpeakUp \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -clonedSourcePackagesDirPath .spm-cache \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify
+
+      - name: Upload result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults.xcresult
+          if-no-files-found: ignore
