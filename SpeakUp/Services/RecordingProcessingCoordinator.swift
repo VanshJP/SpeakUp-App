@@ -8,8 +8,13 @@ import os
 final class RecordingProcessingCoordinator {
     static let shared = RecordingProcessingCoordinator()
 
+    /// Ceiling on one resume pass. Someone returning after a long break has a
+    /// backlog worth clearing, but not an unbounded one.
+    private static let deferredResumeLimit = 20
+
     private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "RecordingProcessing")
     private var activeRecordingIDs: Set<UUID> = []
+    private var resumeInFlight = false
 
     private init() {}
 
@@ -35,6 +40,64 @@ final class RecordingProcessingCoordinator {
                 speechService: speechService,
                 llmService: llmService
             )
+        }
+    }
+
+    /// Scores the recordings the free allowance held back, oldest first.
+    ///
+    /// The deferred card tells the user their audio is safe and will score
+    /// itself when the allowance resets or Lifetime is unlocked. Nothing kept
+    /// that promise before: a held-back recording was only retried if the user
+    /// happened to reopen it. Called on foreground and on entitlement change.
+    ///
+    /// Runs strictly one at a time — a batch of concurrent Whisper passes on a
+    /// cold foreground would be a memory spike, not a feature.
+    func resumeDeferredRecordings(
+        modelContext: ModelContext,
+        speechService: SpeechService,
+        llmService: LLMService
+    ) {
+        guard !resumeInFlight else { return }
+        guard AllowanceGate.decision(settings: fetchSettings(from: modelContext)).isAllowed else { return }
+        resumeInFlight = true
+
+        Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            defer { self.resumeInFlight = false }
+
+            // Bounded so a recording that somehow re-defers itself cannot spin.
+            for _ in 0..<Self.deferredResumeLimit {
+                guard AllowanceGate.decision(settings: self.fetchSettings(from: modelContext)).isAllowed else { return }
+
+                var descriptor = FetchDescriptor<Recording>(
+                    predicate: #Predicate { $0.analysisBlockedByAllowance == true },
+                    sortBy: [SortDescriptor(\.date, order: .forward)]
+                )
+                descriptor.fetchLimit = 1
+                guard let next = (try? modelContext.fetch(descriptor))?.first else { return }
+
+                let id = next.id
+                guard !self.activeRecordingIDs.contains(id) else { return }
+                self.activeRecordingIDs.insert(id)
+                await self.process(
+                    recordingID: id,
+                    modelContext: modelContext,
+                    speechService: speechService,
+                    llmService: llmService
+                )
+                self.activeRecordingIDs.remove(id)
+
+                // Re-fetch rather than reuse `next`: processing takes up to 90s
+                // and the user may have deleted it meanwhile. A recording still
+                // flagged deferred means the allowance ran out mid-run, so stop;
+                // a deleted one just means move on.
+                var check = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == id })
+                check.fetchLimit = 1
+                if let after = (try? modelContext.fetch(check))?.first,
+                   after.analysisBlockedByAllowance {
+                    return
+                }
+            }
         }
     }
 

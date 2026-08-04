@@ -3,6 +3,8 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SpeechService.self) private var speechService
+    @Environment(LLMService.self) private var llmService
     @Query private var userSettings: [UserSettings]
 
     @State private var selectedTab: AppTab = .today
@@ -316,6 +318,17 @@ struct ContentView: View {
             // @Query may not be hydrated on first onAppear — re-evaluate once it lands
             evaluateOnboardingIfNeeded()
         }
+        .onChange(of: EntitlementStore.shared.isLifetime) { _, owned in
+            // The deferred card promises held-back recordings score themselves
+            // the moment Lifetime is unlocked. This is where that happens for a
+            // purchase made in-app; the app-foreground pass covers the rest.
+            guard owned else { return }
+            RecordingProcessingCoordinator.shared.resumeDeferredRecordings(
+                modelContext: modelContext,
+                speechService: speechService,
+                llmService: llmService
+            )
+        }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView { result in
                 Task { @MainActor in
@@ -503,4 +516,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     ContentView()
         .modelContainer(
             for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
+        .environment(SpeechService())
+        .environment(AudioService())
+        .environment(LLMService())
 }

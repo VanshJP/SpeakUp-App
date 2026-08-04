@@ -140,6 +140,14 @@ struct SpeakUpApp: App {
                 // processed while the app was backgrounded.
                 Task {
                     await PurchaseService.shared.refreshEntitlement()
+                    // Entitlement is settled — score anything the free
+                    // allowance held back, whether it was unblocked by the
+                    // purchase or by the monthly cycle rolling over.
+                    RecordingProcessingCoordinator.shared.resumeDeferredRecordings(
+                        modelContext: sharedModelContainer.mainContext,
+                        speechService: speechService,
+                        llmService: llmService
+                    )
                 }
                 AnalyticsService.shared.log(.sessionStart())
             }

@@ -19,6 +19,9 @@ struct PaywallView: View {
     @State private var showingFAQ = false
     @State private var showingRedeemCode = false
     @State private var didSucceed = false
+    /// Recordings the allowance held back. Resolved once — a fetch in `body`
+    /// would run on every redraw of a scrolling sheet.
+    @State private var deferredCount = 0
 
     var body: some View {
         NavigationStack {
@@ -60,6 +63,7 @@ struct PaywallView: View {
                 }
             }
             .task {
+                deferredCount = AllowanceGate.blockedRecordingCount(modelContext: modelContext)
                 await purchases.loadProduct()
                 markPaywallSeen()
             }
@@ -100,6 +104,17 @@ struct PaywallView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            // Concrete, not a scare line: these takes are already recorded and
+            // score themselves the moment the purchase lands.
+            if !didSucceed, deferredCount > 0 {
+                Text(deferredCount == 1
+                     ? "1 saved recording is waiting to be scored."
+                     : "\(deferredCount) saved recordings are waiting to be scored.")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppColors.primary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity)
     }
