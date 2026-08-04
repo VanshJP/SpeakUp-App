@@ -19,11 +19,12 @@ These change shipped copy and shipped behaviour, so settle them first.
 - [ ] **Price and founding-offer framing.** `FoundingOffer.deadline` ships
       `nil`, which shows no urgency copy at all. If a founding price is used,
       set the deadline and raise the App Store Connect price on the same day —
-      the app never sets a price, it only describes one. Note that
+      the app never sets a price, it only describes one.
       `FoundingOffer.standardDisplayPrice` is a US-storefront literal, because
-      StoreKit cannot price a product it is not selling yet; leave the deadline
-      unset while shipping internationally, or the "after" price shows in the
-      wrong currency.
+      StoreKit cannot price a product it is not selling yet. The banner now
+      drops the "…after" comparison on any storefront not selling in USD, so
+      setting a deadline is safe internationally — non-US buyers see "Founding
+      price" with no comparison. Update the literal if the US tier changes.
 - [ ] **Analytics transport.** `LocalAnalyticsSink` keeps events on device and
       uploads nothing. If a hosted sink is adopted, it is a
       `AnalyticsService.use(sink:)` swap plus a privacy-label update, not an

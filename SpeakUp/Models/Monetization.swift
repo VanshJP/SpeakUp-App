@@ -24,13 +24,30 @@ enum FoundingOffer {
     /// The price the offer says it reverts to. StoreKit cannot supply a price
     /// for a product it is not currently selling, so this literal is the one
     /// unavoidable hardcoded price in the app — and it is only correct on the
-    /// US storefront. Setting `deadline` while shipping internationally means
-    /// showing some users a comparison in the wrong currency.
+    /// US storefront.
     static let standardDisplayPrice = "$99.99"
+
+    /// The currency `standardDisplayPrice` is written in.
+    static let standardPriceCurrencyCode = "USD"
 
     static func isActive(now: Date = Date()) -> Bool {
         guard let deadline else { return false }
         return now < deadline
+    }
+
+    /// The "…after" comparison, or nil when it cannot be stated honestly.
+    ///
+    /// Returns nil on any storefront that is not selling in the currency the
+    /// literal is written in, rather than putting "$99.99 after" next to a
+    /// button reading "£74.99". A comparison in the wrong currency is a
+    /// misstated price, not a rounding problem, so the banner drops the
+    /// comparison and keeps the framing instead of guessing at a conversion.
+    ///
+    /// `currencyCode` is nil until StoreKit answers, which also suppresses it.
+    static func comparisonPrice(currencyCode: String?, now: Date = Date()) -> String? {
+        guard isActive(now: now) else { return nil }
+        guard currencyCode == standardPriceCurrencyCode else { return nil }
+        return standardDisplayPrice
     }
 }
 

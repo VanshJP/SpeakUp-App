@@ -62,6 +62,12 @@ final class PurchaseService {
         product != nil
     }
 
+    /// The storefront's currency, nil until the product loads. Used to decide
+    /// whether a hardcoded comparison price can honestly be shown next to it.
+    var currencyCode: String? {
+        product?.priceFormatStyle.currencyCode
+    }
+
     var isBusy: Bool {
         phase == .purchasing || phase == .restoring
     }

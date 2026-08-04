@@ -186,7 +186,7 @@ struct PaywallView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "flag.checkered")
                         .font(.caption2)
-                    Text("Founding price — \(FoundingOffer.standardDisplayPrice) after")
+                    Text(foundingOfferText)
                         .font(.caption.weight(.semibold))
                 }
                 .foregroundStyle(AppColors.warning)
@@ -228,6 +228,15 @@ struct PaywallView: View {
 
     /// The price is only ever the one StoreKit returned for this storefront.
     /// Until it arrives the button names the purchase without pricing it.
+    /// Drops the "…after" comparison on any storefront the literal price is not
+    /// written in, rather than quoting dollars beside a button in pounds.
+    private var foundingOfferText: String {
+        guard let after = FoundingOffer.comparisonPrice(currencyCode: purchases.currencyCode) else {
+            return "Founding price"
+        }
+        return "Founding price — \(after) after"
+    }
+
     private var buyButtonTitle: String {
         if didSucceed { return "Unlocked" }
         guard let price = purchases.displayPrice else { return "Unlock Lifetime" }

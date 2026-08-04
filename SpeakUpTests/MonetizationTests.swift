@@ -33,6 +33,34 @@ struct FreeTierPolicyTests {
     }
 }
 
+// A comparison price is a claim about money, and the only one in the app that
+// StoreKit cannot supply. These pin the conditions under which it may be shown.
+struct FoundingComparisonPriceTests {
+    private let future = t0.addingTimeInterval(30 * day)
+
+    @Test func noComparisonWhileTheOfferIsOff() {
+        // Ships with deadline nil, so this is the shipped state.
+        #expect(FoundingOffer.comparisonPrice(currencyCode: "USD", now: t0) == nil)
+    }
+
+    @Test func noComparisonBeforeStoreKitNamesACurrency() {
+        #expect(FoundingOffer.comparisonPrice(currencyCode: nil, now: t0) == nil)
+    }
+
+    /// The whole point: a dollar figure must never appear beside a price in
+    /// another currency.
+    @Test func noComparisonOnAForeignStorefront() {
+        for code in ["GBP", "EUR", "JPY", "AUD", "CAD"] {
+            #expect(FoundingOffer.comparisonPrice(currencyCode: code, now: future) == nil)
+        }
+    }
+
+    @Test func theLiteralIsWrittenInTheCurrencyItClaims() {
+        #expect(FoundingOffer.standardPriceCurrencyCode == "USD")
+        #expect(FoundingOffer.standardDisplayPrice.hasPrefix("$"))
+    }
+}
+
 // The limit has to be legible before it is spent, not only after. These pin the
 // copy that says so, including the plural that reads wrong exactly once — at
 // one remaining, which is the moment it matters most.
