@@ -33,6 +33,34 @@ struct FreeTierPolicyTests {
     }
 }
 
+// The limit has to be legible before it is spent, not only after. These pin the
+// copy that says so, including the plural that reads wrong exactly once — at
+// one remaining, which is the moment it matters most.
+struct AllowanceDisclosureTests {
+    @Test func anEntitledUserIsToldNothing() {
+        #expect(AllowanceDecision.unlimited.shortSummary == nil)
+    }
+
+    @Test func remainingAnalysesAreCounted() {
+        #expect(AllowanceDecision.intro(remaining: 3).shortSummary == "3 free analyses left")
+    }
+
+    @Test func oneRemainingIsSingular() {
+        #expect(AllowanceDecision.intro(remaining: 1).shortSummary == "1 free analysis left")
+    }
+
+    @Test func aCycleNamesItsResetDay() {
+        let summary = AllowanceDecision.cycle(remaining: 2, resetsOn: t0).shortSummary
+        #expect(summary?.hasPrefix("2 free analyses left · resets ") == true)
+    }
+
+    @Test func exhaustedSaysSoRatherThanShowingZero() {
+        let summary = AllowanceDecision.exhausted(resetsOn: t0).shortSummary
+        #expect(summary?.hasPrefix("No free analyses left · resets ") == true)
+        #expect(summary?.contains("0 free") == false)
+    }
+}
+
 struct PracticeAllowanceTests {
     @Test func entitledUsersAreNeverCounted() {
         let decision = PracticeAllowance.decision(state: AllowanceState(), isEntitled: true, now: t0)

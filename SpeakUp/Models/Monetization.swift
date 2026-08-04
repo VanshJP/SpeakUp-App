@@ -152,6 +152,32 @@ enum AllowanceDecision: Sendable, Equatable {
         case .unlimited: return nil
         }
     }
+
+    /// One line stating what is left, for the surfaces that disclose the limit
+    /// *before* it is spent. Nil when there is nothing to say, which is both the
+    /// entitled case and the reason an entitled user sees no plan chatter.
+    ///
+    /// Lives here rather than in a view so the two places that show it cannot
+    /// word it differently, and so the pluralisation is covered by tests.
+    var shortSummary: String? {
+        func analyses(_ count: Int) -> String {
+            "\(count) free \(count == 1 ? "analysis" : "analyses") left"
+        }
+        func day(_ date: Date) -> String {
+            date.formatted(.dateTime.month(.abbreviated).day())
+        }
+
+        switch self {
+        case .unlimited:
+            return nil
+        case .intro(let remaining):
+            return analyses(remaining)
+        case .cycle(let remaining, let resetsOn):
+            return "\(analyses(remaining)) · resets \(day(resetsOn))"
+        case .exhausted(let resetsOn):
+            return "No free analyses left · resets \(day(resetsOn))"
+        }
+    }
 }
 
 /// Pure allowance arithmetic. No StoreKit, no SwiftData, no clock of its own —

@@ -227,7 +227,42 @@ struct TodayView: View {
 
     // MARK: - Start Button Section
 
+    /// What the free tier has left, shown under the buttons that spend it.
+    /// Nil for entitled users, who have no allowance to report.
+    private var allowanceSummary: String? {
+        guard let settings = userSettings.first else { return nil }
+        return PracticeAllowance.decision(
+            state: settings.allowanceState,
+            isEntitled: EntitlementStore.shared.isLifetime
+        ).shortSummary
+    }
+
     private var startButtonSection: some View {
+        VStack(spacing: 10) {
+            startButtons
+
+            // Disclosed here rather than only on the paywall: finding out about
+            // the limit at the moment it stops you is the version that feels
+            // like a trick.
+            if let allowanceSummary {
+                Button {
+                    Haptics.light()
+                    PaywallCoordinator.shared.present(
+                        .unlimitedAnalyses,
+                        trigger: "today_allowance",
+                        userInitiated: true
+                    )
+                } label: {
+                    Text(allowanceSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var startButtons: some View {
         HStack(spacing: 12) {
             Button {
                 Haptics.medium()
