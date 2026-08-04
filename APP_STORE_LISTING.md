@@ -9,6 +9,10 @@ Nothing in this file was invented about the app. Every claim maps to shipped
 behaviour, and the "Do not claim" list at the end records the ones that were
 tempting and are not true yet.
 
+This is the default page. The four audience-specific pages — interview,
+presentation, pitch, and creator — are in `APP_STORE_PRODUCT_PAGES.md`, which
+depends on the keyword field and screenshot set defined here.
+
 ---
 
 ## 1. Text fields
@@ -23,11 +27,19 @@ Character limits are Apple's. Counts are for the copy as written.
 ### Keywords (100 characters, comma-separated, no spaces)
 
 ```
-speech,public speaking,filler,stutter,presentation,toastmaster,pronunciation,voice,articulation
+speech,public speaking,filler,interview,presentation,toastmaster,pronunciation,voice,articulation
 ```
 
-95 characters. Words already in the app name and subtitle are deliberately
+97 characters. Words already in the app name and subtitle are deliberately
 absent — Apple indexes those separately, and repeating them wastes the field.
+
+`interview` replaced `stutter`, for two reasons. Custom product pages can only
+be assigned keywords that already exist in this field (see
+`APP_STORE_PRODUCT_PAGES.md`), and interview prep is both one of the four
+audience pages and one of the app's five onboarding goals — leaving the term
+out made that page unreachable by search. `stutter` also pulled against
+section 6: it is a high-volume term whose searchers are looking for a therapy
+tool, which is precisely the claim this app must not make.
 
 ### Promotional text (170 characters, editable without a new build)
 

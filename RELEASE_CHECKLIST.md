@@ -40,6 +40,11 @@ These change shipped copy and shipped behaviour, so settle them first.
       separately can hold the whole release.
 - [ ] Privacy nutrition labels: with the shipped local sink, the answer is no
       data collected and no tracking. Re-answer if a hosted sink is adopted.
+- [ ] Paste the text fields from `APP_STORE_LISTING.md` and upload the six
+      default screenshots built to the plan in its section 5.
+- [ ] Create the four custom product pages in `APP_STORE_PRODUCT_PAGES.md`, each
+      submitted with the build, and record the `ppid` URL each one returns. They
+      can only be assigned keywords already present in the shared keyword field.
 - [ ] Privacy policy URL (required) and, because the app sells a non-consumable,
       a terms/EULA link.
 - [ ] App Review notes: state that transcription and scoring run on device,
