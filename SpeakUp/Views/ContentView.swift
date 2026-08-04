@@ -295,6 +295,14 @@ struct ContentView: View {
             if let achievement = achievementService.newlyUnlocked {
                 AchievementUnlockedView(achievement: achievement) {
                     achievementService.clearNewlyUnlocked()
+                    // Celebration just landed — the one moment a rating ask is
+                    // welcome. The service decides whether to spend one.
+                    if ReviewRequestService.shared.requestIfEligible(
+                        .achievementUnlocked,
+                        settings: userSettings.first
+                    ) {
+                        try? modelContext.save()
+                    }
                 }
                 .zIndex(10)
             }

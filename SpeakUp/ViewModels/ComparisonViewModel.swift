@@ -29,6 +29,19 @@ class ComparisonViewModel {
         }
     }
 
+    /// The share card for the current selection. Dates, counts, and scores
+    /// only — see `ProgressCardData` for why it is a value type.
+    var progressCard: ProgressCardData? {
+        guard let a = recordingA, let b = recordingB else { return nil }
+        return ProgressCardData.make(
+            first: a.analysis,
+            firstDate: a.date,
+            latest: b.analysis,
+            latestDate: b.date,
+            sessionCount: allRecordings.filter { $0.analysis != nil }.count
+        )
+    }
+
     struct Delta {
         let label: String
         let valueA: String
