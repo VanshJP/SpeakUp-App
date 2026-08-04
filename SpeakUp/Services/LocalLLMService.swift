@@ -23,6 +23,7 @@ enum ModelFamily: Equatable {
 /// hard llama backend failures.
 enum LocalLLMError: LocalizedError {
     case fileNotFound(path: String)
+    case downloadFailed(status: Int)
     case insufficientMemory(availableBytes: Int, requiredBytes: Int)
     case backendInitFailed
     case modelInitFailed
@@ -33,6 +34,8 @@ enum LocalLLMError: LocalizedError {
         switch self {
         case .fileNotFound(let path):
             return "Model file not found at \(path). Re-download the model."
+        case .downloadFailed(let status):
+            return "The model download failed (HTTP \(status)). Check your connection and try again."
         case .insufficientMemory(let available, let required):
             let avail = ByteCountFormatter.string(fromByteCount: Int64(available), countStyle: .memory)
             let req = ByteCountFormatter.string(fromByteCount: Int64(required), countStyle: .memory)
@@ -227,17 +230,17 @@ final class LocalLLMService {
                 }
                 return url
             case .qwen3_0_6B:
-                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf") else {
+                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen_Qwen3-0.6B-GGUF/resolve/main/Qwen_Qwen3-0.6B-Q4_K_M.gguf") else {
                     preconditionFailure("Invalid Qwen 3 0.6B local model URL")
                 }
                 return url
             case .qwen3_1_7B:
-                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf") else {
+                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf") else {
                     preconditionFailure("Invalid Qwen 3 1.7B local model URL")
                 }
                 return url
             case .qwen3_4B:
-                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf") else {
+                guard let url = URL(string: "https://huggingface.co/bartowski/Qwen_Qwen3-4B-GGUF/resolve/main/Qwen_Qwen3-4B-Q4_K_M.gguf") else {
                     preconditionFailure("Invalid Qwen 3 4B local model URL")
                 }
                 return url
@@ -936,6 +939,18 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        // A download "succeeds" for any status code, so an error page arrives
+        // here looking exactly like a model. Saved unchecked, a few hundred
+        // bytes of JSON get stored as a .gguf, the UI reports the model as
+        // downloaded, and the failure only surfaces much later as an
+        // unexplained load error.
+        if let http = downloadTask.response as? HTTPURLResponse,
+            !(200...299).contains(http.statusCode)
+        {
+            takeCompletionHandler()?(.failure(LocalLLMError.downloadFailed(status: http.statusCode)))
+            return
+        }
+
         // Background sessions reclaim the temp file as soon as this callback
         // returns, so the copy must happen synchronously on this thread.
         let tempDir = FileManager.default.temporaryDirectory
