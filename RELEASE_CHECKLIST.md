@@ -65,6 +65,16 @@ outbound legal links, which App Review will notice.
 - [ ] `BTSupportURL`
 - [ ] Confirm `SupportLinks.feedbackEmail` still reaches a monitored inbox.
 
+### iCloud container identifier
+
+- [ ] Confirm `iCloud.cam.vanshpatel.SpeakUp` in `SpeakUp.entitlements` is
+      registered to this team and enabled on both the app and widget App IDs.
+      Container ids do not have to match the bundle id, so this is legal — but
+      `cam.` next to a bundle id of `com.vansh.SpeakUpMore` reads like a typo
+      for `com.`, and an unregistered container fails signing at archive or
+      validation at upload. If it has never been provisioned, fix it now:
+      changing it after users have iCloud data is a migration, not an edit.
+
 ### Universal links for campaign traffic
 
 `speakup://` links work today. Web links do not, because a domain cannot be

@@ -208,9 +208,13 @@ Lifetime removes the analysis limit and adds the eight-week curriculum, journal
 PDF export, and iCloud sync.
 
 HOW TO REACH THE PAYWALL WITHOUT RECORDING FOUR TIMES
-Complete one analysis, then open the Learn tab and tap any lesson in Week 2 or
-later. The paywall is presented there. It is never shown before the first
-completed analysis, by design.
+Open Settings and tap "Unlock" on the Big Talk Lifetime card at the top. This
+works immediately, with no recording required. The Learn tab reaches it too:
+tap any lesson in Week 2 or later.
+
+The app does not raise the paywall on its own until the first analysis has
+finished, by design — the free result is what earns the right to ask. Buttons
+you tap yourself are never suppressed.
 
 Restore is on the paywall and on the plan card at the top of Settings (that
 card reads "Free plan" until a purchase is restored, then "Big Talk Lifetime").
