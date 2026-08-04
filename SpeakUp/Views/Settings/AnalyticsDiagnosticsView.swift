@@ -22,6 +22,9 @@ struct AnalyticsDiagnosticsView: View {
                 VStack(spacing: 14) {
                     disclosureCard
                     scorecardCard
+                    #if DEBUG
+                    entitlementOverrideCard
+                    #endif
                     recentEventsCard
                     actions
                 }
@@ -77,14 +80,39 @@ struct AnalyticsDiagnosticsView: View {
                 metricRow("Analyses completed", value: "\(card.analysesCompleted)")
                 metricRow("Started → scored", value: percentSummary(card.startToScoreRate))
                 metricRow("Reached first result", value: card.activations > 0 ? "Yes" : "Not yet")
+                metricRow("Activation rate", value: percentSummary(card.activationRate))
                 metricRow("Time to first result", value: timeToValueSummary(card))
                 metricRow("Paywalls after a result", value: "\(card.qualifiedPaywallViews)")
                 metricRow("Purchases", value: "\(card.purchases)")
+                metricRow("Qualified conversion", value: percentSummary(card.qualifiedPaywallConversion))
                 metricRow("Cards shared", value: "\(card.shares)")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    #if DEBUG
+    /// Flips entitlement without a sandbox purchase so both sides of every gate
+    /// can be exercised in one run. Compiled out of Release, so it cannot ship.
+    private var entitlementOverrideCard: some View {
+        GlassCard(padding: 14) {
+            Toggle(isOn: Binding(
+                get: { EntitlementStore.shared.debugOverrideEnabled },
+                set: { EntitlementStore.shared.setDebugOverride($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Force Lifetime (debug)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Debug builds only. Unlocks every gate without buying.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(AppColors.primary)
+        }
+    }
+    #endif
 
     private func percentSummary(_ rate: Double?) -> String {
         guard let rate else { return "—" }

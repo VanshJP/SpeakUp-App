@@ -375,7 +375,9 @@ struct RecordingDetailView: View {
     /// plainly, because "analysis failed" for a paywall reason reads as a bug.
     @ViewBuilder
     private func analysisDeferredCard(_ recording: Recording) -> some View {
-        let decision = AllowanceGate.decision(modelContext: modelContext)
+        // Read through the existing query rather than fetching: a fetch here
+        // would re-run on every body evaluation of this screen.
+        let decision = AllowanceGate.decision(settings: userSettings.first)
 
         GlassCard(tint: AppColors.glassTintPrimary) {
             VStack(spacing: 12) {

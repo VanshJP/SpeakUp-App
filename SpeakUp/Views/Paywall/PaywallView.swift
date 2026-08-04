@@ -63,6 +63,9 @@ struct PaywallView: View {
                 }
             }
             .task {
+                // A cancelled or failed attempt from a previous presentation
+                // would otherwise greet the next one with a stale red line.
+                purchases.clearPhase()
                 deferredCount = AllowanceGate.blockedRecordingCount(modelContext: modelContext)
                 await purchases.loadProduct()
                 markPaywallSeen()
@@ -200,7 +203,9 @@ struct PaywallView: View {
                 Haptics.medium()
                 Task { await buy() }
             }
-            .disabled(didSucceed)
+            // Restoring counts as busy: tapping Buy mid-restore would start a
+            // second StoreKit flow for something the user may already own.
+            .disabled(didSucceed || purchases.isBusy)
 
             Text("One payment. No subscription.")
                 .font(.caption)
@@ -274,6 +279,7 @@ struct PaywallView: View {
                     Haptics.light()
                     Task { await restore() }
                 }
+                .disabled(purchases.isBusy)
 
                 GlassButton(title: "Redeem code", style: .secondary, size: .small) {
                     Haptics.light()
@@ -290,6 +296,30 @@ struct PaywallView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
+
+            legalFooter
+        }
+    }
+
+    /// Terms and privacy, reachable from the screen that takes the money.
+    /// Hidden entirely until the site exists rather than shipping dead links —
+    /// `RELEASE_CHECKLIST.md` covers filling the Info.plist keys in.
+    @ViewBuilder
+    private var legalFooter: some View {
+        if SupportLinks.hasAnyWebDestination {
+            HStack(spacing: 14) {
+                if let terms = SupportLinks.terms {
+                    Link("Terms of Use", destination: terms)
+                }
+                if let privacy = SupportLinks.privacyPolicy {
+                    Link("Privacy Policy", destination: privacy)
+                }
+                if let support = SupportLinks.support {
+                    Link("Support", destination: support)
+                }
+            }
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
         }
     }
 

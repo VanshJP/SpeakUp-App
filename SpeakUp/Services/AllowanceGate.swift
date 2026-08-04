@@ -21,10 +21,6 @@ enum AllowanceGate {
         )
     }
 
-    static func decision(modelContext: ModelContext, now: Date = Date()) -> AllowanceDecision {
-        decision(settings: fetchSettings(modelContext), now: now)
-    }
-
     /// Records a consumed analysis. Call only after an analysis succeeded.
     static func consume(settings: UserSettings?, now: Date = Date()) {
         guard let settings else { return }
@@ -39,16 +35,9 @@ enum AllowanceGate {
     /// Recordings that were saved while the allowance was spent. Used to offer
     /// "analyze the ones you missed" once the user buys or the cycle resets.
     static func blockedRecordingCount(modelContext: ModelContext) -> Int {
-        var descriptor = FetchDescriptor<Recording>(
+        let descriptor = FetchDescriptor<Recording>(
             predicate: #Predicate { $0.analysisBlockedByAllowance == true }
         )
-        descriptor.propertiesToFetch = [\.analysisBlockedByAllowance]
         return (try? modelContext.fetchCount(descriptor)) ?? 0
-    }
-
-    private static func fetchSettings(_ modelContext: ModelContext) -> UserSettings? {
-        var descriptor = FetchDescriptor<UserSettings>()
-        descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
     }
 }
