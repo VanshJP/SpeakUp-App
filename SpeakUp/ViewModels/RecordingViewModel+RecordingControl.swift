@@ -9,6 +9,7 @@ extension RecordingViewModel {
         do {
             recordingURL = try await audioService.startRecording()
 
+            logPracticeStart()
             isRecording = true
             UIApplication.shared.isIdleTimerDisabled = true
             Haptics.medium()
@@ -126,5 +127,31 @@ extension RecordingViewModel {
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
         recordingURL = nil
+    }
+
+    // MARK: - Analytics
+
+    /// Reports the start of a session so the funnel can measure how many
+    /// starts reach a score. Logged once the recorder is actually running, not
+    /// when the screen opens — an abandoned countdown is not a practice start.
+    private func logPracticeStart() {
+        let useCase: String
+        if storyId != nil {
+            useCase = "story"
+        } else if prompt != nil {
+            useCase = "prompt"
+        } else if goalId != nil {
+            useCase = "goal"
+        } else {
+            useCase = "free"
+        }
+
+        let sessionNumber = modelContext.map { context in
+            (try? context.fetchCount(FetchDescriptor<Recording>())) ?? 0
+        } ?? 0
+
+        AnalyticsService.shared.log(
+            .practiceStarted(useCase: useCase, sessionNumber: sessionNumber + 1)
+        )
     }
 }

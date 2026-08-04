@@ -130,6 +130,10 @@ class AchievementService {
             achievement.isUnlocked = true
             achievement.unlockedDate = Date()
 
+            // The retention signal the plan reads: how far into the habit
+            // people get before they stop. The id is already a fixed slug.
+            AnalyticsService.shared.log(.milestone(type: id))
+
             // Report the first newly unlocked one for celebration
             if newlyUnlocked == nil {
                 newlyUnlocked = achievement

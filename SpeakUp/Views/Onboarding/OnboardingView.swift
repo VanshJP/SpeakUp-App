@@ -142,7 +142,7 @@ struct OnboardingView: View {
             // duplicate the footer action on steps that decline explicitly.
             if !viewModel.currentStep.isHero, !viewModel.currentStep.providesOwnSkip {
                 Button("Skip") {
-                    viewModel.advance()
+                    viewModel.skip()
                 }
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -230,7 +230,7 @@ struct OnboardingView: View {
                 },
                 onCalibrate: viewModel.startCalibration,
                 onContinue: viewModel.advance,
-                onSkip: viewModel.advance
+                onSkip: viewModel.skip
             )
 
         case .intelligence:
@@ -252,7 +252,7 @@ struct OnboardingView: View {
                 onContinue: viewModel.advance,
                 onSkip: {
                     viewModel.reminderEnabled = false
-                    viewModel.advance()
+                    viewModel.skip()
                 }
             )
 

@@ -73,7 +73,9 @@ struct AnalyticsDiagnosticsView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
 
+                metricRow("Sessions started", value: "\(card.practiceStarts)")
                 metricRow("Analyses completed", value: "\(card.analysesCompleted)")
+                metricRow("Started → scored", value: percentSummary(card.startToScoreRate))
                 metricRow("Reached first result", value: card.activations > 0 ? "Yes" : "Not yet")
                 metricRow("Time to first result", value: timeToValueSummary(card))
                 metricRow("Paywalls after a result", value: "\(card.qualifiedPaywallViews)")
@@ -82,6 +84,11 @@ struct AnalyticsDiagnosticsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func percentSummary(_ rate: Double?) -> String {
+        guard let rate else { return "—" }
+        return "\(Int((rate * 100).rounded()))%"
     }
 
     private func timeToValueSummary(_ card: AnalyticsScorecard) -> String {

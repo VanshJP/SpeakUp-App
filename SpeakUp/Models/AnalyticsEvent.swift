@@ -160,8 +160,13 @@ extension AnalyticsEvent {
         ])
     }
 
-    static func feedbackCategory(_ category: String) -> AnalyticsEvent {
-        AnalyticsEvent("feedback", funnel: .quality, dimensions: ["category": category])
+    /// How the user rated their own session, coarsened to three buckets.
+    ///
+    /// Only the shape of the answer is recorded. Feedback questions can be
+    /// user-authored, so neither the question text nor its identifier is safe
+    /// to log — a custom question is free-text the user wrote themselves.
+    static func sessionFeedback(sentiment: String) -> AnalyticsEvent {
+        AnalyticsEvent("session_feedback", funnel: .quality, dimensions: ["sentiment": sentiment])
     }
 }
 
@@ -204,12 +209,14 @@ enum AnalyticsBucket {
         }
     }
 
-    static func storage(megabytes: Double) -> String {
-        switch megabytes {
-        case ..<100: return "0-100MB"
-        case ..<500: return "100-500MB"
-        case ..<2000: return "0.5-2GB"
-        default: return "2GB+"
+    /// Coarse self-assessment. A 1–5 scale and a yes/no question both collapse
+    /// to the same three buckets so the quality trend survives the question set
+    /// being edited.
+    static func sentiment(scale value: Int) -> String {
+        switch value {
+        case ..<3: return "negative"
+        case 3: return "mixed"
+        default: return "positive"
         }
     }
 }

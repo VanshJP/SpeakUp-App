@@ -156,6 +156,7 @@ final class LocalAnalyticsSink: AnalyticsSink {
 struct AnalyticsScorecard {
     let firstOpens: Int
     let activations: Int
+    let practiceStarts: Int
     let analysesCompleted: Int
     let qualifiedPaywallViews: Int
     let purchases: Int
@@ -165,6 +166,7 @@ struct AnalyticsScorecard {
     init(events: [RecordedAnalyticsEvent]) {
         firstOpens = events.filter { $0.name == "first_open" }.count
         activations = events.filter { $0.name == "activated" }.count
+        practiceStarts = events.filter { $0.name == "practice_start" }.count
         analysesCompleted = events.filter { $0.name == "analysis_complete" }.count
         qualifiedPaywallViews = events.filter { $0.name == "paywall_qualified" }.count
         purchases = events.filter {
@@ -190,5 +192,13 @@ struct AnalyticsScorecard {
     var qualifiedPaywallConversion: Double? {
         guard qualifiedPaywallViews > 0 else { return nil }
         return Double(purchases) / Double(qualifiedPaywallViews)
+    }
+
+    /// Sessions that reached a score over sessions that were started. A low
+    /// number here means people are recording and then bailing before the
+    /// result — a different problem from never recording at all.
+    var startToScoreRate: Double? {
+        guard practiceStarts > 0 else { return nil }
+        return Double(analysesCompleted) / Double(practiceStarts)
     }
 }

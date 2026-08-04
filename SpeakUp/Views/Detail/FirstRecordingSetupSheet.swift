@@ -124,7 +124,10 @@ struct FirstRecordingSetupSheet: View {
                         icon: "waveform.and.person.filled",
                         title: "Calibrate your voice",
                         detail: "20 seconds of speech makes speaker separation and pace targets yours.",
-                        action: { showingCalibration = true }
+                        action: {
+                            AnalyticsService.shared.log(.onboardingStep("calibrate", action: "open"))
+                            showingCalibration = true
+                        }
                     )
 
                     Divider().overlay(Color.white.opacity(0.06))
@@ -133,7 +136,10 @@ struct FirstRecordingSetupSheet: View {
                         icon: "cpu",
                         title: "AI coherence feedback",
                         detail: "Optional. Uses Apple Intelligence, or a model you download.",
-                        action: { showingAISettings = true }
+                        action: {
+                            AnalyticsService.shared.log(.onboardingStep("intelligence", action: "open"))
+                            showingAISettings = true
+                        }
                     )
                 }
             }
@@ -227,6 +233,7 @@ struct FirstRecordingSetupSheet: View {
             await service.cancelDailyReminder()
             settings?.dailyReminderEnabled = false
             try? modelContext.save()
+            AnalyticsService.shared.log(.onboardingStep("reminder", action: "skip"))
             return
         }
 
@@ -246,6 +253,7 @@ struct FirstRecordingSetupSheet: View {
         settings?.dailyReminderHour = hour
         settings?.dailyReminderMinute = minute
         try? modelContext.save()
+        AnalyticsService.shared.log(.onboardingStep("reminder", action: "complete"))
         Haptics.success()
     }
 
@@ -392,6 +400,7 @@ struct FirstRecordingSetupSheet: View {
         settings.voiceProfileLastUpdated = Date()
         try? modelContext.save()
         showingCalibration = false
+        AnalyticsService.shared.log(.onboardingStep("calibrate", action: "complete"))
         Haptics.success()
     }
 

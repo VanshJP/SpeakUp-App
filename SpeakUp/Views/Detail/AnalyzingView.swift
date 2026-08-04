@@ -334,6 +334,7 @@ struct AnalyzingView: View {
         }
 
         let feedback = SessionFeedback(answers: answers)
+        AnalyticsService.shared.log(.sessionFeedback(sentiment: sentiment(of: answers)))
         Haptics.success()
 
         withAnimation(.spring(response: 0.3)) {
@@ -342,6 +343,19 @@ struct AnalyzingView: View {
 
         onFeedbackSubmitted?(feedback)
         onFeedbackCompleted?()
+    }
+
+    /// Collapses the answer set to one word. A scale answer wins when present
+    /// because it is the closest thing to "how did that go"; a yes/no answer is
+    /// the fallback. Nothing answered reports as unrated rather than positive.
+    private func sentiment(of answers: [FeedbackAnswer]) -> String {
+        if let scale = answers.compactMap(\.scaleValue).first {
+            return AnalyticsBucket.sentiment(scale: scale)
+        }
+        if let yesNo = answers.compactMap(\.boolValue).first {
+            return yesNo ? "positive" : "negative"
+        }
+        return "unrated"
     }
 
     // MARK: - Animations (task-based, auto-cancelled on disappear)

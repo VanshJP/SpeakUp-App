@@ -139,6 +139,9 @@ struct AnalyticsPrivacyTests {
         #expect(AnalyticsBucket.sessionNumber(1) == "1")
         #expect(AnalyticsBucket.sessionNumber(7) == "6-10")
         #expect(AnalyticsBucket.sessionNumber(99) == "11+")
+        #expect(AnalyticsBucket.sentiment(scale: 1) == "negative")
+        #expect(AnalyticsBucket.sentiment(scale: 3) == "mixed")
+        #expect(AnalyticsBucket.sentiment(scale: 5) == "positive")
     }
 
     /// The schema is the privacy control. If a score or a recipient ever
@@ -154,6 +157,11 @@ struct AnalyticsPrivacyTests {
         let share = AnalyticsEvent.shareCompleted(cardType: "then_vs_now", trigger: "detail")
         #expect(share.dimensions["recipient"] == nil)
         #expect(share.dimensions["transcript"] == nil)
+
+        // Feedback questions can be written by the user, so the event carries
+        // the shape of the answer and nothing that was typed.
+        let feedback = AnalyticsEvent.sessionFeedback(sentiment: "positive")
+        #expect(feedback.dimensions == ["sentiment": "positive"])
     }
 
     @Test func emptyDimensionsAreDropped() {

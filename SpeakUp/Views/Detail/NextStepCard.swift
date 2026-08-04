@@ -14,6 +14,9 @@ struct NextStep {
     }
 
     let area: String
+    /// Stable identifier for the weak area, reported to the outcome funnel.
+    /// Separate from `area` so rewording the card copy doesn't fork the data.
+    let areaSlug: String
     let score: Int
     let coaching: String
     let actionTitle: String
@@ -25,23 +28,23 @@ struct NextStep {
     static func from(_ subscores: SpeechSubscores) -> NextStep {
         // Required subscores are always present; optional ones only join the
         // comparison when the pipeline actually produced them.
-        var candidates: [(area: String, score: Int, step: (String, String, Action))] = [
-            ("Filler words", subscores.fillerUsage, (
+        var candidates: [(area: String, slug: String, score: Int, step: (String, String, Action))] = [
+            ("Filler words", "filler", subscores.fillerUsage, (
                 "Fillers creep in when you think and talk at the same time. Pause instead.",
                 "Filler Elimination · 15s",
                 .drill(.fillerElimination)
             )),
-            ("Pace", subscores.pace, (
+            ("Pace", "pace", subscores.pace, (
                 "Steady pace beats fast. Aim for the target WPM band the whole way.",
                 "Pace Control · 60s",
                 .drill(.paceControl)
             )),
-            ("Pauses", subscores.pauseQuality, (
+            ("Pauses", "pause", subscores.pauseQuality, (
                 "Deliberate pauses read as confidence. Practice landing them on purpose.",
                 "Pause Practice · 45s",
                 .drill(.pausePractice)
             )),
-            ("Clarity", subscores.clarity, (
+            ("Clarity", "clarity", subscores.clarity, (
                 "Articulation is mechanical — reading aloud trains the mouth, not the nerves.",
                 "Read Aloud",
                 .readAloud
@@ -49,35 +52,35 @@ struct NextStep {
         ]
 
         if let vocalVariety = subscores.vocalVariety {
-            candidates.append(("Vocal variety", vocalVariety, (
+            candidates.append(("Vocal variety", "vocal_variety", vocalVariety, (
                 "Flat delivery loses the room. Warm the voice up before you speak.",
                 "Vocal Warm-Up",
                 .warmUp
             )))
         }
         if let delivery = subscores.delivery {
-            candidates.append(("Delivery", delivery, (
+            candidates.append(("Delivery", "delivery", delivery, (
                 "Energy carries the point. A warm-up raises your baseline before a session.",
                 "Vocal Warm-Up",
                 .warmUp
             )))
         }
         if let vocabulary = subscores.vocabulary {
-            candidates.append(("Vocabulary", vocabulary, (
+            candidates.append(("Vocabulary", "vocabulary", vocabulary, (
                 "Reach for a stronger word under time pressure until it stops being a reach.",
                 "Impromptu Sprint · 30s",
                 .drill(.impromptuSprint)
             )))
         }
         if let structure = subscores.structure {
-            candidates.append(("Structure", structure, (
+            candidates.append(("Structure", "structure", structure, (
                 "Point, reason, example. Sprints force you to build that shape fast.",
                 "Impromptu Sprint · 30s",
                 .drill(.impromptuSprint)
             )))
         }
         if let relevance = subscores.relevance {
-            candidates.append(("Staying on topic", relevance, (
+            candidates.append(("Staying on topic", "relevance", relevance, (
                 "Answer the question first, then support it. Don't warm up on the listener.",
                 "Impromptu Sprint · 30s",
                 .drill(.impromptuSprint)
@@ -88,6 +91,7 @@ struct NextStep {
         guard weakest.score < 75 else {
             return NextStep(
                 area: weakest.area,
+                areaSlug: weakest.slug,
                 score: weakest.score,
                 coaching: "Nothing scored below 75 this session. Bank another rep while it's working.",
                 actionTitle: "Practice Again",
@@ -97,6 +101,7 @@ struct NextStep {
 
         return NextStep(
             area: weakest.area,
+            areaSlug: weakest.slug,
             score: weakest.score,
             coaching: weakest.step.0,
             actionTitle: weakest.step.1,
@@ -141,6 +146,9 @@ struct NextStepCard: View {
                 HStack(spacing: 10) {
                     Button {
                         Haptics.medium()
+                        // Logged here rather than at each call site so every
+                        // surface that shows this card reports the same event.
+                        AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
                         onAction(step.action)
                     } label: {
                         Text(step.actionTitle)
@@ -155,6 +163,7 @@ struct NextStepCard: View {
                     if step.action != .practiceAgain {
                         Button {
                             Haptics.light()
+                            AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
                             onPracticeAgain()
                         } label: {
                             Image(systemName: "arrow.counterclockwise")

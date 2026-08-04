@@ -65,6 +65,15 @@ class DrillViewModel {
     private var audioLevelTimer: Timer?
     private var totalDuration: Int = 0
 
+    /// Lifetime drill count. Held in UserDefaults rather than on the view model
+    /// because a fresh instance is built per sheet presentation, and a counter
+    /// that resets every time the sheet opens buckets everything as "1".
+    private static let startCountKey = "analytics.drillsStarted"
+    private var drillsStarted: Int {
+        get { UserDefaults.standard.integer(forKey: Self.startCountKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.startCountKey) }
+    }
+
     var progress: Double {
         guard totalDuration > 0 else { return 0 }
         return 1.0 - Double(timeRemaining) / Double(totalDuration)
@@ -110,6 +119,13 @@ class DrillViewModel {
         do {
             // Start the recorder so the audio session is active
             _ = try await audioService.startRecording()
+
+            // Drills never produce a `Recording`, so the session number they
+            // report is the drill count, not a position in the practice log.
+            drillsStarted += 1
+            AnalyticsService.shared.log(
+                .practiceStarted(useCase: "drill", sessionNumber: drillsStarted)
+            )
 
             // Start audio level monitoring (same as RecordingViewModel)
             startAudioLevelMonitoring()

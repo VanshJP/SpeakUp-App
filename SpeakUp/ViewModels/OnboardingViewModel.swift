@@ -64,6 +64,26 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
 
     /// Steps moved out of the first run and offered after the first result.
     static let deferredSteps: [OnboardingStep] = [.calibrate, .intelligence, .reminder]
+
+    /// Stable name for the drop-off funnel. Deliberately not derived from any
+    /// on-screen copy: reworded headlines must not split one step into two
+    /// series and make the funnel look like a cliff that isn't there.
+    var analyticsName: String {
+        switch self {
+        case .welcome: return "welcome"
+        case .howItWorks: return "how_it_works"
+        case .whatsInside: return "whats_inside"
+        case .name: return "name"
+        case .goal: return "goal"
+        case .level: return "level"
+        case .vocab: return "vocab"
+        case .mic: return "mic"
+        case .calibrate: return "calibrate"
+        case .intelligence: return "intelligence"
+        case .reminder: return "reminder"
+        case .ready: return "ready"
+        }
+    }
 }
 
 // MARK: - Result
@@ -256,19 +276,29 @@ final class OnboardingViewModel {
     // and fought the view-level curve for the same state change.
 
     func advance() {
-        guard let index = steps.firstIndex(of: currentStep),
-              index + 1 < steps.count else { return }
-        Haptics.medium()
-        currentStep = steps[index + 1]
-        persistProgress()
+        move(by: 1, action: "continue")
+    }
+
+    /// Leaving a step without doing what it asked. Separate from `advance` so
+    /// the funnel can tell "answered and moved on" from "escaped" — a step
+    /// everyone skips is a step that should not be in the first run.
+    func skip() {
+        move(by: 1, action: "skip")
     }
 
     func goBack() {
-        guard currentStep.allowsBack,
-              let index = steps.firstIndex(of: currentStep),
-              index > 0 else { return }
-        Haptics.light()
-        currentStep = steps[index - 1]
+        guard currentStep.allowsBack else { return }
+        move(by: -1, action: "back")
+    }
+
+    private func move(by offset: Int, action: String) {
+        guard let index = steps.firstIndex(of: currentStep) else { return }
+        let target = index + offset
+        guard steps.indices.contains(target) else { return }
+
+        AnalyticsService.shared.log(.onboardingStep(currentStep.analyticsName, action: action))
+        if offset > 0 { Haptics.medium() } else { Haptics.light() }
+        currentStep = steps[target]
         persistProgress()
     }
 
@@ -411,6 +441,7 @@ final class OnboardingViewModel {
     // MARK: Result
 
     func makeResult() -> OnboardingResult {
+        AnalyticsService.shared.log(.onboardingStep(currentStep.analyticsName, action: "complete"))
         let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         // Always commit the current name into the dictation dictionary at
         // result time so renaming after the name step (back-nav, edit on a

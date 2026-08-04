@@ -47,6 +47,15 @@ class ReadAloudViewModel {
     private var startTime: Date?
     private var timerTask: Task<Void, Never>?
 
+    /// Lifetime read-aloud count. In UserDefaults for the same reason as the
+    /// drill counter: the view model is rebuilt per presentation, so anything
+    /// held in memory buckets every session as the first one.
+    private static let startCountKey = "analytics.readAloudSessionsStarted"
+    private var sessionsStarted: Int {
+        get { UserDefaults.standard.integer(forKey: Self.startCountKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.startCountKey) }
+    }
+
     // MARK: - Filtered Passages
 
     var passages: [ReadAloudPassage] {
@@ -89,6 +98,10 @@ class ReadAloudViewModel {
             sessionState = .listening
             startTime = Date()
             startTimer()
+            sessionsStarted += 1
+            AnalyticsService.shared.log(
+                .practiceStarted(useCase: "read_aloud", sessionNumber: sessionsStarted)
+            )
             Haptics.medium()
         } catch {
             errorMessage = error.localizedDescription
