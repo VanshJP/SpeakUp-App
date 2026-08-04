@@ -104,6 +104,17 @@ final class UserSettings {
     // resumes where the user left off instead of restarting from welcome.
     var onboardingStepRaw: Int = 0
 
+    // Free-tier analysis allowance. Counters only — whether they are consulted
+    // at all is decided by `EntitlementStore.policy`.
+    var freeIntroAnalysesUsed: Int = 0
+    var freeCycleStart: Date?
+    var freeCycleAnalysesUsed: Int = 0
+
+    // Paywall / review-prompt bookkeeping
+    var hasSeenPaywall: Bool = false
+    var lastReviewRequestVersion: String?
+    var lastReviewRequestDate: Date?
+
     // Score Weights
     var clarityWeight: Double = 0.18
     var paceWeight: Double = 0.12
@@ -201,6 +212,25 @@ final class UserSettings {
 
     var resolvedSpeakerLevel: SpeakerLevel {
         SpeakerLevel(rawValue: speakerLevel) ?? .intermediate
+    }
+
+    // MARK: - Free-Tier Allowance
+
+    /// Bridge between the persisted counters and the pure allowance arithmetic
+    /// in `PracticeAllowance`, which is where the rules actually live.
+    var allowanceState: AllowanceState {
+        get {
+            AllowanceState(
+                introUsed: freeIntroAnalysesUsed,
+                cycleStart: freeCycleStart,
+                cycleUsed: freeCycleAnalysesUsed
+            )
+        }
+        set {
+            freeIntroAnalysesUsed = newValue.introUsed
+            freeCycleStart = newValue.cycleStart
+            freeCycleAnalysesUsed = newValue.cycleUsed
+        }
     }
 
     // MARK: - Transcription Bias

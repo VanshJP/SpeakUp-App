@@ -86,11 +86,26 @@ final class RecordingProcessingCoordinator {
             return
         }
 
+        let settings = fetchSettings(from: modelContext)
+
+        // Free-tier gate. Deliberately after the idempotency and media guards:
+        // re-opening an already-analyzed recording must never trip it, and a
+        // recording with no audio should report the missing file, not a paywall.
+        guard AllowanceGate.decision(settings: settings).isAllowed else {
+            recording.isProcessing = false
+            recording.lastProcessingError = nil
+            recording.analysisBlockedByAllowance = true
+            save(modelContext, context: "deferring analysis past free allowance \(recordingID.uuidString)")
+            return
+        }
+        if recording.analysisBlockedByAllowance {
+            recording.analysisBlockedByAllowance = false
+        }
+
         recording.isProcessing = true
         recording.lastProcessingError = nil
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
-        let settings = fetchSettings(from: modelContext)
         let vocabWords = settings?.vocabWords ?? []
         let scoreWeights = ScoreWeights(from: settings)
 
@@ -183,7 +198,11 @@ final class RecordingProcessingCoordinator {
             persisted.analysis = computed.0
             persisted.isProcessing = false
             persisted.lastProcessingError = nil
+            persisted.analysisBlockedByAllowance = false
             updateStoryBestScore(for: persisted, modelContext: modelContext)
+            // Charged only on success — a failed transcription must not cost a
+            // free analysis.
+            AllowanceGate.consume(settings: settings)
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
             // Once per completed recording — keeps widgets fresh for users who
             // record from Library/History and never open the Today tab.

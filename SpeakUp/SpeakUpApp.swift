@@ -104,6 +104,18 @@ struct SpeakUpApp: App {
                         }
                     }
 
+                    // StoreKit listener first, product load second — a purchase
+                    // that completes during startup must never be dropped.
+                    PurchaseService.shared.start()
+
+                    // Logged once per install, after a grace period so a launch
+                    // that arrived through a campaign link has had its source
+                    // captured by `onOpenURL` before the event is written.
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        AttributionStore.shared.logFirstOpenIfNeeded()
+                    }
+
                     // Preload Whisper model in background – don't block UI on launch
                     Task.detached(priority: .background) {
                         await speechService.preloadModel()
@@ -124,6 +136,12 @@ struct SpeakUpApp: App {
                     // Re-arms the 3-day lapse timer on every foreground.
                     await notifications.scheduleLapsedUserNudge()
                 }
+                // Catches a purchase made on another device and a refund
+                // processed while the app was backgrounded.
+                Task {
+                    await PurchaseService.shared.refreshEntitlement()
+                }
+                AnalyticsService.shared.log(.sessionStart())
             }
         }
     }

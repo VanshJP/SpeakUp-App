@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showingStoryEditor = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
+    @State private var paywall = PaywallCoordinator.shared
 
     // Story → Warm-Up / Drill routing
     @State private var warmUpStory: Story?
@@ -283,6 +284,9 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $paywall.request) { request in
+            PaywallView(request: request)
+        }
         .onOpenURL { url in
             handleDeepLink(url)
         }
@@ -404,7 +408,16 @@ struct ContentView: View {
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "speakup" else { return }
 
+        // Any link can carry campaign parameters, so attribution is captured
+        // before routing rather than on one dedicated host.
+        AttributionStore.shared.capture(from: url)
+
         switch url.host {
+        case "open":
+            // Attribution-only entry point for campaign links that should land
+            // the user on the home screen.
+            selectedTab = .today
+
         case "record":
             // Fresh session context — never inherit a story/goal/prompt from
             // whatever was recorded last.
