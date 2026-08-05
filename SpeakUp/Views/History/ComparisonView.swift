@@ -3,6 +3,7 @@ import SwiftData
 
 struct ComparisonView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var userSettings: [UserSettings]
     @State private var viewModel = ComparisonViewModel()
 
     var body: some View {
@@ -35,6 +36,26 @@ struct ComparisonView: View {
         }
         .navigationTitle("Compare")
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            if let card = viewModel.progressCard {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.medium()
+                        ProgressCardRenderer.share(card, trigger: "compare") {
+                            if ReviewRequestService.shared.requestIfEligible(
+                                .shareCompleted,
+                                settings: userSettings.first
+                            ) {
+                                try? modelContext.save()
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share progress card")
+                }
+            }
+        }
         .onAppear {
             viewModel.configure(with: modelContext)
         }

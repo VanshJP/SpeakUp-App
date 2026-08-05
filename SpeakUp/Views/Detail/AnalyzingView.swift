@@ -66,12 +66,23 @@ struct AnalyzingView: View {
         }
     }
 
+    /// A first load is a ~150 MB download; every load after it takes seconds.
+    /// Showing the same spinner for both is what makes a slow first run read as
+    /// a hang rather than a download.
+    private var isFirstTimeModelDownload: Bool {
+        isModelLoading && !WhisperService.hasCompletedFirstLoad
+    }
+
     private var statusTitle: String {
-        isModelLoading ? "Preparing Speech Engine..." : stages[progressStage]
+        if isFirstTimeModelDownload { return "Downloading Speech Model..." }
+        return isModelLoading ? "Preparing Speech Engine..." : stages[progressStage]
     }
 
     private var statusSubtitle: String {
-        isModelLoading ? "Loading the AI model for first-time use" : "Sit tight — we're crunching the numbers"
+        if isFirstTimeModelDownload {
+            return "One-time download, about 150 MB. Your recording is already saved — leave this screen and it will score itself when the download finishes."
+        }
+        return isModelLoading ? "Loading the AI model for first-time use" : "Sit tight — we're crunching the numbers"
     }
 
     private let stages = [
@@ -323,6 +334,7 @@ struct AnalyzingView: View {
         }
 
         let feedback = SessionFeedback(answers: answers)
+        AnalyticsService.shared.log(.sessionFeedback(sentiment: sentiment(of: answers)))
         Haptics.success()
 
         withAnimation(.spring(response: 0.3)) {
@@ -331,6 +343,19 @@ struct AnalyzingView: View {
 
         onFeedbackSubmitted?(feedback)
         onFeedbackCompleted?()
+    }
+
+    /// Collapses the answer set to one word. A scale answer wins when present
+    /// because it is the closest thing to "how did that go"; a yes/no answer is
+    /// the fallback. Nothing answered reports as unrated rather than positive.
+    private func sentiment(of answers: [FeedbackAnswer]) -> String {
+        if let scale = answers.compactMap(\.scaleValue).first {
+            return AnalyticsBucket.sentiment(scale: scale)
+        }
+        if let yesNo = answers.compactMap(\.boolValue).first {
+            return yesNo ? "positive" : "negative"
+        }
+        return "unrated"
     }
 
     // MARK: - Animations (task-based, auto-cancelled on disappear)

@@ -39,6 +39,14 @@ class CurriculumViewModel {
         lesson.activities.firstIndex(where: { !isActivityCompleted($0.id) }) ?? 0
     }
 
+    /// Week one is the free sample of the improvement plan; the rest of the
+    /// eight weeks is part of Lifetime. Separate from `isLessonAccessible` so
+    /// the UI can tell "not yet earned" apart from "not yet bought".
+    @MainActor
+    func requiresPurchase(_ phase: CurriculumPhase) -> Bool {
+        phase.week > 1 && !EntitlementStore.shared.isUnlocked(.fullCurriculum)
+    }
+
     func isLessonAccessible(_ lesson: CurriculumLesson, in phase: CurriculumPhase) -> Bool {
         // Completed lessons are always accessible (for review)
         if isLessonCompleted(lesson.id) { return true }

@@ -1,0 +1,380 @@
+import StoreKit
+import SwiftData
+import SwiftUI
+
+/// The one purchase decision in the app.
+///
+/// Structure follows the offer: what you already proved to yourself, what the
+/// purchase adds, one price, one button, and the ownership scope in the same
+/// words the App Store description and the FAQ use.
+struct PaywallView: View {
+    let request: PaywallRequest
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    private var purchases: PurchaseService { PurchaseService.shared }
+    private var entitlements: EntitlementStore { EntitlementStore.shared }
+
+    @State private var showingFAQ = false
+    @State private var showingRedeemCode = false
+    @State private var didSucceed = false
+    /// Recordings the allowance held back. Resolved once — a fetch in `body`
+    /// would run on every redraw of a scrolling sheet.
+    @State private var deferredCount = 0
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground(style: .subtle)
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        header
+                        includedCard
+                        priceBlock
+                        ownershipScope
+                        secondaryActions
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 32)
+                }
+                .scrollIndicators(.hidden)
+            }
+            .navigationTitle("Big Talk Lifetime")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Not now") { dismiss() }
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .sheet(isPresented: $showingFAQ) {
+                NavigationStack { LifetimeFAQView() }
+            }
+            .offerCodeRedemption(isPresented: $showingRedeemCode) { result in
+                Task {
+                    if case .success = result {
+                        await purchases.refreshEntitlement()
+                        AnalyticsService.shared.log(.restoreResult("offer_code"))
+                    }
+                    if entitlements.isLifetime { didSucceed = true }
+                }
+            }
+            .task {
+                // A cancelled or failed attempt from a previous presentation
+                // would otherwise greet the next one with a stale red line.
+                purchases.clearPhase()
+                deferredCount = AllowanceGate.blockedRecordingCount(modelContext: modelContext)
+                await purchases.loadProduct()
+                markPaywallSeen()
+            }
+            .onChange(of: entitlements.isLifetime) { _, owned in
+                if owned { didSucceed = true }
+            }
+            .onChange(of: didSucceed) { _, succeeded in
+                guard succeeded else { return }
+                Haptics.success()
+                Task {
+                    try? await Task.sleep(for: .milliseconds(700))
+                    dismiss()
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            Image("BigTalkOrb")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 56, height: 56)
+                .padding(.top, 8)
+
+            Text(didSucceed ? "You own Big Talk." : "Keep the whole gym.")
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+
+            Text(didSucceed
+                 ? "Everything is unlocked on this Apple Account, on every device."
+                 : request.feature.paywallReason)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            // Concrete, not a scare line: these takes are already recorded and
+            // score themselves the moment the purchase lands.
+            if !didSucceed, deferredCount > 0 {
+                Text(deferredCount == 1
+                     ? "1 saved recording is waiting to be scored."
+                     : "\(deferredCount) saved recordings are waiting to be scored.")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppColors.primary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - What's included
+
+    private var includedCard: some View {
+        GlassCard(tint: AppColors.glassTintPrimary, padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(Self.includedRows, id: \.title) { row in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: row.icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.primary)
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Text(row.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private struct IncludedRow {
+        let icon: String
+        let title: String
+        let detail: String
+    }
+
+    private static let includedRows: [IncludedRow] = [
+        IncludedRow(
+            icon: "infinity",
+            title: "Unlimited scored practice",
+            detail: "Record and analyze as often as you want, on device."
+        ),
+        IncludedRow(
+            icon: "book.closed",
+            title: "The full eight-week curriculum",
+            detail: "Every phase past the first, with lessons that respond to your own sessions."
+        ),
+        IncludedRow(
+            icon: "icloud",
+            title: "iCloud sync",
+            detail: "Your practice on every device, in your own iCloud account."
+        ),
+        IncludedRow(
+            icon: "square.and.arrow.down",
+            title: "Journal export",
+            detail: "Your sessions, scores, and notes as a PDF you keep."
+        )
+    ]
+
+    // MARK: - Price
+
+    private var priceBlock: some View {
+        VStack(spacing: 12) {
+            if FoundingOffer.isActive() {
+                HStack(spacing: 6) {
+                    Image(systemName: "flag.checkered")
+                        .font(.caption2)
+                    Text(foundingOfferText)
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(AppColors.warning)
+            }
+
+            GlassButton(
+                title: buyButtonTitle,
+                icon: didSucceed ? "checkmark" : nil,
+                style: .primary,
+                size: .large,
+                isLoading: purchases.phase == .purchasing || purchases.loadState == .loading,
+                fullWidth: true
+            ) {
+                Haptics.medium()
+                Task { await buy() }
+            }
+            // Restoring counts as busy: tapping Buy mid-restore would start a
+            // second StoreKit flow for something the user may already own. And
+            // until StoreKit prices the product there is nothing to agree to.
+            .disabled(didSucceed || purchases.isBusy || !purchases.canPurchase)
+
+            Text("One payment. No subscription.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if purchases.phase == .pendingApproval {
+                statusLine(
+                    icon: "clock",
+                    text: "Waiting for approval. Big Talk unlocks by itself once it goes through.",
+                    color: AppColors.info
+                )
+            }
+
+            if let message = purchases.errorMessage {
+                statusLine(icon: "exclamationmark.triangle", text: message, color: AppColors.error)
+            }
+        }
+    }
+
+    /// The price is only ever the one StoreKit returned for this storefront.
+    /// Until it arrives the button names the purchase without pricing it.
+    /// Drops the "…after" comparison on any storefront the literal price is not
+    /// written in, rather than quoting dollars beside a button in pounds.
+    private var foundingOfferText: String {
+        guard let after = FoundingOffer.comparisonPrice(currencyCode: purchases.currencyCode) else {
+            return "Founding price"
+        }
+        return "Founding price — \(after) after"
+    }
+
+    private var buyButtonTitle: String {
+        if didSucceed { return "Unlocked" }
+        guard let price = purchases.displayPrice else { return "Unlock Lifetime" }
+        return "Unlock Lifetime · \(price)"
+    }
+
+    private func statusLine(icon: String, text: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(text)
+                .font(.caption)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Ownership scope
+
+    private var ownershipScope: some View {
+        GlassCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("What you own")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(Self.ownershipScopeText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Kept identical to the App Store description, the FAQ, and the support
+    /// site. A purchase scope that reads differently in three places is how
+    /// refund requests start.
+    static let ownershipScopeText = """
+    Pay once to keep Big Talk Lifetime's on-device feature set. No subscription \
+    is required for the features you own. Optional future services with ongoing \
+    delivery costs may be sold separately.
+    """
+
+    // MARK: - Secondary
+
+    private var secondaryActions: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                GlassButton(
+                    title: "Restore",
+                    style: .secondary,
+                    size: .small,
+                    isLoading: purchases.phase == .restoring
+                ) {
+                    Haptics.light()
+                    Task { await restore() }
+                }
+                .disabled(purchases.isBusy)
+
+                GlassButton(title: "Redeem code", style: .secondary, size: .small) {
+                    Haptics.light()
+                    showingRedeemCode = true
+                }
+
+                GlassButton(title: "What's included", style: .secondary, size: .small) {
+                    Haptics.light()
+                    showingFAQ = true
+                }
+            }
+
+            Text("Purchases are tied to your Apple Account and restore on any device you sign in to.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+
+            legalFooter
+        }
+    }
+
+    /// Terms and privacy, reachable from the screen that takes the money.
+    /// Hidden entirely until the site exists rather than shipping dead links —
+    /// `RELEASE_CHECKLIST.md` covers filling the Info.plist keys in.
+    @ViewBuilder
+    private var legalFooter: some View {
+        if SupportLinks.hasAnyWebDestination {
+            HStack(spacing: 14) {
+                if let terms = SupportLinks.terms {
+                    Link("Terms of Use", destination: terms)
+                }
+                if let privacy = SupportLinks.privacyPolicy {
+                    Link("Privacy Policy", destination: privacy)
+                }
+                if let support = SupportLinks.support {
+                    Link("Support", destination: support)
+                }
+            }
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func buy() async {
+        let succeeded = await purchases.purchase()
+        let result: String
+        switch purchases.phase {
+        case .purchased: result = "purchased"
+        case .cancelled: result = "cancelled"
+        case .pendingApproval: result = "pending"
+        case .failed: result = "failed"
+        default: result = succeeded ? "purchased" : "unknown"
+        }
+        AnalyticsService.shared.log(
+            .purchaseResult(result, price: purchases.displayPrice, source: AttributionStore.shared.source)
+        )
+        if succeeded { didSucceed = true }
+    }
+
+    private func restore() async {
+        let restored = await purchases.restore()
+        AnalyticsService.shared.log(.restoreResult(restored ? "restored" : "nothing_to_restore"))
+        if restored { didSucceed = true }
+    }
+
+    private func markPaywallSeen() {
+        var descriptor = FetchDescriptor<UserSettings>()
+        descriptor.fetchLimit = 1
+        guard let settings = try? modelContext.fetch(descriptor).first, !settings.hasSeenPaywall else { return }
+        settings.hasSeenPaywall = true
+        try? modelContext.save()
+    }
+}
+
+#Preview {
+    PaywallView(request: PaywallRequest(feature: .unlimitedAnalyses, trigger: "preview"))
+        .modelContainer(for: [UserSettings.self], inMemory: true)
+}

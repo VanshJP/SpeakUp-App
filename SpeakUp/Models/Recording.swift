@@ -27,6 +27,10 @@ final class Recording {
     var storyId: UUID?
     var storyTitle: String?
     var waveformPeaks: [Float]?
+    /// Set when the recording was saved but left unanalyzed because the free
+    /// allowance was spent. The audio is untouched — analysis runs the moment
+    /// the allowance resets or Lifetime is purchased.
+    var analysisBlockedByAllowance: Bool = false
     @Transient var audioLevelSamples: [Float]? = nil
 
     init(

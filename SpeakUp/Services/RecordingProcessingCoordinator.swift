@@ -8,8 +8,13 @@ import os
 final class RecordingProcessingCoordinator {
     static let shared = RecordingProcessingCoordinator()
 
+    /// Ceiling on one resume pass. Someone returning after a long break has a
+    /// backlog worth clearing, but not an unbounded one.
+    private static let deferredResumeLimit = 20
+
     private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "RecordingProcessing")
     private var activeRecordingIDs: Set<UUID> = []
+    private var resumeInFlight = false
 
     private init() {}
 
@@ -35,6 +40,64 @@ final class RecordingProcessingCoordinator {
                 speechService: speechService,
                 llmService: llmService
             )
+        }
+    }
+
+    /// Scores the recordings the free allowance held back, oldest first.
+    ///
+    /// The deferred card tells the user their audio is safe and will score
+    /// itself when the allowance resets or Lifetime is unlocked. Nothing kept
+    /// that promise before: a held-back recording was only retried if the user
+    /// happened to reopen it. Called on foreground and on entitlement change.
+    ///
+    /// Runs strictly one at a time — a batch of concurrent Whisper passes on a
+    /// cold foreground would be a memory spike, not a feature.
+    func resumeDeferredRecordings(
+        modelContext: ModelContext,
+        speechService: SpeechService,
+        llmService: LLMService
+    ) {
+        guard !resumeInFlight else { return }
+        guard AllowanceGate.decision(settings: fetchSettings(from: modelContext)).isAllowed else { return }
+        resumeInFlight = true
+
+        Task(priority: .utility) { [weak self] in
+            guard let self else { return }
+            defer { self.resumeInFlight = false }
+
+            // Bounded so a recording that somehow re-defers itself cannot spin.
+            for _ in 0..<Self.deferredResumeLimit {
+                guard AllowanceGate.decision(settings: self.fetchSettings(from: modelContext)).isAllowed else { return }
+
+                var descriptor = FetchDescriptor<Recording>(
+                    predicate: #Predicate { $0.analysisBlockedByAllowance == true },
+                    sortBy: [SortDescriptor(\.date, order: .forward)]
+                )
+                descriptor.fetchLimit = 1
+                guard let next = (try? modelContext.fetch(descriptor))?.first else { return }
+
+                let id = next.id
+                guard !self.activeRecordingIDs.contains(id) else { return }
+                self.activeRecordingIDs.insert(id)
+                await self.process(
+                    recordingID: id,
+                    modelContext: modelContext,
+                    speechService: speechService,
+                    llmService: llmService
+                )
+                self.activeRecordingIDs.remove(id)
+
+                // Re-fetch rather than reuse `next`: processing takes up to 90s
+                // and the user may have deleted it meanwhile. A recording still
+                // flagged deferred means the allowance ran out mid-run, so stop;
+                // a deleted one just means move on.
+                var check = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == id })
+                check.fetchLimit = 1
+                if let after = (try? modelContext.fetch(check))?.first,
+                   after.analysisBlockedByAllowance {
+                    return
+                }
+            }
         }
     }
 
@@ -86,11 +149,28 @@ final class RecordingProcessingCoordinator {
             return
         }
 
+        let settings = fetchSettings(from: modelContext)
+
+        // Free-tier gate. Deliberately after the idempotency and media guards:
+        // re-opening an already-analyzed recording must never trip it, and a
+        // recording with no audio should report the missing file, not a paywall.
+        guard AllowanceGate.decision(settings: settings).isAllowed else {
+            recording.isProcessing = false
+            recording.lastProcessingError = nil
+            recording.analysisBlockedByAllowance = true
+            save(modelContext, context: "deferring analysis past free allowance \(recordingID.uuidString)")
+            AnalyticsService.shared.log(.allowanceExhausted())
+            return
+        }
+        if recording.analysisBlockedByAllowance {
+            recording.analysisBlockedByAllowance = false
+        }
+
         recording.isProcessing = true
         recording.lastProcessingError = nil
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
-        let settings = fetchSettings(from: modelContext)
+        let startedAt = Date()
         let vocabWords = settings?.vocabWords ?? []
         let scoreWeights = ScoreWeights(from: settings)
 
@@ -183,18 +263,67 @@ final class RecordingProcessingCoordinator {
             persisted.analysis = computed.0
             persisted.isProcessing = false
             persisted.lastProcessingError = nil
+            persisted.analysisBlockedByAllowance = false
             updateStoryBestScore(for: persisted, modelContext: modelContext)
+            // Charged only on success — a failed transcription must not cost a
+            // free analysis.
+            AllowanceGate.consume(settings: settings)
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
+            logCompletion(
+                startedAt: startedAt,
+                backend: speechService.lastTranscriptionBackend,
+                modelContext: modelContext
+            )
             // Once per completed recording — keeps widgets fresh for users who
             // record from Library/History and never open the Today tab.
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
             logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .private(mask: .hash))")
+            AnalyticsService.shared.log(.analysisFailed(reason: Self.failureCategory(for: error)))
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             persisted.isProcessing = false
             persisted.lastProcessingError = error.localizedDescription
             save(modelContext, context: "clearing processing flag after error \(recordingID.uuidString)")
         }
+    }
+
+    // MARK: - Measurement
+
+    /// Time to value is the launch gate the whole onboarding plan is judged on,
+    /// so it is measured where the work actually finishes rather than where the
+    /// UI happens to notice.
+    private func logCompletion(startedAt: Date, backend: String, modelContext: ModelContext) {
+        let elapsed = Date().timeIntervalSince(startedAt)
+        let analyzedCount = analyzedRecordingCount(modelContext)
+
+        AnalyticsService.shared.log(
+            .analysisCompleted(
+                sessionNumber: analyzedCount,
+                processingPath: backend,
+                elapsed: elapsed
+            )
+        )
+        AnalyticsService.shared.logOnce(
+            .activated(minutesFromFirstOpen: AttributionStore.shared.minutesSinceFirstOpen),
+            key: "activated"
+        )
+    }
+
+    private func analyzedRecordingCount(_ modelContext: ModelContext) -> Int {
+        let descriptor = FetchDescriptor<Recording>(
+            predicate: #Predicate { $0.analysis != nil }
+        )
+        return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
+
+    /// Coarse reason only — an error string can contain a file path.
+    private static func failureCategory(for error: Error) -> String {
+        let text = error.localizedDescription.lowercased()
+        if text.contains("timed out") || text.contains("timeout") { return "timeout" }
+        if text.contains("model") { return "model" }
+        if text.contains("permission") || text.contains("denied") { return "permission" }
+        if text.contains("audio") || text.contains("file") { return "audio" }
+        return "other"
     }
 
     /// Per-recording auto-calibration: every quality-gated session nudges the

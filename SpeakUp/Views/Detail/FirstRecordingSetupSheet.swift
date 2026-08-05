@@ -13,6 +13,12 @@ struct FirstRecordingSetupSheet: View {
     @State private var countdownSeconds: Int = 10
     @State private var showFullSettings = false
 
+    // Deferred onboarding steps, offered here instead of before the first score.
+    @State private var reminderEnabled = false
+    @State private var reminderTime = Date()
+    @State private var showingCalibration = false
+    @State private var showingAISettings = false
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -21,6 +27,7 @@ struct FirstRecordingSetupSheet: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         headerSection
+                        finishSetupSection
                         quickSettingsSection
                         fullSettingsButton
                     }
@@ -44,11 +51,28 @@ struct FirstRecordingSetupSheet: View {
             .navigationDestination(isPresented: $showFullSettings) {
                 SettingsView()
             }
+            .navigationDestination(isPresented: $showingAISettings) {
+                AIModelSettingsView()
+            }
+            .sheet(isPresented: $showingCalibration) {
+                NavigationStack {
+                    VoiceCalibrationView { profile in
+                        applyCalibration(profile)
+                    }
+                }
+            }
             .onAppear {
                 if let settings {
                     selectedDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
                     selectedTimerBehavior = settings.timerEndBehavior
                     countdownSeconds = settings.countdownDuration
+                    reminderEnabled = settings.dailyReminderEnabled
+                    reminderTime = Calendar.current.date(
+                        bySettingHour: settings.dailyReminderHour,
+                        minute: settings.dailyReminderMinute,
+                        second: 0,
+                        of: Date()
+                    ) ?? Date()
                 }
             }
         }
@@ -73,12 +97,164 @@ struct FirstRecordingSetupSheet: View {
                     .font(.title3.bold())
                     .foregroundStyle(.white)
 
-                Text("Customize your session defaults so every future recording feels just right.")
+                Text("Now that you have seen a score, here are the optional extras — and your session defaults.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
         }
+    }
+
+    // MARK: - Deferred Setup
+
+    /// The three steps onboarding no longer asks for up front. They land here,
+    /// after the app has produced a score, where a reminder or a model download
+    /// is a decision about something the user has actually seen work.
+    private var finishSetupSection: some View {
+        VStack(spacing: 14) {
+            GlassSectionHeader("Finish Setting Up", icon: "sparkles")
+
+            GlassCard {
+                VStack(spacing: 16) {
+                    reminderRow
+
+                    Divider().overlay(Color.white.opacity(0.06))
+
+                    deferredRow(
+                        icon: "waveform.and.person.filled",
+                        title: "Calibrate your voice",
+                        detail: "20 seconds of speech makes speaker separation and pace targets yours.",
+                        action: {
+                            AnalyticsService.shared.log(.onboardingStep("calibrate", action: "open"))
+                            showingCalibration = true
+                        }
+                    )
+
+                    Divider().overlay(Color.white.opacity(0.06))
+
+                    deferredRow(
+                        icon: "cpu",
+                        title: "AI coherence feedback",
+                        detail: "Optional. Uses Apple Intelligence, or a model you download.",
+                        action: {
+                            AnalyticsService.shared.log(.onboardingStep("intelligence", action: "open"))
+                            showingAISettings = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private var reminderRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.categoryAmber)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Daily reminder")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("A nudge at the time you pick. Nothing else.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+
+                Toggle("", isOn: $reminderEnabled)
+                    .labelsHidden()
+                    .tint(AppColors.primary)
+                    .onChange(of: reminderEnabled) { _, enabled in
+                        Task { await applyReminderPreference(enabled) }
+                    }
+            }
+
+            if reminderEnabled {
+                DatePicker(
+                    "Reminder time",
+                    selection: $reminderTime,
+                    displayedComponents: .hourAndMinute
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .onChange(of: reminderTime) { _, _ in
+                    Task { await applyReminderPreference(true) }
+                }
+            }
+        }
+    }
+
+    private func deferredRow(
+        icon: String,
+        title: String,
+        detail: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: {
+            Haptics.light()
+            action()
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.primary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .buttonStyle(GlassPressStyle())
+    }
+
+    /// Requests notification permission only at the moment the user asks for a
+    /// reminder, and reverts the switch if they decline.
+    private func applyReminderPreference(_ enabled: Bool) async {
+        let service = NotificationService()
+
+        guard enabled else {
+            await service.cancelDailyReminder()
+            settings?.dailyReminderEnabled = false
+            try? modelContext.save()
+            AnalyticsService.shared.log(.onboardingStep("reminder", action: "skip"))
+            return
+        }
+
+        let granted = await service.requestPermission()
+        AnalyticsService.shared.log(.permissionResult(kind: "notifications", granted: granted))
+        guard granted else {
+            reminderEnabled = false
+            return
+        }
+
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
+        let hour = comps.hour ?? 9
+        let minute = comps.minute ?? 0
+        await service.scheduleDailyReminder(hour: hour, minute: minute)
+
+        settings?.dailyReminderEnabled = true
+        settings?.dailyReminderHour = hour
+        settings?.dailyReminderMinute = minute
+        try? modelContext.save()
+        AnalyticsService.shared.log(.onboardingStep("reminder", action: "complete"))
+        Haptics.success()
     }
 
     private var quickSettingsSection: some View {
@@ -211,6 +387,21 @@ struct FirstRecordingSetupSheet: View {
             Haptics.medium()
             showFullSettings = true
         }
+    }
+
+    /// Matches `SettingsViewModel.saveCalibrationProfile`: a deliberate "this is
+    /// my voice" reading earns full blend trust rather than starting at one
+    /// sample, so speaker separation works on the very next conversation.
+    private func applyCalibration(_ profile: VoiceProfile) {
+        guard let settings else { return }
+        settings.voiceProfileF0Hz = profile.f0Hz
+        settings.voiceProfileEnergyDb = profile.energyDb
+        settings.voiceProfileSampleCount = max(settings.voiceProfileSampleCount, 3)
+        settings.voiceProfileLastUpdated = Date()
+        try? modelContext.save()
+        showingCalibration = false
+        AnalyticsService.shared.log(.onboardingStep("calibrate", action: "complete"))
+        Haptics.success()
     }
 
     // MARK: - Save

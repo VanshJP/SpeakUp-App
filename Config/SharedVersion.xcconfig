@@ -3,3 +3,10 @@
 // APP_MARKETING_VERSION=2.1 APP_BUILD_NUMBER=42
 APP_MARKETING_VERSION = 3
 APP_BUILD_NUMBER = 2
+
+// Host for campaign universal links, without a scheme (e.g. bigtalk.app).
+// Feeds Info.plist's BTUniversalLinkDomain, which UniversalLink reads at
+// runtime, and must match the host in the associated-domains entitlement.
+// Empty means web links are ignored and only speakup:// routes work — see
+// RELEASE_CHECKLIST.md for the entitlement and apple-app-site-association steps.
+BT_UNIVERSAL_LINK_DOMAIN =

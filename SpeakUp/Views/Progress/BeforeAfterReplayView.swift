@@ -5,6 +5,7 @@ struct BeforeAfterReplayView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(AudioService.self) private var audioService
+    @Query private var userSettings: [UserSettings]
     @State private var viewModel = ProgressReplayViewModel()
     @State private var playingEarly = false
     @State private var playingLatest = false
@@ -64,6 +65,10 @@ struct BeforeAfterReplayView: View {
                                 onPlay: { playLatest() }
                             )
 
+                            if let card = viewModel.progressCard {
+                                shareSection(card)
+                            }
+
                             // Motivational message
                             if viewModel.scoreImprovement > 20 {
                                 FeaturedGlassCard {
@@ -106,6 +111,38 @@ struct BeforeAfterReplayView: View {
             .onDisappear {
                 audioService.stop()
             }
+        }
+    }
+
+    /// The card carries scores, dates, and a session count — never a
+    /// transcript, a prompt, or audio. Said out loud here so the user does not
+    /// have to guess what they are about to post.
+    private func shareSection(_ card: ProgressCardData) -> some View {
+        GlassCard(tint: AppColors.glassTintPrimary) {
+            VStack(spacing: 12) {
+                VStack(spacing: 4) {
+                    Text("Share your progress")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Scores and dates only — no transcript, prompt, or audio leaves your device.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                GlassButton(title: "Share Card", icon: "square.and.arrow.up", style: .secondary, size: .small) {
+                    Haptics.medium()
+                    ProgressCardRenderer.share(card, trigger: "then_vs_now") {
+                        if ReviewRequestService.shared.requestIfEligible(
+                            .shareCompleted,
+                            settings: userSettings.first
+                        ) {
+                            try? modelContext.save()
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 

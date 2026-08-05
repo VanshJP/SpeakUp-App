@@ -3,6 +3,8 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SpeechService.self) private var speechService
+    @Environment(LLMService.self) private var llmService
     @Query private var userSettings: [UserSettings]
 
     @State private var selectedTab: AppTab = .today
@@ -25,6 +27,7 @@ struct ContentView: View {
     @State private var showingStoryEditor = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
+    @State private var paywall = PaywallCoordinator.shared
 
     // Story → Warm-Up / Drill routing
     @State private var warmUpStory: Story?
@@ -121,6 +124,7 @@ struct ContentView: View {
                         showingBeforeAfter = true
                     },
                     onShowJournalExport: {
+                        guard PaywallCoordinator.allow(.journalExport, trigger: "journal_export") else { return }
                         showingJournalExport = true
                     },
                     onShowGoals: {
@@ -283,13 +287,30 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $paywall.request) { request in
+            PaywallView(request: request)
+        }
         .onOpenURL { url in
+            handleDeepLink(url)
+        }
+        // Universal links arrive as a browsing activity rather than an open-URL
+        // callback, but resolve to the same routes.
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            guard let url = activity.webpageURL else { return }
             handleDeepLink(url)
         }
         .overlay {
             if let achievement = achievementService.newlyUnlocked {
                 AchievementUnlockedView(achievement: achievement) {
                     achievementService.clearNewlyUnlocked()
+                    // Celebration just landed — the one moment a rating ask is
+                    // welcome. The service decides whether to spend one.
+                    if ReviewRequestService.shared.requestIfEligible(
+                        .achievementUnlocked,
+                        settings: userSettings.first
+                    ) {
+                        try? modelContext.save()
+                    }
                 }
                 .zIndex(10)
             }
@@ -302,6 +323,17 @@ struct ContentView: View {
         .onChange(of: userSettings.first?.hasCompletedOnboarding) { _, _ in
             // @Query may not be hydrated on first onAppear — re-evaluate once it lands
             evaluateOnboardingIfNeeded()
+        }
+        .onChange(of: EntitlementStore.shared.isLifetime) { _, owned in
+            // The deferred card promises held-back recordings score themselves
+            // the moment Lifetime is unlocked. This is where that happens for a
+            // purchase made in-app; the app-foreground pass covers the rest.
+            guard owned else { return }
+            RecordingProcessingCoordinator.shared.resumeDeferredRecordings(
+                modelContext: modelContext,
+                speechService: speechService,
+                llmService: llmService
+            )
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView { result in
@@ -402,9 +434,21 @@ struct ContentView: View {
     // MARK: - Deep Links
 
     private func handleDeepLink(_ url: URL) {
+        // A campaign link arrives as https on our own domain; normalise it into
+        // the custom-scheme form so both entry points route identically.
+        let url = UniversalLink.route(from: url) ?? url
         guard url.scheme == "speakup" else { return }
 
+        // Any link can carry campaign parameters, so attribution is captured
+        // before routing rather than on one dedicated host.
+        AttributionStore.shared.capture(from: url)
+
         switch url.host {
+        case "open":
+            // Attribution-only entry point for campaign links that should land
+            // the user on the home screen.
+            selectedTab = .today
+
         case "record":
             // Fresh session context — never inherit a story/goal/prompt from
             // whatever was recorded last.
@@ -481,4 +525,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     ContentView()
         .modelContainer(
             for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self], inMemory: true)
+        .environment(SpeechService())
+        .environment(AudioService())
+        .environment(LLMService())
 }

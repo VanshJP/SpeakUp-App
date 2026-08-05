@@ -29,6 +29,8 @@ struct SettingsView: View {
 
     private var settingsMenuCard: some View {
         VStack(spacing: 12) {
+            LifetimeStatusRow()
+
             GlassSectionHeader("You", icon: "person.crop.circle")
 
             settingsLink(
@@ -167,6 +169,14 @@ struct SettingsView: View {
                             .labelsHidden()
                             .tint(AppColors.primary)
                             .onChange(of: iCloudSyncEnabled) { _, newValue in
+                                // Turning sync *on* is part of Lifetime. Turning
+                                // it off never is — a user must always be able to
+                                // stop their data leaving the device.
+                                if newValue,
+                                   !PaywallCoordinator.allow(.iCloudSync, trigger: "icloud_sync") {
+                                    iCloudSyncEnabled = false
+                                    return
+                                }
                                 ICloudStorageService.shared.isSyncEnabled = newValue
                                 // Also persist to SwiftData settings
                                 if let settings = viewModel.settings {
@@ -327,20 +337,58 @@ struct AboutSettingsView: View {
                         .frame(minHeight: 32)
                     }
 
-                    Link(destination: URL(string: "mailto:vansh@trygoldfinch.com")!) {
-                        GlassCard(padding: 14) {
-                            HStack {
-                                Label("Send Feedback", systemImage: "envelope")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .frame(minHeight: 32)
+                    NavigationLink {
+                        LifetimeFAQView()
+                    } label: {
+                        aboutRow(
+                            "Lifetime, Privacy & Data",
+                            icon: "hand.raised",
+                            trailingIcon: "chevron.right"
+                        )
+                    }
+                    .buttonStyle(GlassPressStyle())
+
+                    if let mail = SupportLinks.feedbackMailto {
+                        Link(destination: mail) {
+                            aboutRow("Send Feedback", icon: "envelope", trailingIcon: "arrow.up.right")
                         }
                     }
+
+                    if let support = SupportLinks.support {
+                        Link(destination: support) {
+                            aboutRow("Support", icon: "lifepreserver", trailingIcon: "arrow.up.right")
+                        }
+                    }
+
+                    if let privacy = SupportLinks.privacyPolicy {
+                        Link(destination: privacy) {
+                            aboutRow("Privacy Policy", icon: "lock.shield", trailingIcon: "arrow.up.right")
+                        }
+                    }
+
+                    if let terms = SupportLinks.terms {
+                        Link(destination: terms) {
+                            aboutRow("Terms of Use", icon: "doc.text", trailingIcon: "arrow.up.right")
+                        }
+                    }
+
+                    NavigationLink {
+                        AnalyticsDiagnosticsView()
+                    } label: {
+                        aboutRow(
+                            "Usage Diagnostics",
+                            icon: "chart.bar.doc.horizontal",
+                            trailingIcon: "chevron.right"
+                        )
+                    }
+                    .buttonStyle(GlassPressStyle())
+
+                    Text("Big Talk keeps your recordings, transcripts, and scores on this device. There is no account, and nothing is uploaded to us.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
 
                     // Journal export lives in History → Progress → More,
                     // next to the data it exports.
@@ -351,6 +399,21 @@ struct AboutSettingsView: View {
         }
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func aboutRow(_ title: String, icon: String, trailingIcon: String) -> some View {
+        GlassCard(padding: 14) {
+            HStack {
+                Label(title, systemImage: icon)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: trailingIcon)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(minHeight: 32)
+        }
     }
 }
 

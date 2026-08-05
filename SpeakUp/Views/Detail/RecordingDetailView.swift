@@ -35,6 +35,12 @@ struct RecordingDetailView: View {
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
     @State private var coherenceEnhanceInFlight = false
     @State private var playableMediaAvailable = false
+    /// Set while the user is choosing whether the prompt text goes on the card.
+    @State private var pendingShareRecording: Recording?
+    /// The first score has to be the first thing the user sees. A questionnaire
+    /// in front of it costs the moment the whole install was for. Resolved once
+    /// on load — a fetch count in `body` would run on every redraw.
+    @State private var isFirstAnalyzedSession = false
     /// Rolling baselines every number on this screen is read against. Loads in
     /// the background, so all fields start nil and fill in together.
     @State private var baselines = PersonalAverage.Baselines()
@@ -73,6 +79,7 @@ struct RecordingDetailView: View {
 
     private func shouldGateFeedback(for recording: Recording) -> Bool {
         feedbackEnabled &&
+        !isFirstAnalyzedSession &&
         recording.analysis != nil &&
         recording.sessionFeedback == nil &&
         !SessionFeedbackGateStore.isDismissed(recording.id)
@@ -129,7 +136,7 @@ struct RecordingDetailView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Button {
                         if case .ready(let recording) = detailScreenState {
-                            presentScoreCardShare(for: recording)
+                            beginScoreCardShare(for: recording)
                         }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
@@ -203,6 +210,27 @@ struct RecordingDetailView: View {
         } message: {
             Text(playbackErrorMessage ?? "")
         }
+        .confirmationDialog(
+            "Share Score Card",
+            isPresented: Binding(
+                get: { pendingShareRecording != nil },
+                set: { if !$0 { pendingShareRecording = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingShareRecording
+        ) { shareTarget in
+            Button("Share Scores Only") {
+                presentScoreCardShare(for: shareTarget, includePromptText: false)
+            }
+            Button("Include What I Practised") {
+                presentScoreCardShare(for: shareTarget, includePromptText: true)
+            }
+            Button("Cancel", role: .cancel) {
+                pendingShareRecording = nil
+            }
+        } message: { shareTarget in
+            Text("The card always shows your scores. It leaves out \(shareCaptionDescription(for: shareTarget)) unless you add it.")
+        }
         .sheet(isPresented: $showingScoreWeights) {
             NavigationStack {
                 ScoreWeightsView(viewModel: settingsViewModel)
@@ -257,6 +285,9 @@ struct RecordingDetailView: View {
                     case .coaching:
                         coachingTabContent(recording)
                     }
+                } else if recording.analysisBlockedByAllowance {
+                    // Held back by the free allowance, not broken.
+                    analysisDeferredCard(recording)
                 } else {
                     // Analysis never landed (transcription failed or was
                     // interrupted) — say so and offer a way out instead of
@@ -290,6 +321,11 @@ struct RecordingDetailView: View {
     /// LLM coherence pass). Safe to call repeatedly — each step guards itself.
     private func runReadySetupIfNeeded() {
         guard case .ready(let recording) = detailScreenState else { return }
+        // The paywall is allowed to exist from here on: the user has seen a
+        // complete result, which is what earns the right to ask.
+        if recording.analysis != nil {
+            PaywallCoordinator.shared.markFirstResultSeen()
+        }
         // Resolved once here instead of in body — hasPlayableMedia hits the
         // filesystem (iCloud/local existence checks) on every call.
         playableMediaAvailable = hasPlayableMedia(recording)
@@ -313,8 +349,79 @@ struct RecordingDetailView: View {
 
         Task {
             let loaded = await PersonalAverage.all(excluding: currentID, container: container)
-            await MainActor.run { baselines = loaded }
+            await MainActor.run {
+                baselines = loaded
+                considerReviewPromptForStrongResult()
+            }
         }
+    }
+
+    /// A new personal best or a top-band score is the only moment on this
+    /// screen worth spending one of the year's review prompts on. Waits for the
+    /// baselines because "was this good?" is a question about the user's own
+    /// history, not an absolute threshold.
+    private func considerReviewPromptForStrongResult() {
+        guard !isFirstAnalyzedSession,
+              case .ready(let recording) = detailScreenState,
+              let score = recording.analysis?.speechScore.overall else { return }
+
+        let beatPersonalBest = baselines.best.map { score > $0 } ?? false
+        guard beatPersonalBest || score >= 85 else { return }
+
+        noteReviewWorthyMoment(.strongResult)
+    }
+
+    /// The recording is saved and playable; only the scoring is waiting. Said
+    /// plainly, because "analysis failed" for a paywall reason reads as a bug.
+    @ViewBuilder
+    private func analysisDeferredCard(_ recording: Recording) -> some View {
+        // Read through the existing query rather than fetching: a fetch here
+        // would re-run on every body evaluation of this screen.
+        let decision = AllowanceGate.decision(settings: userSettings.first)
+
+        GlassCard(tint: AppColors.glassTintPrimary) {
+            VStack(spacing: 12) {
+                Image(systemName: "clock.badge.checkmark")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(AppColors.primary)
+
+                VStack(spacing: 4) {
+                    Text("Saved, not scored yet")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(deferredMessage(for: decision))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(spacing: 8) {
+                    GlassButton(title: "Unlock Lifetime", icon: "sparkles", style: .primary) {
+                        Haptics.medium()
+                        PaywallCoordinator.shared.present(
+                            .unlimitedAnalyses,
+                            trigger: "deferred_analysis",
+                            userInitiated: true
+                        )
+                    }
+                    GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .secondary, size: .small) {
+                        Haptics.light()
+                        enqueueProcessingIfNeeded(recording, force: true)
+                    }
+                }
+                .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func deferredMessage(for decision: AllowanceDecision) -> String {
+        guard case .exhausted(let resetsOn) = decision else {
+            return "This recording is safe. Tap Try Again to score it now."
+        }
+        let date = resetsOn.formatted(date: .abbreviated, time: .omitted)
+        return "Your free analyses are used up for now. The audio is safe — it scores automatically on \(date), or the moment you unlock Lifetime."
     }
 
     @ViewBuilder
@@ -346,18 +453,45 @@ struct RecordingDetailView: View {
         }
     }
 
-    /// Renders the score card and hands it to the system share sheet.
-    private func presentScoreCardShare(for recording: Recording) {
-        guard let image = ScoreCardRenderer.render(recording: recording) else { return }
-        let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else { return }
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = rootVC.view
-            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
+    /// Starts a score-card share. When the session has a prompt or a story
+    /// behind it, the user is asked whether that text travels with the card —
+    /// the score is theirs to show off, the subject matter may not be.
+    private func beginScoreCardShare(for recording: Recording) {
+        guard ScoreCardRenderer.promptCaption(for: recording) != nil else {
+            presentScoreCardShare(for: recording, includePromptText: false)
+            return
         }
-        rootVC.present(activityVC, animated: true)
+        pendingShareRecording = recording
+    }
+
+    /// What the include-prompt choice would actually reveal.
+    private func shareCaptionDescription(for recording: Recording) -> String {
+        recording.prompt != nil ? "the prompt you answered" : "your story's title"
+    }
+
+    /// Renders the score card and hands it to the system share sheet.
+    private func presentScoreCardShare(for recording: Recording, includePromptText: Bool) {
+        pendingShareRecording = nil
+        guard let image = ScoreCardRenderer.render(
+            recording: recording,
+            includePromptText: includePromptText
+        ) else { return }
+
+        SharePresenter.present(
+            image: image,
+            cardType: includePromptText ? "score_card_with_prompt" : "score_card",
+            trigger: "recording_detail"
+        ) {
+            noteReviewWorthyMoment(.shareCompleted)
+        }
+    }
+
+    /// A good thing just happened. The service decides whether it is worth
+    /// spending one of the year's review prompts on.
+    private func noteReviewWorthyMoment(_ trigger: ReviewRequestService.Trigger) {
+        let settings = userSettings.first
+        guard ReviewRequestService.shared.requestIfEligible(trigger, settings: settings) else { return }
+        try? modelContext.save()
     }
 
     private func enqueueProcessingIfNeeded(_ recording: Recording, force: Bool = false) {
@@ -885,7 +1019,7 @@ struct RecordingDetailView: View {
                 Spacer()
 
                 Button {
-                    presentScoreCardShare(for: recording)
+                    beginScoreCardShare(for: recording)
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "square.and.arrow.up")
@@ -1404,6 +1538,11 @@ struct RecordingDetailView: View {
         do {
             let recordings = try modelContext.fetch(descriptor)
             recording = recordings.first
+
+            let analyzedCount = (try? modelContext.fetchCount(
+                FetchDescriptor<Recording>(predicate: #Predicate { $0.analysis != nil })
+            )) ?? 0
+            isFirstAnalyzedSession = analyzedCount <= 1
 
             // Reset stale isProcessing flag — if the app crashed mid-transcription,
             // this flag stays true in SwiftData but no task is actually running.

@@ -1,10 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// Interactive first-launch flow. Two hero screens bookend ten working pages
-/// that explain the app, capture practice intent, and switch on the four
-/// things Big Talk needs to do its job: microphone, voice profile, an AI
-/// backend, and a daily reminder.
+/// Interactive first-launch flow. Two hero screens bookend the working pages
+/// that explain the app, capture practice intent, and switch on the one thing
+/// Big Talk cannot start without: the microphone.
+///
+/// Voice calibration, the on-device model, and reminders are not here. They ask
+/// for effort, storage, or a system permission before the app has produced a
+/// single score, so `FirstRecordingSetupSheet` offers them afterwards instead.
+/// The steps still exist and still work — see `OnboardingStep.deferredSteps`.
 ///
 /// Every page routes through `OnboardingPage`, so the header rhythm, glass
 /// surfaces, and call-to-action placement match the rest of the app instead of
@@ -138,7 +142,7 @@ struct OnboardingView: View {
             // duplicate the footer action on steps that decline explicitly.
             if !viewModel.currentStep.isHero, !viewModel.currentStep.providesOwnSkip {
                 Button("Skip") {
-                    viewModel.advance()
+                    viewModel.skip()
                 }
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -226,7 +230,7 @@ struct OnboardingView: View {
                 },
                 onCalibrate: viewModel.startCalibration,
                 onContinue: viewModel.advance,
-                onSkip: viewModel.advance
+                onSkip: viewModel.skip
             )
 
         case .intelligence:
@@ -248,7 +252,7 @@ struct OnboardingView: View {
                 onContinue: viewModel.advance,
                 onSkip: {
                     viewModel.reminderEnabled = false
-                    viewModel.advance()
+                    viewModel.skip()
                 }
             )
 

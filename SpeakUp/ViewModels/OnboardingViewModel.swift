@@ -50,6 +50,40 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         default: return false
         }
     }
+
+    /// Steps a first run walks before the first recording.
+    ///
+    /// Calibration, the on-device model download, and the reminder prompt are
+    /// deliberately absent. Each one asks for effort, storage, or a system
+    /// permission before the user has seen a single score, and the score is the
+    /// only thing that has earned any of it. All three are offered again on
+    /// `FirstRecordingSetupSheet`, immediately after the first session.
+    static let firstRunSteps: [OnboardingStep] = [
+        .welcome, .howItWorks, .whatsInside, .name, .goal, .level, .vocab, .mic, .ready
+    ]
+
+    /// Steps moved out of the first run and offered after the first result.
+    static let deferredSteps: [OnboardingStep] = [.calibrate, .intelligence, .reminder]
+
+    /// Stable name for the drop-off funnel. Deliberately not derived from any
+    /// on-screen copy: reworded headlines must not split one step into two
+    /// series and make the funnel look like a cliff that isn't there.
+    var analyticsName: String {
+        switch self {
+        case .welcome: return "welcome"
+        case .howItWorks: return "how_it_works"
+        case .whatsInside: return "whats_inside"
+        case .name: return "name"
+        case .goal: return "goal"
+        case .level: return "level"
+        case .vocab: return "vocab"
+        case .mic: return "mic"
+        case .calibrate: return "calibrate"
+        case .intelligence: return "intelligence"
+        case .reminder: return "reminder"
+        case .ready: return "ready"
+        }
+    }
 }
 
 // MARK: - Result
@@ -111,7 +145,10 @@ final class OnboardingViewModel {
     // Notification permission + reminder time
     var hasNotificationPermission = false
     var isRequestingNotificationPermission = false
-    var reminderEnabled = true
+    /// Off until the user asks for it. The reminder step is no longer part of
+    /// the first run, so defaulting this on would fire a notification
+    /// permission prompt nobody agreed to.
+    var reminderEnabled = false
     var reminderTime: Date = OnboardingViewModel.defaultReminderTime()
 
     // Vocab + dictionary seeds (still populated; surfaced on the ready step
@@ -136,14 +173,13 @@ final class OnboardingViewModel {
         }
     }
 
-    // v5 keys: splitting the explainer into `.howItWorks` + `.whatsInside`
-    // shifted every rawValue after it. Bumping invalidates older saved state,
-    // which would otherwise restore a returning user to the wrong page, the
-    // same reason v4 existed.
-    private static let resumeStepKey = "onboarding.lastReachedStep.v5"
-    private static let resumeNameKey = "onboarding.draftName.v5"
-    private static let resumeGoalKey = "onboarding.draftGoal.v5"
-    private static let resumeLevelKey = "onboarding.draftLevel.v5"
+    // v6 keys: calibration, the model download, and reminders left the first
+    // run, so a v5 resume could land on a step this flow no longer walks.
+    // Bumping invalidates that saved state, the same reason v5 existed.
+    private static let resumeStepKey = "onboarding.lastReachedStep.v6"
+    private static let resumeNameKey = "onboarding.draftName.v6"
+    private static let resumeGoalKey = "onboarding.draftGoal.v6"
+    private static let resumeLevelKey = "onboarding.draftLevel.v6"
 
     // MARK: Lifecycle
 
@@ -157,16 +193,20 @@ final class OnboardingViewModel {
 
     var canAdvanceFromName: Bool { !trimmedName.isEmpty }
 
+    /// The flow this run walks. Navigation indexes into this rather than
+    /// walking `rawValue + 1`, so deferring a step is a change to one array.
+    var steps: [OnboardingStep] { OnboardingStep.firstRunSteps }
+
     /// The steps that carry a counter and a tick. The hero cover and the
     /// terminal recap bookend the flow rather than being part of it. Counting
     /// them meant the user never saw the last number ("Step 10 of 11" was the
     /// highest label the flow could ever show).
-    private static let countedSteps = OnboardingStep.allCases.filter { !$0.isHero }
+    private var countedSteps: [OnboardingStep] { steps.filter { !$0.isHero } }
 
-    var stepCount: Int { max(1, Self.countedSteps.count) }
+    var stepCount: Int { max(1, countedSteps.count) }
 
     private var countedIndex: Int? {
-        Self.countedSteps.firstIndex(of: currentStep)
+        countedSteps.firstIndex(of: currentStep)
     }
 
     /// Ticks fill across the counted steps only. The terminal step reads full.
@@ -190,7 +230,8 @@ final class OnboardingViewModel {
     func restoreFromDefaults() {
         let defaults = UserDefaults.standard
         if let raw = defaults.object(forKey: Self.resumeStepKey) as? Int,
-           let step = OnboardingStep(rawValue: raw) {
+           let step = OnboardingStep(rawValue: raw),
+           steps.contains(step) {
             currentStep = step
         }
         if let savedName = defaults.string(forKey: Self.resumeNameKey) {
@@ -235,18 +276,29 @@ final class OnboardingViewModel {
     // and fought the view-level curve for the same state change.
 
     func advance() {
-        guard let next = OnboardingStep(rawValue: currentStep.rawValue + 1) else { return }
-        Haptics.medium()
-        currentStep = next
-        persistProgress()
+        move(by: 1, action: "continue")
+    }
+
+    /// Leaving a step without doing what it asked. Separate from `advance` so
+    /// the funnel can tell "answered and moved on" from "escaped" — a step
+    /// everyone skips is a step that should not be in the first run.
+    func skip() {
+        move(by: 1, action: "skip")
     }
 
     func goBack() {
-        guard currentStep.allowsBack,
-              let previous = OnboardingStep(rawValue: currentStep.rawValue - 1)
-        else { return }
-        Haptics.light()
-        currentStep = previous
+        guard currentStep.allowsBack else { return }
+        move(by: -1, action: "back")
+    }
+
+    private func move(by offset: Int, action: String) {
+        guard let index = steps.firstIndex(of: currentStep) else { return }
+        let target = index + offset
+        guard steps.indices.contains(target) else { return }
+
+        AnalyticsService.shared.log(.onboardingStep(currentStep.analyticsName, action: action))
+        if offset > 0 { Haptics.medium() } else { Haptics.light() }
+        currentStep = steps[target]
         persistProgress()
     }
 
@@ -389,6 +441,7 @@ final class OnboardingViewModel {
     // MARK: Result
 
     func makeResult() -> OnboardingResult {
+        AnalyticsService.shared.log(.onboardingStep(currentStep.analyticsName, action: "complete"))
         let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         // Always commit the current name into the dictation dictionary at
         // result time so renaming after the name step (back-nav, edit on a
