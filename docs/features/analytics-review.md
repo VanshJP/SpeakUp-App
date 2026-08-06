@@ -21,8 +21,9 @@ On-device behavioural logging (no upload by default), install/deep-link attribut
 1. Default sink is **local only** (`LocalAnalyticsSink`). Swap via `use(sink:)` — do not ship PII / audio / transcripts / exact scores. Use bucketed dimensions.
 2. Attribution is **first-win** from query (`source` / `utm_source` / …). Delay `first_open` briefly (~2s) so deep links can win.
 3. Review triggers: `strong_result` / `share_completed` / `achievement_unlocked`. Rules in `ReviewEligibility`: once per launch, after first result, **not on paywall**, once per version, ≥60 days between asks.
-4. Product-page attribution notes: `APP_STORE_PRODUCT_PAGES.md`.
+4. Shares must go through `SharePresenter` so `.shareCompleted` fires only on **completed** shares (dismiss ≠ share).
+5. Product-page attribution notes: `APP_STORE_PRODUCT_PAGES.md`.
 
 ## Cross-links
 
-[monetization.md](./monetization.md) · [architecture.md](./architecture.md) · [recording-detail.md](./recording-detail.md) · [achievements-goals.md](./achievements-goals.md) · `/RELEASE_CHECKLIST.md`
+[monetization.md](./monetization.md) · [architecture.md](./architecture.md) · [recording-detail.md](./recording-detail.md) · [achievements-goals.md](./achievements-goals.md) · `/docs/AGENT_GOTCHAS.md` · `/RELEASE_CHECKLIST.md`
