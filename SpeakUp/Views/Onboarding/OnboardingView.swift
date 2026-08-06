@@ -1,16 +1,18 @@
 import SwiftUI
+import SwiftData
 import UIKit
 
-/// Interactive first-launch flow. Two hero screens bookend the working pages
-/// that explain the app, capture practice intent, and switch on the one thing
-/// Big Talk cannot start without: the microphone.
+/// Interactive first-launch flow. Four quick questions build toward the one
+/// thing that matters: the guided baseline recording, which happens *inside*
+/// onboarding — briefing, take, analysis, and score reveal — instead of
+/// dropping the user into an unguided recorder afterwards.
 ///
 /// Voice calibration, the on-device model, and reminders are not here. They ask
 /// for effort, storage, or a system permission before the app has produced a
 /// single score, so `FirstRecordingSetupSheet` offers them afterwards instead.
 /// The steps still exist and still work — see `OnboardingStep.deferredSteps`.
 ///
-/// Every page routes through `OnboardingPage`, so the header rhythm, glass
+/// Question pages route through `OnboardingPage`, so the header rhythm, glass
 /// surfaces, and call-to-action placement match the rest of the app instead of
 /// each step inventing its own layout.
 struct OnboardingView: View {
@@ -21,8 +23,12 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            AppBackground(style: .subtle)
+            // The canvas darkens for the live take, exactly like the app's own
+            // recorder — the baseline should feel like the recording screen the
+            // user will meet again tomorrow, not a page that happens to record.
+            AppBackground(style: isTakeLive ? .recording : .subtle)
                 .ignoresSafeArea()
+                .motion(AppMotion.settle, value: isTakeLive)
 
             VStack(spacing: 0) {
                 topBar
@@ -59,8 +65,8 @@ struct OnboardingView: View {
             Task { await viewModel.checkNotificationPermission() }
         }
         .onChange(of: viewModel.currentStep) { oldStep, newStep in
-            // Dismiss the keyboard on every transition. Steps that need it
-            // (.name, .vocab) re-acquire focus after the crossfade settles.
+            // Dismiss the keyboard on every transition. The name step
+            // re-acquires focus after the crossfade settles.
             UIApplication.shared.sendAction(
                 #selector(UIResponder.resignFirstResponder),
                 to: nil, from: nil, for: nil
@@ -79,16 +85,33 @@ struct OnboardingView: View {
             // The mic test holds a live recording. Leaving it running while the
             // app is backgrounded keeps the system recording indicator lit and
             // burns battery for a meter nobody can see.
-            guard viewModel.currentStep == .mic else { return }
-            if phase == .active {
-                Task { await viewModel.resumeMicTestIfPermitted() }
-            } else {
-                viewModel.stopMicTest()
+            if viewModel.currentStep == .mic {
+                if phase == .active {
+                    Task { await viewModel.resumeMicTestIfPermitted() }
+                } else {
+                    viewModel.stopMicTest()
+                }
+            }
+            // A baseline take interrupted by backgrounding (call, app switch)
+            // is discarded rather than resumed — a take with a hole in it
+            // would poison the one recording everything gets compared to.
+            // `.saving` is deliberately excluded: the audio is already stopped
+            // and the row is moments from existing, so discarding there would
+            // throw away a finished take.
+            if viewModel.currentStep == .baseline,
+               phase != .active,
+               viewModel.baselinePhase == .countdown || viewModel.baselinePhase == .recording {
+                viewModel.discardBaselineTake(note: "We saved nothing. Clean slate whenever you're ready.")
             }
         }
         .onDisappear {
             viewModel.stopMicTest()
         }
+    }
+
+    private var isTakeLive: Bool {
+        viewModel.currentStep == .baseline
+            && (viewModel.baselinePhase == .countdown || viewModel.baselinePhase == .recording)
     }
 
     // MARK: - Top Bar
@@ -124,10 +147,11 @@ struct OnboardingView: View {
 
             // Ticks read as discrete steps rather than a loading bar: one
             // tick per page, using the app's shared meter primitive. Hidden on
-            // the cover so the first screen reads as a cover, not a form.
+            // hero steps: the cover should read as a cover, and the baseline
+            // is the event the ticks build toward, not another tick.
             //
             // Decorative to VoiceOver on purpose: every non-hero page already
-            // announces "Step N of 10" as the first line of its header, so
+            // announces "Step N of 4" as the first line of its header, so
             // labelling the meter too would read the position twice.
             TickMeter(
                 fraction: viewModel.stepProgress,
@@ -135,7 +159,7 @@ struct OnboardingView: View {
                 tickCount: viewModel.stepCount
             )
             .frame(height: 12)
-            .opacity(viewModel.currentStep == .welcome ? 0 : 1)
+            .opacity(viewModel.currentStep.isHero ? 0 : 1)
             .motion(AppMotion.settle, value: viewModel.stepProgress)
 
             // Skip makes no sense on the cover or the terminal step, and would
@@ -162,18 +186,6 @@ struct OnboardingView: View {
         case .welcome:
             OnboardingWelcomeStep(onContinue: viewModel.advance)
 
-        case .howItWorks:
-            OnboardingHowItWorksStep(
-                counter: viewModel.stepCounterLabel,
-                onContinue: viewModel.advance
-            )
-
-        case .whatsInside:
-            OnboardingWhatsInsideStep(
-                counter: viewModel.stepCounterLabel,
-                onContinue: viewModel.advance
-            )
-
         case .name:
             OnboardingNameStep(
                 counter: viewModel.stepCounterLabel,
@@ -187,24 +199,19 @@ struct OnboardingView: View {
                 counter: viewModel.stepCounterLabel,
                 userName: viewModel.trimmedName,
                 selectedGoal: viewModel.selectedGoal,
-                onSelect: { viewModel.selectGoal($0) },
+                onSelect: { goal, autoAdvance in
+                    viewModel.selectGoal(goal, autoAdvance: autoAdvance)
+                },
                 onContinue: viewModel.advance
             )
 
         case .level:
             OnboardingLevelStep(
                 counter: viewModel.stepCounterLabel,
-                selected: viewModel.speakerLevel,
-                onSelect: { viewModel.selectLevel($0, haptic: false) },
-                onContinue: viewModel.advance
-            )
-
-        case .vocab:
-            OnboardingVocabStep(
-                counter: viewModel.stepCounterLabel,
-                vocabWords: viewModel.vocabWords,
-                onAdd: { viewModel.addVocabWord($0) },
-                onRemove: { viewModel.removeVocabWord($0) },
+                selected: viewModel.hasPickedLevel ? viewModel.speakerLevel : nil,
+                onSelect: { level, autoAdvance in
+                    viewModel.selectLevel(level, autoAdvance: autoAdvance)
+                },
                 onContinue: viewModel.advance
             )
 
@@ -217,6 +224,29 @@ struct OnboardingView: View {
                 counter: viewModel.stepCounterLabel,
                 viewModel: viewModel,
                 onContinue: viewModel.advance
+            )
+
+        case .baselineBriefing:
+            OnboardingBaselineBriefingStep(
+                userName: viewModel.trimmedName,
+                onContinue: viewModel.advance,
+                onNotNow: {
+                    AnalyticsService.shared.log(.onboardingStep("baseline_briefing", action: "skip"))
+                    onComplete(viewModel.makeResult())
+                }
+            )
+
+        case .baseline:
+            OnboardingBaselineStep(
+                viewModel: viewModel,
+                userName: viewModel.trimmedName,
+                onComplete: { recordingID, review in
+                    Haptics.success()
+                    onComplete(viewModel.makeResult(
+                        baselineRecordingID: recordingID,
+                        reviewBaseline: review
+                    ))
+                }
             )
 
         case .calibrate:
@@ -256,18 +286,6 @@ struct OnboardingView: View {
                 }
             )
 
-        case .ready:
-            OnboardingReadyStep(
-                userName: viewModel.trimmedName,
-                goal: viewModel.selectedGoal ?? .everydayConfidence,
-                level: viewModel.speakerLevel,
-                hasCalibratedVoice: viewModel.hasCalibratedVoice,
-                launchFirstRecording: $viewModel.launchFirstRecording,
-                onFinish: {
-                    Haptics.success()
-                    onComplete(viewModel.makeResult())
-                }
-            )
         }
     }
 }
@@ -278,4 +296,6 @@ struct OnboardingView: View {
     OnboardingView { _ in }
         .environment(LLMService())
         .environment(AudioService())
+        .environment(SpeechService())
+        .modelContainer(for: [Recording.self, Prompt.self, UserSettings.self], inMemory: true)
 }

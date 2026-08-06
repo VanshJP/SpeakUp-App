@@ -309,9 +309,14 @@ final class RecordingProcessingCoordinator {
         )
     }
 
+    /// Counted on `transcriptionText`: SwiftData stores the Codable `analysis`
+    /// as a composite attribute with no queryable column, so a predicate on it
+    /// raises an ObjC exception inside CoreData's SQL generation — not a Swift
+    /// error, so `try?` cannot catch it and the app terminates. Transcript and
+    /// analysis persist in the same save, so the two counts agree.
     private func analyzedRecordingCount(_ modelContext: ModelContext) -> Int {
         let descriptor = FetchDescriptor<Recording>(
-            predicate: #Predicate { $0.analysis != nil }
+            predicate: #Predicate { $0.transcriptionText != nil }
         )
         return (try? modelContext.fetchCount(descriptor)) ?? 0
     }

@@ -5,32 +5,35 @@ import SwiftUI
 ///
 /// This exists in-app rather than only on a website because the purchase scope
 /// is the thing a refund argument turns on, and a user deciding at the paywall
-/// should not have to leave to read it.
+/// should not have to leave to read it. The scope itself sits above the fold;
+/// everything else collapses, because eight open paragraphs is a document, and
+/// nobody reads a document mid-purchase.
 struct LifetimeFAQView: View {
     @Environment(\.dismiss) private var dismiss
+
+    @State private var expanded: Set<String> = []
 
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
+                    scopeCard
+
+                    Text("QUESTIONS")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .tracking(0.6)
+                        .padding(.top, 6)
+                        .padding(.leading, 4)
+
                     ForEach(Self.entries, id: \.question) { entry in
-                        GlassCard(padding: 15) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(entry.question)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Text(entry.answer)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        entryRow(entry)
                     }
 
                     legalLinks
+                        .padding(.top, 8)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -45,6 +48,78 @@ struct LifetimeFAQView: View {
             }
         }
     }
+
+    // MARK: - Scope
+
+    /// The one answer nobody should have to tap for.
+    private var scopeCard: some View {
+        GlassCard(cornerRadius: 20, tint: AppColors.primary, padding: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                    Text("What you own")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+
+                Text(PaywallView.ownershipScopeText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: - Entries
+
+    private func entryRow(_ entry: Entry) -> some View {
+        let isOpen = expanded.contains(entry.question)
+
+        return GlassCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    Haptics.light()
+                    withAnimation(AppMotion.snap) {
+                        if isOpen {
+                            expanded.remove(entry.question)
+                        } else {
+                            expanded.insert(entry.question)
+                        }
+                    }
+                } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(entry.question)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isOpen ? 0 : -90))
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+
+                if isOpen {
+                    Text(entry.answer)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: - Legal
 
     @ViewBuilder
     private var legalLinks: some View {
@@ -89,10 +164,6 @@ struct LifetimeFAQView: View {
     }
 
     private static let entries: [Entry] = [
-        Entry(
-            question: "What does Lifetime include?",
-            answer: PaywallView.ownershipScopeText
-        ),
         Entry(
             question: "What can I do without paying?",
             answer: """

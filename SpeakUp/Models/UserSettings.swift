@@ -84,6 +84,9 @@ final class UserSettings {
     // First Recording Setup
     var hasShownFirstRecordingSetup: Bool = false
 
+    // Guided layout walkthrough, shown once after the first score lands.
+    var hasSeenAppTour: Bool = false
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 

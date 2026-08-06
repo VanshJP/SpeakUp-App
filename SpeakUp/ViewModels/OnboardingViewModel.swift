@@ -12,33 +12,37 @@ import UIKit
 /// user has already addressed in a previous launch are skippable on resume.
 enum OnboardingStep: Int, CaseIterable, Identifiable {
     case welcome = 0
-    case howItWorks
-    case whatsInside
     case name
     case goal
     case level
-    case vocab
     case mic
+    case baselineBriefing
+    case baseline
     case calibrate
     case intelligence
     case reminder
-    case ready
 
     var id: Int { rawValue }
 
     /// Whether the user can navigate back from this step. The terminal
-    /// `ready` step is one-way: once they hit it, they're done.
+    /// `baseline` step is one-way: retakes happen inside it, and backing out
+    /// mid-take would tear down a live recording.
     var allowsBack: Bool {
         switch self {
-        case .welcome, .ready: return false
+        case .welcome, .baseline: return false
         default: return true
         }
     }
 
     /// Hero steps run their own full-bleed layout instead of the shared
-    /// `OnboardingPage` scaffold, and carry no step counter.
+    /// `OnboardingPage` header, carry no step counter, and hide the tick
+    /// meter. The baseline is the event the counted steps build toward, so it
+    /// is deliberately not a step among steps.
     var isHero: Bool {
-        self == .welcome || self == .ready
+        switch self {
+        case .welcome, .baselineBriefing, .baseline: return true
+        default: return false
+        }
     }
 
     /// Steps that put a labelled decline action in their own footer
@@ -51,7 +55,9 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// Steps a first run walks before the first recording.
+    /// Steps a first run walks. The flow ends inside the baseline recording —
+    /// the first guided take, its analysis, and its reveal — rather than
+    /// handing the user off to an unguided recorder after a recap screen.
     ///
     /// Calibration, the on-device model download, and the reminder prompt are
     /// deliberately absent. Each one asks for effort, storage, or a system
@@ -59,7 +65,7 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     /// only thing that has earned any of it. All three are offered again on
     /// `FirstRecordingSetupSheet`, immediately after the first session.
     static let firstRunSteps: [OnboardingStep] = [
-        .welcome, .howItWorks, .whatsInside, .name, .goal, .level, .vocab, .mic, .ready
+        .welcome, .name, .goal, .level, .mic, .baselineBriefing, .baseline
     ]
 
     /// Steps moved out of the first run and offered after the first result.
@@ -71,17 +77,15 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     var analyticsName: String {
         switch self {
         case .welcome: return "welcome"
-        case .howItWorks: return "how_it_works"
-        case .whatsInside: return "whats_inside"
         case .name: return "name"
         case .goal: return "goal"
         case .level: return "level"
-        case .vocab: return "vocab"
         case .mic: return "mic"
+        case .baselineBriefing: return "baseline_briefing"
+        case .baseline: return "baseline"
         case .calibrate: return "calibrate"
         case .intelligence: return "intelligence"
         case .reminder: return "reminder"
-        case .ready: return "ready"
         }
     }
 }
@@ -99,7 +103,12 @@ struct OnboardingResult {
     let reminderEnabled: Bool
     let reminderHour: Int
     let reminderMinute: Int
-    let launchFirstRecording: Bool
+    /// The baseline recording captured inside onboarding. Nil when the user
+    /// bailed before recording (mic denied, "explore first").
+    let baselineRecordingID: UUID?
+    /// True when the reveal's "See my full breakdown" was tapped — ContentView
+    /// routes straight into the recording detail after dismissing.
+    let reviewBaselineOnFinish: Bool
     /// Baseline voice signature captured on the calibration step. Nil when the
     /// user skipped it, in which case the profile is learned from recordings.
     let voiceProfile: VoiceProfile?
@@ -119,6 +128,9 @@ final class OnboardingViewModel {
     // Practice intent
     var selectedGoal: OnboardingGoal? = nil
     var speakerLevel: SpeakerLevel = .intermediate
+    /// The level step advances on tap, so it needs an unpicked state even
+    /// though `speakerLevel` carries a default for everything downstream.
+    var hasPickedLevel = false
 
     // Mic permission + live test
     var hasMicPermission = false
@@ -151,13 +163,41 @@ final class OnboardingViewModel {
     var reminderEnabled = false
     var reminderTime: Date = OnboardingViewModel.defaultReminderTime()
 
-    // Vocab + dictionary seeds (still populated; surfaced on the ready step
-    // as a quick preview rather than a full editing page).
+    // Vocab + dictionary seeds. Seeded silently from the level pick — the
+    // editing page was homework mid-flow; the Word Bank in Settings is the
+    // editor now.
     var vocabWords: [String] = OnboardingViewModel.vocabSeeds(for: .intermediate)
     var dictionaryWords: [String] = []
 
-    // Final action
-    var launchFirstRecording = true
+    // MARK: Baseline take
+
+    /// The guided first take. `ready → countdown → recording`; everything after
+    /// stop (persist, analyze, reveal) is view-owned because it needs the
+    /// model context.
+    enum BaselinePhase {
+        /// `saving` covers the gap between the user pressing Done and the
+        /// `Recording` row existing — stopping the file takes long enough to
+        /// see. Without it the take screen fell back to `ready` for a few
+        /// frames and the pre-record UI flashed back over a finished take.
+        case ready, countdown, recording, saving
+    }
+
+    var baselinePhase: BaselinePhase = .ready
+    var baselineCountdownValue = 3
+    /// Whole seconds only — the recorder UI is 1 Hz, so writing fractional
+    /// elapsed would re-diff the page 16 times a second for nothing.
+    var baselineElapsed: Int = 0
+    /// One-line status shown on the ready state after a discarded or failed
+    /// take ("We saved nothing — clean slate.").
+    var baselineNote: String?
+    private var baselineCountdownTask: Task<Void, Never>?
+    /// dBFS samples at ~0.5s cadence, matching what `RecordingViewModel`
+    /// collects for the volume/energy metrics.
+    private var baselineLevelSamples: [Float] = []
+    private var baselineSampleCounter = 0
+
+    // Auto-advance after a goal/level pick — the answer is the navigation.
+    private var autoAdvanceTask: Task<Void, Never>?
 
     static func vocabSeeds(for level: SpeakerLevel) -> [String] {
         switch level {
@@ -173,13 +213,14 @@ final class OnboardingViewModel {
         }
     }
 
-    // v6 keys: calibration, the model download, and reminders left the first
-    // run, so a v5 resume could land on a step this flow no longer walks.
-    // Bumping invalidates that saved state, the same reason v5 existed.
-    private static let resumeStepKey = "onboarding.lastReachedStep.v6"
-    private static let resumeNameKey = "onboarding.draftName.v6"
-    private static let resumeGoalKey = "onboarding.draftGoal.v6"
-    private static let resumeLevelKey = "onboarding.draftLevel.v6"
+    // v7 keys: the explainer pages, vocab editor, and ready recap left the
+    // flow and the baseline moved inside it, so v6 raw values point at steps
+    // that no longer exist. Bumping invalidates that saved state, the same
+    // reason v6 existed.
+    private static let resumeStepKey = "onboarding.lastReachedStep.v7"
+    private static let resumeNameKey = "onboarding.draftName.v7"
+    private static let resumeGoalKey = "onboarding.draftGoal.v7"
+    private static let resumeLevelKey = "onboarding.draftLevel.v7"
 
     // MARK: Lifecycle
 
@@ -197,10 +238,9 @@ final class OnboardingViewModel {
     /// walking `rawValue + 1`, so deferring a step is a change to one array.
     var steps: [OnboardingStep] { OnboardingStep.firstRunSteps }
 
-    /// The steps that carry a counter and a tick. The hero cover and the
-    /// terminal recap bookend the flow rather than being part of it. Counting
-    /// them meant the user never saw the last number ("Step 10 of 11" was the
-    /// highest label the flow could ever show).
+    /// The steps that carry a counter and a tick: the four questions between
+    /// the cover and the baseline. The hero bookends aren't counted — the
+    /// baseline is the destination, not a step among steps.
     private var countedSteps: [OnboardingStep] { steps.filter { !$0.isHero } }
 
     var stepCount: Int { max(1, countedSteps.count) }
@@ -209,9 +249,11 @@ final class OnboardingViewModel {
         countedSteps.firstIndex(of: currentStep)
     }
 
-    /// Ticks fill across the counted steps only. The terminal step reads full.
+    /// Ticks fill across the counted steps only. The baseline beats read full
+    /// (the meter is hidden there, but Back into a counted step must not
+    /// animate from zero).
     var stepProgress: Double {
-        if currentStep == .ready { return 1 }
+        if currentStep == .baselineBriefing || currentStep == .baseline { return 1 }
         guard let index = countedIndex else { return 0 }
         return Double(index + 1) / Double(stepCount)
     }
@@ -232,7 +274,9 @@ final class OnboardingViewModel {
         if let raw = defaults.object(forKey: Self.resumeStepKey) as? Int,
            let step = OnboardingStep(rawValue: raw),
            steps.contains(step) {
-            currentStep = step
+            // Never resume cold onto the live recorder — the briefing carries
+            // the context that makes the recorder make sense.
+            currentStep = step == .baseline ? .baselineBriefing : step
         }
         if let savedName = defaults.string(forKey: Self.resumeNameKey) {
             nameInput = savedName
@@ -244,6 +288,7 @@ final class OnboardingViewModel {
         if let levelRaw = defaults.object(forKey: Self.resumeLevelKey) as? Int,
            let level = SpeakerLevel(rawValue: levelRaw) {
             speakerLevel = level
+            hasPickedLevel = true
             vocabWords = Self.vocabSeeds(for: level)
         }
     }
@@ -292,6 +337,8 @@ final class OnboardingViewModel {
     }
 
     private func move(by offset: Int, action: String) {
+        autoAdvanceTask?.cancel()
+        autoAdvanceTask = nil
         guard let index = steps.firstIndex(of: currentStep) else { return }
         let target = index + offset
         guard steps.indices.contains(target) else { return }
@@ -302,22 +349,36 @@ final class OnboardingViewModel {
         persistProgress()
     }
 
-    func selectGoal(_ goal: OnboardingGoal) {
+    /// Tap-to-advance for the single-choice questions: pick lands, the payoff
+    /// line gets a beat to be read, then the flow moves on its own. Re-picking
+    /// inside the window restarts the beat. Views pass `autoAdvance: false`
+    /// under VoiceOver, where unrequested navigation is disorienting.
+    private func scheduleAutoAdvance() {
+        autoAdvanceTask?.cancel()
+        autoAdvanceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1100))
+            guard !Task.isCancelled else { return }
+            self?.advance()
+        }
+    }
+
+    func selectGoal(_ goal: OnboardingGoal, autoAdvance: Bool = false) {
         Haptics.selection()
         selectedGoal = goal
         persistProgress()
+        if autoAdvance { scheduleAutoAdvance() }
     }
 
-    /// `haptic: false` is used by the level `SectionPicker`, which already
-    /// fires its own selection haptic before writing through the binding.
-    func selectLevel(_ level: SpeakerLevel, haptic: Bool = true) {
-        if haptic { Haptics.selection() }
+    func selectLevel(_ level: SpeakerLevel, autoAdvance: Bool = false) {
+        Haptics.selection()
+        hasPickedLevel = true
         let oldSeeds = Self.vocabSeeds(for: speakerLevel)
         speakerLevel = level
         if vocabWords == oldSeeds {
             vocabWords = Self.vocabSeeds(for: level)
         }
         persistProgress()
+        if autoAdvance { scheduleAutoAdvance() }
     }
 
     // MARK: Mic Permission + Live Test
@@ -380,6 +441,20 @@ final class OnboardingViewModel {
             print("Onboarding mic test failed to start: \(error)")
             return
         }
+        startLevelMonitor(forBaselineTake: false)
+    }
+
+    func stopMicTest() {
+        levelMonitorTask?.cancel()
+        levelMonitorTask = nil
+        audioService.cancelRecording()
+        micLevel = 0
+    }
+
+    /// One monitor loop shared by the mic test and the baseline take. The
+    /// baseline variant additionally tracks whole-second elapsed time and
+    /// collects ~0.5s dBFS samples for the volume/energy metrics.
+    private func startLevelMonitor(forBaselineTake: Bool) {
         levelMonitorTask?.cancel()
         levelMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -392,16 +467,104 @@ final class OnboardingViewModel {
                 if smoothed > 0.18, !self.hasHeardVoice {
                     self.hasHeardVoice = true
                 }
+                if forBaselineTake {
+                    let seconds = Int(self.audioService.recordingDuration)
+                    if seconds != self.baselineElapsed {
+                        self.baselineElapsed = seconds
+                    }
+                    self.baselineSampleCounter += 1
+                    if self.baselineSampleCounter >= 8 {
+                        self.baselineSampleCounter = 0
+                        self.baselineLevelSamples.append(dbfs)
+                    }
+                }
                 try? await Task.sleep(for: .milliseconds(60))
             }
         }
     }
 
-    func stopMicTest() {
+    // MARK: Baseline Take
+
+    var micPermissionDenied: Bool {
+        AVAudioApplication.shared.recordPermission == .denied
+    }
+
+    /// 3-2-1 in the record button, then the take starts. The countdown lives
+    /// here (not in `CountdownOverlayView`) so the prompt card never leaves
+    /// the screen — the take begins on a page the user is already reading.
+    func beginBaselineCountdown() {
+        guard baselinePhase == .ready else { return }
+        baselineNote = nil
+        Haptics.medium()
+        baselinePhase = .countdown
+        baselineCountdownValue = 3
+        baselineCountdownTask?.cancel()
+        baselineCountdownTask = Task { [weak self] in
+            for tick in [3, 2, 1] {
+                guard let self, !Task.isCancelled else { return }
+                self.baselineCountdownValue = tick
+                Haptics.light()
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard let self, !Task.isCancelled else { return }
+            await self.startBaselineTake()
+        }
+    }
+
+    private func startBaselineTake() async {
+        do {
+            _ = try await audioService.startRecording()
+        } catch {
+            baselinePhase = .ready
+            baselineNote = "The recorder couldn't start. Try again."
+            return
+        }
+        baselineElapsed = 0
+        baselineLevelSamples = []
+        baselineSampleCounter = 0
+        baselinePhase = .recording
+        Haptics.heavy()
+        UIApplication.shared.isIdleTimerDisabled = true
+        startLevelMonitor(forBaselineTake: true)
+    }
+
+    /// Finalizes the take. Returns the audio to persist; the caller owns the
+    /// model context, so the `Recording` row is created view-side.
+    func finishBaselineTake() async -> (url: URL, duration: TimeInterval, levelSamples: [Float])? {
+        guard baselinePhase == .recording else { return nil }
+        // Also doubles as the re-entrancy guard: a second Done tap during the
+        // stop no longer passes the guard above.
+        baselinePhase = .saving
         levelMonitorTask?.cancel()
         levelMonitorTask = nil
-        audioService.cancelRecording()
         micLevel = 0
+        UIApplication.shared.isIdleTimerDisabled = false
+        Haptics.success()
+        let url = await audioService.stopRecording()
+        let duration = audioService.recordingDuration
+        guard let url else {
+            baselinePhase = .ready
+            baselineNote = "That take didn't save. Give it another go."
+            return nil
+        }
+        // Stays `.saving` on success — the caller swaps the whole page to the
+        // analyzing view, so returning to `ready` would only flash the recorder.
+        return (url, duration, baselineLevelSamples)
+    }
+
+    /// Start over, interruption, or backgrounding mid-take. Deletes the audio
+    /// and resets to ready; `note` explains what happened in the coach's voice.
+    func discardBaselineTake(note: String? = nil) {
+        baselineCountdownTask?.cancel()
+        baselineCountdownTask = nil
+        levelMonitorTask?.cancel()
+        levelMonitorTask = nil
+        micLevel = 0
+        UIApplication.shared.isIdleTimerDisabled = false
+        audioService.cancelRecording()
+        baselineElapsed = 0
+        baselinePhase = .ready
+        baselineNote = note
     }
 
     // MARK: Voice Calibration
@@ -440,7 +603,7 @@ final class OnboardingViewModel {
 
     // MARK: Result
 
-    func makeResult() -> OnboardingResult {
+    func makeResult(baselineRecordingID: UUID? = nil, reviewBaseline: Bool = false) -> OnboardingResult {
         AnalyticsService.shared.log(.onboardingStep(currentStep.analyticsName, action: "complete"))
         let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         // Always commit the current name into the dictation dictionary at
@@ -460,56 +623,10 @@ final class OnboardingViewModel {
             reminderEnabled: reminderEnabled && hasNotificationPermission,
             reminderHour: comps.hour ?? 9,
             reminderMinute: comps.minute ?? 0,
-            launchFirstRecording: launchFirstRecording,
+            baselineRecordingID: baselineRecordingID,
+            reviewBaselineOnFinish: reviewBaseline,
             voiceProfile: voiceProfile
         )
-    }
-
-    // MARK: Word Bank Editing
-
-    /// Spell-checker reused across add attempts. `UITextChecker` is cheap to
-    /// construct but caching avoids re-allocating on every keystroke commit.
-    private static let spellChecker = UITextChecker()
-
-    /// Append a vocab word after validation. Returns `true` on success so the
-    /// caller can decide whether to clear its input field. Failures fire an
-    /// error haptic so the user gets immediate tactile feedback that the
-    /// word was rejected.
-    @discardableResult
-    func addVocabWord(_ word: String) -> Bool {
-        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isValidVocabWord(trimmed) else {
-            Haptics.error()
-            return false
-        }
-        guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
-            Haptics.error()
-            return false
-        }
-        Haptics.light()
-        vocabWords.append(trimmed)
-        return true
-    }
-
-    /// Validate a candidate vocab entry. Word must be at least 2 characters,
-    /// purely alphabetic, and recognised by `UITextChecker` against US English.
-    private func isValidVocabWord(_ word: String) -> Bool {
-        guard word.count >= 2 else { return false }
-        guard word.unicodeScalars.allSatisfy({ CharacterSet.letters.contains($0) }) else { return false }
-        let range = NSRange(location: 0, length: word.utf16.count)
-        let misspelled = Self.spellChecker.rangeOfMisspelledWord(
-            in: word,
-            range: range,
-            startingAt: 0,
-            wrap: false,
-            language: "en_US"
-        )
-        return misspelled.location == NSNotFound
-    }
-
-    func removeVocabWord(_ word: String) {
-        Haptics.light()
-        vocabWords.removeAll { $0.caseInsensitiveCompare(word) == .orderedSame }
     }
 
     private static func defaultReminderTime() -> Date {

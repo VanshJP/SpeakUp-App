@@ -280,38 +280,6 @@ struct OnboardingBullet: View {
     }
 }
 
-// MARK: - Summary Row
-
-/// Label/value line used on the ready step recap.
-struct OnboardingSummaryRow: View {
-    let icon: String
-    let label: String
-    let value: String
-    var tint: Color = AppColors.primary
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 22)
-
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 8)
-
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.trailing)
-        }
-        .frame(minHeight: 26)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 // MARK: - Brand Orb
 
 /// The brand orb, used only on the two hero steps. Elsewhere the header glyph

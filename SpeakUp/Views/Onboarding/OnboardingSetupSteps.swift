@@ -14,7 +14,7 @@ struct OnboardingMicStep: View {
     var body: some View {
         OnboardingPage(
             counter: counter,
-            title: hasPermission ? "Say something" : "Let's hear your voice",
+            title: hasPermission ? "Sound check" : "Let's make sure we can hear you",
             subtitle: subtitle
         ) {
             GlassCard(tint: hasPermission ? AppColors.glassTintPrimary : nil, padding: 16) {
@@ -27,7 +27,7 @@ struct OnboardingMicStep: View {
 
                     if heardVoice {
                         StatusPill(
-                            text: "Mic is working",
+                            text: "Loud and clear",
                             color: AppColors.success,
                             glyph: .icon("checkmark")
                         )
@@ -41,27 +41,9 @@ struct OnboardingMicStep: View {
                 .frame(maxWidth: .infinity)
                 .motion(AppMotion.settle, value: heardVoice)
             }
-
-            GlassCard(padding: 12) {
-                VStack(alignment: .leading, spacing: 9) {
-                    OnboardingBullet(
-                        icon: "mic",
-                        text: "Microphone access records your practice sessions."
-                    )
-                    OnboardingBullet(
-                        icon: "text.quote",
-                        text: "Speech recognition is the backup transcriber when the on-device model is still loading."
-                    )
-                    OnboardingBullet(
-                        icon: "lock.fill",
-                        text: "Audio is transcribed on this device and recording only runs while you're on a session screen.",
-                        tint: AppColors.success
-                    )
-                }
-            }
         } footer: {
             if hasPermission {
-                OnboardingCTA(title: "Continue", action: onContinue)
+                OnboardingCTA(title: "I'm ready", action: onContinue)
             } else {
                 OnboardingCTA(
                     title: isRequesting ? "Asking…" : "Allow microphone",
@@ -76,14 +58,17 @@ struct OnboardingMicStep: View {
         .motion(AppMotion.settle, value: hasPermission)
     }
 
+    /// "Sound check" is the load-bearing reframe: roadies do sound checks;
+    /// nobody judges a sound check. Nothing here is kept or scored, and the
+    /// copy never asks the user to perform.
     private var subtitle: String {
         if !hasPermission {
-            return "Big Talk needs the microphone to record, and speech recognition as a transcription fallback. Both are used only while you practice."
+            return "Big Talk listens only while you're recording. Audio stays on this iPhone."
         }
         if heardVoice {
-            return "That's the level we'll be scoring. Keep talking or continue."
+            return "Got you. That's the voice we'll be listening to."
         }
-        return "Try saying: \"Hi, I'm getting started with Big Talk.\""
+        return "Say anything. Try \"testing, one two three.\""
     }
 }
 
@@ -542,106 +527,7 @@ struct OnboardingReminderStep: View {
     }
 }
 
-// MARK: - Ready
-
-struct OnboardingReadyStep: View {
-    @Environment(LLMService.self) private var llmService
-
-    let userName: String
-    let goal: OnboardingGoal
-    let level: SpeakerLevel
-    let hasCalibratedVoice: Bool
-    @Binding var launchFirstRecording: Bool
-    let onFinish: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    OnboardingOrb(size: 150)
-                        .padding(.top, 10)
-
-                    VStack(spacing: 8) {
-                        Text(headline)
-                            .font(.title.bold())
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text("Here's your setup. Your first recording is the baseline every later session gets compared against.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 8)
-
-                    GlassCard(padding: 14) {
-                        VStack(spacing: 10) {
-                            OnboardingSummaryRow(
-                                icon: goal.icon,
-                                label: "Focus",
-                                value: goal.displayName,
-                                tint: goal.color
-                            )
-                            Divider().overlay(AppColors.cardStroke)
-                            OnboardingSummaryRow(
-                                icon: level.icon,
-                                label: "Level",
-                                value: level.displayName,
-                                tint: level.color
-                            )
-                            Divider().overlay(AppColors.cardStroke)
-                            OnboardingSummaryRow(
-                                icon: "waveform.badge.person.crop",
-                                label: "Voice profile",
-                                value: hasCalibratedVoice ? "Calibrated" : "Learns as you record",
-                                tint: hasCalibratedVoice ? AppColors.success : AppColors.accent
-                            )
-                            Divider().overlay(AppColors.cardStroke)
-                            OnboardingSummaryRow(
-                                icon: "sparkles",
-                                label: "AI coaching",
-                                value: aiSummary,
-                                tint: llmService.isAvailable ? AppColors.success : AppColors.accent
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            }
-
-            VStack(spacing: 12) {
-                Toggle(isOn: $launchFirstRecording) {
-                    Text("Start a 60-second session right now")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                .tint(AppColors.primary)
-
-                OnboardingCTA(
-                    title: launchFirstRecording ? "Start first recording" : "Take me in",
-                    icon: launchFirstRecording ? "mic.fill" : "checkmark",
-                    action: onFinish
-                )
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
-        }
-    }
-
-    private var headline: String {
-        userName.isEmpty ? "You're all set" : "Let's go, \(userName)"
-    }
-
-    private var aiSummary: String {
-        switch llmService.activeBackend {
-        case .appleIntelligence: return "Apple Intelligence"
-        case .localLLM: return llmService.localLLM.modelDisplayName
-        case .none:
-            if case .downloading = llmService.localLLM.modelState { return "Downloading" }
-            return "Built-in analysis"
-        }
-    }
-}
+// The ready-step recap that used to live here is gone with the baseline
+// moving inside onboarding: the flow no longer needs a receipt or a
+// start-recording decision — the reveal in `OnboardingBaselineSteps` is the
+// terminal screen.

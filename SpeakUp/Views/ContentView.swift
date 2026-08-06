@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var pendingRecordingNavigation: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
+    /// Owned here because the tour crosses tabs: it drives `selectedTab` and
+    /// draws over the tab bar, neither of which a single tab's root can do.
+    @State private var appTour = AppTourModel()
 
     // Feature sheets
     @State private var showingWarmUps = false
@@ -195,8 +198,23 @@ struct ContentView: View {
                 .transition(.opacity.combined(with: .scale(scale: 1.05)))
                 .zIndex(1)
             }
+
+            // Above the tab bar on purpose: the tour points *at* the tabs, so
+            // it has to be able to dim and outline them.
+            if appTour.activeStep != nil {
+                AppTourOverlay(tour: appTour, onFinish: finishTour)
+                    .transition(.opacity)
+                    .zIndex(5)
+            }
         }
+        .environment(\.appTour, appTour)
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
+        .motion(AppMotion.settle, value: appTour.activeStep != nil)
+        .onChange(of: appTour.activeStep) { _, step in
+            // The tour walks the tabs itself; the user's job is just to read.
+            guard let step, selectedTab != step.tab else { return }
+            selectedTab = step.tab
+        }
         .fullScreenCover(isPresented: $showingRecording, onDismiss: {
             recordingStoryId = nil
             if let id = pendingRecordingNavigation {
@@ -337,16 +355,33 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView { result in
+                // Everything that decides what the user sees next runs before
+                // the cover comes down, so the destination is already in place
+                // behind it. Routing *after* an await meant the last tap landed
+                // the user on Today, then flipped the tab, then pushed a detail
+                // view at them — the flow's final impression was a stutter.
+                if let settings = userSettings.first {
+                    applyOnboardingResult(result, to: settings)
+                    try? modelContext.save()
+                }
+                OnboardingViewModel.clearResumeState()
+
+                // The baseline was recorded inside onboarding, so there is no
+                // post-dismissal handoff into an unguided recorder — that
+                // handoff was the moment the old flow lost people.
+                if let baselineID = result.baselineRecordingID, result.reviewBaselineOnFinish {
+                    selectedTab = .history
+                    selectedRecordingId = baselineID.uuidString
+                }
+                showOnboarding = false
+
                 Task { @MainActor in
-                    if let settings = userSettings.first {
-                        applyOnboardingResult(result, to: settings)
-                        try? modelContext.save()
-                    }
-                    OnboardingViewModel.clearResumeState()
+                    // None of the rest changes the screen, so none of it holds
+                    // up the dismissal.
+                    //
                     // Sync SettingsViewModel's cached word lists so vocab and
                     // dictionary words appear immediately without a restart.
                     await settingsViewModel.loadSettings()
-                    showOnboarding = false
 
                     if result.reminderEnabled {
                         let service = NotificationService()
@@ -357,12 +392,12 @@ struct ContentView: View {
                         )
                     }
 
-                    if result.launchFirstRecording {
-                        try? await Task.sleep(for: .milliseconds(500))
-                        recordingPrompt = nil
-                        recordingStoryId = nil
-                        recordingDuration = .sixty
-                        showingCountdown = true
+                    if result.baselineRecordingID != nil {
+                        // The unlock overlay is full-screen confetti. Fired into
+                        // the dismissal it lands on top of the reveal the user
+                        // is still leaving, so it waits for the transition.
+                        try? await Task.sleep(for: .milliseconds(700))
+                        await achievementService.checkAchievements(context: modelContext)
                     }
                 }
             }
@@ -411,12 +446,32 @@ struct ContentView: View {
 
         // If recordings already exist when onboarding completes (re-onboarding,
         // app upgrade, or testing), suppress the first-recording setup sheet —
-        // the user clearly knows how to record. Without this, the sheet fires
-        // on TodayView appearance whenever count >= 1 and the flag is false.
+        // the user clearly knows how to record. The baseline recorded inside
+        // onboarding doesn't count as "already knows": the sheet firing after
+        // it is exactly the deferred-setup moment it exists for.
         if !settings.hasShownFirstRecordingSetup {
             let count = (try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
-            if count > 0 { settings.hasShownFirstRecordingSetup = true }
+            let baselineCount = result.baselineRecordingID != nil ? 1 : 0
+            if count > baselineCount { settings.hasShownFirstRecordingSetup = true }
         }
+    }
+
+    // MARK: - App Tour
+
+    /// Ends the walkthrough. Marked seen either way: a user who skipped it has
+    /// told us what they think of it, and re-showing would be nagging. Landing
+    /// back on Today matters because the last stop is Settings, and leaving
+    /// someone parked there is the opposite of "you now know where things are".
+    private func finishTour(completed: Bool) {
+        appTour.activeStep = nil
+        selectedTab = .today
+        if let settings = userSettings.first {
+            settings.hasSeenAppTour = true
+            try? modelContext.save()
+        }
+        AnalyticsService.shared.log(
+            .onboardingStep("app_tour", action: completed ? "complete" : "skip")
+        )
     }
 
     // MARK: - Onboarding

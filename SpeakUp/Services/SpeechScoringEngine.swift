@@ -694,7 +694,7 @@ enum SpeechScoringEngine {
 // MARK: - EnhancedSpeechMetrics
 
 /// Container for all enhanced speech metrics computed by SpeechScoringEngine.
-struct EnhancedSpeechMetrics: Codable {
+nonisolated struct EnhancedSpeechMetrics: Codable, Equatable {
     /// Phonation Time Ratio: fraction of recording time spent speaking (0-1).
     /// Research benchmark: 0.55-0.75 is natural conversational speech.
     var phonationTimeRatio: Double

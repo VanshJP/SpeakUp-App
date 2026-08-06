@@ -50,6 +50,7 @@ struct SettingsView: View {
             ) {
                 SessionDefaultsView(viewModel: viewModel)
             }
+            .tourAnchor(.settingsPresets)
 
             settingsLink(
                 icon: "bell.fill",

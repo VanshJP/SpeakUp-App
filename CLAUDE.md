@@ -84,7 +84,7 @@ View (SwiftUI) → ViewModel (@Observable) → Service (@Observable) → SwiftDa
 | `Settings/` | `SettingsView`, `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` | Fully split settings surfaces |
 | `PromptWheel/` | `PromptWheelView` | Spinning random prompt selector |
 | `Onboarding/` | `OnboardingView` | First-launch flow (all steps live in this one file) |
-| `Components/` | `GlassCard`, `GlassButton`, `RingStatsView`, `ConfettiView`, `FlowLayout`, `PersistentTextField`, `RichTextEditor`, `PracticeHistoryChart`, `SectionPicker`, `StatStrip`, `StreakChip`, `SubscoreRadarChart`, `MetricExplainerSheet` | Shared glass-styled building blocks |
+| `Components/` | `GlassCard`, `GlassButton`, `RingStatsView`, `ConfettiView`, `FlowLayout`, `PersistentTextField`, `RichTextEditor`, `PracticeHistoryChart`, `SectionPicker`, `StatStrip`, `StreakChip`, `SubscoreRadarChart`, `MetricExplainerSheet`, `AppTourView` | Shared glass-styled building blocks |
 
 ### Entry point
 
@@ -107,6 +107,10 @@ Achievements moved off the tab bar — presented as a sheet from Today. Global o
 Deep link schemes:
 - `speakup://record?prompt=<id>` — start recording, optionally pre-fill prompt
 - `speakup://story` / `speakup://story/new` — open Library / story editor
+
+## Onboarding
+
+Source-of-truth file: `ONBOARDING_VISION.md` — read it before touching anything under `Views/Onboarding/` or the onboarding paths in `ContentView`. It carries the activation moment, the user-feedback constitution, twelve implementation invariants (e.g. the prompt never leaves the screen during a take, the user presses every record button, a first score is never framed as a grade), the deliberately-cut list, and the deferred backlog. The baseline recording happens *inside* onboarding (briefing → guided take → staged analyzing → reveal in `OnboardingBaselineSteps.swift`); there is no post-onboarding handoff into the recorder. Full research and screen rationale: `ONBOARDING_REDESIGN.md`.
 
 ## Speak Algorithm (speech scoring pipeline)
 
@@ -297,6 +301,7 @@ Before building custom UI, check `Components/` for existing pieces:
 - `RichTextEditor` — UIKit-backed `NSAttributedString` editor (Stories rich-text body)
 - `PersistentTextField` — text field that survives view identity churn
 - `PracticeHistoryChart` — compact Swift Charts sparkline for a metric over recent sessions
+- `AppTourView` — one-shot guided layout walkthrough shown after the first score. `AppTourModel` lives on `ContentView` (it drives tab selection and draws over the tab bar); views mark spotlight targets with `.tourAnchor(_:)`. See `ONBOARDING_VISION.md`.
 
 ### Building a new view — checklist
 1. Wrap in `ScrollView` with `.appBackground(.primary)` (or `.subtle` for sheets)

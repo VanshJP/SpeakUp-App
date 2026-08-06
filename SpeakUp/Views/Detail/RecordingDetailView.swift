@@ -1539,8 +1539,14 @@ struct RecordingDetailView: View {
             let recordings = try modelContext.fetch(descriptor)
             recording = recordings.first
 
+            // Counted on `transcriptionText`, not `analysis`: SwiftData stores
+            // the Codable `analysis` as a composite attribute with no queryable
+            // column, so a predicate touching it raises an ObjC exception during
+            // SQL generation that `try?` cannot catch — it terminates the app.
+            // Transcript and analysis are written in the same save, so the count
+            // matches. Same reasoning in `RecordingProcessingCoordinator`.
             let analyzedCount = (try? modelContext.fetchCount(
-                FetchDescriptor<Recording>(predicate: #Predicate { $0.analysis != nil })
+                FetchDescriptor<Recording>(predicate: #Predicate { $0.transcriptionText != nil })
             )) ?? 0
             isFirstAnalyzedSession = analyzedCount <= 1
 

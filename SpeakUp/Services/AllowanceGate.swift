@@ -31,13 +31,4 @@ enum AllowanceGate {
             now: now
         )
     }
-
-    /// Recordings that were saved while the allowance was spent. Used to offer
-    /// "analyze the ones you missed" once the user buys or the cycle resets.
-    static func blockedRecordingCount(modelContext: ModelContext) -> Int {
-        let descriptor = FetchDescriptor<Recording>(
-            predicate: #Predicate { $0.analysisBlockedByAllowance == true }
-        )
-        return (try? modelContext.fetchCount(descriptor)) ?? 0
-    }
 }

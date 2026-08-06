@@ -6,6 +6,7 @@ struct TodayView: View {
     @State private var viewModel = TodayViewModel()
 
     @Query private var userSettings: [UserSettings]
+    @Environment(\.appTour) private var tour
     @State private var showingFirstRecordingSetup = false
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
@@ -38,6 +39,7 @@ struct TodayView: View {
 
                     // 2. Where you stand (tap → full Progress charts).
                     ringStatsSection
+                        .tourAnchor(.todayStats)
 
                     // 2b. What changed since last week — once per week, dismissable.
                     weeklyRecapSection
@@ -48,11 +50,15 @@ struct TodayView: View {
                     focusSection
 
                     // 4. Core action — today's prompt + start buttons
-                    interactivePromptSection
-                    startButtonSection
+                    VStack(spacing: 20) {
+                        interactivePromptSection
+                        startButtonSection
+                    }
+                    .tourAnchor(.todayPrompt)
 
                     // 5. Quick actions
                     toolbarStrip
+                        .tourAnchor(.todayTools)
 
                     // 6. Daily challenge
                     if let challenge = viewModel.dailyChallenge {
@@ -73,9 +79,9 @@ struct TodayView: View {
             viewModel.configure(with: modelContext)
         }
         .task {
-            await checkFirstRecordingSetup()
+            await checkFirstRunSurfaces()
         }
-        .sheet(isPresented: $showingFirstRecordingSetup) {
+        .sheet(isPresented: $showingFirstRecordingSetup, onDismiss: startTourIfNeeded) {
             FirstRecordingSetupSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -150,18 +156,37 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - First Recording Setup
+    // MARK: - First Run Surfaces
 
-    private func checkFirstRecordingSetup() async {
-        guard userSettings.first?.hasShownFirstRecordingSetup != true else { return }
-        let descriptor = FetchDescriptor<Recording>()
-        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+    /// The two things that wait for a score before they earn the user's
+    /// attention: the deferred setup sheet (calibration, AI model, reminders)
+    /// and the layout tour. Strictly sequential — the tour spotlights cut out
+    /// of a dimmed layer, which a presented sheet would sit on top of.
+    ///
+    /// Both are gated on a recording existing, so a user who skipped the
+    /// baseline meets them after their first real session instead.
+    private func checkFirstRunSurfaces() async {
+        guard let settings = userSettings.first else { return }
+        let needsSetup = !settings.hasShownFirstRecordingSetup
+        guard needsSetup || !settings.hasSeenAppTour else { return }
+
+        let count = (try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
         guard count >= 1 else { return }
-        showingFirstRecordingSetup = true
-        if let settings = userSettings.first {
-            settings.hasShownFirstRecordingSetup = true
-            try? modelContext.save()
+
+        guard needsSetup else {
+            startTourIfNeeded()
+            return
         }
+        showingFirstRecordingSetup = true
+        settings.hasShownFirstRecordingSetup = true
+        try? modelContext.save()
+    }
+
+    /// Called on setup-sheet dismissal and directly when that sheet has
+    /// already been seen. Callers have established that a recording exists.
+    private func startTourIfNeeded() {
+        guard userSettings.first?.hasSeenAppTour == false else { return }
+        tour?.begin()
     }
 
     // MARK: - Top Header
