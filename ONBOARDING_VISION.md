@@ -6,6 +6,8 @@ changing anything under `Views/Onboarding/` or the onboarding paths in
 the old flow, screen-by-screen rationale) lives in `ONBOARDING_REDESIGN.md`;
 this file is the distilled contract. Last updated: 2026-08-05.
 
+Agent index for related surfaces: `docs/features/README.md` (Today tour, recording detail reveal, architecture deep links).
+
 ## The one-sentence vision
 
 A first-time user should reach their first completed baseline recording

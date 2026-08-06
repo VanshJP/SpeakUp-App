@@ -1,0 +1,35 @@
+# Recording — capture session
+
+## Purpose
+
+Full-screen practice take: countdown → record with live fillers / waveform / framework cues → save `Recording` for later analysis.
+
+## Key files
+
+| Role | Path |
+|------|------|
+| UI | `SpeakUp/Views/Recording/` — `RecordingView`, `RecordButton`, `TimerView`, `CountdownOverlayView`, `FillerCounterOverlay`, `FrameworkOverlayView` |
+| VM | `SpeakUp/ViewModels/RecordingViewModel.swift` + `+AudioMonitoring`, `+Computed`, `+Permissions`, `+RecordingControl`, `+Timer` |
+| Audio | `SpeakUp/Services/AudioService.swift` |
+| Live fillers | `SpeakUp/Services/LiveTranscriptionService.swift` |
+| Coaching audio/haptics | `HapticCoachingService`, `ChirpPlayer` |
+| Waveform gen | `AudioWaveformGenerator` |
+| Model | `SpeakUp/Models/Recording.swift`, `SpeechFramework.swift`, `RecordingGroup.swift` |
+
+## Flow
+
+1. `ContentView` sets prompt and/or `recordingStoryId`, duration, optional goal.
+2. Countdown sheet → `RecordingView` `fullScreenCover`.
+3. Story practice: set `recordingStoryId`, clear `recordingPrompt`.
+4. On stop: persist `Recording` (audio/video URL); analysis runs later via coordinator (see speech pipeline).
+
+## Invariants
+
+- User presses every record control (especially onboarding — see `ONBOARDING_VISION.md`).
+- High-frequency audio levels must not re-diff the whole screen — pass snapshots into POD subviews (`RecordButtonWaveformStack` pattern).
+- Deep-link `record` clears prior prompt/story/goal context.
+- Allowance is **not** consumed at capture time — only after successful analysis (`AllowanceGate.consume`).
+
+## Cross-links
+
+[speech-pipeline.md](./speech-pipeline.md) · [recording-detail.md](./recording-detail.md) · [stories.md](./stories.md) · [monetization.md](./monetization.md) · [architecture.md](./architecture.md)
