@@ -16,3 +16,6 @@ xcuserdata/
 
 # IDE
 .vscode/
+
+# Removed semantic index (agents use docs/features + ripgrep)
+.tokenuinely/

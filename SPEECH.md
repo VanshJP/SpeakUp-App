@@ -1,6 +1,6 @@
 # Speech Analysis Algorithm Contract
 
-Purpose: compact, authoritative reference for LLM context injection. Source-of-truth for the Big Talk scoring pipeline. Also aliased in docs as `SPEECH_ANALYSIS_DEEP_DIVE.md` — this file (`SPEECH.md`) is canonical.
+Purpose: compact, authoritative reference for LLM context injection. Source-of-truth for the Big Talk scoring pipeline. Canonical path: `SPEECH.md` (do not look for `SPEECH_ANALYSIS_DEEP_DIVE.md`). Agent index: `docs/features/speech-pipeline.md`.
 Last refresh: April 2026. Aligned with `SpeechService.swift`, `SpeechScoringEngine.swift`, `RecordingProcessingCoordinator.swift`.
 
 ## Design philosophy
