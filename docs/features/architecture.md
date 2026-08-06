@@ -14,10 +14,19 @@ Start the app: build SwiftData `ModelContainer`, inject services, seed defaults,
 | AASA | `Config/apple-app-site-association` |
 | Entitlements | `SpeakUp/SpeakUp.entitlements` |
 
-**Injected services (Environment):** `SpeechService`, `AudioService`, `LLMService`.  
-**Also started at launch:** `PurchaseService.shared.start()`, entitlement refresh on foreground, deferred recording resume.
+### Dependency injection
+
+| Mechanism | Types |
+|-----------|--------|
+| `.environment` from `SpeakUpApp` | `SpeechService`, `AudioService`, `LLMService` only → `@Environment(X.self)` |
+| Singletons (`.shared`) | `PurchaseService`, `EntitlementStore`, `PaywallCoordinator`, `RecordingProcessingCoordinator`, `AnalyticsService`, `AttributionStore`, `ReviewRequestService`, `ICloudStorageService`, `ChirpPlayer` |
+| Custom `EnvironmentKey` | `appTour` (`AppTourKey`), `shimmerPhase` (`ShimmerPhaseKey`) — prefer explicit keys over `@Entry` under MainActor default |
+
+**Also at launch:** `PurchaseService.shared.start()`, entitlement refresh on foreground, deferred recording resume (`analysisBlockedByAllowance`).
 
 **Schema:** `Recording`, `Prompt`, `UserGoal`, `UserSettings`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`.
+
+Concurrency / isolation traps: `/docs/AGENT_GOTCHAS.md`.
 
 ## Tabs
 
@@ -46,4 +55,4 @@ Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentV
 
 ## Cross-links
 
-[monetization.md](./monetization.md) · [icloud.md](./icloud.md) · [recording.md](./recording.md) · [widgets.md](./widgets.md) · [analytics-review.md](./analytics-review.md) · `/ONBOARDING_VISION.md`
+[monetization.md](./monetization.md) · [icloud.md](./icloud.md) · [recording.md](./recording.md) · [widgets.md](./widgets.md) · [analytics-review.md](./analytics-review.md) · `/docs/AGENT_GOTCHAS.md` · `/ONBOARDING_VISION.md`

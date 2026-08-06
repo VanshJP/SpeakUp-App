@@ -15,8 +15,9 @@ Cross-tool instructions for AI coding agents. Keep this file short — deep deta
 3. **SwiftData schema = additive only.** Optional fields or defaults. Never rename/remove stored `@Attribute`s or make existing fields non-optional.
 4. **No `@StateObject` / `@ObservedObject`.** Use `@Observable`. ViewModels never take `ModelContext`; Views use `@Query` / `@Environment(\.modelContext)`.
 5. **UI = design system only.** `AppColors` / `GlassStyles` / `AppBackground` / `GlassButton`. No raw `Color.blue` / opaque cards. Sheets use `.appBackground(.subtle)`.
-6. **Never decode `Recording.analysis` on the main thread in `body`.** Use background `ModelContext` + lightweight projections (`RecordingSummary`, `ChartRecordingPoint`).
-7. **Persisted text (commits, PRs, code comments) = normal English.** Chat may use Smart Caveman (see below).
+6. **Never decode `Recording.analysis` on the main thread in `body`.** Background `ModelContext` + POD projections (`RecordingSummary`, `ChartRecordingPoint`). Never `#Predicate` on Codable blob columns (crashes process — see gotchas).
+7. **MainActor is the default isolation** (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`). Mark pure models / policies / DTOs `nonisolated` or background work breaks. Details: `docs/AGENT_GOTCHAS.md`.
+8. **Persisted text (commits, PRs, code comments) = normal English.** Chat may use Smart Caveman (see below).
 
 ---
 
@@ -26,6 +27,8 @@ Before editing a feature, **read the matching doc** — do not reload all of `do
 
 | Working on… | Read first |
 |-------------|------------|
+| Concurrency, SwiftData queries, shares, DI traps | **`docs/AGENT_GOTCHAS.md`** |
+| Workflow (add setting / paid gate / field / widget / test) | **`docs/AGENT_PLAYBOOK.md`** |
 | Any new feature / unsure where code lives | `docs/features/README.md` |
 | App boot, tabs, deep links, global sheets | `docs/features/architecture.md` |
 | Recording UI / AudioService | `docs/features/recording.md` |
@@ -84,8 +87,12 @@ View (SwiftUI) → ViewModel (@MainActor @Observable) → Service (@Observable) 
 - File name = primary type. Use `// MARK:` sections.
 - High-frequency metering/playback: pass snapshots into small POD subviews; draw dense visuals in one `Canvas`.
 - Resolve file existence once into `@State` — never `FileManager` in `body`.
+- Media paths: store via `Recording.relativeURL`; read via `resolvedAudioURL` / `resolvedVideoURL`.
+- Env-injected services: only `SpeechService`, `AudioService`, `LLMService`. Everything else StoreKit/paywall/analytics/coordinator = `.shared` (see gotchas).
+- Shares: `SharePresenter` only — do not invent a second activity sheet.
 - Widget timeline reloads: fingerprint-gate via `TodayViewModel` — no unconditional `reloadAllTimelines()`.
 - Prompt seeding: fingerprint-gated (`seededPromptFingerprint_v1`).
+- Paid features: membership lives in `FreeTierPolicy.default`, not scattered `isLifetime` checks.
 
 ---
 
@@ -99,7 +106,7 @@ xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' 
 xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' test
 ```
 
-StoreKit config: `Products.storekit` (Lifetime SKU `com.vansh.SpeakUpMore.lifetime`).
+StoreKit config: `Products.storekit` (Lifetime SKU `com.vansh.SpeakUpMore.lifetime`). Tests: Swift Testing under `SpeakUpTests/` — see playbook.
 
 ---
 
@@ -114,4 +121,4 @@ Exceptions: destructive warnings, multi-step clarity, user confusion.
 
 ## Doc maintenance
 
-When you add or reshape a feature: update the matching `docs/features/*.md` and the index row in `docs/features/README.md` in the same PR. Do not grow this file with feature encyclopedias — link out.
+When you add or reshape a feature: update the matching `docs/features/*.md` and the index row in `docs/features/README.md` in the same PR. New silent-failure traps → `docs/AGENT_GOTCHAS.md`. New repeatable workflow → `docs/AGENT_PLAYBOOK.md`. Do not grow this file with feature encyclopedias — link out.

@@ -24,7 +24,9 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 2. `markFirstResultSeen()` only when analysis completed — gates auto-paywall and review.
 3. Deferred-by-allowance UI must offer unlock path via paywall; fail-open policy lives in `PaywallCoordinator`.
 4. Processing: prefer `RecordingProcessingCoordinator` over ad-hoc parallel jobs.
+5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
+6. Share score / progress cards via `SharePresenter` only (completed-share analytics).
 
 ## Cross-links
 
-[speech-pipeline.md](./speech-pipeline.md) · `/SPEECH.md` · [monetization.md](./monetization.md) · [analytics-review.md](./analytics-review.md) · [achievements-goals.md](./achievements-goals.md)
+[speech-pipeline.md](./speech-pipeline.md) · `/SPEECH.md` · [monetization.md](./monetization.md) · [analytics-review.md](./analytics-review.md) · [achievements-goals.md](./achievements-goals.md) · `/docs/AGENT_GOTCHAS.md`

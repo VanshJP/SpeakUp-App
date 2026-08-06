@@ -35,9 +35,12 @@ This doc only lists wiring and agent gotchas.
 - Story-linked recordings: feed `Story.content` as `promptText` (story wins over Prompt).
 - Exhausted free allowance → `analysisBlockedByAllowance`; resume deferred jobs on foreground / entitlement (serial, capped).
 - Never decode analysis blobs on main in list `body` — use `RecordingSummary` / chart points.
+- Never `#Predicate` on `Recording.analysis` — ObjC crash inside CoreData SQL gen; proxy via `transcriptionText != nil` (`analyzedRecordingCount`).
+- Re-fetch `Recording` by id after long transcription before mutating (user may have deleted it).
 - Whisper first load is slow — check service state before assuming failure.
 - Score philosophy: progressive (short casual ≈ 50–65; solid minute ≈ 75–90; only empty/gibberish ≪ 20).
+- Pure scoring types are `nonisolated` — required under MainActor-default isolation (`/docs/AGENT_GOTCHAS.md`).
 
 ## Cross-links
 
-`/SPEECH.md` · [recording-detail.md](./recording-detail.md) · [monetization.md](./monetization.md) · [stories.md](./stories.md) · [settings.md](./settings.md) (weights / AI model)
+`/SPEECH.md` · [recording-detail.md](./recording-detail.md) · [monetization.md](./monetization.md) · [stories.md](./stories.md) · [settings.md](./settings.md) (weights / AI model) · `/docs/AGENT_GOTCHAS.md`

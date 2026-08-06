@@ -22,7 +22,8 @@ Home Screen glanceables + deep links. Hydrate from App Group — widget process 
 2. Reload timelines via fingerprint gate in `TodayViewModel` — budget WidgetKit refreshes.
 3. Deep links from widgets must match `ContentView` / `UniversalLink` routers.
 4. Never add SwiftData usage inside the widget target.
+5. Entitlement cache lives in the same App Group suite — don’t invent a second suite name.
 
 ## Cross-links
 
-[today-library.md](./today-library.md) · [architecture.md](./architecture.md) · [monetization.md](./monetization.md) · [stories.md](./stories.md)
+[today-library.md](./today-library.md) · [architecture.md](./architecture.md) · [monetization.md](./monetization.md) · [stories.md](./stories.md) · `/docs/AGENT_GOTCHAS.md` · `/docs/AGENT_PLAYBOOK.md`

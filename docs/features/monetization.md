@@ -28,6 +28,18 @@ One non-consumable **Lifetime** purchase. Free users get a small analysis allowa
 - Gated: `unlimitedAnalyses`, `fullCurriculum`, `journalExport`, `iCloudSync`.
 - **Not gated:** `progressCards` (Then-vs-Now / share loop must stay free for acquisition).
 
+## Call-site matrix
+
+| API | Use when | Where today |
+|-----|----------|-------------|
+| `PaywallCoordinator.allow(_:trigger:)` | Proceed **or** show paywall; fail-open if first-result suppressed | Journal export (`ContentView`), iCloud enable (`SettingsView`) |
+| `present(..., userInitiated: true)` | Explicit Unlock / locked CTA | Today allowance, Curriculum phase, deferred analysis detail, `LifetimeStatusRow` |
+| `AllowanceGate.decision` | May we analyze / meter copy | `RecordingProcessingCoordinator`, detail deferred UI, status row |
+| `AllowanceGate.consume` | After **successful** analysis persist only | `RecordingProcessingCoordinator` only |
+| `FreeTierPolicy.gates` / `EntitlementStore` | Membership | Curriculum phase lock; inside `allow` |
+
+New gates: change `FreeTierPolicy.default.gatedFeatures`, then call `allow` or `present` — do not scatter `if isLifetime`. Recipe: `/docs/AGENT_PLAYBOOK.md` → “Add or change a paid gate”.
+
 ## Invariants
 
 1. Consume allowance **only after successful analysis** (`AllowanceGate.consume`). Fail open if settings row missing.
@@ -37,7 +49,8 @@ One non-consumable **Lifetime** purchase. Free users get a small analysis allowa
 5. iCloud once enabled is never revoked as a product rule (gate enable, not ongoing use).
 6. FAQ / marketing claims must match `APP_STORE_LISTING.md` ownership scope.
 7. Never ask for App Store review on top of the paywall (`ReviewRequestService`).
+8. Buy button waits for StoreKit `displayPrice` — never hardcode the Lifetime price in UI.
 
 ## Cross-links
 
-[recording-detail.md](./recording-detail.md) · [curriculum.md](./curriculum.md) · [history-progress.md](./history-progress.md) · [icloud.md](./icloud.md) · [analytics-review.md](./analytics-review.md) · `/RELEASE_CHECKLIST.md`
+[recording-detail.md](./recording-detail.md) · [curriculum.md](./curriculum.md) · [history-progress.md](./history-progress.md) · [icloud.md](./icloud.md) · [analytics-review.md](./analytics-review.md) · `/docs/AGENT_GOTCHAS.md` · `/RELEASE_CHECKLIST.md`

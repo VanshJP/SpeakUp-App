@@ -17,11 +17,12 @@ Browse takes, contribution/streak UI, metric charts, then-vs-now replay, PDF jou
 
 ## Invariants
 
-1. **No analysis decode in list/chart `body`.** Background `ModelContext` → `RecordingSummary` / `ChartRecordingPoint`. Fetch only needed columns when possible (`propertiesToFetch`).
-2. Journal export gated: `PaywallCoordinator.allow(.journalExport)`.
-3. Progress / share cards are **not** gated by default (`PaidFeature.progressCards` exists but omitted from `FreeTierPolicy.default`) — share loop must stay free for acquisition.
-4. Streak sheet is presentation from Today/History — not a tab.
+1. **No analysis decode in list/chart `body`.** Background `ModelContext` → `RecordingSummary` / `ChartRecordingPoint` (`HistoryViewModel.fetchSummaries`, `ProgressChartsView`). Recipe: `/docs/AGENT_GOTCHAS.md` §3.
+2. Never `#Predicate { $0.analysis != nil }` — process crash. Proxy with `transcriptionText != nil` when counting analyzed takes.
+3. Journal export gated: `PaywallCoordinator.allow(.journalExport)`.
+4. Progress / share cards are **not** gated by default (`PaidFeature.progressCards` exists but omitted from `FreeTierPolicy.default`) — share loop must stay free for acquisition. Shares go through `SharePresenter`.
+5. Streak sheet is presentation from Today/History — not a tab.
 
 ## Cross-links
 
-[monetization.md](./monetization.md) · [recording-detail.md](./recording-detail.md) · [analytics-review.md](./analytics-review.md) · [speech-pipeline.md](./speech-pipeline.md)
+[monetization.md](./monetization.md) · [recording-detail.md](./recording-detail.md) · [analytics-review.md](./analytics-review.md) · [speech-pipeline.md](./speech-pipeline.md) · `/docs/AGENT_GOTCHAS.md`
