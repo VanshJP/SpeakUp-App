@@ -82,7 +82,9 @@ nonisolated enum PaidFeature: String, CaseIterable, Sendable {
     var paywallReason: String {
         switch self {
         case .unlimitedAnalyses:
-            return "You have used your free analyses for now."
+            // Worded to be true on both sides of the free trial: the day it
+            // ends, and any later month whose three analyses are spent.
+            return "Unlimited scored practice is part of Lifetime."
         case .fullCurriculum:
             return "The eight-week curriculum is part of Lifetime."
         case .journalExport:
@@ -95,16 +97,47 @@ nonisolated enum PaidFeature: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Free Trial
+
+/// The 14-day window in which everything except iCloud sync is open.
+///
+/// The clock starts at the first *completed* analysis, not at first launch, so
+/// a user who installs and does not record yet burns no days, and a failed
+/// transcription cannot start it. `AllowanceGate.consume` is the one place that
+/// starts it; `EntitlementStore` owns the date.
+nonisolated enum PracticeTrial {
+    static let lengthInDays = 14
+    static let length = TimeInterval(lengthInDays) * 24 * 60 * 60
+
+    static func state(startedAt: Date?, now: Date = Date()) -> TrialState {
+        guard let startedAt else { return .notStarted }
+        let endsOn = startedAt.addingTimeInterval(length)
+        return now < endsOn ? .active(endsOn: endsOn) : .expired
+    }
+
+    /// Whole days left, rounded up — any time left is at least "1 day", because
+    /// a countdown that reads 0 while the trial still works is a bug report.
+    static func daysRemaining(until endsOn: Date, now: Date = Date()) -> Int {
+        max(0, Int((endsOn.timeIntervalSince(now) / 86_400).rounded(.up)))
+    }
+}
+
+nonisolated enum TrialState: Sendable, Equatable {
+    /// No analysis has completed yet, so the clock has not been started.
+    case notStarted
+    case active(endsOn: Date)
+    case expired
+
+    var isExpired: Bool { self == .expired }
+}
+
 // MARK: - Free Tier Policy
 
 /// The free/paid boundary in one value. Deliberately a stored policy rather
 /// than scattered `if isLifetime` literals so the boundary can be tuned from
 /// launch measurement without touching feature code.
 nonisolated struct FreeTierPolicy: Sendable, Equatable {
-    /// Full analyses a new user gets immediately, before any monthly cycle
-    /// starts. The first result has to be free for the score to earn trust.
-    var introAnalyses: Int
-    /// Full analyses per rolling month once the intro allowance is spent.
+    /// Full analyses per rolling month once the trial has expired.
     var monthlyAnalyses: Int
     /// Features that require the Lifetime purchase.
     var gatedFeatures: Set<PaidFeature>
@@ -113,22 +146,28 @@ nonisolated struct FreeTierPolicy: Sendable, Equatable {
         gatedFeatures.contains(feature)
     }
 
-    /// Ships with the GTM plan's allowance (three immediately, then three per
-    /// month) and its ownership boundary (export, sync, complete archive).
+    /// During the 14 days: see everything, then decide. Only iCloud sync stays
+    /// behind the purchase, because turning it on is a commitment to a store
+    /// the user would then lose access to when the trial ends.
+    static let trial = FreeTierPolicy(
+        monthlyAnalyses: .max,
+        gatedFeatures: [.iCloudSync]
+    )
+
+    /// After the 14 days: three analyses per rolling month, and the full
+    /// ownership boundary (curriculum, export, sync).
     ///
-    /// `progressCards` is intentionally *not* gated. The same plan makes
+    /// `progressCards` is intentionally *not* gated. The GTM plan makes
     /// Then-vs-Now sharing the primary distribution loop, and a share loop that
     /// only buyers can run cannot acquire the users it is budgeted to acquire.
     /// Add it here if measurement says otherwise.
-    static let `default` = FreeTierPolicy(
-        introAnalyses: 3,
+    static let expired = FreeTierPolicy(
         monthlyAnalyses: 3,
         gatedFeatures: [.unlimitedAnalyses, .fullCurriculum, .journalExport, .iCloudSync]
     )
 
     /// Everything open. Used for entitled users and for debug overrides.
     static let unrestricted = FreeTierPolicy(
-        introAnalyses: .max,
         monthlyAnalyses: .max,
         gatedFeatures: []
     )
@@ -139,15 +178,14 @@ nonisolated struct FreeTierPolicy: Sendable, Equatable {
 /// Persisted counters behind the free analysis allowance. Kept separate from
 /// `UserSettings` so the arithmetic is testable without SwiftData.
 nonisolated struct AllowanceState: Sendable, Equatable {
-    var introUsed: Int = 0
     var cycleStart: Date?
     var cycleUsed: Int = 0
 }
 
 /// What the user is allowed to do right now.
 nonisolated enum AllowanceDecision: Sendable, Equatable {
-    /// Part of the immediate intro allowance.
-    case intro(remaining: Int)
+    /// Inside the free trial — unlimited and uncounted until `endsOn`.
+    case trial(endsOn: Date)
     /// Part of the current monthly cycle.
     case cycle(remaining: Int, resetsOn: Date)
     /// Out of free analyses until `resetsOn`.
@@ -160,13 +198,12 @@ nonisolated enum AllowanceDecision: Sendable, Equatable {
         return true
     }
 
-    /// Analyses left before the paywall, or nil when unlimited.
+    /// Analyses left before the paywall, or nil when nothing is being counted.
     var remaining: Int? {
         switch self {
-        case .intro(let remaining): return remaining
         case .cycle(let remaining, _): return remaining
         case .exhausted: return 0
-        case .unlimited: return nil
+        case .trial, .unlimited: return nil
         }
     }
 
@@ -176,7 +213,11 @@ nonisolated enum AllowanceDecision: Sendable, Equatable {
     ///
     /// Lives here rather than in a view so the two places that show it cannot
     /// word it differently, and so the pluralisation is covered by tests.
-    var shortSummary: String? {
+    var shortSummary: String? { summary(now: Date()) }
+
+    /// `shortSummary` with an injected clock, because the trial line counts days
+    /// down and a copy test cannot wait fourteen days to check it.
+    func summary(now: Date) -> String? {
         func analyses(_ count: Int) -> String {
             "\(count) free \(count == 1 ? "analysis" : "analyses") left"
         }
@@ -187,8 +228,9 @@ nonisolated enum AllowanceDecision: Sendable, Equatable {
         switch self {
         case .unlimited:
             return nil
-        case .intro(let remaining):
-            return analyses(remaining)
+        case .trial(let endsOn):
+            let days = PracticeTrial.daysRemaining(until: endsOn, now: now)
+            return days <= 1 ? "Free trial · last day" : "Free trial · \(days) days left"
         case .cycle(let remaining, let resetsOn):
             return "\(analyses(remaining)) · resets \(day(resetsOn))"
         case .exhausted(let resetsOn):
@@ -208,14 +250,21 @@ nonisolated enum PracticeAllowance {
     static func decision(
         state: AllowanceState,
         isEntitled: Bool,
-        policy: FreeTierPolicy = .default,
+        trial: TrialState,
+        policy: FreeTierPolicy,
         now: Date = Date()
     ) -> AllowanceDecision {
-        guard !isEntitled, policy.gates(.unlimitedAnalyses) else { return .unlimited }
+        guard !isEntitled else { return .unlimited }
 
-        if state.introUsed < policy.introAnalyses {
-            return .intro(remaining: policy.introAnalyses - state.introUsed)
+        // A trial that has not started yet still reports its full length: the
+        // clock only starts at the first score, so nothing has been spent.
+        switch trial {
+        case .notStarted: return .trial(endsOn: now.addingTimeInterval(PracticeTrial.length))
+        case .active(let endsOn): return .trial(endsOn: endsOn)
+        case .expired: break
         }
+
+        guard policy.gates(.unlimitedAnalyses) else { return .unlimited }
 
         let normalized = normalizedCycle(state: state, now: now)
         let resetsOn = normalized.start.addingTimeInterval(cycleLength)
@@ -228,20 +277,17 @@ nonisolated enum PracticeAllowance {
 
     /// Records one consumed analysis. Only ever called after an analysis
     /// actually succeeded — a failed transcription must not cost a credit.
+    /// Nothing is counted while the trial is live.
     static func consume(
         state: AllowanceState,
         isEntitled: Bool,
-        policy: FreeTierPolicy = .default,
+        trial: TrialState,
+        policy: FreeTierPolicy,
         now: Date = Date()
     ) -> AllowanceState {
-        guard !isEntitled, policy.gates(.unlimitedAnalyses) else { return state }
+        guard !isEntitled, trial.isExpired, policy.gates(.unlimitedAnalyses) else { return state }
 
         var updated = state
-        if updated.introUsed < policy.introAnalyses {
-            updated.introUsed += 1
-            return updated
-        }
-
         let normalized = normalizedCycle(state: state, now: now)
         updated.cycleStart = normalized.start
         updated.cycleUsed = normalized.used + 1

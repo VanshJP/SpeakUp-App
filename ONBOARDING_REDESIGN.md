@@ -6,6 +6,23 @@
 
 Source of truth: real user feedback ("I'm overwhelmed", "the prompt disappeared immediately", "I got put into a lesson but had no idea what I was supposed to say", "I didn't know if there was a script", "the baseline recording should be the first guided experience", "don't make it feel like a chore", "too much reading makes people turn their brains off").
 
+> **Status: design record, not current state.** This document is the research and
+> rationale behind the redesign. `ONBOARDING_VISION.md` is the contract and wins
+> on any disagreement. Shipped behaviour has since moved on in four places:
+>
+> - **Goal is multi-select** (1 to 3 picks) and the picks weight the daily prompt
+>   category mix via `Models/PromptMix.swift`. This document describes a single
+>   pick that only aimed coaching.
+> - **Nothing auto-advances.** Goal and level show their payoff line and wait for
+>   an explicit Continue. Testers read the timed jump as the app deciding for
+>   them, and it made a second goal pick a race against the timer.
+> - **The reveal has one action** — `See my full breakdown`. The `Take me home`
+>   alternative below was cut: it let people opt out one tap before the screen
+>   that explains the number they were just shown.
+> - **Script mode was cut** (2026-08-05). Big Talk trains thinking on the spot;
+>   Read-Aloud practice lives in the Library instead. Baseline copy quotes **30
+>   seconds**, not the 45 used in early drafts below.
+
 ---
 
 ## 1. UX Audit of the Current Onboarding
@@ -135,8 +152,8 @@ Nine screens → six beats. Reading screens: two → zero. Time to baseline: ~90
 ```
 1. COVER        "Hear yourself improve."          (orb breathes — the app is alive)
 2. NAME         "What should we call you?"        (one field, skippable)
-3. GOAL         "What brought you here, Vansh?"   (tap card → auto-advance + payoff line)
-4. LEVEL        "Where are you starting from?"    (tap card → auto-advance + payoff line)
+3. GOAL         "What brought you here, Vansh?"   (shipped: multi-select + payoff line + Continue)
+4. LEVEL        "Where are you starting from?"    (shipped: tap card + payoff line + Continue)
 5. SOUND CHECK  "Let's make sure we can hear you" (mic permission + live waveform test)
 6. THE BASELINE  a) Briefing — coach cascade, 3 beats, conversational
                  b) Recording — prompt pinned, user-initiated, guided live
@@ -247,7 +264,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 ```
 
 - **Headline:** `What brought you here, Vansh?` (existing copy — it's good).
-- **Interaction:** **tap card → payoff line materializes under the list → auto-advance after ~900ms.** No Continue button. Tapping again within the window re-picks. (Duolingo/Copilot: the answer is the navigation.)
+- **Interaction (as drafted):** tap card → payoff line materializes under the list → auto-advance after ~900ms, no Continue button. (Duolingo/Copilot: the answer is the navigation.) **As shipped:** the step is multi-select (1 to 3) with a permanent Continue, because a timed jump turns a second pick into a race — and the picks now weight the prompt category mix, not just tip tone.
 - **Microcopy payoffs (one per goal):** work → `Got it. Prompts will lean toward meetings and updates.` · interviews → `Got it. Expect interview-style questions.` · confidence → `Got it. Prompts will feel like everyday conversation.` · public speaking → `Got it. Expect prompts you could open a talk with.` · clarity → `Got it. Coaching will focus on pace and crispness.`
 - **Animation:** selected card lifts + teal hairline; payoff line slides in from below with `Haptics.selection()`; others dim 40%.
 - **Why it exists:** the goal drives prompt selection and tip weighting — and the *payoff line* is the proof the app listened (audit gap I2). **If removed:** coaching is generic and the user's first score has no "for you" story; personalization would have to be inferred silently, invisibly.
@@ -279,7 +296,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 
 - **Headline:** `How do you feel about speaking today?` — a feelings question, not an assessment ("Where are you starting from" + "Beginner" labels make people grade themselves; self-assessment is exactly the anxiety we're removing).
 - **Options map to existing `SpeakerLevel`:** beginner = `Finding my feet — I avoid it when I can` · intermediate = `Getting comfortable — fine, but I want to be good` · advanced = `Sharpening up — good, chasing great`.
-- **Interaction:** tap → payoff line (`We'll start you gentle and ramp up.` / `We'll start you with mostly medium prompts.` / `We'll skew your prompts hard.`) → auto-advance. Vocab seeds applied silently via existing `vocabSeeds(for:)`.
+- **Interaction:** tap → payoff line (`We'll start you gentle and ramp up.` / `We'll start you with mostly medium prompts.` / `We'll skew your prompts hard.`) → Continue. (Drafted as auto-advance; shipped with an explicit Continue to match the goal step.) Vocab seeds applied silently via existing `vocabSeeds(for:)`.
 - **Why it exists:** drives `dailyDifficultyWeights` and vocab seeding — real product consequences from one tap. **If removed:** everyone gets intermediate defaults; recoverable in Settings, but the flow loses its second "it listened" beat. This is the first screen to cut if the funnel says four questions is one too many — the payoff line is what earns its slot.
 
 ---
@@ -333,7 +350,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 │  │ and pauses.          │   │    chips pop in one by one
 │  ╰─────────────────────╯    │
 │  ╭─────────────────────╮    │
-│  │ 45 seconds. No grade,│   │  ← beat 3, +1.8s
+│  │ 30 seconds. No grade,│   │  ← beat 3, +1.8s
 │  │ no pressure — this is│   │
 │  │ your starting line.  │   │
 │  ╰─────────────────────╯    │
@@ -345,7 +362,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 └─────────────────────────────┘
 ```
 
-- **Copy, exactly:** `One recording, and I'll know your voice.` → `I'll measure pace, clarity, fillers, and pauses.` (four metric chips pop in with the words — Oura's "You'll see: HR · HRV" pattern) → `45 seconds. No grade, no pressure — this is your starting line.`
+- **Copy, exactly:** `One recording, and I'll know your voice.` → `I'll measure pace, clarity, fillers, and pauses.` (four metric chips pop in with the words — Oura's "You'll see: HR · HRV" pattern) → `30 seconds is enough. No grade, no pressure. This is your starting line.` (30 is the only duration onboarding copy ever quotes; early drafts said 45.)
 - **Interaction:** bubbles cascade automatically (0.9s apart); a tap fast-forwards the cascade. `What will I say?` is a quiet text button → opens the prompt preview early (same content as 6b's prompt card) for users whose anxiety is specifically compositional.
 - **CTA:** `Set my starting line` — the feature is named by what it does *for* them.
 - **Progress:** ticks replaced by a subtle `Your baseline` eyebrow — this is no longer a step among steps; it's the event.
@@ -379,7 +396,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 │  You can retry as many      │   │   └──────┘    └─────────┘   │
 │  times as you like.         │   │    Start over               │
 │                             │   │                             │
-│  Read a script instead      │   │                             │
+│  (script fallback: cut)     │   │                             │
 └─────────────────────────────┘   └─────────────────────────────┘
 ```
 
@@ -390,7 +407,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 | Why are we recording? | 6a beat 1 + eyebrow `YOUR BASELINE` |
 | What are we measuring? | 6a beat 2 (metric chips) |
 | How long? | 6a beat 3 + the 30s "enough" tick on the progress line |
-| What should I say? | Prompt card, pinned forever + three starter chips + `Swap ⟳` + script fallback |
+| What should I say? | Prompt card, pinned forever + three starter chips + `Swap ⟳` |
 | What if I mess up? | `Start over` visible from second zero + ready-state caption |
 | Can I retry? | `You can retry as many times as you like.` printed *before* the first take |
 | What happens next? | 6a CTA promise + analyzing screen delivers it |
@@ -399,7 +416,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 - Prompt card pinned top. Default prompt: `Introduce yourself. What do you do, and what kind of speaking do you want to improve?` — chosen because everyone can answer it, it produces natural free speech (better baseline data than read speech), and its content feeds the goal narrative.
 - Three starter chips (teleprompter scaffolding, Meta AI glasses pattern): `"My name is…"` · `"I spend my days…"` · `"I want to sound…"`. Tapping one gently pulses it — they're crutches to read, not inputs.
 - `Swap ⟳` cycles 3 alternate prompts (e.g., `Describe your typical morning, start to finish.` / `What's something you know a lot about? Explain it simply.`) — Character AI's swap affordance; control kills panic.
-- `Read a script instead` (quiet button, bottom): swaps the card to a short `ReadAloudPassage` (~80 words, easy tier). For the user who freezes at composition entirely — the Speechify/Meta AI zero-thought path. The card header becomes `Just read this out loud.` Recording flow identical. (Scoring: script path routes like a story-linked recording — script text as `promptText` — so relevance scores read-fidelity; already supported by the pipeline.)
+- ~~`Read a script instead`~~ **Cut 2026-08-05.** Drafted as a quiet button swapping the card for a short `ReadAloudPassage`. Removed because a read-aloud baseline trains the wrong muscle and doesn't compare honestly against the spontaneous sessions that follow it; the starter chips remain the anti-freeze aid, and Read-Aloud practice lives in the Library. See `ONBOARDING_VISION.md` → "Deliberately cut".
 - **The user taps record.** 3-2-1 countdown plays *in the button itself* — the prompt card never leaves the screen (fixes F2 + F3 in one move).
 - Caption: `Tap when you're ready. You can retry as many times as you like.`
 
@@ -471,7 +488,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 │  ┌───────────────────────┐  │
 │  │  See my full breakdown│  │
 │  └───────────────────────┘  │
-│      Take me home           │
+│   (no secondary action)     │
 └─────────────────────────────┘
 ```
 
@@ -480,7 +497,7 @@ Copy is final-intent quality: simple, confident, minimal, friendly. No marketing
 - Two metric chips max (pace + fillers — the two most self-explanatory). The other seven wait in the detail view; the reveal is a headline, not the article.
 - **One coaching insight** in the coach's bubble voice, from `CoachingTipService`, name included: `Steady pace, Vansh. We'll work on pauses first — that's your fastest win.` This single line *is* the activation promise kept — the app heard you, and it has a plan for you.
 - **Baseline framing line:** `Every session from now on is compared to this.` + `🔥 Day 1` streak spark (investment loop opens).
-- **CTA:** `See my full breakdown` → `RecordingDetailView` (natural teach-the-app moment). Secondary: `Take me home` → TodayView. Both routes mark onboarding complete; `FirstRecordingSetupSheet` fires on Today afterwards exactly as it does now.
+- **CTA:** `See my full breakdown` → `RecordingDetailView` (natural teach-the-app moment). **Shipped with no secondary action** — the drafted `Take me home` was cut, since the breakdown is where a first score becomes information. Onboarding is complete either way and `FirstRecordingSetupSheet` fires on Today afterwards exactly as it does now.
 - **Low-score guard:** if overall < 40, suppress the number as the hero — show the two metric chips + `You showed up — that's the hard part. Plenty of headroom, and headroom is the fun part.` The number still exists in detail view. First-session churn is not worth numeric purity.
 - **Why it exists:** this is the moment the activation metric measures — completion + understanding + excitement in one screen. **If removed:** the baseline ends in the generic detail view: information present, *meaning* absent, celebration missing.
 
@@ -513,35 +530,35 @@ All within the existing `AppMotion.settle` / `.snap` vocabulary; everything here
 
 ## 9. Empty States
 
-- **Baseline skipped → TodayView hero card** (replaces stats rings until done): `Your starting line is waiting · One 45-second recording unlocks your scores, streaks, and coaching. → Set my baseline` — routes into 6a. The activation moment stays reachable forever; the empty state *is* the funnel re-entry.
+- **Baseline skipped → TodayView hero card** (replaces stats rings until done): `Your starting line is waiting · One 30-second recording unlocks your scores, streaks, and coaching. → Set my baseline` — routes into 6a. The activation moment stays reachable forever; the empty state *is* the funnel re-entry. Still unbuilt — tracked in `ONBOARDING_VISION.md` → "Known ceilings".
 - **History before any recording:** `Your story starts with one recording.` + the same CTA. Charts/streak surfaces: show meter tracks with `scoreEmpty`, never bare zeros ("0" reads as failure; an unlit meter reads as *potential*).
 - **Sound check hearing nothing for 10s:** `Not hearing you yet. Closer to the mic?` under the flat waveform.
 
 ## 10. Accessibility
 
-- **VoiceOver order on 6b:** prompt text → starter chips → record button → swap → script fallback. During recording, announcements via `AXAnnouncement` only at meaningful moments (record started · 30s reached · stopped) — never per-second.
+- **VoiceOver order on 6b:** prompt text → starter chips → record button → swap. During recording, announcements via `AXAnnouncement` only at meaningful moments (record started · 30s reached · stopped) — never per-second.
 - **The 30s tick** posts `"30 seconds — that's enough for a baseline"` as an announcement; encouragement lines are polite (non-interrupting) announcements.
 - **Reduce Motion:** orb static with opacity pulse only; cascade bubbles appear without offset; ring sets instantly with the number counting via opacity crossfade; confetti off. (Existing `.motion()` wrapper handles most of this.)
 - **Dynamic Type:** the script/prompt card is *read aloud from* — it must scale to accessibility sizes without truncation; card scrolls internally rather than clipping. Starter chips wrap via `FlowLayout`.
 - **Haptics always paired with a visual** (deaf-blind users get the visual; VoiceOver users get the announcement; nobody depends on the buzz).
-- **Auto-advance (goal/level) with VoiceOver running:** disable the timer; show an explicit Continue after selection — auto-navigation under VO is disorienting.
+- **Auto-advance (goal/level):** dropped entirely rather than special-cased for VoiceOver. Every user gets the explicit Continue, so there is one behaviour to reason about instead of two.
 - **Color:** score communicated by number + verdict word (`scoreVerdict`), never color alone. All copy on glass meets 4.5:1.
 - **The countdown-in-button** also renders numerals at the screen's center-safe area for low-vision users; `Haptics` tick per second.
 
 ## 11. Success Metrics
 
-Instrument via existing `AnalyticsService.onboardingStep` (names stay stable per its own doc), adding: `baseline_briefing`, `baseline_ready`, `baseline_recording`, `baseline_analyzing`, `baseline_reveal`, with actions `continue / skip / retry / swap_prompt / script_mode / abandon`.
+Instrument via existing `AnalyticsService.onboardingStep` (names stay stable per its own doc), adding: `baseline_briefing`, `baseline_ready`, `baseline_recording`, `baseline_analyzing`, `baseline_reveal`, with actions `continue / skip / retry / swap_prompt / abandon`. (`script_mode` was dropped with script mode.)
 
 - **Funnel:** completion rate per beat; overall cover→reveal. Target: >70% of installs reach the reveal (current equivalent unknown — instrument first).
 - **Time-to-baseline:** median install → reveal. Target < 4 minutes.
-- **Baseline quality:** % of first takes ≥30s; retry count distribution; % hitting silence/gibberish coaching; % choosing script mode vs. prompt (if script >40%, the default prompt is too scary — iterate the prompt, not the script).
+- **Baseline quality:** % of first takes ≥30s; retry count distribution; % hitting silence/gibberish coaching; swap-prompt share (if high, the default prompt is too scary — iterate the prompt).
 - **Comprehension proxy:** % tapping `See my full breakdown` (curiosity = understood there's more).
 - **Momentum:** % recording a second session within 48h (the single best predictor of retention); D1/D7 retention vs. pre-redesign cohort.
 - **Guardrails:** mic-permission grant rate must not drop (moving it later can only help); `FirstRecordingSetupSheet` engagement unchanged.
 
 ## 12. Activation Metric
 
-> **A new user is *activated* when, in their first session, they (1) complete a baseline recording ≥30 seconds, (2) view the reveal screen, and (3) take one forward action from it (`See my full breakdown`, `Take me home`, or any tap on Today).**
+> **A new user is *activated* when, in their first session, they (1) complete a baseline recording ≥30 seconds, (2) view the reveal screen, and (3) take one forward action from it (`See my full breakdown`, or any tap on Today).**
 
 One number to report: **install → activated %**. Condition (3) is the "excited, not just finished" proxy — a user who force-quits on the reveal saw a score but didn't buy the story. Leading indicator: % of activated users who return within 48h.
 
@@ -554,28 +571,30 @@ Every decision above traces to one of four grounds — the per-screen "Why this 
 | Baseline inside onboarding, not after | Duolingo (lesson-in-onboarding); user feedback ("should be the first guided experience"); the handoff is where the current design dies |
 | User presses record; countdown in-button | Perceived control is the primary lever on state anxiety; fixes F2/F3 with one mechanism |
 | Prompt pinned during take | Meta AI / Speechify / Character AI convergent pattern; verbatim user feedback |
-| Script fallback at arm's reach | "I didn't know if there was a script" — they were *asking* for one; Speechify's zero-composition path |
+| ~~Script fallback at arm's reach~~ (cut) | Drafted from "I didn't know if there was a script" + Speechify's zero-composition path. Cut because a read baseline trains the wrong muscle; starter chips carry the anti-freeze job |
 | Count up + "30s = enough" tick | Goal-gradient effect (progress motivates; deadlines threaten); M3 fix; substance curve genuinely accepts ~30s |
 | Cut How-It-Works / What's-Inside / Vocab | "Too much reading…"; "never homework"; Duolingo/Headspace delay everything; inventory ≠ comprehension |
-| Payoff line per answer, auto-advance | Duolingo echo pattern; fixes I2 (inputs with no visible consequence) |
+| Payoff line per answer (auto-advance later dropped) | Duolingo echo pattern; fixes I2 (inputs with no visible consequence) |
 | Analyzing as staged theater with one real fact | Labor illusion (Life Reset) + verifiable artifact ("You said 112 words") converts wait into trust |
 | "Starting line," never "score"; low-score guard | Oura baseline framing; E2 (first-number churn risk); growth-mindset framing of an initial measurement |
 | Defer calibration / AI / reminders (unchanged) | Headspace post-session asks; the current build already got this right — keep it |
 
 ---
 
-## Appendix — Implementation Mapping (for build planning; no schema changes required)
+## Appendix — Implementation Mapping (for build planning)
+
+The redesign itself needed no schema changes. Multi-select goals later added one additive field, `UserSettings.onboardingGoalsRaw`, with an empty default so lightweight migration and CloudKit evolution stay safe.
 
 | New piece | Built from |
 |---|---|
-| Cover / Name / Goal / Level | Existing steps, copy + auto-advance changes; `OnboardingPage`, `OnboardingChoiceCard`, tick meter as-is |
+| Cover / Name / Goal / Level | Existing steps, copy changes; `OnboardingPage`, `OnboardingChoiceCard`, tick meter as-is. Goal became multi-select feeding `PromptMix`; both question steps keep a permanent Continue |
 | Sound check | Existing `OnboardingMicStep` + waveform + `hasHeardVoice`, retitled/recopied |
 | 6a briefing cascade | New lightweight view; `onboardingReveal` stagger + `GlassCard` bubbles; orb = existing `OnboardingOrb` |
 | 6b guided recorder | New onboarding-owned view wrapping `AudioService` (the mic step already records); prompt card = `GlassCard`; chips = `FlowLayout`; **not** the generic `RecordingView` |
-| Script mode | `DefaultReadAloudPassages` easy tier; score via existing script-as-`promptText` path |
+| ~~Script mode~~ | Cut before ship; Read-Aloud practice covers read speech from the Library |
 | 6c analyzing | `RecordingProcessingCoordinator` stages surfaced; `AnalyzingView` as base |
 | 6d reveal | `RingStatsView` ring + `ConfettiView` + `CoachingTipService`; routes to `RecordingDetailView` |
 | Today hero card (empty state) | New card on `TodayView`, shown until first recording exists |
 | Removals | `whatsInside`, `vocab` steps; `launchFirstRecording` toggle + `ContentView` auto-countdown path (`ContentView.swift:360-366`) |
 
-Resume-key bump to v7 (steps changed — same reason v6 exists).
+Resume-key bump to v7 (steps changed — same reason v6 exists). Bumped again to v8 when the goal draft became a list.

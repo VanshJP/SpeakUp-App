@@ -305,7 +305,10 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(item: $paywall.request) { request in
+        // Full screen, not a sheet. The offer is a short flow through the user's
+        // own progress before it asks for anything, and a card sheet both cuts
+        // that short and reads as dismissible chrome.
+        .fullScreenCover(item: $paywall.request) { request in
             PaywallView(request: request)
         }
         .onOpenURL { url in
@@ -414,7 +417,9 @@ struct ContentView: View {
         settings.hasCompletedOnboarding = true
         settings.speakerLevel = result.speakerLevel.rawValue
         settings.userName = result.userName
-        settings.onboardingGoalRaw = result.goal.rawValue
+        settings.onboardingGoalsRaw = result.goals.map(\.rawValue)
+        // First pick stays the primary goal for anything that names one.
+        settings.onboardingGoalRaw = (result.goals.first ?? .everydayConfidence).rawValue
 
         // Persist reminder preference + time so SettingsView reflects it.
         settings.dailyReminderEnabled = result.reminderEnabled
@@ -422,9 +427,10 @@ struct ContentView: View {
         settings.dailyReminderMinute = result.reminderMinute
 
         // Prompt categories are intentionally NOT narrowed by the onboarding
-        // goal — the goal is stored for reference but all categories stay
-        // enabled so the user sees the full prompt pool. Category selection is
-        // user-driven via PromptSettingsView.
+        // goals. The goals *weight* which categories surface (`PromptMix`),
+        // while every category stays enabled so the full pool remains
+        // reachable. Narrowing belongs to the user, via PromptSettingsView,
+        // and that gate beats the onboarding weighting when the two disagree.
 
         // Voice calibration captured during onboarding. Matches
         // `SettingsViewModel.saveCalibrationProfile`: a deliberate "this is my

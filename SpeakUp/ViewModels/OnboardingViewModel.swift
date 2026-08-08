@@ -59,17 +59,14 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     /// the first guided take, its analysis, and its reveal — rather than
     /// handing the user off to an unguided recorder after a recap screen.
     ///
-    /// Calibration, the on-device model download, and the reminder prompt are
-    /// deliberately absent. Each one asks for effort, storage, or a system
-    /// permission before the user has seen a single score, and the score is the
-    /// only thing that has earned any of it. All three are offered again on
+    /// `calibrate`, `intelligence`, and `reminder` are deliberately absent.
+    /// Each one asks for effort, storage, or a system permission before the
+    /// user has seen a single score, and the score is the only thing that has
+    /// earned any of it. All three keep working and are offered again on
     /// `FirstRecordingSetupSheet`, immediately after the first session.
     static let firstRunSteps: [OnboardingStep] = [
         .welcome, .name, .goal, .level, .mic, .baselineBriefing, .baseline
     ]
-
-    /// Steps moved out of the first run and offered after the first result.
-    static let deferredSteps: [OnboardingStep] = [.calibrate, .intelligence, .reminder]
 
     /// Stable name for the drop-off funnel. Deliberately not derived from any
     /// on-screen copy: reworded headlines must not split one step into two
@@ -96,7 +93,9 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
 /// so it can apply them to the persisted `UserSettings` row in one shot.
 struct OnboardingResult {
     let userName: String
-    let goal: OnboardingGoal
+    /// Goals in pick order, at least one. Drives the prompt category mix on
+    /// Today (see `PromptMix`); the first entry is stored as the primary goal.
+    let goals: [OnboardingGoal]
     let speakerLevel: SpeakerLevel
     let vocabWords: [String]
     let dictionaryWords: [String]
@@ -125,10 +124,15 @@ final class OnboardingViewModel {
     // Identity
     var nameInput: String = ""
 
-    // Practice intent
-    var selectedGoal: OnboardingGoal? = nil
+    // Practice intent. Multi-select: someone preparing for interviews who also
+    // wants everyday confidence is one user, not two, and the prompt mix can
+    // weight both. Ordered so the first pick stays the primary goal.
+    var selectedGoals: [OnboardingGoal] = []
+    /// Ceiling on picks. Past three the weighting stops meaning anything —
+    /// every category ends up favored, which is the same as none of them.
+    static let maxGoals = 3
     var speakerLevel: SpeakerLevel = .intermediate
-    /// The level step advances on tap, so it needs an unpicked state even
+    /// The level step shows an unpicked state until the user chooses, even
     /// though `speakerLevel` carries a default for everything downstream.
     var hasPickedLevel = false
 
@@ -196,9 +200,6 @@ final class OnboardingViewModel {
     private var baselineLevelSamples: [Float] = []
     private var baselineSampleCounter = 0
 
-    // Auto-advance after a goal/level pick — the answer is the navigation.
-    private var autoAdvanceTask: Task<Void, Never>?
-
     static func vocabSeeds(for level: SpeakerLevel) -> [String] {
         switch level {
         case .beginner:
@@ -213,14 +214,13 @@ final class OnboardingViewModel {
         }
     }
 
-    // v7 keys: the explainer pages, vocab editor, and ready recap left the
-    // flow and the baseline moved inside it, so v6 raw values point at steps
-    // that no longer exist. Bumping invalidates that saved state, the same
-    // reason v6 existed.
-    private static let resumeStepKey = "onboarding.lastReachedStep.v7"
-    private static let resumeNameKey = "onboarding.draftName.v7"
-    private static let resumeGoalKey = "onboarding.draftGoal.v7"
-    private static let resumeLevelKey = "onboarding.draftLevel.v7"
+    // v8 keys: the goal draft is a list now, not one Int. Reading a v7 scalar
+    // into it would silently restore a single goal and lose the shape, so the
+    // bump invalidates the old drafts instead — same reason v7 existed.
+    private static let resumeStepKey = "onboarding.lastReachedStep.v8"
+    private static let resumeNameKey = "onboarding.draftName.v8"
+    private static let resumeGoalsKey = "onboarding.draftGoals.v8"
+    private static let resumeLevelKey = "onboarding.draftLevel.v8"
 
     // MARK: Lifecycle
 
@@ -233,6 +233,10 @@ final class OnboardingViewModel {
     }
 
     var canAdvanceFromName: Bool { !trimmedName.isEmpty }
+
+    /// At the cap, unpicked goals stop responding — `toggleGoal` refuses and
+    /// the step dims them, rather than silently dropping an earlier pick.
+    var hasReachedGoalLimit: Bool { selectedGoals.count >= Self.maxGoals }
 
     /// The flow this run walks. Navigation indexes into this rather than
     /// walking `rawValue + 1`, so deferring a step is a change to one array.
@@ -281,9 +285,8 @@ final class OnboardingViewModel {
         if let savedName = defaults.string(forKey: Self.resumeNameKey) {
             nameInput = savedName
         }
-        if let goalRaw = defaults.object(forKey: Self.resumeGoalKey) as? Int,
-           let goal = OnboardingGoal(rawValue: goalRaw) {
-            selectedGoal = goal
+        if let goalRaws = defaults.array(forKey: Self.resumeGoalsKey) as? [Int] {
+            selectedGoals = goalRaws.compactMap { OnboardingGoal(rawValue: $0) }
         }
         if let levelRaw = defaults.object(forKey: Self.resumeLevelKey) as? Int,
            let level = SpeakerLevel(rawValue: levelRaw) {
@@ -297,9 +300,7 @@ final class OnboardingViewModel {
         let defaults = UserDefaults.standard
         defaults.set(currentStep.rawValue, forKey: Self.resumeStepKey)
         defaults.set(trimmedName, forKey: Self.resumeNameKey)
-        if let goal = selectedGoal {
-            defaults.set(goal.rawValue, forKey: Self.resumeGoalKey)
-        }
+        defaults.set(selectedGoals.map(\.rawValue), forKey: Self.resumeGoalsKey)
         defaults.set(speakerLevel.rawValue, forKey: Self.resumeLevelKey)
     }
 
@@ -309,7 +310,7 @@ final class OnboardingViewModel {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: resumeStepKey)
         defaults.removeObject(forKey: resumeNameKey)
-        defaults.removeObject(forKey: resumeGoalKey)
+        defaults.removeObject(forKey: resumeGoalsKey)
         defaults.removeObject(forKey: resumeLevelKey)
     }
 
@@ -337,8 +338,6 @@ final class OnboardingViewModel {
     }
 
     private func move(by offset: Int, action: String) {
-        autoAdvanceTask?.cancel()
-        autoAdvanceTask = nil
         guard let index = steps.firstIndex(of: currentStep) else { return }
         let target = index + offset
         guard steps.indices.contains(target) else { return }
@@ -349,27 +348,34 @@ final class OnboardingViewModel {
         persistProgress()
     }
 
-    /// Tap-to-advance for the single-choice questions: pick lands, the payoff
-    /// line gets a beat to be read, then the flow moves on its own. Re-picking
-    /// inside the window restarts the beat. Views pass `autoAdvance: false`
-    /// under VoiceOver, where unrequested navigation is disorienting.
-    private func scheduleAutoAdvance() {
-        autoAdvanceTask?.cancel()
-        autoAdvanceTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(1100))
-            guard !Task.isCancelled else { return }
-            self?.advance()
+    /// Add or remove a goal. Nothing navigates: the goal step is multi-select,
+    /// so the flow cannot know the answer is finished until the user says so.
+    /// The old behaviour (pick, wait a beat, jump) read as the app deciding for
+    /// you, and made a second pick a race against the timer.
+    ///
+    /// Deselecting the last remaining goal is refused rather than allowed and
+    /// then blocked at the CTA — leaving the step un-answerable after it was
+    /// answered is a worse state than a tap that declines to do anything.
+    func toggleGoal(_ goal: OnboardingGoal) {
+        if let index = selectedGoals.firstIndex(of: goal) {
+            guard selectedGoals.count > 1 else {
+                Haptics.warning()
+                return
+            }
+            selectedGoals.remove(at: index)
+            Haptics.light()
+        } else {
+            guard !hasReachedGoalLimit else {
+                Haptics.warning()
+                return
+            }
+            selectedGoals.append(goal)
+            Haptics.selection()
         }
-    }
-
-    func selectGoal(_ goal: OnboardingGoal, autoAdvance: Bool = false) {
-        Haptics.selection()
-        selectedGoal = goal
         persistProgress()
-        if autoAdvance { scheduleAutoAdvance() }
     }
 
-    func selectLevel(_ level: SpeakerLevel, autoAdvance: Bool = false) {
+    func selectLevel(_ level: SpeakerLevel) {
         Haptics.selection()
         hasPickedLevel = true
         let oldSeeds = Self.vocabSeeds(for: speakerLevel)
@@ -378,7 +384,6 @@ final class OnboardingViewModel {
             vocabWords = Self.vocabSeeds(for: level)
         }
         persistProgress()
-        if autoAdvance { scheduleAutoAdvance() }
     }
 
     // MARK: Mic Permission + Live Test
@@ -616,7 +621,9 @@ final class OnboardingViewModel {
         }
         return OnboardingResult(
             userName: trimmedName,
-            goal: selectedGoal ?? .everydayConfidence,
+            // Never empty downstream: a user who skipped the goal step still
+            // needs a mix, and everyday talk is the least presumptuous default.
+            goals: selectedGoals.isEmpty ? [.everydayConfidence] : selectedGoals,
             speakerLevel: speakerLevel,
             vocabWords: vocabWords,
             dictionaryWords: finalDictionary,

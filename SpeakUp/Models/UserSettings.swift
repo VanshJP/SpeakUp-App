@@ -99,17 +99,32 @@ final class UserSettings {
     // and seeded into the dictation dictionary so transcripts spell it right).
     var userName: String = ""
 
-    // Primary practice goal selected during onboarding. Drives default prompt
-    // category mix on first run. Stored as raw Int for lightweight migration.
+    // Primary practice goal selected during onboarding. Kept as a single Int
+    // for backward compatibility (and for copy that names one goal); the full
+    // multi-select list lives in `onboardingGoalsRaw` below.
     var onboardingGoalRaw: Int = OnboardingGoal.everydayConfidence.rawValue
 
-    // Onboarding resume support — last reached step so a force-quit mid-flow
-    // resumes where the user left off instead of restarting from welcome.
+    // Every goal picked during onboarding, in pick order. Weights which prompt
+    // categories surface on Today (see `PromptMix`). Additive with an empty
+    // default so existing rows migrate without a schema step; an empty array
+    // means "this row predates multi-select" and falls back to the single goal.
+    var onboardingGoalsRaw: [Int] = []
+
+    // Legacy, unread. Onboarding resume moved to UserDefaults
+    // (`onboarding.lastReachedStep.*`) so drafts don't touch the SwiftData
+    // store. Kept because removing a stored attribute breaks lightweight
+    // migration and CloudKit schema evolution for existing installs.
     var onboardingStepRaw: Int = 0
 
-    // Free-tier analysis allowance. Counters only — whether they are consulted
-    // at all is decided by `EntitlementStore.policy`.
+    // Legacy, unread. The immediate three-analysis intro grant was replaced by
+    // the 14-day trial, whose clock lives in `EntitlementStore`. Kept because
+    // removing a stored attribute breaks lightweight migration and CloudKit
+    // schema evolution for existing installs.
     var freeIntroAnalysesUsed: Int = 0
+
+    // Free-tier analysis allowance, used once the trial has expired. Counters
+    // only — whether they are consulted at all is decided by
+    // `EntitlementStore.policy`.
     var freeCycleStart: Date?
     var freeCycleAnalysesUsed: Int = 0
 
@@ -217,6 +232,25 @@ final class UserSettings {
         SpeakerLevel(rawValue: speakerLevel) ?? .intermediate
     }
 
+    // MARK: - Practice Goals
+
+    /// Goals picked during onboarding, in pick order. Falls back to the single
+    /// stored goal for rows written before multi-select existed, so the prompt
+    /// mix is never empty for an upgrading user.
+    var resolvedOnboardingGoals: [OnboardingGoal] {
+        let picked = onboardingGoalsRaw.compactMap { OnboardingGoal(rawValue: $0) }
+        if !picked.isEmpty { return picked }
+        return [OnboardingGoal(rawValue: onboardingGoalRaw) ?? .everydayConfidence]
+    }
+
+    /// Category weighting for prompt selection: goals bias, enabled categories gate.
+    var promptMix: PromptMix {
+        PromptMix(
+            goals: resolvedOnboardingGoals,
+            enabledCategoryNames: Set(enabledPromptCategories)
+        )
+    }
+
     // MARK: - Free-Tier Allowance
 
     /// Bridge between the persisted counters and the pure allowance arithmetic
@@ -224,13 +258,11 @@ final class UserSettings {
     var allowanceState: AllowanceState {
         get {
             AllowanceState(
-                introUsed: freeIntroAnalysesUsed,
                 cycleStart: freeCycleStart,
                 cycleUsed: freeCycleAnalysesUsed
             )
         }
         set {
-            freeIntroAnalysesUsed = newValue.introUsed
             freeCycleStart = newValue.cycleStart
             freeCycleAnalysesUsed = newValue.cycleUsed
         }
@@ -351,8 +383,8 @@ enum SpeakerLevel: Int, Codable, CaseIterable, Identifiable {
 
 // MARK: - Onboarding Goal
 
-/// What the user wants out of SpeakUp. Drives default prompt category mix on
-/// first launch and is shown back to the user on Today as gentle context.
+/// What the user wants out of SpeakUp. Picked during onboarding (up to three)
+/// and weighted into the daily prompt category mix by `PromptMix`.
 enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
     case interviews = 0
     case meetings = 1

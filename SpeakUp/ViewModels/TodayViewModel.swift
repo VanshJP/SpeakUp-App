@@ -20,7 +20,10 @@ class TodayViewModel {
     private var modelContext: ModelContext?
     private var lastPracticeDate: Date?
     private var answeredPromptIDs: Set<String> = []
-    private var enabledPromptCategoryNames: Set<String> = []
+    /// Category weighting from the user's onboarding goals, gated by their
+    /// enabled categories. Built once per settings load rather than per prompt,
+    /// and the only place the category gate is applied now.
+    private var promptMix: PromptMix = .uniform
     private var hasRerolledPrompt = false
 
     nonisolated init() {}
@@ -241,10 +244,11 @@ class TodayViewModel {
         if hasRerolledPrompt && todaysPrompt != nil { return }
 
         // Get today's prompt based on date seed, weighted by self-reported
-        // speaker level so beginners see easier rotations and advanced
-        // users see more challenging ones.
+        // speaker level for difficulty and by the user's practice goals for
+        // category, so beginners see easier rotations and someone practising
+        // for interviews mostly meets interview-shaped prompts.
         let level = currentSpeakerLevel(context: context)
-        let todayData = DefaultPrompts.getTodaysPrompt(for: level)
+        let todayData = DefaultPrompts.getTodaysPrompt(for: level, mix: promptMix)
         let targetId = todayData.id
 
         // Fetch all prompts and filter in memory to avoid SwiftData predicate issues
@@ -269,13 +273,16 @@ class TodayViewModel {
                 allPrompts.append(newPrompt)
             }
 
-            // If hiding answered prompts and current prompt was already answered, pick an unanswered one
+            // If hiding answered prompts and current prompt was already
+            // answered, pick an unanswered one — still through the mix, so the
+            // substitute leans the same way the day's prompt would have.
             if hideAnsweredPrompts, let current = todaysPrompt, answeredPromptIDs.contains(current.id) {
-                let unanswered = allPrompts.filter {
-                    !answeredPromptIDs.contains($0.id) &&
-                    (enabledPromptCategoryNames.isEmpty || enabledPromptCategoryNames.contains($0.category))
-                }
-                todaysPrompt = unanswered.randomElement() ?? current
+                let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
+                todaysPrompt = promptMix.pick(
+                    from: unanswered,
+                    seed: DefaultPrompts.todaySeed(),
+                    category: \.category
+                ) ?? current
             }
         } catch {
             print("Error loading today's prompt: \(error)")
@@ -307,7 +314,7 @@ class TodayViewModel {
                 hideAnsweredPrompts = settings.hideAnsweredPrompts
                 weeklyGoalSessions = settings.weeklyGoalSessions
                 storyPracticeEnabled = settings.storyPracticeEnabled
-                enabledPromptCategoryNames = Set(settings.enabledPromptCategories)
+                promptMix = settings.promptMix
             }
         } catch {
             print("Error loading user settings: \(error)")
@@ -333,9 +340,9 @@ class TodayViewModel {
     func refreshPrompt() async {
         guard let context = modelContext else { return }
 
-        // Get a random prompt biased by the user's speaker level
+        // Get a random prompt biased by the user's speaker level and goals
         let level = currentSpeakerLevel(context: context)
-        let randomData = DefaultPrompts.getRandomPrompt(for: level, enabledCategories: enabledPromptCategoryNames)
+        let randomData = DefaultPrompts.getRandomPrompt(for: level, mix: promptMix)
         let targetId = randomData.id
 
         // Fetch all prompts and filter in memory to avoid SwiftData predicate issues
@@ -362,11 +369,8 @@ class TodayViewModel {
             // If hiding answered prompts, prefer an unanswered one
             if hideAnsweredPrompts {
                 loadAnsweredPromptIDs(context: context)
-                let unanswered = allPrompts.filter {
-                    !answeredPromptIDs.contains($0.id) &&
-                    (enabledPromptCategoryNames.isEmpty || enabledPromptCategoryNames.contains($0.category))
-                }
-                if let pick = unanswered.randomElement() {
+                let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
+                if let pick = promptMix.pickRandom(from: unanswered, category: \.category) {
                     candidate = pick
                 }
             }

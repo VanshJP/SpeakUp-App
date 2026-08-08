@@ -24,6 +24,7 @@ struct AnalyticsDiagnosticsView: View {
                     scorecardCard
                     #if DEBUG
                     entitlementOverrideCard
+                    trialOverrideCard
                     #endif
                     recentEventsCard
                     actions
@@ -110,6 +111,46 @@ struct AnalyticsDiagnosticsView: View {
                 }
             }
             .tint(AppColors.primary)
+        }
+    }
+
+    /// Moves the 14-day trial clock so both sides of it can be seen in one run
+    /// instead of two weeks apart.
+    private var trialOverrideCard: some View {
+        GlassCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Free trial (debug)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(trialStateSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 10) {
+                    GlassButton(title: "Reset", style: .secondary, size: .small) {
+                        EntitlementStore.shared.setDebugTrialStart(nil)
+                    }
+                    GlassButton(title: "Start now", style: .secondary, size: .small) {
+                        EntitlementStore.shared.setDebugTrialStart(Date())
+                    }
+                    GlassButton(title: "Expire", style: .secondary, size: .small) {
+                        EntitlementStore.shared.setDebugTrialStart(
+                            Date().addingTimeInterval(-PracticeTrial.length - 60)
+                        )
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var trialStateSummary: String {
+        switch EntitlementStore.shared.trialState {
+        case .notStarted: return "Not started — begins at the first scored analysis."
+        case .active(let endsOn): return "Active · \(PracticeTrial.daysRemaining(until: endsOn)) days left."
+        case .expired: return "Expired — three analyses per 30 days."
         }
     }
     #endif

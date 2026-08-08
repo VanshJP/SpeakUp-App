@@ -20,10 +20,9 @@ struct LifetimeStatusRow: View {
     var body: some View {
         GlassCard(
             tint: entitlements.isLifetime ? AppColors.success : AppColors.primary,
-            padding: 15,
-            accentBorder: entitlements.isLifetime ? nil : AppColors.primary
+            padding: 14
         ) {
-            VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 12) {
                 identityRow
 
                 if !entitlements.isLifetime, let allowance {
@@ -53,15 +52,11 @@ struct LifetimeStatusRow: View {
     // MARK: - Identity
 
     private var identityRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill((entitlements.isLifetime ? AppColors.success : AppColors.primary).opacity(0.16))
-                    .frame(width: 34, height: 34)
-                Image(systemName: entitlements.isLifetime ? "checkmark.seal.fill" : "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(entitlements.isLifetime ? AppColors.success : AppColors.primary)
-            }
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: entitlements.isLifetime ? "checkmark.seal.fill" : "sparkles")
+                .font(.body)
+                .foregroundStyle(entitlements.isLifetime ? AppColors.success : AppColors.primary)
+                .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Big Talk Lifetime")
@@ -114,7 +109,7 @@ struct LifetimeStatusRow: View {
             }
             return "Owned since \(date.formatted(date: .abbreviated, time: .omitted))"
         }
-        return "One payment. No subscription."
+        return "One payment. Every future feature included."
     }
 
     // MARK: - Allowance
@@ -122,18 +117,22 @@ struct LifetimeStatusRow: View {
     /// The live count, not the policy number. A card that says "3 analyses a
     /// month" to someone who has none left is describing the plan rather than
     /// answering the question they opened Settings to ask.
+    ///
+    /// During the trial the same meter counts days instead — one tick per day
+    /// of the fourteen — because that is what is actually running out.
     private var allowance: (remaining: Int, total: Int, summary: String)? {
         guard let settings = userSettings.first else { return nil }
         let decision = AllowanceGate.decision(settings: settings)
         guard let summary = decision.shortSummary else { return nil }
 
-        let total: Int
-        if case .intro = decision {
-            total = FreeTierPolicy.default.introAnalyses
-        } else {
-            total = FreeTierPolicy.default.monthlyAnalyses
+        if case .trial(let endsOn) = decision {
+            return (
+                PracticeTrial.daysRemaining(until: endsOn),
+                PracticeTrial.lengthInDays,
+                summary
+            )
         }
-        return (decision.remaining ?? 0, max(total, 1), summary)
+        return (decision.remaining ?? 0, max(FreeTierPolicy.expired.monthlyAnalyses, 1), summary)
     }
 
     private func allowanceMeter(_ allowance: (remaining: Int, total: Int, summary: String)) -> some View {
@@ -187,9 +186,7 @@ struct LifetimeStatusRow: View {
                 }
                 .disabled(purchases.isBusy)
 
-                Circle()
-                    .fill(Color.secondary.opacity(0.5))
-                    .frame(width: 2.5, height: 2.5)
+                Text("·")
 
                 Button("What's included") {
                     Haptics.light()

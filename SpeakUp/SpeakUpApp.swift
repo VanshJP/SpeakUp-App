@@ -83,6 +83,11 @@ struct SpeakUpApp: App {
                     // clear it so History rows don't spin forever.
                     await resetStaleProcessingFlags()
 
+                    // Upgrade path: an install that already has recordings never
+                    // hits the first-analysis start, so it gets its 14 days on
+                    // first launch of this build. Same idempotent method.
+                    startTrialForExistingInstallIfNeeded()
+
                     // Seed remaining data concurrently — all independent of each other
                     async let p: () = seedPromptsIfNeeded()
                     async let a: () = seedAchievementsIfNeeded()
@@ -267,6 +272,17 @@ struct SpeakUpApp: App {
         } catch {
             print("Error ensuring settings: \(error)")
         }
+    }
+
+    /// Existing installs get a fresh 14 days on first launch of the new build.
+    /// A store with no recordings is left alone — that clock starts at the first
+    /// score, in `AllowanceGate.consume`.
+    @MainActor
+    private func startTrialForExistingInstallIfNeeded() {
+        guard case .notStarted = EntitlementStore.shared.trialState else { return }
+        let count = (try? sharedModelContainer.mainContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
+        guard count > 0 else { return }
+        EntitlementStore.shared.startTrialIfNeeded()
     }
 
     @MainActor

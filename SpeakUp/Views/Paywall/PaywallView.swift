@@ -1,18 +1,29 @@
-import Charts
 import StoreKit
 import SwiftData
 import SwiftUI
 
 /// The one purchase decision in the app.
 ///
-/// Structure follows the offer, in the order a buyer actually resolves it:
-/// proof from their own practice, what the purchase adds, one price with its own
-/// real estate, and one button that never scrolls out of reach. The ownership
-/// scope stays one tap away in the FAQ rather than sitting between the user and
-/// the price — it is the same words there, on the store listing, and on the
-/// support site.
+/// Presented full screen, and paced as a short flow rather than a single sheet:
+/// what the user has already moved, what is still on the table and how slowly
+/// the free tier gets there, then the offer. Each step is built only from the
+/// user's own recordings — the strongest argument for keeping a practice tool is
+/// the practice already in it.
+///
+/// A user with nothing scored yet sees only the offer. An empty progress screen
+/// in front of a price is a toll booth, and the price is never more than one tap
+/// away from any step. The ownership scope stays in the FAQ rather than sitting
+/// between the user and the price — same words there, on the store listing, and
+/// on the support site.
 struct PaywallView: View {
     let request: PaywallRequest
+
+    /// The steps ahead of the offer. Only ever grown by data the user produced.
+    private enum Step: Hashable {
+        case progress
+        case headroom
+        case offer
+    }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -28,6 +39,14 @@ struct PaywallView: View {
     /// sheet.
     @State private var proof = PaywallProof()
     @State private var heroAppeared = false
+    @State private var step: Step = .offer
+
+    /// Only the steps this user's own library can fill.
+    private var steps: [Step] {
+        guard proof.hasScores else { return [.offer] }
+        guard proof.headroom != nil else { return [.progress, .offer] }
+        return [.progress, .headroom, .offer]
+    }
 
     var body: some View {
         ZStack {
@@ -37,12 +56,15 @@ struct PaywallView: View {
                 successState
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
             } else {
-                offer
+                flow
                     .transition(.opacity)
             }
         }
         .animation(AppMotion.settle, value: didSucceed)
-        .overlay(alignment: .top) { topBar }
+        // Above the paged content and its swipe area. Without the zIndex the
+        // TabView page takes the hit test at the top edge and Close/Restore go
+        // dead even though they are drawn on top.
+        .overlay(alignment: .top) { topBar.zIndex(1) }
         .sheet(isPresented: $showingFAQ) {
             NavigationStack { LifetimeFAQView() }
         }
@@ -61,6 +83,10 @@ struct PaywallView: View {
             purchases.clearPhase()
             withAnimation(AppMotion.settle) { heroAppeared = true }
             proof = await PaywallProof.load(container: modelContext.container)
+            // Start on the first step the loaded data can actually fill. Set
+            // after the load rather than before, so a user with an empty library
+            // never sees a personalised step flash and disappear.
+            if let first = steps.first { step = first }
             await purchases.loadProduct()
             markPaywallSeen()
         }
@@ -77,8 +103,89 @@ struct PaywallView: View {
                 dismiss()
             }
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Flow
+
+    private var flow: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $step) {
+                ForEach(steps, id: \.self) { step in
+                    page(for: step)
+                        .tag(step)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(AppMotion.slide, value: step)
+
+            if steps.count > 1 { stepDots }
+
+            bottomBar
+        }
+        .padding(.top, 52)
+    }
+
+    @ViewBuilder
+    private func page(for step: Step) -> some View {
+        switch step {
+        case .progress:
+            PaywallProgressStep(proof: proof)
+        case .headroom:
+            if let headroom = proof.headroom {
+                PaywallHeadroomStep(proof: proof, headroom: headroom)
+            }
+        case .offer:
+            offer
+        }
+    }
+
+    private var stepDots: some View {
+        HStack(spacing: 6) {
+            ForEach(steps, id: \.self) { dot in
+                Circle()
+                    .fill(dot == step ? AppColors.primary : Color.white.opacity(0.22))
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .padding(.bottom, 4)
+        .accessibilityHidden(true)
+    }
+
+    /// Advance, or buy. The price is one tap from every step and never hidden
+    /// behind the story — a flow the user cannot skip is a toll booth.
+    @ViewBuilder
+    private var bottomBar: some View {
+        switch step {
+        case .offer:
+            buyBar
+        case .progress, .headroom:
+            VStack(spacing: 10) {
+                GlassButton(
+                    title: step == .progress ? "What's still on the table" : "See what Lifetime unlocks",
+                    style: .primary,
+                    size: .large,
+                    fullWidth: true
+                ) {
+                    Haptics.medium()
+                    advance()
+                }
+
+                Button("Skip to the offer") {
+                    Haptics.light()
+                    withAnimation(AppMotion.slide) { step = .offer }
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func advance() {
+        guard let index = steps.firstIndex(of: step), index + 1 < steps.count else { return }
+        withAnimation(AppMotion.slide) { step = steps[index + 1] }
     }
 
     // MARK: - Offer
@@ -88,16 +195,17 @@ struct PaywallView: View {
             VStack(spacing: 20) {
                 hero
                 headline
-                if proof.hasScores { proofCard }
                 includedCard
                 priceCard
             }
             .padding(.horizontal, 20)
+            // The hero's 190pt glow overflows its 116pt frame by ~37pt a side,
+            // and a ScrollView clips to its content bounds — without the inset
+            // the glow gets sliced flat across the top.
             .padding(.top, 40)
-            .padding(.bottom, 20)
+            .padding(.bottom, 12)
         }
         .scrollIndicators(.hidden)
-        .safeAreaInset(edge: .bottom) { buyBar }
     }
 
     // MARK: - Chrome
@@ -127,14 +235,23 @@ struct PaywallView: View {
                     Haptics.light()
                     Task { await restore() }
                 } label: {
-                    if purchases.phase == .restoring {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Restore")
+                    Group {
+                        if purchases.phase == .restoring {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Restore")
+                        }
                     }
+                    // Same glass chip as Close. Bare text floating over a
+                    // scrolling page reads as part of the page.
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(height: 30)
+                    .padding(.horizontal, 12)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5))
                 }
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+                .buttonStyle(GlassPressStyle())
                 .disabled(purchases.isBusy)
             }
         }
@@ -194,92 +311,6 @@ struct PaywallView: View {
         }
     }
 
-    // MARK: - Proof
-
-    /// Their own practice, in their own numbers. The strongest argument for
-    /// keeping the tool is the work already in it.
-    private var proofCard: some View {
-        GlassCard(cornerRadius: 20, padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("YOUR PRACTICE SO FAR")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .tracking(0.6)
-
-                HStack(spacing: 0) {
-                    proofStat("\(proof.takes)", proof.takes == 1 ? "take" : "takes", .white)
-                    statDivider
-                    proofStat("\(proof.best)", "best score", AppColors.scoreColor(for: proof.best))
-                    statDivider
-                    proofStat(trailingStat.value, trailingStat.label, trailingStat.color)
-                }
-
-                // Two points draw a line that says nothing. Below three takes the
-                // numbers above already carry the whole story.
-                if proof.recentScores.count >= 3 { sparkline }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// Improvement is the better third number when it exists; a streak of zero
-    /// on a screen asking for money argues the wrong way.
-    private var trailingStat: (value: String, label: String, color: Color) {
-        if let gain = proof.gain, gain > 0 {
-            return ("+\(gain)", "points gained", AppColors.success)
-        }
-        return ("\(proof.streak)", "day streak", AppColors.warning)
-    }
-
-    private func proofStat(_ value: String, _ label: String, _ color: Color) -> some View {
-        VStack(spacing: 3) {
-            Text(value)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var statDivider: some View {
-        Rectangle()
-            .fill(AppColors.cardStroke)
-            .frame(width: 0.5, height: 34)
-    }
-
-    private var sparkline: some View {
-        Chart(Array(proof.recentScores.indices), id: \.self) { index in
-            AreaMark(
-                x: .value("Take", index),
-                y: .value("Score", proof.recentScores[index])
-            )
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [AppColors.primary.opacity(0.30), AppColors.primary.opacity(0)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .interpolationMethod(.catmullRom)
-
-            LineMark(
-                x: .value("Take", index),
-                y: .value("Score", proof.recentScores[index])
-            )
-            .foregroundStyle(AppColors.primary)
-            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-            .interpolationMethod(.catmullRom)
-        }
-        .chartYScale(domain: 0...100)
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-        .chartLegend(.hidden)
-        .frame(height: 46)
-        .accessibilityLabel("Your recent scores, oldest to newest")
-    }
-
     // MARK: - What's included
 
     private var includedCard: some View {
@@ -309,10 +340,28 @@ struct PaywallView: View {
                         Spacer(minLength: 0)
                     }
                 }
+
+                // The free offer stated on the screen that sells the paid one:
+                // finding out what you already had only after it lapses is the
+                // version that feels like a trick.
+                Text(Self.freeOfferText)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    /// One wording for the free offer, shared with the FAQ and the store
+    /// listing. Says "free for 14 days" and never "trial period" — this is a
+    /// time-limited free tier ahead of a one-time purchase, not an
+    /// auto-renewing subscription trial, and App Review reads those differently.
+    static let freeOfferText = """
+    Everything except iCloud sync is free for your first 14 days, starting at \
+    your first score. After that, three full analyses every 30 days. Nothing \
+    charges by itself, ever.
+    """
 
     private struct IncludedRow {
         let icon: String
@@ -340,6 +389,11 @@ struct PaywallView: View {
             icon: "square.and.arrow.down",
             title: "Journal export",
             detail: "Your sessions, scores, and notes as a PDF you keep."
+        ),
+        IncludedRow(
+            icon: "gift",
+            title: "Every future feature",
+            detail: "Whatever we add later is yours too. You are never asked to pay again."
         )
     ]
 
@@ -558,7 +612,7 @@ struct PaywallView: View {
                 .font(.title.bold())
                 .foregroundStyle(.white)
 
-            Text("Everything is unlocked on this Apple Account, on every device.")
+            Text("Everything is unlocked on this Apple Account, on every device, including whatever we add later.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -582,10 +636,15 @@ struct PaywallView: View {
     /// site. A purchase scope that reads differently in three places is how
     /// refund requests start. It is surfaced through `LifetimeFAQView`, one tap
     /// from the buy bar, rather than between the user and the price.
+    ///
+    /// Deliberately unqualified: one purchase, every feature, including the ones
+    /// that do not exist yet. There is no carve-out for future add-ons, because
+    /// a carve-out is what makes the word "lifetime" mean nothing. Anything the
+    /// app gains later ships to existing owners at no charge.
     static let ownershipScopeText = """
-    Pay once to keep Big Talk Lifetime's on-device feature set. No subscription \
-    is required for the features you own. Optional future services with ongoing \
-    delivery costs may be sold separately.
+    Pay once and Big Talk is yours. Everything in the app today and everything \
+    added later is included, at no extra charge. No subscription, no upgrade \
+    fee, no second purchase, ever.
     """
 
     // MARK: - Actions
@@ -618,46 +677,6 @@ struct PaywallView: View {
         guard let settings = try? modelContext.fetch(descriptor).first, !settings.hasSeenPaywall else { return }
         settings.hasSeenPaywall = true
         try? modelContext.save()
-    }
-}
-
-// MARK: - Proof
-
-/// What the user's own library says, projected into plain values.
-///
-/// Read on a background context because it decodes `Recording.analysis`, which
-/// must never happen on the main thread inside a scrolling view.
-private nonisolated struct PaywallProof: Sendable {
-    var takes = 0
-    var best = 0
-    var streak = 0
-    var gain: Int?
-    /// Oldest to newest, capped — a sparkline 200 points wide is a smear.
-    var recentScores: [Int] = []
-    var deferred = 0
-
-    var hasScores: Bool { !recentScores.isEmpty }
-
-    static func load(container: ModelContainer) async -> PaywallProof {
-        await Task.detached(priority: .userInitiated) {
-            let context = ModelContext(container)
-            let descriptor = FetchDescriptor<Recording>(
-                sortBy: [SortDescriptor(\.date, order: .forward)]
-            )
-            let recordings = (try? context.fetch(descriptor)) ?? []
-            let scores = recordings.compactMap { $0.analysis?.speechScore.overall }
-
-            var proof = PaywallProof()
-            proof.takes = recordings.count
-            proof.best = scores.max() ?? 0
-            proof.streak = Date.calculateStreak(from: recordings.map(\.date))
-            proof.recentScores = Array(scores.suffix(14))
-            proof.deferred = recordings.filter(\.analysisBlockedByAllowance).count
-            if let first = scores.first, let last = scores.last, scores.count >= 2 {
-                proof.gain = last - first
-            }
-            return proof
-        }.value
     }
 }
 

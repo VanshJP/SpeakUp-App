@@ -11,11 +11,14 @@ These change shipped copy and shipped behaviour, so settle them first.
 - [ ] **Product name.** The bundle display name is `Big Talk`; the code, target,
       and bundle id still say `SpeakUp` (`com.vansh.SpeakUpMore`). The App Store
       listing must match the display name, not the target name.
-- [ ] **Free/paid boundary.** Shipping default is `FreeTierPolicy.default` in
-      `Monetization.swift`: three intro analyses, then three per rolling 30
-      days, with curriculum, journal export, and iCloud sync owned. Progress
-      cards are deliberately *not* gated — the share loop has to run on free
-      accounts. Change the policy, not the call sites, if this moves.
+- [ ] **Free/paid boundary.** Two policies in `Monetization.swift`:
+      `FreeTierPolicy.trial` for the first 14 days (everything open except
+      iCloud sync) and `.expired` after (three analyses per rolling 30 days,
+      with curriculum, journal export, and iCloud sync owned). The 14 days run
+      from the first *completed* analysis — `AllowanceGate.consume` starts the
+      clock, `EntitlementStore` holds it. Progress cards are deliberately *not*
+      gated in either policy — the share loop has to run on free accounts.
+      Change the policy, not the call sites, if this moves.
 - [ ] **Price and founding-offer framing.** `FoundingOffer.deadline` ships
       `nil`, which shows no urgency copy at all. If a founding price is used,
       set the deadline and raise the App Store Connect price on the same day —
@@ -49,9 +52,11 @@ These change shipped copy and shipped behaviour, so settle them first.
 - [ ] Privacy policy URL (required) and, because the app sells a non-consumable,
       a terms/EULA link.
 - [ ] App Review notes: state that transcription and scoring run on device,
-      that the free tier is three analyses then three per month, that no account
-      is required, and how a reviewer reaches the paywall (finish one analysis,
-      then open a gated feature).
+      that the free tier is 14 days of everything but iCloud sync and then three
+      analyses per 30 days, that this collects no payment method and charges
+      nothing when it ends, that no account is required, and how a reviewer
+      reaches the paywall during the 14 days (Settings > Unlock, or turning on
+      iCloud sync — curriculum and export are open in that window).
 - [ ] Generate offer codes if the launch plan uses them — the redemption sheet
       is already wired into `PaywallView`.
 
@@ -130,8 +135,13 @@ Then, on a device:
 - [ ] **First run.** Fresh install, complete onboarding, record, and confirm a
       score appears without a calibration, model-download, or reminder step in
       front of it.
-- [ ] **Allowance.** Burn the three intro analyses and confirm the fourth
-      recording is saved and shows "Saved, not scored yet" rather than an error.
+- [ ] **Trial.** On a fresh install, confirm Today reads "Free trial · 14 days
+      left" after the first score, and that Learn and journal export are open
+      while iCloud sync still raises the paywall.
+- [ ] **Allowance.** Expire the trial (Settings > Usage Diagnostics > Free trial
+      (debug) > Expire, DEBUG builds only), burn the three analyses, and confirm
+      the fourth recording is saved and shows "Saved, not scored yet" rather
+      than an error — and that Learn, export, and sync are gated again.
 - [ ] **Purchase.** Buy Lifetime in the sandbox, confirm the deferred recording
       scores automatically and every gated surface opens.
 - [ ] **Restore.** Delete and reinstall, tap Restore, confirm entitlement

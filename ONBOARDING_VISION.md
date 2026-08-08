@@ -4,7 +4,8 @@ Source-of-truth for why onboarding is shaped the way it is. Read this before
 changing anything under `Views/Onboarding/` or the onboarding paths in
 `ContentView`. The full research behind it (Mobbin case studies, UX audit of
 the old flow, screen-by-screen rationale) lives in `ONBOARDING_REDESIGN.md`;
-this file is the distilled contract. Last updated: 2026-08-05.
+this file is the distilled contract, and it wins wherever the two disagree.
+Last updated: 2026-08-06.
 
 Agent index for related surfaces: `docs/features/README.md` (Today tour, recording detail reveal, architecture deep links).
 
@@ -60,13 +61,22 @@ be written in prose:
 4. **Coach voice, ~25-word cap.** Every screen is something a human coach
    would say. No feature tours, no bullet walls, no terms-and-conditions
    register. Teach through interaction, not paragraphs.
-5. **One question, one screen, one tap.** Goal and level advance on tap
-   after a payoff line ("Got it. Expect interview-style questions.") —
-   every input gets a visible consequence within one screen.
+5. **One question, one screen, one visible consequence.** Goal and level
+   each show a payoff line the moment they're answered ("Got it. Expect
+   interview-style questions.") and then wait for an explicit Continue.
+   Nothing auto-advances: the goal step is multi-select (up to 3, minimum
+   1), so a timed jump would turn a second pick into a race, and testers
+   read the delay on the old single-pick steps as the app deciding for
+   them. Goals are not decoration — they weight which prompt categories
+   surface on Today (`Models/PromptMix.swift`), while the category
+   switches in Settings stay the hard gate.
 6. **The first number is never a grade.** Copy says "starting line".
    Zero-score takes (silence/gibberish gate) are never shown as a number —
    the user is coached into a retake and the row is deleted. Scores < 40
-   get the supportive reveal without the hero number.
+   get the supportive reveal without the hero number. The reveal has
+   exactly one forward action and it lands on the full breakdown; the old
+   "Take me home" alternative let people opt out one tap before the screen
+   that explains the number they were just shown.
 7. **Escape hatches at arm's length, shame-free.** Start over is always
    visible mid-take; swap-prompt is one tap away at the moment of panic;
    retakes are unlimited and stated as such *before* the first take.
@@ -124,7 +134,13 @@ welcome → name → goal → level → mic (sound check) → baselineBriefing �
   `reviewBaselineOnFinish` → `ContentView` routes "See my full breakdown"
   through the History → `RecordingDetailView` path, runs the achievements
   check, and keeps `FirstRecordingSetupSheet` eligible (the baseline itself
-  doesn't count as "already knows how to record").
+  doesn't count as "already knows how to record"). Every successful reveal
+  takes that route; only the couldn't-hear and scoring-failure states
+  finish without a breakdown, since there is nothing to show.
+- `OnboardingResult.goals` is a list. `ContentView` writes it to
+  `UserSettings.onboardingGoalsRaw` and keeps the first pick in
+  `onboardingGoalRaw`; `TodayViewModel` builds one `PromptMix` per settings
+  load and passes it to both the daily prompt and the reroll.
 
 ## The layout tour (post-first-score)
 

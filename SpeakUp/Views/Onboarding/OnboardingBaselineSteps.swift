@@ -610,11 +610,14 @@ private struct OnboardingBaselineResultView: View {
                 if analysis.speechScore.overall == 0 {
                     couldNotHearState
                 } else {
+                    // One forward action, and it lands on the breakdown. The
+                    // reveal is a headline; the detail view is where a first
+                    // score becomes information, so offering "home" instead
+                    // was offering people the version with nothing in it.
                     OnboardingBaselineRevealView(
                         analysis: analysis,
                         userName: userName,
-                        onSeeBreakdown: { onComplete(true) },
-                        onGoHome: { onComplete(false) }
+                        onSeeBreakdown: { onComplete(true) }
                     )
                 }
             } else {
@@ -746,11 +749,14 @@ private struct OnboardingBaselineResultView: View {
 /// coaching insight, and the promise that every later session compares back
 /// to this. A low first score never leads with the number — first-session
 /// churn is not worth numeric purity.
+///
+/// One exit, and it goes forward into the breakdown. The screen used to offer
+/// "Take me home" alongside it, which let people leave the flow one tap before
+/// the part that explains their score.
 private struct OnboardingBaselineRevealView: View {
     let analysis: SpeechAnalysis
     let userName: String
     let onSeeBreakdown: () -> Void
-    let onGoHome: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ringProgress: Double = 0
@@ -826,10 +832,7 @@ private struct OnboardingBaselineRevealView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            VStack(spacing: 10) {
-                OnboardingCTA(title: "See my full breakdown", icon: "chart.bar.fill", action: onSeeBreakdown)
-                OnboardingTextButton(title: "Take me home", action: onGoHome)
-            }
+            OnboardingCTA(title: "See my full breakdown", icon: "chart.bar.fill", action: onSeeBreakdown)
             .padding(.horizontal, 20)
             .padding(.top, 10)
             .padding(.bottom, 18)

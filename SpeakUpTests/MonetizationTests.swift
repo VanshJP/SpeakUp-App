@@ -11,19 +11,28 @@ private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
 @MainActor
 struct FreeTierPolicyTests {
-    @Test func defaultPolicyMatchesTheShippedOffer() {
-        #expect(FreeTierPolicy.default.introAnalyses == 3)
-        #expect(FreeTierPolicy.default.monthlyAnalyses == 3)
-        #expect(FreeTierPolicy.default.gates(.unlimitedAnalyses))
-        #expect(FreeTierPolicy.default.gates(.journalExport))
-        #expect(FreeTierPolicy.default.gates(.fullCurriculum))
-        #expect(FreeTierPolicy.default.gates(.iCloudSync))
+    /// The whole offer during the 14 days: see everything, then decide. iCloud
+    /// sync is the one exception, so it is the one thing pinned as gated.
+    @Test func theTrialGatesOnlyICloudSync() {
+        #expect(FreeTierPolicy.trial.gatedFeatures == [.iCloudSync])
+        #expect(!FreeTierPolicy.trial.gates(.unlimitedAnalyses))
+        #expect(!FreeTierPolicy.trial.gates(.fullCurriculum))
+        #expect(!FreeTierPolicy.trial.gates(.journalExport))
+    }
+
+    @Test func expiredPolicyMatchesTheShippedOffer() {
+        #expect(FreeTierPolicy.expired.monthlyAnalyses == 3)
+        #expect(FreeTierPolicy.expired.gates(.unlimitedAnalyses))
+        #expect(FreeTierPolicy.expired.gates(.journalExport))
+        #expect(FreeTierPolicy.expired.gates(.fullCurriculum))
+        #expect(FreeTierPolicy.expired.gates(.iCloudSync))
     }
 
     /// The share loop is the plan's primary distribution channel. Gating it
     /// behind the purchase would mean only buyers can recruit users.
     @Test func progressCardsStayFree() {
-        #expect(!FreeTierPolicy.default.gates(.progressCards))
+        #expect(!FreeTierPolicy.expired.gates(.progressCards))
+        #expect(!FreeTierPolicy.trial.gates(.progressCards))
     }
 
     @Test func unrestrictedPolicyGatesNothing() {
@@ -31,6 +40,35 @@ struct FreeTierPolicyTests {
         for feature in PaidFeature.allCases {
             #expect(!FreeTierPolicy.unrestricted.gates(feature))
         }
+    }
+}
+
+// The clock the whole offer hangs on. It starts at the first score, so an
+// unstarted trial is a full trial, and it must end at exactly 14 days.
+@MainActor
+struct PracticeTrialTests {
+    @Test func anUnstartedClockIsNotRunning() {
+        #expect(PracticeTrial.state(startedAt: nil, now: t0) == .notStarted)
+    }
+
+    @Test func theTrialEndsExactlyFourteenDaysAfterItStarts() {
+        let endsOn = t0.addingTimeInterval(14 * day)
+
+        #expect(PracticeTrial.state(startedAt: t0, now: t0) == .active(endsOn: endsOn))
+        #expect(PracticeTrial.state(startedAt: t0, now: endsOn.addingTimeInterval(-60))
+                == .active(endsOn: endsOn))
+        #expect(PracticeTrial.state(startedAt: t0, now: endsOn) == .expired)
+        #expect(PracticeTrial.state(startedAt: t0, now: t0.addingTimeInterval(365 * day)) == .expired)
+    }
+
+    /// Any time left has to read as at least one day — a countdown showing zero
+    /// while the trial still works is a bug report.
+    @Test func daysRemainingRoundsUp() {
+        let endsOn = t0.addingTimeInterval(14 * day)
+        #expect(PracticeTrial.daysRemaining(until: endsOn, now: t0) == 14)
+        #expect(PracticeTrial.daysRemaining(until: endsOn, now: t0.addingTimeInterval(13 * day)) == 1)
+        #expect(PracticeTrial.daysRemaining(until: endsOn, now: endsOn.addingTimeInterval(-60)) == 1)
+        #expect(PracticeTrial.daysRemaining(until: endsOn, now: endsOn) == 0)
     }
 }
 
@@ -73,11 +111,29 @@ struct AllowanceDisclosureTests {
     }
 
     @Test func remainingAnalysesAreCounted() {
-        #expect(AllowanceDecision.intro(remaining: 3).shortSummary == "3 free analyses left")
+        #expect(AllowanceDecision.cycle(remaining: 3, resetsOn: t0).summary(now: t0)?
+            .hasPrefix("3 free analyses left") == true)
     }
 
     @Test func oneRemainingIsSingular() {
-        #expect(AllowanceDecision.intro(remaining: 1).shortSummary == "1 free analysis left")
+        #expect(AllowanceDecision.cycle(remaining: 1, resetsOn: t0).summary(now: t0)?
+            .hasPrefix("1 free analysis left") == true)
+    }
+
+    @Test func theTrialCountsDaysRatherThanAnalyses() {
+        let decision = AllowanceDecision.trial(endsOn: t0.addingTimeInterval(14 * day))
+        #expect(decision.summary(now: t0) == "Free trial · 14 days left")
+        #expect(decision.summary(now: t0.addingTimeInterval(11 * day)) == "Free trial · 3 days left")
+        // Nothing is being counted down during the trial.
+        #expect(decision.remaining == nil)
+    }
+
+    /// The last day says so rather than reading "1 days left", and it is the one
+    /// day the line has a job to do.
+    @Test func theLastTrialDayIsNamed() {
+        let decision = AllowanceDecision.trial(endsOn: t0.addingTimeInterval(14 * day))
+        #expect(decision.summary(now: t0.addingTimeInterval(13 * day)) == "Free trial · last day")
+        #expect(decision.summary(now: t0.addingTimeInterval(14 * day - 60)) == "Free trial · last day")
     }
 
     @Test func aCycleNamesItsResetDay() {
@@ -94,80 +150,117 @@ struct AllowanceDisclosureTests {
 
 @MainActor
 struct PracticeAllowanceTests {
-    @Test func entitledUsersAreNeverCounted() {
-        let decision = PracticeAllowance.decision(state: AllowanceState(), isEntitled: true, now: t0)
-        #expect(decision == .unlimited)
-
-        let after = PracticeAllowance.consume(
-            state: AllowanceState(introUsed: 2), isEntitled: true, now: t0
+    // Every free user in these tests is past the 14 days unless the test is
+    // about the trial itself; that is where the counting starts.
+    private func decide(
+        _ state: AllowanceState,
+        trial: TrialState = .expired,
+        isEntitled: Bool = false,
+        at now: Date
+    ) -> AllowanceDecision {
+        PracticeAllowance.decision(
+            state: state,
+            isEntitled: isEntitled,
+            trial: trial,
+            policy: isEntitled ? .unrestricted : (trial.isExpired ? .expired : .trial),
+            now: now
         )
-        #expect(after.introUsed == 2)
     }
 
-    @Test func introAllowanceCountsDownFromThree() {
+    private func spend(
+        _ state: AllowanceState,
+        trial: TrialState = .expired,
+        isEntitled: Bool = false,
+        at now: Date
+    ) -> AllowanceState {
+        PracticeAllowance.consume(
+            state: state,
+            isEntitled: isEntitled,
+            trial: trial,
+            policy: isEntitled ? .unrestricted : (trial.isExpired ? .expired : .trial),
+            now: now
+        )
+    }
+
+    @Test func entitledUsersAreNeverCounted() {
+        #expect(decide(AllowanceState(), isEntitled: true, at: t0) == .unlimited)
+
+        let after = spend(AllowanceState(cycleStart: t0, cycleUsed: 2), isEntitled: true, at: t0)
+        #expect(after.cycleUsed == 2)
+    }
+
+    // MARK: - Trial
+
+    /// The clock has not started, so nothing has been spent and the line reports
+    /// the full fourteen.
+    @Test func anUnstartedTrialReportsItsFullLength() {
+        #expect(decide(AllowanceState(), trial: .notStarted, at: t0)
+                == .trial(endsOn: t0.addingTimeInterval(14 * day)))
+    }
+
+    @Test func theTrialIsUnlimitedAndUncounted() {
+        let endsOn = t0.addingTimeInterval(14 * day)
         var state = AllowanceState()
-        for expected in [3, 2, 1] {
-            #expect(PracticeAllowance.decision(state: state, isEntitled: false, now: t0)
-                    == .intro(remaining: expected))
-            state = PracticeAllowance.consume(state: state, isEntitled: false, now: t0)
+
+        for offset in 0..<20 {
+            let now = t0.addingTimeInterval(Double(offset) * 0.5 * day)
+            let decision = decide(state, trial: .active(endsOn: endsOn), at: now)
+            #expect(decision == .trial(endsOn: endsOn))
+            #expect(decision.isAllowed)
+            state = spend(state, trial: .active(endsOn: endsOn), at: now)
         }
-        #expect(state.introUsed == 3)
+
+        // Twenty scored analyses inside the trial leave the cycle untouched, so
+        // the month after expiry still opens at three.
+        #expect(state == AllowanceState())
     }
 
-    @Test func monthlyCycleOpensAfterTheIntroAllowance() {
-        let state = AllowanceState(introUsed: 3)
-        #expect(PracticeAllowance.decision(state: state, isEntitled: false, now: t0)
-                == .cycle(remaining: 3, resetsOn: t0.addingTimeInterval(30 * day)))
+    @Test func theCycleOpensAtThreeWhenTheTrialExpires() {
+        let expiry = t0.addingTimeInterval(14 * day)
+        #expect(decide(AllowanceState(), trial: .expired, at: expiry)
+                == .cycle(remaining: 3, resetsOn: expiry.addingTimeInterval(30 * day)))
     }
+
+    // MARK: - Post-trial cycle
 
     @Test func cycleStartDoesNotDriftAsAnalysesAreUsed() {
-        var state = AllowanceState(introUsed: 3)
-        state = PracticeAllowance.consume(state: state, isEntitled: false, now: t0)
-        state = PracticeAllowance.consume(state: state, isEntitled: false, now: t0.addingTimeInterval(5 * day))
+        var state = spend(AllowanceState(), at: t0)
+        state = spend(state, at: t0.addingTimeInterval(5 * day))
         #expect(state.cycleStart == t0)
         #expect(state.cycleUsed == 2)
     }
 
     @Test func fourthAnalysisInTheWindowIsBlocked() {
-        var state = AllowanceState(introUsed: 3)
+        var state = AllowanceState()
         for offset in [0.0, 2.0, 5.0] {
-            state = PracticeAllowance.consume(
-                state: state, isEntitled: false, now: t0.addingTimeInterval(offset * day)
-            )
+            state = spend(state, at: t0.addingTimeInterval(offset * day))
         }
-        let decision = PracticeAllowance.decision(
-            state: state, isEntitled: false, now: t0.addingTimeInterval(6 * day)
-        )
+        let decision = decide(state, at: t0.addingTimeInterval(6 * day))
         #expect(decision == .exhausted(resetsOn: t0.addingTimeInterval(30 * day)))
         #expect(!decision.isAllowed)
         #expect(decision.remaining == 0)
     }
 
     @Test func allowanceReturnsExactlyAtTheResetBoundary() {
-        var state = AllowanceState(introUsed: 3)
-        for _ in 0..<3 {
-            state = PracticeAllowance.consume(state: state, isEntitled: false, now: t0)
-        }
+        var state = AllowanceState()
+        for _ in 0..<3 { state = spend(state, at: t0) }
 
         let justBefore = t0.addingTimeInterval(30 * day - 60)
-        #expect(PracticeAllowance.decision(state: state, isEntitled: false, now: justBefore)
-                == .exhausted(resetsOn: t0.addingTimeInterval(30 * day)))
+        #expect(decide(state, at: justBefore) == .exhausted(resetsOn: t0.addingTimeInterval(30 * day)))
 
         let justAfter = t0.addingTimeInterval(30 * day + 60)
-        #expect(PracticeAllowance.decision(state: state, isEntitled: false, now: justAfter)
+        #expect(decide(state, at: justAfter)
                 == .cycle(remaining: 3, resetsOn: t0.addingTimeInterval(60 * day)))
     }
 
     /// Someone who comes back after a year gets one allowance, not one for
     /// every month they were away.
     @Test func longAbsenceGrantsOneAllowance() {
-        var state = AllowanceState(introUsed: 3)
-        for _ in 0..<3 {
-            state = PracticeAllowance.consume(state: state, isEntitled: false, now: t0)
-        }
+        var state = AllowanceState()
+        for _ in 0..<3 { state = spend(state, at: t0) }
 
         let muchLater = t0.addingTimeInterval(365 * day)
-        let decision = PracticeAllowance.decision(state: state, isEntitled: false, now: muchLater)
+        let decision = decide(state, at: muchLater)
         #expect(decision.remaining == 3)
 
         guard case .cycle(_, let resetsOn) = decision else {
@@ -177,16 +270,13 @@ struct PracticeAllowanceTests {
         #expect(resetsOn > muchLater)
         #expect(resetsOn.timeIntervalSince(muchLater) <= 30 * day)
 
-        let consumed = PracticeAllowance.consume(state: state, isEntitled: false, now: muchLater)
-        #expect(consumed.cycleUsed == 1)
+        #expect(spend(state, at: muchLater).cycleUsed == 1)
     }
 
     @Test func purchasingWhileExhaustedUnblocksImmediately() {
-        var state = AllowanceState(introUsed: 3)
-        for _ in 0..<3 {
-            state = PracticeAllowance.consume(state: state, isEntitled: false, now: t0)
-        }
-        #expect(PracticeAllowance.decision(state: state, isEntitled: true, now: t0) == .unlimited)
+        var state = AllowanceState()
+        for _ in 0..<3 { state = spend(state, at: t0) }
+        #expect(decide(state, isEntitled: true, at: t0) == .unlimited)
     }
 }
 

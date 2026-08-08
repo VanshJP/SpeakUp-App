@@ -660,12 +660,13 @@ private struct MotivationalTipCard: View {
 
 // MARK: - Detail Skeleton View
 //
-// Post-recording loading state. Mirrors the layout the user is about to see on
-// RecordingDetailView — prompt header, hero score ring + subscore rows, stats
-// grid, pace chart, transcript — rendered as shimmering placeholders so the
-// wait reads as "your results are materializing here" rather than an unrelated
-// progress screen. A status pill at the top and an animated progress ring
-// report the pipeline stage as the scoring algorithm runs.
+// Post-recording loading state. Mirrors `RecordingDetailView.readyContent`
+// block for block — context strip, hero score card, next step, tab picker,
+// metric rows — so nothing jumps when the score lands. Same 20pt stack spacing
+// and 16pt page padding as the real screen, same card paddings, and the header
+// is literally the same view: everything it shows (prompt, category, date,
+// duration) is known before analysis starts, so it renders for real instead of
+// as a grey bar. Only the parts that need the analysis are placeholders.
 
 private struct DetailSkeletonView: View {
     let recording: Recording
@@ -680,7 +681,8 @@ private struct DetailSkeletonView: View {
             // Single ShimmerHost drives one animation for every skeleton
             // primitive in this view via the shimmerPhase environment value.
             ShimmerHost {
-                VStack(spacing: 16) {
+                // 20pt, matching RecordingDetailView.readyContent.
+                VStack(spacing: 20) {
                     statusHeader
                         // The parent RecordingView ZStack uses .ignoresSafeArea()
                         // so the recording UI can paint edge-to-edge. When the
@@ -690,14 +692,14 @@ private struct DetailSkeletonView: View {
                         // clears the status bar regardless of device.
                         .padding(.top, systemTopSafeAreaInset + 8)
 
-                    promptHeaderSkeleton
+                    DetailContextStrip(recording: recording)
+
                     heroScoreSkeleton
-                    statsGridSkeleton
-                    chartSkeleton
-                    transcriptSkeleton
+                    nextStepSkeleton
+                    tabPickerSkeleton
+                    metricRowsSkeleton
 
                     MotivationalTipCard(tipIndex: currentTipIndex, isVisible: tipVisible)
-                        .padding(.top, 4)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 32)
@@ -723,6 +725,7 @@ private struct DetailSkeletonView: View {
 
     private var statusHeader: some View {
         VStack(spacing: 10) {
+            // Duration lives in the context strip below — it was printed twice.
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.mini)
@@ -730,10 +733,6 @@ private struct DetailSkeletonView: View {
                 Text("Analyzing")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppColors.primary)
-                Spacer()
-                Text(recording.formattedDuration)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -759,103 +758,71 @@ private struct DetailSkeletonView: View {
     }
 
     // MARK: - Skeleton Sections
+    //
+    // Each mirrors the card it will be replaced by: same GlassCard padding,
+    // same element order, same heights.
 
-    private var promptHeaderSkeleton: some View {
-        GlassCard(padding: 14) {
+    /// `ScoreHeroCard` — eyebrow row, subscore donut, verdict line.
+    private var heroScoreSkeleton: some View {
+        GlassCard(padding: 16, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    SkeletonBar(width: 88, height: 12)
+                    SkeletonBar(width: 84, height: 10)
                     Spacer()
-                    SkeletonBar(width: 72, height: 10)
+                    SkeletonBar(width: 30, height: 30, cornerRadius: 15)
                 }
-                SkeletonBar(width: nil, height: 14)
-                SkeletonBar(width: 200, height: 14)
-            }
-        }
-    }
 
-    private var heroScoreSkeleton: some View {
-        GlassCard(tint: AppColors.glassTintPrimary) {
-            VStack(spacing: 18) {
+                SkeletonDonut()
+                    .frame(height: 260)
+                    .frame(maxWidth: .infinity)
+
                 HStack {
-                    SkeletonBar(width: 140, height: 14)
+                    Spacer()
+                    SkeletonBar(width: 132, height: 13)
                     Spacer()
                 }
-                HStack(spacing: 18) {
-                    SkeletonRing()
-                    VStack(spacing: 10) {
-                        ForEach(0..<4, id: \.self) { _ in
-                            SkeletonSubscoreRow()
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    /// `NextStepCard` — eyebrow, area, coaching line, action pill + repeat.
+    private var nextStepSkeleton: some View {
+        GlassCard(padding: 18) {
+            VStack(alignment: .leading, spacing: 14) {
+                SkeletonBar(width: 108, height: 10)
+                SkeletonBar(width: 152, height: 19)
+                VStack(alignment: .leading, spacing: 7) {
+                    SkeletonBar(width: nil, height: 12)
+                    SkeletonBar(width: 210, height: 12)
+                }
+                HStack(spacing: 10) {
+                    SkeletonBar(width: nil, height: 46, cornerRadius: 23)
+                    SkeletonBar(width: 46, height: 46, cornerRadius: 23)
                 }
             }
         }
     }
 
-    private var statsGridSkeleton: some View {
+    /// The real picker, inert. Rebuilding its frame as a placeholder would fork
+    /// the styling; the tabs themselves are not waiting on the analysis.
+    private var tabPickerSkeleton: some View {
+        SectionPicker(
+            sections: DetailTab.allCases,
+            selection: .constant(.breakdown),
+            label: { $0.rawValue },
+            icon: { $0.icon }
+        )
+        .disabled(true)
+        .opacity(0.4)
+    }
+
+    /// `MetricRowGroup` — pace, fillers, words, pauses.
+    private var metricRowsSkeleton: some View {
         GlassCard(padding: 14) {
-            HStack(spacing: 0) {
+            VStack(spacing: 10) {
                 ForEach(0..<4, id: \.self) { i in
-                    VStack(spacing: 6) {
-                        SkeletonBar(width: 22, height: 22, cornerRadius: 6)
-                        SkeletonBar(width: 36, height: 16)
-                        SkeletonBar(width: 44, height: 10)
-                    }
-                    .frame(maxWidth: .infinity)
-                    if i < 3 {
-                        Rectangle()
-                            .fill(.quaternary)
-                            .frame(width: 0.5, height: 40)
-                    }
-                }
-            }
-        }
-    }
-
-    private var chartSkeleton: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SkeletonBar(width: 160, height: 16)
-
-            GlassCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .bottom, spacing: 6) {
-                        ForEach(0..<14, id: \.self) { i in
-                            let h: CGFloat = [28, 48, 36, 62, 44, 72, 52, 40, 58, 34, 66, 46, 54, 42][i % 14]
-                            SkeletonBar(width: nil, height: h, cornerRadius: 4)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .frame(height: 80)
-
-                    HStack {
-                        SkeletonBar(width: 40, height: 8)
-                        Spacer()
-                        SkeletonBar(width: 40, height: 8)
-                        Spacer()
-                        SkeletonBar(width: 40, height: 8)
-                    }
-                }
-            }
-        }
-    }
-
-    private var transcriptSkeleton: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                SkeletonBar(width: 120, height: 16)
-                Spacer()
-                SkeletonBar(width: 28, height: 28, cornerRadius: 14)
-            }
-
-            GlassCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    SkeletonBar(width: nil, height: 12)
-                    SkeletonBar(width: nil, height: 12)
-                    SkeletonBar(width: 260, height: 12)
-                    SkeletonBar(width: nil, height: 12)
-                    SkeletonBar(width: 180, height: 12)
+                    if i > 0 { MetricRowDivider() }
+                    SkeletonMetricRow(labelWidth: [46, 52, 58, 62][i])
                 }
             }
         }
@@ -878,27 +845,56 @@ private struct SkeletonBar: View {
     }
 }
 
-private struct SkeletonRing: View {
-    var body: some View {
-        ZStack {
-            RingProgress(progress: 0.35, color: .white.opacity(0.14), lineWidth: 10)
-                .frame(width: 112, height: 112)
+/// Stand-in for `SubscoreRadarChart`: the annulus at the geometry the chart
+/// itself uses (42pt label inset, inner radius 0.38 of outer), the centre score,
+/// and the orbiting axis labels.
+private struct SkeletonDonut: View {
+    private let labelInset: CGFloat = 42
+    private let axisCount = 6
 
-            VStack(spacing: 4) {
-                SkeletonBar(width: 50, height: 22)
-                SkeletonBar(width: 30, height: 8)
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            let radius = (side / 2) - labelInset
+            let inner = radius * 0.38
+
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.07), lineWidth: radius - inner)
+                    .frame(width: radius + inner, height: radius + inner)
+
+                SkeletonBar(width: 52, height: 30)
+                    .frame(width: 52)
+
+                ForEach(0..<axisCount, id: \.self) { i in
+                    let angle = (Double(i) / Double(axisCount)) * 2 * .pi - .pi / 2
+                    SkeletonBar(width: 36, height: 8)
+                        .frame(width: 36)
+                        .position(
+                            x: center.x + cos(angle) * (radius + 20),
+                            y: center.y + sin(angle) * (radius + 20)
+                        )
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .shimmer()
     }
 }
 
-private struct SkeletonSubscoreRow: View {
+/// Stand-in for one `MetricRow`: icon, label, and a right-aligned value.
+private struct SkeletonMetricRow: View {
+    let labelWidth: CGFloat
+
     var body: some View {
         HStack(spacing: 8) {
-            SkeletonBar(width: 54, height: 10)
-            SkeletonBar(width: 90, height: 7, cornerRadius: 3.5)
-            SkeletonBar(width: 24, height: 10)
+            SkeletonBar(width: 16, height: 16, cornerRadius: 4)
+            SkeletonBar(width: labelWidth, height: 12)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 3) {
+                SkeletonBar(width: 44, height: 17)
+                SkeletonBar(width: 56, height: 9)
+            }
         }
     }
 }

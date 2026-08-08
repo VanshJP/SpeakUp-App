@@ -2747,36 +2747,48 @@ enum DefaultPrompts {
 
     // MARK: - Helper Functions
 
-    /// Random prompt biased by the user's self-reported speaker level.
-    /// Beginners see more easy prompts; advanced users see more hard ones.
-    static func getRandomPrompt(for level: SpeakerLevel) -> PromptData {
-        let target = pickDifficulty(for: level, seed: Int.random(in: 0..<1_000_000))
-        let pool = all.filter { $0.difficulty == target }
-        return pool.randomElement() ?? all.randomElement()!
+    /// Random prompt, difficulty biased by the user's self-reported speaker
+    /// level and category biased by their goal mix. Used for rerolls, so the
+    /// seed is random. Pass `.uniform` for no category bias.
+    static func getRandomPrompt(for level: SpeakerLevel, mix: PromptMix) -> PromptData {
+        pick(for: level, mix: mix, seed: Int.random(in: 0..<1_000_000))
     }
 
-    /// Random prompt filtered to enabled categories, then biased by speaker level.
-    static func getRandomPrompt(for level: SpeakerLevel, enabledCategories: Set<String>) -> PromptData {
-        guard !enabledCategories.isEmpty else { return getRandomPrompt(for: level) }
-        let target = pickDifficulty(for: level, seed: Int.random(in: 0..<1_000_000))
-        let pool = all.filter { $0.difficulty == target && enabledCategories.contains($0.category) }
-        if let pick = pool.randomElement() { return pick }
-        let fallback = all.filter { enabledCategories.contains($0.category) }
-        return fallback.randomElement() ?? all.randomElement()!
+    /// Date-seeded daily prompt. The same calendar day always returns the same
+    /// prompt for a given level and mix, so the home screen stays stable across
+    /// re-fetches; the mix changes *which* prompt a day lands on, never how
+    /// often it changes underneath the user.
+    static func getTodaysPrompt(for level: SpeakerLevel, mix: PromptMix) -> PromptData {
+        pick(for: level, mix: mix, seed: todaySeed())
     }
 
-    /// Date-seeded daily prompt biased by the user's self-reported speaker
-    /// level. The same calendar day always returns the same prompt for a
-    /// given level, so the home screen stays stable across re-fetches.
-    static func getTodaysPrompt(for level: SpeakerLevel) -> PromptData {
-        let today = Calendar.current.startOfDay(for: Date())
-        let components = Calendar.current.dateComponents([.year, .month, .day], from: today)
-        let seed = (components.year ?? 0) * 366 + (components.month ?? 0) * 31 + (components.day ?? 0)
-
+    /// Difficulty first (speaker level), category second (goal mix). Ordered
+    /// that way so a goal pick never overrides the level's difficulty ramp —
+    /// a beginner who picked Interviews still gets easy interview prompts.
+    private static func pick(for level: SpeakerLevel, mix: PromptMix, seed: Int) -> PromptData {
         let target = pickDifficulty(for: level, seed: seed)
         let pool = all.filter { $0.difficulty == target }
-        guard !pool.isEmpty else { return all[seed % all.count] }
-        return pool[seed % pool.count]
+
+        if let pick = mix.pick(from: pool, seed: seed, category: \.category) {
+            return pick
+        }
+        // Every prompt at this difficulty sits in a category the user disabled.
+        // Widen to the whole set before giving up on the mix entirely.
+        if let pick = mix.pick(from: all, seed: seed, category: \.category) {
+            return pick
+        }
+        guard !pool.isEmpty else { return all[abs(seed) % all.count] }
+        return pool[abs(seed) % pool.count]
+    }
+
+    /// Stable for the whole calendar day, and across launches — callers that
+    /// need a day-stable pick of their own (Today's answered-prompt substitute)
+    /// share this rather than hashing a string, since String hashing is seeded
+    /// per process and would reshuffle on every cold launch.
+    static func todaySeed() -> Int {
+        let today = Calendar.current.startOfDay(for: Date())
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: today)
+        return (components.year ?? 0) * 366 + (components.month ?? 0) * 31 + (components.day ?? 0)
     }
 
     /// Map a `(easy, medium, hard)` weight tuple onto the seed to pick a

@@ -10,7 +10,8 @@ import UIKit
 /// Voice calibration, the on-device model, and reminders are not here. They ask
 /// for effort, storage, or a system permission before the app has produced a
 /// single score, so `FirstRecordingSetupSheet` offers them afterwards instead.
-/// The steps still exist and still work — see `OnboardingStep.deferredSteps`.
+/// Their steps still exist and still work — they are simply not in
+/// `OnboardingStep.firstRunSteps`.
 ///
 /// Question pages route through `OnboardingPage`, so the header rhythm, glass
 /// surfaces, and call-to-action placement match the rest of the app instead of
@@ -198,10 +199,9 @@ struct OnboardingView: View {
             OnboardingGoalStep(
                 counter: viewModel.stepCounterLabel,
                 userName: viewModel.trimmedName,
-                selectedGoal: viewModel.selectedGoal,
-                onSelect: { goal, autoAdvance in
-                    viewModel.selectGoal(goal, autoAdvance: autoAdvance)
-                },
+                selectedGoals: viewModel.selectedGoals,
+                maxGoals: OnboardingViewModel.maxGoals,
+                onToggle: viewModel.toggleGoal,
                 onContinue: viewModel.advance
             )
 
@@ -209,9 +209,7 @@ struct OnboardingView: View {
             OnboardingLevelStep(
                 counter: viewModel.stepCounterLabel,
                 selected: viewModel.hasPickedLevel ? viewModel.speakerLevel : nil,
-                onSelect: { level, autoAdvance in
-                    viewModel.selectLevel(level, autoAdvance: autoAdvance)
-                },
+                onSelect: viewModel.selectLevel,
                 onContinue: viewModel.advance
             )
 

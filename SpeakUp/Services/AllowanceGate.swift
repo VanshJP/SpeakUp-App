@@ -13,21 +13,31 @@ enum AllowanceGate {
         now: Date = Date()
     ) -> AllowanceDecision {
         guard let settings else { return .unlimited }
+        let store = EntitlementStore.shared
         return PracticeAllowance.decision(
             state: settings.allowanceState,
-            isEntitled: EntitlementStore.shared.isLifetime,
-            policy: .default,
+            isEntitled: store.isLifetime,
+            trial: store.trialState,
+            policy: store.policy,
             now: now
         )
     }
 
     /// Records a consumed analysis. Call only after an analysis succeeded.
+    ///
+    /// This is also where the 14-day trial clock starts: one call site, and it
+    /// inherits the "charged only on success" invariant, so a failed
+    /// transcription can never burn a day.
     static func consume(settings: UserSettings?, now: Date = Date()) {
+        let store = EntitlementStore.shared
+        store.startTrialIfNeeded(now: now)
+
         guard let settings else { return }
         settings.allowanceState = PracticeAllowance.consume(
             state: settings.allowanceState,
-            isEntitled: EntitlementStore.shared.isLifetime,
-            policy: .default,
+            isEntitled: store.isLifetime,
+            trial: store.trialState,
+            policy: store.policy,
             now: now
         )
     }

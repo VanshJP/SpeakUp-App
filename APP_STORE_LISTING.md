@@ -44,10 +44,10 @@ tool, which is precisely the claim this app must not make.
 ### Promotional text (170 characters, editable without a new build)
 
 ```
-Record a minute. Get a real score on pace, fillers, pauses, and clarity — worked out on your iPhone, not on a server. No account, nothing uploaded.
+Record a minute. Get a real score on pace, fillers, pauses, and clarity — worked out on your iPhone, not on a server. Everything free for 14 days.
 ```
 
-147 characters.
+146 characters.
 
 ### Description (4000 characters)
 
@@ -110,11 +110,15 @@ share carry scores and dates only, never a transcript, a prompt, or your audio.
 
 FREE AND LIFETIME
 
-Free includes three full analyses right away, then three every month, plus
+Everything except iCloud sync is free for your first 14 days, starting at your
+first score — unlimited scored practice, the eight-week curriculum, and journal
+export included. After that you keep three full analyses every 30 days, plus
 every drill, warm-up, read-aloud passage, your own scripts, and the progress
-cards. Big Talk Lifetime is a single payment that removes the analysis limit
-and adds the full curriculum, journal PDF export, and iCloud sync. No
-subscription is required for the features you own.
+cards. Nothing charges by itself: there is no subscription and no card
+involved. Big Talk Lifetime is a single payment that removes the analysis limit
+and keeps the full curriculum, journal PDF export, and iCloud sync. It covers
+everything in the app today and everything added later, at no extra charge:
+no subscription, no upgrade fee, no second purchase.
 
 Big Talk requires iOS 26 or later.
 ```
@@ -191,7 +195,8 @@ Both are requested during onboarding and are required to record and score a
 session. Please allow both.
 
 FIRST RUN
-1. Complete onboarding (about 60 seconds).
+1. Complete onboarding (about two minutes; it ends with a guided baseline
+   recording and its score).
 2. Tap the record button on the Today tab and speak for 20-60 seconds about
    anything.
 3. Stop. The first analysis downloads a small on-device speech model, which can
@@ -200,17 +205,22 @@ FIRST RUN
 IN-APP PURCHASE
 One non-consumable: com.vansh.SpeakUpMore.lifetime.
 
-The free tier is three full analyses immediately, then three per rolling 30
-days. Everything else — drills, warm-ups, read-aloud, user-written scripts,
-progress cards — is free and ungated.
+The free tier is everything except iCloud sync for 14 days, measured from the
+first completed analysis rather than from install. This is a time-limited free
+tier, not an auto-renewing trial: no payment method is collected, nothing is
+charged when it ends, and the app simply falls back to three full analyses per
+rolling 30 days. Everything else — drills, warm-ups, read-aloud, user-written
+scripts, progress cards — is free and ungated at all times.
 
-Lifetime removes the analysis limit and adds the eight-week curriculum, journal
-PDF export, and iCloud sync.
+Lifetime removes the analysis limit and keeps the eight-week curriculum,
+journal PDF export, and iCloud sync after the 14 days.
 
-HOW TO REACH THE PAYWALL WITHOUT RECORDING FOUR TIMES
+HOW TO REACH THE PAYWALL DURING REVIEW
 Open Settings and tap "Unlock" on the Big Talk Lifetime card at the top. This
-works immediately, with no recording required. The Learn tab reaches it too:
-tap any lesson in Week 2 or later.
+works immediately, with no recording required, and during the free 14 days it
+is the intended path — the curriculum and journal export are unlocked in that
+window, so they will not raise the paywall. Turning on iCloud sync in Settings
+raises it too, and is gated from the first launch.
 
 The app does not raise the paywall on its own until the first analysis has
 finished, by design — the free result is what earns the right to ask. Buttons
@@ -308,4 +318,8 @@ would not survive being held to.
   review category it is not built for.
 - **A specific accuracy percentage.** Nothing in the repo measures transcription
   accuracy against a reference corpus, so any number would be made up.
-- **"Free forever."** The free tier is three analyses, then three a month.
+- **"Free forever."** The free tier is 14 days of everything but iCloud sync,
+  then three analyses per 30 days.
+- **"Free trial" framed as a subscription trial.** No payment method is
+  collected and nothing renews. Say "free for 14 days", never "trial period",
+  "starts your subscription", or anything implying a charge at the end.

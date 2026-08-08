@@ -16,6 +16,7 @@ final class EntitlementStore {
     private enum Key {
         static let isLifetime = "entitlement.lifetime.v1"
         static let purchasedAt = "entitlement.lifetime.purchasedAt.v1"
+        static let trialStartedAt = "entitlement.trial.startedAt.v1"
         static let debugOverride = "debug.forceLifetimeEntitlement"
     }
 
@@ -25,6 +26,14 @@ final class EntitlementStore {
 
     private(set) var isLifetime: Bool
     private(set) var purchaseDate: Date?
+
+    /// When the 14-day trial clock was started, or nil if it never has been.
+    /// Lives in device defaults rather than SwiftData: every gate resolves
+    /// entitlement synchronously from here, and a second copy in `UserSettings`
+    /// would be a second thing to keep in sync. A reinstall therefore grants a
+    /// fresh 14 days — generous on purpose, and the alternative would need a
+    /// CloudKit round-trip before anyone could practise.
+    private(set) var trialStartedAt: Date?
 
     /// True when the value came from a StoreKit response this launch rather
     /// than from the cache. Used to avoid showing "Free" copy before the first
@@ -36,6 +45,7 @@ final class EntitlementStore {
         defaults = suite
         isLifetime = suite.bool(forKey: Key.isLifetime)
         purchaseDate = suite.object(forKey: Key.purchasedAt) as? Date
+        trialStartedAt = suite.object(forKey: Key.trialStartedAt) as? Date
 
         #if DEBUG
         if suite.bool(forKey: Key.debugOverride) || UserDefaults.standard.bool(forKey: Key.debugOverride) {
@@ -44,10 +54,24 @@ final class EntitlementStore {
         #endif
     }
 
+    var trialState: TrialState {
+        PracticeTrial.state(startedAt: trialStartedAt)
+    }
+
+    /// Starts the 14 days. Idempotent — the two callers (the first successful
+    /// analysis, and first launch of this build on an install that already has
+    /// recordings) both funnel through here, and only the first one writes.
+    func startTrialIfNeeded(now: Date = Date()) {
+        guard trialStartedAt == nil else { return }
+        trialStartedAt = now
+        defaults.set(now, forKey: Key.trialStartedAt)
+    }
+
     /// The active free/paid boundary. Feature code asks this, never `isLifetime`
     /// directly, so the boundary stays in one place.
     var policy: FreeTierPolicy {
-        isLifetime ? .unrestricted : .default
+        if isLifetime { return .unrestricted }
+        return trialState.isExpired ? .expired : .trial
     }
 
     func isUnlocked(_ feature: PaidFeature) -> Bool {
@@ -91,6 +115,17 @@ final class EntitlementStore {
 
     var debugOverrideEnabled: Bool {
         UserDefaults.standard.bool(forKey: Key.debugOverride)
+    }
+
+    /// Moves the trial clock so both sides of the 14 days can be exercised
+    /// without waiting two weeks. `nil` puts it back to "never started".
+    func setDebugTrialStart(_ date: Date?) {
+        trialStartedAt = date
+        if let date {
+            defaults.set(date, forKey: Key.trialStartedAt)
+        } else {
+            defaults.removeObject(forKey: Key.trialStartedAt)
+        }
     }
     #endif
 }

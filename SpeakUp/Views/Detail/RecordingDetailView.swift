@@ -551,55 +551,14 @@ struct RecordingDetailView: View {
 
     // MARK: - Context Strip
 
-    /// What you were doing, in two lines and no card.
-    ///
-    /// This is metadata, not content — giving it a glass surface of its own
-    /// made it compete with the score for the top of the page. Category, date,
-    /// time, duration, and difficulty collapse into one caption line; the
-    /// prompt itself stays legible because it is the only thing here the user
-    /// actually re-reads.
+    /// Layout lives in `DetailContextStrip` — the analyzing skeleton renders the
+    /// same header, so it must not fork.
     @ViewBuilder
     private func contextStrip(_ recording: Recording) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: contextIcon(recording))
-                    .font(.system(size: 10, weight: .semibold))
-                Text(contextMetaLine(recording))
-                    .font(.caption)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(.secondary)
-
-            if let prompt = recording.prompt {
-                Text(prompt.text)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Button {
-                    Haptics.light()
-                    editingTitleText = recording.customTitle ?? ""
-                    isEditingTitle = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(recording.customTitle?.isEmpty == false ? recording.displayTitle : "Name this session")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(recording.customTitle?.isEmpty == false ? .white : .secondary)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Image(systemName: "pencil")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
+        DetailContextStrip(recording: recording) {
+            editingTitleText = recording.customTitle ?? ""
+            isEditingTitle = true
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .alert("Name This Session", isPresented: $isEditingTitle) {
             TextField("e.g. Elevator pitch practice", text: $editingTitleText)
             Button("Save") {
@@ -611,36 +570,6 @@ struct RecordingDetailView: View {
         } message: {
             Text("Give this session a name or the question you were answering.")
         }
-    }
-
-    private func contextIcon(_ recording: Recording) -> String {
-        if recording.storyId != nil { return "book.pages" }
-        if let category = recording.prompt?.category {
-            return PromptCategory(rawValue: category)?.iconName ?? "text.bubble"
-        }
-        return "waveform"
-    }
-
-    /// "Storytelling · Hard · Mar 14, 9:41 AM · 1:04"
-    private func contextMetaLine(_ recording: Recording) -> String {
-        var parts: [String] = []
-
-        if recording.storyId != nil {
-            parts.append(recording.storyTitle ?? "Story Practice")
-        } else if let category = recording.prompt?.category {
-            parts.append(PromptCategory(rawValue: category)?.shortName ?? category)
-        } else {
-            parts.append("Free Practice")
-        }
-
-        if let difficulty = recording.prompt?.difficulty {
-            parts.append(difficulty.displayName)
-        }
-
-        parts.append(recording.date.formatted(date: .abbreviated, time: .shortened))
-        parts.append(recording.formattedDuration)
-
-        return parts.joined(separator: " · ")
     }
 
     // MARK: - Processing Section (moved to AnalyzingView)

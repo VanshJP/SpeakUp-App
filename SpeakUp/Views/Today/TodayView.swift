@@ -252,14 +252,11 @@ struct TodayView: View {
 
     // MARK: - Start Button Section
 
-    /// What the free tier has left, shown under the buttons that spend it.
-    /// Nil for entitled users, who have no allowance to report.
+    /// The trial countdown, or what the free tier has left once it expires,
+    /// shown under the buttons that spend it. Nil for entitled users, who have
+    /// no allowance to report.
     private var allowanceSummary: String? {
-        guard let settings = userSettings.first else { return nil }
-        return PracticeAllowance.decision(
-            state: settings.allowanceState,
-            isEntitled: EntitlementStore.shared.isLifetime
-        ).shortSummary
+        AllowanceGate.decision(settings: userSettings.first).shortSummary
     }
 
     private var startButtonSection: some View {

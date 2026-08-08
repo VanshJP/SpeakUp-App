@@ -36,7 +36,8 @@
       "Bash(perl -pi -e 's/^\\(nonisolated struct \\\\w+: [^{]*Codable[^{]*?\\)\\( \\\\{\\)$/$1, Equatable$2/ unless /Equatable/' SpeakUp/Models/SpeechAnalysis.swift)",
       "Bash(sort -u -k2)",
       "Bash(echo \"clean: $?\")",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"exit:$?\")"
     ]
   }
 }
