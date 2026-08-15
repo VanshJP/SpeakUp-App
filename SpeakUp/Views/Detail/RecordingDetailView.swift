@@ -211,7 +211,7 @@ struct RecordingDetailView: View {
             Text(playbackErrorMessage ?? "")
         }
         .confirmationDialog(
-            "Share Score Card",
+            "Challenge a friend?",
             isPresented: Binding(
                 get: { pendingShareRecording != nil },
                 set: { if !$0 { pendingShareRecording = nil } }
@@ -219,17 +219,17 @@ struct RecordingDetailView: View {
             titleVisibility: .visible,
             presenting: pendingShareRecording
         ) { shareTarget in
-            Button("Share Scores Only") {
-                presentScoreCardShare(for: shareTarget, includePromptText: false)
-            }
-            Button("Include What I Practised") {
+            Button("Send Prompt & Scores") {
                 presentScoreCardShare(for: shareTarget, includePromptText: true)
+            }
+            Button("Scores Only") {
+                presentScoreCardShare(for: shareTarget, includePromptText: false)
             }
             Button("Cancel", role: .cancel) {
                 pendingShareRecording = nil
             }
         } message: { shareTarget in
-            Text("The card always shows your scores. It leaves out \(shareCaptionDescription(for: shareTarget)) unless you add it.")
+            Text("Your scores go on the card. Include \(shareCaptionDescription(for: shareTarget)) to send a link your friend can tap to try the same one.")
         }
         .sheet(isPresented: $showingScoreWeights) {
             NavigationStack {
@@ -274,6 +274,9 @@ struct RecordingDetailView: View {
                 if let analysis = recording.analysis {
                     scoreHero(analysis)
                     nextStepSection(analysis, recording: recording)
+                    // Challenge CTA sits next to the score — burying it in
+                    // Coaching was the moment the share loop went unseen.
+                    shareCTASection(recording)
 
                     detailTabPicker
 
@@ -469,7 +472,9 @@ struct RecordingDetailView: View {
         recording.prompt != nil ? "the prompt you answered" : "your story's title"
     }
 
-    /// Renders the score card and hands it to the system share sheet.
+    /// Renders the score card and hands it to the system share sheet, with a
+    /// caption that carries a tappable try-this-prompt link when the sender
+    /// opted to include the prompt.
     private func presentScoreCardShare(for recording: Recording, includePromptText: Bool) {
         pendingShareRecording = nil
         guard let image = ScoreCardRenderer.render(
@@ -477,10 +482,42 @@ struct RecordingDetailView: View {
             includePromptText: includePromptText
         ) else { return }
 
+        let score = recording.analysis?.speechScore.overall
+        let url: URL?
+        let promptText: String?
+        if includePromptText, let prompt = recording.prompt {
+            let payload = SharedPromptPayload(
+                promptID: prompt.id,
+                text: prompt.text,
+                category: prompt.category,
+                difficulty: prompt.difficulty.rawValue,
+                beatScore: score,
+                source: SharedPromptLink.shareSource
+            )
+            url = SharedPromptLink.shareURL(for: payload)
+            promptText = prompt.text
+        } else if includePromptText {
+            // Story title is on the card, but a friend cannot open someone
+            // else's story. Send them into a fresh session instead.
+            url = SharedPromptLink.shareURL(for: SharedPromptPayload(source: SharedPromptLink.shareSource))
+            promptText = recording.storyTitle
+        } else {
+            url = nil
+            promptText = nil
+        }
+
+        let message = SharedPromptLink.message(
+            score: score,
+            verdict: score.map { AppColors.scoreVerdict(for: $0) },
+            promptText: includePromptText ? promptText : nil,
+            url: url
+        )
+
         SharePresenter.present(
             image: image,
             cardType: includePromptText ? "score_card_with_prompt" : "score_card",
-            trigger: "recording_detail"
+            trigger: "recording_detail",
+            message: message
         ) {
             noteReviewWorthyMoment(.shareCompleted)
         }
@@ -522,18 +559,13 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func scoreHero(_ analysis: SpeechAnalysis) -> some View {
         let axes = subscoreAxes(analysis)
-        let strongest = axes.max(by: { $0.value < $1.value })
-        let weakest = axes.min(by: { $0.value < $1.value })
-        // With one axis, strongest and weakest are the same metric — showing
-        // it twice under opposing labels would be nonsense.
-        let hasSpread = strongest?.id != weakest?.id
-
+        let emphasis = SubscoreRadarChart.Axis.emphasisIDs(in: axes)
         ScoreHeroCard(
             score: analysis.speechScore.overall,
             personalAverage: baselines.score,
             axes: axes,
-            strongestAxisID: hasSpread ? strongest?.id : nil,
-            weakestAxisID: hasSpread ? weakest?.id : nil,
+            strongestAxisID: emphasis.strongest,
+            weakestAxisID: emphasis.weakest,
             onShowWeights: { showingScoreWeights = true }
         )
     }
@@ -935,19 +967,23 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func shareCTASection(_ recording: Recording) -> some View {
+        let hasPrompt = recording.prompt != nil
         GlassCard(tint: AppColors.primary.opacity(0.1)) {
-            HStack {
+            HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Share your progress")
+                    Text(hasPrompt ? "Challenge a friend" : "Share your score")
                         .font(.subheadline.weight(.medium))
-                    Text("Create a shareable score card")
+                    Text(hasPrompt
+                         ? "Send your score and a link to this prompt"
+                         : "Create a shareable score card")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
 
                 Button {
+                    Haptics.light()
                     beginScoreCardShare(for: recording)
                 } label: {
                     HStack(spacing: 4) {
@@ -957,6 +993,7 @@ struct RecordingDetailView: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(AppColors.primary)
                 }
+                .accessibilityLabel(hasPrompt ? "Challenge a friend" : "Share your score")
             }
         }
     }
@@ -1018,10 +1055,6 @@ struct RecordingDetailView: View {
             selfAssessmentSection(feedback)
         } else if userSettings.first?.sessionFeedbackEnabled ?? false {
             reflectionPromptCard
-        }
-
-        if recording.analysis != nil {
-            shareCTASection(recording)
         }
 
         journalReflectionSection(recording)

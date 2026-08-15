@@ -36,6 +36,8 @@ struct SubscoreRadarChart: View {
     /// render at full opacity with a direction marker and every other label
     /// dims, so the chart carries the "strongest / weakest" story on its own.
     var emphasizedAxisIDs: (strongest: String?, weakest: String?)
+    /// Share-card renders must not install tap targets or present sheets.
+    var interactive: Bool
 
     @State private var drawProgress: CGFloat
     @State private var selectedAxis: Axis?
@@ -51,13 +53,15 @@ struct SubscoreRadarChart: View {
         overallScore: Int,
         animate: Bool = true,
         showsCenterScore: Bool = true,
-        emphasizedAxisIDs: (strongest: String?, weakest: String?) = (nil, nil)
+        emphasizedAxisIDs: (strongest: String?, weakest: String?) = (nil, nil),
+        interactive: Bool = true
     ) {
         self.axes = axes
         self.overallScore = overallScore
         self.animate = animate
         self.showsCenterScore = showsCenterScore
         self.emphasizedAxisIDs = emphasizedAxisIDs
+        self.interactive = interactive
         self._drawProgress = State(initialValue: animate ? 0.0 : 1.0)
     }
 
@@ -70,7 +74,9 @@ struct SubscoreRadarChart: View {
 
             ZStack {
                 wedgeCanvas(outerRadius: radius, innerRadius: inner)
-                hitTestLayer(outerRadius: radius, innerRadius: inner)
+                if interactive {
+                    hitTestLayer(outerRadius: radius, innerRadius: inner)
+                }
                 axisLabels(center: center, radius: radius)
                 if showsCenterScore {
                     centerScore
@@ -94,6 +100,7 @@ struct SubscoreRadarChart: View {
         .sheet(item: $selectedAxis) { axis in
             MetricExplainerSheet(axis: axis)
         }
+        .allowsHitTesting(interactive)
     }
 
     private func selectAxis(_ axis: Axis) {
@@ -239,7 +246,7 @@ struct SubscoreRadarChart: View {
             let anchorPoint = vertex(at: index, center: center, radius: radius + 21, scaled: 1.0)
             axisLabel(axis: axis)
                 .contentShape(Rectangle())
-                .onTapGesture { selectAxis(axis) }
+                .onTapGesture { if interactive { selectAxis(axis) } }
                 .position(x: anchorPoint.x, y: anchorPoint.y)
         }
     }
@@ -459,5 +466,15 @@ extension SubscoreRadarChart.Axis {
             ))
         }
         return axes
+    }
+
+    /// Strongest and weakest ids, or nils when a single axis would be both.
+    static func emphasisIDs(in axes: [SubscoreRadarChart.Axis]) -> (strongest: String?, weakest: String?) {
+        let strongest = axes.max(by: { $0.value < $1.value })
+        let weakest = axes.min(by: { $0.value < $1.value })
+        guard let strongest, let weakest, strongest.id != weakest.id else {
+            return (nil, nil)
+        }
+        return (strongest.id, weakest.id)
     }
 }

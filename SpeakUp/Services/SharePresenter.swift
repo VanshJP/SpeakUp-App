@@ -8,7 +8,13 @@ import UIKit
 /// eventually stop logging.
 @MainActor
 enum SharePresenter {
-    /// Presents `image` and reports the share once the user completes it.
+    /// Presents `image` (and optional caption / link) and reports the share
+    /// once the user completes it.
+    ///
+    /// `message` is the caption iMessage, Mail, and Notes attach under the
+    /// card — it should already contain the tappable URL when there is one.
+    /// Passing the URL as a separate activity item doubles the preview in
+    /// some destinations, so the caption is the single carrier.
     ///
     /// Returns false when no window is available to present from.
     @discardableResult
@@ -16,11 +22,17 @@ enum SharePresenter {
         image: UIImage,
         cardType: String,
         trigger: String,
+        message: String? = nil,
         onShared: (() -> Void)? = nil
     ) -> Bool {
         guard let root = rootViewController else { return false }
 
-        let activity = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        var items: [Any] = [image]
+        if let message, !message.isEmpty {
+            items.append(message)
+        }
+
+        let activity = UIActivityViewController(activityItems: items, applicationActivities: nil)
 
         if let popover = activity.popoverPresentationController {
             popover.sourceView = root.view
