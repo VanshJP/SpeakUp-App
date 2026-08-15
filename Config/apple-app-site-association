@@ -6,7 +6,7 @@
         "components": [
           { "/": "/", "comment": "Bare campaign link — opens Today and captures source/campaign." },
           { "/": "/open", "comment": "Attribution-only entry point." },
-          { "/": "/record", "comment": "Starts a session, optionally with ?prompt=<id>." },
+          { "/": "/record", "comment": "Starts a session. Optional ?prompt=<id>. Friend challenges also carry &text= &cat= &diff= &beat= &source=share." },
           { "/": "/story", "comment": "Opens the Library." },
           { "/": "/story/new", "comment": "Opens the story editor." },
           { "/": "/*", "exclude": true, "comment": "Everything else stays on the website." }

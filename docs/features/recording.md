@@ -18,8 +18,8 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 
 ## Flow
 
-1. `ContentView` sets prompt and/or `recordingStoryId`, duration, optional goal.
-2. Countdown sheet → `RecordingView` `fullScreenCover`.
+1. `ContentView` sets prompt and/or `recordingStoryId`, duration, optional goal, optional `recordingChallenge`.
+2. Countdown sheet → `RecordingView` `fullScreenCover`. Friend-challenge links (`source=share`) add countdown chrome and log `practice_start` as `shared_prompt`.
 3. Story practice: set `recordingStoryId`, clear `recordingPrompt`.
 4. On stop: persist `Recording` (audio/video URL); analysis runs later via coordinator (see speech pipeline).
 

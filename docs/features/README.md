@@ -27,7 +27,7 @@ Canonical contracts that are *not* duplicated here:
 | [architecture.md](./architecture.md) | Boot, tabs, deep links, DI, global sheets | `SpeakUpApp.swift`, `ContentView.swift` |
 | [recording.md](./recording.md) | Capture session UI + audio | `Views/Recording/`, `RecordingViewModel*`, `AudioService` |
 | [speech-pipeline.md](./speech-pipeline.md) | Pointer into `SPEECH.md` + wiring | `Services/*Speech*`, `RecordingProcessingCoordinator` |
-| [recording-detail.md](./recording-detail.md) | Analyzing / score reveal / playback / share | `Views/Detail/`, `SharePresenter` |
+| [recording-detail.md](./recording-detail.md) | Analyzing / score reveal / playback / share + prompt links | `Views/Detail/`, `SharePresenter`, `SharedPromptLink` |
 | [stories.md](./stories.md) | Rich-text scripts + story practice | `Views/Stories/`, `Story*`, `StoryTaggingService` |
 | [read-aloud.md](./read-aloud.md) | Passage practice + dictionary | `Views/ReadAloud/`, `ReadAloudService` |
 | [today-library.md](./today-library.md) | Today home + Practice Hub | `Views/Today/`, `Views/Practice/` |

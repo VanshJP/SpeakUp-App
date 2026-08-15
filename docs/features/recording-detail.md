@@ -14,7 +14,8 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Transcript | `TranscriptViews`, `TranscriptExcerptCard`, `WPMChartView` |
 | Coaching / next | `CoachingTipsView`, `NextStepCard`, `ListenBackEncouragementView` |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
-| Share cards | `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter` |
+| Share cards | `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter`, `SharedPromptLink`, `SharedPromptResolver` |
+| Inbound challenge | `SharedChallengeStore`, `FriendChallengeCard` (Today), countdown chrome in `CountdownOverlayView` |
 
 > Note: older docs mentioned `DetailAnalysisTab` — layout evolved into hero / reveal / transcript / playback pieces. Prefer current files above.
 
@@ -25,7 +26,8 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 3. Deferred-by-allowance UI must offer unlock path via paywall; fail-open policy lives in `PaywallCoordinator`.
 4. Processing: prefer `RecordingProcessingCoordinator` over ad-hoc parallel jobs.
 5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
-6. Share score / progress cards via `SharePresenter` only (completed-share analytics).
+6. Share score / progress cards via `SharePresenter` only (completed-share analytics). Score-card shares that include the prompt also attach a caption with a try-this-prompt URL (`SharedPromptLink`); do not invent a second activity sheet.
+7. Prompt text on a share card and in the share URL is opt-in. Scores-only shares must not put the prompt (or `beat`) on the link. Story sessions may show the title on the card but never encode story body into the URL.
 
 ## Cross-links
 

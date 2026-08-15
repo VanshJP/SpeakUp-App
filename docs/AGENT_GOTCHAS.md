@@ -107,7 +107,7 @@ Local `AudioService()` in onboarding / drills can be **session-scoped on purpose
 
 ## 7. Shares go through `SharePresenter`
 
-Both score cards and Then-vs-Now cards must use `SharePresenter.present(...)`. It logs `.shareCompleted` only when the user **completes** the share (dismiss ≠ share). A second `UIActivityViewController` will desync growth analytics.
+Both score cards and Then-vs-Now cards must use `SharePresenter.present(...)`. It logs `.shareCompleted` only when the user **completes** the share (dismiss ≠ share). A second `UIActivityViewController` will desync growth analytics. Score-card shares may pass a `message` (prompt quote + try-this-prompt URL) as an extra item on that same call; do not present a second sheet.
 
 ---
 

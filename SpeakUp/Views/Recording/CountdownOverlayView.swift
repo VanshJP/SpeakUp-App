@@ -10,6 +10,8 @@ struct CountdownOverlayView: View {
     let onComplete: () -> Void
     let onCancel: () -> Void
     @Binding var selectedGoalId: UUID?
+    /// Set when this session came from a friend-challenge link.
+    var challenge: SharedChallenge? = nil
 
     @Query(filter: #Predicate<UserGoal> { !$0.isCompleted })
     private var activeGoals: [UserGoal]
@@ -41,6 +43,7 @@ struct CountdownOverlayView: View {
         countdownDuration: Int = 15,
         countdownStyle: CountdownStyle = .countDown,
         selectedGoalId: Binding<UUID?> = .constant(nil),
+        challenge: SharedChallenge? = nil,
         onComplete: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -49,6 +52,7 @@ struct CountdownOverlayView: View {
         self.countdownDuration = countdownDuration
         self.countdownStyle = countdownStyle
         self._selectedGoalId = selectedGoalId
+        self.challenge = challenge
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
@@ -166,6 +170,15 @@ struct CountdownOverlayView: View {
     private func prominentPromptCard(_ prompt: Prompt) -> some View {
         FeaturedGlassCard {
             VStack(spacing: 16) {
+                if challenge != nil {
+                    Text("Friend challenge")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                        .frame(maxWidth: .infinity)
+                }
+
                 HStack {
                     Label(prompt.category, systemImage: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
                         .font(.subheadline.weight(.medium))
@@ -203,12 +216,23 @@ struct CountdownOverlayView: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
 
-                Text("Read and prepare your response")
+                Text(challengeFooter)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
                     .padding(.top, 4)
             }
         }
+    }
+
+    private var challengeFooter: String {
+        if let score = challenge?.beatScore {
+            return "They scored \(score). Can you beat it?"
+        }
+        if challenge != nil {
+            return "A friend sent you this prompt"
+        }
+        return "Read and prepare your response"
     }
 
     // MARK: - Helpers

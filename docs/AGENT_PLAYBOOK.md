@@ -64,7 +64,7 @@ Existing target: `SpeakUpTests/` — **Swift Testing** (`@Test`), `@testable imp
 |--------|--------|
 | Pure functions, injected `now` / policy | Live StoreKit, AVAudio, network |
 | `nonisolated` types under test (or `@MainActor` suite if type is UI-bound) | Spawning `ModelContainer` unless extending an existing pattern |
-| Mirror `MonetizationTests` / `ScoringEngineTests` / `UniversalLinkTests` | XCTest-style classes for new files |
+| Mirror `MonetizationTests` / `ScoringEngineTests` / `UniversalLinkTests` / `SharedPromptLinkTests` | XCTest-style classes for new files |
 
 Agent does **not** execute tests. Suggest:
 

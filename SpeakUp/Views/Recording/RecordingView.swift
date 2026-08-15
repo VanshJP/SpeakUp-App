@@ -23,6 +23,8 @@ struct RecordingView: View {
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
     var storyId: UUID? = nil
+    /// `share` when this session is answering a friend-challenge link.
+    var sessionSource: String? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
@@ -53,6 +55,7 @@ struct RecordingView: View {
             )
             viewModel.goalId = goalId
             viewModel.storyId = storyId
+            viewModel.sessionSource = sessionSource
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
                     customFillers: Set(settings.customFillerWords),

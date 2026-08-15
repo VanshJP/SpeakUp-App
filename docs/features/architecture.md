@@ -43,6 +43,7 @@ Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentV
 ## Deep links
 
 - `speakup://record?prompt=<id>` — start recording (clears prior prompt/story/goal context as coded)
+- `speakup://record?prompt=<id>&text=<prompt>&cat=<category>&diff=<difficulty>&beat=<0-100>&source=share` — friend-challenge: same prompt, countdown chrome, optional score to beat. `text` is the fallback when the recipient does not have that catalog id (custom prompts, older seeds).
 - `speakup://story` / `speakup://story/new` — Library / new story
 - HTTPS universal links → same router; capture attribution **before** routing (`AttributionStore`)
 

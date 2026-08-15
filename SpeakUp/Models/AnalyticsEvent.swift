@@ -118,6 +118,14 @@ extension AnalyticsEvent {
         ])
     }
 
+    /// A recipient opened a friend-challenge link. No prompt text, no score —
+    /// only that the loop closed.
+    static func sharedPromptOpened() -> AnalyticsEvent {
+        AnalyticsEvent("shared_prompt_opened", funnel: .acquisition, dimensions: [
+            "source": "share"
+        ])
+    }
+
     static func reviewRequested(trigger: String) -> AnalyticsEvent {
         AnalyticsEvent("review_requested", funnel: .advocacy, dimensions: ["trigger": trigger])
     }

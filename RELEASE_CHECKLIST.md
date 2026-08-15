@@ -104,7 +104,9 @@ goes live the moment these four steps are done, in this order:
       `appIDs` entry still matches `<TEAM_ID>.<bundle id>`.
 
 Then confirm on a device that a link pasted into Notes opens the app, that
-`https://<host>/record?prompt=<id>` starts a session, and that
+`https://<host>/record?prompt=<id>` starts a session, that a share-card link
+`https://<host>/record?prompt=<id>&text=...&source=share` opens a friend
+challenge (prompt visible, optional beat score on the countdown), and that
 `?source=…&campaign=…` shows up on the `first_open` event in Usage Diagnostics.
 
 ## 4. Build configuration to verify in Xcode

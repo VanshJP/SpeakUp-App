@@ -41,6 +41,7 @@ struct ContentView: View {
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
     @State private var recordingStoryId: UUID?
+    @State private var recordingChallenge: SharedChallenge?
     @State private var hasEvaluatedOnboarding = false
 
     private var countdownDuration: Int {
@@ -65,6 +66,7 @@ struct ContentView: View {
                         recordingPrompt = prompt
                         recordingStoryId = nil
                         recordingDuration = duration
+                        adoptChallengeIfMatching(prompt)
                         showingCountdown = true
                     },
                     onShowWheel: {
@@ -89,6 +91,7 @@ struct ContentView: View {
                         recordingPrompt = nil
                         recordingStoryId = story.id
                         recordingDuration = .sixty
+                        recordingChallenge = nil
                         showingCountdown = true
                     }
                 )
@@ -100,12 +103,14 @@ struct ContentView: View {
                         recordingPrompt = prompt
                         recordingStoryId = nil
                         recordingDuration = .sixty
+                        adoptChallengeIfMatching(prompt)
                         showingCountdown = true
                     },
                     onStartStoryPractice: { story in
                         recordingPrompt = nil
                         recordingStoryId = story.id
                         recordingDuration = .sixty
+                        recordingChallenge = nil
                         showingCountdown = true
                     },
                     onSendToWarmUp: { story in
@@ -141,6 +146,7 @@ struct ContentView: View {
                             recordingPrompt = prompt
                             recordingStoryId = nil
                             recordingDuration = .sixty
+                            recordingChallenge = nil
                             showingCountdown = true
                         }
                     )
@@ -182,6 +188,7 @@ struct ContentView: View {
                     countdownDuration: countdownDuration,
                     countdownStyle: countdownStyle,
                     selectedGoalId: $recordingGoalId,
+                    challenge: recordingChallenge,
                     onComplete: {
                         showingCountdown = false
                         showingRecording = true
@@ -193,6 +200,7 @@ struct ContentView: View {
                         recordingPrompt = nil
                         recordingStoryId = nil
                         recordingGoalId = nil
+                        recordingChallenge = nil
                     }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 1.05)))
@@ -217,6 +225,7 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showingRecording, onDismiss: {
             recordingStoryId = nil
+            recordingChallenge = nil
             if let id = pendingRecordingNavigation {
                 selectedRecordingId = id
                 pendingRecordingNavigation = nil
@@ -229,10 +238,12 @@ struct ContentView: View {
                 countdownStyle: countdownStyle,
                 goalId: recordingGoalId,
                 storyId: recordingStoryId,
+                sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     selectedTab = .history
                     showingRecording = false
+                    SharedChallengeStore.shared.dismiss()
                     Task {
                         await achievementService.checkAchievements(context: modelContext)
                     }
@@ -246,6 +257,7 @@ struct ContentView: View {
             PromptWheelView(onSelectPrompt: { prompt in
                 showingPromptWheel = false
                 recordingPrompt = prompt
+                recordingChallenge = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     showingCountdown = true
                 }
@@ -511,20 +523,7 @@ struct ContentView: View {
             selectedTab = .today
 
         case "record":
-            // Fresh session context — never inherit a story/goal/prompt from
-            // whatever was recorded last.
-            recordingPrompt = nil
-            recordingStoryId = nil
-            recordingGoalId = nil
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-                let promptId = components.queryItems?.first(where: { $0.name == "prompt" })?.value
-            {
-                let descriptor = FetchDescriptor<Prompt>()
-                if let prompts = try? modelContext.fetch(descriptor) {
-                    recordingPrompt = prompts.first { $0.id == promptId }
-                }
-            }
-            showingCountdown = true
+            startRecording(from: url)
 
         case "story":
             selectedTab = .library
@@ -535,6 +534,49 @@ struct ContentView: View {
         default:
             break
         }
+    }
+
+    /// Widget, campaign, and friend-challenge links all land here. Challenge
+    /// chrome is only applied when `source=share` so a Daily Prompt widget tap
+    /// does not look like a dare.
+    private func startRecording(from url: URL) {
+        recordingPrompt = nil
+        recordingStoryId = nil
+        recordingGoalId = nil
+        recordingChallenge = nil
+
+        let payload = SharedPromptLink.payload(from: url) ?? SharedPromptPayload()
+        if let prompt = SharedPromptResolver.resolve(payload, in: modelContext)
+            ?? payload.promptID.flatMap({ SharedPromptResolver.prompt(id: $0, in: modelContext) }) {
+            recordingPrompt = prompt
+            if payload.isShareChallenge {
+                let challenge = SharedChallenge(
+                    promptID: prompt.id,
+                    promptText: prompt.text,
+                    category: prompt.category,
+                    difficulty: prompt.difficulty.rawValue,
+                    beatScore: payload.beatScore
+                )
+                recordingChallenge = challenge
+                SharedChallengeStore.shared.remember(challenge)
+                AnalyticsService.shared.log(.sharedPromptOpened())
+            }
+        }
+
+        // Never cover onboarding with a countdown. The challenge waits on Today.
+        if showOnboarding { return }
+        showingCountdown = true
+    }
+
+    /// Keep friend-challenge chrome if Today/Library started the exact prompt
+    /// that was waiting; otherwise this is a normal session.
+    private func adoptChallengeIfMatching(_ prompt: Prompt?) {
+        guard let prompt, let pending = SharedChallengeStore.shared.pending,
+              pending.promptID == prompt.id else {
+            recordingChallenge = nil
+            return
+        }
+        recordingChallenge = pending
     }
 }
 
