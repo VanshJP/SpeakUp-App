@@ -104,15 +104,16 @@ accepts both.
       developer portal and regenerate the profile. Do this *before* the next
       build — the entitlement below fails code signing without it.
 - [x] `com.apple.developer.associated-domains` in
-      `SpeakUp/SpeakUp.entitlements`: `applinks:www.bigtalkapp.com` (plus the
-      apex, harmless if it never serves an AASA). It must match the xcconfig
-      value; a mismatch fails silently, with links opening Safari.
-- [ ] Host `Config/apple-app-site-association` at
-      `https://www.bigtalkapp.com/.well-known/apple-app-site-association`,
-      served as `application/json` with no `.json` extension and no redirect.
-      Verify the `appIDs` entry still matches `<TEAM_ID>.<bundle id>`.
-      Check: `curl -sI https://www.bigtalkapp.com/.well-known/apple-app-site-association`
-      must be `200` with `content-type: application/json`.
+      `SpeakUp/SpeakUp.entitlements`: `applinks:www.bigtalkapp.com`. It must
+      match the xcconfig value; a mismatch fails silently, with links opening
+      Safari.
+- [x] `Config/apple-app-site-association` is hosted at
+      `https://www.bigtalkapp.com/.well-known/apple-app-site-association`
+      from the website repo (`public/.well-known/` + a `vercel.json` header
+      rule forcing `application/json`). If the file changes here, copy it
+      there again — the two are not linked. Check:
+      `curl -sI https://www.bigtalkapp.com/.well-known/apple-app-site-association`
+      must be `200` with `content-type: application/json` and no redirect.
 
 Then confirm on a device that a link pasted into Notes opens the app, that
 `https://<host>/record?prompt=<id>` starts a session, that a share-card link

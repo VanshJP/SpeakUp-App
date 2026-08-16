@@ -18,7 +18,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:www.bigtalkapp.com</string>
-		<string>applinks:bigtalkapp.com</string>
 	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
