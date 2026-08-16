@@ -92,25 +92,27 @@ outbound legal links, which App Review will notice.
 
 ### Universal links for campaign traffic
 
-`speakup://` links work today. Web links do not, because a domain cannot be
-claimed before it is owned — the `associated-domains` entitlement is
-deliberately *not* checked in, since adding it without the matching capability
-on the App ID fails code signing on the next build. The routing code ships and
-goes live the moment these four steps are done, in this order:
+Host is `www.bigtalkapp.com` — the apex 308-redirects to it, and iOS follows no
+redirects when fetching `apple-app-site-association` or resolving a link, so
+every outbound link and the entitlement use the `www` form. Inbound matching
+accepts both.
 
-- [ ] Set `BT_UNIVERSAL_LINK_DOMAIN` in `Config/SharedVersion.xcconfig` to the
-      bare host (`bigtalk.app`, no scheme, no trailing slash). It feeds
-      `BTUniversalLinkDomain` in Info.plist, which `UniversalLink` reads.
+- [x] `BT_UNIVERSAL_LINK_DOMAIN = www.bigtalkapp.com` in
+      `Config/SharedVersion.xcconfig`. It feeds `BTUniversalLinkDomain` in
+      Info.plist, which `UniversalLink` reads.
 - [ ] Enable the **Associated Domains** capability on the App ID in the
-      developer portal and regenerate the profile.
-- [ ] Add `com.apple.developer.associated-domains` to
-      `SpeakUp/SpeakUp.entitlements` with the single entry
-      `applinks:<the same host>`. It must match the xcconfig value exactly; a
-      mismatch fails silently, with links opening Safari instead of the app.
+      developer portal and regenerate the profile. Do this *before* the next
+      build — the entitlement below fails code signing without it.
+- [x] `com.apple.developer.associated-domains` in
+      `SpeakUp/SpeakUp.entitlements`: `applinks:www.bigtalkapp.com` (plus the
+      apex, harmless if it never serves an AASA). It must match the xcconfig
+      value; a mismatch fails silently, with links opening Safari.
 - [ ] Host `Config/apple-app-site-association` at
-      `https://<host>/.well-known/apple-app-site-association`, served as
-      `application/json` with no `.json` extension and no redirect. Verify the
-      `appIDs` entry still matches `<TEAM_ID>.<bundle id>`.
+      `https://www.bigtalkapp.com/.well-known/apple-app-site-association`,
+      served as `application/json` with no `.json` extension and no redirect.
+      Verify the `appIDs` entry still matches `<TEAM_ID>.<bundle id>`.
+      Check: `curl -sI https://www.bigtalkapp.com/.well-known/apple-app-site-association`
+      must be `200` with `content-type: application/json`.
 
 Then confirm on a device that a link pasted into Notes opens the app, that
 `https://<host>/record?prompt=<id>` starts a session, that a share-card link

@@ -9,4 +9,7 @@ APP_BUILD_NUMBER = 2
 // runtime, and must match the host in the associated-domains entitlement.
 // Empty means web links are ignored and only speakup:// routes work — see
 // RELEASE_CHECKLIST.md for the entitlement and apple-app-site-association steps.
-BT_UNIVERSAL_LINK_DOMAIN =
+// www, not the apex: bigtalkapp.com 308-redirects to www, and iOS does not
+// follow redirects when it fetches apple-app-site-association or resolves a
+// link. Inbound matching ignores the www prefix either way.
+BT_UNIVERSAL_LINK_DOMAIN = www.bigtalkapp.com

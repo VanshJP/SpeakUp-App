@@ -32,6 +32,20 @@ nonisolated enum UniversalLink {
         return normalizedHost(raw)
     }
 
+    /// The host exactly as configured, `www.` intact.
+    ///
+    /// Outbound links must use the host the `apple-app-site-association` file
+    /// is actually served from: iOS does not follow redirects when resolving a
+    /// universal link, so an apex link on a site that 308s to `www` opens
+    /// Safari instead of the app. Inbound matching still uses `domain`, which
+    /// is `www.`-insensitive, so both forms route.
+    static var linkHost: String? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: infoPlistKey) as? String else {
+            return nil
+        }
+        return normalizedHost(raw, strippingWWW: false)
+    }
+
     /// Reads the configured domain and routes against it.
     static func route(from url: URL) -> URL? {
         guard let domain else { return nil }
@@ -67,7 +81,7 @@ nonisolated enum UniversalLink {
     /// Lowercased, `www.`-stripped, empty-as-nil. Applied to both sides of the
     /// comparison so a link written `https://WWW.Example.com` still matches a
     /// domain configured as `example.com`.
-    private static func normalizedHost(_ raw: String?) -> String? {
+    private static func normalizedHost(_ raw: String?, strippingWWW: Bool = true) -> String? {
         guard let raw else { return nil }
         var host = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         // Tolerates a domain configured with a scheme or a trailing slash.
@@ -75,7 +89,7 @@ nonisolated enum UniversalLink {
             host.removeFirst(prefix.count)
         }
         if host.hasSuffix("/") { host.removeLast() }
-        if host.hasPrefix("www.") { host.removeFirst(4) }
+        if strippingWWW, host.hasPrefix("www.") { host.removeFirst(4) }
         return host.isEmpty ? nil : host
     }
 }

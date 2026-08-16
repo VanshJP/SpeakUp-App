@@ -110,7 +110,7 @@ nonisolated enum SharedPromptLink {
     /// back to `speakup://` when no host is configured yet.
     static func shareURL(
         for payload: SharedPromptPayload,
-        domain: String? = UniversalLink.domain
+        domain: String? = UniversalLink.linkHost
     ) -> URL? {
         let clipped = clippedPayload(payload)
         if let domain, let host = normalizedHost(domain),
@@ -179,7 +179,8 @@ nonisolated enum SharedPromptLink {
             host.removeFirst(prefix.count)
         }
         if host.hasSuffix("/") { host.removeLast() }
-        if host.hasPrefix("www.") { host.removeFirst(4) }
+        // `www.` is kept: the link has to point at the host serving the AASA
+        // file, and iOS does not follow redirects resolving a universal link.
         return host.isEmpty ? nil : host
     }
 
