@@ -361,7 +361,7 @@ var activeBackend: LLMBackend {
 ```
 
 - **Apple Intelligence** (`FoundationModels`, iOS 18.2+) preferred.
-- **LocalLLMService** (`LlamaSwift` + Qwen 2.5 GGUF — compact 0.5B / balanced 1.5B / quality 3B) is the fallback; auto-loads at app launch via `loadLocalModelIfNeeded()` when Apple Intelligence is unavailable.
+- **LocalLLMService** (`LlamaSwift` + Gemma GGUF — Gemma 3 1B / Gemma 4 E2B / Gemma 4 E4B) is the fallback; auto-loads at app launch via `loadLocalModelIfNeeded()` when Apple Intelligence is unavailable.
 - **None** — coherence enhancement is skipped; rule-based relevance stands alone.
 
 Memory pressure: `LLMService` installs a `DispatchSourceMemoryPressure` monitor on `[.warning, .critical]` that unloads the local LLM and cancels in-flight generation. `RecordingProcessingCoordinator` also unloads the LLM before long Whisper transcriptions to avoid OOM.

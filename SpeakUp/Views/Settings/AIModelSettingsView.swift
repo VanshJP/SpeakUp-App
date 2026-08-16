@@ -10,7 +10,7 @@ struct AIModelSettingsView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     appleIntelligenceCard
                     localModelCard
@@ -196,17 +196,9 @@ struct AIModelSettingsView: View {
                     }
                 )
             ) {
-                Section("Gemma") {
-                    ForEach(llmService.localLLM.availableProfiles.filter { $0.modelFamily == .gemma }) { profile in
-                        Text("\(profile.displayName) • \(profile.approximateModelSize)")
-                            .tag(profile)
-                    }
-                }
-                Section("Qwen") {
-                    ForEach(llmService.localLLM.availableProfiles.filter { $0.modelFamily == .qwen }) { profile in
-                        Text("\(profile.displayName) • \(profile.approximateModelSize)")
-                            .tag(profile)
-                    }
+                ForEach(llmService.localLLM.availableProfiles) { profile in
+                    Text("\(profile.displayName) • \(profile.approximateModelSize)")
+                        .tag(profile)
                 }
             }
             .pickerStyle(.menu)
