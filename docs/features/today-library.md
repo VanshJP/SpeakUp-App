@@ -9,7 +9,7 @@
 
 | Role | Path |
 |------|------|
-| Views | `SpeakUp/Views/Today/` — `TodayView`, `TodayFocusCard`, `DailyChallengeCard`, `StoryPromptCard`, `WeeklyRecapCard` |
+| Views | `SpeakUp/Views/Today/` — `TodayView`, `TodayFocusCard`, `DailyChallengeCard`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard` |
 | VM | `SpeakUp/ViewModels/TodayViewModel.swift` |
 | Services | `DailyChallengeService`, `WeeklyProgressService` |
 | Components | `RingStatsView`, `StreakChip` |
@@ -31,6 +31,7 @@
 3. Library sections: `.prompts` / `.stories` / `.tools`. Recording start callbacks bubble to `ContentView`.
 4. Prompt category gates for wheel/challenge live in Settings (`PromptSettingsView`).
 5. Spotlight targets: mark with `.tourAnchor(_:)` for `AppTourView`.
+6. Inbound friend-challenge links (`source=share`) persist on `SharedChallengeStore` and surface as `FriendChallengeCard` when the countdown does not run (onboarding, cancel). Do not start a countdown over onboarding.
 
 ## Cross-links
 

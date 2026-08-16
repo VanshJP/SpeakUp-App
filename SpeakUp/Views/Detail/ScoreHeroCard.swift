@@ -22,11 +22,23 @@ struct ScoreHeroCard: View {
     let weakestAxisID: String?
     let onShowWeights: () -> Void
 
-    private var scoreColor: Color { AppColors.scoreColor(for: score) }
-
-    private var delta: Int? {
-        guard let personalAverage else { return nil }
-        return score - personalAverage
+    var body: some View {
+        GlassCard(padding: 16, elevated: true) {
+            ScoreHeroBody(
+                score: score,
+                axes: axes,
+                strongestAxisID: strongestAxisID,
+                weakestAxisID: weakestAxisID,
+                personalAverage: personalAverage,
+                showsWeightsButton: true,
+                showsPersonalContext: true,
+                animate: true,
+                interactive: true,
+                onShowWeights: onShowWeights
+            )
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
     }
 
     private var strongestAxis: SubscoreRadarChart.Axis? {
@@ -37,55 +49,87 @@ struct ScoreHeroCard: View {
         weakestAxisID.flatMap { id in axes.first { $0.id == id } }
     }
 
-    var body: some View {
-        GlassCard(padding: 16, elevated: true) {
-            VStack(alignment: .leading, spacing: 10) {
-                eyebrow
-
-                if axes.isEmpty {
-                    // No donut to hold the number, so it leads on its own and
-                    // the meter gives it a position on the scale.
-                    soloScoreRow
-                    TickMeter(fraction: Double(score) / 100, color: scoreColor)
-                        .frame(height: 18)
-                } else {
-                    // The score lives in the middle of the ring. It used to
-                    // also print at 68pt directly above, which said the same
-                    // number twice inches apart and made this the tallest card
-                    // on the screen by far. One numeral, inside the donut it
-                    // belongs to.
-                    SubscoreRadarChart(
-                        axes: axes,
-                        overallScore: score,
-                        emphasizedAxisIDs: (strongestAxisID, weakestAxisID)
-                    )
-                    .frame(height: 260)
-                    .frame(maxWidth: .infinity)
-
-                    verdictLine
-                }
+    /// The radar carries strongest/weakest visually, so VoiceOver has to say it
+    /// here or that information disappears entirely for non-visual users.
+    private var accessibilitySummary: String {
+        var parts = ["Session score \(score) out of 100, \(AppColors.scoreVerdict(for: score))"]
+        if let personalAverage {
+            let delta = score - personalAverage
+            if abs(delta) > 2 {
+                parts.append("\(abs(delta)) points \(delta > 0 ? "above" : "below") your average")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilitySummary)
+        if let strongestAxis { parts.append("strongest \(strongestAxis.label) \(strongestAxis.value)") }
+        if let weakestAxis { parts.append("weakest \(weakestAxis.label) \(weakestAxis.value)") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+// MARK: - Shared body
+
+/// Innards of the in-app hero and the share card. Sharing a screenshot of a
+/// different layout than the one the user just celebrated is how the "aha"
+/// dies in the share sheet.
+struct ScoreHeroBody: View {
+    let score: Int
+    let axes: [SubscoreRadarChart.Axis]
+    var strongestAxisID: String? = nil
+    var weakestAxisID: String? = nil
+    var personalAverage: Int? = nil
+    var showsWeightsButton: Bool = true
+    /// Personal average is for the owner. A share card that tells a friend
+    /// they are "5 above your average" is talking to the wrong person.
+    var showsPersonalContext: Bool = true
+    var animate: Bool = true
+    var interactive: Bool = true
+    var radarHeight: CGFloat = 260
+    var onShowWeights: () -> Void = {}
+
+    private var scoreColor: Color { AppColors.scoreColor(for: score) }
+
+    private var delta: Int? {
+        guard showsPersonalContext, let personalAverage else { return nil }
+        return score - personalAverage
     }
 
-    /// Verdict and delta on one centred line beneath the ring — the context the
-    /// number needs, at caption weight so it supports the ring instead of
-    /// competing with it.
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            eyebrow
+
+            if axes.isEmpty {
+                soloScoreRow
+                TickMeter(fraction: Double(score) / 100, color: scoreColor)
+                    .frame(height: 18)
+            } else {
+                SubscoreRadarChart(
+                    axes: axes,
+                    overallScore: score,
+                    animate: animate,
+                    emphasizedAxisIDs: (strongestAxisID, weakestAxisID),
+                    interactive: interactive
+                )
+                .frame(height: radarHeight)
+                .frame(maxWidth: .infinity)
+
+                verdictLine
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Verdict and (optionally) delta on one centred line beneath the ring.
     private var verdictLine: some View {
         HStack(spacing: 8) {
             Text(AppColors.scoreVerdict(for: score))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(scoreColor)
 
-            deltaLabel
+            if showsPersonalContext {
+                deltaLabel
+            }
         }
         .frame(maxWidth: .infinity)
     }
-
-    // MARK: - Subviews
 
     private var eyebrow: some View {
         HStack {
@@ -97,18 +141,20 @@ struct ScoreHeroCard: View {
 
             Spacer()
 
-            Button {
-                Haptics.light()
-                onShowWeights()
-            } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 30, height: 30)
-                    .contentShape(Rectangle())
+            if showsWeightsButton {
+                Button {
+                    Haptics.light()
+                    onShowWeights()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Adjust score weights")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Adjust score weights")
         }
     }
 
@@ -132,7 +178,9 @@ struct ScoreHeroCard: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
 
-                deltaLabel
+                if showsPersonalContext {
+                    deltaLabel
+                }
             }
 
             Spacer(minLength: 0)
@@ -157,23 +205,11 @@ struct ScoreHeroCard: View {
                 }
                 .foregroundStyle(delta > 0 ? AppColors.success : AppColors.warning)
             }
-        } else {
+        } else if showsPersonalContext {
             Text("Your first scored session")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    /// The radar carries strongest/weakest visually, so VoiceOver has to say it
-    /// here or that information disappears entirely for non-visual users.
-    private var accessibilitySummary: String {
-        var parts = ["Session score \(score) out of 100, \(AppColors.scoreVerdict(for: score))"]
-        if let delta, abs(delta) > 2 {
-            parts.append("\(abs(delta)) points \(delta > 0 ? "above" : "below") your average")
-        }
-        if let strongestAxis { parts.append("strongest \(strongestAxis.label) \(strongestAxis.value)") }
-        if let weakestAxis { parts.append("weakest \(weakestAxis.label) \(weakestAxis.value)") }
-        return parts.joined(separator: ", ")
     }
 }
 

@@ -8,6 +8,7 @@ struct TodayView: View {
     @Query private var userSettings: [UserSettings]
     @Environment(\.appTour) private var tour
     @State private var showingFirstRecordingSetup = false
+    @State private var challengeStore = SharedChallengeStore.shared
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
     // RecordingDetailView so both entry points land on the same tool.
@@ -36,6 +37,14 @@ struct TodayView: View {
 
                     // 1. Header — date + streak chip
                     topHeaderRow
+
+                    if let challenge = challengeStore.pending {
+                        FriendChallengeCard(
+                            challenge: challenge,
+                            onAccept: { acceptFriendChallenge(challenge) },
+                            onDismiss: { challengeStore.dismiss() }
+                        )
+                    }
 
                     // 2. Where you stand (tap → full Progress charts).
                     ringStatsSection
@@ -154,6 +163,21 @@ struct TodayView: View {
         case .practiceAgain:
             onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
         }
+    }
+
+    /// Rebuilds the SwiftData prompt (catalog row or the shared insert) so
+    /// ContentView can attach challenge chrome via the matching id.
+    private func acceptFriendChallenge(_ challenge: SharedChallenge) {
+        let payload = SharedPromptPayload(
+            promptID: challenge.promptID,
+            text: challenge.promptText,
+            category: challenge.category,
+            difficulty: challenge.difficulty,
+            beatScore: challenge.beatScore,
+            source: SharedPromptLink.shareSource
+        )
+        let prompt = SharedPromptResolver.resolve(payload, in: modelContext)
+        onStartRecording(prompt, viewModel.selectedDuration)
     }
 
     // MARK: - First Run Surfaces

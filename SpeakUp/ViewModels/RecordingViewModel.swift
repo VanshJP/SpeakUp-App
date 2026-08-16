@@ -19,6 +19,9 @@ class RecordingViewModel {
     var prompt: Prompt?
     var goalId: UUID?
     var storyId: UUID?
+    /// Overrides the practice-start funnel when the session came from a
+    /// friend-challenge link (`share` → `shared_prompt`).
+    var sessionSource: String?
 
     // Timer
     var remainingTime: TimeInterval = 60

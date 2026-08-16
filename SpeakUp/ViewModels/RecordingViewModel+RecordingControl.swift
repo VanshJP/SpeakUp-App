@@ -136,7 +136,9 @@ extension RecordingViewModel {
     /// when the screen opens — an abandoned countdown is not a practice start.
     private func logPracticeStart() {
         let useCase: String
-        if storyId != nil {
+        if sessionSource == SharedPromptLink.shareSource {
+            useCase = "shared_prompt"
+        } else if storyId != nil {
             useCase = "story"
         } else if prompt != nil {
             useCase = "prompt"
