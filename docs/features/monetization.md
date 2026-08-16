@@ -22,11 +22,19 @@ One non-consumable **Lifetime** purchase. Free users get a small analysis allowa
 - **No hardcoded buy-button price** — wait for StoreKit `displayPrice`. Wrong-currency price is worse than empty.
 - `FoundingOffer.deadline = nil` by default (no urgency). `$99.99` comparison only when offer active **and** storefront currency is USD.
 
-## Free tier (`FreeTierPolicy.default`)
+## Free tier
 
-- **3** intro analyses, then **3** per rolling 30-day cycle.
-- Gated: `unlimitedAnalyses`, `fullCurriculum`, `journalExport`, `iCloudSync`.
-- **Not gated:** `progressCards` (Then-vs-Now / share loop must stay free for acquisition).
+Two policies, selected by `EntitlementStore.policy`:
+
+| Policy | When | Analyses | Gated |
+|--------|------|----------|-------|
+| `.trial` | First 14 days | unlimited | `iCloudSync` only |
+| `.expired` | After | 3 per rolling 30 days | `unlimitedAnalyses`, `fullCurriculum`, `journalExport`, `iCloudSync` |
+| `.unrestricted` | Entitled / debug | unlimited | none |
+
+The 14 days run from the first **completed** analysis — `AllowanceGate.consume` starts the clock, `EntitlementStore.trialStartedAt` holds it (App Group defaults, so a reinstall grants a fresh 14 days by design).
+
+**Not gated in either policy:** `progressCards` (Then-vs-Now / share loop must stay free for acquisition).
 
 ## Call-site matrix
 
@@ -38,11 +46,12 @@ One non-consumable **Lifetime** purchase. Free users get a small analysis allowa
 | `AllowanceGate.consume` | After **successful** analysis persist only | `RecordingProcessingCoordinator` only |
 | `FreeTierPolicy.gates` / `EntitlementStore` | Membership | Curriculum phase lock; inside `allow` |
 
-New gates: change `FreeTierPolicy.default.gatedFeatures`, then call `allow` or `present` — do not scatter `if isLifetime`. Recipe: `/docs/AGENT_PLAYBOOK.md` → “Add or change a paid gate”.
+New gates: change `gatedFeatures` on `FreeTierPolicy.trial` and/or `.expired`, then call `allow` or `present` — do not scatter `if isLifetime`. Recipe: `/docs/AGENT_PLAYBOOK.md` → “Add or change a paid gate”.
 
 ## Invariants
 
 1. Consume allowance **only after successful analysis** (`AllowanceGate.consume`). Fail open if settings row missing.
+1a. The gate and the charge are ~90s apart, so `RecordingProcessingCoordinator.reservedAnalyses` holds a claim in between. Any new call site that gates on `AllowanceGate.decision` and charges after an `await` needs the same reservation, or concurrent recordings each see the same `remaining`.
 2. Exhausted allowance → defer analysis (`analysisBlockedByAllowance`); resume on foreground / entitlement (serial, capped ~20).
 3. `PaywallCoordinator`: no auto-paywall before first completed result; user-initiated Unlock always works; fail-open if suppressed.
 4. Entitlement mirrored to App Group for widget/offline; `Transaction.updates` + restore + offer codes keep `EntitlementStore` honest.

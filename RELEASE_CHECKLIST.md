@@ -44,8 +44,15 @@ These change shipped copy and shipped behaviour, so settle them first.
       separately can hold the whole release.
 - [ ] Privacy nutrition labels: with the shipped local sink, the answer is no
       data collected and no tracking. Re-answer if a hosted sink is adopted.
-- [ ] Paste the text fields from `APP_STORE_LISTING.md` and upload the six
-      default screenshots built to the plan in its section 5.
+- [ ] Paste the text fields from `APP_STORE_LISTING.md` and upload the seven
+      default screenshots from `screenshots/final/`, in filename order.
+- [ ] Confirm the display size Connect is asking for (6.9" vs 6.5") and
+      re-export if it disagrees — the canvas is two constants in
+      `screenshots/compose_creative.py`.
+- [ ] Re-check the `430` prompt count on slide 4 against the seeds in
+      `SpeakUp/Data/`. It is baked into an image and goes stale silently.
+- [ ] Resolve the slide 7 wording against the do-not-claim list — "AI Speech
+      Coaching" is currently rendered and section 6 rules it out.
 - [ ] Create the four custom product pages in `APP_STORE_PRODUCT_PAGES.md`, each
       submitted with the build, and record the `ppid` URL each one returns. They
       can only be assigned keywords already present in the shared keyword field.
@@ -66,10 +73,12 @@ These change shipped copy and shipped behaviour, so settle them first.
 whose value is missing or not `https://`. Empty values ship a build with no
 outbound legal links, which App Review will notice.
 
-- [ ] `BTPrivacyPolicyURL`
-- [ ] `BTTermsURL`
-- [ ] `BTSupportURL`
-- [ ] Confirm `SupportLinks.feedbackEmail` still reaches a monitored inbox.
+- [x] `BTPrivacyPolicyURL` — `https://www.bigtalkapp.com/privacy`
+- [x] `BTTermsURL` — `https://www.bigtalkapp.com/terms`
+- [x] `BTSupportURL` — `https://www.bigtalkapp.com/support`
+- [x] `SupportLinks.feedbackEmail` is `vansh@trygoldfinch.com`, a monitored inbox.
+      The website's support page advertises `hello@bigtalk.app`, which is on a
+      domain that does not resolve — fix that on the site, not in the app.
 
 ### iCloud container identifier
 

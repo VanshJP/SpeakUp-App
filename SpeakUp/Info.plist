@@ -29,11 +29,11 @@
 		</dict>
 	</array>
 	<key>BTSupportURL</key>
-	<string></string>
+	<string>https://www.bigtalkapp.com/support</string>
 	<key>BTPrivacyPolicyURL</key>
-	<string></string>
+	<string>https://www.bigtalkapp.com/privacy</string>
 	<key>BTTermsURL</key>
-	<string></string>
+	<string>https://www.bigtalkapp.com/terms</string>
 	<key>BTUniversalLinkDomain</key>
 	<string>$(BT_UNIVERSAL_LINK_DOMAIN)</string>
 </dict>

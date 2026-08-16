@@ -31,9 +31,10 @@ Two consequences worth planning around:
 - **Keywords are drawn from one shared field.** A page cannot invent a term. The
   keyword field was changed to include `interview` for exactly this reason; if a
   future page needs a term, it has to earn a slot in that 100-character field
-  first.
-- **The subtitle is shared.** Every page below carries "Practice speaking. See
-  your progress." above its own screenshots, so no page's first slide should
+  first. `public speaking` moved into the app name, which is *not* assignable
+  here — the three pages that used it were reassigned rather than left broken.
+- **The subtitle is shared.** Every page below carries "Practice speeches &
+  interviews" above its own screenshots, so no page's first slide should
   repeat that idea — it is already on screen.
 
 ## Attribution is already wired
@@ -86,7 +87,7 @@ stories before the capture session.
 **Internal name:** `bigtalk-interview`
 **Traffic:** Apple Search Ads on interview terms, career and job-search
 newsletters, university career-services partnerships.
-**Keyword assignment:** `interview`, `speech`, `public speaking`
+**Keyword assignment:** `interview`, `speech`, `coach`
 **Deep link:** `speakup://record` — a page that promises rehearsal should open
 on the recording screen, not the home tab.
 
@@ -116,7 +117,7 @@ sub-score genuinely measures whether the answer stayed on the question.
 **Internal name:** `bigtalk-presentation`
 **Traffic:** Apple Search Ads on presentation and Toastmasters terms, workplace
 L&D newsletters, conference speaker packs.
-**Keyword assignment:** `presentation`, `toastmaster`, `public speaking`
+**Keyword assignment:** `presentation`, `toastmaster`, `speech`
 **Deep link:** `speakup://story` — this audience arrives with a talk already
 written, so the Library is the right landing.
 
@@ -145,7 +146,7 @@ noticeably lighter, use `PREP` instead.
 **Internal name:** `bigtalk-pitch`
 **Traffic:** Founder and startup newsletters, accelerator resource lists, sales
 enablement communities.
-**Keyword assignment:** `speech`, `public speaking`, `articulation`
+**Keyword assignment:** `speech`, `pitch`, `articulation`
 **Deep link:** `speakup://record`
 
 **Promotional text (158 characters):**

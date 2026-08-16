@@ -374,6 +374,10 @@ struct AIModelSettingsView: View {
                         .padding(.top, 4)
                 }
             }
+            // GlassCard hugs its content, and nothing in this stack is
+            // intrinsically full-width, so without this the card renders
+            // narrower than its neighbours.
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

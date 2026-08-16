@@ -21,35 +21,63 @@ Character limits are Apple's. Counts are for the copy as written.
 
 | Field | Limit | Copy | Count |
 |-------|-------|------|-------|
-| App Name | 30 | `Big Talk: Speech Coach` | 22 |
-| Subtitle | 30 | `Practice speaking out loud` | 26 |
+| App Name | 30 | `Big Talk: Public Speaking` | 25 |
+| Subtitle | 30 | `Practice speeches & interviews` | 30 |
+
+The name carries the category's highest-volume head term. `Big Talk` alone has
+no search weight at launch — nobody is looking for it yet — so the twenty
+characters after the colon are the most valuable real estate in the listing,
+and they go to the phrase people actually type. `Speech Coach` was the previous
+occupant and lost on volume; `speech` survives in the keyword field, so nothing
+is dropped by the swap.
+
+The subtitle spends its thirty characters on the two use cases that convert
+best, rather than restating the name. Both terms are indexed.
 
 ### Keywords (100 characters, comma-separated, no spaces)
 
 ```
-speech,public speaking,filler,interview,presentation,toastmaster,pronunciation,voice,articulation
+speech,interview,presentation,filler,toastmaster,pronunciation,voice,articulation,toast,pitch,coach
 ```
 
-97 characters. Words already in the app name and subtitle are deliberately
-absent — Apple indexes those separately, and repeating them wastes the field.
+99 characters.
 
-`interview` replaced `stutter`, for two reasons. Custom product pages can only
-be assigned keywords that already exist in this field (see
-`APP_STORE_PRODUCT_PAGES.md`), and interview prep is both one of the four
-audience pages and one of the app's five onboarding goals — leaving the term
-out made that page unreachable by search. `stutter` also pulled against
-section 6: it is a high-volume term whose searchers are looking for a therapy
-tool, which is precisely the claim this app must not make.
+`public speaking` moved out of this field and into the app name. Apple indexes
+name, subtitle, and keywords together, so a term in the name does not need a
+slot here — that freed sixteen characters for `toast`, `pitch`, and `coach`,
+all three of which map to shipped behaviour (story practice, the impromptu
+sprint drill, the next-step card).
+
+**Constraint that outranks normal ASO advice:** custom product pages can only
+be assigned terms that exist in *this* field, not in the name (see
+`APP_STORE_PRODUCT_PAGES.md`). Dropping `public speaking` therefore required
+reassigning it on three of the four pages before it could leave. Any future
+edit to this field has to check those assignments first — a page whose keyword
+vanishes silently stops being reachable by search.
+
+`interview` replaced `stutter` for the same reason: interview prep is both one
+of the four audience pages and one of the app's five onboarding goals, and
+leaving the term out made that page unreachable. `stutter` also pulled against
+section 6 — it is a high-volume term whose searchers want a therapy tool,
+which is precisely the claim this app must not make.
 
 ### Promotional text (170 characters, editable without a new build)
 
 ```
-Record a minute. Get a real score on pace, fillers, pauses, and clarity — worked out on your iPhone, not on a server. Everything free for 14 days.
+Record a minute. Get a real score on your pace, filler words, pauses, and clarity — worked out on your iPhone, never on a server. Everything free for 14 days.
 ```
 
-146 characters.
+158 characters. Promotional text is **not** indexed by App Store search, and
+neither is the description. Only the app name, the subtitle, the keyword field,
+and in-app purchase display names feed ranking — so everything below this line
+is conversion copy, written for a person who has already landed on the page,
+and should never be contorted to fit a keyword.
 
-### Description (4000 characters)
+### Description (4000 characters — 3180 as written)
+
+Paste-ready and unwrapped in `screenshots/listing-fields.txt`. The hard wraps
+below are for reading this file only; App Store Connect keeps them verbatim, so
+copy from the txt.
 
 ```
 Big Talk is a speaking gym for your iPhone. Record yourself for a minute, and
@@ -77,12 +105,14 @@ PRACTICE THAT TARGETS THE WEAK SPOT
 • Warm-ups — breathing, tongue twisters, vocal range, and articulation
 • Read-aloud passages with word-level pronunciation scoring and a built-in
   dictionary
+• Hundreds of prompts, from interview questions to impromptu topics, so you
+  always know what to say next
 • A live filler counter that ticks up while you are still talking, so you hear
   the habit as it happens
 
 BRING YOUR OWN MATERIAL
 
-Write or paste your own scripts — a best-man speech, a stand-up set, a
+Write or paste your own scripts — a wedding toast, a stand-up set, a
 stakeholder update, an interview answer — and Big Talk scores how closely you
 delivered what you wrote, not how well you matched a generic prompt. Send a
 script straight into a warm-up or a drill.
@@ -242,27 +272,54 @@ is present.
 
 ## 5. Screenshot plan
 
-Six slides for iPhone 6.7" (1290 × 2796). App Store Connect rejects anything
-that is not an exact match for the display size it is uploaded under.
+Seven slides, shipped, at iPhone 6.5" (1242 × 2688). App Store Connect rejects
+anything that is not an exact match for the display size it is uploaded under.
+The finished files are `screenshots/final/01-…` through `07-…`, numbered in
+upload order, and the composer that builds them is
+`screenshots/compose_creative.py`.
 
-**Background colour: `#0FB3AE`.** The app's own canvas is near-black navy, so a
-dark background would swallow the device screens at thumbnail size. This is the
-brand teal (`AppColors.primary`, `#0D8488`) pushed up in saturation and
-lightness, which stays recognisably the app's colour while giving the dark
-screenshots something to sit against. Same colour on all six.
+**Treatment: graphite ground, per-slide accent.** The flat teal background in
+the original plan was abandoned — it fought the app's own dark canvas instead of
+framing it. Each slide now sits on near-black with a colour glow behind the
+device, and that colour is the one the captured screen already uses for its
+data. The set reads as one system without any slide repeating a backdrop.
 
-Headlines are two lines: a big action verb and a smaller descriptor. Both are
-short enough to sit inside the centre 70% of the canvas, which is what survives
-the crop from 9:16 down to Apple's narrower ratio.
+Headlines are Title Case sentences, not the old two-line verb/descriptor stack,
+because the benefit-led copy that tested better does not fit a single verb.
 
-| # | Verb | Descriptor | Screen to capture | Required state |
-|---|------|------------|-------------------|----------------|
-| 1 | `SCORE` | `HOW YOU ACTUALLY SOUND` | `RecordingDetailView`, Breakdown tab, scrolled to the score ring and sub-score radar | A session scoring 70-85. Not 95 (reads fake) and not 40 (reads discouraging). Every optional sub-score present, so the radar is full. |
-| 2 | `CATCH` | `FILLERS AS YOU SAY THEM` | `RecordingView` mid-recording, filler counter overlay visible | Counter showing 3-5, circular waveform active, timer around 0:35. |
-| 3 | `DRILL` | `THE WEAK SPOT IT FINDS` | `RecordingDetailView` next-step card, or `DrillSessionView` mid-drill | Next-step card naming a real weak area with its score. If using the drill screen, capture Pace Control with the live WPM band visible. |
-| 4 | `REHEARSE` | `YOUR OWN SCRIPT` | `StoryDetailView` for a story with practice history | A real script (a toast, an interview answer), 3+ linked sessions, tags populated. Not "Untitled". |
-| 5 | `SEE` | `HOW FAR YOU HAVE COME` | `BeforeAfterReplayView` | At least 8 analysed sessions with a genuine upward trend, so the delta and the four metric rows all read as improvement. |
-| 6 | `KEEP` | `EVERY WORD ON DEVICE` | `LifetimeFAQView`, privacy section, or Settings > Usage Diagnostics | The diagnostics screen is the stronger of the two — it shows the actual event log, which makes the claim concrete rather than a promise. |
+| # | Headline | Subhead | Screen |
+|---|----------|---------|--------|
+| 1 | Practice Public Speaking | Build confidence with feedback on clarity, pace & more | `RecordingDetailView` breakdown — score ring and full sub-score radar |
+| 2 | Stop Saying "Um" & "Like" | Catch filler words and speak with more confidence | Transcript with fillers marked inline |
+| 3 | Practice Speeches & Interviews | Rehearse presentations, pitches, toasts & more | `StoryDetailView` with linked practice history |
+| 4 | 430 Public Speaking Prompts | Always know what to say next | Prompt library |
+| 5 | Build Speaking Confidence Daily | Short, focused practice that adds up | Today tab |
+| 6 | Track Your Speaking Progress | See your scores improve over time | Progress charts |
+| 7 | Private AI Speech Coaching | Your voice stays on your iPhone | Settings > AI Features |
+
+**Slide 4 states a number.** `430` matches the seeded prompt count today and is
+baked into an image rather than a text field, so it goes stale silently the
+moment prompts are added or removed. Re-check it against `SpeakUp/Data/` before
+every submission, or replace it with `Hundreds of`.
+
+**Slide 7 contradicts section 6.** "AI Speech Coaching" is the exact framing the
+do-not-claim list rules out. The optional on-device LLM pass makes the word
+defensible, but the rule exists because the scoring pipeline is signal
+processing, not a model. Either re-render slide 7 as `Your Voice Never Leaves
+Your iPhone` (a one-line change in the composer's `SLIDES` table) or amend
+section 6 to permit the narrower claim. Do not ship the two documents
+disagreeing.
+
+Still missing: the live-recording slide — the filler counter ticking mid-
+sentence — which the original plan had at position 2. The simulator has no
+usable microphone, so it needs a capture on a physical device. It is the single
+best frame the app has, and worth the trip.
+
+**Check the required display size before uploading.** Apple has been moving the
+required iPhone slot to 6.9" (1320 × 2868), with 6.5" as the fallback that gets
+scaled. The composer takes its canvas from two constants, so re-exporting at
+another size is a one-line edit and a rerun — cheap enough to just do for both
+slots rather than gamble on which one Connect demands at submission.
 
 ### Capture rules for the whole set
 
@@ -270,27 +327,29 @@ the crop from 9:16 down to Apple's narrower ratio.
   dark by definition — do not mix in a light-mode simulator.
 - Clean status bar: `Simulator → Features → Status Bar`, override to 9:41, full
   bars, full battery, no carrier text.
-- No empty states, no "Untitled", no `Test 1`. Seed realistic content first.
+- No empty states, no "Untitled", no `Test 1`. Launch with `-seedScreenshotData`
+  (`SpeakUp/Debug/ScreenshotSeeder.swift`) on a fresh install — it writes twelve
+  sessions climbing 58 → 84 and one story with linked practice, which is what
+  makes the progress and story slides worth capturing at all.
+- No DEBUG-only UI in frame. Usage Diagnostics renders a "Force Lifetime" toggle
+  and trial overrides in a debug build; use `LifetimeFAQView` instead.
 - Slide 1 does the most work. If only one screenshot is retaken, retake that one.
 
 ### Building the slides
 
-The `aso-appstore-screenshots` skill turns these into finished slides, but it
-needs a Mac: `compose.py` wants the SF Pro Display Black font at
-`/Library/Fonts/SF-Pro-Display-Black.otf`, the crop step uses `sips`, and the
-enhancement pass needs the Gemini MCP server. Run it from the repo root after
-capturing the six screenshots above:
-
 ```bash
-SKILL_DIR=".claude/skills/aso-appstore-screenshots"
-python3 "$SKILL_DIR/compose.py" \
-  --bg "#0FB3AE" --verb "SCORE" --desc "HOW YOU ACTUALLY SOUND" \
-  --screenshot simulator-screenshots/01-breakdown.png \
-  --output screenshots/01-score/scaffold.png
+python3 screenshots/compose_creative.py
 ```
 
-Then follow the skill's enhance → crop → review loop for each slide. The first
-approved slide becomes the style template for the other five.
+Reads raw captures from `simulator-screenshots/`, writes finished slides to
+`screenshots/final/`. Needs a Mac: SF Pro Display Black and Medium at
+`/Library/Fonts/`, and Pillow. Headlines, subheads, accents, and source captures
+all live in the `SLIDES` table at the bottom of that file — edit copy there, not
+in an image editor.
+
+The `aso-appstore-screenshots` skill's own `compose.py` produced the earlier
+flat-background scaffolds and still works, but its device frame deliberately
+bleeds off-canvas, which is why the current composer draws its own.
 
 ### App preview video (optional, 15-30s)
 

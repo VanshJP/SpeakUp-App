@@ -181,51 +181,50 @@ struct StoryDetailView: View {
 
     // MARK: - Primary Actions grid
 
+    /// One light pill for the action you came here to take, two secondary
+    /// pills for the side doors. `PracticeToolCard` is not used here: it is a
+    /// fixed-height grid tile, and at this width it left half of itself empty.
+    ///
+    /// There is deliberately no score tile — the metrics row directly beneath
+    /// already reports best and average, and a fourth tile that only displayed
+    /// a number read as a button that did nothing.
     private var primaryActions: some View {
-        let columns = [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
-        ]
-        return LazyVGrid(columns: columns, spacing: 10) {
-            PracticeToolCard(
+        VStack(spacing: 10) {
+            GlassButton(
+                title: "Practice This Story",
                 icon: "mic.fill",
-                title: "Practice",
-                subtitle: "Record from this story",
-                color: AppColors.primary
+                style: .primary,
+                size: .large,
+                fullWidth: true
             ) {
                 guard let onStartPractice else { return }
                 Haptics.heavy()
                 onStartPractice(story)
             }
 
-            PracticeToolCard(
-                icon: "flame.fill",
-                title: "Warm-Up",
-                subtitle: "Prep your voice",
-                color: AppColors.toolWarmUp
-            ) {
-                guard let onSendToWarmUp else { return }
-                Haptics.medium()
-                onSendToWarmUp(story)
-            }
+            HStack(spacing: 10) {
+                GlassButton(
+                    title: "Warm-Up",
+                    icon: "flame.fill",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
+                    guard let onSendToWarmUp else { return }
+                    Haptics.medium()
+                    onSendToWarmUp(story)
+                }
 
-            PracticeToolCard(
-                icon: "bolt.fill",
-                title: "Drill",
-                subtitle: "Impromptu sprint",
-                color: AppColors.categoryIndigo
-            ) {
-                guard let onSendToDrill else { return }
-                Haptics.medium()
-                onSendToDrill(story)
+                GlassButton(
+                    title: "Drill",
+                    icon: "bolt.fill",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
+                    guard let onSendToDrill else { return }
+                    Haptics.medium()
+                    onSendToDrill(story)
+                }
             }
-
-            PracticeToolCard(
-                icon: "chart.line.uptrend.xyaxis",
-                title: "Score",
-                subtitle: story.bestScore > 0 ? "Best: \(story.bestScore)" : "No practice yet",
-                color: story.bestScore > 0 ? AppColors.scoreColor(for: story.bestScore) : .gray
-            ) {}
         }
     }
 

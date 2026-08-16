@@ -7,6 +7,9 @@ import SwiftData
 /// must never happen on the main thread inside a scrolling view.
 nonisolated struct PaywallProof: Sendable {
     var takes = 0
+    /// Takes that actually carry a score. Distinct from `takes`, which counts
+    /// unscored recordings too, and it is the span `gain` is measured across.
+    var scoredTakes = 0
     var best = 0
     var streak = 0
     var firstScore: Int?
@@ -22,9 +25,15 @@ nonisolated struct PaywallProof: Sendable {
     /// Points gained per take, from the user's own first-to-last movement.
     /// Nil below three takes or when the trend is flat or down — a pace claim
     /// built on two points, or on a decline, is not a claim worth making.
+    ///
+    /// Divided by `scoredTakes`, not `recentScores.count`: `gain` spans the
+    /// whole history, while `recentScores` is capped at 14 for the sparkline.
+    /// Mixing the two overstated the rate by the ratio between them — roughly
+    /// 7x for a hundred-take user — and that rate is what
+    /// `monthsToCloseOnFreeTier` puts on the paywall as a claim.
     var pointsPerTake: Double? {
-        guard recentScores.count >= 3, let gain, gain > 0 else { return nil }
-        return Double(gain) / Double(recentScores.count - 1)
+        guard scoredTakes >= 3, let gain, gain > 0 else { return nil }
+        return Double(gain) / Double(scoredTakes - 1)
     }
 
     /// How long the free tier takes to close the remaining gap, at the rate
@@ -63,6 +72,7 @@ nonisolated struct PaywallProof: Sendable {
 
             var proof = PaywallProof()
             proof.takes = recordings.count
+            proof.scoredTakes = scores.count
             proof.best = scores.max() ?? 0
             proof.streak = Date.calculateStreak(from: recordings.map(\.date))
             proof.recentScores = Array(scores.suffix(14))

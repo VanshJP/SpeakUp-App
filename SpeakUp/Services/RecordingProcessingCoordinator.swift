@@ -16,6 +16,14 @@ final class RecordingProcessingCoordinator {
     private var activeRecordingIDs: Set<UUID> = []
     private var resumeInFlight = false
 
+    /// Analyses that cleared the allowance gate but have not been charged yet.
+    ///
+    /// The gate reads persisted counters and the charge lands up to 90s later,
+    /// after transcription. Nothing serialises two different recordings, so
+    /// without this both see the same `remaining` and both go through — a user
+    /// with one analysis left who stops two recordings in a row gets two.
+    private var reservedAnalyses = 0
+
     private init() {}
 
     func isProcessing(_ recordingID: UUID) -> Bool {
@@ -73,11 +81,14 @@ final class RecordingProcessingCoordinator {
                     predicate: #Predicate { $0.analysisBlockedByAllowance == true },
                     sortBy: [SortDescriptor(\.date, order: .forward)]
                 )
-                descriptor.fetchLimit = 1
-                guard let next = (try? modelContext.fetch(descriptor))?.first else { return }
+                // Fetch a window rather than one row so a deferred recording the
+                // user is already retrying by hand is stepped over instead of
+                // ending the whole pass and stranding the backlog behind it.
+                descriptor.fetchLimit = Self.deferredResumeLimit
+                guard let next = (try? modelContext.fetch(descriptor))?
+                    .first(where: { !self.activeRecordingIDs.contains($0.id) }) else { return }
 
                 let id = next.id
-                guard !self.activeRecordingIDs.contains(id) else { return }
                 self.activeRecordingIDs.insert(id)
                 await self.process(
                     recordingID: id,
@@ -154,7 +165,12 @@ final class RecordingProcessingCoordinator {
         // Free-tier gate. Deliberately after the idempotency and media guards:
         // re-opening an already-analyzed recording must never trip it, and a
         // recording with no audio should report the missing file, not a paywall.
-        guard AllowanceGate.decision(settings: settings).isAllowed else {
+        let decision = AllowanceGate.decision(settings: settings)
+        // `remaining` is nil while entitled or inside the trial — nothing is
+        // being counted there, so nothing needs reserving.
+        let chargeable = decision.remaining != nil
+        let alreadyReserved = decision.remaining.map { $0 <= reservedAnalyses } ?? false
+        guard decision.isAllowed, !alreadyReserved else {
             recording.isProcessing = false
             recording.lastProcessingError = nil
             recording.analysisBlockedByAllowance = true
@@ -162,6 +178,11 @@ final class RecordingProcessingCoordinator {
             AnalyticsService.shared.log(.allowanceExhausted())
             return
         }
+        // Held until this call returns, which is after `consume` has persisted
+        // the charge on the success path. A failure releases it uncharged.
+        if chargeable { reservedAnalyses += 1 }
+        defer { if chargeable { reservedAnalyses -= 1 } }
+
         if recording.analysisBlockedByAllowance {
             recording.analysisBlockedByAllowance = false
         }

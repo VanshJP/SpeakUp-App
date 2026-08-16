@@ -344,3 +344,57 @@ struct FoundingOfferTests {
         #expect(!FoundingOffer.isActive(now: t0))
     }
 }
+
+/// `pointsPerTake` is the rate behind the "months to close on the free tier"
+/// line on the paywall, so the span it divides by has to match the span `gain`
+/// was measured over. It previously divided a whole-history gain by
+/// `recentScores.count`, which is capped at 14 for the sparkline.
+@MainActor
+struct PaywallProofRateTests {
+    @Test func rateUsesTheWholeScoredHistoryNotTheSparklineWindow() {
+        var proof = PaywallProof()
+        proof.scoredTakes = 100
+        proof.gain = 40
+        proof.recentScores = Array(repeating: 80, count: 14)
+
+        // 40 points across 99 takes — not across the 13 the sparkline draws,
+        // which would have claimed a rate roughly 7x too fast.
+        #expect(proof.pointsPerTake == 40.0 / 99.0)
+    }
+
+    /// Under the cap the two spans coincide, so this is the case that was
+    /// always right and has to stay right.
+    @Test func aShortHistoryIsUnaffected() {
+        var proof = PaywallProof()
+        proof.scoredTakes = 5
+        proof.gain = 8
+        proof.recentScores = [40, 44, 48, 52, 48]
+
+        #expect(proof.pointsPerTake == 2.0)
+    }
+
+    @Test func noRateFromTooFewTakesOrAFlatTrend() {
+        var proof = PaywallProof()
+        proof.scoredTakes = 2
+        proof.gain = 10
+        #expect(proof.pointsPerTake == nil)
+
+        proof.scoredTakes = 20
+        proof.gain = 0
+        #expect(proof.pointsPerTake == nil)
+
+        proof.gain = -5
+        #expect(proof.pointsPerTake == nil)
+    }
+
+    /// A slower rate must not read as a shorter wait — the direction of this
+    /// relationship is the whole argument the paywall is making.
+    @Test func aSlowerRateMeansMoreMonths() {
+        let fast = PaywallProof.monthsToClose(points: 20, pointsPerTake: 3.1, takesPerMonth: 3)
+        let slow = PaywallProof.monthsToClose(points: 20, pointsPerTake: 0.4, takesPerMonth: 3)
+
+        #expect(fast != nil)
+        #expect(slow != nil)
+        #expect(slow! > fast!)
+    }
+}

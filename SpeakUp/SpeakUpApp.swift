@@ -95,6 +95,12 @@ struct SpeakUpApp: App {
                     async let f: () = seedStoryFoldersIfNeeded()
                     _ = await (p, a, c, f)
 
+                    #if DEBUG
+                    // Runs after prompt/curriculum seeding so the seeded history
+                    // sits alongside a fully populated library.
+                    ScreenshotSeeder.seedIfRequested(context: sharedModelContainer.mainContext)
+                    #endif
+
                     // Legacy URL migration is one-shot and runs fully off the main
                     // actor so a populated Recording store never delays first frame.
                     let container = sharedModelContainer

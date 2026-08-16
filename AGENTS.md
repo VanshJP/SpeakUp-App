@@ -92,7 +92,7 @@ View (SwiftUI) → ViewModel (@MainActor @Observable) → Service (@Observable) 
 - Shares: `SharePresenter` only — do not invent a second activity sheet.
 - Widget timeline reloads: fingerprint-gate via `TodayViewModel` — no unconditional `reloadAllTimelines()`.
 - Prompt seeding: fingerprint-gated (`seededPromptFingerprint_v1`).
-- Paid features: membership lives in `FreeTierPolicy.default`, not scattered `isLifetime` checks.
+- Paid features: membership lives in `FreeTierPolicy.trial` / `.expired`, not scattered `isLifetime` checks.
 
 ---
 

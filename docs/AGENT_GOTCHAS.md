@@ -85,8 +85,14 @@ Resolve existence **once** into `@State` — never `FileManager.fileExists` insi
 
 - Consume allowance on record tap or failed transcribe
 - Auto-present paywall before first completed result unless `userInitiated: true`
-- Gate `progressCards` by default (`FreeTierPolicy.default` omits it — `MonetizationTests` pins this)
-- Scatter `if EntitlementStore.shared.isLifetime` — change membership in `FreeTierPolicy.default.gatedFeatures`
+- Gate `progressCards` in either policy (`.trial` / `.expired` both omit it — `MonetizationTests` pins this)
+- Scatter `if EntitlementStore.shared.isLifetime` — change membership in `FreeTierPolicy.trial` / `.expired`
+
+### Gate and charge are ~90s apart — reserve in between
+
+`AllowanceGate.decision` reads persisted counters; `AllowanceGate.consume` writes them only after transcription succeeds. Nothing serialises two different recordings, so two concurrent `process` runs both read the same `remaining` and both pass. `RecordingProcessingCoordinator.reservedAnalyses` holds a claim across that window and the gate subtracts it.
+
+Any new site that gates on `decision` and charges after an `await` needs the same reservation, or the free allowance leaks. Silent — it looks like a generous free tier, not a bug.
 
 Full policy: [features/monetization.md](./features/monetization.md).
 

@@ -22,7 +22,7 @@ If the row enables a paid capability (e.g. iCloud), call `PaywallCoordinator.all
 ## Add or change a paid gate
 
 1. Decide if this is a new `PaidFeature` case or reuse an existing one (`Monetization.swift`).
-2. Put membership in `FreeTierPolicy.default.gatedFeatures` — **one place**, not call-site `if isLifetime`.
+2. Put membership in `FreeTierPolicy.trial` / `.expired` `gatedFeatures` — **one place**, not call-site `if isLifetime`.
 3. Choose API ([gotchas §5](./AGENT_GOTCHAS.md)):
    - Action that must proceed-or-paywall → `PaywallCoordinator.allow(_:trigger:)`
    - Explicit Unlock / locked cell → `present(..., userInitiated: true)`

@@ -71,35 +71,42 @@ def fit_font(text, max_w, size_max, size_min):
     return ImageFont.truetype(FONT_PATH, size_min)
 
 
-def draw_centered(draw, y, text, font, max_w=None):
+def draw_centered(draw, y, text, font, max_w=None, fill="white"):
     lines = word_wrap(draw, text, font, max_w) if max_w else [text]
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         h = bbox[3] - bbox[1]
         # Use anchor="mt" (middle-top) for pixel-perfect horizontal centering
         # Adjust y by bbox[1] offset so text top aligns with intended position
-        draw.text((CANVAS_W // 2, y - bbox[1]), line, fill="white", font=font, anchor="mt")
+        draw.text((CANVAS_W // 2, y - bbox[1]), line, fill=fill, font=font, anchor="mt")
         y += h + DESC_LINE_GAP
     return y
 
 
-def compose(bg_hex, verb, desc, screenshot_path, output_path):
+def compose(
+    bg_hex,
+    verb,
+    desc,
+    screenshot_path,
+    output_path,
+    fg="#FFFFFF",
+    sub_fg=None,
+    upper=True,
+    verb_size=None,
+    desc_size=DESC_SIZE,
+):
     bg = hex_to_rgb(bg_hex)
+    sub_fg = sub_fg or fg
+    case = (lambda s: s.upper()) if upper else (lambda s: s)
 
     # ── 1. Canvas ───────────────────────────────────────────────────
     canvas = Image.new("RGBA", (CANVAS_W, CANVAS_H), (*bg, 255))
     draw = ImageDraw.Draw(canvas)
 
     # ── 2. Measure text, then center between top of canvas & device ─
-    verb_font = fit_font(verb.upper(), MAX_VERB_W, VERB_SIZE_MAX, VERB_SIZE_MIN)
-    desc_font = ImageFont.truetype(FONT_PATH, DESC_SIZE)
-
-    # Measure total text block height (dry run at y=0)
-    dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    m_y = 0
-    m_y = draw_centered(dummy, m_y, verb.upper(), verb_font)
-    m_y += VERB_DESC_GAP
-    text_height = draw_centered(dummy, m_y, desc.upper(), desc_font, max_w=MAX_TEXT_W)
+    verb_max = verb_size or VERB_SIZE_MAX
+    verb_font = fit_font(case(verb), MAX_VERB_W, verb_max, min(VERB_SIZE_MIN, verb_max))
+    desc_font = ImageFont.truetype(FONT_PATH, desc_size)
 
     # Device at fixed Y; text starts at fixed position
     device_y = DEVICE_Y
@@ -107,9 +114,9 @@ def compose(bg_hex, verb, desc, screenshot_path, output_path):
 
     # Draw text at centered position
     y = text_top
-    y = draw_centered(draw, y, verb.upper(), verb_font)
+    y = draw_centered(draw, y, case(verb), verb_font, max_w=MAX_VERB_W, fill=fg)
     y += VERB_DESC_GAP
-    draw_centered(draw, y, desc.upper(), desc_font, max_w=MAX_TEXT_W)
+    draw_centered(draw, y, case(desc), desc_font, max_w=MAX_TEXT_W, fill=sub_fg)
     device_x = (CANVAS_W - DEVICE_W) // 2
     screen_x = device_x + BEZEL
     screen_y = device_y + BEZEL
@@ -166,9 +173,25 @@ def main():
     p.add_argument("--desc", required=True, help="Benefit descriptor (TRADING CARD PRICES)")
     p.add_argument("--screenshot", required=True, help="Simulator screenshot path")
     p.add_argument("--output", required=True, help="Output file path")
+    p.add_argument("--fg", default="#FFFFFF", help="Headline colour")
+    p.add_argument("--sub-fg", default=None, help="Descriptor colour (defaults to --fg)")
+    p.add_argument("--title-case", action="store_true", help="Keep text as written instead of uppercasing")
+    p.add_argument("--verb-size", type=int, default=None, help="Max headline point size")
+    p.add_argument("--desc-size", type=int, default=DESC_SIZE, help="Descriptor point size")
     args = p.parse_args()
 
-    compose(args.bg, args.verb, args.desc, args.screenshot, args.output)
+    compose(
+        args.bg,
+        args.verb,
+        args.desc,
+        args.screenshot,
+        args.output,
+        fg=args.fg,
+        sub_fg=args.sub_fg,
+        upper=not args.title_case,
+        verb_size=args.verb_size,
+        desc_size=args.desc_size,
+    )
 
 
 if __name__ == "__main__":

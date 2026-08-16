@@ -37,7 +37,24 @@
       "Bash(sort -u -k2)",
       "Bash(echo \"clean: $?\")",
       "Bash(echo \"exit: $?\")",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(rg -n \"TODO|FIXME|not implemented|placeholder\" SpeakUp/Services/PurchaseService.swift SpeakUp/Services/EntitlementStore.swift SpeakUp/Services/AllowanceGate.swift SpeakUp/Models/Monetization.swift SpeakUp/Views/Paywall/*.swift)",
+      "Bash(rg -rn \"SupportLinks\" --type swift -l)",
+      "Bash(rg -n -B6 \"\\\\.pick\\\\\\(\\\\s*$|\\\\.pick\\\\\\(from:\" --type swift SpeakUp/)",
+      "Bash(rg -rn \"onOpenURL|scheme|host ==|url.host\" SpeakUp/Views/ContentView.swift)",
+      "Bash(cat)",
+      "Bash(chmod +x /private/tmp/claude-501/-Users-vanshpatel-SpeakUp/36408ba2-82d2-4aa8-8561-18d30f78fcd7/scratchpad/tap.sh)",
+      "Bash(chmod +x /private/tmp/claude-501/-Users-vanshpatel-SpeakUp/36408ba2-82d2-4aa8-8561-18d30f78fcd7/scratchpad/shot.sh)",
+      "Bash(./tap.sh 274 473)",
+      "Bash(./shot.sh 02-library)",
+      "Bash(/usr/bin/python3 -c \"import Quartz; print\\('ok'\\)\")",
+      "Bash(xcrun -sdk macosx swiftc -O click.swift -o click)",
+      "Bash(./click 274 473)",
+      "Bash(./click 200 820)",
+      "Bash(./shot.sh 04-history)",
+      "Bash(screencapture -x -R 732,38,456,972 win.png)",
+      "Bash(sips -g pixelWidth -g pixelHeight win.png)",
+      "Skill(keybindings-help)"
     ]
   }
 }
