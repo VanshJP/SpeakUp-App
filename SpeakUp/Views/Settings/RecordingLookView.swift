@@ -82,7 +82,6 @@ struct RecordingLookView: View {
                     } thumbnail: { style in
                         RecordButton(isRecording: false, style: style) {}
                             .scaleEffect(0.62)
-                            .allowsHitTesting(false)
                     }
 
                     group(
@@ -237,7 +236,15 @@ struct RecordingLookView: View {
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                                     .fill(isSelected ? AppColors.glassTintPrimary : AppColors.surfaceLift)
 
+                                // Thumbnails are scaled-down full-size views, so
+                                // their layout stays big (the backdrop is 320pt,
+                                // the dial 150pt) even though they draw small.
+                                // Clamped and made inert here or the last tile in
+                                // a grid — drawn on top — swallows taps meant for
+                                // the row above it.
                                 thumbnail(option)
+                                    .frame(width: 76, height: 76)
+                                    .allowsHitTesting(false)
                             }
                             .frame(width: 76, height: 76)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -256,6 +263,8 @@ struct RecordingLookView: View {
                                 .minimumScaleFactor(0.8)
                                 .frame(maxWidth: 84)
                         }
+                        // Pins the tap target to this tile's own bounds.
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(option[keyPath: name])
