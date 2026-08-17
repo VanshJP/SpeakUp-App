@@ -2,14 +2,15 @@ import SwiftUI
 
 // MARK: - Countdown Backdrop
 
-/// Canvas behind the prepare countdown only. Recording, drills-in-progress,
-/// and the rest of the app stay on `AppBackground` — this enum is not a
-/// second theme system.
+/// Canvas behind a practice session — the prepare countdown and the recording
+/// screen itself, so the look the user picked does not vanish the moment they
+/// start talking. The rest of the app stays on `AppBackground`; this enum is
+/// not a second theme system.
 ///
 /// `nonisolated` so settings tests and any off-main decode of the stored Int
 /// do not hop the MainActor. Raw values are the SwiftData payload; do not
 /// reorder existing cases.
-nonisolated enum CountdownBackdrop: Int, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Sendable {
     case base = 0
     case aurora = 1
     case hyperspace = 2
@@ -33,10 +34,14 @@ nonisolated enum CountdownBackdrop: Int, Codable, CaseIterable, Identifiable, Se
 
 // MARK: - View
 
-/// Full-bleed countdown canvas. Driven from a single `TimelineView` so every
+/// Full-bleed session canvas. Driven from a single `TimelineView` so every
 /// style shares one clock. `animated: false` freezes a frame for thumbnails.
-struct CountdownBackdropView: View {
-    var backdrop: CountdownBackdrop = .base
+///
+/// Runs at 30 fps for the whole take, alongside the 60 fps waveform. If that
+/// ever shows up in energy traces, drop this to 15 fps while recording rather
+/// than freezing it — a still backdrop reads as a rendering bug.
+struct RecordingBackdropView: View {
+    var backdrop: RecordingBackdrop = .base
     var animated: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

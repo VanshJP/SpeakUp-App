@@ -1,91 +1,97 @@
 import SwiftUI
 
-/// Photo-filter style picker for the recording screen. One live preview on top,
-/// a strip of thumbnails below, instant swap on tap.
+/// Recording Look picker: one live preview of the session on top, every option
+/// laid out in grids underneath.
+///
+/// It used to be four tabbed sections, each a horizontal filter strip, and the
+/// preview changed meaning depending on which tab you were in — sometimes a
+/// countdown, sometimes a recording. With twenty options across four groups,
+/// most of them sat off-screen and the preview never said which screen you were
+/// looking at. Now nothing hides behind a swipe, and the preview shows both
+/// halves of a real session at once, on the backdrop you picked.
 ///
 /// The preview is the real components — `CircularWaveformView`, `RecordButton`,
-/// `CountdownDial`, `CountdownBackdropView` — not stand-ins, so what is picked
-/// here is what shows up. Canvas choices apply only to the prepare countdown.
+/// `CountdownDial`, `RecordingBackdropView` — not stand-ins.
 struct RecordingLookView: View {
     @Bindable var viewModel: SettingsViewModel
 
-    @State private var section: Section = .waveform
     @State private var showingPreview = false
-
-    nonisolated enum Section: Int, Hashable, Identifiable, CaseIterable {
-        case waveform, button, countdown, canvas
-
-        var id: Int { rawValue }
-
-        var title: String {
-            switch self {
-            case .waveform: return "Waveform"
-            case .button: return "Button"
-            case .countdown: return "Countdown"
-            case .canvas: return "Canvas"
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .waveform: return "waveform"
-            case .button: return "record.circle"
-            case .countdown: return "timer"
-            case .canvas: return "sparkles"
-            }
-        }
-
-        var caption: String {
-            switch self {
-            case .waveform: return "The ring that reacts to your voice while you record."
-            case .button: return "The button you press to start and stop a take."
-            case .countdown: return "The dial on the prepare screen before recording starts."
-            case .canvas: return "The sky behind the prepare countdown. Recording itself stays navy."
-            }
-        }
-    }
 
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
 
             PageScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    preview
-
-                    SectionPicker(
-                        sections: Section.allCases,
-                        selection: $section,
-                        label: { $0.title },
-                        icon: { $0.icon },
-                        style: .compact,
-                        layout: .scrollable
-                    )
-                    .padding(.horizontal, 20)
-
-                    strip
-
-                    Text(section.caption)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                VStack(spacing: 28) {
+                    hero
 
                     GlassButton(
-                        title: "Preview",
+                        title: "Play Preview",
                         icon: "play.fill",
                         style: .primary,
                         size: .medium,
                         fullWidth: true
                     ) {
-                        Haptics.medium()
-                        showingPreview = true
+                        openPreview()
                     }
-                    .accessibilityHint("Opens a full-screen preview. Stop is at the bottom centre.")
+                    .accessibilityHint("Plays a full-screen countdown and recording. The record button stops it.")
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
+
+                    group(
+                        title: "Background",
+                        caption: "Behind the countdown and the whole recording.",
+                        options: RecordingBackdrop.allCases,
+                        selected: viewModel.recordingBackdrop,
+                        name: \.displayName
+                    ) { backdrop in
+                        viewModel.recordingBackdrop = backdrop
+                    } thumbnail: { backdrop in
+                        RecordingBackdropView(backdrop: backdrop, animated: false)
+                            .frame(width: 320, height: 320)
+                            .scaleEffect(0.25)
+                    }
+
+                    group(
+                        title: "Waveform",
+                        caption: "The ring that reacts to your voice while you record.",
+                        options: WaveformStyle.allCases,
+                        selected: viewModel.waveformStyle,
+                        name: \.displayName
+                    ) { style in
+                        viewModel.waveformStyle = style
+                    } thumbnail: { style in
+                        CircularWaveformView(style: style, canvasSize: 76, simulated: true)
+                    }
+
+                    group(
+                        title: "Record Button",
+                        caption: "The button you press to start and stop a take.",
+                        options: RecordButtonStyle.allCases,
+                        selected: viewModel.recordButtonStyle,
+                        name: \.displayName
+                    ) { style in
+                        viewModel.recordButtonStyle = style
+                    } thumbnail: { style in
+                        RecordButton(isRecording: false, style: style) {}
+                            .scaleEffect(0.62)
+                            .allowsHitTesting(false)
+                    }
+
+                    group(
+                        title: "Countdown",
+                        caption: "The dial on the prepare screen before recording starts.",
+                        options: CountdownLook.allCases,
+                        selected: viewModel.countdownLook,
+                        name: \.displayName
+                    ) { look in
+                        viewModel.countdownLook = look
+                    } thumbnail: { look in
+                        CountdownDial(look: look, progress: 0.65, number: 7)
+                            .scaleEffect(0.5)
+                    }
                 }
                 .padding(.top, 12)
+                .padding(.bottom, 32)
             }
         }
         .navigationTitle("Recording Look")
@@ -93,14 +99,13 @@ struct RecordingLookView: View {
         .onChange(of: viewModel.waveformStyle) { _, _ in persist() }
         .onChange(of: viewModel.recordButtonStyle) { _, _ in persist() }
         .onChange(of: viewModel.countdownLook) { _, _ in persist() }
-        .onChange(of: viewModel.countdownBackdrop) { _, _ in persist() }
+        .onChange(of: viewModel.recordingBackdrop) { _, _ in persist() }
         .fullScreenCover(isPresented: $showingPreview) {
             RecordingLookPreview(
-                mode: previewMode,
                 waveformStyle: viewModel.waveformStyle,
                 buttonStyle: viewModel.recordButtonStyle,
                 countdownLook: viewModel.countdownLook,
-                backdrop: viewModel.countdownBackdrop,
+                backdrop: viewModel.recordingBackdrop,
                 countdownDuration: viewModel.countdownDuration.rawValue,
                 countdownStyle: viewModel.countdownStyle
             )
@@ -114,37 +119,22 @@ struct RecordingLookView: View {
         Task { await viewModel.saveSettings() }
     }
 
-    private var previewMode: RecordingLookPreview.Mode {
-        switch section {
-        case .waveform, .button: return .recording
-        case .countdown, .canvas: return .countdown
-        }
+    private func openPreview() {
+        Haptics.medium()
+        showingPreview = true
     }
 
-    // MARK: - Preview
+    // MARK: - Hero
 
-    private var preview: some View {
+    /// Both halves of a session in one card — the countdown dial and the
+    /// recording ring, on the chosen backdrop — so every pick below is visible
+    /// without switching modes.
+    private var hero: some View {
         ZStack {
-            previewBackground
+            RecordingBackdropView(backdrop: viewModel.recordingBackdrop)
 
-            switch section {
-            case .waveform, .button:
-                CircularWaveformView(style: viewModel.waveformStyle, simulated: true)
-                    // Fresh subtree per style so the new one animates in.
-                    .id(viewModel.waveformStyle)
-
-                RecordButton(isRecording: true, style: viewModel.recordButtonStyle) {
-                    Haptics.medium()
-                    showingPreview = true
-                }
-                .accessibilityLabel("Preview look")
-                .accessibilityHint("Opens a full-screen preview. Stop is at the bottom centre.")
-
-            case .countdown, .canvas:
-                Button {
-                    Haptics.medium()
-                    showingPreview = true
-                } label: {
+            VStack(spacing: 18) {
+                heroPiece("Countdown") {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let remaining = 10 - Int(context.date.timeIntervalSinceReferenceDate.rounded(.down)) % 10
                         CountdownDial(
@@ -153,84 +143,81 @@ struct RecordingLookView: View {
                             number: remaining,
                             isPulsing: true
                         )
+                        .scaleEffect(0.78)
+                        .frame(width: 118, height: 118)
                     }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Preview countdown")
-                .accessibilityHint("Opens a full-screen preview. Stop is at the bottom centre.")
+
+                heroPiece("Recording") {
+                    ZStack {
+                        CircularWaveformView(style: viewModel.waveformStyle, canvasSize: 130, simulated: true)
+                            // Fresh subtree per style so the new one animates in.
+                            .id(viewModel.waveformStyle)
+
+                        RecordButton(isRecording: true, style: viewModel.recordButtonStyle) {}
+                            .scaleEffect(130.0 / 220.0)
+                    }
+                }
             }
+            .allowsHitTesting(false)
         }
-        .frame(height: 290)
+        .frame(height: 320)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(AppColors.cardStroke, lineWidth: 1)
         }
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .onTapGesture { openPreview() }
         .padding(.horizontal, 20)
-        .animation(AppMotion.settle, value: section)
-        .animation(AppMotion.settle, value: viewModel.countdownBackdrop)
+        .animation(AppMotion.settle, value: viewModel.recordingBackdrop)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Preview of your recording look")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Plays a full-screen countdown and recording. The record button stops it.")
     }
 
-    @ViewBuilder
-    private var previewBackground: some View {
-        switch section {
-        case .waveform, .button:
-            AppBackground(style: .recording)
-        case .countdown, .canvas:
-            CountdownBackdropView(backdrop: viewModel.countdownBackdrop)
+    private func heroPiece<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 6) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+                .tracking(1.0)
+
+            content()
         }
     }
 
-    // MARK: - Filter Strip
+    // MARK: - Option Groups
 
-    @ViewBuilder
-    private var strip: some View {
-        switch section {
-        case .waveform:
-            row(WaveformStyle.allCases, selected: viewModel.waveformStyle, name: \.displayName) { style in
-                viewModel.waveformStyle = style
-            } thumbnail: { style in
-                CircularWaveformView(style: style, canvasSize: 84, simulated: true)
-            }
-
-        case .button:
-            row(RecordButtonStyle.allCases, selected: viewModel.recordButtonStyle, name: \.displayName) { style in
-                viewModel.recordButtonStyle = style
-            } thumbnail: { style in
-                RecordButton(isRecording: false, style: style) {}
-                    .scaleEffect(0.62)
-                    .allowsHitTesting(false)
-            }
-
-        case .countdown:
-            row(CountdownLook.allCases, selected: viewModel.countdownLook, name: \.displayName) { look in
-                viewModel.countdownLook = look
-            } thumbnail: { look in
-                CountdownDial(look: look, progress: 0.65, number: 7)
-                    .scaleEffect(0.5)
-            }
-
-        case .canvas:
-            row(CountdownBackdrop.allCases, selected: viewModel.countdownBackdrop, name: \.displayName) { backdrop in
-                viewModel.countdownBackdrop = backdrop
-            } thumbnail: { backdrop in
-                CountdownBackdropView(backdrop: backdrop, animated: false)
-                    .frame(width: 400, height: 400)
-                    .scaleEffect(0.24)
-                    .frame(width: 96, height: 96)
-            }
-        }
-    }
-
-    private func row<Option: Identifiable & Equatable, Thumb: View>(
-        _ options: [Option],
+    private func group<Option: Identifiable & Equatable, Thumb: View>(
+        title: String,
+        caption: String,
+        options: [Option],
         selected: Option,
         name: KeyPath<Option, String>,
         select: @escaping (Option) -> Void,
         @ViewBuilder thumbnail: @escaping (Option) -> Thumb
     ) -> some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Adaptive, not a fixed column count: the tiles are a hard 76pt so
+            // an oversized thumbnail (the backdrop renders at 320pt and gets
+            // clipped) can't stretch the grid.
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 76), spacing: 12)],
+                spacing: 14
+            ) {
                 ForEach(options) { option in
                     let isSelected = option == selected
 
@@ -244,7 +231,7 @@ struct RecordingLookView: View {
 
                                 thumbnail(option)
                             }
-                            .frame(width: 96, height: 96)
+                            .frame(width: 76, height: 76)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -255,8 +242,11 @@ struct RecordingLookView: View {
                             }
 
                             Text(option[keyPath: name])
-                                .font(.caption.weight(isSelected ? .semibold : .regular))
+                                .font(.caption2.weight(isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? AppColors.primary : .secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .frame(maxWidth: 84)
                         }
                     }
                     .buttonStyle(.plain)
@@ -264,9 +254,7 @@ struct RecordingLookView: View {
                     .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 2)
         }
-        .scrollIndicators(.hidden)
+        .padding(.horizontal, 20)
     }
 }

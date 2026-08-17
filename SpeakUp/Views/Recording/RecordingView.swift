@@ -245,8 +245,13 @@ struct RecordingView: View {
 
     // MARK: - Audio Background
 
+    /// Same canvas the prepare countdown just showed, so the session doesn't
+    /// swap backgrounds under the user the second recording starts. `.base`
+    /// resolves to `AppBackground(style: .recording)`, the old look.
     private var audioBackground: some View {
-        AppBackground(style: .recording)
+        RecordingBackdropView(
+            backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
+        )
     }
 
     // MARK: - Top Bar

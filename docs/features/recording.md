@@ -14,7 +14,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 | Live fillers | `SpeakUp/Services/LiveTranscriptionService.swift` |
 | Coaching audio/haptics | `HapticCoachingService`, `ChirpPlayer` |
 | Waveform gen | `AudioWaveformGenerator` |
-| Cosmetic looks | `CircularWaveformView` (`RecordingView.swift`), `RecordButton`, `CountdownDial` (`CountdownOverlayView.swift`), `CountdownBackdropView` + `WaveformStyle` / `RecordButtonStyle` / `CountdownLook` / `CountdownBackdrop` (`UserSettings.swift` + `CountdownBackdrop.swift`); all picked in Settings → Recording Look (`RecordingLookView`). Full-screen try-on is `RecordingLookPreview` — stop is the record button at the bottom centre. |
+| Cosmetic looks | `CircularWaveformView` (`RecordingView.swift`), `RecordButton`, `CountdownDial` (`CountdownOverlayView.swift`), `RecordingBackdropView` + `WaveformStyle` / `RecordButtonStyle` / `CountdownLook` / `RecordingBackdrop` (`UserSettings.swift` + `RecordingBackdrop.swift`); all picked in Settings → Recording Look (`RecordingLookView`). Full-screen try-on is `RecordingLookPreview` — it plays countdown then recording, and the record button stops it. |
 | Model | `SpeakUp/Models/Recording.swift`, `SpeechFramework.swift`, `RecordingGroup.swift` |
 
 ## Flow
@@ -30,7 +30,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 - High-frequency audio levels must not re-diff the whole screen — pass snapshots into POD subviews (`RecordButtonWaveformStack` pattern).
 - Look settings (`waveformStyle`, `recordButtonStyle`, `countdownLook`, `countdownBackdrop`) are read at the call site and passed in as plain values — the components never query settings themselves, so the settings preview can render any style. Wired in recording + drills; onboarding stays on defaults.
 - `CountdownLook` is orthogonal to `CountdownStyle` (dial shape vs. count up/down).
-- `CountdownBackdrop` is orthogonal to both, and is **prepare-screen only**. Do not paint `RecordingView` (or any other screen) with it.
+- `RecordingBackdrop` is orthogonal to both and paints the **whole session** — prepare countdown (`CountdownOverlayView`), `RecordingView`, and `DrillSessionView`. `.base` resolves to `AppBackground(style: .recording)`, so the default look is unchanged. Do not paint any screen outside a session with it.
 - Deep-link `record` clears prior prompt/story/goal context.
 - Allowance is **not** consumed at capture time — only after successful analysis (`AllowanceGate.consume`).
 

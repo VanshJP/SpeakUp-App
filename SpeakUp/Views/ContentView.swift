@@ -56,8 +56,8 @@ struct ContentView: View {
         CountdownLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
     }
 
-    private var countdownBackdrop: CountdownBackdrop {
-        CountdownBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
+    private var countdownBackdrop: RecordingBackdrop {
+        RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
     }
 
     private var timerEndBehavior: TimerEndBehavior {

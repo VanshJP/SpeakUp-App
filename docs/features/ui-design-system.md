@@ -17,7 +17,7 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 
 ## Hard rules
 
-1. Every screen: `.appBackground(...)`. Sheets / detail: prefer `.subtle`. Recording session: `.recording`. Exception: the prepare countdown (`CountdownOverlayView`) uses `CountdownBackdropView` — Base is `AppBackground.recording`; the other canvases stay on that page only.
+1. Every screen: `.appBackground(...)`. Sheets / detail: prefer `.subtle`. Recording session: `RecordingBackdropView` — the user-picked canvas, shared by the prepare countdown and `RecordingView`, where Base is `AppBackground(style: .recording)`. Those canvases stay inside a session; nothing else in the app uses them.
 2. Cards: `.glassCard` / `GlassCard` — `ultraThinMaterial` + `surfaceLift` + `cardStroke`. No opaque fills.
 3. Colors only from `AppColors`. Score ramp (`scoreColor(for:)`) ≠ semantic success/warning.
 4. Buttons: `GlassButton` / `GlassIconButton` (styles: primary / secondary / outline / ghost / danger).

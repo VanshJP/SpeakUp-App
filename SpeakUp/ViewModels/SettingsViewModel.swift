@@ -54,7 +54,7 @@ class SettingsViewModel {
     var waveformStyle: WaveformStyle = .rings
     var recordButtonStyle: RecordButtonStyle = .classic
     var countdownLook: CountdownLook = .ring
-    var countdownBackdrop: CountdownBackdrop = .base
+    var recordingBackdrop: RecordingBackdrop = .base
 
     // Local state - Sound Pack
     var soundPack: SoundPack = .soft
@@ -228,7 +228,7 @@ class SettingsViewModel {
         waveformStyle = WaveformStyle(rawValue: settings.waveformStyle) ?? .rings
         recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
         countdownLook = CountdownLook(rawValue: settings.countdownLook) ?? .ring
-        countdownBackdrop = CountdownBackdrop(rawValue: settings.countdownBackdrop) ?? .base
+        recordingBackdrop = RecordingBackdrop(rawValue: settings.countdownBackdrop) ?? .base
 
         // Sound pack
         soundPack = SoundPack(rawValue: settings.soundPack) ?? .soft
@@ -305,7 +305,7 @@ class SettingsViewModel {
         settings.waveformStyle = waveformStyle.rawValue
         settings.recordButtonStyle = recordButtonStyle.rawValue
         settings.countdownLook = countdownLook.rawValue
-        settings.countdownBackdrop = countdownBackdrop.rawValue
+        settings.countdownBackdrop = recordingBackdrop.rawValue
 
         // Sound pack
         settings.soundPack = soundPack.rawValue

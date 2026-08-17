@@ -1,57 +1,37 @@
 import Combine
 import SwiftUI
 
-/// Full-screen Recording Look preview. The picker card is a teaser; this is
-/// the page the user will actually stand in. Stop lives at the bottom centre
-/// and is the only way out — that is the control they will hunt for on the
-/// real recording screen, so it has to work here.
+/// Full-screen try-on for the Recording Look picker. It plays one session in
+/// order — prepare countdown, then recording — on the chosen backdrop, because
+/// that is the sequence the user actually stands in. Splitting it into a
+/// "countdown preview" and a separate "recording preview" made one picker feel
+/// like two unrelated screens.
+///
+/// The record button is the way out, in both phases, exactly where it sits on
+/// the real screen.
 struct RecordingLookPreview: View {
-    enum Mode {
-        case recording
-        case countdown
-    }
-
-    let mode: Mode
     let waveformStyle: WaveformStyle
     let buttonStyle: RecordButtonStyle
     let countdownLook: CountdownLook
-    let backdrop: CountdownBackdrop
+    let backdrop: RecordingBackdrop
     let countdownDuration: Int
     let countdownStyle: CountdownStyle
 
     @Environment(\.dismiss) private var dismiss
     @State private var elapsedSeconds = 0
+    @State private var isRecording = false
     @State private var isPulsing = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    private var totalSeconds: Int { max(1, countdownDuration) }
+    /// Sitting through a real 15 s countdown to look at a dial is a waste. Five
+    /// seconds reads the style, and a tap skips ahead like the real screen's
+    /// Start Now.
+    private var totalSeconds: Int { min(max(1, countdownDuration), 5) }
 
     var body: some View {
         ZStack {
-            switch mode {
-            case .recording:
-                recordingCanvas
-            case .countdown:
-                countdownCanvas
-            }
-        }
-        .ignoresSafeArea()
-        .onReceive(timer) { _ in
-            guard mode == .countdown else { return }
-            elapsedSeconds += 1
-            if elapsedSeconds > totalSeconds {
-                elapsedSeconds = 0
-            }
-        }
-        .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
-    }
-
-    // MARK: - Recording mock
-
-    private var recordingCanvas: some View {
-        ZStack {
-            AppBackground(style: .recording)
+            RecordingBackdropView(backdrop: backdrop)
 
             VStack(spacing: 0) {
                 previewBadge
@@ -59,68 +39,92 @@ struct RecordingLookPreview: View {
 
                 Spacer()
 
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let elapsed = Int(context.date.timeIntervalSinceReferenceDate.rounded(.down)) % 60
-                    let remaining = TimeInterval(60 - elapsed)
-                    TimerView(
-                        remainingTime: remaining,
-                        totalTime: 60,
-                        progress: remaining / 60,
-                        color: AppColors.recording,
-                        isRecording: true,
-                        timerLabel: "remaining"
-                    )
+                if isRecording {
+                    recordingPhase
+                } else {
+                    countdownPhase
                 }
 
                 Spacer()
 
-                stopControl
+                controls
             }
-            .padding()
+            .padding(.horizontal, 20)
+        }
+        .ignoresSafeArea()
+        .animation(AppMotion.settle, value: isRecording)
+        .onReceive(timer) { _ in
+            guard !isRecording else { return }
+            elapsedSeconds += 1
+            if elapsedSeconds >= totalSeconds {
+                startRecordingPhase()
+            }
+        }
+        .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
+    }
+
+    // MARK: - Phases
+
+    private var countdownPhase: some View {
+        VStack(spacing: 20) {
+            CountdownDial(
+                look: countdownLook,
+                progress: progress,
+                number: displayNumber,
+                isPulsing: isPulsing
+            )
+
+            phaseLabel("Getting ready")
         }
     }
 
-    // MARK: - Countdown mock
-
-    private var countdownCanvas: some View {
-        ZStack {
-            CountdownBackdropView(backdrop: backdrop)
-
-            VStack(spacing: 20) {
-                previewBadge
-                    .padding(.top, 56)
-
-                CountdownDial(
-                    look: countdownLook,
-                    progress: progress,
-                    number: displayNumber,
-                    isPulsing: isPulsing
+    private var recordingPhase: some View {
+        VStack(spacing: 20) {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let elapsed = Int(context.date.timeIntervalSinceReferenceDate.rounded(.down)) % 60
+                let remaining = TimeInterval(60 - elapsed)
+                TimerView(
+                    remainingTime: remaining,
+                    totalTime: 60,
+                    progress: remaining / 60,
+                    color: AppColors.recording,
+                    isRecording: true,
+                    timerLabel: "remaining"
                 )
-                .padding(.top, 12)
-
-                Spacer()
-
-                stopControl
             }
+
+            phaseLabel("Recording")
         }
     }
 
-    // MARK: - Stop (bottom middle)
+    private func phaseLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.55))
+            .textCase(.uppercase)
+            .tracking(1.2)
+    }
 
-    private var stopControl: some View {
+    // MARK: - Controls
+
+    private var controls: some View {
         VStack(spacing: 16) {
-            if mode == .recording {
-                ZStack {
+            ZStack {
+                if isRecording {
                     CircularWaveformView(style: waveformStyle, simulated: true)
-                    RecordButton(isRecording: true, style: buttonStyle, onTap: stop)
-                        .accessibilityLabel("Stop preview")
                 }
-            } else {
-                RecordButton(isRecording: true, style: buttonStyle, onTap: stop)
-                    .accessibilityLabel("Stop preview")
+
+                RecordButton(isRecording: true, style: buttonStyle) {
+                    if isRecording {
+                        exitPreview()
+                    } else {
+                        startRecordingPhase()
+                    }
+                }
+                .accessibilityLabel(isRecording ? "Stop preview" : "Skip to recording")
             }
 
-            Text("Tap to stop")
+            Text(isRecording ? "Tap to stop" : "Tap to skip ahead")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .padding(.horizontal, 16)
@@ -143,10 +147,20 @@ struct RecordingLookPreview: View {
         )
     }
 
-    private func stop() {
+    // MARK: - Actions
+
+    private func startRecordingPhase() {
+        guard !isRecording else { return }
+        Haptics.success()
+        isRecording = true
+    }
+
+    private func exitPreview() {
         Haptics.heavy()
         dismiss()
     }
+
+    // MARK: - Countdown maths
 
     private var displayNumber: Int {
         switch countdownStyle {
