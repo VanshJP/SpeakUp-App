@@ -258,8 +258,13 @@ struct RecordingView: View {
 
     // MARK: - Audio Background
 
+    /// Same canvas the prepare countdown just showed, so the session doesn't
+    /// swap backgrounds under the user the second recording starts. `.base`
+    /// resolves to `AppBackground(style: .recording)`, the old look.
     private var audioBackground: some View {
-        AppBackground(style: .recording)
+        RecordingBackdropView(
+            backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
+        )
     }
 
     // MARK: - Top Bar
@@ -551,21 +556,30 @@ struct CircularWaveformView: View {
     private var scale: CGFloat { canvasSize / 220 }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
-            Canvas { graphics, size in
-                let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let time = context.date.timeIntervalSinceReferenceDate
-                let level = simulated
-                    ? 0.45 + 0.28 * CGFloat(sin(time * 1.6))
-                    : smoothedLevel
-                draw(in: &graphics, center: center, time: time, level: level)
+        // Off takes no frame at all, so the record button doesn't sit in the
+        // middle of an invisible 220pt hole — and no 60 fps clock runs for a
+        // canvas with nothing on it.
+        if style == .off {
+            EmptyView()
+        } else {
+            // Thumbnail-sized instances run at half rate — the picker shows six
+            // of these at once, and nobody reads 60 fps off a 76pt swatch.
+            TimelineView(.animation(minimumInterval: canvasSize < 120 ? 1.0 / 30.0 : 1.0 / 60.0)) { context in
+                Canvas { graphics, size in
+                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                    let time = context.date.timeIntervalSinceReferenceDate
+                    let level = simulated
+                        ? 0.45 + 0.28 * CGFloat(sin(time * 1.6))
+                        : smoothedLevel
+                    draw(in: &graphics, center: center, time: time, level: level)
+                }
             }
-        }
-        .frame(width: canvasSize, height: canvasSize)
-        .allowsHitTesting(false)
-        .onChange(of: audioLevel) { _, newLevel in
-            let normalized = CGFloat(max(0, min(1, (Double(newLevel) + 60) / 60)))
-            smoothedLevel = smoothedLevel * 0.72 + normalized * 0.28
+            .frame(width: canvasSize, height: canvasSize)
+            .allowsHitTesting(false)
+            .onChange(of: audioLevel) { _, newLevel in
+                let normalized = CGFloat(max(0, min(1, (Double(newLevel) + 60) / 60)))
+                smoothedLevel = smoothedLevel * 0.72 + normalized * 0.28
+            }
         }
     }
 
@@ -684,6 +698,9 @@ struct CircularWaveformView: View {
                     lineWidth: (1 + 2 * level) * scale
                 )
             }
+
+        case .off:
+            break  // body never builds the canvas for this one
         }
     }
 }

@@ -8,6 +8,7 @@ struct CountdownOverlayView: View {
     let countdownDuration: Int
     let countdownStyle: CountdownStyle
     var look: CountdownLook = .ring
+    var backdrop: RecordingBackdrop = .base
     let onComplete: () -> Void
     let onCancel: () -> Void
     @Binding var selectedGoalId: UUID?
@@ -44,6 +45,7 @@ struct CountdownOverlayView: View {
         countdownDuration: Int = 15,
         countdownStyle: CountdownStyle = .countDown,
         look: CountdownLook = .ring,
+        backdrop: RecordingBackdrop = .base,
         selectedGoalId: Binding<UUID?> = .constant(nil),
         challenge: SharedChallenge? = nil,
         onComplete: @escaping () -> Void,
@@ -54,6 +56,7 @@ struct CountdownOverlayView: View {
         self.countdownDuration = countdownDuration
         self.countdownStyle = countdownStyle
         self.look = look
+        self.backdrop = backdrop
         self._selectedGoalId = selectedGoalId
         self.challenge = challenge
         self.onComplete = onComplete
@@ -64,7 +67,7 @@ struct CountdownOverlayView: View {
 
     var body: some View {
         ZStack {
-            AppBackground(style: .recording)
+            RecordingBackdropView(backdrop: backdrop)
 
             VStack(spacing: 20) {
                 CountdownDial(

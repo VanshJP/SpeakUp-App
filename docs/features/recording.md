@@ -15,7 +15,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 | Coaching audio/haptics | `HapticCoachingService`, `ChirpPlayer` |
 | Word workout overlay | `VocabOverlayPanel` in `RecordingView.swift` — today's spotlight words when the workout is on |
 | Waveform gen | `AudioWaveformGenerator` |
-| Cosmetic looks | `CircularWaveformView` (`RecordingView.swift`), `RecordButton`, `CountdownDial` (`CountdownOverlayView.swift`) + `WaveformStyle` / `RecordButtonStyle` / `CountdownLook` (`UserSettings.swift`); all picked in Settings → Recording Look (`RecordingLookView`) |
+| Cosmetic looks | `CircularWaveformView` (`RecordingView.swift`), `RecordButton`, `CountdownDial` (`CountdownOverlayView.swift`), `RecordingBackdropView` + `WaveformStyle` / `RecordButtonStyle` / `CountdownLook` / `RecordingBackdrop` (`UserSettings.swift` + `RecordingBackdrop.swift`); all picked in Settings → Recording Look (`RecordingLookView`). Full-screen try-on is `RecordingLookPreview` — it plays countdown then recording, and the record button stops it. |
 | Model | `SpeakUp/Models/Recording.swift`, `SpeechFramework.swift`, `RecordingGroup.swift` |
 
 ## Flow
@@ -29,8 +29,10 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 
 - User presses every record control (especially onboarding — see `ONBOARDING_VISION.md`).
 - High-frequency audio levels must not re-diff the whole screen — pass snapshots into POD subviews (`RecordButtonWaveformStack` pattern).
-- Look settings (`waveformStyle`, `recordButtonStyle`, `countdownLook`) are read at the call site and passed in as plain values — the components never query settings themselves, so the settings preview can render any style. Wired in recording + drills; onboarding stays on defaults.
+- Look settings (`waveformStyle`, `recordButtonStyle`, `countdownLook`, `countdownBackdrop`) are read at the call site and passed in as plain values — the components never query settings themselves, so the settings preview can render any style. Wired in recording + drills; onboarding stays on defaults.
+- `WaveformStyle.off` renders `EmptyView` with **no frame**, so the record button collapses to its own 80pt instead of centring in an empty 220pt canvas. Any new layout around the waveform must survive it being absent.
 - `CountdownLook` is orthogonal to `CountdownStyle` (dial shape vs. count up/down).
+- `RecordingBackdrop` is orthogonal to both and paints the **whole session** — prepare countdown (`CountdownOverlayView`), `RecordingView`, and `DrillSessionView`. `.base` resolves to `AppBackground(style: .recording)`, so the default look is unchanged. Do not paint any screen outside a session with it.
 - Deep-link `record` clears prior prompt/story/goal context.
 - Allowance is **not** consumed at capture time — only after successful analysis (`AllowanceGate.consume`).
 

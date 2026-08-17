@@ -98,6 +98,7 @@ struct DrillSelectionView: View {
                         countdownDuration: userSettings.first?.countdownDuration ?? 15,
                         countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
                         look: CountdownLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
+                        backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
                         onComplete: {
                             showingCountdown = false
                             if let mode = selectedDrillMode {

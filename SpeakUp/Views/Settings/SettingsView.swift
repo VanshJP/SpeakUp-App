@@ -77,7 +77,10 @@ struct SettingsView: View {
                 icon: "waveform.circle",
                 iconColor: AppColors.categoryBrandBright,
                 title: "Recording Look",
-                subtitle: "\(viewModel.waveformStyle.displayName) · \(viewModel.recordButtonStyle.displayName) · \(viewModel.countdownLook.displayName)"
+                // Two of the four, because the row is `.lineLimit(1)` and four
+                // names truncate at default type on a small phone. These are
+                // the two you see the whole session.
+                subtitle: "\(viewModel.recordingBackdrop.displayName) · \(viewModel.waveformStyle.displayName)"
             ) {
                 RecordingLookView(viewModel: viewModel)
             }
