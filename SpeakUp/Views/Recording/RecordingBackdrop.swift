@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Countdown Backdrop
+// MARK: - Recording Backdrop
 
 /// Canvas behind a practice session — the prepare countdown and the recording
 /// screen itself, so the look the user picked does not vanish the moment they

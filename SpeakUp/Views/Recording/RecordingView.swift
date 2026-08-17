@@ -521,7 +521,9 @@ struct CircularWaveformView: View {
         if style == .off {
             EmptyView()
         } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+            // Thumbnail-sized instances run at half rate — the picker shows six
+            // of these at once, and nobody reads 60 fps off a 76pt swatch.
+            TimelineView(.animation(minimumInterval: canvasSize < 120 ? 1.0 / 30.0 : 1.0 / 60.0)) { context in
                 Canvas { graphics, size in
                     let center = CGPoint(x: size.width / 2, y: size.height / 2)
                     let time = context.date.timeIntervalSinceReferenceDate

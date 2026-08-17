@@ -52,6 +52,22 @@ struct RecordingLookPreview: View {
             .padding(.horizontal, 20)
         }
         .ignoresSafeArea()
+        // The record button is the exit this screen is teaching, but it is the
+        // bottom of a fixed-height stack — at accessibility text sizes on a
+        // small phone it can run off the edge, and a full-screen cover has no
+        // swipe-dismiss. This is the guaranteed way out.
+        .overlay(alignment: .topLeading) {
+            Button(action: exitPreview) {
+                Image(systemName: "xmark")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background { Circle().fill(.ultraThinMaterial) }
+            }
+            .accessibilityLabel("Close preview")
+            .padding(.leading, 20)
+            .padding(.top, 56)
+        }
         .animation(AppMotion.settle, value: isRecording)
         .onReceive(timer) { _ in
             guard !isRecording else { return }
@@ -114,7 +130,7 @@ struct RecordingLookPreview: View {
                     CircularWaveformView(style: waveformStyle, simulated: true)
                 }
 
-                RecordButton(isRecording: true, style: buttonStyle) {
+                RecordButton(isRecording: isRecording, style: buttonStyle) {
                     if isRecording {
                         exitPreview()
                     } else {

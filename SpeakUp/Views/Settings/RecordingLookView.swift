@@ -116,7 +116,6 @@ struct RecordingLookView: View {
                 countdownDuration: viewModel.countdownDuration.rawValue,
                 countdownStyle: viewModel.countdownStyle
             )
-            .presentationBackground(Color(red: 0.02, green: 0.04, blue: 0.10))
         }
     }
 
@@ -168,7 +167,9 @@ struct RecordingLookView: View {
             }
             .allowsHitTesting(false)
         }
-        .frame(height: 320)
+        // minHeight, not a hard height: the two labels grow with Dynamic Type
+        // and would otherwise push the recording half under the clip.
+        .frame(minHeight: 320)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -261,7 +262,7 @@ struct RecordingLookView: View {
                                 .foregroundStyle(isSelected ? AppColors.primary : .secondary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
-                                .frame(maxWidth: 84)
+                                .frame(maxWidth: .infinity)
                         }
                         // Pins the tap target to this tile's own bounds.
                         .contentShape(Rectangle())
