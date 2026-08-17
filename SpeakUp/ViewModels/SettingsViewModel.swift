@@ -40,6 +40,13 @@ class SettingsViewModel {
     // Local state - Story Practice
     var storyPracticeEnabled: Bool = false
 
+    // Local state - Daily word workout
+    var vocabChallengeEnabled: Bool = true
+    var vocabChallengeWordCount: Int = 2
+    var vocabChallengeUseBank: Bool = true
+    var vocabChallengeUseDictionary: Bool = true
+    var vocabChallengeIntroduceNew: Bool = true
+
     // Local state - Speaker Level
     var speakerLevel: SpeakerLevel = .intermediate
 
@@ -213,6 +220,12 @@ class SettingsViewModel {
         enabledPromptCategories = Set(settings.enabledCategories)
         storyPracticeEnabled = settings.storyPracticeEnabled
 
+        vocabChallengeEnabled = settings.vocabChallengeEnabled
+        vocabChallengeWordCount = settings.vocabChallengeWordCount
+        vocabChallengeUseBank = settings.vocabChallengeUseBank
+        vocabChallengeUseDictionary = settings.vocabChallengeUseDictionary
+        vocabChallengeIntroduceNew = settings.vocabChallengeIntroduceNew
+
         // Speaker Level
         speakerLevel = settings.resolvedSpeakerLevel
 
@@ -288,6 +301,12 @@ class SettingsViewModel {
         settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
         settings.storyPracticeEnabled = storyPracticeEnabled
+
+        settings.vocabChallengeEnabled = vocabChallengeEnabled
+        settings.vocabChallengeWordCount = min(3, max(1, vocabChallengeWordCount))
+        settings.vocabChallengeUseBank = vocabChallengeUseBank
+        settings.vocabChallengeUseDictionary = vocabChallengeUseDictionary
+        settings.vocabChallengeIntroduceNew = vocabChallengeIntroduceNew
 
         // Speaker Level
         settings.speakerLevel = speakerLevel.rawValue
@@ -403,6 +422,10 @@ class SettingsViewModel {
             showVocabError("Use at least 2 characters")
             return
         }
+        if WordSafety.isBlocked(trimmed) {
+            showVocabError("That word isn't allowed")
+            return
+        }
         vocabWords.append(trimmed)
         newVocabWord = ""
         Haptics.success()
@@ -437,6 +460,7 @@ class SettingsViewModel {
         for raw in words {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.count >= 2,
+                  WordSafety.allows(trimmed),
                   !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }),
                   !isFillerWord(trimmed) else { continue }
             vocabWords.append(trimmed)
@@ -458,6 +482,7 @@ class SettingsViewModel {
         for raw in words {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.count >= 2,
+                  WordSafety.allows(trimmed),
                   !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }),
                   !isFillerWord(trimmed) else { continue }
             dictationBiasWords.append(trimmed)
@@ -480,6 +505,10 @@ class SettingsViewModel {
         }
         guard trimmed.count >= 2 else {
             showDictationError("Use at least 2 characters")
+            return
+        }
+        if WordSafety.isBlocked(trimmed) {
+            showDictationError("That word isn't allowed")
             return
         }
         guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
@@ -662,6 +691,11 @@ class SettingsViewModel {
         ChirpPlayer.shared.pack = .soft
         settings.vocabWords = []
         settings.dictationBiasWords = []
+        settings.vocabChallengeEnabled = true
+        settings.vocabChallengeWordCount = 2
+        settings.vocabChallengeUseBank = true
+        settings.vocabChallengeUseDictionary = true
+        settings.vocabChallengeIntroduceNew = true
         settings.customFillerWords = []
         settings.customContextFillerWords = []
         settings.removedDefaultFillers = []
@@ -759,6 +793,26 @@ class SettingsViewModel {
         }
     }
     
+    var vocabChallengePreferences: VocabChallengePreferences {
+        VocabChallengePreferences(
+            isEnabled: vocabChallengeEnabled,
+            wordCount: vocabChallengeWordCount,
+            useBank: vocabChallengeUseBank,
+            useDictionary: vocabChallengeUseDictionary,
+            introduceNew: vocabChallengeIntroduceNew,
+            vocabWords: vocabWords,
+            dictionaryWords: dictationBiasWords,
+            extraBanned: customFillerWords + customContextFillerWords,
+            userName: userName,
+            speakerLevelRaw: speakerLevel.rawValue
+        )
+    }
+
+    @MainActor
+    func saveVocabChallengeSettings() {
+        Task { await saveSettings() }
+    }
+
     // MARK: - Pace Target
 
     /// Effective target shown in UI — learned value in auto mode, slider value otherwise.

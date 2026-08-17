@@ -17,6 +17,7 @@ This doc only lists wiring and agent gotchas.
 | Live word capture | `DictationService` (word bank), `LiveTranscriptionService`, `ReadAloudService` |
 | Isolation | `SpeechIsolationService`, `ConversationIsolationService` |
 | Fillers | `FillerDetectionPipeline` |
+| Vocab matching | `VocabMatcher` — inflected bank + daily spotlight words; `WordSafety` gates adds |
 | Text / relevance / pitch | `TextAnalysisService`, `PromptRelevanceService`, `PitchAnalysisService` |
 | LLM | `LLMService`, `LocalLLMService` |
 | Models | `SpeakUp/Models/SpeechAnalysis.swift` |

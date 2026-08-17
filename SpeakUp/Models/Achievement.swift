@@ -42,6 +42,7 @@ enum AchievementDefinition: String, CaseIterable {
     case zeroFillers = "zero_fillers"
     case allCategories = "all_categories"
     case listenBack = "listen_back"
+    case wordWorkout = "word_workout"
 
     var title: String {
         switch self {
@@ -57,6 +58,7 @@ enum AchievementDefinition: String, CaseIterable {
         case .zeroFillers: return "Clean Speech"
         case .allCategories: return "Well Rounded"
         case .listenBack: return "Brave Listener"
+        case .wordWorkout: return "Word Workout"
         }
     }
 
@@ -74,6 +76,7 @@ enum AchievementDefinition: String, CaseIterable {
         case .zeroFillers: return "Complete a session with zero filler words"
         case .allCategories: return "Record in every prompt category"
         case .listenBack: return "Listen to your own recording for the first time"
+        case .wordWorkout: return "Use three vocabulary words in a single session"
         }
     }
 
@@ -91,6 +94,7 @@ enum AchievementDefinition: String, CaseIterable {
         case .zeroFillers: return "checkmark.seal.fill"
         case .allCategories: return "square.grid.3x3.fill"
         case .listenBack: return "headphones"
+        case .wordWorkout: return "character.book.closed.fill"
         }
     }
 

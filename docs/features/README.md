@@ -31,6 +31,7 @@ Canonical contracts that are *not* duplicated here:
 | [stories.md](./stories.md) | Rich-text scripts + story practice | `Views/Stories/`, `Story*`, `StoryTaggingService` |
 | [read-aloud.md](./read-aloud.md) | Passage practice + dictionary | `Views/ReadAloud/`, `ReadAloudService` |
 | [today-library.md](./today-library.md) | Today home + Practice Hub | `Views/Today/`, `Views/Practice/` |
+| [vocab-challenge.md](./vocab-challenge.md) | Daily word workout | `VocabChallengeService`, `Views/Today/VocabChallengeCard.swift` |
 | [history-progress.md](./history-progress.md) | History, charts, journal, streak | `Views/History/`, `Views/Progress/`, `Views/Streak/` |
 | [curriculum.md](./curriculum.md) | Learn tab, signal progression | `Views/Curriculum/`, `CurriculumService` |
 | [practice-tools.md](./practice-tools.md) | Warm-ups, drills, confidence | `Views/WarmUp/`, `Drills/`, `Confidence/` |

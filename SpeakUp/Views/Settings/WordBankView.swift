@@ -308,6 +308,8 @@ struct WordBankView: View {
 
     private var wordBankTab: some View {
         VStack(spacing: 16) {
+            VocabChallengeSettingsCard(viewModel: viewModel)
+
             // Explanation text (compact)
             HStack(spacing: 8) {
                 Image(systemName: "character.book.closed.fill")
@@ -723,6 +725,116 @@ struct WordBankView: View {
         .foregroundStyle(AppColors.error)
         .padding(.horizontal, 4)
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
+// MARK: - Daily word workout
+
+struct VocabChallengeSettingsCard: View {
+    @Bindable var viewModel: SettingsViewModel
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle(isOn: $viewModel.vocabChallengeEnabled) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "character.book.closed")
+                            .foregroundStyle(AppColors.categorySage)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Daily word workout")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Spotlight a few words. Use each one in a sentence.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .tint(AppColors.primary)
+                .onChange(of: viewModel.vocabChallengeEnabled) { _, _ in
+                    viewModel.saveVocabChallengeSettings()
+                }
+
+                if viewModel.vocabChallengeEnabled {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Words per day")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 6) {
+                            ForEach([1, 2, 3], id: \.self) { count in
+                                wordCountPill(count)
+                            }
+                        }
+                    }
+
+                    sourceToggle(
+                        isOn: $viewModel.vocabChallengeUseBank,
+                        title: "Word bank",
+                        subtitle: "Rotate words you already track"
+                    )
+                    sourceToggle(
+                        isOn: $viewModel.vocabChallengeUseDictionary,
+                        title: "Dictionary",
+                        subtitle: "Include names and terms you added"
+                    )
+                    sourceToggle(
+                        isOn: $viewModel.vocabChallengeIntroduceNew,
+                        title: "New words",
+                        subtitle: "Teach one fresh speaking word each day"
+                    )
+                }
+            }
+        }
+    }
+
+    private func wordCountPill(_ count: Int) -> some View {
+        let selected = viewModel.vocabChallengeWordCount == count
+        return Button {
+            Haptics.selection()
+            viewModel.vocabChallengeWordCount = count
+            viewModel.saveVocabChallengeSettings()
+        } label: {
+            Text("\(count)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(selected ? .white : .white.opacity(0.45))
+                .frame(minWidth: 36, minHeight: 28)
+                .background {
+                    Capsule()
+                        .fill(selected ? AppColors.primary.opacity(0.35) : Color.white.opacity(0.05))
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(
+                                    selected ? AppColors.primary.opacity(0.6) : Color.white.opacity(0.08),
+                                    lineWidth: 0.5
+                                )
+                        }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(count) words per day")
+    }
+
+    private func sourceToggle(
+        isOn: Binding<Bool>,
+        title: String,
+        subtitle: String
+    ) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.subheadline)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .tint(AppColors.primary)
+        .onChange(of: isOn.wrappedValue) { _, _ in
+            viewModel.saveVocabChallengeSettings()
+        }
     }
 }
 

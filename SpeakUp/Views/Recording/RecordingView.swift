@@ -9,6 +9,10 @@ struct RecordingView: View {
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
     @State private var showingVocabOverlay = false
+    @State private var overlayWords: [String] = []
+    @State private var overlayIntroduced: Set<String> = []
+    @State private var overlayTitle = "Your Words"
+    @State private var overlaySubtitle = ""
     @State private var completedRecording: Recording?
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
@@ -65,9 +69,13 @@ struct RecordingView: View {
                 viewModel.coachingService.isEnabled = settings.hapticCoachingEnabled
             }
             await viewModel.checkPermissions()
+            refreshVocabOverlay()
             // Auto-start recording after countdown
             if !viewModel.isRecording {
                 await viewModel.startRecording()
+            }
+            if !overlayWords.isEmpty {
+                showingVocabOverlay = true
             }
         }
         .onDisappear {
@@ -105,8 +113,13 @@ struct RecordingView: View {
             }
             .padding()
 
-            if showingVocabOverlay, let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
-                VocabOverlayPanel(words: vocabWords) {
+            if showingVocabOverlay, !overlayWords.isEmpty {
+                VocabOverlayPanel(
+                    title: overlayTitle,
+                    subtitle: overlaySubtitle,
+                    words: overlayWords,
+                    introduced: overlayIntroduced
+                ) {
                     withAnimation(.spring(response: 0.3)) {
                         showingVocabOverlay = false
                     }
@@ -325,9 +338,9 @@ struct RecordingView: View {
                 }
             }
 
-            if let vocabWords = userSettings.first?.vocabWords, !vocabWords.isEmpty {
+            if !overlayWords.isEmpty {
                 Toggle(isOn: $showingVocabOverlay) {
-                    Label("Vocabulary words", systemImage: "character.book.closed")
+                    Label(overlayTitle, systemImage: "character.book.closed")
                 }
             }
         } label: {
@@ -340,6 +353,34 @@ struct RecordingView: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Session options")
+    }
+
+    private func refreshVocabOverlay() {
+        guard let settings = userSettings.first else {
+            overlayWords = []
+            overlayIntroduced = []
+            return
+        }
+
+        let prefs = settings.vocabChallengePreferences
+        if prefs.isEnabled,
+           let challenge = VocabChallengeService.todaysChallenge(preferences: prefs),
+           !challenge.words.isEmpty {
+            overlayWords = challenge.words.map(\.text)
+            overlayIntroduced = Set(
+                challenge.words
+                    .filter { $0.source == .introduced }
+                    .map { $0.text.lowercased() }
+            )
+            overlayTitle = "Use today"
+            overlaySubtitle = "Say each one in a sentence."
+            return
+        }
+
+        overlayWords = settings.vocabWords
+        overlayIntroduced = []
+        overlayTitle = "Your Words"
+        overlaySubtitle = ""
     }
 
     private func compactPromptCard(_ prompt: Prompt) -> some View {
@@ -700,7 +741,10 @@ private struct RecordButtonWaveformStack: View {
 // MARK: - Vocab Overlay Panel
 
 struct VocabOverlayPanel: View {
+    var title: String = "Your Words"
+    var subtitle: String = ""
     let words: [String]
+    var introduced: Set<String> = []
     let onDismiss: () -> Void
 
     @State private var autoHideTask: Task<Void, Never>?
@@ -709,7 +753,7 @@ struct VocabOverlayPanel: View {
         VStack {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Label("Your Words", systemImage: "character.book.closed")
+                    Label(title, systemImage: "character.book.closed")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(AppColors.primary)
                     Spacer()
@@ -721,8 +765,15 @@ struct VocabOverlayPanel: View {
                     .foregroundStyle(.white.opacity(0.5))
                 }
 
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
                 FlowLayout(spacing: 6) {
                     ForEach(words, id: \.self) { word in
+                        let isNew = introduced.contains(word.lowercased())
                         Text(word)
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white)
@@ -730,10 +781,13 @@ struct VocabOverlayPanel: View {
                             .padding(.vertical, 5)
                             .background {
                                 Capsule()
-                                    .fill(AppColors.primary.opacity(0.2))
+                                    .fill((isNew ? AppColors.categorySage : AppColors.primary).opacity(0.2))
                                     .overlay {
                                         Capsule()
-                                            .strokeBorder(AppColors.primary.opacity(0.3), lineWidth: 0.5)
+                                            .strokeBorder(
+                                                (isNew ? AppColors.categorySage : AppColors.primary).opacity(0.3),
+                                                lineWidth: 0.5
+                                            )
                                     }
                             }
                     }

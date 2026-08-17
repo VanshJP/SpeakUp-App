@@ -9,7 +9,7 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 | Role | Path |
 |------|------|
 | Hub | `SpeakUp/Views/Settings/SettingsView.swift` |
-| Pages | `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView`, `RecordingLookView`, `AnalyticsDiagnosticsView` |
+| Pages | `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` (incl. daily word workout), `RecordingLookView`, `AnalyticsDiagnosticsView` |
 | Lifetime row | `SpeakUp/Views/Paywall/LifetimeStatusRow.swift` |
 | VM | `SettingsViewModel.swift` |
 | Model | `UserSettings.swift`, `SupportLinks.swift` |
@@ -24,6 +24,7 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 6. `RecordingLookView` is the cosmetic picker: live preview on top, filter strip below, three sections (waveform / button / countdown) persisting `waveformStyle`, `recordButtonStyle`, `countdownLook`. Previews use the real components, never stand-ins. Looks change **form only** — the brand palette is fixed ([ui-design-system.md](./ui-design-system.md)).
 7. `soundPack` (Session Defaults → Cue Sound) sets `ChirpPlayer.shared.pack`. Set it in **both** `SettingsViewModel.saveSettings` and `SpeakUpApp.ensureSettingsExist` — the app-boot assignment is what survives a relaunch.
 8. `shareCardTheme` is picked in `ShareCardSheet`, not here ([recording-detail.md](./recording-detail.md)).
+9. Daily word workout knobs (`vocabChallengeEnabled`, word count, bank / dictionary / new-word sources) live on the Vocab tab of `WordBankView`. Additive `UserSettings` fields; default on. See [vocab-challenge.md](./vocab-challenge.md).
 
 ## Cross-links
 

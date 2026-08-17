@@ -937,6 +937,8 @@ struct RecordingDetailView: View {
     private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
         statsGrid(analysis)
 
+        vocabWorkoutSection(recording: recording, analysis: analysis)
+
         // Attaches the filler count above to the words that produced it.
         // Renders nothing on a clean take.
         if let words = recording.transcriptionWords, !words.isEmpty {
@@ -951,6 +953,23 @@ struct RecordingDetailView: View {
 
         if recording.goalId != nil {
             goalProgressCard(recording)
+        }
+    }
+
+    @ViewBuilder
+    private func vocabWorkoutSection(recording: Recording, analysis: SpeechAnalysis) -> some View {
+        if let settings = userSettings.first {
+            let prefs = settings.vocabChallengePreferences
+            if let challenge = VocabChallengeService.todaysChallenge(preferences: prefs),
+               !challenge.words.isEmpty {
+                let transcripts = [recording.transcriptionText].compactMap { $0 }
+                let evaluation = VocabChallengeService.evaluate(
+                    challenge,
+                    transcripts: transcripts,
+                    usages: analysis.vocabWordsUsed
+                )
+                VocabChallengeResultCard(challenge: challenge, evaluation: evaluation)
+            }
         }
     }
 

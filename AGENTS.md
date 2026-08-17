@@ -37,6 +37,7 @@ Before editing a feature, **read the matching doc** — do not reload all of `do
 | Stories / story-linked practice | `docs/features/stories.md` |
 | Read-Aloud | `docs/features/read-aloud.md` |
 | Today / Library (Practice Hub) | `docs/features/today-library.md` |
+| Daily word workout / vocab challenge | `docs/features/vocab-challenge.md` |
 | History / charts / journal / streak | `docs/features/history-progress.md` |
 | Curriculum / Learn | `docs/features/curriculum.md` |
 | Warm-ups / drills / confidence | `docs/features/practice-tools.md` |

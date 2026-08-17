@@ -13,6 +13,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 | Audio | `SpeakUp/Services/AudioService.swift` |
 | Live fillers | `SpeakUp/Services/LiveTranscriptionService.swift` |
 | Coaching audio/haptics | `HapticCoachingService`, `ChirpPlayer` |
+| Word workout overlay | `VocabOverlayPanel` in `RecordingView.swift` — today's spotlight words when the workout is on |
 | Waveform gen | `AudioWaveformGenerator` |
 | Cosmetic looks | `CircularWaveformView` (`RecordingView.swift`), `RecordButton`, `CountdownDial` (`CountdownOverlayView.swift`) + `WaveformStyle` / `RecordButtonStyle` / `CountdownLook` (`UserSettings.swift`); all picked in Settings → Recording Look (`RecordingLookView`) |
 | Model | `SpeakUp/Models/Recording.swift`, `SpeechFramework.swift`, `RecordingGroup.swift` |
@@ -35,4 +36,4 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 
 ## Cross-links
 
-[speech-pipeline.md](./speech-pipeline.md) · [recording-detail.md](./recording-detail.md) · [stories.md](./stories.md) · [monetization.md](./monetization.md) · [architecture.md](./architecture.md)
+[speech-pipeline.md](./speech-pipeline.md) · [recording-detail.md](./recording-detail.md) · [stories.md](./stories.md) · [monetization.md](./monetization.md) · [vocab-challenge.md](./vocab-challenge.md) · [architecture.md](./architecture.md)

@@ -85,6 +85,14 @@ final class UserSettings {
     // Story Practice
     var storyPracticeEnabled: Bool = false
 
+    // Daily word workout. Additive defaults so existing rows keep the feature
+    // on and mix bank + dictionary + a new word each day.
+    var vocabChallengeEnabled: Bool = true
+    var vocabChallengeWordCount: Int = 2
+    var vocabChallengeUseBank: Bool = true
+    var vocabChallengeUseDictionary: Bool = true
+    var vocabChallengeIntroduceNew: Bool = true
+
     // Dictation
     var autoFormatDictation: Bool = true
 
@@ -219,7 +227,7 @@ final class UserSettings {
 
     func addVocabWord(_ word: String) {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard WordSafety.allows(trimmed) else { return }
         guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         vocabWords.append(trimmed)
     }
@@ -228,9 +236,24 @@ final class UserSettings {
 
     func addDictationBiasWord(_ word: String) {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard WordSafety.allows(trimmed) else { return }
         guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         dictationBiasWords.append(trimmed)
+    }
+
+    var vocabChallengePreferences: VocabChallengePreferences {
+        VocabChallengePreferences(
+            isEnabled: vocabChallengeEnabled,
+            wordCount: vocabChallengeWordCount,
+            useBank: vocabChallengeUseBank,
+            useDictionary: vocabChallengeUseDictionary,
+            introduceNew: vocabChallengeIntroduceNew,
+            vocabWords: vocabWords,
+            dictionaryWords: dictationBiasWords,
+            extraBanned: customFillerWords + customContextFillerWords,
+            userName: userName,
+            speakerLevelRaw: speakerLevel
+        )
     }
 
     // MARK: - Speaker Level

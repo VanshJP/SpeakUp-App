@@ -192,7 +192,12 @@ final class RecordingProcessingCoordinator {
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
         let startedAt = Date()
-        let vocabWords = settings?.vocabWords ?? []
+        let vocabWords = VocabMatcher.mergeUnique(
+            settings?.vocabWords ?? [],
+            VocabChallengeService.detectionWords(
+                preferences: settings?.vocabChallengePreferences ?? .disabled
+            )
+        )
         let scoreWeights = ScoreWeights(from: settings)
 
         do {

@@ -13,6 +13,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Playback | `PlaybackDrawer`, `RecordingDetailPlaybackViewModel` |
 | Transcript | `TranscriptViews`, `TranscriptExcerptCard`, `WPMChartView` |
 | Coaching / next | `CoachingTipsView`, `NextStepCard`, `ListenBackEncouragementView` |
+| Word workout result | `VocabChallengeResultCard` on the breakdown tab when today's spotlight words exist |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
 | Share cards | `ShareCardSheet` (picker + preview), `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter`, `SharedPromptLink`, `SharedPromptResolver` |
 | Inbound challenge | `SharedChallengeStore`, `FriendChallengeCard` (Today), countdown chrome in `CountdownOverlayView` |
