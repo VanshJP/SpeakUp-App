@@ -54,6 +54,7 @@ class SettingsViewModel {
     var waveformStyle: WaveformStyle = .rings
     var recordButtonStyle: RecordButtonStyle = .classic
     var countdownLook: CountdownLook = .ring
+    var countdownBackdrop: CountdownBackdrop = .base
 
     // Local state - Sound Pack
     var soundPack: SoundPack = .soft
@@ -227,6 +228,7 @@ class SettingsViewModel {
         waveformStyle = WaveformStyle(rawValue: settings.waveformStyle) ?? .rings
         recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
         countdownLook = CountdownLook(rawValue: settings.countdownLook) ?? .ring
+        countdownBackdrop = CountdownBackdrop(rawValue: settings.countdownBackdrop) ?? .base
 
         // Sound pack
         soundPack = SoundPack(rawValue: settings.soundPack) ?? .soft
@@ -303,6 +305,7 @@ class SettingsViewModel {
         settings.waveformStyle = waveformStyle.rawValue
         settings.recordButtonStyle = recordButtonStyle.rawValue
         settings.countdownLook = countdownLook.rawValue
+        settings.countdownBackdrop = countdownBackdrop.rawValue
 
         // Sound pack
         settings.soundPack = soundPack.rawValue
@@ -657,6 +660,7 @@ class SettingsViewModel {
         settings.waveformStyle = 0
         settings.recordButtonStyle = 0
         settings.countdownLook = 0
+        settings.countdownBackdrop = 0
         settings.soundPack = 0
         settings.shareCardTheme = 0
         ChirpPlayer.shared.pack = .soft

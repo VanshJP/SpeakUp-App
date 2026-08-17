@@ -40,6 +40,7 @@ final class UserSettings {
     var waveformStyle: Int = 0      // WaveformStyle
     var recordButtonStyle: Int = 0  // RecordButtonStyle
     var countdownLook: Int = 0      // CountdownLook
+    var countdownBackdrop: Int = 0  // CountdownBackdrop (prepare screen only)
     var soundPack: Int = 0          // SoundPack (ChirpPlayer.swift)
     var shareCardTheme: Int = 0     // ScoreCardTheme (ScoreCardRenderer.swift)
 
