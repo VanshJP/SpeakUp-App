@@ -1,8 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct DrillSessionView: View {
     var viewModel: DrillViewModel
     @Environment(\.dismiss) private var dismiss
+    @Query private var userSettings: [UserSettings]
     @State private var showingExitConfirm = false
 
     var body: some View {
@@ -153,10 +155,16 @@ struct DrillSessionView: View {
             // Stop button (same style as RecordButton when recording)
             ZStack {
                 if viewModel.isActive {
-                    CircularWaveformView(audioLevel: viewModel.audioLevel)
+                    CircularWaveformView(
+                        audioLevel: viewModel.audioLevel,
+                        style: WaveformStyle(rawValue: userSettings.first?.waveformStyle ?? 0) ?? .rings
+                    )
                 }
 
-                RecordButton(isRecording: true) {
+                RecordButton(
+                    isRecording: true,
+                    style: RecordButtonStyle(rawValue: userSettings.first?.recordButtonStyle ?? 0) ?? .classic
+                ) {
                     viewModel.finishDrill()
                 }
             }

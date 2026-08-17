@@ -13,7 +13,7 @@ struct StoryFolderEditorSheet: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     previewHeader
 
@@ -177,7 +177,7 @@ struct StoryMoveFolderSheet: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 10) {
                     destinationRow(
                         title: "All Stories",

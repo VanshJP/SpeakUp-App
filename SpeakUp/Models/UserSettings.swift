@@ -36,6 +36,13 @@ final class UserSettings {
     // Timer End Behavior
     var timerEndBehavior: Int = 0 // 0 = save & stop, 1 = keep going
 
+    // Look & feel — cosmetic only, raw values of the enums named in comments
+    var waveformStyle: Int = 0      // WaveformStyle
+    var recordButtonStyle: Int = 0  // RecordButtonStyle
+    var countdownLook: Int = 0      // CountdownLook
+    var soundPack: Int = 0          // SoundPack (ChirpPlayer.swift)
+    var shareCardTheme: Int = 0     // ScoreCardTheme (ScoreCardRenderer.swift)
+
     // Word Bank
     var vocabWords: [String] = []
     var dictationBiasWords: [String] = []
@@ -508,6 +515,76 @@ enum CountdownStyle: Int, Codable, CaseIterable, Identifiable {
         switch self {
         case .countUp: return "Count Up"
         case .countDown: return "Count Down"
+        }
+    }
+}
+
+// MARK: - Waveform Style
+
+/// Look of the live waveform ringing the record button. Form only — every
+/// style keeps the brand gradient so the recording screen stays one palette.
+enum WaveformStyle: Int, Codable, CaseIterable, Identifiable {
+    case rings = 0
+    case bars = 1
+    case dots = 2
+    case ribbon = 3
+    case pulse = 4
+    case spark = 5
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .rings: return "Rings"
+        case .bars: return "Bars"
+        case .dots: return "Dots"
+        case .ribbon: return "Ribbon"
+        case .pulse: return "Pulse"
+        case .spark: return "Spark"
+        }
+    }
+}
+
+// MARK: - Record Button Style
+
+/// Look of the record button. Every case keeps the 80pt footprint so no
+/// surrounding layout shifts when it changes.
+enum RecordButtonStyle: Int, Codable, CaseIterable, Identifiable {
+    case classic = 0
+    case ring = 1
+    case orb = 2
+    case minimal = 3
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .classic: return "Classic"
+        case .ring: return "Ring"
+        case .orb: return "Orb"
+        case .minimal: return "Minimal"
+        }
+    }
+}
+
+// MARK: - Countdown Look
+
+/// Shape of the countdown dial. Orthogonal to `CountdownStyle`, which decides
+/// whether the number counts up or down.
+enum CountdownLook: Int, Codable, CaseIterable, Identifiable {
+    case ring = 0
+    case orb = 1
+    case segments = 2
+    case minimal = 3
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .ring: return "Ring"
+        case .orb: return "Orb"
+        case .segments: return "Segments"
+        case .minimal: return "Minimal"
         }
     }
 }

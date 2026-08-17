@@ -51,7 +51,7 @@ struct ScoreWeightsView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     introCard
                     weightVisualization

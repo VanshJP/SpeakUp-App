@@ -24,10 +24,12 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 5. Motion: `AppMotion` or `.spring(response: 0.3)` / `.easeInOut(duration: 0.2)`. Respect Reduce Motion.
 6. Haptics via `Haptics.*` typed helpers.
 7. Tab bar: `.tint(.white)`, `.preferredColorScheme(.dark)`.
+8. Full-screen pages scroll with **`PageScrollView`**, not `ScrollView`. A plain vertical `ScrollView` pans sideways as soon as any child measures wider than the viewport; `PageScrollView` clamps content to the container width so overflow clips instead. Deliberate horizontal rails stay `ScrollView(.horizontal)`.
+9. Nothing in a page may demand more width than the screen. `.fixedSize()` on a row, a wide fixed `.frame(width:)`, or a pinned pill row are the usual causes — check at 375pt *and* at accessibility text sizes, and reach for `ViewThatFits` before pinning (see `ActivityStrip.header`).
 
 ## New view checklist
 
-1. `ScrollView` + `.appBackground`
+1. `PageScrollView` + `.appBackground`
 2. `GlassCard` content blocks
 3. `AppColors` only
 4. `GlassButton` for actions

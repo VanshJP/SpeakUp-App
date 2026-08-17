@@ -21,7 +21,7 @@ struct AchievementGalleryView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     // Progress Header
                     achievementProgressHeader

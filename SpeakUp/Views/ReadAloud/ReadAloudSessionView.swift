@@ -26,7 +26,7 @@ struct ReadAloudSessionView: View {
 
                 // Passage text with word highlighting
                 ScrollViewReader { proxy in
-                    ScrollView {
+                    PageScrollView {
                         passageText
                             .padding(.horizontal, 20)
                             .padding(.vertical, 24)

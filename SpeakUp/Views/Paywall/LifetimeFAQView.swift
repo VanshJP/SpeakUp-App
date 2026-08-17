@@ -19,7 +19,7 @@ struct LifetimeFAQView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     scopeCard
 

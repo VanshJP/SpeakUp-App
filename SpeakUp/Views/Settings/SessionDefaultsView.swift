@@ -7,7 +7,7 @@ struct SessionDefaultsView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     GlassCard {
                         VStack(spacing: 0) {
@@ -89,6 +89,19 @@ struct SessionDefaultsView: View {
 
                             divider
 
+                            settingsRow(icon: "music.quarternote.3", title: "Cue Sound") {
+                                Picker("", selection: $viewModel.soundPack) {
+                                    ForEach(SoundPack.allCases) { pack in
+                                        Text(pack.displayName).tag(pack)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .tint(AppColors.primary)
+                                .disabled(!viewModel.chirpSoundEnabled)
+                            }
+
+                            divider
+
                             Stepper(value: $viewModel.weeklyGoalSessions, in: 1...14) {
                                 HStack {
                                     Label("Weekly Goal", systemImage: "target")
@@ -103,7 +116,7 @@ struct SessionDefaultsView: View {
                         }
                     }
 
-                    Text("Speaker level controls your daily prompt difficulty mix. Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills.")
+                    Text("Speaker level controls your daily prompt difficulty mix. Countdown timer gives you time to prepare. \"Keep Going\" lets you record past the timer. Haptic coaching gives gentle vibrations for long silences, fillers, or pace changes. Audio cues play short chirps during warm-ups and drills, and Cue Sound picks their timbre.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
@@ -166,6 +179,15 @@ private struct SessionDefaultsChangeModifiers: ViewModifier {
             .onChange(of: viewModel.chirpSoundEnabled) { _, _ in
                 guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
+            }
+            .onChange(of: viewModel.soundPack) { _, pack in
+                guard !viewModel.isSyncing else { return }
+                Task {
+                    await viewModel.saveSettings()
+                    // Hear the pack you just picked — the whole point of the row.
+                    ChirpPlayer.shared.pack = pack
+                    ChirpPlayer.shared.play(.tick)
+                }
             }
             .onChange(of: viewModel.weeklyGoalSessions) { _, _ in
                 guard !viewModel.isSyncing else { return }

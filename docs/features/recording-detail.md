@@ -14,7 +14,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Transcript | `TranscriptViews`, `TranscriptExcerptCard`, `WPMChartView` |
 | Coaching / next | `CoachingTipsView`, `NextStepCard`, `ListenBackEncouragementView` |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
-| Share cards | `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter`, `SharedPromptLink`, `SharedPromptResolver` |
+| Share cards | `ShareCardSheet` (picker + preview), `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter`, `SharedPromptLink`, `SharedPromptResolver` |
 | Inbound challenge | `SharedChallengeStore`, `FriendChallengeCard` (Today), countdown chrome in `CountdownOverlayView` |
 
 > Note: older docs mentioned `DetailAnalysisTab` — layout evolved into hero / reveal / transcript / playback pieces. Prefer current files above.
@@ -28,6 +28,8 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
 6. Share score / progress cards via `SharePresenter` only (completed-share analytics). Score-card shares that include the prompt also attach a caption with a try-this-prompt URL (`SharedPromptLink`); do not invent a second activity sheet.
 7. Prompt text on a share card and in the share URL is opt-in. Scores-only shares must not put the prompt (or `beat`) on the link. Story sessions may show the title on the card but never encode story body into the URL.
+8. `ShareCardSheet` is the one share surface: variant tabs (Scores / Challenge) over a live preview, a `ScoreCardTheme` filter strip, then Save / Copy / Share. `.scores` **must** stay the default selection — the default card carries no prompt. Themes change only the card backdrop (all stay dark, so the hero body needs no per-theme colors) and persist to `UserSettings.shareCardTheme`; the render cache is keyed by variant **and** theme. Save and Copy log `share_complete` too; they are the same intent by another route.
+9. Share captions are three lines at most (headline, prompt quote, URL). Explanation belongs on the card or in the sheet's subtitle, not in text the recipient reads.
 
 ## Cross-links
 

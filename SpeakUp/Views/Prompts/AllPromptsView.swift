@@ -768,7 +768,7 @@ extension PromptCategory {
 
 #Preview {
     NavigationStack {
-        ScrollView {
+        PageScrollView {
             AllPromptsView()
                 .padding(.horizontal)
         }

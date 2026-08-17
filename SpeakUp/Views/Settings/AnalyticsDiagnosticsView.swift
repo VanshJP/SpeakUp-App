@@ -18,7 +18,7 @@ struct AnalyticsDiagnosticsView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 14) {
                     disclosureCard
                     scorecardCard

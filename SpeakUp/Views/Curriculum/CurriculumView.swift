@@ -11,7 +11,7 @@ struct CurriculumView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 // Same grammar as Today: where you stand, then the one thing
                 // to do next, then the browsable list. Previously two gradient
                 // hero cards stacked here and competed for the same attention.

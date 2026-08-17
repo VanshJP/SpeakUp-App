@@ -9,13 +9,18 @@ enum ScoreCardRenderer {
     /// someone was told to talk about can be a job interview question or the
     /// title of a personal story, and a share card is the one place in this app
     /// where private practice becomes public.
-    static func render(recording: Recording, includePromptText: Bool = false) -> UIImage? {
+    static func render(
+        recording: Recording,
+        includePromptText: Bool = false,
+        theme: ScoreCardTheme = .midnight
+    ) -> UIImage? {
         guard let analysis = recording.analysis else { return nil }
 
         let view = ScoreCardView(
             recording: recording,
             analysis: analysis,
-            includePromptText: includePromptText
+            includePromptText: includePromptText,
+            theme: theme
         )
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3.0
@@ -30,6 +35,62 @@ enum ScoreCardRenderer {
     }
 }
 
+// MARK: - Score Card Theme
+
+/// Backdrop of the shared card. Every theme stays dark so the hero body, the
+/// radar chart, and the white type inside it need no per-theme handling —
+/// only the canvas behind them changes.
+enum ScoreCardTheme: Int, Codable, CaseIterable, Identifiable {
+    case midnight = 0
+    case aurora = 1
+    case slate = 2
+    case spotlight = 3
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .midnight: return "Midnight"
+        case .aurora: return "Aurora"
+        case .slate: return "Slate"
+        case .spotlight: return "Spotlight"
+        }
+    }
+
+    @ViewBuilder
+    var background: some View {
+        switch self {
+        case .midnight:
+            AppBackground(style: .subtle)
+
+        case .aurora:
+            LinearGradient(
+                colors: [
+                    Color(red: 0.03, green: 0.13, blue: 0.16),
+                    Color(red: 0.06, green: 0.07, blue: 0.14),
+                    Color(red: 0.13, green: 0.07, blue: 0.15)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+        case .slate:
+            Color(red: 0.071, green: 0.075, blue: 0.086)
+
+        case .spotlight:
+            ZStack {
+                Color(red: 0.04, green: 0.04, blue: 0.05)
+                RadialGradient(
+                    colors: [AppColors.primary.opacity(0.35), .clear],
+                    center: .init(x: 0.5, y: 0.18),
+                    startRadius: 10,
+                    endRadius: 420
+                )
+            }
+        }
+    }
+}
+
 // MARK: - Score Card SwiftUI View (rendered to image)
 //
 // Mirrors recording detail: context strip (prompt as the title) sitting above
@@ -40,6 +101,7 @@ private struct ScoreCardView: View {
     let recording: Recording
     let analysis: SpeechAnalysis
     let includePromptText: Bool
+    let theme: ScoreCardTheme
 
     private var axes: [SubscoreRadarChart.Axis] {
         SubscoreRadarChart.Axis.from(
@@ -56,7 +118,7 @@ private struct ScoreCardView: View {
 
     var body: some View {
         ZStack {
-            AppBackground(style: .subtle)
+            theme.background
 
             VStack(alignment: .leading, spacing: 20) {
                 brandRow

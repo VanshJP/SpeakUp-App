@@ -29,16 +29,20 @@ struct PracticeHubView: View {
         ZStack(alignment: .bottomTrailing) {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                     Section {
+                        // Each section owns a topBarTrailing toolbar item. A
+                        // crossfade keeps the outgoing section alive for the
+                        // animation, so two filter buttons render at once —
+                        // swap instantly instead. The picker pill still slides.
                         switch selectedSection {
                         case .prompts:
                             AllPromptsView(
                                 onSelectPrompt: onSelectPrompt,
                                 searchText: promptsSearchText
                             )
-                            .transition(.opacity)
+                            .transition(.identity)
                         case .stories:
                             StoriesListView(
                                 viewModel: storiesViewModel,
@@ -47,10 +51,10 @@ struct PracticeHubView: View {
                                 onSendToWarmUp: onSendToWarmUp,
                                 onSendToDrill: onSendToDrill
                             )
-                            .transition(.opacity)
+                            .transition(.identity)
                         case .tools:
                             toolsSection
-                                .transition(.opacity)
+                                .transition(.identity)
                         }
 
                         Color.clear.frame(height: 88) // FAB breathing room

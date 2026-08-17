@@ -12,7 +12,7 @@ struct GoalsView: View {
             ZStack {
                 AppBackground(style: .subtle)
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 16) {
                         // Summary header
                         if !viewModel.activeGoals.isEmpty || !viewModel.completedGoals.isEmpty {

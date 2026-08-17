@@ -191,7 +191,7 @@ struct PaywallView: View {
     // MARK: - Offer
 
     private var offer: some View {
-        ScrollView {
+        PageScrollView {
             VStack(spacing: 20) {
                 hero
                 headline

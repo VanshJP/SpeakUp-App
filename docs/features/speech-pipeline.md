@@ -13,7 +13,8 @@ This doc only lists wiring and agent gotchas.
 | Orchestrator | `SpeakUp/Services/SpeechService.swift` |
 | Job queue | `SpeakUp/Services/RecordingProcessingCoordinator.swift` |
 | Scoring | `SpeakUp/Services/SpeechScoringEngine.swift` |
-| Whisper / fallback | `WhisperService`, `DictationService` |
+| Whisper / fallback | `WhisperService`, `SpeechService.transcribeWithAppleSpeech` |
+| Live word capture | `DictationService` (word bank), `LiveTranscriptionService`, `ReadAloudService` |
 | Isolation | `SpeechIsolationService`, `ConversationIsolationService` |
 | Fillers | `FillerDetectionPipeline` |
 | Text / relevance / pitch | `TextAnalysisService`, `PromptRelevanceService`, `PitchAnalysisService` |
@@ -25,7 +26,7 @@ This doc only lists wiring and agent gotchas.
 
 1. Detail (or coordinator) enqueues when `recording.analysis == nil`.
 2. Dedupe on `recordingID` inside `RecordingProcessingCoordinator`.
-3. Transcription order: isolation → WhisperKit → reload retry → Apple Speech.
+3. Transcription order: isolation → WhisperKit → raw-URL retry → reload retry → Apple Speech (`SpeechService.transcribeWithAppleSpeech`, not `DictationService`).
 4. Primary-speaker labeling → `SpeechService.analyze(...)`.
 5. Optional LLM coherence enhance (Apple Intelligence → local llama → skip).
 6. On success: `AllowanceGate.consume` (not before).
@@ -38,6 +39,8 @@ This doc only lists wiring and agent gotchas.
 - Never `#Predicate` on `Recording.analysis` — ObjC crash inside CoreData SQL gen; proxy via `transcriptionText != nil` (`analyzedRecordingCount`).
 - Re-fetch `Recording` by id after long transcription before mutating (user may have deleted it).
 - Whisper first load is slow — check service state before assuming failure.
+- Every `SFSpeech*RecognitionRequest` in the app sets `requiresOnDeviceRecognition = true` unconditionally. On-device is a product claim (`APP_STORE_LISTING.md` §3), so an unavailable recognizer must fail rather than fall back to Apple's servers. Never make it conditional on `supportsOnDeviceRecognition` — that flag reads false while assets install.
+- Lowering `DecodingOptions.noSpeechThreshold` makes WhisperKit drop *more* audio, one whole 30 s window at a time, with no error.
 - Score philosophy: progressive (short casual ≈ 50–65; solid minute ≈ 75–90; only empty/gibberish ≪ 20).
 - Pure scoring types are `nonisolated` — required under MainActor-default isolation (`/docs/AGENT_GOTCHAS.md`).
 

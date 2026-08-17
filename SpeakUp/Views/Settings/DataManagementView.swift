@@ -7,7 +7,7 @@ struct DataManagementView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 16) {
                     // MARK: - Voice Profile Card
                     GlassSectionHeader("Voice Profile", icon: "waveform.badge.person.crop")

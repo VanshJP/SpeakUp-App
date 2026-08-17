@@ -92,6 +92,11 @@ class ReadAloudService {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // Unconditional: on-device processing is a product guarantee, not a
+        // preference. Left unset, the recognizer is free to stream microphone
+        // audio to Apple's servers. If the on-device assets are not available
+        // the request fails, and failing is the correct outcome here.
+        request.requiresOnDeviceRecognition = true
         self.recognitionRequest = request
 
         let inputNode = engine.inputNode

@@ -97,7 +97,9 @@ struct SharedPromptLinkTests {
         #expect(message.contains("Solid"))
         #expect(message.contains(sampleText))
         #expect(message.contains(url.absoluteString))
-        #expect(message.contains("Tap to try the same prompt"))
+        #expect(message.contains("Beat it?"))
+        // The caption is a headline, the prompt, and the link — nothing else.
+        #expect(message.split(separator: "\n", omittingEmptySubsequences: true).count == 3)
     }
 
     @Test func scoresOnlyMessageDoesNotLeakAPrompt() {

@@ -23,7 +23,7 @@ struct MetricExplainerSheet: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
+        PageScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
                 headerCard
                 measuresCard

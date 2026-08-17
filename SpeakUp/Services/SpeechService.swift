@@ -180,18 +180,22 @@ class SpeechService {
                 finalWords = speakerLabeled.0
                 let speakerIsolationMetrics = speakerLabeled.1
                 let voiceProfileUpdate = speakerLabeled.2
-                let outputWords = self.isolatedPrimaryTranscriptWords(
-                    from: finalWords,
-                    metrics: speakerIsolationMetrics
-                )
+                // Every word is kept. Speaker isolation only labels words
+                // (`isPrimarySpeaker`); dropping the non-primary ones here deleted
+                // them from the stored transcript, so the transcript no longer
+                // matched the audio — worst in the back half of a solo recording,
+                // where natural pitch declination and fading energy pull words away
+                // from a voice profile built from the first 12 seconds. `analyze`
+                // still applies the primary-speaker gate for scoring, and the detail
+                // view renders the labels as speaker turns.
                 let outputText = self.transcriptText(
-                    from: outputWords,
+                    from: finalWords,
                     fallback: result.text
                 )
 
                 continuation.resume(returning: SpeechTranscriptionResult(
                     text: outputText,
-                    words: outputWords,
+                    words: finalWords,
                     duration: result.duration,
                     audioIsolationMetrics: isolationResult?.metrics,
                     speakerIsolationMetrics: speakerIsolationMetrics,
@@ -303,6 +307,14 @@ class SpeechService {
         // about cleaning up raw speech and removing filler words
         request.addsPunctuation = false
 
+        // Unconditional: on-device processing is a product guarantee, not a
+        // preference, and `supportsOnDeviceRecognition` can read false while
+        // assets are still installing. This was the one leg of the chain that
+        // left the device at all. Server-side recognition also stops at roughly
+        // a minute of audio and returns that prefix as a final result, so a long
+        // recording reaching this fallback came back silently truncated.
+        request.requiresOnDeviceRecognition = true
+
         // Thread-safe resume-once gate — the recognition callback and the
         // timeout task race on different queues.
         final class ResumeGate: @unchecked Sendable {
@@ -340,9 +352,14 @@ class SpeechService {
             }
 
             // Apple Speech can stall with no final result and no error, leaking
-            // the continuation (and hanging dictation) forever. Force-resume.
+            // the continuation (and hanging dictation) forever. Force-resume —
+            // scaled to the file, since a flat 90 s aborted long recordings that
+            // were still being recognized normally.
+            let audioDuration = (try? AVAudioFile(forReading: audioURL)).map {
+                Double($0.length) / $0.processingFormat.sampleRate
+            } ?? 0
             Task {
-                try? await Task.sleep(for: .seconds(90))
+                try? await Task.sleep(for: .seconds(min(600, max(90, audioDuration * 5))))
                 guard gate.claim() else { return }
                 recognitionTask.cancel()
                 continuation.resume(throwing: SpeechServiceError.transcriptionFailed(
@@ -751,19 +768,6 @@ class SpeechService {
             (metrics.filteredOutWordCount >= minimumFilteredOutWords && metrics.speakerSwitchCount >= 2)
 
         return hasConversationEvidence
-    }
-
-    private func isolatedPrimaryTranscriptWords(
-        from words: [TranscriptionWord],
-        metrics: SpeakerIsolationMetrics?
-    ) -> [TranscriptionWord] {
-        let primaryWords = words.filter(\.isPrimarySpeaker)
-        let shouldFilter = shouldScoreUsingPrimarySpeakerWords(
-            totalWords: words.count,
-            primaryWordsCount: primaryWords.count,
-            speakerIsolationMetrics: metrics
-        )
-        return shouldFilter ? primaryWords : words
     }
 
     private func transcriptText(from words: [TranscriptionWord], fallback: String) -> String {

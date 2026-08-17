@@ -441,6 +441,8 @@ struct RecordingView: View {
 
             RecordButtonWaveformStack(
                 audioLevel: level,
+                waveformStyle: WaveformStyle(rawValue: userSettings.first?.waveformStyle ?? 0) ?? .rings,
+                buttonStyle: RecordButtonStyle(rawValue: userSettings.first?.recordButtonStyle ?? 0) ?? .classic,
                 isRecording: isRecording,
                 onTap: {
                     Task {
@@ -490,61 +492,32 @@ struct RecordingView: View {
 // MARK: - Circular Waveform View (surrounds record button)
 
 /// Radial waveform drawn in a single Canvas node inside a TimelineView.
-/// One draw per frame, 48 capsule paths, no per-bar view diffing.
+/// One draw per frame, no per-bar view diffing.
 ///
 /// - `audioLevel`: incoming dB reading, smoothed to avoid jitter.
+/// - `style`: user-chosen look (Settings → Waveform).
+/// - `canvasSize`: geometry scales from the 220pt reference design, so the
+///   same view doubles as a settings thumbnail.
+/// - `simulated`: no mic — drive the envelope from a sine so previews move.
 struct CircularWaveformView: View {
     var audioLevel: Float = 0
-
-    private let barCount = 54
-    private let baseRadius: CGFloat = 72
-    private let maxBarHeight: CGFloat = 44
-    private let minBarHeight: CGFloat = 8
-    private let barWidth: CGFloat = 3
-    private let canvasSize: CGFloat = 220
+    var style: WaveformStyle = .rings
+    var canvasSize: CGFloat = 220
+    var simulated: Bool = false
 
     @State private var smoothedLevel: CGFloat = 0.18
+
+    private var scale: CGFloat { canvasSize / 220 }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
             Canvas { graphics, size in
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let time = context.date.timeIntervalSinceReferenceDate
-                let baseLevel: CGFloat = smoothedLevel
-                let gradient = Gradient(colors: [AppColors.primary, AppColors.categoryBrandBright])
-
-                for i in 0..<barCount {
-                    let angle = (Double(i) / Double(barCount)) * 2 * .pi
-                    // Two detuned sines give each bar an organic, non-repeating
-                    // bob that still tracks the incoming audio envelope.
-                    let wave = sin(time * 3.0 + Double(i) * 0.35) * 0.22
-                    let variation = sin(Double(i) * 1.7 + time * 1.1) * 0.12
-                    let h = max(0.15, min(1.0, baseLevel + CGFloat(wave) + CGFloat(variation)))
-                    let barLength = minBarHeight + (maxBarHeight - minBarHeight) * h
-                    let half = barLength / 2
-
-                    var layer = graphics
-                    layer.translateBy(x: center.x, y: center.y)
-                    layer.rotate(by: .radians(angle))
-
-                    // Capsule centered on the ring perimeter — half extends
-                    // inward, half outward, producing a mirrored spoke.
-                    let rect = CGRect(
-                        x: -barWidth / 2,
-                        y: -(baseRadius + half),
-                        width: barWidth,
-                        height: barLength
-                    )
-                    let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
-                    layer.fill(
-                        path,
-                        with: .linearGradient(
-                            gradient,
-                            startPoint: CGPoint(x: 0, y: -(baseRadius + half)),
-                            endPoint: CGPoint(x: 0, y: -(baseRadius - half))
-                        )
-                    )
-                }
+                let level = simulated
+                    ? 0.45 + 0.28 * CGFloat(sin(time * 1.6))
+                    : smoothedLevel
+                draw(in: &graphics, center: center, time: time, level: level)
             }
         }
         .frame(width: canvasSize, height: canvasSize)
@@ -552,6 +525,124 @@ struct CircularWaveformView: View {
         .onChange(of: audioLevel) { _, newLevel in
             let normalized = CGFloat(max(0, min(1, (Double(newLevel) + 60) / 60)))
             smoothedLevel = smoothedLevel * 0.72 + normalized * 0.28
+        }
+    }
+
+    // MARK: - Drawing
+
+    /// Two detuned sines give each bar an organic, non-repeating bob that
+    /// still tracks the incoming audio envelope.
+    private func amplitude(_ i: Int, time: Double, level: CGFloat) -> CGFloat {
+        let wave = sin(time * 3.0 + Double(i) * 0.35) * 0.22
+        let variation = sin(Double(i) * 1.7 + time * 1.1) * 0.12
+        return max(0.15, min(1.0, level + CGFloat(wave) + CGFloat(variation)))
+    }
+
+    private func draw(in graphics: inout GraphicsContext, center: CGPoint, time: Double, level: CGFloat) {
+        let gradient = Gradient(colors: [AppColors.primary, AppColors.categoryBrandBright])
+        let radius = 72 * scale
+        let minLength = 8 * scale
+        let maxLength = 44 * scale
+
+        switch style {
+        case .rings, .bars, .spark:
+            let barCount = style == .spark ? 80 : (style == .bars ? 40 : 54)
+            let barWidth: CGFloat = (style == .spark ? 1.5 : (style == .bars ? 5.0 : 3.0)) * scale
+
+            for i in 0..<barCount {
+                let angle = (Double(i) / Double(barCount)) * 2 * .pi
+                var h = amplitude(i, time: time, level: level)
+                // Spark alternates hairline lengths for a sharper, spikier ring.
+                if style == .spark && i.isMultiple(of: 2) { h *= 0.5 }
+                let barLength = minLength + (maxLength - minLength) * h
+                // Rings straddle the perimeter; the others grow outward only.
+                let inset = style == .rings ? barLength / 2 : 0
+
+                var layer = graphics
+                layer.translateBy(x: center.x, y: center.y)
+                layer.rotate(by: .radians(angle))
+
+                let rect = CGRect(
+                    x: -barWidth / 2,
+                    y: -(radius + barLength - inset),
+                    width: barWidth,
+                    height: barLength
+                )
+                let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                if style == .spark {
+                    layer.fill(path, with: .color(AppColors.categoryBrandBright.opacity(Double(0.3 + 0.6 * h))))
+                } else {
+                    layer.fill(
+                        path,
+                        with: .linearGradient(
+                            gradient,
+                            startPoint: CGPoint(x: 0, y: -(radius + barLength - inset)),
+                            endPoint: CGPoint(x: 0, y: -(radius - inset))
+                        )
+                    )
+                }
+            }
+
+        case .dots:
+            for i in 0..<36 {
+                let angle = (Double(i) / 36.0) * 2 * .pi - .pi / 2
+                let h = amplitude(i, time: time, level: level)
+                let distance = radius + maxLength * 0.5 * h
+                let dotRadius = (2 + 4 * h) * scale
+                let rect = CGRect(
+                    x: center.x + CGFloat(cos(angle)) * distance - dotRadius,
+                    y: center.y + CGFloat(sin(angle)) * distance - dotRadius,
+                    width: dotRadius * 2,
+                    height: dotRadius * 2
+                )
+                graphics.fill(
+                    Path(ellipseIn: rect),
+                    with: .color(AppColors.categoryBrandBright.opacity(Double(0.4 + 0.6 * h)))
+                )
+            }
+
+        case .ribbon:
+            // Two phase-offset closed curves — the trailing one reads as echo.
+            for pass in 0..<2 {
+                var path = Path()
+                let samples = 120
+                for i in 0...samples {
+                    let angle = (Double(i) / Double(samples)) * 2 * .pi - .pi / 2
+                    let h = amplitude(i, time: time + Double(pass) * 0.45, level: level)
+                    let r = radius + maxLength * 0.5 * (h - 0.4)
+                    let point = CGPoint(x: center.x + CGFloat(cos(angle)) * r, y: center.y + CGFloat(sin(angle)) * r)
+                    if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                }
+                path.closeSubpath()
+                graphics.stroke(
+                    path,
+                    with: .linearGradient(
+                        gradient,
+                        startPoint: CGPoint(x: center.x, y: center.y - radius),
+                        endPoint: CGPoint(x: center.x, y: center.y + radius)
+                    ),
+                    lineWidth: (pass == 0 ? 2.5 : 1.0) as CGFloat * scale
+                )
+            }
+
+        case .pulse:
+            let base = Path(ellipseIn: CGRect(
+                x: center.x - radius, y: center.y - radius,
+                width: radius * 2, height: radius * 2
+            ))
+            graphics.stroke(base, with: .color(AppColors.primary.opacity(0.45)), lineWidth: 2 * scale)
+
+            // Rings born at the button edge, expanding outward and fading.
+            for ring in 0..<4 {
+                let phase = (time * 0.5 + Double(ring) * 0.25).truncatingRemainder(dividingBy: 1)
+                let r = radius + (maxLength + 16 * scale) * CGFloat(phase)
+                let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+                graphics.stroke(
+                    Path(ellipseIn: rect),
+                    with: .color(AppColors.categoryBrandBright.opacity((1 - phase) * Double(0.2 + 0.6 * level))),
+                    lineWidth: (1 + 2 * level) * scale
+                )
+            }
         }
     }
 }
@@ -590,16 +681,18 @@ private struct VoiceActivityPill: View {
 /// state changes further up in `bottomControls`.
 private struct RecordButtonWaveformStack: View {
     let audioLevel: Float
+    let waveformStyle: WaveformStyle
+    let buttonStyle: RecordButtonStyle
     let isRecording: Bool
     let onTap: () -> Void
 
     var body: some View {
         ZStack {
             if isRecording {
-                CircularWaveformView(audioLevel: audioLevel)
+                CircularWaveformView(audioLevel: audioLevel, style: waveformStyle)
             }
 
-            RecordButton(isRecording: isRecording, onTap: onTap)
+            RecordButton(isRecording: isRecording, style: buttonStyle, onTap: onTap)
         }
     }
 }

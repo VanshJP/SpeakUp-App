@@ -50,6 +50,14 @@ class SettingsViewModel {
     // Local state - Timer End Behavior
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
 
+    // Local state - Recording Look
+    var waveformStyle: WaveformStyle = .rings
+    var recordButtonStyle: RecordButtonStyle = .classic
+    var countdownLook: CountdownLook = .ring
+
+    // Local state - Sound Pack
+    var soundPack: SoundPack = .soft
+
     // Local state - Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 
@@ -215,6 +223,15 @@ class SettingsViewModel {
         // Timer end behavior
         timerEndBehavior = TimerEndBehavior(rawValue: settings.timerEndBehavior) ?? .saveAndStop
 
+        // Recording look
+        waveformStyle = WaveformStyle(rawValue: settings.waveformStyle) ?? .rings
+        recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
+        countdownLook = CountdownLook(rawValue: settings.countdownLook) ?? .ring
+
+        // Sound pack
+        soundPack = SoundPack(rawValue: settings.soundPack) ?? .soft
+        ChirpPlayer.shared.pack = soundPack
+
         // Word Bank
         vocabWords = settings.vocabWords
         dictationBiasWords = settings.dictationBiasWords
@@ -281,6 +298,15 @@ class SettingsViewModel {
 
         // Timer end behavior
         settings.timerEndBehavior = timerEndBehavior.rawValue
+
+        // Recording look
+        settings.waveformStyle = waveformStyle.rawValue
+        settings.recordButtonStyle = recordButtonStyle.rawValue
+        settings.countdownLook = countdownLook.rawValue
+
+        // Sound pack
+        settings.soundPack = soundPack.rawValue
+        ChirpPlayer.shared.pack = soundPack
 
         // Word Bank
         settings.vocabWords = vocabWords
@@ -628,6 +654,12 @@ class SettingsViewModel {
         settings.countdownDuration = 15
         settings.countdownStyle = 0
         settings.timerEndBehavior = 0
+        settings.waveformStyle = 0
+        settings.recordButtonStyle = 0
+        settings.countdownLook = 0
+        settings.soundPack = 0
+        settings.shareCardTheme = 0
+        ChirpPlayer.shared.pack = .soft
         settings.vocabWords = []
         settings.dictationBiasWords = []
         settings.customFillerWords = []

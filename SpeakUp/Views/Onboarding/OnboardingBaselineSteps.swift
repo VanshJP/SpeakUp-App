@@ -24,7 +24,7 @@ struct OnboardingBaselineBriefingStep: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
+            PageScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(spacing: 10) {
                         OnboardingOrb(size: 96)
@@ -768,7 +768,7 @@ private struct OnboardingBaselineRevealView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
+            PageScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
                     VStack(spacing: 8) {
                         Text("Your starting line")

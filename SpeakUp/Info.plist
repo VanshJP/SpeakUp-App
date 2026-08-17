@@ -28,6 +28,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Big Talk saves the score card you chose to share into your photo library. It never reads your existing photos.</string>
 	<key>BTSupportURL</key>
 	<string>https://www.bigtalkapp.com/support</string>
 	<key>BTPrivacyPolicyURL</key>

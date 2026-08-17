@@ -172,7 +172,7 @@ struct LessonDetailView: View {
     private var lessonContent: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 16) {
                         // Scroll anchor
                         Color.clear

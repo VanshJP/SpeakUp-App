@@ -43,7 +43,7 @@ struct FirstRecordingSetupSheet: View {
             ZStack {
                 AppBackground(style: .subtle)
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 18) {
                         headerSection
                         finishSetupSection

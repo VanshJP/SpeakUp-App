@@ -19,7 +19,7 @@ struct PaywallProgressStep: View {
     let proof: PaywallProof
 
     var body: some View {
-        ScrollView {
+        PageScrollView {
             VStack(spacing: 18) {
                 Text(title)
                     .font(.title.bold())
@@ -171,7 +171,7 @@ struct PaywallHeadroomStep: View {
     let headroom: PaywallHeadroom
 
     var body: some View {
-        ScrollView {
+        PageScrollView {
             VStack(spacing: 18) {
                 Text("There are \(headroom.points) points still on the table.")
                     .font(.title.bold())

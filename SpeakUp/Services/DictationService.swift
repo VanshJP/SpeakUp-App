@@ -11,6 +11,10 @@ class DictationService {
     var recognizedWords: [String] = []
     var lastAddedIndex = 0
 
+    /// Why the last `start()` gave up, for the caller to display. Every failure
+    /// path here is silent otherwise — the mic button simply never lights up.
+    var errorMessage: String?
+
     /// Current audio input level in dB (-160 silence … 0 max).
     var audioLevel: Float = -160
 
@@ -25,6 +29,10 @@ class DictationService {
     /// Timer that reads the latest level from the tap callback and publishes to `audioLevel`.
     private var levelTimer: Timer?
 
+    /// Set while `stop()` tears the session down, so the cancellation error the
+    /// recognizer reports back is not mistaken for a real failure.
+    private var isStopping = false
+
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
@@ -37,12 +45,20 @@ class DictationService {
                 continuation.resume(returning: status == .authorized)
             }
         }
-        guard authorized else { return }
-        guard let recognizer, recognizer.isAvailable else { return }
+        guard authorized else {
+            errorMessage = "Speech recognition permission is off. Turn it on in Settings."
+            return
+        }
+        guard let recognizer, recognizer.isAvailable else {
+            errorMessage = "Speech recognition isn't available right now."
+            return
+        }
 
         recognizedWords = []
         lastAddedIndex = 0
         audioLevel = -160
+        errorMessage = nil
+        isStopping = false
 
         let engine = AVAudioEngine()
         self.audioEngine = engine
@@ -53,11 +69,17 @@ class DictationService {
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             print("DictationService: audio session setup failed: \(error)")
+            errorMessage = "Couldn't start the microphone."
             return
         }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // Unconditional: on-device processing is a product guarantee, not a
+        // preference. Left unset, the recognizer is free to stream microphone
+        // audio to Apple's servers. If the on-device assets are not available
+        // the request fails, and failing is the correct outcome here.
+        request.requiresOnDeviceRecognition = true
         self.recognitionRequest = request
 
         let inputNode = engine.inputNode
@@ -69,6 +91,7 @@ class DictationService {
         }
         guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
             print("DictationService: invalid input format \(recordingFormat)")
+            errorMessage = "Couldn't start the microphone."
             cleanup()
             return
         }
@@ -97,6 +120,7 @@ class DictationService {
             try engine.start()
         } catch {
             print("DictationService: audio engine failed to start: \(error)")
+            errorMessage = "Couldn't start the microphone."
             cleanup()
             return
         }
@@ -122,6 +146,14 @@ class DictationService {
 
             if error != nil || (result?.isFinal ?? false) {
                 Task { @MainActor in
+                    // `stop()` cancels the task, which reports an error too —
+                    // only an unrequested failure is worth telling the user
+                    // about. On-device recognition is required, so a device
+                    // whose assets are missing lands here rather than sending
+                    // the audio to a server.
+                    if error != nil, !self.isStopping {
+                        self.errorMessage = "On-device dictation isn't ready yet. Try again in a moment."
+                    }
                     self.cleanup()
                     self.isListening = false
                 }
@@ -130,6 +162,7 @@ class DictationService {
     }
 
     func stop() {
+        isStopping = true
         recognitionRequest?.endAudio()
         cleanup()
         isListening = false

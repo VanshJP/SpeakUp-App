@@ -21,7 +21,7 @@ struct ConfidenceToolsView: View {
             ZStack {
                 AppBackground()
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 16) {
                         // Category tabs
                         ScrollView(.horizontal, showsIndicators: false) {

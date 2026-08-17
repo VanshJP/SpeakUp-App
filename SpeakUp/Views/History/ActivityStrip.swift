@@ -47,23 +47,40 @@ struct ActivityStrip: View {
 
     // MARK: - Subviews
 
+    /// `.fixedSize()` stops the picker's scroll view swallowing the whole row,
+    /// but it also means the row cannot shrink — at accessibility text sizes
+    /// the title and two pills together are wider than a phone. `ViewThatFits`
+    /// drops to a stacked layout at that point instead of overflowing the page.
     private var header: some View {
-        HStack {
-            Text(metric.title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                title
+                Spacer(minLength: 8)
+                picker
+            }
 
-            Spacer()
-
-            SectionPicker(
-                sections: ActivityMetric.allCases,
-                selection: $metric,
-                label: { $0.shortLabel },
-                style: .compact,
-                layout: .scrollable
-            )
-            .fixedSize()
+            VStack(alignment: .leading, spacing: 10) {
+                title
+                picker
+            }
         }
+    }
+
+    private var title: some View {
+        Text(metric.title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+    }
+
+    private var picker: some View {
+        SectionPicker(
+            sections: ActivityMetric.allCases,
+            selection: $metric,
+            label: { $0.shortLabel },
+            style: .compact,
+            layout: .scrollable
+        )
+        .fixedSize()
     }
 
     private func footer(_ buckets: [Date: DayBucket]) -> some View {

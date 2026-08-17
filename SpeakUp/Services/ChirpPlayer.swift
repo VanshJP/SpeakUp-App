@@ -6,6 +6,8 @@ final class ChirpPlayer {
     static let shared = ChirpPlayer()
 
     var isEnabled: Bool = true
+    /// Timbre of every cue. Set from `UserSettings.soundPack`.
+    var pack: SoundPack = .soft
 
     private let sampleRate: Double = 44100
     private var player: AVAudioPlayer?
@@ -53,7 +55,11 @@ final class ChirpPlayer {
                 try session.setActive(true)
             }
 
-            let data = generateWAV(frequency: chirp.frequency, duration: chirp.duration, volume: chirp.volume)
+            let data = generateWAV(
+                frequency: chirp.frequency * pack.pitchScale,
+                duration: chirp.duration * pack.durationScale,
+                volume: chirp.volume
+            )
             player = try AVAudioPlayer(data: data)
             player?.play()
         } catch {
@@ -82,17 +88,27 @@ final class ChirpPlayer {
         data.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
         appendUInt32(&data, UInt32(dataSize))               // data size
 
-        // Generate samples
+        // Generate samples — the pack decides the harmonic stack and envelope,
+        // which is the whole difference between a beep and a marimba.
+        let harmonics = pack.harmonics
+        let gainSum = harmonics.reduce(Float(0)) { $0 + $1.gain }
+
         for i in 0..<frameCount {
             let t = Float(i) / Float(sampleRate)
-            let envelope = sin(Float.pi * Float(i) / Float(frameCount))
-            let sample = sin(2 * .pi * frequency * t) * volume * envelope
+            let progress = Float(i) / Float(frameCount)
+            var tone: Float = 0
+            for harmonic in harmonics {
+                tone += sin(2 * .pi * frequency * harmonic.multiple * t) * harmonic.gain
+            }
+            let sample = (tone / gainSum) * volume * pack.envelope(progress)
             let intSample = Int16(max(-1, min(1, sample)) * Float(Int16.max))
             appendInt16(&data, intSample)
         }
 
         return data
     }
+
+    // MARK: - WAV helpers
 
     private func appendUInt32(_ data: inout Data, _ value: UInt32) {
         var v = value.littleEndian
@@ -107,5 +123,75 @@ final class ChirpPlayer {
     private func appendInt16(_ data: inout Data, _ value: Int16) {
         var v = value.littleEndian
         data.append(Data(bytes: &v, count: 2))
+    }
+}
+
+// MARK: - Sound Pack
+
+/// Timbre of the practice cues. A pack is three numbers and an envelope —
+/// no audio files, so adding one costs nothing at build or download time.
+enum SoundPack: Int, Codable, CaseIterable, Identifiable {
+    case soft = 0
+    case marimba = 1
+    case beep = 2
+    case chime = 3
+
+    var id: Int { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .soft: return "Soft"
+        case .marimba: return "Marimba"
+        case .beep: return "Beep"
+        case .chime: return "Chime"
+        }
+    }
+
+    struct Harmonic {
+        let multiple: Float
+        let gain: Float
+    }
+
+    var harmonics: [Harmonic] {
+        switch self {
+        case .soft:
+            return [Harmonic(multiple: 1, gain: 1)]
+        case .marimba:
+            // The 4th partial is what makes a struck bar sound like wood.
+            return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 4, gain: 0.3), Harmonic(multiple: 9.2, gain: 0.08)]
+        case .beep:
+            // Odd harmonics only — an approximated square wave.
+            return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 3, gain: 0.33), Harmonic(multiple: 5, gain: 0.2)]
+        case .chime:
+            return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 2, gain: 0.45), Harmonic(multiple: 3, gain: 0.18)]
+        }
+    }
+
+    var pitchScale: Float {
+        switch self {
+        case .chime: return 1.5
+        default: return 1.0
+        }
+    }
+
+    var durationScale: Double {
+        switch self {
+        case .soft: return 1.0
+        case .marimba: return 1.8
+        case .beep: return 0.9
+        case .chime: return 2.4
+        }
+    }
+
+    /// Amplitude at `progress` through the tone, 0...1.
+    func envelope(_ progress: Float) -> Float {
+        switch self {
+        case .soft:
+            return sin(.pi * progress)                                  // symmetric swell
+        case .marimba, .chime:
+            return min(1, progress * 60) * exp(-4 * progress)           // struck, then decays
+        case .beep:
+            return min(1, progress * 80) * min(1, (1 - progress) * 25)  // gated
+        }
     }
 }

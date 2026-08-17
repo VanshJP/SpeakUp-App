@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import WhisperKit
 
@@ -37,6 +38,32 @@ class WhisperService {
     /// Maximum number of user-supplied bias terms to include in the prompt line, so the
     /// dictionary clause can never dominate the prompt budget even before tokenization.
     private static let maxBiasTerms = 25
+
+    /// Ceiling on a single word's length. Whisper occasionally emits a word whose end
+    /// timestamp overshoots by minutes; left alone it drags the reported duration past
+    /// the end of the file and hands every consumer of word timings — playback
+    /// highlighting, pause detection, per-word acoustics — a window of silence.
+    private static let maxWordDuration: TimeInterval = 3.0
+
+    /// Longest gap between decoded tokens before the decoder counts as hung.
+    ///
+    /// WhisperKit reports every token through the transcription callback, so a
+    /// live decoder beats many times per window. Watching that beat instead of
+    /// total elapsed time is what lets a 10-minute recording finish: the flat
+    /// 90 s cap this replaced timed those out, and each timeout fell through
+    /// the chain to Apple Speech, which returns a truncated transcript.
+    private static let decodeStallTimeout: TimeInterval = 60
+
+    /// Backstop for the one failure the stall detector cannot see: a decoder
+    /// that keeps emitting tokens while the seek point never advances through
+    /// the file. Deliberately loose — the stall detector handles every ordinary
+    /// hang long before this fires.
+    private static func decodeCeiling(for audioURL: URL) -> TimeInterval {
+        let audioDuration = (try? AVAudioFile(forReading: audioURL)).map {
+            Double($0.length) / $0.processingFormat.sampleRate
+        } ?? 0
+        return min(1800, max(300, audioDuration * 10))
+    }
 
     // MARK: - Initialization
 
@@ -148,8 +175,17 @@ class WhisperService {
                 language: "en",
                 temperature: 0.0,
                 temperatureIncrementOnFallback: 0.2,
-                temperatureFallbackCount: 3,
+                // WhisperKit's default. A window that fails the logprob or
+                // compression-ratio checks is retried at a higher temperature;
+                // cutting the retries short (this was 3) writes off marginal
+                // windows that a later attempt would have decoded. The cost is
+                // paid only on windows that are already failing.
+                temperatureFallbackCount: 5,
                 usePrefillPrompt: true,
+                // Inert while `promptTokens` is set — WhisperKit skips the KV
+                // cache prefill in that case (TextDecoder: "currently breaks if
+                // it starts at non-zero index"). Left true for the day the
+                // prompt goes away.
                 usePrefillCache: true,
                 skipSpecialTokens: false,
                 withoutTimestamps: false,
@@ -160,16 +196,35 @@ class WhisperService {
                 compressionRatioThreshold: 2.4,
                 logProbThreshold: -1.0,
                 firstTokenLogProbThreshold: -1.5,
-                noSpeechThreshold: 0.4  // Lower threshold to capture more speech including hesitations
+                // This is the *silence* trigger, not a speech-sensitivity dial.
+                // WhisperKit discards an entire 30 s window — no error, no gap
+                // marker — when `noSpeechProb > noSpeechThreshold` and the
+                // window also fails `logProbThreshold`
+                // (SegmentSeeker.findSeekPointAndSegments). Lowering it drops
+                // *more* audio, so the old 0.4 (against a 0.6 default) was
+                // deleting quiet stretches: trailing off at the end of a
+                // thought, or fading in the back half of a long recording.
+                noSpeechThreshold: 0.6
             )
 
-            // Transcribe with a timeout — WhisperKit's decoder can hang indefinitely
-            // under certain conditions (e.g. degenerate audio, prompt edge-cases).
+            // WhisperKit's decoder can hang indefinitely under certain conditions
+            // (degenerate audio, prompt edge-cases), so a watchdog runs alongside
+            // it. The watchdog measures decode *progress*, not elapsed time — see
+            // `decodeStallTimeout`. Only one result is ever returned here: without
+            // a `chunkingStrategy` WhisperKit decodes the whole file in a single
+            // task, so `.first` is the complete transcript, not the first chunk.
+            let heartbeat = DecodeHeartbeat()
+            let ceiling = WhisperService.decodeCeiling(for: audioURL)
             let result: WhisperTranscriptionResult = try await withThrowingTaskGroup(of: WhisperTranscriptionResult.self) { group in
                 group.addTask {
                     let results = try await whisperKit.transcribe(
                         audioPath: audioURL.path,
-                        decodeOptions: options
+                        decodeOptions: options,
+                        callback: { _ in
+                            heartbeat.beat()
+                            // Anything but an explicit `false` lets decoding run on.
+                            return true
+                        }
                     )
                     guard let first = results.first else {
                         throw WhisperServiceError.noSpeechTranscriptionResult
@@ -177,8 +232,14 @@ class WhisperService {
                     return first
                 }
                 group.addTask {
-                    try await Task.sleep(for: .seconds(90))
-                    throw WhisperServiceError.transcriptionTimedOut
+                    let deadline = Date().addingTimeInterval(ceiling)
+                    while true {
+                        try await Task.sleep(for: .seconds(5))
+                        guard heartbeat.secondsSinceLastBeat < WhisperService.decodeStallTimeout,
+                              Date() < deadline else {
+                            throw WhisperServiceError.transcriptionTimedOut
+                        }
+                    }
                 }
                 let first = try await group.next()!
                 group.cancelAll()
@@ -247,25 +308,7 @@ class WhisperService {
         // Sort by start time to ensure chronological order across segments
         rawTimings.sort { $0.start < $1.start }
 
-        // Normalize timings: Whisper partial segments can occasionally emit tiny overlaps
-        // or zero-length words. Clamp each word so starts never regress and every word
-        // has a non-zero duration.
-        var normalizedTimings: [RawWordTiming] = []
-        normalizedTimings.reserveCapacity(rawTimings.count)
-        var lastEnd: TimeInterval = 0
-        for timing in rawTimings {
-            let clampedStart = max(lastEnd, timing.start)
-            let clampedEnd = max(clampedStart + 0.01, timing.end)
-            normalizedTimings.append(
-                RawWordTiming(
-                    word: timing.word,
-                    start: clampedStart,
-                    end: clampedEnd,
-                    confidence: timing.confidence
-                )
-            )
-            lastEnd = clampedEnd
-        }
+        let normalizedTimings = WhisperService.normalizeTimings(rawTimings)
 
         // Run unified filler detection pipeline
         let words = FillerDetectionPipeline.tagFillers(in: normalizedTimings)
@@ -278,6 +321,39 @@ class WhisperService {
         )
     }
 
+    /// Clamp word timings: Whisper partial segments can occasionally emit tiny overlaps
+    /// or zero-length words. Every word keeps its own start (the caller sorted them, so
+    /// starts are already non-decreasing) and gets a non-zero duration bounded by both
+    /// the next word's start and `maxWordDuration`.
+    ///
+    /// Nothing carries forward: the previous version clamped each start against the
+    /// previous *end*, so one overshooting end timestamp shifted every word after it.
+    ///
+    /// Expects `rawTimings` sorted by start.
+    static func normalizeTimings(_ rawTimings: [RawWordTiming]) -> [RawWordTiming] {
+        var normalized: [RawWordTiming] = []
+        normalized.reserveCapacity(rawTimings.count)
+
+        for (index, timing) in rawTimings.enumerated() {
+            let start = max(0, timing.start)
+            let minimumEnd = start + 0.01
+            var ceiling = start + maxWordDuration
+            if index + 1 < rawTimings.count {
+                ceiling = min(ceiling, max(minimumEnd, rawTimings[index + 1].start))
+            }
+            normalized.append(
+                RawWordTiming(
+                    word: timing.word,
+                    start: start,
+                    end: min(max(minimumEnd, timing.end), ceiling),
+                    confidence: timing.confidence
+                )
+            )
+        }
+
+        return normalized
+    }
+
     // MARK: - Model Management
 
     /// Unload model to free memory
@@ -287,6 +363,29 @@ class WhisperService {
         whisperKit = nil
         isModelLoaded = false
         modelLoadProgress = 0
+    }
+}
+
+/// Liveness signal for a running decode.
+///
+/// WhisperKit invokes the transcription callback from a detached background
+/// task, once per decoded token, so this must be thread-safe and must not touch
+/// actor-isolated state. The watchdog reads `secondsSinceLastBeat` to tell a
+/// slow recording (beating steadily) from a hung decoder (silent).
+nonisolated private final class DecodeHeartbeat: @unchecked Sendable {
+    private var lastBeat = Date()
+    private let lock = NSLock()
+
+    func beat() {
+        lock.lock()
+        lastBeat = Date()
+        lock.unlock()
+    }
+
+    var secondsSinceLastBeat: TimeInterval {
+        lock.lock()
+        defer { lock.unlock() }
+        return Date().timeIntervalSince(lastBeat)
     }
 }
 

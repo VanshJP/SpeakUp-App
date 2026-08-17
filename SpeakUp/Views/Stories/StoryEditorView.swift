@@ -63,7 +63,7 @@ struct StoryEditorView: View {
         ZStack(alignment: .bottom) {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     titleField
                     folderChip

@@ -44,7 +44,7 @@ struct HistoryView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                     Section {
                         switch selectedSection {

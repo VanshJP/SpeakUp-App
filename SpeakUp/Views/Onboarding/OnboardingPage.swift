@@ -33,7 +33,7 @@ struct OnboardingPage<Content: View, Footer: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
+            PageScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     header
                     content

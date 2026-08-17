@@ -13,7 +13,7 @@ struct ProfileSettingsView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {

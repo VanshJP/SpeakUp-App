@@ -83,7 +83,7 @@ struct StreakDetailView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
+        PageScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 heroFlame
                 statsRow

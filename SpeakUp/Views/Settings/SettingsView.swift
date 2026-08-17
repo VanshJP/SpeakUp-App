@@ -10,7 +10,7 @@ struct SettingsView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 16) {
                     settingsMenuCard
                 }
@@ -71,6 +71,15 @@ struct SettingsView: View {
                 subtitle: "Target: \(viewModel.displayTargetWPM) WPM"
             ) {
                 AnalysisSettingsView(viewModel: viewModel)
+            }
+
+            settingsLink(
+                icon: "waveform.circle",
+                iconColor: AppColors.categoryBrandBright,
+                title: "Recording Look",
+                subtitle: "\(viewModel.waveformStyle.displayName) · \(viewModel.recordButtonStyle.displayName) · \(viewModel.countdownLook.displayName)"
+            ) {
+                RecordingLookView(viewModel: viewModel)
             }
 
             settingsLink(
@@ -324,7 +333,7 @@ struct AboutSettingsView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 12) {
                     GlassCard(padding: 14) {
                         HStack {

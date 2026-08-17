@@ -21,7 +21,7 @@ struct BatchAddPromptsView: View {
             ZStack {
                 AppBackground(style: .subtle)
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 20) {
                         textInputSection
                         categorySection

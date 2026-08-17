@@ -347,7 +347,7 @@ struct ProgressChartsView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 ProgressChartsContent()
                     .padding()
             }

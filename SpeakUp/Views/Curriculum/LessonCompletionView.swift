@@ -26,7 +26,7 @@ struct LessonCompletionView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 24) {
                     Spacer().frame(height: 40)
 

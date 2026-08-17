@@ -10,7 +10,7 @@ struct ComparisonView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 16) {
                     if viewModel.allRecordings.count >= 2 {
                         // Hero score summary

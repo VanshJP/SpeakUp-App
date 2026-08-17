@@ -274,6 +274,10 @@ struct SpeakUpApp: App {
             } else if let settings = existingSettings.first {
                 // Keep startup sync preference in lock-step with persisted settings.
                 ICloudStorageService.shared.isSyncEnabled = settings.iCloudSyncEnabled
+                // Audio cue preferences otherwise only land when the Settings
+                // tab is opened, so a relaunch would silently revert them.
+                ChirpPlayer.shared.isEnabled = settings.chirpSoundEnabled
+                ChirpPlayer.shared.pack = SoundPack(rawValue: settings.soundPack) ?? .soft
             }
         } catch {
             print("Error ensuring settings: \(error)")

@@ -78,7 +78,7 @@ struct JournalExportView: View {
         ZStack {
             AppBackground()
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {

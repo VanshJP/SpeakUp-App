@@ -30,7 +30,7 @@ struct WordBankView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 4)
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 16) {
                         if selectedTab == 0 {
                             wordBankTab
@@ -77,7 +77,9 @@ struct WordBankView: View {
     private var bottomInputBar: some View {
         VStack(spacing: 8) {
             // Error messages
-            if selectedTab == 0, let error = viewModel.vocabWordError {
+            if let error = dictationEngine.errorMessage {
+                errorLabel(error)
+            } else if selectedTab == 0, let error = viewModel.vocabWordError {
                 errorLabel(error)
             } else if selectedTab == 1, let error = viewModel.dictationWordError {
                 errorLabel(error)

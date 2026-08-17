@@ -1,4 +1,5 @@
 import Photos
+import SwiftData
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -18,12 +19,15 @@ struct ShareCardSheet: View {
     var onShared: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var userSettings: [UserSettings]
 
     /// The challenge card is the default — it is the one that travels, because
     /// it carries a link a friend can tap. Turning it off falls back to the
     /// scores-only card.
     @State private var includePrompt = true
-    @State private var rendered: [Variant: UIImage] = [:]
+    /// Keyed by variant *and* theme — switching either one is a different card.
+    @State private var rendered: [String: UIImage] = [:]
     @State private var confirmation: String?
     /// A card needs a score. Reached by opening the sheet on a session that was
     /// saved but never analyzed — without this the preview spins forever and
@@ -57,12 +61,22 @@ struct ShareCardSheet: View {
         challengeAvailable && includePrompt ? .challenge : .scores
     }
 
+    private var theme: ScoreCardTheme {
+        ScoreCardTheme(rawValue: userSettings.first?.shareCardTheme ?? 0) ?? .midnight
+    }
+
+    private var renderKey: String { "\(variant.rawValue)_\(theme.rawValue)" }
+
     var body: some View {
         VStack(spacing: 0) {
             header
 
-            preview(variant)
+            preview
                 .frame(maxHeight: .infinity)
+
+            if !unavailable {
+                themeStrip.padding(.bottom, 14)
+            }
 
             if challengeAvailable && !unavailable {
                 promptToggle.padding(.bottom, 18)
@@ -74,7 +88,7 @@ struct ShareCardSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         .presentationBackground { AppBackground(style: .subtle) }
-        .task(id: variant) { await renderIfNeeded(variant) }
+        .task(id: renderKey) { await renderIfNeeded(variant) }
         .overlay(alignment: .bottom) {
             if let confirmation {
                 Text(confirmation)
@@ -147,9 +161,9 @@ struct ShareCardSheet: View {
 
     // MARK: - Cards
 
-    private func preview(_ option: Variant) -> some View {
+    private var preview: some View {
         Group {
-            if let image = rendered[option] {
+            if let image = rendered[renderKey] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
@@ -194,6 +208,54 @@ struct ShareCardSheet: View {
         }
         .padding(.horizontal, 38)
         .padding(.vertical, 18)
+    }
+
+    /// Filter-strip picker: the swatch is the actual backdrop the card uses,
+    /// so no second render is needed to show what you are choosing.
+    private var themeStrip: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                ForEach(ScoreCardTheme.allCases) { option in
+                    Button {
+                        select(option)
+                    } label: {
+                        VStack(spacing: 6) {
+                            // Drawn at card scale then shrunk, so the swatch
+                            // shows the real gradient rather than one corner
+                            // of it — the orbs are sized in absolute points.
+                            option.background
+                                .frame(width: 400, height: 400)
+                                .scaleEffect(0.13)
+                                .frame(width: 52, height: 52)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(
+                                            option == theme ? Color.white.opacity(0.9) : AppColors.cardStroke,
+                                            lineWidth: option == theme ? 2 : 0.5
+                                        )
+                                }
+
+                            Text(option.displayName)
+                                .font(.caption2.weight(option == theme ? .semibold : .regular))
+                                .foregroundStyle(.white.opacity(option == theme ? 0.9 : 0.45))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(option.displayName)
+                    .accessibilityAddTraits(option == theme ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func select(_ option: ScoreCardTheme) {
+        guard option != theme, let settings = userSettings.first else { return }
+        Haptics.selection()
+        settings.shareCardTheme = option.rawValue
+        try? modelContext.save()
     }
 
     private var promptToggle: some View {
@@ -243,8 +305,8 @@ struct ShareCardSheet: View {
     /// inline on the rare miss (a tap landing before `.task` finished) rather
     /// than disabling the buttons until it lands.
     private func withImage(_ body: (UIImage) -> Void) {
-        guard let image = rendered[variant] ?? render(variant) else { return }
-        rendered[variant] = image
+        guard let image = rendered[renderKey] ?? render(variant) else { return }
+        rendered[renderKey] = image
         body(image)
     }
 
@@ -306,10 +368,11 @@ struct ShareCardSheet: View {
     /// Yields first so the sheet finishes animating in before `ImageRenderer`
     /// takes the main thread for a frame or two.
     private func renderIfNeeded(_ option: Variant) async {
-        guard rendered[option] == nil else { return }
+        let key = renderKey
+        guard rendered[key] == nil else { return }
         await Task.yield()
         if let image = render(option) {
-            rendered[option] = image
+            rendered[key] = image
         } else {
             unavailable = true
         }
@@ -318,7 +381,8 @@ struct ShareCardSheet: View {
     private func render(_ option: Variant) -> UIImage? {
         ScoreCardRenderer.render(
             recording: recording,
-            includePromptText: option.includesPromptText
+            includePromptText: option.includesPromptText,
+            theme: theme
         )
     }
 

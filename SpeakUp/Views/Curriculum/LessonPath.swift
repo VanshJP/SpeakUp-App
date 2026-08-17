@@ -155,7 +155,7 @@ struct LessonRail: Shape {
 }
 
 #Preview {
-    ScrollView {
+    PageScrollView {
         VStack(spacing: 0) {
             LessonPathRow(
                 state: .completed,

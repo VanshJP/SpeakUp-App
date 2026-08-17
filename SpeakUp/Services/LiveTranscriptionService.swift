@@ -181,11 +181,12 @@ class LiveTranscriptionService {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        // On-device keeps latency low and avoids network pauses that force
-        // early isFinal → recognition restart cycles.
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        // Unconditional: on-device processing is a product guarantee, not a
+        // preference, and `supportsOnDeviceRecognition` can read false while
+        // assets are still installing — which used to hand that session's
+        // microphone audio to Apple's servers. It also keeps latency low and
+        // avoids network pauses that force early isFinal → restart cycles.
+        request.requiresOnDeviceRecognition = true
         recognitionRequest = request
         lastProcessedSegmentCount = 0
         recognitionGeneration += 1

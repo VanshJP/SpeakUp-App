@@ -162,9 +162,11 @@ Then, on a device:
       returns with no account and no re-purchase.
 - [ ] **Refund path.** Use StoreKit's transaction manager to revoke the
       purchase and confirm the app returns to the free tier without crashing.
-- [ ] **Share privacy.** Share a score card from a prompt-backed session and
-      confirm the default card carries no prompt text; share a Then-vs-Now card
-      and confirm it carries no transcript, prompt, or story title.
+- [ ] **Share privacy.** Open the share sheet on a prompt-backed session and
+      confirm it opens on the Scores tab with no prompt text on the preview;
+      confirm Save writes to Photos after the permission prompt, and that Copy
+      pastes the card; share a Then-vs-Now card and confirm it carries no
+      transcript, prompt, or story title.
 - [ ] **Offline.** Airplane mode: recording, scoring, and playback all work; the
       paywall degrades to the fallback price rather than an empty sheet.
 - [ ] **Widgets.** Add each widget and confirm it hydrates from the App Group.

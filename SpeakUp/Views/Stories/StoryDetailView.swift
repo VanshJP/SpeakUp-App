@@ -25,7 +25,7 @@ struct StoryDetailView: View {
         ZStack(alignment: .top) {
             AppBackground(style: .subtle)
 
-            ScrollView {
+            PageScrollView {
                 VStack(spacing: 20) {
                     heroHeader
                     primaryActions

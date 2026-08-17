@@ -203,6 +203,11 @@ nonisolated enum SharedPromptLink {
 
     /// The message that travels *with* the image. Friends without the app still
     /// see the prompt; friends with the app get a tappable link.
+    ///
+    /// Kept to a headline, the prompt, and the URL. Everything the old version
+    /// spelled out — that this is a score, that the link opens the same prompt —
+    /// is already on the card or obvious from the link, and a caption people
+    /// scroll past is a caption that shares nothing.
     static func message(
         score: Int?,
         verdict: String?,
@@ -213,9 +218,9 @@ nonisolated enum SharedPromptLink {
 
         if let score {
             let verdictSuffix = verdict.map { " — \($0)" } ?? ""
-            lines.append("I scored \(score) on Big Talk\(verdictSuffix). Think you can beat it?")
+            lines.append("\(score) on Big Talk\(verdictSuffix).\(url == nil ? "" : " Beat it?")")
         } else {
-            lines.append("I just practised on Big Talk.")
+            lines.append(url == nil ? "Practising on Big Talk." : "Your turn on Big Talk.")
         }
 
         if let promptText, !promptText.isEmpty {
@@ -224,12 +229,7 @@ nonisolated enum SharedPromptLink {
         }
 
         if let url {
-            lines.append("")
-            if promptText == nil {
-                lines.append("Try Big Talk:")
-            } else {
-                lines.append("Tap to try the same prompt:")
-            }
+            if promptText == nil { lines.append("") }
             lines.append(url.absoluteString)
         }
 

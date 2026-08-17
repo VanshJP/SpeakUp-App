@@ -52,6 +52,10 @@ struct ContentView: View {
         CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown
     }
 
+    private var countdownLook: CountdownLook {
+        CountdownLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
+    }
+
     private var timerEndBehavior: TimerEndBehavior {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
@@ -187,6 +191,7 @@ struct ContentView: View {
                     duration: recordingDuration,
                     countdownDuration: countdownDuration,
                     countdownStyle: countdownStyle,
+                    look: countdownLook,
                     selectedGoalId: $recordingGoalId,
                     challenge: recordingChallenge,
                     onComplete: {

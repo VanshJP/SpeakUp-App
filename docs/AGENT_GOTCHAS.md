@@ -128,7 +128,15 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 ---
 
-## 9. Onboarding & first-run order
+## 9. Speech recognition: two silent audio-eaters
+
+**`DecodingOptions.noSpeechThreshold` is the silence trigger, not a sensitivity dial.** WhisperKit throws away an entire 30 s window — no error, no gap marker, seek just jumps forward — when `noSpeechProb >` the threshold and the window also fails `logProbThreshold` (`SegmentSeeker.findSeekPointAndSegments`). **Lowering it drops more audio, not less.** A value of 0.4 against the 0.6 default was deleting quiet stretches out of the middle and back half of recordings. Same trap shape for `temperatureFallbackCount`: cutting it below the default writes off marginal windows a retry would have decoded.
+
+**`requiresOnDeviceRecognition` must be set to `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple's servers; `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard it with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
+
+---
+
+## 10. Onboarding & first-run order
 
 Before any `Views/Onboarding/` or onboarding path in `ContentView`: read **`ONBOARDING_VISION.md`**.
 
@@ -147,4 +155,7 @@ Post-onboarding sequence after first score: `FirstRecordingSetupSheet` → `AppT
 7. Recreate StoreKit / coordinator singletons.  
 8. Absolute media paths; skip `resolvedAudioURL`.  
 9. Edit only one of the two `WidgetDataProvider`s.  
-10. Change onboarding without the vision contract (prompt stays visible, user presses record, first score ≠ grade).
+9b. Plain `ScrollView` for a full-screen page — it pans sideways the moment a child measures wider than the viewport. Use `PageScrollView`.  
+10. Change onboarding without the vision contract (prompt stays visible, user presses record, first score ≠ grade).  
+11. Lower `noSpeechThreshold` "to catch more speech" — it silently deletes whole 30 s windows.  
+12. Make `requiresOnDeviceRecognition` conditional — audio leaves the device exactly when the flag reads false.

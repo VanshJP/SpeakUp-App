@@ -29,10 +29,10 @@ struct TodayView: View {
         ZStack {
             AppBackground()
 
-            // Explicit vertical axis — the Today screen is intentionally locked
-            // to vertical scrolling only. No horizontal paging, no TabView page
-            // style, no horizontal ScrollView.
-            ScrollView(.vertical) {
+            // Vertical only, and `PageScrollView` is what makes that true: an
+            // over-wide child used to let this page pan sideways. No horizontal
+            // paging, no TabView page style, no horizontal scroller.
+            PageScrollView {
                 VStack(spacing: 20) {
 
                     // 1. Header — date + streak chip

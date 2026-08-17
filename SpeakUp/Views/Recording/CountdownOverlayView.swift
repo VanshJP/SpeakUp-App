@@ -7,6 +7,7 @@ struct CountdownOverlayView: View {
     let duration: RecordingDuration
     let countdownDuration: Int
     let countdownStyle: CountdownStyle
+    var look: CountdownLook = .ring
     let onComplete: () -> Void
     let onCancel: () -> Void
     @Binding var selectedGoalId: UUID?
@@ -42,6 +43,7 @@ struct CountdownOverlayView: View {
         duration: RecordingDuration,
         countdownDuration: Int = 15,
         countdownStyle: CountdownStyle = .countDown,
+        look: CountdownLook = .ring,
         selectedGoalId: Binding<UUID?> = .constant(nil),
         challenge: SharedChallenge? = nil,
         onComplete: @escaping () -> Void,
@@ -51,6 +53,7 @@ struct CountdownOverlayView: View {
         self.duration = duration
         self.countdownDuration = countdownDuration
         self.countdownStyle = countdownStyle
+        self.look = look
         self._selectedGoalId = selectedGoalId
         self.challenge = challenge
         self.onComplete = onComplete
@@ -64,8 +67,13 @@ struct CountdownOverlayView: View {
             AppBackground(style: .recording)
 
             VStack(spacing: 20) {
-                countdownRing
-                    .padding(.top, 60)
+                CountdownDial(
+                    look: look,
+                    progress: progress,
+                    number: displayNumber,
+                    isPulsing: isPulsing
+                )
+                .padding(.top, 60)
 
                 Spacer()
 
@@ -134,35 +142,6 @@ struct CountdownOverlayView: View {
         hasCompleted = true
         Haptics.success()
         onComplete()
-    }
-
-    // MARK: - Countdown Ring
-
-    private var countdownRing: some View {
-        ZStack {
-            Circle()
-                .fill(Color.white.opacity(0.04))
-                .frame(width: 140, height: 140)
-                .scaleEffect(isPulsing ? 1.06 : 1.0)
-
-            RingProgress(progress: progress, color: AppColors.primary, lineWidth: 5)
-                .frame(width: 110, height: 110)
-                .motion(.linear(duration: 1), value: progress)
-
-            VStack(spacing: 2) {
-                Text("\(displayNumber)")
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .contentTransition(.numericText())
-                    .animation(.spring(duration: 0.3), value: displayNumber)
-
-                Text("sec")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .textCase(.uppercase)
-                    .tracking(1.0)
-            }
-        }
     }
 
     // MARK: - Prominent Prompt Card
@@ -243,6 +222,112 @@ struct CountdownOverlayView: View {
             return Double(remainingSeconds) / Double(totalSeconds)
         case .countUp:
             return Double(elapsedSeconds) / Double(totalSeconds)
+        }
+    }
+}
+
+// MARK: - Countdown Dial
+
+/// The countdown visual on its own, so the settings picker previews exactly
+/// what the countdown screen will show.
+struct CountdownDial: View {
+    let look: CountdownLook
+    let progress: Double
+    let number: Int
+    var isPulsing: Bool = false
+
+    private let segmentCount = 12
+
+    var body: some View {
+        ZStack {
+            switch look {
+            case .ring:
+                Circle()
+                    .fill(Color.white.opacity(0.04))
+                    .frame(width: 140, height: 140)
+                    .scaleEffect(isPulsing ? 1.06 : 1.0)
+
+                RingProgress(progress: progress, color: AppColors.primary, lineWidth: 5)
+                    .frame(width: 110, height: 110)
+                    .motion(.linear(duration: 1), value: progress)
+
+                numberStack(size: 40, showsUnit: true)
+
+            case .orb:
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [AppColors.primary.opacity(0.55), AppColors.primary.opacity(0.02)],
+                            center: .center,
+                            startRadius: 6,
+                            endRadius: 78
+                        )
+                    )
+                    .frame(width: 150, height: 150)
+                    // The orb itself is the progress read-out: it shrinks as
+                    // the countdown drains, so there is no ring to read.
+                    .scaleEffect(0.72 + 0.28 * progress)
+                    .motion(.linear(duration: 1), value: progress)
+
+                numberStack(size: 46, showsUnit: false)
+
+            case .segments:
+                ZStack {
+                    ForEach(0..<segmentCount, id: \.self) { i in
+                        Capsule()
+                            .fill(
+                                Double(i) < progress * Double(segmentCount)
+                                    ? AppColors.primary
+                                    : Color.white.opacity(0.12)
+                            )
+                            .frame(width: 3, height: 14)
+                            .offset(y: -62)
+                            .rotationEffect(.degrees(Double(i) / Double(segmentCount) * 360))
+                    }
+                }
+                .frame(width: 140, height: 140)
+
+                numberStack(size: 40, showsUnit: true)
+
+            case .minimal:
+                VStack(spacing: 14) {
+                    Text("\(number)")
+                        .font(.system(size: 72, weight: .light, design: .rounded))
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText())
+                        .animation(.spring(duration: 0.3), value: number)
+
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(width: 120, height: 3)
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(AppColors.primary)
+                                .frame(width: 120 * progress, height: 3)
+                                .motion(.linear(duration: 1), value: progress)
+                        }
+                }
+                .frame(width: 140, height: 140)
+            }
+        }
+        .frame(width: 150, height: 150)
+    }
+
+    private func numberStack(size: CGFloat, showsUnit: Bool) -> some View {
+        VStack(spacing: 2) {
+            Text("\(number)")
+                .font(.system(size: size, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .animation(.spring(duration: 0.3), value: number)
+
+            if showsUnit {
+                Text("sec")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .textCase(.uppercase)
+                    .tracking(1.0)
+            }
         }
     }
 }

@@ -10,7 +10,7 @@ struct ReadAloudSelectionView: View {
             ZStack {
                 AppBackground()
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 16) {
                         Text("Read the passage out loud. We'll track your accuracy in real time.")
                             .font(.subheadline)

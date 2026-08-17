@@ -24,7 +24,7 @@ struct DrillSelectionView: View {
             ZStack {
                 AppBackground()
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 20) {
                         if let story = sourceStory {
                             sourceStoryBanner(story)
@@ -97,6 +97,7 @@ struct DrillSelectionView: View {
                         duration: .thirty,
                         countdownDuration: userSettings.first?.countdownDuration ?? 15,
                         countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
+                        look: CountdownLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
                         onComplete: {
                             showingCountdown = false
                             if let mode = selectedDrillMode {

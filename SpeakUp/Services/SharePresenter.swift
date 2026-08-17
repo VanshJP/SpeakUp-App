@@ -54,11 +54,19 @@ enum SharePresenter {
         return true
     }
 
+    /// The *topmost* presented controller, not the window root. Callers now
+    /// include `ShareCardSheet`, which is itself a presented sheet — presenting
+    /// on the root while it is up throws "already presenting" and no share
+    /// sheet ever appears.
     private static var rootViewController: UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
         guard let scene else { return nil }
         let window = scene.windows.first(where: \.isKeyWindow) ?? scene.windows.first
-        return window?.rootViewController
+        var top = window?.rootViewController
+        while let presented = top?.presentedViewController, !presented.isBeingDismissed {
+            top = presented
+        }
+        return top
     }
 }

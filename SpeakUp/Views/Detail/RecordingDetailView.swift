@@ -35,7 +35,7 @@ struct RecordingDetailView: View {
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
     @State private var coherenceEnhanceInFlight = false
     @State private var playableMediaAvailable = false
-    /// Set while the user is choosing whether the prompt text goes on the card.
+    /// Set while the share sheet is up, choosing which card leaves the app.
     @State private var pendingShareRecording: Recording?
     /// The first score has to be the first thing the user sees. A questionnaire
     /// in front of it costs the moment the whole install was for. Resolved once
@@ -132,48 +132,58 @@ struct RecordingDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
+            // The ToolbarSpacer is what stops these two icons drifting as the
+            // page scrolls. Adjacent items in one placement share a single glass
+            // capsule, and the system re-insets that capsule when the scroll-edge
+            // effect fades in and out — with two children inside, the re-inset
+            // redistributes them and both icons move. Splitting the old HStack
+            // into two ToolbarItems changed nothing, because the grouping is
+            // automatic; only a spacer breaks it. One item per capsule is the
+            // arrangement every other screen here already has, and none of them
+            // drift. Fixed sizing, not flexible: this is a divider, not a shove
+            // to opposite ends of the bar.
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(alignment: .center, spacing: 12) {
-                    Button {
-                        if case .ready(let recording) = detailScreenState {
-                            beginScoreCardShare(for: recording)
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.body)
-                            .frame(width: 28, height: 28)
+                Button {
+                    if case .ready(let recording) = detailScreenState {
+                        pendingShareRecording = recording
                     }
-
-                    Menu {
-                        if case .ready(let recording) = detailScreenState {
-                            Button {
-                                editingTitleText = recording.customTitle ?? ""
-                                isEditingTitle = true
-                            } label: {
-                                Label("Rename", systemImage: "pencil")
-                            }
-
-                            Button {
-                                toggleFavorite(recording)
-                            } label: {
-                                Label(
-                                    recording.isFavorite ? "Remove Favorite" : "Add to Favorites",
-                                    systemImage: recording.isFavorite ? "heart.slash" : "heart"
-                                )
-                            }
-                        }
-
-                        Button(role: .destructive) {
-                            showingDeleteAlert = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.body)
-                            .frame(width: 28, height: 28)
-                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
                 }
+                .accessibilityLabel("Share")
+            }
+
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if case .ready(let recording) = detailScreenState {
+                        Button {
+                            editingTitleText = recording.customTitle ?? ""
+                            isEditingTitle = true
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+
+                        Button {
+                            toggleFavorite(recording)
+                        } label: {
+                            Label(
+                                recording.isFavorite ? "Remove Favorite" : "Add to Favorites",
+                                systemImage: recording.isFavorite ? "heart.slash" : "heart"
+                            )
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        showingDeleteAlert = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("More options")
             }
         }
         .task {
@@ -210,26 +220,10 @@ struct RecordingDetailView: View {
         } message: {
             Text(playbackErrorMessage ?? "")
         }
-        .confirmationDialog(
-            "Challenge a friend?",
-            isPresented: Binding(
-                get: { pendingShareRecording != nil },
-                set: { if !$0 { pendingShareRecording = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: pendingShareRecording
-        ) { shareTarget in
-            Button("Send Prompt & Scores") {
-                presentScoreCardShare(for: shareTarget, includePromptText: true)
+        .sheet(item: $pendingShareRecording) { shareTarget in
+            ShareCardSheet(recording: shareTarget) {
+                noteReviewWorthyMoment(.shareCompleted)
             }
-            Button("Scores Only") {
-                presentScoreCardShare(for: shareTarget, includePromptText: false)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingShareRecording = nil
-            }
-        } message: { shareTarget in
-            Text("Your scores go on the card. Include \(shareCaptionDescription(for: shareTarget)) to send a link your friend can tap to try the same one.")
         }
         .sheet(isPresented: $showingScoreWeights) {
             NavigationStack {
@@ -262,7 +256,7 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func readyContent(_ recording: Recording) -> some View {
-        ScrollView(.vertical) {
+        PageScrollView {
             // Three blocks, then tabs. Context → score → what to do about it.
             // Every metric surface (radar, stat tiles, pace chart, goal) moved
             // under Breakdown: they are evidence for the score, and stacking
@@ -453,73 +447,6 @@ struct RecordingDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-        }
-    }
-
-    /// Starts a score-card share. When the session has a prompt or a story
-    /// behind it, the user is asked whether that text travels with the card —
-    /// the score is theirs to show off, the subject matter may not be.
-    private func beginScoreCardShare(for recording: Recording) {
-        guard ScoreCardRenderer.promptCaption(for: recording) != nil else {
-            presentScoreCardShare(for: recording, includePromptText: false)
-            return
-        }
-        pendingShareRecording = recording
-    }
-
-    /// What the include-prompt choice would actually reveal.
-    private func shareCaptionDescription(for recording: Recording) -> String {
-        recording.prompt != nil ? "the prompt you answered" : "your story's title"
-    }
-
-    /// Renders the score card and hands it to the system share sheet, with a
-    /// caption that carries a tappable try-this-prompt link when the sender
-    /// opted to include the prompt.
-    private func presentScoreCardShare(for recording: Recording, includePromptText: Bool) {
-        pendingShareRecording = nil
-        guard let image = ScoreCardRenderer.render(
-            recording: recording,
-            includePromptText: includePromptText
-        ) else { return }
-
-        let score = recording.analysis?.speechScore.overall
-        let url: URL?
-        let promptText: String?
-        if includePromptText, let prompt = recording.prompt {
-            let payload = SharedPromptPayload(
-                promptID: prompt.id,
-                text: prompt.text,
-                category: prompt.category,
-                difficulty: prompt.difficulty.rawValue,
-                beatScore: score,
-                source: SharedPromptLink.shareSource
-            )
-            url = SharedPromptLink.shareURL(for: payload)
-            promptText = prompt.text
-        } else if includePromptText {
-            // Story title is on the card, but a friend cannot open someone
-            // else's story. Send them into a fresh session instead.
-            url = SharedPromptLink.shareURL(for: SharedPromptPayload(source: SharedPromptLink.shareSource))
-            promptText = recording.storyTitle
-        } else {
-            url = nil
-            promptText = nil
-        }
-
-        let message = SharedPromptLink.message(
-            score: score,
-            verdict: score.map { AppColors.scoreVerdict(for: $0) },
-            promptText: includePromptText ? promptText : nil,
-            url: url
-        )
-
-        SharePresenter.present(
-            image: image,
-            cardType: includePromptText ? "score_card_with_prompt" : "score_card",
-            trigger: "recording_detail",
-            message: message
-        ) {
-            noteReviewWorthyMoment(.shareCompleted)
         }
     }
 
@@ -984,7 +911,7 @@ struct RecordingDetailView: View {
 
                 Button {
                     Haptics.light()
-                    beginScoreCardShare(for: recording)
+                    pendingShareRecording = recording
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "square.and.arrow.up")
@@ -1346,8 +1273,20 @@ struct RecordingDetailView: View {
         return DefaultFeedbackQuestions.questions + custom
     }
 
+    /// Transcript text for the LLM passes (coherence blend, coaching insight).
+    ///
+    /// Narrowed to the primary speaker when isolation actually ran — the stored
+    /// transcript keeps every word so the displayed transcript matches the audio,
+    /// but coaching the user on a second person's sentences is not useful.
+    /// `ConversationIsolationService` reports a ratio of 1.0 and no filtered
+    /// words when it decided not to separate, so this is inert on solo takes.
     private func resolvedTranscript(for recording: Recording) -> String {
+        let metrics = recording.analysis?.speakerIsolationMetrics
+        let isolationApplied = (metrics?.primarySpeakerWordRatio ?? 1.0) < 1.0
+            && (metrics?.filteredOutWordCount ?? 0) > 0
+
         let wordsTranscript = recording.transcriptionWords?
+            .filter { !isolationApplied || $0.isPrimarySpeaker }
             .map(\.word)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)

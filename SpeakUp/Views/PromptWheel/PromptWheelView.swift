@@ -13,7 +13,7 @@ struct PromptWheelView: View {
             ZStack {
                 AppBackground(style: .subtle)
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 24) {
                         headerCaption
                         wheelSection

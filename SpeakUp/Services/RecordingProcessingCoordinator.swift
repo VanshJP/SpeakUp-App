@@ -18,7 +18,7 @@ final class RecordingProcessingCoordinator {
 
     /// Analyses that cleared the allowance gate but have not been charged yet.
     ///
-    /// The gate reads persisted counters and the charge lands up to 90s later,
+    /// The gate reads persisted counters and the charge lands minutes later,
     /// after transcription. Nothing serialises two different recordings, so
     /// without this both see the same `remaining` and both go through — a user
     /// with one analysis left who stops two recordings in a row gets two.
@@ -98,7 +98,7 @@ final class RecordingProcessingCoordinator {
                 )
                 self.activeRecordingIDs.remove(id)
 
-                // Re-fetch rather than reuse `next`: processing takes up to 90s
+                // Re-fetch rather than reuse `next`: processing can take minutes
                 // and the user may have deleted it meanwhile. A recording still
                 // flagged deferred means the allowance ran out mid-run, so stop;
                 // a deleted one just means move on.
@@ -234,10 +234,10 @@ final class RecordingProcessingCoordinator {
                     llmService.localLLM.unloadModel()
                 }
 
-                // No outer timeout: every fallback leg self-bounds (WhisperKit
-                // has an internal 90s timeout per attempt, Apple Speech force-
-                // resumes at 90s). An outer race here killed the fallback chain
-                // whenever the first attempt used its full window.
+                // No outer timeout: the Whisper legs self-bound on a decode-stall
+                // watchdog and the Apple Speech leg on a duration-scaled timer.
+                // An outer race here killed the fallback chain whenever the first
+                // attempt used its full window.
                 let transcription = try await speechService.transcribe(
                     audioURL: mediaURL,
                     fillerConfig: fillerConfig,
@@ -245,7 +245,7 @@ final class RecordingProcessingCoordinator {
                     voiceProfile: voiceProfile
                 )
 
-                // Transcription ran up to 90s — confirm the recording still exists
+                // Transcription can run for minutes — confirm the recording still exists
                 // before touching its properties (deleted SwiftData objects trap).
                 guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
 
@@ -274,7 +274,7 @@ final class RecordingProcessingCoordinator {
             }
 
             // Re-fetch before writing — the user may have deleted the recording
-            // while transcription/analysis ran (up to 90s+). Writing to a deleted
+            // while transcription/analysis ran (potentially minutes). Writing to a deleted
             // SwiftData object traps.
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             if let text = computed.2 {

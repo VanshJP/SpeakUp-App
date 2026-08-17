@@ -15,7 +15,7 @@ struct BeforeAfterReplayView: View {
             ZStack {
                 AppBackground()
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 20) {
                         if viewModel.isLoaded {
                             // Header

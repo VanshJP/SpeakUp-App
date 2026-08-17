@@ -19,7 +19,7 @@ struct WarmUpListView: View {
             ZStack {
                 AppBackground()
 
-                ScrollView {
+                PageScrollView {
                     VStack(spacing: 16) {
                         if let story = sourceStory {
                             sourceStoryBanner(story)
