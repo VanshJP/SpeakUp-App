@@ -77,7 +77,7 @@ struct SettingsView: View {
                 icon: "waveform.circle",
                 iconColor: AppColors.categoryBrandBright,
                 title: "Recording Look",
-                subtitle: "\(viewModel.waveformStyle.displayName) · \(viewModel.recordButtonStyle.displayName) · \(viewModel.countdownLook.displayName)"
+                subtitle: "\(viewModel.waveformStyle.displayName) · \(viewModel.recordButtonStyle.displayName) · \(viewModel.countdownLook.displayName) · \(viewModel.countdownBackdrop.displayName)"
             ) {
                 RecordingLookView(viewModel: viewModel)
             }
