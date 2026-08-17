@@ -60,7 +60,15 @@ struct RecordingLookView: View {
                     ) { style in
                         viewModel.waveformStyle = style
                     } thumbnail: { style in
-                        CircularWaveformView(style: style, canvasSize: 76, simulated: true)
+                        if style == .off {
+                            // Off draws nothing, and a blank tile reads as a
+                            // broken thumbnail rather than a choice.
+                            Image(systemName: "waveform.slash")
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.55))
+                        } else {
+                            CircularWaveformView(style: style, canvasSize: 76, simulated: true)
+                        }
                     }
 
                     group(

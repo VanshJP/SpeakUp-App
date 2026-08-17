@@ -531,6 +531,8 @@ enum WaveformStyle: Int, Codable, CaseIterable, Identifiable {
     case ribbon = 3
     case pulse = 4
     case spark = 5
+    /// Named `off`, not `none`, so `.none` never reads as an Optional here.
+    case off = 6
 
     var id: Int { rawValue }
 
@@ -542,6 +544,7 @@ enum WaveformStyle: Int, Codable, CaseIterable, Identifiable {
         case .ribbon: return "Ribbon"
         case .pulse: return "Pulse"
         case .spark: return "Spark"
+        case .off: return "Off"
         }
     }
 }
