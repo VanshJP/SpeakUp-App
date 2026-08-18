@@ -135,25 +135,19 @@ struct RecordingDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        // Actions read `recording` directly. Switching on `detailScreenState`
+        // made Share a silent no-op during analyzing / feedback, which is
+        // when these buttons are on screen and look tappable.
         .toolbar {
-            // The ToolbarSpacer is what stops these two icons drifting as the
-            // page scrolls. Adjacent items in one placement share a single glass
-            // capsule, and the system re-insets that capsule when the scroll-edge
-            // effect fades in and out — with two children inside, the re-inset
-            // redistributes them and both icons move. Splitting the old HStack
-            // into two ToolbarItems changed nothing, because the grouping is
-            // automatic; only a spacer breaks it. One item per capsule is the
-            // arrangement every other screen here already has, and none of them
-            // drift. Fixed sizing, not flexible: this is a divider, not a shove
-            // to opposite ends of the bar.
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    if case .ready(let recording) = detailScreenState {
-                        pendingShareRecording = recording
-                    }
+                    guard let recording else { return }
+                    Haptics.light()
+                    pendingShareRecording = recording
                 } label: {
-                    Image(systemName: "square.and.arrow.up")
+                    DetailToolbarGlyph("square.and.arrow.up", yOffset: 1)
                 }
+                .disabled(recording == nil)
                 .accessibilityLabel("Share")
             }
 
@@ -161,7 +155,7 @@ struct RecordingDetailView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    if case .ready(let recording) = detailScreenState {
+                    if let recording {
                         Button {
                             editingTitleText = recording.customTitle ?? ""
                             isEditingTitle = true
@@ -185,7 +179,10 @@ struct RecordingDetailView: View {
                         Label("Delete", systemImage: "trash")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    // Bare `ellipsis`, not `ellipsis.circle`: the bar already
+                    // wraps each item in a glass circle, and a circled glyph
+                    // inside that circle sits optically lower than Share.
+                    DetailToolbarGlyph("ellipsis")
                 }
                 .accessibilityLabel("More options")
             }
@@ -260,7 +257,7 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func readyContent(_ recording: Recording) -> some View {
-        PageScrollView {
+        PageScrollView(pinTopEdge: true) {
             // Three blocks, then tabs. Context → score → what to do about it.
             // Every metric surface (radar, stat tiles, pace chart, goal) moved
             // under Breakdown: they are evidence for the score, and stacking
@@ -1726,6 +1723,27 @@ private enum AIInsightBlock {
     case heading(AttributedString)
     case paragraph(AttributedString)
     case bullet(AttributedString)
+}
+
+/// Same box for every trailing detail glyph so Liquid Glass circles line up.
+/// `square.and.arrow.up` is optically top-heavy (the arrow sits above the
+/// square); a 1pt nudge matches it to `ellipsis`.
+private struct DetailToolbarGlyph: View {
+    let systemName: String
+    var yOffset: CGFloat = 0
+
+    init(_ systemName: String, yOffset: CGFloat = 0) {
+        self.systemName = systemName
+        self.yOffset = yOffset
+    }
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.body.weight(.medium))
+            .frame(width: 22, height: 22)
+            .offset(y: yOffset)
+            .contentShape(Rectangle())
+    }
 }
 
 // MARK: - Goal Progress Badge

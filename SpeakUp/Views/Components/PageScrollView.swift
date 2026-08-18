@@ -20,6 +20,11 @@ import SwiftUI
 /// rows, card rails) stay as `ScrollView(.horizontal)`.
 struct PageScrollView<Content: View>: View {
     var showsIndicators: Bool = true
+    /// iOS 26's default *soft* top scroll-edge effect re-insets floating
+    /// toolbar glass as content slides under the bar, so trailing icons bounce
+    /// up and down. Pin it on screens with a hidden nav bar and trailing
+    /// actions (`RecordingDetailView`).
+    var pinTopEdge: Bool = false
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -28,5 +33,6 @@ struct PageScrollView<Content: View>: View {
                 .containerRelativeFrame(.horizontal)
         }
         .scrollIndicators(showsIndicators ? .automatic : .hidden)
+        .scrollEdgeEffectDisabled(pinTopEdge, for: .top)
     }
 }

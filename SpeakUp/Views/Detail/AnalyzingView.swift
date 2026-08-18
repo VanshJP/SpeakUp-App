@@ -139,10 +139,9 @@ struct AnalyzingView: View {
     private var feedbackContent: some View {
         Group {
             if feedbackQuestions.count > 2 {
-                PageScrollView {
+                PageScrollView(showsIndicators: false, pinTopEdge: true) {
                     feedbackContentStack
                 }
-                .scrollIndicators(.hidden)
             } else {
                 feedbackContentStack
             }
@@ -677,7 +676,7 @@ private struct DetailSkeletonView: View {
     let tipVisible: Bool
 
     var body: some View {
-        PageScrollView {
+        PageScrollView(pinTopEdge: true) {
             // Single ShimmerHost drives one animation for every skeleton
             // primitive in this view via the shimmerPhase environment value.
             ShimmerHost {
