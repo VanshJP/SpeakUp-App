@@ -67,6 +67,8 @@ class RecordingViewModel {
 
     // Live filler counter
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
+    var liveCaptionTokens: [LiveCaptionToken] { liveTranscriptionService.liveCaptionTokens }
+    var heardVocabKeys: Set<String> { liveTranscriptionService.heardVocabKeys }
 
     // Filler word config (set before recording starts)
     var fillerConfig: FillerWordConfig = .default

@@ -303,14 +303,15 @@ struct RecordingView: View {
 
             // Compact prompt card at top (during recording)
             if let prompt, viewModel.isRecording {
-                compactPromptCard(prompt)
+                CompactPromptCard(category: prompt.category, text: prompt.text)
             }
 
             if !overlayWords.isEmpty {
                 VocabStrip(
                     words: overlayWords,
                     introduced: overlayIntroduced,
-                    reviewing: overlayReviewing
+                    reviewing: overlayReviewing,
+                    heard: viewModel.heardVocabKeys
                 )
             }
         }
@@ -322,6 +323,7 @@ struct RecordingView: View {
             overlayWords = []
             overlayIntroduced = []
             overlayReviewing = []
+            viewModel.liveTranscriptionService.targetVocab = []
             return
         }
 
@@ -340,6 +342,7 @@ struct RecordingView: View {
                     .filter { $0.isReview == true }
                     .map(\.id)
             )
+            viewModel.liveTranscriptionService.targetVocab = Array(overlayWords.prefix(4))
             return
         }
 
@@ -348,39 +351,27 @@ struct RecordingView: View {
         overlayWords = settings.vocabWords
         overlayIntroduced = []
         overlayReviewing = []
-    }
-
-    private func compactPromptCard(_ prompt: Prompt) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(prompt.category)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.6))
-
-            Text(prompt.text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(2)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: 14)
-        .padding(.horizontal, 4)
+        viewModel.liveTranscriptionService.targetVocab = Array(overlayWords.prefix(4))
     }
 
     // MARK: - Center Content
 
     private var centerContent: some View {
-        TimerView(
-            remainingTime: viewModel.displayTime,
-            progress: viewModel.progress,
-            color: viewModel.timerColor,
-            isRecording: viewModel.isRecording,
-            isOvertime: viewModel.isOvertime,
-            timerLabel: viewModel.timerLabel,
-            // Same dial the countdown just drew — the look is picked once
-            // in Settings and has to survive the hand-off to recording.
-            look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
-        )
+        VStack(spacing: 16) {
+            LiveCaptionView(tokens: viewModel.liveCaptionTokens)
+
+            TimerView(
+                remainingTime: viewModel.displayTime,
+                progress: viewModel.progress,
+                color: viewModel.timerColor,
+                isRecording: viewModel.isRecording,
+                isOvertime: viewModel.isOvertime,
+                timerLabel: viewModel.timerLabel,
+                // Same dial the countdown just drew — the look is picked once
+                // in Settings and has to survive the hand-off to recording.
+                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
+            )
+        }
     }
 
     private func coachingCueView(_ cue: CoachingCue) -> some View {
@@ -723,18 +714,22 @@ private struct RecordButtonWaveformStack: View {
 ///
 /// This used to be a glass panel floating over the top of the screen, which
 /// landed squarely on the compact prompt card and hid the thing the speaker was
-/// supposed to be answering. A chip row that takes its own space costs a few
-/// points of height and blocks nothing.
+/// supposed to be answering. Chips light up when live transcription hears the
+/// word (same `VocabMatcher` as post-take analysis).
 private struct VocabStrip: View {
     let words: [String]
     let introduced: Set<String>
     let reviewing: Set<String>
+    let heard: Set<String>
 
     /// Mid-sentence is no time to read a list. Anything past a few chips is
     /// reference material, and reference material belongs on Today.
     private var shown: [String] { Array(words.prefix(4)) }
 
     var body: some View {
+        let used = shown.filter { heard.contains($0.lowercased()) }
+        let pending = shown.filter { !heard.contains($0.lowercased()) }
+
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: "character.book.closed")
                 .font(.system(size: 10, weight: .semibold))
@@ -750,31 +745,98 @@ private struct VocabStrip: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
+        .motion(AppMotion.settle, value: heard)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Words to use: \(shown.joined(separator: ", "))")
+        .accessibilityLabel(vocabAccessibilityLabel(used: used, pending: pending))
+    }
+
+    private func vocabAccessibilityLabel(used: [String], pending: [String]) -> String {
+        if pending.isEmpty {
+            return "All spotlight words used: \(shown.joined(separator: ", "))"
+        }
+        if used.isEmpty {
+            return "Words to use: \(pending.joined(separator: ", "))"
+        }
+        return "Used \(used.joined(separator: ", ")). Still to use: \(pending.joined(separator: ", "))"
     }
 
     private func chip(_ word: String) -> some View {
-        let tint = tint(for: word)
-        return Text(word)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.white.opacity(0.9))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background {
-                Capsule()
-                    .fill(tint.opacity(0.18))
-                    .overlay {
-                        Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.5)
-                    }
+        let on = heard.contains(word.lowercased())
+        let chipTint = on ? AppColors.success : sourceTint(for: word)
+        return HStack(spacing: 4) {
+            if on {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8, weight: .bold))
             }
+            Text(word)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.white.opacity(0.9))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background {
+            Capsule()
+                .fill(chipTint.opacity(on ? 0.28 : 0.18))
+                .overlay {
+                    Capsule().strokeBorder(chipTint.opacity(on ? 0.55 : 0.35), lineWidth: 0.5)
+                }
+        }
     }
 
-    private func tint(for word: String) -> Color {
+    private func sourceTint(for word: String) -> Color {
         let key = word.lowercased()
         if reviewing.contains(key) { return AppColors.primary }
         if introduced.contains(key) { return AppColors.categorySage }
         return .white
+    }
+}
+
+// MARK: - Compact Prompt Card
+
+/// Isolated so expand/collapse `@State` survives the 10 Hz recording tick.
+/// A `Button` here works; a `Menu` in the parent tree did not.
+private struct CompactPromptCard: View {
+    let category: String
+    let text: String
+    @State private var expanded = false
+
+    var body: some View {
+        Button {
+            Haptics.light()
+            expanded.toggle()
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(category)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.6))
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+
+                Text(text)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(expanded ? 8 : 2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .glassCard(cornerRadius: 14)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .motion(AppMotion.settle, value: expanded)
+        .accessibilityLabel("Prompt, \(category)")
+        .accessibilityValue(text)
+        .accessibilityHint(expanded ? "Collapses the prompt" : "Shows the full prompt")
     }
 }
 

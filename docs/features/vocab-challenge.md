@@ -20,7 +20,7 @@ An FSRS schedule decides *when* a word comes back, so words the user has already
 | Models | `SpeakUp/Models/VocabChallenge.swift` |
 | Today card | `SpeakUp/Views/Today/VocabChallengeCard.swift` |
 | Settings | `VocabChallengeSettingsCard` in `WordBankView.swift` |
-| Recording strip | `VocabStrip` in `RecordingView.swift` |
+| Recording strip | `VocabStrip` in `RecordingView.swift` — chips light when live transcription matches via `VocabMatcher` |
 | Tests | `SpeakUpTests/VocabChallengeTests.swift` |
 
 ## Invariants

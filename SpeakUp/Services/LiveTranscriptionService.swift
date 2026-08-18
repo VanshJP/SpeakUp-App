@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import Observation
 import os
 
 @Observable
@@ -9,6 +10,17 @@ class LiveTranscriptionService {
     var liveWordCount = 0
     var isActive = false
     var fillerConfig: FillerWordConfig = .default
+    /// Latest-utterance caption tokens. Written only when the slice changes.
+    var liveCaptionTokens: [LiveCaptionToken] = []
+    /// Spotlight words the speaker has already used this take (lowercase keys).
+    var heardVocabKeys: Set<String> = []
+    /// Words the recording strip is showing. Ignored by observation — the view
+    /// writes this once per session, and matching results go through `heardVocabKeys`.
+    @ObservationIgnored var targetVocab: [String] = []
+    /// Finished utterances, kept across SFSpeech restarts so vocab matching
+    /// still sees words from before the last pause.
+    @ObservationIgnored private var committedTranscript = ""
+    @ObservationIgnored private var currentUtterance = ""
 
     /// Timestamp (relative to recognition start) when the last spoken word ended.
     /// Used to detect sentence boundaries for graceful recording stop.
@@ -91,6 +103,10 @@ class LiveTranscriptionService {
 
         liveFillerCount = 0
         liveWordCount = 0
+        liveCaptionTokens = []
+        heardVocabKeys = []
+        committedTranscript = ""
+        currentUtterance = ""
         lastSegmentEndTime = 0
         lastProcessedSegmentCount = 0
         segmentTimeOffset = 0
@@ -247,6 +263,12 @@ class LiveTranscriptionService {
         // Carry forward the furthest end time so sentence-boundary detection
         // still works across request boundaries.
         segmentTimeOffset = max(segmentTimeOffset, lastSegmentEndTime)
+        if !currentUtterance.isEmpty {
+            committedTranscript = committedTranscript.isEmpty
+                ? currentUtterance
+                : committedTranscript + " " + currentUtterance
+            currentUtterance = ""
+        }
 
         // Invalidate in-flight callbacks before cancelling so the cancel error
         // cannot recurse into another restart.
@@ -305,5 +327,34 @@ class LiveTranscriptionService {
         liveFillerCount = max(liveFillerCount, fillerCount)
         liveWordCount = max(liveWordCount, wordCount)
         lastSegmentEndTime = max(lastSegmentEndTime, segmentTimeOffset + endTime)
+
+        currentUtterance = words.joined(separator: " ")
+        let tokens = LiveTakeText.tokens(words: words)
+        if tokens != liveCaptionTokens {
+            liveCaptionTokens = tokens
+        }
+        refreshHeardVocab()
+    }
+
+    private func refreshHeardVocab() {
+        guard !targetVocab.isEmpty else { return }
+        let haystack = committedTranscript.isEmpty
+            ? currentUtterance
+            : committedTranscript + " " + currentUtterance
+        guard !haystack.isEmpty else { return }
+
+        var heard = heardVocabKeys
+        var grew = false
+        for word in targetVocab {
+            let key = word.lowercased()
+            if heard.contains(key) { continue }
+            if VocabMatcher.contains(word, in: haystack) {
+                heard.insert(key)
+                grew = true
+            }
+        }
+        if grew {
+            heardVocabKeys = heard
+        }
     }
 }
