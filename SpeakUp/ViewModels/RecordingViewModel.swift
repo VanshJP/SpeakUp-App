@@ -69,6 +69,12 @@ class RecordingViewModel {
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
     var liveCaptionTokens: [LiveCaptionToken] { liveTranscriptionService.liveCaptionTokens }
     var heardVocabKeys: Set<String> { liveTranscriptionService.heardVocabKeys }
+    /// Spotlight words the live matcher should listen for. Set once per session,
+    /// before `startRecording()`; `start()` clears the matches, not the targets.
+    var targetVocab: [String] {
+        get { liveTranscriptionService.targetVocab }
+        set { liveTranscriptionService.targetVocab = newValue }
+    }
 
     // Filler word config (set before recording starts)
     var fillerConfig: FillerWordConfig = .default

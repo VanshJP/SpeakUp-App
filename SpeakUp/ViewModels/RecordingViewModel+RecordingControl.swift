@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import UIKit
+import os
 
 extension RecordingViewModel {
     // MARK: - Recording Control
@@ -22,11 +23,18 @@ extension RecordingViewModel {
             // session into a 0 Hz format and aborts inside AVAudioEngine.
             liveTranscriptionService.fillerConfig = fillerConfig
             let authorized = await liveTranscriptionService.requestAuthorization()
-            if authorized {
-                try? await Task.sleep(for: .milliseconds(150))
-                guard isRecording else { return }
-                liveTranscriptionService.start()
+            guard authorized else {
+                // Denied once = denied forever, and the whole live layer (filler
+                // count, captions, spotlight chips) goes quiet with nothing on
+                // screen to say why. Recording and post-take scoring are
+                // unaffected, so this is not fatal — just invisible.
+                Logger(subsystem: "com.vansh.SpeakUpMore", category: "LiveTranscription")
+                    .error("speech recognition not authorized — no live fillers, captions, or vocab chips this take")
+                return
             }
+            try? await Task.sleep(for: .milliseconds(150))
+            guard isRecording else { return }
+            liveTranscriptionService.start()
         } catch {
             self.error = error
         }

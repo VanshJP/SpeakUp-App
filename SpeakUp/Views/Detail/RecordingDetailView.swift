@@ -151,6 +151,13 @@ struct RecordingDetailView: View {
                 .accessibilityLabel("Share")
             }
 
+            // Load-bearing, not decoration. Adjacent items in one placement
+            // share a single glass capsule, and the system re-insets that
+            // capsule as content scrolls under it — with two children inside,
+            // the re-inset redistributes them and both icons drift. The spacer
+            // is what gives each icon its own capsule; `pinTopEdge` on the
+            // scroll view stops the re-inset itself. Belt and braces, because
+            // only one of the two is under our control across OS updates.
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
 
             ToolbarItem(placement: .topBarTrailing) {

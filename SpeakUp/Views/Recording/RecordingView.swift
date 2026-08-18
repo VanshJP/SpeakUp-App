@@ -323,7 +323,7 @@ struct RecordingView: View {
             overlayWords = []
             overlayIntroduced = []
             overlayReviewing = []
-            viewModel.liveTranscriptionService.targetVocab = []
+            viewModel.targetVocab = []
             return
         }
 
@@ -342,7 +342,7 @@ struct RecordingView: View {
                     .filter { $0.isReview == true }
                     .map(\.id)
             )
-            viewModel.liveTranscriptionService.targetVocab = Array(overlayWords.prefix(4))
+            viewModel.targetVocab = VocabStrip.shown(overlayWords)
             return
         }
 
@@ -351,7 +351,7 @@ struct RecordingView: View {
         overlayWords = settings.vocabWords
         overlayIntroduced = []
         overlayReviewing = []
-        viewModel.liveTranscriptionService.targetVocab = Array(overlayWords.prefix(4))
+        viewModel.targetVocab = VocabStrip.shown(overlayWords)
     }
 
     // MARK: - Center Content
@@ -724,7 +724,13 @@ private struct VocabStrip: View {
 
     /// Mid-sentence is no time to read a list. Anything past a few chips is
     /// reference material, and reference material belongs on Today.
-    private var shown: [String] { Array(words.prefix(4)) }
+    ///
+    /// The one owner of the cut: the live matcher listens for exactly the words
+    /// this returns, so a chip can never light up for a word off the strip —
+    /// or stay dark for one on it.
+    static func shown(_ words: [String]) -> [String] { Array(words.prefix(4)) }
+
+    private var shown: [String] { Self.shown(words) }
 
     var body: some View {
         let used = shown.filter { heard.contains($0.lowercased()) }

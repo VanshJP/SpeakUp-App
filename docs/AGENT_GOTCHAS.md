@@ -140,7 +140,7 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 ## 10. No `Menu` / `Picker` on the live recording tree
 
-`RecordingViewModel` ticks at 10 Hz and writes `@Observable` fields the parent view reads. A `Menu` or `Picker` in that tree re-identifies every tick, so taps look dead (STAR/PREP mid-take controls). Isolated `Button`s with their own `@State` (`CompactPromptCard`) and POD children (`LiveCaptionView`) survive. Teach frameworks in Learn. Do not overlay them on the take.
+`RecordingViewModel` ticks at 10 Hz and writes `@Observable` fields the parent view reads. Observed symptom: a `Menu` / `Picker` placed directly in that tree stops responding to taps (the STAR/PREP mid-take controls) — presentation appears to lose its anchor as the parent re-evaluates. Not root-caused; `Menu` works fine on quiet screens (`RecordingDetailView`). What does survive: isolated `Button`s owning their own `@State` (`CompactPromptCard`) and POD children fed plain values (`LiveCaptionView`). Also: anything on this screen that sizes to live content must reserve its height, or the centred timer moves under it. Teach frameworks in Learn, not overlaid on the take.
 
 ---
 

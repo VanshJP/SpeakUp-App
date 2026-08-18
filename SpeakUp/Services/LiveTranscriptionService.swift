@@ -17,9 +17,11 @@ class LiveTranscriptionService {
     /// Words the recording strip is showing. Ignored by observation — the view
     /// writes this once per session, and matching results go through `heardVocabKeys`.
     @ObservationIgnored var targetVocab: [String] = []
-    /// Finished utterances, kept across SFSpeech restarts so vocab matching
-    /// still sees words from before the last pause.
-    @ObservationIgnored private var committedTranscript = ""
+    /// Text of the *current* recognition request only. Nothing older is kept:
+    /// `heardVocabKeys` is sticky and every utterance is scanned word by word
+    /// while it is live, so a hit in an earlier utterance is already recorded
+    /// by the time SFSpeech restarts. Replaying the whole take would only make
+    /// the scan grow O(n²) for no extra match.
     @ObservationIgnored private var currentUtterance = ""
 
     /// Timestamp (relative to recognition start) when the last spoken word ended.
@@ -42,6 +44,14 @@ class LiveTranscriptionService {
     private var recognitionGeneration = 0
     /// `removeTap` crashes if no tap is installed — track it explicitly.
     private var isTapInstalled = false
+    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LiveTranscription")
+    /// Restarts since the last word we actually heard. A pause-triggered
+    /// restart is normal and resets this on the next word; a request that dies
+    /// before delivering anything does not, so a hard failure (missing
+    /// on-device asset, revoked authorization) climbs to the cap instead of
+    /// respinning a doomed request forever with nothing on screen.
+    @ObservationIgnored private var barrenRestarts = 0
+    private static let barrenRestartCap = 3
     /// Token only — touched from `deinit` (nonisolated) and init.
     nonisolated(unsafe) private var interruptionObserver: NSObjectProtocol?
 
@@ -88,7 +98,11 @@ class LiveTranscriptionService {
     /// NSException that Swift `do/catch` cannot catch — abort.
     @MainActor
     func start() {
-        guard let recognizer, recognizer.isAvailable else { return }
+        guard let recognizer, recognizer.isAvailable else {
+            logger.error("start aborted — recognizer nil or unavailable (no live fillers or captions)")
+            return
+        }
+        barrenRestarts = 0
 
         // Idempotent: a rapid double-tap on the record button, or a re-entry
         // from the view-model before the previous session has fully torn
@@ -105,7 +119,6 @@ class LiveTranscriptionService {
         liveWordCount = 0
         liveCaptionTokens = []
         heardVocabKeys = []
-        committedTranscript = ""
         currentUtterance = ""
         lastSegmentEndTime = 0
         lastProcessedSegmentCount = 0
@@ -185,7 +198,10 @@ class LiveTranscriptionService {
     @MainActor
     @discardableResult
     private func attachRecognition(on engine: AVAudioEngine) -> Bool {
-        guard let recognizer, recognizer.isAvailable else { return false }
+        guard let recognizer, recognizer.isAvailable else {
+            logger.error("attach aborted — recognizer became unavailable mid-session")
+            return false
+        }
 
         let inputNode = engine.inputNode
         // Prefer inputFormat — outputFormat can report 0 Hz before the graph
@@ -231,11 +247,15 @@ class LiveTranscriptionService {
             // and partial-result writes never race the 10 Hz recording timer
             // that reads `isActive` / `lastSegmentEndTime`.
             let hadError = error != nil
+            let errorText = error.map { String(describing: $0) }
             let isFinal = result?.isFinal ?? false
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 // Ignore callbacks from cancelled generations (restart/stop).
                 guard self.isActive, self.recognitionGeneration == generation else { return }
+                if let errorText {
+                    self.logger.error("recognition task failed: \(errorText, privacy: .public)")
+                }
                 if let result { self.processPartialResult(result) }
 
                 // SFSpeech auto-finalizes after a pause. Previously we tore
@@ -260,15 +280,20 @@ class LiveTranscriptionService {
             return
         }
 
+        barrenRestarts += 1
+        guard barrenRestarts <= Self.barrenRestartCap else {
+            let cap = Self.barrenRestartCap
+            let available = recognizer?.isAvailable ?? false
+            let onDevice = recognizer?.supportsOnDeviceRecognition ?? false
+            logger.error("giving up after \(cap, privacy: .public) restarts with no words — available: \(available, privacy: .public), onDeviceSupported: \(onDevice, privacy: .public). Live fillers and captions are off for this take.")
+            stopInternal()
+            return
+        }
+
         // Carry forward the furthest end time so sentence-boundary detection
         // still works across request boundaries.
         segmentTimeOffset = max(segmentTimeOffset, lastSegmentEndTime)
-        if !currentUtterance.isEmpty {
-            committedTranscript = committedTranscript.isEmpty
-                ? currentUtterance
-                : committedTranscript + " " + currentUtterance
-            currentUtterance = ""
-        }
+        currentUtterance = ""
 
         // Invalidate in-flight callbacks before cancelling so the cancel error
         // cannot recurse into another restart.
@@ -300,6 +325,10 @@ class LiveTranscriptionService {
             // utterances and we don't want the UI to flash back to 0.
             return
         }
+
+        // Any real word proves the pipeline is alive — a later restart is a
+        // pause, not a failure.
+        barrenRestarts = 0
 
         // Skip reprocessing when the recognizer revises existing segments
         // without adding new words. Post-recording analysis handles precision.
@@ -336,25 +365,15 @@ class LiveTranscriptionService {
         refreshHeardVocab()
     }
 
+    /// Runs on the main actor once per newly recognised word. Only unmatched
+    /// targets are scanned, and only against the live utterance.
     private func refreshHeardVocab() {
-        guard !targetVocab.isEmpty else { return }
-        let haystack = committedTranscript.isEmpty
-            ? currentUtterance
-            : committedTranscript + " " + currentUtterance
-        guard !haystack.isEmpty else { return }
-
-        var heard = heardVocabKeys
-        var grew = false
-        for word in targetVocab {
-            let key = word.lowercased()
-            if heard.contains(key) { continue }
-            if VocabMatcher.contains(word, in: haystack) {
-                heard.insert(key)
-                grew = true
-            }
-        }
-        if grew {
-            heardVocabKeys = heard
-        }
+        let found = LiveTakeText.newlyHeard(
+            targets: targetVocab,
+            in: currentUtterance,
+            already: heardVocabKeys
+        )
+        guard !found.isEmpty else { return }
+        heardVocabKeys.formUnion(found)
     }
 }

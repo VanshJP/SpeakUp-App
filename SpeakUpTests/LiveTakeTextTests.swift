@@ -30,4 +30,31 @@ struct LiveTakeTextTests {
     @Test func normalizedWordStripsCaseAndPunctuation() {
         #expect(LiveTakeText.normalizedWord(" Um, ") == "um")
     }
+
+    // MARK: - Spotlight matching
+
+    @Test func spotlightWordIsHeardWithItsInflections() {
+        let found = LiveTakeText.newlyHeard(
+            targets: ["Candid", "ephemeral"],
+            in: "she gave the most candidly honest answer",
+            already: []
+        )
+        #expect(found == ["candid"])
+    }
+
+    @Test func alreadyHeardWordsAreNotRescanned() {
+        let found = LiveTakeText.newlyHeard(
+            targets: ["candid"],
+            in: "another candid answer",
+            already: ["candid"]
+        )
+        #expect(found.isEmpty)
+    }
+
+    /// Empty is the caller's signal to skip the `@Observable` write.
+    @Test func nothingToMatchYieldsNoWrite() {
+        #expect(LiveTakeText.newlyHeard(targets: ["candid"], in: "", already: []).isEmpty)
+        #expect(LiveTakeText.newlyHeard(targets: [], in: "candid", already: []).isEmpty)
+        #expect(LiveTakeText.newlyHeard(targets: ["candid"], in: "no match here", already: []).isEmpty)
+    }
 }
