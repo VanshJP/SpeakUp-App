@@ -234,13 +234,13 @@ struct WordBankView: View {
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.4))
 
-                detectionTypePill(label: "Always", isSelected: !newFillerIsContextDependent) {
+                CardPill(label: "Always", isSelected: !newFillerIsContextDependent, tint: AppColors.warning) {
                     withAnimation(.spring(response: 0.25)) {
                         newFillerIsContextDependent = false
                     }
                 }
 
-                detectionTypePill(label: "Context-only", isSelected: newFillerIsContextDependent) {
+                CardPill(label: "Context-only", isSelected: newFillerIsContextDependent, tint: AppColors.warning) {
                     withAnimation(.spring(response: 0.25)) {
                         newFillerIsContextDependent = true
                     }
@@ -308,7 +308,17 @@ struct WordBankView: View {
 
     private var wordBankTab: some View {
         VStack(spacing: 16) {
-            // Explanation text (compact)
+            VocabChallengeSettingsCard(viewModel: viewModel)
+
+            // Live dictation preview
+            if dictationEngine.isListening {
+                dictationPreview(tint: AppColors.primary)
+            }
+
+            // Word chips — above the explainer so the list, not the settings,
+            // is what the tab is about.
+            vocabWordsSection
+
             HStack(spacing: 8) {
                 Image(systemName: "character.book.closed.fill")
                     .font(.caption)
@@ -318,14 +328,6 @@ struct WordBankView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 4)
-
-            // Live dictation preview
-            if dictationEngine.isListening {
-                dictationPreview(tint: AppColors.primary)
-            }
-
-            // Word chips
-            vocabWordsSection
         }
     }
 
@@ -558,28 +560,6 @@ struct WordBankView: View {
         }
     }
 
-    private func detectionTypePill(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background {
-                    Capsule()
-                        .fill(isSelected ? AppColors.warning.opacity(0.25) : Color.white.opacity(0.05))
-                        .overlay {
-                            Capsule()
-                                .strokeBorder(
-                                    isSelected ? AppColors.warning.opacity(0.5) : Color.white.opacity(0.08),
-                                    lineWidth: 0.5
-                                )
-                        }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
     private var alwaysDetectedSection: some View {
         let unconditional = viewModel.activeFillerWords.filter { !$0.isContextDependent }
         return GlassCard {
@@ -723,6 +703,116 @@ struct WordBankView: View {
         .foregroundStyle(AppColors.error)
         .padding(.horizontal, 4)
         .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
+
+// MARK: - Daily word workout
+
+struct VocabChallengeSettingsCard: View {
+    @Bindable var viewModel: SettingsViewModel
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle(isOn: $viewModel.vocabChallengeEnabled) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "character.book.closed")
+                            .foregroundStyle(AppColors.categorySage)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Daily word workout")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Spotlight a few words. Use each one in a sentence.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .tint(AppColors.primary)
+                .onChange(of: viewModel.vocabChallengeEnabled) { _, _ in
+                    viewModel.saveVocabChallengeSettings()
+                }
+
+                if viewModel.vocabChallengeEnabled {
+                    Divider()
+
+                    HStack(spacing: 6) {
+                        Text("Words per day")
+                            .font(.subheadline)
+                        Spacer(minLength: 12)
+                        ForEach([1, 2, 3], id: \.self) { count in
+                            CardPill(
+                                label: "\(count)",
+                                isSelected: viewModel.vocabChallengeWordCount == count,
+                                minWidth: 36
+                            ) {
+                                viewModel.vocabChallengeWordCount = count
+                                viewModel.saveVocabChallengeSettings()
+                            }
+                            .accessibilityLabel("\(count) words per day")
+                        }
+                    }
+
+                    // ponytail: the bank, your dictionary terms and spaced review
+                    // are always in play. They were four more switches on the very
+                    // page that manages the words, and no answer but "on" made the
+                    // workout better. Whether the app teaches you words you have
+                    // never tracked is the one real choice left.
+                    Toggle(isOn: $viewModel.vocabChallengeIntroduceNew) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Teach new words")
+                                .font(.subheadline)
+                            Text("Mix in a word you don't track yet")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(AppColors.primary)
+                    .onChange(of: viewModel.vocabChallengeIntroduceNew) { _, _ in
+                        viewModel.saveVocabChallengeSettings()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The in-card sibling of `FilterPill`. Same job, but `FilterPill` fills with
+/// `.ultraThinMaterial`, which turns to mud stacked inside a `GlassCard`, so
+/// this keeps the card's own translucent treatment. Two hand-rolled copies of
+/// it lived in this file — word count and filler detection type.
+private struct CardPill: View {
+    let label: String
+    let isSelected: Bool
+    var tint: Color = AppColors.primary
+    var minWidth: CGFloat? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.45))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .frame(minWidth: minWidth, minHeight: 30)
+                .background {
+                    Capsule()
+                        .fill(isSelected ? tint.opacity(0.3) : Color.white.opacity(0.05))
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(
+                                    isSelected ? tint.opacity(0.55) : Color.white.opacity(0.08),
+                                    lineWidth: 0.5
+                                )
+                        }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

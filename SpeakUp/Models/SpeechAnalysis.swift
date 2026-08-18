@@ -67,7 +67,7 @@ nonisolated struct FillerWord: Codable, Identifiable, Sendable, Equatable {
 
 // MARK: - Vocab Word Usage
 
-nonisolated struct VocabWordUsage: Codable, Identifiable, Equatable {
+nonisolated struct VocabWordUsage: Codable, Identifiable, Equatable, Sendable {
     var id: UUID = UUID()
     let word: String
     var count: Int

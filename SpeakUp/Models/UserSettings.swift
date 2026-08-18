@@ -39,7 +39,7 @@ final class UserSettings {
     // Look & feel — cosmetic only, raw values of the enums named in comments
     var waveformStyle: Int = 0      // WaveformStyle
     var recordButtonStyle: Int = 0  // RecordButtonStyle
-    var countdownLook: Int = 0      // CountdownLook
+    var countdownLook: Int = 0      // TimerLook
     var countdownBackdrop: Int = 0  // RecordingBackdrop — column name predates it covering the whole session
     var soundPack: Int = 0          // SoundPack (ChirpPlayer.swift)
     var shareCardTheme: Int = 0     // ScoreCardTheme (ScoreCardRenderer.swift)
@@ -85,6 +85,15 @@ final class UserSettings {
 
     // Story Practice
     var storyPracticeEnabled: Bool = false
+
+    // Daily word workout. Additive defaults so existing rows keep the feature
+    // on and mix bank + dictionary + a new word each day.
+    var vocabChallengeEnabled: Bool = true
+    var vocabChallengeWordCount: Int = 2
+    var vocabChallengeUseBank: Bool = true
+    var vocabChallengeUseDictionary: Bool = true
+    var vocabChallengeIntroduceNew: Bool = true
+    var vocabChallengeSpacedReview: Bool = true
 
     // Dictation
     var autoFormatDictation: Bool = true
@@ -220,7 +229,7 @@ final class UserSettings {
 
     func addVocabWord(_ word: String) {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard WordSafety.allows(trimmed) else { return }
         guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         vocabWords.append(trimmed)
     }
@@ -229,9 +238,25 @@ final class UserSettings {
 
     func addDictationBiasWord(_ word: String) {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard WordSafety.allows(trimmed) else { return }
         guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         dictationBiasWords.append(trimmed)
+    }
+
+    var vocabChallengePreferences: VocabChallengePreferences {
+        VocabChallengePreferences(
+            isEnabled: vocabChallengeEnabled,
+            wordCount: vocabChallengeWordCount,
+            useBank: vocabChallengeUseBank,
+            useDictionary: vocabChallengeUseDictionary,
+            introduceNew: vocabChallengeIntroduceNew,
+            spacedReviewEnabled: vocabChallengeSpacedReview,
+            vocabWords: vocabWords,
+            dictionaryWords: dictationBiasWords,
+            extraBanned: customFillerWords + customContextFillerWords,
+            userName: userName,
+            speakerLevelRaw: speakerLevel
+        )
     }
 
     // MARK: - Speaker Level
@@ -571,11 +596,11 @@ enum RecordButtonStyle: Int, Codable, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Countdown Look
+// MARK: - Timer Look
 
 /// Shape of the countdown dial. Orthogonal to `CountdownStyle`, which decides
 /// whether the number counts up or down.
-enum CountdownLook: Int, Codable, CaseIterable, Identifiable {
+enum TimerLook: Int, Codable, CaseIterable, Identifiable {
     case ring = 0
     case orb = 1
     case segments = 2

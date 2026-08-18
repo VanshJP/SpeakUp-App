@@ -44,6 +44,10 @@ struct RecordingDetailView: View {
     /// Rolling baselines every number on this screen is read against. Loads in
     /// the background, so all fields start nil and fill in together.
     @State private var baselines = PersonalAverage.Baselines()
+    /// Today's word workout scored against this take. Resolved once on load —
+    /// picking the day's words reads *and writes* UserDefaults, so running it
+    /// from `body` re-picked and re-saved the day on every redraw.
+    @State private var vocabWorkout: (challenge: DailyVocabChallenge, evaluation: VocabChallengeEvaluation)?
 
     // Next-step routing — the practice tool that targets this session's weakest area.
     @State private var nextStepDrill: DrillMode?
@@ -326,6 +330,7 @@ struct RecordingDetailView: View {
         // Resolved once here instead of in body — hasPlayableMedia hits the
         // filesystem (iCloud/local existence checks) on every call.
         playableMediaAvailable = hasPlayableMedia(recording)
+        resolveVocabWorkoutIfNeeded(for: recording)
         prepareDetailAssets(for: recording)
         configurePlaybackState(for: recording)
         populateWPMTimeSeriesIfNeeded()
@@ -937,6 +942,8 @@ struct RecordingDetailView: View {
     private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
         statsGrid(analysis)
 
+        vocabWorkoutSection
+
         // Attaches the filler count above to the words that produced it.
         // Renders nothing on a clean take.
         if let words = recording.transcriptionWords, !words.isEmpty {
@@ -952,6 +959,35 @@ struct RecordingDetailView: View {
         if recording.goalId != nil {
             goalProgressCard(recording)
         }
+    }
+
+    @ViewBuilder
+    private var vocabWorkoutSection: some View {
+        if let vocabWorkout {
+            VocabChallengeResultCard(
+                challenge: vocabWorkout.challenge,
+                evaluation: vocabWorkout.evaluation
+            )
+        }
+    }
+
+    private func resolveVocabWorkoutIfNeeded(for recording: Recording) {
+        guard vocabWorkout == nil,
+              let settings = userSettings.first,
+              let analysis = recording.analysis,
+              let challenge = VocabChallengeService.todaysChallenge(
+                  preferences: settings.vocabChallengePreferences
+              ),
+              !challenge.words.isEmpty else { return }
+
+        vocabWorkout = (
+            challenge,
+            VocabChallengeService.evaluate(
+                challenge,
+                transcripts: [recording.transcriptionText].compactMap { $0 },
+                usages: analysis.vocabWordsUsed
+            )
+        )
     }
 
     @ViewBuilder

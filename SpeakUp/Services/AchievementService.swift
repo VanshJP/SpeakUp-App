@@ -14,6 +14,7 @@ class AchievementService {
         let hasScore80: Bool
         let hasScore95: Bool
         let hasZeroFillerRecording: Bool
+        let hasWordWorkout: Bool
         let allCategoriesCovered: Bool
     }
 
@@ -66,13 +67,16 @@ class AchievementService {
         var hasScore80 = false
         var hasScore95 = false
         var hasZeroFiller = false
+        var hasWordWorkout = false
         for recording in recordings {
             guard let analysis = recording.analysis else { continue }
             let overall = analysis.speechScore.overall
             if overall >= 80 { hasScore80 = true }
             if overall >= 95 { hasScore95 = true }
             if analysis.totalFillerCount == 0 && analysis.totalWords > 0 { hasZeroFiller = true }
-            if hasScore80 && hasScore95 && hasZeroFiller { break }
+            let usedVocab = analysis.vocabWordsUsed.filter { $0.count > 0 }.count
+            if usedVocab >= 3 { hasWordWorkout = true }
+            if hasScore80 && hasScore95 && hasZeroFiller && hasWordWorkout { break }
         }
 
         return Signals(
@@ -81,6 +85,7 @@ class AchievementService {
             hasScore80: hasScore80,
             hasScore95: hasScore95,
             hasZeroFillerRecording: hasZeroFiller,
+            hasWordWorkout: hasWordWorkout,
             allCategoriesCovered: allCategories.isSubset(of: usedCategories)
         )
     }
@@ -108,6 +113,14 @@ class AchievementService {
         for dup in duplicates {
             context.delete(dup)
         }
+        for def in AchievementDefinition.allCases {
+            if lookup[def.rawValue] == nil {
+                let model = def.toModel()
+                context.insert(model)
+                lookup[def.rawValue] = model
+            }
+        }
+
         let streak = signals.streak
 
         let checks: [(String, Bool)] = [
@@ -123,6 +136,7 @@ class AchievementService {
             ("zero_fillers", signals.hasZeroFillerRecording),
             ("all_categories", signals.allCategoriesCovered),
             ("listen_back", listenBackCount >= 1),
+            ("word_workout", signals.hasWordWorkout),
         ]
 
         for (id, met) in checks {

@@ -12,7 +12,7 @@ import SwiftUI
 struct RecordingLookPreview: View {
     let waveformStyle: WaveformStyle
     let buttonStyle: RecordButtonStyle
-    let countdownLook: CountdownLook
+    let countdownLook: TimerLook
     let backdrop: RecordingBackdrop
     let countdownDuration: Int
     let countdownStyle: CountdownStyle
@@ -83,11 +83,13 @@ struct RecordingLookPreview: View {
 
     private var countdownPhase: some View {
         VStack(spacing: 20) {
-            CountdownDial(
+            TimerDial(
                 look: countdownLook,
                 progress: progress,
-                number: displayNumber,
-                isPulsing: isPulsing
+                text: "\(displayNumber)",
+                caption: "sec",
+                isPulsing: isPulsing,
+                diameter: 200
             )
 
             phaseLabel("Getting ready")
@@ -101,11 +103,11 @@ struct RecordingLookPreview: View {
                 let remaining = TimeInterval(60 - elapsed)
                 TimerView(
                     remainingTime: remaining,
-                    totalTime: 60,
                     progress: remaining / 60,
                     color: AppColors.recording,
                     isRecording: true,
-                    timerLabel: "remaining"
+                    timerLabel: "remaining",
+                    look: countdownLook
                 )
             }
 

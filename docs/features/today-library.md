@@ -2,16 +2,16 @@
 
 ## Purpose
 
-**Today** — home: rings, focus/prompt, streak, daily challenge, weekly recap, quick tools, story shortcut.  
+**Today** — home: rings, focus/prompt, streak, daily challenge, word workout, weekly recap, quick tools, story shortcut.  
 **Library** — unified browser: prompts, stories, tools (warm-ups, drills, read-aloud, confidence).
 
 ## Key files — Today
 
 | Role | Path |
 |------|------|
-| Views | `SpeakUp/Views/Today/` — `TodayView`, `TodayFocusCard`, `DailyChallengeCard`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard` |
+| Views | `SpeakUp/Views/Today/` — `TodayView`, `TodayFocusCard`, `DailyChallengeCard`, `VocabChallengeCard`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard` |
 | VM | `SpeakUp/ViewModels/TodayViewModel.swift` |
-| Services | `DailyChallengeService`, `WeeklyProgressService` |
+| Services | `DailyChallengeService`, `WeeklyProgressService`, `VocabChallengeService` |
 | Components | `RingStatsView`, `StreakChip` |
 | Widget writes | `SpeakUp/Services/WidgetDataProvider.swift` |
 
@@ -32,7 +32,8 @@
 4. Prompt category gates for wheel/challenge live in Settings (`PromptSettingsView`).
 5. Spotlight targets: mark with `.tourAnchor(_:)` for `AppTourView`.
 6. Inbound friend-challenge links (`source=share`) persist on `SharedChallengeStore` and surface as `FriendChallengeCard` when the countdown does not run (onboarding, cancel). Do not start a countdown over onboarding.
+7. Word workout is a separate Today card from the rotating daily challenge. Knobs live in Settings → Words. See [vocab-challenge.md](./vocab-challenge.md).
 
 ## Cross-links
 
-[recording.md](./recording.md) · [stories.md](./stories.md) · [practice-tools.md](./practice-tools.md) · [widgets.md](./widgets.md) · [monetization.md](./monetization.md) · `/ONBOARDING_VISION.md`
+[today-library.md](./today-library.md) · [stories.md](./stories.md) · [practice-tools.md](./practice-tools.md) · [widgets.md](./widgets.md) · [monetization.md](./monetization.md) · [vocab-challenge.md](./vocab-challenge.md) · `/ONBOARDING_VISION.md`

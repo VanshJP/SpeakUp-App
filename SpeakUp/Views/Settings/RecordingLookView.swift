@@ -11,7 +11,7 @@ import SwiftUI
 /// halves of a real session at once, on the backdrop you picked.
 ///
 /// The preview is the real components — `CircularWaveformView`, `RecordButton`,
-/// `CountdownDial`, `RecordingBackdropView` — not stand-ins.
+/// `TimerDial`, `RecordingBackdropView` — not stand-ins.
 struct RecordingLookView: View {
     @Bindable var viewModel: SettingsViewModel
 
@@ -85,15 +85,15 @@ struct RecordingLookView: View {
                     }
 
                     group(
-                        title: "Countdown",
-                        caption: "The dial on the prepare screen before recording starts.",
-                        options: CountdownLook.allCases,
+                        title: "Timer",
+                        caption: "The dial on the prepare screen and the clock while you record.",
+                        options: TimerLook.allCases,
                         selected: viewModel.countdownLook,
                         name: \.displayName
                     ) { look in
                         viewModel.countdownLook = look
                     } thumbnail: { look in
-                        CountdownDial(look: look, progress: 0.65, number: 7)
+                        TimerDial(look: look, progress: 0.65, text: "7", caption: "sec")
                             .scaleEffect(0.5)
                     }
                 }
@@ -140,13 +140,14 @@ struct RecordingLookView: View {
             RecordingBackdropView(backdrop: viewModel.recordingBackdrop)
 
             VStack(spacing: 18) {
-                heroPiece("Countdown") {
+                heroPiece("Timer") {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let remaining = 10 - Int(context.date.timeIntervalSinceReferenceDate.rounded(.down)) % 10
-                        CountdownDial(
+                        TimerDial(
                             look: viewModel.countdownLook,
                             progress: Double(remaining) / 10.0,
-                            number: remaining,
+                            text: "\(remaining)",
+                            caption: "sec",
                             isPulsing: true
                         )
                         .scaleEffect(0.78)

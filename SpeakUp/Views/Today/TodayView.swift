@@ -69,9 +69,22 @@ struct TodayView: View {
                     toolbarStrip
                         .tourAnchor(.todayTools)
 
-                    // 6. Daily challenge
+                    // 6. Daily challenge + word workout
                     if let challenge = viewModel.dailyChallenge {
                         DailyChallengeCard(challenge: challenge)
+                    }
+
+                    if let workout = viewModel.vocabChallenge {
+                        VocabChallengeCard(
+                            challenge: workout,
+                            bankWords: userSettings.first?.vocabWords ?? [],
+                            onSkip: { word in
+                                viewModel.skipVocabWord(word)
+                            },
+                            onAddToBank: { word in
+                                addSpotlightWordToBank(word)
+                            }
+                        )
                     }
                 }
                 .padding()
@@ -163,6 +176,14 @@ struct TodayView: View {
         case .practiceAgain:
             onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
         }
+    }
+
+    private func addSpotlightWordToBank(_ word: VocabChallengeWord) {
+        guard let settings = userSettings.first else { return }
+        guard WordSafety.allows(word.text) else { return }
+        settings.addVocabWord(word.text)
+        try? modelContext.save()
+        Haptics.success()
     }
 
     /// Rebuilds the SwiftData prompt (catalog row or the shared insert) so

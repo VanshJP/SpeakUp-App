@@ -40,6 +40,11 @@ class SettingsViewModel {
     // Local state - Story Practice
     var storyPracticeEnabled: Bool = false
 
+    // Local state - Daily word workout
+    var vocabChallengeEnabled: Bool = true
+    var vocabChallengeWordCount: Int = 2
+    var vocabChallengeIntroduceNew: Bool = true
+
     // Local state - Speaker Level
     var speakerLevel: SpeakerLevel = .intermediate
 
@@ -53,7 +58,7 @@ class SettingsViewModel {
     // Local state - Recording Look
     var waveformStyle: WaveformStyle = .rings
     var recordButtonStyle: RecordButtonStyle = .classic
-    var countdownLook: CountdownLook = .ring
+    var countdownLook: TimerLook = .ring
     var recordingBackdrop: RecordingBackdrop = .base
 
     // Local state - Sound Pack
@@ -214,6 +219,10 @@ class SettingsViewModel {
         enabledPromptCategories = Set(settings.enabledCategories)
         storyPracticeEnabled = settings.storyPracticeEnabled
 
+        vocabChallengeEnabled = settings.vocabChallengeEnabled
+        vocabChallengeWordCount = settings.vocabChallengeWordCount
+        vocabChallengeIntroduceNew = settings.vocabChallengeIntroduceNew
+
         // Speaker Level
         speakerLevel = settings.resolvedSpeakerLevel
 
@@ -227,7 +236,7 @@ class SettingsViewModel {
         // Recording look
         waveformStyle = WaveformStyle(rawValue: settings.waveformStyle) ?? .rings
         recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
-        countdownLook = CountdownLook(rawValue: settings.countdownLook) ?? .ring
+        countdownLook = TimerLook(rawValue: settings.countdownLook) ?? .ring
         recordingBackdrop = RecordingBackdrop(rawValue: settings.countdownBackdrop) ?? .base
 
         // Sound pack
@@ -290,6 +299,15 @@ class SettingsViewModel {
         settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
         settings.storyPracticeEnabled = storyPracticeEnabled
+
+        settings.vocabChallengeEnabled = vocabChallengeEnabled
+        settings.vocabChallengeWordCount = min(3, max(1, vocabChallengeWordCount))
+        // ponytail: sources and spacing are no longer knobs — the picker keeps
+        // the flags so it stays testable, the UI just never turns them off.
+        settings.vocabChallengeUseBank = true
+        settings.vocabChallengeUseDictionary = true
+        settings.vocabChallengeIntroduceNew = vocabChallengeIntroduceNew
+        settings.vocabChallengeSpacedReview = true
 
         // Speaker Level
         settings.speakerLevel = speakerLevel.rawValue
@@ -406,6 +424,10 @@ class SettingsViewModel {
             showVocabError("Use at least 2 characters")
             return
         }
+        if WordSafety.isBlocked(trimmed) {
+            showVocabError("That word isn't allowed")
+            return
+        }
         vocabWords.append(trimmed)
         newVocabWord = ""
         Haptics.success()
@@ -440,6 +462,7 @@ class SettingsViewModel {
         for raw in words {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.count >= 2,
+                  WordSafety.allows(trimmed),
                   !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }),
                   !isFillerWord(trimmed) else { continue }
             vocabWords.append(trimmed)
@@ -461,6 +484,7 @@ class SettingsViewModel {
         for raw in words {
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.count >= 2,
+                  WordSafety.allows(trimmed),
                   !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }),
                   !isFillerWord(trimmed) else { continue }
             dictationBiasWords.append(trimmed)
@@ -483,6 +507,10 @@ class SettingsViewModel {
         }
         guard trimmed.count >= 2 else {
             showDictationError("Use at least 2 characters")
+            return
+        }
+        if WordSafety.isBlocked(trimmed) {
+            showDictationError("That word isn't allowed")
             return
         }
         guard !dictationBiasWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
@@ -666,6 +694,12 @@ class SettingsViewModel {
         ChirpPlayer.shared.pack = .soft
         settings.vocabWords = []
         settings.dictationBiasWords = []
+        settings.vocabChallengeEnabled = true
+        settings.vocabChallengeWordCount = 2
+        settings.vocabChallengeUseBank = true
+        settings.vocabChallengeUseDictionary = true
+        settings.vocabChallengeIntroduceNew = true
+        settings.vocabChallengeSpacedReview = true
         settings.customFillerWords = []
         settings.customContextFillerWords = []
         settings.removedDefaultFillers = []
@@ -762,7 +796,12 @@ class SettingsViewModel {
             print("Error clearing data: \(error)")
         }
     }
-    
+
+    @MainActor
+    func saveVocabChallengeSettings() {
+        Task { await saveSettings() }
+    }
+
     // MARK: - Pace Target
 
     /// Effective target shown in UI — learned value in auto mode, slider value otherwise.

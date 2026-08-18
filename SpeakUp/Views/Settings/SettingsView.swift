@@ -254,6 +254,9 @@ struct SettingsView: View {
         if viewModel.hasFillerCustomizations {
             parts.append("fillers customized")
         }
+        if viewModel.vocabChallengeEnabled {
+            parts.append("daily workout")
+        }
         return parts.isEmpty ? "Vocab, dictation, and filler words" : parts.joined(separator: ", ")
     }
 

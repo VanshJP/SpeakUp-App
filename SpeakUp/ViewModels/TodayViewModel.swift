@@ -12,6 +12,7 @@ class TodayViewModel {
     var isLoading = true
     var weeklyProgress: WeeklyProgressData?
     var dailyChallenge: DailyChallenge?
+    var vocabChallenge: DailyVocabChallenge?
     var hideAnsweredPrompts: Bool = false
     var weeklyGoalSessions: Int = 5
     var storyPracticeEnabled: Bool = false
@@ -25,6 +26,10 @@ class TodayViewModel {
     /// and the only place the category gate is applied now.
     private var promptMix: PromptMix = .uniform
     private var hasRerolledPrompt = false
+    private var vocabChallengePreferences: VocabChallengePreferences = .disabled
+    private var vocabUsedCounts: [String: Int] = [:]
+    private var todayTranscripts: [String] = []
+    private var todayVocabUsages: [VocabWordUsage] = []
 
     nonisolated init() {}
 
@@ -58,10 +63,14 @@ class TodayViewModel {
         self.recentSubscores = heavy.recentSubscores
         self.answeredPromptIDs = heavy.answeredPromptIDs
         self.lastPracticeDate = heavy.lastPracticeDate
+        self.vocabUsedCounts = heavy.vocabUsedCounts
+        self.todayTranscripts = heavy.todayTranscripts
+        self.todayVocabUsages = heavy.todayVocabUsages
 
         var challenge = DailyChallengeService.todaysChallenge()
         challenge.isCompleted = heavy.dailyChallengeCompleted
         self.dailyChallenge = challenge
+        refreshVocabChallenge()
 
         // Load today's prompt (uses answeredPromptIDs populated above)
         await loadTodaysPrompt(context: context)
@@ -159,6 +168,26 @@ class TodayViewModel {
                 DailyChallengeService.evaluate(challenge: challengeTemplate, recording: $0)
             }
 
+            var vocabUsedCounts: [String: Int] = [:]
+            var todayTranscripts: [String] = []
+            var todayVocabUsages: [VocabWordUsage] = []
+            for recording in recordings {
+                if let usage = recording.analysis?.vocabWordsUsed {
+                    for item in usage where item.count > 0 {
+                        let key = item.word.lowercased()
+                        vocabUsedCounts[key, default: 0] += item.count
+                    }
+                }
+            }
+            for recording in todayRecordings {
+                if let text = recording.transcriptionText, !text.isEmpty {
+                    todayTranscripts.append(text)
+                }
+                if let usage = recording.analysis?.vocabWordsUsed {
+                    todayVocabUsages.append(contentsOf: usage)
+                }
+            }
+
             // Recent subscores for weak area (last 10)
             let recentSubscores: [SpeechSubscores] = recordings
                 .prefix(10)
@@ -170,6 +199,9 @@ class TodayViewModel {
                 answeredPromptIDs: answered,
                 recentSubscores: recentSubscores,
                 dailyChallengeCompleted: challengeCompleted,
+                vocabUsedCounts: vocabUsedCounts,
+                todayTranscripts: todayTranscripts,
+                todayVocabUsages: todayVocabUsages,
                 // Recordings are date-descending; first = latest practice of
                 // any kind, analyzed or not (feeds the streak widget).
                 lastPracticeDate: recordings.first?.date
@@ -315,6 +347,7 @@ class TodayViewModel {
                 weeklyGoalSessions = settings.weeklyGoalSessions
                 storyPracticeEnabled = settings.storyPracticeEnabled
                 promptMix = settings.promptMix
+                vocabChallengePreferences = settings.vocabChallengePreferences
             }
         } catch {
             print("Error loading user settings: \(error)")
@@ -421,6 +454,36 @@ class TodayViewModel {
         }
     }
 
+    // MARK: - Word Workout
+
+    @MainActor
+    func skipVocabWord(_ word: VocabChallengeWord) {
+        _ = VocabChallengeService.skip(
+            word.text,
+            preferences: vocabChallengePreferences,
+            usedCounts: vocabUsedCounts
+        )
+        withAnimation(.spring(duration: 0.25)) {
+            refreshVocabChallenge()
+        }
+    }
+
+    @MainActor
+    private func refreshVocabChallenge() {
+        guard let built = VocabChallengeService.todaysChallenge(
+            preferences: vocabChallengePreferences,
+            usedCounts: vocabUsedCounts
+        ) else {
+            vocabChallenge = nil
+            return
+        }
+        let evaluation = VocabChallengeService.evaluate(
+            built,
+            transcripts: todayTranscripts,
+            usages: todayVocabUsages
+        )
+        vocabChallenge = VocabChallengeService.applying(evaluation, to: built)
+    }
 }
 
 // MARK: - Sendable result types
@@ -431,5 +494,8 @@ nonisolated private struct TodayHeavyResult: Sendable {
     let answeredPromptIDs: Set<String>
     let recentSubscores: [SpeechSubscores]
     let dailyChallengeCompleted: Bool
+    let vocabUsedCounts: [String: Int]
+    let todayTranscripts: [String]
+    let todayVocabUsages: [VocabWordUsage]
     let lastPracticeDate: Date?
 }
