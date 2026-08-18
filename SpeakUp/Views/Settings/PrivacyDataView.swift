@@ -1,18 +1,11 @@
 import SwiftUI
 
-/// Ownership scope, free-tier boundary, storage and model disclosure, and
-/// privacy, in the app, in the same words as the store listing.
+/// Storage and model disclosure, deletion, and the legal links, in the app and
+/// in the same words as the store listing.
 ///
-/// This exists in-app rather than only on a website because the purchase scope
-/// is the thing a refund argument turns on, and a user deciding at the paywall
-/// should not have to leave to read it. The scope itself sits above the fold;
-/// everything else collapses, because a screen of open paragraphs is a document, and
-/// nobody reads a document mid-purchase.
-///
-/// Every answer here states enforced behavior. `FreeTierPolicy.expired` is the
-/// source of truth for what locks after the trial: change the policy and these
-/// answers have to move with it.
-struct LifetimeFAQView: View {
+/// Answers collapse rather than sitting open: a screen of open paragraphs is a
+/// document, and nobody reads a document.
+struct PrivacyDataView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -21,10 +14,7 @@ struct LifetimeFAQView: View {
 
             PageScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    scopeCard
-
                     GlassSectionHeader("Questions", icon: "questionmark.circle")
-                        .padding(.top, 4)
 
                     questionsCard
 
@@ -41,36 +31,12 @@ struct LifetimeFAQView: View {
             .scrollIndicators(.hidden)
             .tint(.secondary)
         }
-        .navigationTitle("Lifetime & Privacy")
+        .navigationTitle("Privacy & Data")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") { dismiss() }
             }
-        }
-    }
-
-    // MARK: - Scope
-
-    /// The one answer nobody should have to tap for.
-    private var scopeCard: some View {
-        GlassCard(tint: AppColors.primary, padding: 14) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.body)
-                        .foregroundStyle(AppColors.primary)
-                    Text("What you own")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                }
-
-                Text(PaywallView.ownershipScopeText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -159,62 +125,11 @@ struct LifetimeFAQView: View {
 
     private static let entries: [Entry] = [
         Entry(
-            question: "What can I do without paying?",
+            question: "What does the beta cost?",
             answer: """
-            For your first 14 days, everything except iCloud sync: unlimited \
-            scored practice, every week of the curriculum, and journal export \
-            included. After that you keep three full analyses every 30 days, \
-            and each one is the complete result, meaning score, subscores, \
-            transcript, and your recommended next step.
-            """
-        ),
-        Entry(
-            question: "What stays free forever, and what locks?",
-            answer: """
-            Free either way: all the drills, warm-ups, and read-aloud passages, \
-            your stories, your full history with charts and the \
-            first-versus-latest replay, your goal and target pace, reminders, \
-            your streak, week 1 of the curriculum, and the cards you can share.
-
-            After the 14 days, three things wait behind Lifetime: the curriculum \
-            past week 1, journal PDF export, and iCloud sync. Nothing you \
-            already recorded is taken away.
-            """
-        ),
-        Entry(
-            question: "When do the 14 days start?",
-            answer: """
-            At your first completed analysis, not when you install. Days you \
-            never open the app before your first score cost you nothing, and a \
-            recording that fails to transcribe does not start the clock.
-            """
-        ),
-        Entry(
-            question: "What happens if I record with no analyses left?",
-            answer: """
-            The recording is saved and stays playable; only the scoring waits. \
-            It scores itself automatically, oldest first, the moment your 30 \
-            days roll over or you unlock Lifetime. Nothing is deleted and \
-            nothing needs re-recording.
-            """
-        ),
-        Entry(
-            question: "Is this a subscription?",
-            answer: """
-            No. Big Talk Lifetime is a single non-consumable purchase on your \
-            Apple Account. There is no renewal, and nothing you own expires. \
-            The 14 days are a free run of the app, not a subscription trial: \
-            nothing is charged when they end, and no card is involved. You \
-            simply drop to three analyses every 30 days until you choose to buy.
-            """
-        ),
-        Entry(
-            question: "Will new features cost extra later?",
-            answer: """
-            No. One purchase covers everything in the app today and everything \
-            added after you buy. No upgrade fee, no pro tier, no second \
-            purchase, no feature moved behind a new price. If Big Talk gains \
-            something next year, it simply appears for you.
+            Nothing. Every feature is open during the beta: unlimited scored \
+            practice, all eight weeks of the curriculum, journal export, and \
+            iCloud sync. There is no purchase in the app and no card involved.
             """
         ),
         Entry(
@@ -243,20 +158,11 @@ struct LifetimeFAQView: View {
             """
         ),
         Entry(
-            question: "I already bought it. How do I get it back?",
-            answer: """
-            Tap Restore on the purchase screen, or in Settings. Purchases are \
-            tied to your Apple Account, so any device signed in to the same \
-            account can restore it. No account or password of ours is involved.
-            """
-        ),
-        Entry(
             question: "Can I delete my data?",
             answer: """
-            Yes, always, whether you have paid or not. Swipe any session in \
-            History to delete it, or erase every recording, goal, achievement, \
-            and lesson at once from Settings, under Data Management. Privacy and \
-            deletion are never behind the purchase.
+            Yes, always. Swipe any session in History to delete it, or erase \
+            every recording, goal, achievement, and lesson at once from \
+            Settings, under Data Management.
             """
         ),
         Entry(
@@ -271,5 +177,5 @@ struct LifetimeFAQView: View {
 }
 
 #Preview {
-    NavigationStack { LifetimeFAQView() }
+    NavigationStack { PrivacyDataView() }
 }

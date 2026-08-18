@@ -322,10 +322,10 @@ struct RecordingDetailView: View {
     /// LLM coherence pass). Safe to call repeatedly — each step guards itself.
     private func runReadySetupIfNeeded() {
         guard case .ready(let recording) = detailScreenState else { return }
-        // The paywall is allowed to exist from here on: the user has seen a
+        // A review prompt is allowed from here on: the user has seen a
         // complete result, which is what earns the right to ask.
         if recording.analysis != nil {
-            PaywallCoordinator.shared.markFirstResultSeen()
+            ReviewRequestService.shared.markFirstResultSeen()
         }
         // Resolved once here instead of in body — hasPlayableMedia hits the
         // filesystem (iCloud/local existence checks) on every call.
@@ -374,7 +374,7 @@ struct RecordingDetailView: View {
     }
 
     /// The recording is saved and playable; only the scoring is waiting. Said
-    /// plainly, because "analysis failed" for a paywall reason reads as a bug.
+    /// plainly, because "analysis failed" for a held-back recording reads as a bug.
     @ViewBuilder
     private func analysisDeferredCard(_ recording: Recording) -> some View {
         // Read through the existing query rather than fetching: a fetch here
@@ -397,19 +397,9 @@ struct RecordingDetailView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                VStack(spacing: 8) {
-                    GlassButton(title: "Unlock Lifetime", icon: "sparkles", style: .primary) {
-                        Haptics.medium()
-                        PaywallCoordinator.shared.present(
-                            .unlimitedAnalyses,
-                            trigger: "deferred_analysis",
-                            userInitiated: true
-                        )
-                    }
-                    GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .secondary, size: .small) {
-                        Haptics.light()
-                        enqueueProcessingIfNeeded(recording, force: true)
-                    }
+                GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .primary) {
+                    Haptics.light()
+                    enqueueProcessingIfNeeded(recording, force: true)
                 }
                 .padding(.top, 4)
             }
@@ -423,7 +413,7 @@ struct RecordingDetailView: View {
             return "This recording is safe. Tap Try Again to score it now."
         }
         let date = resetsOn.formatted(date: .abbreviated, time: .omitted)
-        return "Your free analyses are used up for now. The audio is safe — it scores automatically on \(date), or the moment you unlock Lifetime."
+        return "Your free analyses are used up for now. The audio is safe — it scores automatically on \(date)."
     }
 
     @ViewBuilder

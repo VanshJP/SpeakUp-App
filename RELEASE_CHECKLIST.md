@@ -58,6 +58,10 @@ These change shipped copy and shipped behaviour, so settle them first.
       can only be assigned keywords already present in the shared keyword field.
 - [ ] Privacy policy URL (required) and, because the app sells a non-consumable,
       a terms/EULA link.
+- [ ] **Paid build only:** restore the paywall UI. It is deleted for the beta
+      (`docs/features/monetization.md`), and `BetaAccess.allFeaturesFree = true`
+      opens every gate. A paid submission needs both reverted, or the app sells
+      nothing while claiming a free tier.
 - [ ] App Review notes: state that transcription and scoring run on device,
       that the free tier is 14 days of everything but iCloud sync and then three
       analyses per 30 days, that this collects no payment method and charges
@@ -65,7 +69,7 @@ These change shipped copy and shipped behaviour, so settle them first.
       reaches the paywall during the 14 days (Settings > Unlock, or turning on
       iCloud sync — curriculum and export are open in that window).
 - [ ] Generate offer codes if the launch plan uses them — the redemption sheet
-      is already wired into `PaywallView`.
+      lives in the restored `PaywallView`.
 
 ## 3. Website and in-app links
 

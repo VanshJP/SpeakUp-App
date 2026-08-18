@@ -297,36 +297,8 @@ struct TodayView: View {
 
     // MARK: - Start Button Section
 
-    /// The trial countdown, or what the free tier has left once it expires,
-    /// shown under the buttons that spend it. Nil for entitled users, who have
-    /// no allowance to report.
-    private var allowanceSummary: String? {
-        AllowanceGate.decision(settings: userSettings.first).shortSummary
-    }
-
     private var startButtonSection: some View {
-        VStack(spacing: 10) {
-            startButtons
-
-            // Disclosed here rather than only on the paywall: finding out about
-            // the limit at the moment it stops you is the version that feels
-            // like a trick.
-            if let allowanceSummary {
-                Button {
-                    Haptics.light()
-                    PaywallCoordinator.shared.present(
-                        .unlimitedAnalyses,
-                        trigger: "today_allowance",
-                        userInitiated: true
-                    )
-                } label: {
-                    Text(allowanceSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        startButtons
     }
 
     private var startButtons: some View {

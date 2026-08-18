@@ -15,7 +15,7 @@ Gotchas first: [AGENT_GOTCHAS.md](./AGENT_GOTCHAS.md).
 5. Persist on `UserSettings` only with **additive** optional/default fields.
 6. Update [features/settings.md](./features/settings.md).
 
-If the row enables a paid capability (e.g. iCloud), call `PaywallCoordinator.allow` **before** flipping preference.
+Nothing in Settings is gated during the beta — there is no paywall to call ([features/monetization.md](./features/monetization.md)).
 
 ---
 
@@ -23,9 +23,7 @@ If the row enables a paid capability (e.g. iCloud), call `PaywallCoordinator.all
 
 1. Decide if this is a new `PaidFeature` case or reuse an existing one (`Monetization.swift`).
 2. Put membership in `FreeTierPolicy.trial` / `.expired` `gatedFeatures` — **one place**, not call-site `if isLifetime`.
-3. Choose API ([gotchas §5](./AGENT_GOTCHAS.md)):
-   - Action that must proceed-or-paywall → `PaywallCoordinator.allow(_:trigger:)`
-   - Explicit Unlock / locked cell → `present(..., userInitiated: true)`
+3. Restore the paywall UI first — it is deleted for the beta ([features/monetization.md](./features/monetization.md)). A gate with no unlock path is a dead end, not a gate.
 4. Do **not** gate `progressCards` unless launch measurement + tests explicitly change policy.
 5. Add / extend `SpeakUpTests/MonetizationTests.swift` (pure policy + injected clock).
 6. Update [features/monetization.md](./features/monetization.md) + `RELEASE_CHECKLIST.md` if the boundary ships to users.

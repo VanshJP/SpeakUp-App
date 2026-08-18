@@ -29,8 +29,6 @@ struct SettingsView: View {
 
     private var settingsMenuCard: some View {
         VStack(spacing: 12) {
-            LifetimeStatusRow()
-
             GlassSectionHeader("You", icon: "person.crop.circle")
 
             settingsLink(
@@ -182,14 +180,6 @@ struct SettingsView: View {
                             .labelsHidden()
                             .tint(AppColors.primary)
                             .onChange(of: iCloudSyncEnabled) { _, newValue in
-                                // Turning sync *on* is part of Lifetime. Turning
-                                // it off never is — a user must always be able to
-                                // stop their data leaving the device.
-                                if newValue,
-                                   !PaywallCoordinator.allow(.iCloudSync, trigger: "icloud_sync") {
-                                    iCloudSyncEnabled = false
-                                    return
-                                }
                                 ICloudStorageService.shared.isSyncEnabled = newValue
                                 // Also persist to SwiftData settings
                                 if let settings = viewModel.settings {
@@ -354,10 +344,10 @@ struct AboutSettingsView: View {
                     }
 
                     NavigationLink {
-                        LifetimeFAQView()
+                        PrivacyDataView()
                     } label: {
                         aboutRow(
-                            "Lifetime, Privacy & Data",
+                            "Privacy & Data",
                             icon: "hand.raised",
                             trailingIcon: "chevron.right"
                         )

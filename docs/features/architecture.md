@@ -19,7 +19,7 @@ Start the app: build SwiftData `ModelContainer`, inject services, seed defaults,
 | Mechanism | Types |
 |-----------|--------|
 | `.environment` from `SpeakUpApp` | `SpeechService`, `AudioService`, `LLMService` only → `@Environment(X.self)` |
-| Singletons (`.shared`) | `PurchaseService`, `EntitlementStore`, `PaywallCoordinator`, `RecordingProcessingCoordinator`, `AnalyticsService`, `AttributionStore`, `ReviewRequestService`, `ICloudStorageService`, `ChirpPlayer` |
+| Singletons (`.shared`) | `PurchaseService`, `EntitlementStore`, `RecordingProcessingCoordinator`, `AnalyticsService`, `AttributionStore`, `ReviewRequestService`, `ICloudStorageService`, `ChirpPlayer` |
 | Custom `EnvironmentKey` | `appTour` (`AppTourKey`), `shimmerPhase` (`ShimmerPhaseKey`) — prefer explicit keys over `@Entry` under MainActor default |
 
 **Also at launch:** `PurchaseService.shared.start()`, entitlement refresh on foreground, deferred recording resume (`analysisBlockedByAllowance`).

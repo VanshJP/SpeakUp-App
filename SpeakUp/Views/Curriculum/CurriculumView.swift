@@ -165,8 +165,7 @@ struct CurriculumView: View {
 
     private func phaseSection(_ phase: CurriculumPhase) -> some View {
         let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
-        let needsPurchase = viewModel.requiresPurchase(phase)
-        let isLocked = needsPurchase || (!isPreviousPhaseCompleted(before: phase) && phase.week > 1)
+        let isLocked = !isPreviousPhaseCompleted(before: phase) && phase.week > 1
         let isPhaseComplete = completedInPhase == phase.lessons.count && !phase.lessons.isEmpty
 
         return VStack(alignment: .leading, spacing: 12) {
@@ -179,7 +178,7 @@ struct CurriculumView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(phase.lessons.enumerated()), id: \.element.id) { index, lesson in
-                    let isAccessible = viewModel.isLessonAccessible(lesson, in: phase) && !needsPurchase
+                    let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)
 
                     if isAccessible {
                         NavigationLink {
@@ -190,17 +189,8 @@ struct CurriculumView: View {
                         .buttonStyle(GlassPressStyle())
                     } else {
                         Button {
-                            if needsPurchase {
-                                Haptics.medium()
-                                PaywallCoordinator.shared.present(
-                                    .fullCurriculum,
-                                    trigger: "curriculum_phase",
-                                    userInitiated: true
-                                )
-                            } else {
-                                Haptics.warning()
-                                showingLockedInfo = true
-                            }
+                            Haptics.warning()
+                            showingLockedInfo = true
                         } label: {
                             lessonPathRow(lesson, at: index, in: phase, isLocked: true)
                         }

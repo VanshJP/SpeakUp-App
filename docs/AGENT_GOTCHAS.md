@@ -75,11 +75,11 @@ Resolve existence **once** into `@State` — never `FileManager.fileExists` insi
 
 | API | When | Call sites (today) |
 |-----|------|--------------------|
-| `PaywallCoordinator.allow(_:trigger:)` | Feature action: proceed **or** show paywall; **fail-open** if first-result suppressed | Journal export (`ContentView`), iCloud enable (`SettingsView`) |
-| `PaywallCoordinator.shared.present(..., userInitiated: true)` | Explicit Unlock / locked CTA | Today allowance, Curriculum phase, deferred analysis, `LifetimeStatusRow` |
 | `AllowanceGate.decision` | May we analyze / meter copy | Coordinator enqueue/process, detail deferred UI, status row |
 | `AllowanceGate.consume` | **Only after successful analysis persist** | `RecordingProcessingCoordinator` only |
-| `EntitlementStore` / `FreeTierPolicy.gates` | Membership checks | Curriculum lock, `allow` internals |
+| `EntitlementStore` / `FreeTierPolicy.gates` | Membership checks | `AllowanceGate` only |
+
+> **Beta:** the paywall UI is deleted and `BetaAccess.allFeaturesFree` is true, so nothing gates in the UI and `AllowanceGate` always answers `.unlimited`. See [features/monetization.md](./features/monetization.md) before adding a gate.
 
 **Do not:**
 
@@ -103,7 +103,7 @@ Full policy: [features/monetization.md](./features/monetization.md).
 **`.environment` from `SpeakUpApp` (only these three):** `SpeechService`, `AudioService`, `LLMService` → `@Environment(X.self)`.
 
 **Singletons — use `.shared`, do not invent new Environment keys or recreate:**  
-`PaywallCoordinator`, `PurchaseService`, `EntitlementStore`, `RecordingProcessingCoordinator`, `AnalyticsService`, `AttributionStore`, `ReviewRequestService`, `ICloudStorageService`, `ChirpPlayer`.
+`PurchaseService`, `EntitlementStore`, `RecordingProcessingCoordinator`, `AnalyticsService`, `AttributionStore`, `ReviewRequestService`, `ICloudStorageService`, `ChirpPlayer`.
 
 **Custom `EnvironmentKey`s today:** `appTour` (`AppTourKey`), `shimmerPhase` (`ShimmerPhaseKey`).
 

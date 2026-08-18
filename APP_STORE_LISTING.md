@@ -340,7 +340,7 @@ slots rather than gamble on which one Connect demands at submission.
   sessions climbing 58 → 84 and one story with linked practice, which is what
   makes the progress and story slides worth capturing at all.
 - No DEBUG-only UI in frame. Usage Diagnostics renders a "Force Lifetime" toggle
-  and trial overrides in a debug build; use `LifetimeFAQView` instead.
+  and trial overrides in a debug build; use `PrivacyDataView` instead.
 - Slide 1 does the most work. If only one screenshot is retaken, retake that one.
 
 ### Building the slides

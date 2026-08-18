@@ -6,10 +6,10 @@ import UIKit
 /// Asks for an App Store review, but only after something actually went well.
 ///
 /// Ratings are the cheapest acquisition channel this app has, and the system
-/// budget is three prompts per user per year. Spending one on a bad session, a
-/// first launch, or the instant after a paywall is spending it on someone who
-/// is not about to write five stars. Every ask therefore has to clear a success
-/// trigger *and* the throttles in `ReviewEligibility`.
+/// budget is three prompts per user per year. Spending one on a bad session or
+/// a first launch is spending it on someone who is not about to write five
+/// stars. Every ask therefore has to clear a success trigger *and* the
+/// throttles in `ReviewEligibility`.
 @MainActor
 @Observable
 final class ReviewRequestService {
@@ -26,7 +26,24 @@ final class ReviewRequestService {
     /// One ask per launch, regardless of how many good things happen.
     private var askedThisLaunch = false
 
-    private init() {}
+    /// Set once the user has seen a finished analysis. Persisted, because it
+    /// describes something they have already done — held only in memory it
+    /// reset on every cold launch and silently disarmed every prompt.
+    private(set) var hasCompletedFirstResult: Bool
+
+    private let defaults: UserDefaults
+    private static let firstResultKey = "paywall.firstResultSeen.v1"
+
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        hasCompletedFirstResult = defaults.bool(forKey: Self.firstResultKey)
+    }
+
+    func markFirstResultSeen() {
+        guard !hasCompletedFirstResult else { return }
+        hasCompletedFirstResult = true
+        defaults.set(true, forKey: Self.firstResultKey)
+    }
 
     /// Raises the system review prompt when the moment and the throttles allow.
     ///
@@ -40,8 +57,7 @@ final class ReviewRequestService {
         let version = AnalyticsEnvironment.appVersion
         guard ReviewEligibility.shouldAsk(
             askedThisLaunch: askedThisLaunch,
-            hasSeenFirstResult: PaywallCoordinator.shared.hasCompletedFirstResult,
-            paywallOnScreen: PaywallCoordinator.shared.request != nil,
+            hasSeenFirstResult: hasCompletedFirstResult,
             currentVersion: version,
             lastAskedVersion: settings.lastReviewRequestVersion,
             lastAskedDate: settings.lastReviewRequestDate

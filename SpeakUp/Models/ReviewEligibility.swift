@@ -16,7 +16,6 @@ nonisolated enum ReviewEligibility {
     static func shouldAsk(
         askedThisLaunch: Bool,
         hasSeenFirstResult: Bool,
-        paywallOnScreen: Bool,
         currentVersion: String,
         lastAskedVersion: String?,
         lastAskedDate: Date?,
@@ -26,8 +25,6 @@ nonisolated enum ReviewEligibility {
         guard !askedThisLaunch else { return false }
         // Nobody rates an app they have not gotten a result out of yet.
         guard hasSeenFirstResult else { return false }
-        // Never stack a rating prompt on top of a purchase decision.
-        guard !paywallOnScreen else { return false }
         // One ask per version: a build the user disliked does not get a retry.
         guard lastAskedVersion != currentVersion else { return false }
 

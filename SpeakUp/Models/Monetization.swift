@@ -1,5 +1,17 @@
 import Foundation
 
+// MARK: - Beta
+
+/// Master switch for the public beta: everything unlocked, no paywall, no
+/// allowance accounting, no buy button anywhere in the app.
+///
+/// StoreKit stays wired up underneath — a real purchase still verifies and
+/// still persists — so turning monetization back on for the App Store build is
+/// this one line, not a re-integration.
+nonisolated enum BetaAccess {
+    static let allFeaturesFree = true
+}
+
 // MARK: - Product
 
 /// The single paid SKU. One non-consumable, no tiers — the ownership offer is

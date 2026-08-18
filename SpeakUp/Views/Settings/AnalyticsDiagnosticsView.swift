@@ -3,8 +3,8 @@ import SwiftUI
 /// The launch scorecard, computed on this device from the local event log.
 ///
 /// There is no analytics backend, so this screen is how the beta gates
-/// (activation rate, time to value, qualified paywall conversion) actually get
-/// read: a tester opens it, exports the JSON, and sends it over. It doubles as
+/// (activation rate, time to value) actually get read: a tester opens it,
+/// exports the JSON, and sends it over. It doubles as
 /// the honest answer to "what do you collect?" — everything recorded is right
 /// here, in full, and it never leaves unless the user exports it.
 struct AnalyticsDiagnosticsView: View {
@@ -83,9 +83,6 @@ struct AnalyticsDiagnosticsView: View {
                 metricRow("Reached first result", value: card.activations > 0 ? "Yes" : "Not yet")
                 metricRow("Activation rate", value: percentSummary(card.activationRate))
                 metricRow("Time to first result", value: timeToValueSummary(card))
-                metricRow("Paywalls after a result", value: "\(card.qualifiedPaywallViews)")
-                metricRow("Purchases", value: "\(card.purchases)")
-                metricRow("Qualified conversion", value: percentSummary(card.qualifiedPaywallConversion))
                 metricRow("Cards shared", value: "\(card.shares)")
             }
             .frame(maxWidth: .infinity, alignment: .leading)

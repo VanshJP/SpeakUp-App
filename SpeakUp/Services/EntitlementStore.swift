@@ -24,7 +24,15 @@ final class EntitlementStore {
     /// App Group is unavailable so entitlement never silently resets.
     private let defaults: UserDefaults
 
-    private(set) var isLifetime: Bool
+    /// What StoreKit last verified. Read `isLifetime` instead — during the
+    /// beta the two differ.
+    private(set) var ownsLifetime: Bool
+
+    /// The answer every gate asks. `BetaAccess.allFeaturesFree` forces it true
+    /// so the beta has no paywall while the real entitlement keeps recording
+    /// itself underneath.
+    var isLifetime: Bool { BetaAccess.allFeaturesFree || ownsLifetime }
+
     private(set) var purchaseDate: Date?
 
     /// When the 14-day trial clock was started, or nil if it never has been.
@@ -43,13 +51,13 @@ final class EntitlementStore {
     private init() {
         let suite = UserDefaults(suiteName: WidgetDataProvider.suiteName) ?? .standard
         defaults = suite
-        isLifetime = suite.bool(forKey: Key.isLifetime)
+        ownsLifetime = suite.bool(forKey: Key.isLifetime)
         purchaseDate = suite.object(forKey: Key.purchasedAt) as? Date
         trialStartedAt = suite.object(forKey: Key.trialStartedAt) as? Date
 
         #if DEBUG
         if suite.bool(forKey: Key.debugOverride) || UserDefaults.standard.bool(forKey: Key.debugOverride) {
-            isLifetime = true
+            ownsLifetime = true
         }
         #endif
     }
@@ -84,13 +92,13 @@ final class EntitlementStore {
 
         #if DEBUG
         if defaults.bool(forKey: Key.debugOverride) || UserDefaults.standard.bool(forKey: Key.debugOverride) {
-            isLifetime = true
+            ownsLifetime = true
             return
         }
         #endif
 
-        guard owned != isLifetime || date != purchaseDate else { return }
-        isLifetime = owned
+        guard owned != ownsLifetime || date != purchaseDate else { return }
+        ownsLifetime = owned
         purchaseDate = date
         defaults.set(owned, forKey: Key.isLifetime)
         if let date {
@@ -107,9 +115,9 @@ final class EntitlementStore {
         UserDefaults.standard.set(enabled, forKey: Key.debugOverride)
         defaults.set(enabled, forKey: Key.debugOverride)
         if enabled {
-            isLifetime = true
+            ownsLifetime = true
         } else {
-            isLifetime = defaults.bool(forKey: Key.isLifetime)
+            ownsLifetime = defaults.bool(forKey: Key.isLifetime)
         }
     }
 

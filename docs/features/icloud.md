@@ -17,7 +17,7 @@ Container id (in service): `iCloud.cam.vanshpatel.SpeakUp`.
 
 ## Invariants
 
-1. Enabling sync is a **paid** action: `PaywallCoordinator.allow(.iCloudSync)`. Once on, do not revoke for product reasons.
+1. Enabling sync is ungated during the beta ([monetization.md](./monetization.md)). Once on, do not revoke for product reasons.
 2. Fresh install defaults **on** when an iCloud account is present (`resolvedSyncEnabledPreference`).
 3. CloudKit vs local is chosen at **ModelContainer** creation — mid-session flips need careful preference mirroring to UserDefaults; do not casually rebuild the container.
 4. Container creation fallback: CloudKit → local-only → in-memory.

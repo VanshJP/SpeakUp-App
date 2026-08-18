@@ -14,7 +14,6 @@ struct ReviewEligibilityTests {
     private func shouldAsk(
         askedThisLaunch: Bool = false,
         hasSeenFirstResult: Bool = true,
-        paywallOnScreen: Bool = false,
         currentVersion: String = "1.0(1)",
         lastAskedVersion: String? = nil,
         lastAskedDate: Date? = nil,
@@ -23,7 +22,6 @@ struct ReviewEligibilityTests {
         ReviewEligibility.shouldAsk(
             askedThisLaunch: askedThisLaunch,
             hasSeenFirstResult: hasSeenFirstResult,
-            paywallOnScreen: paywallOnScreen,
             currentVersion: currentVersion,
             lastAskedVersion: lastAskedVersion,
             lastAskedDate: lastAskedDate,
@@ -37,10 +35,6 @@ struct ReviewEligibilityTests {
 
     @Test func neverAsksBeforeTheFirstResult() {
         #expect(!shouldAsk(hasSeenFirstResult: false))
-    }
-
-    @Test func neverStacksOnThePaywall() {
-        #expect(!shouldAsk(paywallOnScreen: true))
     }
 
     @Test func onlyOncePerLaunch() {

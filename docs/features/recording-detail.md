@@ -23,8 +23,8 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 ## Invariants
 
 1. Resolve `resolvedAudioURL` / file existence **once** into `@State` — not in `body`.
-2. `markFirstResultSeen()` only when analysis completed — gates auto-paywall and review.
-3. Deferred-by-allowance UI must offer unlock path via paywall; fail-open policy lives in `PaywallCoordinator`.
+2. `ReviewRequestService.markFirstResultSeen()` only when analysis completed — gates the review prompt.
+3. Deferred-by-allowance UI offers Try Again only — no unlock path exists during the beta, and `AllowanceGate` never defers while `BetaAccess.allFeaturesFree` is true.
 4. Processing: prefer `RecordingProcessingCoordinator` over ad-hoc parallel jobs.
 5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
 6. Share score / progress cards via `SharePresenter` only (completed-share analytics). Score-card shares that include the prompt also attach a caption with a try-this-prompt URL (`SharedPromptLink`); do not invent a second activity sheet.

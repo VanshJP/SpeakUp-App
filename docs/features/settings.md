@@ -10,13 +10,13 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 |------|------|
 | Hub | `SpeakUp/Views/Settings/SettingsView.swift` |
 | Pages | `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordBankView` (incl. daily word workout), `RecordingLookView`, `AnalyticsDiagnosticsView` |
-| Lifetime row | `SpeakUp/Views/Paywall/LifetimeStatusRow.swift` |
+| Privacy & data | `SpeakUp/Views/Settings/PrivacyDataView.swift` |
 | VM | `SettingsViewModel.swift` |
 | Model | `UserSettings.swift`, `SupportLinks.swift` |
 
 ## Invariants
 
-1. iCloud toggle: call `PaywallCoordinator.allow(.iCloudSync)` before enabling preference.
+1. iCloud toggle flips freely — no paid gate during the beta ([monetization.md](./monetization.md)).
 2. Support / privacy / terms URLs from Info.plist (`BT*URL` keys) — hide rows when unset.
 3. DEBUG Lifetime override via `EntitlementStore.setDebugOverride` only.
 4. Score weights persist on `UserSettings`; defaults in `ScoreWeights.defaults` (`SPEECH.md`).

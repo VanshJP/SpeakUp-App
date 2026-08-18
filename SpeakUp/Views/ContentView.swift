@@ -30,7 +30,6 @@ struct ContentView: View {
     @State private var showingStoryEditor = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
-    @State private var paywall = PaywallCoordinator.shared
 
     // Story → Warm-Up / Drill routing
     @State private var warmUpStory: Story?
@@ -140,7 +139,6 @@ struct ContentView: View {
                         showingBeforeAfter = true
                     },
                     onShowJournalExport: {
-                        guard PaywallCoordinator.allow(.journalExport, trigger: "journal_export") else { return }
                         showingJournalExport = true
                     },
                     onShowGoals: {
@@ -327,12 +325,6 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        // Full screen, not a sheet. The offer is a short flow through the user's
-        // own progress before it asks for anything, and a card sheet both cuts
-        // that short and reads as dismissible chrome.
-        .fullScreenCover(item: $paywall.request) { request in
-            PaywallView(request: request)
-        }
         .onOpenURL { url in
             handleDeepLink(url)
         }
@@ -366,17 +358,6 @@ struct ContentView: View {
         .onChange(of: userSettings.first?.hasCompletedOnboarding) { _, _ in
             // @Query may not be hydrated on first onAppear — re-evaluate once it lands
             evaluateOnboardingIfNeeded()
-        }
-        .onChange(of: EntitlementStore.shared.isLifetime) { _, owned in
-            // The deferred card promises held-back recordings score themselves
-            // the moment Lifetime is unlocked. This is where that happens for a
-            // purchase made in-app; the app-foreground pass covers the rest.
-            guard owned else { return }
-            RecordingProcessingCoordinator.shared.resumeDeferredRecordings(
-                modelContext: modelContext,
-                speechService: speechService,
-                llmService: llmService
-            )
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView { result in

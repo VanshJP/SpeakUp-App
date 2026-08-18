@@ -19,7 +19,7 @@ Browse takes, contribution/streak UI, metric charts, then-vs-now replay, PDF jou
 
 1. **No analysis decode in list/chart `body`.** Background `ModelContext` → `RecordingSummary` / `ChartRecordingPoint` (`HistoryViewModel.fetchSummaries`, `ProgressChartsView`). Recipe: `/docs/AGENT_GOTCHAS.md` §3.
 2. Never `#Predicate { $0.analysis != nil }` — process crash. Proxy with `transcriptionText != nil` when counting analyzed takes.
-3. Journal export gated: `PaywallCoordinator.allow(.journalExport)`.
+3. Journal export is ungated during the beta ([monetization.md](./monetization.md)).
 4. Progress / share cards are **not** gated (`PaidFeature.progressCards` exists but is omitted from both `FreeTierPolicy.trial` and `.expired`) — share loop must stay free for acquisition. Shares go through `SharePresenter`.
 5. Streak sheet is presentation from Today/History — not a tab.
 
