@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Full-screen practice take: countdown → record with live fillers / waveform / framework cues → save `Recording` for later analysis.
+Full-screen practice take: countdown → record with live fillers / waveform → save `Recording` for later analysis.
 
 ## Key files
 
 | Role | Path |
 |------|------|
-| UI | `SpeakUp/Views/Recording/` — `RecordingView`, `RecordButton`, `TimerDial` / `TimerView` (`TimerView.swift`), `CountdownOverlayView`, `FillerCounterOverlay`, `MicLevelPill` (`RecordingView.swift`), `FrameworkOverlayView` |
+| UI | `SpeakUp/Views/Recording/` — `RecordingView`, `RecordButton`, `TimerDial` / `TimerView` (`TimerView.swift`), `CountdownOverlayView`, `FillerCounterOverlay`, `MicLevelPill` (`RecordingView.swift`) |
 | VM | `SpeakUp/ViewModels/RecordingViewModel.swift` + `+AudioMonitoring`, `+Computed`, `+Permissions`, `+RecordingControl`, `+Timer` |
 | Audio | `SpeakUp/Services/AudioService.swift` |
 | Live fillers | `SpeakUp/Services/LiveTranscriptionService.swift` |
 | Coaching audio/haptics | `HapticCoachingService`, `ChirpPlayer` |
-| Word workout strip | `VocabStrip` in `RecordingView.swift` — today's spotlight words as chips inside the top bar, below the prompt card. It used to be a floating panel that covered the prompt; toggle it from the session options menu. |
+| Word workout strip | `VocabStrip` in `RecordingView.swift` — today's spotlight words as chips inside the top bar, below the prompt card. It used to be a floating panel that covered the prompt. Read-only during the take — no mid-session toggle. |
 | Waveform gen | `AudioWaveformGenerator` |
 | Cosmetic looks | `CircularWaveformView` (`RecordingView.swift`), `RecordButton`, `TimerDial` (`TimerView.swift`), `RecordingBackdropView` + `WaveformStyle` / `RecordButtonStyle` / `TimerLook` / `RecordingBackdrop` (`UserSettings.swift` + `RecordingBackdrop.swift`); all picked in Settings → Recording Look (`RecordingLookView`). Full-screen try-on is `RecordingLookPreview` — it plays countdown then recording, and the record button stops it. |
-| Model | `SpeakUp/Models/Recording.swift`, `SpeechFramework.swift`, `RecordingGroup.swift` |
+| Model | `SpeakUp/Models/Recording.swift`, `RecordingGroup.swift` |
 
 ## Flow
 
@@ -35,6 +35,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 - `TimerLook` styles **both** halves of a session: the countdown dial and the recording clock (and the drill clock) all render through one `TimerDial`, scaled by `diameter` — 200 on the countdown and while recording, 150 for settings thumbnails. It used to style the countdown only, so the recording screen silently fell back to a plain ring. New timer visuals go in `TimerDial`, never in a call site.
 - The countdown and the recording screen are laid out **slot for slot** — prompt on top, dial in the middle at the same `diameter`, actions along the bottom — so the hand-off moves nothing but the prompt card shrinking. Changing one screen's vertical structure means changing the other.
 - Top bar = status (`FillerCounterOverlay`, `MicLevelPill`), bottom = controls (record button, hint, coaching cue). The live filler count is status and lived above the record button until it kept shoving it down; don't move controls up or status down.
+- No `Menu` / `Picker` on the live recording tree. The 10 Hz timer re-evaluates the parent and eats taps, so STAR/PREP cues looked like dead buttons. Teach frameworks in Learn; do not overlay them on the take. `Recording.frameworkUsed` stays on the model (schema is additive-only) but is no longer written from capture.
 - Mic activity comes from `AudioService.isHearingInput` — a decaying peak, not `audioLevel > -40`. The raw comparison flips on every gap between words. Both the recording and drill screens read the service property; the decay/floor knobs live in `AudioService`.
 - `RecordingBackdrop` is orthogonal to both and paints the **whole session** — prepare countdown (`CountdownOverlayView`), `RecordingView`, and `DrillSessionView`. `.base` resolves to `AppBackground(style: .recording)`, so the default look is unchanged. Do not paint any screen outside a session with it.
 - Deep-link `record` clears prior prompt/story/goal context.

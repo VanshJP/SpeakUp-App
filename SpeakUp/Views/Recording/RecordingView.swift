@@ -7,12 +7,9 @@ struct RecordingView: View {
     @Environment(SpeechService.self) private var speechService
     @Environment(LLMService.self) private var llmService
     @State private var viewModel = RecordingViewModel()
-    @State private var selectedFramework: SpeechFramework?
-    @State private var showingVocabStrip = true
     @State private var overlayWords: [String] = []
     @State private var overlayIntroduced: Set<String> = []
     @State private var overlayReviewing: Set<String> = []
-    @State private var overlayTitle = "Your Words"
     @State private var completedRecording: Recording?
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
@@ -302,8 +299,6 @@ struct RecordingView: View {
                 }
 
                 MicLevelPill(isHearing: viewModel.audioService.isHearingInput)
-
-                sessionOptionsMenu
             }
 
             // Compact prompt card at top (during recording)
@@ -311,50 +306,15 @@ struct RecordingView: View {
                 compactPromptCard(prompt)
             }
 
-            if showingVocabStrip, !overlayWords.isEmpty {
+            if !overlayWords.isEmpty {
                 VocabStrip(
                     words: overlayWords,
                     introduced: overlayIntroduced,
                     reviewing: overlayReviewing
                 )
-                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.top, 50)
-        .animation(AppMotion.settle, value: showingVocabStrip)
-    }
-
-    /// Framework and vocab used to sit in the top bar as their own circular
-    /// buttons, alongside a read-only goal badge — five controls competing with
-    /// the timer and waveform for a screen whose entire job is "talk now".
-    /// They're mid-session adjustments, not primary actions, so they collapse
-    /// into one overflow. The goal badge is gone outright: it was pure context,
-    /// and the countdown screen showed it seconds earlier.
-    private var sessionOptionsMenu: some View {
-        Menu {
-            Picker("Framework", selection: $selectedFramework) {
-                Text("No framework").tag(SpeechFramework?.none)
-                ForEach(SpeechFramework.allCases) { framework in
-                    Label(framework.displayName, systemImage: framework.icon)
-                        .tag(SpeechFramework?.some(framework))
-                }
-            }
-
-            if !overlayWords.isEmpty {
-                Toggle(isOn: $showingVocabStrip) {
-                    Label(overlayTitle, systemImage: "character.book.closed")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background { Circle().fill(.ultraThinMaterial) }
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel("Session options")
     }
 
     private func refreshVocabOverlay() {
@@ -380,7 +340,6 @@ struct RecordingView: View {
                     .filter { $0.isReview == true }
                     .map(\.id)
             )
-            overlayTitle = "Use today"
             return
         }
 
@@ -389,7 +348,6 @@ struct RecordingView: View {
         overlayWords = settings.vocabWords
         overlayIntroduced = []
         overlayReviewing = []
-        overlayTitle = "Your Words"
     }
 
     private func compactPromptCard(_ prompt: Prompt) -> some View {
@@ -412,29 +370,17 @@ struct RecordingView: View {
     // MARK: - Center Content
 
     private var centerContent: some View {
-        VStack(spacing: 24) {
-            // Framework overlay
-            if let framework = selectedFramework, viewModel.isRecording {
-                FrameworkOverlayView(
-                    framework: framework,
-                    elapsedTime: viewModel.recordingDuration,
-                    totalDuration: TimeInterval(duration.seconds)
-                )
-            }
-
-            // Timer
-            TimerView(
-                remainingTime: viewModel.displayTime,
-                progress: viewModel.progress,
-                color: viewModel.timerColor,
-                isRecording: viewModel.isRecording,
-                isOvertime: viewModel.isOvertime,
-                timerLabel: viewModel.timerLabel,
-                // Same dial the countdown just drew — the look is picked once
-                // in Settings and has to survive the hand-off to recording.
-                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
-            )
-        }
+        TimerView(
+            remainingTime: viewModel.displayTime,
+            progress: viewModel.progress,
+            color: viewModel.timerColor,
+            isRecording: viewModel.isRecording,
+            isOvertime: viewModel.isOvertime,
+            timerLabel: viewModel.timerLabel,
+            // Same dial the countdown just drew — the look is picked once
+            // in Settings and has to survive the hand-off to recording.
+            look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
+        )
     }
 
     private func coachingCueView(_ cue: CoachingCue) -> some View {

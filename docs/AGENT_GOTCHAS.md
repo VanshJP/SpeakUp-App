@@ -138,7 +138,13 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 ---
 
-## 10. Onboarding & first-run order
+## 10. No `Menu` / `Picker` on the live recording tree
+
+`RecordingViewModel` ticks at 10 Hz and writes `@Observable` fields the parent view reads. A `Menu` or `Picker` in that tree re-identifies every tick, so taps look dead (STAR/PREP mid-take controls). Teach frameworks in Learn. Do not overlay them on the take.
+
+---
+
+## 11. Onboarding & first-run order
 
 Before any `Views/Onboarding/` or onboarding path in `ContentView`: read **`ONBOARDING_VISION.md`**.
 

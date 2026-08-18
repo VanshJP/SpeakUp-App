@@ -3,8 +3,8 @@ import SwiftUI
 /// A number over its label — the smallest unit of reported data in the app.
 ///
 /// Written out inline in twelve places (score weights, before/after replay,
-/// lesson detail, practice results, streak detail, the framework overlay, the
-/// analyzing skeleton, the comparison view twice) as the same
+/// lesson detail, practice results, streak detail, the analyzing skeleton,
+/// the comparison view twice) as the same
 /// `VStack(spacing: 4) { bold value; caption label }`.
 struct StatPair: View {
     let value: String
