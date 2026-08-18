@@ -8,6 +8,7 @@ nonisolated struct VocabChallengeStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private let cacheKey = "vocabChallenge.cachedDay.v1"
     private let skipPrefix = "vocabChallenge.skipped."
+    private let reviewKey = "vocabChallenge.reviews.v1"
 
     struct CachedDay: Codable, Sendable, Equatable {
         var dayStamp: String
@@ -27,6 +28,17 @@ nonisolated struct VocabChallengeStore: @unchecked Sendable {
     func save(_ cache: CachedDay) {
         guard let data = try? JSONEncoder().encode(cache) else { return }
         defaults.set(data, forKey: cacheKey)
+    }
+
+    /// FSRS state per word, keyed by lowercased word.
+    func reviews() -> [String: VocabReviewState] {
+        guard let data = defaults.data(forKey: reviewKey) else { return [:] }
+        return (try? JSONDecoder().decode([String: VocabReviewState].self, from: data)) ?? [:]
+    }
+
+    func saveReviews(_ reviews: [String: VocabReviewState]) {
+        guard let data = try? JSONEncoder().encode(reviews) else { return }
+        defaults.set(data, forKey: reviewKey)
     }
 
     func skipped(on dayStamp: String) -> Set<String> {

@@ -107,19 +107,7 @@ struct DrillSessionView: View {
 
             // Voice activity indicator
             if viewModel.isActive {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(viewModel.audioLevel > -40 ? AppColors.success : AppColors.scoreEmpty)
-                        .frame(width: 8, height: 8)
-                        .animation(.easeInOut(duration: 0.15), value: viewModel.audioLevel > -40)
-
-                    Text(viewModel.audioLevel > -40 ? "Speaking" : "Silent")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(viewModel.audioLevel > -40 ? .white : .white.opacity(0.6))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(.ultraThinMaterial))
+                MicLevelPill(isHearing: viewModel.audioService.isHearingInput)
             } else {
                 Spacer().frame(width: 44)
             }
@@ -143,11 +131,11 @@ struct DrillSessionView: View {
 
             TimerView(
                 remainingTime: TimeInterval(viewModel.timeRemaining),
-                totalTime: TimeInterval(viewModel.selectedMode?.defaultDurationSeconds ?? 60),
                 progress: viewModel.progress,
                 color: viewModel.selectedMode?.color ?? AppColors.primary,
                 isRecording: viewModel.isActive,
-                timerLabel: "remaining"
+                timerLabel: "remaining",
+                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
             )
         }
     }

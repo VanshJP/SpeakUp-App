@@ -23,6 +23,23 @@ class AudioService: NSObject {
     // Permission
     var hasPermission = false
 
+    /// True while the mic is actually picking something up.
+    ///
+    /// The recording and drill screens used to derive this from the
+    /// instantaneous level (`audioLevel > -40`), which flipped on every gap
+    /// between words — a strobe in the corner of a screen whose whole job is
+    /// "talk now". This holds a decaying peak instead, so ordinary pauses keep
+    /// it lit and only real silence puts it out.
+    private(set) var isHearingInput = true
+
+    /// Tuning knobs for `isHearingInput`. `getAudioLevel()` runs at 10 Hz, so
+    /// the peak sheds 15 dB/s: a normal speaking peak survives ~2.5 s of quiet
+    /// before the indicator drops. Raise the decay to react faster; lower the
+    /// floor if a quiet room reads as silence.
+    private static let peakDecayPerSample: Float = 1.5
+    private static let hearingFloor: Float = -40
+    private var inputPeak: Float = 0
+
     private var recordingTimer: Timer?
     private var displayLink: CADisplayLink?
     private var lifecycleObservers: [NSObjectProtocol] = []
@@ -123,6 +140,11 @@ class AudioService: NSObject {
             recordingURL = audioFilename
             recordingDuration = 0
 
+            // Full grace window at the top of a take, so the indicator doesn't
+            // cry "no sound" in the second before the speaker starts.
+            inputPeak = 0
+            isHearingInput = true
+
             // Start duration timer
             await MainActor.run {
                 recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -205,7 +227,18 @@ class AudioService: NSObject {
     
     func getAudioLevel() -> Float {
         audioRecorder?.updateMeters()
-        return audioRecorder?.averagePower(forChannel: 0) ?? -160
+        let level = audioRecorder?.averagePower(forChannel: 0) ?? -160
+
+        // Decaying peak, not the raw reading: a gap between two words is not a
+        // dead mic. Written only when it flips, so observers don't re-render at
+        // the sampling rate.
+        inputPeak = max(level, inputPeak - Self.peakDecayPerSample)
+        let hearing = inputPeak > Self.hearingFloor
+        if hearing != isHearingInput {
+            isHearingInput = hearing
+        }
+
+        return level
     }
     
     // MARK: - Playback

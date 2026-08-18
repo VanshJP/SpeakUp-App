@@ -7,7 +7,7 @@ struct CountdownOverlayView: View {
     let duration: RecordingDuration
     let countdownDuration: Int
     let countdownStyle: CountdownStyle
-    var look: CountdownLook = .ring
+    var look: TimerLook = .ring
     var backdrop: RecordingBackdrop = .base
     let onComplete: () -> Void
     let onCancel: () -> Void
@@ -44,7 +44,7 @@ struct CountdownOverlayView: View {
         duration: RecordingDuration,
         countdownDuration: Int = 15,
         countdownStyle: CountdownStyle = .countDown,
-        look: CountdownLook = .ring,
+        look: TimerLook = .ring,
         backdrop: RecordingBackdrop = .base,
         selectedGoalId: Binding<UUID?> = .constant(nil),
         challenge: SharedChallenge? = nil,
@@ -69,23 +69,30 @@ struct CountdownOverlayView: View {
         ZStack {
             RecordingBackdropView(backdrop: backdrop)
 
+            // Laid out against the recording screen, slot for slot: prompt
+            // where the compact prompt card will be, dial where the clock will
+            // be and at the clock's size, actions along the bottom. The
+            // hand-off used to drop the dial from the top of the screen to the
+            // middle and grow it 150 → 200, so the one thing the eye was
+            // holding onto moved the instant recording started.
             VStack(spacing: 20) {
-                CountdownDial(
-                    look: look,
-                    progress: progress,
-                    number: displayNumber,
-                    isPulsing: isPulsing
-                )
-                .padding(.top, 60)
-
-                Spacer()
-
                 if let prompt {
                     prominentPromptCard(prompt)
                         .padding(.horizontal, 20)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
+
+                TimerDial(
+                    look: look,
+                    progress: progress,
+                    text: "\(displayNumber)",
+                    caption: "sec",
+                    isPulsing: isPulsing,
+                    diameter: 200
+                )
+
+                Spacer(minLength: 0)
 
                 HStack(spacing: 12) {
                     GlassButton(
@@ -111,6 +118,7 @@ struct CountdownOverlayView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 50)
             }
+            .padding(.top, 50)
         }
         .onReceive(timer) { _ in
             guard !hasCompleted else { return }
@@ -225,112 +233,6 @@ struct CountdownOverlayView: View {
             return Double(remainingSeconds) / Double(totalSeconds)
         case .countUp:
             return Double(elapsedSeconds) / Double(totalSeconds)
-        }
-    }
-}
-
-// MARK: - Countdown Dial
-
-/// The countdown visual on its own, so the settings picker previews exactly
-/// what the countdown screen will show.
-struct CountdownDial: View {
-    let look: CountdownLook
-    let progress: Double
-    let number: Int
-    var isPulsing: Bool = false
-
-    private let segmentCount = 12
-
-    var body: some View {
-        ZStack {
-            switch look {
-            case .ring:
-                Circle()
-                    .fill(Color.white.opacity(0.04))
-                    .frame(width: 140, height: 140)
-                    .scaleEffect(isPulsing ? 1.06 : 1.0)
-
-                RingProgress(progress: progress, color: AppColors.primary, lineWidth: 5)
-                    .frame(width: 110, height: 110)
-                    .motion(.linear(duration: 1), value: progress)
-
-                numberStack(size: 40, showsUnit: true)
-
-            case .orb:
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [AppColors.primary.opacity(0.55), AppColors.primary.opacity(0.02)],
-                            center: .center,
-                            startRadius: 6,
-                            endRadius: 78
-                        )
-                    )
-                    .frame(width: 150, height: 150)
-                    // The orb itself is the progress read-out: it shrinks as
-                    // the countdown drains, so there is no ring to read.
-                    .scaleEffect(0.72 + 0.28 * progress)
-                    .motion(.linear(duration: 1), value: progress)
-
-                numberStack(size: 46, showsUnit: false)
-
-            case .segments:
-                ZStack {
-                    ForEach(0..<segmentCount, id: \.self) { i in
-                        Capsule()
-                            .fill(
-                                Double(i) < progress * Double(segmentCount)
-                                    ? AppColors.primary
-                                    : Color.white.opacity(0.12)
-                            )
-                            .frame(width: 3, height: 14)
-                            .offset(y: -62)
-                            .rotationEffect(.degrees(Double(i) / Double(segmentCount) * 360))
-                    }
-                }
-                .frame(width: 140, height: 140)
-
-                numberStack(size: 40, showsUnit: true)
-
-            case .minimal:
-                VStack(spacing: 14) {
-                    Text("\(number)")
-                        .font(.system(size: 72, weight: .light, design: .rounded))
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-                        .animation(.spring(duration: 0.3), value: number)
-
-                    Capsule()
-                        .fill(Color.white.opacity(0.12))
-                        .frame(width: 120, height: 3)
-                        .overlay(alignment: .leading) {
-                            Capsule()
-                                .fill(AppColors.primary)
-                                .frame(width: 120 * progress, height: 3)
-                                .motion(.linear(duration: 1), value: progress)
-                        }
-                }
-                .frame(width: 140, height: 140)
-            }
-        }
-        .frame(width: 150, height: 150)
-    }
-
-    private func numberStack(size: CGFloat, showsUnit: Bool) -> some View {
-        VStack(spacing: 2) {
-            Text("\(number)")
-                .font(.system(size: size, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .contentTransition(.numericText())
-                .animation(.spring(duration: 0.3), value: number)
-
-            if showsUnit {
-                Text("sec")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .textCase(.uppercase)
-                    .tracking(1.0)
-            }
         }
     }
 }

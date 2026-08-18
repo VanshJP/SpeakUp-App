@@ -11,6 +11,16 @@ nonisolated enum VocabChallengeService {
         return String(format: "%04d-%02d-%02d", year, month, day)
     }
 
+    static func date(fromDayStamp stamp: String, calendar: Calendar = .current) -> Date? {
+        let parts = stamp.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var components = DateComponents()
+        components.year = parts[0]
+        components.month = parts[1]
+        components.day = parts[2]
+        return calendar.date(from: components)
+    }
+
     static func daySeed(_ date: Date, calendar: Calendar = .current) -> Int {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return (parts.year ?? 0) * 366 + (parts.month ?? 0) * 31 + (parts.day ?? 0)
@@ -46,6 +56,11 @@ nonisolated enum VocabChallengeService {
         let skipped = store.skipped(on: stamp)
         let seed = daySeed(now, calendar: calendar)
 
+        if preferences.spacedReviewEnabled {
+            settleUnusedWords(before: stamp, now: now, store: store, calendar: calendar)
+        }
+        let reviews = preferences.spacedReviewEnabled ? store.reviews() : [:]
+
         if let cached = store.cached(),
            cached.dayStamp == stamp,
            cached.fingerprint == fingerprint {
@@ -58,7 +73,9 @@ nonisolated enum VocabChallengeService {
                 preferences: preferences,
                 usedCounts: usedCounts,
                 skipped: skipped,
-                seed: seed
+                seed: seed,
+                reviews: reviews,
+                now: now
             )
             if filled.isEmpty { return emptyChallenge(dayStamp: stamp) }
             store.save(.init(dayStamp: stamp, fingerprint: fingerprint, words: filled))
@@ -70,7 +87,9 @@ nonisolated enum VocabChallengeService {
             preferences: preferences,
             usedCounts: usedCounts,
             skipped: skipped,
-            seed: seed
+            seed: seed,
+            reviews: reviews,
+            now: now
         )
         if picked.isEmpty { return emptyChallenge(dayStamp: stamp) }
         store.save(.init(dayStamp: stamp, fingerprint: fingerprint, words: picked))
@@ -86,18 +105,38 @@ nonisolated enum VocabChallengeService {
         calendar: Calendar = .current
     ) -> DailyVocabChallenge? {
         let stamp = dayStamp(now, calendar: calendar)
-        store.skip(word, on: stamp)
-        if var cached = store.cached(), cached.dayStamp == stamp {
-            cached.words.removeAll { $0.text.caseInsensitiveCompare(word) == .orderedSame }
-            store.save(cached)
+        // The rebuild below drops skipped words from the cached day on its own,
+        // so the cache is only read here — for where the word was sitting.
+        var previous: [VocabChallengeWord] = []
+        if let cached = store.cached(), cached.dayStamp == stamp {
+            previous = cached.words
         }
-        return todaysChallenge(
+        let slot = previous.firstIndex { $0.id == word.lowercased() }
+        store.skip(word, on: stamp)
+
+        guard let refilled = todaysChallenge(
             preferences: preferences,
             usedCounts: usedCounts,
             now: now,
             store: store,
             calendar: calendar
-        )
+        ) else { return nil }
+
+        // The rebuild appends, so the replacement would otherwise land at the
+        // bottom of the card and the row the user just tapped would jump away
+        // from under their finger. Put it back in the skipped word's slot.
+        guard let slot,
+              refilled.words.count >= previous.count,
+              slot < refilled.words.count - 1 else { return refilled }
+
+        var words = refilled.words
+        let replacement = words.removeLast()
+        words.insert(replacement, at: slot)
+        store.save(.init(dayStamp: stamp, fingerprint: preferences.fingerprint, words: words))
+
+        var reordered = refilled
+        reordered.words = words
+        return reordered
     }
 
     static func evaluate(
@@ -138,6 +177,10 @@ nonisolated enum VocabChallengeService {
 
     // MARK: - Picking
 
+    /// Anki's leech rule, loosely: four missed days running means the word is
+    /// being ignored, not learned.
+    private static let leechThreshold = 4
+
     private static func emptyChallenge(dayStamp: String) -> DailyVocabChallenge {
         DailyVocabChallenge(dayStamp: dayStamp, words: [], usedKeys: [], isCompleted: false)
     }
@@ -147,7 +190,9 @@ nonisolated enum VocabChallengeService {
         preferences: VocabChallengePreferences,
         usedCounts: [String: Int],
         skipped: Set<String>,
-        seed: Int
+        seed: Int,
+        reviews: [String: VocabReviewState],
+        now: Date
     ) -> [VocabChallengeWord] {
         let target = preferences.resolvedWordCount
         var picked = existing
@@ -155,43 +200,117 @@ nonisolated enum VocabChallengeService {
             .union(existing.map { $0.text.lowercased() })
             .union(bannedKeys(preferences))
 
-        let pool = rankedPool(
+        let spaced = preferences.spacedReviewEnabled
+        let ranked = rankedPool(
             preferences: preferences,
             usedCounts: usedCounts,
-            seed: seed
+            seed: seed,
+            reviews: reviews,
+            now: now
         )
 
-        let wantsIntro = preferences.introduceNew
+        func drain(_ pool: [VocabChallengeWord]) {
+            for candidate in pool {
+                if picked.count >= target { break }
+                let key = candidate.text.lowercased()
+                if exclude.contains(key) { continue }
+                picked.append(candidate)
+                exclude.insert(key)
+            }
+        }
+
+        // One slot is held for a fresh word whenever there is more than one to
+        // give, so a backlog of due reviews can never starve out learning. At a
+        // single word a day there is nothing to reserve, and a word going stale
+        // outranks meeting a new one.
+        let reserveIntro = preferences.introduceNew && (!spaced || target >= 2)
+        // Anything with a schedule is off the table for the random draw: it has
+        // either just led the day or is deliberately resting, and re-teaching it
+        // as brand new would reset the very schedule that is doing the work.
+        let scheduled: Set<String> = spaced ? Set(reviews.keys) : []
         let introAlready = picked.contains { $0.source == .introduced }
-        if wantsIntro, !introAlready, picked.count < target {
-            if let intro = pickIntroduced(preferences: preferences, exclude: exclude, seed: seed) {
+        if reserveIntro, !introAlready, picked.count < target {
+            if let intro = pickIntroduced(
+                preferences: preferences,
+                exclude: exclude.union(scheduled),
+                seed: seed
+            ) {
                 picked.append(intro)
                 exclude.insert(intro.text.lowercased())
             }
         }
 
-        for candidate in pool {
-            if picked.count >= target { break }
-            let key = candidate.text.lowercased()
-            if exclude.contains(key) { continue }
-            picked.append(candidate)
-            exclude.insert(key)
-        }
+        drain(ranked.primary)
 
         if picked.count < target, preferences.introduceNew {
             let extras = pickIntroducedMany(
                 preferences: preferences,
-                exclude: exclude,
+                exclude: exclude.union(scheduled),
                 seed: seed &+ 17,
                 count: target - picked.count
             )
             picked.append(contentsOf: extras)
+            exclude.formUnion(extras.map { $0.text.lowercased() })
         }
+
+        // Words scheduled for later, used only to keep the card from going
+        // empty on a day with nothing due and no new words left.
+        drain(ranked.deferred)
 
         if picked.count > target {
             picked = Array(picked.prefix(target))
         }
         return picked
+    }
+
+    /// Grades every word from a previous day's pick that was never spoken.
+    /// Missing it is the "again" review — FSRS pulls it back in tomorrow.
+    private static func settleUnusedWords(
+        before today: String,
+        now: Date,
+        store: VocabChallengeStore,
+        calendar: Calendar
+    ) {
+        guard let cached = store.cached(), cached.dayStamp != today else { return }
+        // Graded on the day it was missed, not today — otherwise a word skipped
+        // on Monday would not resurface until the day after the user next opens
+        // the app, and a week away would cost only one lapse-day.
+        let missedOn = date(fromDayStamp: cached.dayStamp, calendar: calendar) ?? now
+        var reviews = store.reviews()
+        var changed = false
+        for word in cached.words {
+            let key = word.text.lowercased()
+            if reviews[key]?.lastGradedDay == cached.dayStamp { continue }
+            reviews[key] = VocabScheduler.review(reviews[key], grade: .again, on: missedOn, calendar: calendar)
+            changed = true
+        }
+        if changed { store.saveReviews(reviews) }
+    }
+
+    /// Records that tracked words were actually spoken, which is the passing
+    /// review. Idempotent per day, so re-analysing or a second session the same
+    /// day does not double-count.
+    static func recordUsage(
+        _ usages: [VocabWordUsage],
+        preferences: VocabChallengePreferences,
+        now: Date = Date(),
+        store: VocabChallengeStore = .standard,
+        calendar: Calendar = .current
+    ) {
+        guard preferences.isEnabled, preferences.spacedReviewEnabled else { return }
+        let stamp = dayStamp(now, calendar: calendar)
+        var reviews = store.reviews()
+        var changed = false
+        for usage in usages where usage.count > 0 {
+            let key = usage.word.lowercased()
+            if reviews[key]?.lastGradedDay == stamp { continue }
+            // Leaning on a word several times in one day is the strongest
+            // signal available without asking the user to rate anything.
+            let grade: VocabGrade = usage.count >= 3 ? .easy : .good
+            reviews[key] = VocabScheduler.review(reviews[key], grade: grade, on: now, calendar: calendar)
+            changed = true
+        }
+        if changed { store.saveReviews(reviews) }
     }
 
     private static func bannedKeys(_ preferences: VocabChallengePreferences) -> Set<String> {
@@ -201,11 +320,15 @@ nonisolated enum VocabChallengeService {
         return keys
     }
 
+    /// `primary` is what today should draw from; `deferred` is everything FSRS
+    /// wants to leave alone for now, kept only as a fallback.
     private static func rankedPool(
         preferences: VocabChallengePreferences,
         usedCounts: [String: Int],
-        seed: Int
-    ) -> [VocabChallengeWord] {
+        seed: Int,
+        reviews: [String: VocabReviewState],
+        now: Date
+    ) -> (primary: [VocabChallengeWord], deferred: [VocabChallengeWord]) {
         var pool: [VocabChallengeWord] = []
         if preferences.useBank {
             for word in preferences.vocabWords {
@@ -222,16 +345,63 @@ nonisolated enum VocabChallengeService {
             }
         }
 
-        let unused = pool.filter { (usedCounts[$0.text.lowercased()] ?? 0) == 0 }
-        let used = pool.filter { (usedCounts[$0.text.lowercased()] ?? 0) > 0 }
-            .sorted { lhs, rhs in
-                let c0 = usedCounts[lhs.text.lowercased()] ?? 0
-                let c1 = usedCounts[rhs.text.lowercased()] ?? 0
-                if c0 != c1 { return c0 < c1 }
-                return stableHash(seed, lhs.text) < stableHash(seed, rhs.text)
+        // A word the workout taught is scheduled too, even when the user never
+        // tapped Add. Without this a new word is spotlighted once and only ever
+        // returns by chance, which is the opposite of what spacing is for.
+        if preferences.spacedReviewEnabled, preferences.introduceNew {
+            var known = Set(pool.map(\.id))
+            for (key, state) in reviews where state.due <= now && !known.contains(key) {
+                guard let entry = DefaultVocabLexicon.entry(for: key),
+                      WordSafety.allowsForChallenge(entry.word),
+                      !WordSafety.isUserName(entry.word, userName: preferences.userName) else { continue }
+                pool.append(
+                    VocabChallengeWord(
+                        text: entry.word,
+                        source: .introduced,
+                        gloss: entry.gloss,
+                        prompt: entry.prompt
+                    )
+                )
+                known.insert(key)
             }
+        }
 
-        return shuffle(unused, seed: seed) + used
+        guard preferences.spacedReviewEnabled else {
+            let unused = pool.filter { (usedCounts[$0.id] ?? 0) == 0 }
+            let used = pool.filter { (usedCounts[$0.id] ?? 0) > 0 }
+                .sorted { lhs, rhs in
+                    let c0 = usedCounts[lhs.id] ?? 0
+                    let c1 = usedCounts[rhs.id] ?? 0
+                    if c0 != c1 { return c0 < c1 }
+                    return stableHash(seed, lhs.text) < stableHash(seed, rhs.text)
+                }
+            return (shuffle(unused, seed: seed) + used, [])
+        }
+
+        // Most overdue first: the word closest to being forgotten is the one
+        // worth spending a slot on. A word missed several days running has
+        // stopped being a review and started being a nag, so it gives up the
+        // lead — otherwise ignoring the workout pins the same words on screen
+        // forever.
+        func leads(_ word: VocabChallengeWord) -> Bool {
+            guard let state = reviews[word.id] else { return false }
+            return state.due <= now && (state.consecutiveLapses ?? 0) < leechThreshold
+        }
+
+        let due = pool
+            .filter(leads)
+            .sorted { (reviews[$0.id]?.due ?? now) < (reviews[$1.id]?.due ?? now) }
+            .map { word -> VocabChallengeWord in
+                var marked = word
+                marked.isReview = true
+                return marked
+            }
+        let fresh = pool.filter { reviews[$0.id] == nil }
+        let rested = pool
+            .filter { reviews[$0.id] != nil && !leads($0) }
+            .sorted { (reviews[$0.id]?.due ?? now) < (reviews[$1.id]?.due ?? now) }
+
+        return (due + shuffle(fresh, seed: seed), rested)
     }
 
     private static func makeCandidate(

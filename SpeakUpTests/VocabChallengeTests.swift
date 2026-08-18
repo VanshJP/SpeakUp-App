@@ -99,6 +99,7 @@ struct VocabChallengeServiceTests {
         useBank: Bool = true,
         useDictionary: Bool = true,
         introduceNew: Bool = true,
+        spaced: Bool = true,
         bank: [String] = ["Strategic", "Authentic"],
         dictionary: [String] = ["Kubernetes"],
         extraBanned: [String] = [],
@@ -111,6 +112,7 @@ struct VocabChallengeServiceTests {
             useBank: useBank,
             useDictionary: useDictionary,
             introduceNew: introduceNew,
+            spacedReviewEnabled: spaced,
             vocabWords: bank,
             dictionaryWords: dictionary,
             extraBanned: extraBanned,
@@ -209,6 +211,32 @@ struct VocabChallengeServiceTests {
         #expect(next?.words.count == 2)
     }
 
+    @Test func skipKeepsTheReplacementInTheSkippedSlot() {
+        let store = makeStore()
+        let now = day(2026, 8, 17)
+        let original = VocabChallengeService.todaysChallenge(
+            preferences: prefs(count: 3),
+            now: now,
+            store: store
+        )!
+        #expect(original.words.count == 3)
+
+        let skipped = original.words[0].text
+        let next = VocabChallengeService.skip(
+            skipped,
+            preferences: prefs(count: 3),
+            now: now,
+            store: store
+        )!
+
+        // The rows the user did not touch must not move.
+        #expect(next.words[1].text == original.words[1].text)
+        #expect(next.words[2].text == original.words[2].text)
+        #expect(next.words[0].text.caseInsensitiveCompare(skipped) != .orderedSame)
+        // The order has to survive the round trip, since Today rebuilds from cache.
+        #expect(store.cached()?.words.map(\.text) == next.words.map(\.text))
+    }
+
     @Test func evaluateDetectsUsedWordsInTranscript() {
         let challenge = DailyVocabChallenge(
             dayStamp: "2026-08-17",
@@ -262,5 +290,165 @@ struct VocabChallengeServiceTests {
         )
         #expect(result?.words.map(\.text) == ["Kubernetes"])
         #expect(result?.words.first?.source == .dictionary)
+    }
+}
+
+struct VocabSchedulerTests {
+    @Test func missedWordReturnsSoonerThanSpokenOne() {
+        let now = Date()
+        let spoken = VocabScheduler.review(nil, grade: .good, on: now)
+        let missed = VocabScheduler.review(nil, grade: .again, on: now)
+        #expect(missed.due < spoken.due)
+        #expect(missed.lapses == 1)
+        #expect(spoken.lapses == 0)
+    }
+
+    @Test func intervalGrowsAsAWordSticks() {
+        let first = VocabScheduler.review(nil, grade: .good, on: Date())
+        let second = VocabScheduler.review(first, grade: .good, on: first.due)
+        #expect(second.due.timeIntervalSince(second.lastReview)
+            > first.due.timeIntervalSince(first.lastReview))
+        #expect(second.reps == 2)
+    }
+
+    @Test func forgettingNeverLooksLikeProgress() {
+        let first = VocabScheduler.review(nil, grade: .good, on: Date())
+        let second = VocabScheduler.review(first, grade: .good, on: first.due)
+        let lapsed = VocabScheduler.review(second, grade: .again, on: second.due)
+        #expect(lapsed.stability < second.stability)
+        #expect(lapsed.due.timeIntervalSince(lapsed.lastReview)
+            < second.due.timeIntervalSince(second.lastReview))
+        #expect(lapsed.lapses == 1)
+        #expect(lapsed.consecutiveLapses == 1)
+    }
+
+    @Test func intervalStaysUnderTheCeiling() {
+        var state = VocabScheduler.review(nil, grade: .easy, on: Date())
+        for _ in 0..<20 {
+            state = VocabScheduler.review(state, grade: .easy, on: state.due)
+        }
+        let days = state.due.timeIntervalSince(state.lastReview) / 86_400
+        #expect(days >= 1 && days <= 91)
+    }
+}
+
+struct VocabSpacedReviewTests {
+    private func makeStore() -> VocabChallengeStore {
+        let suite = "VocabSpacedReviewTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return VocabChallengeStore(defaults: defaults)
+    }
+
+    private func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return Calendar(identifier: .gregorian).date(from: components)!
+    }
+
+    private func bankOnly(spaced: Bool = true) -> VocabChallengePreferences {
+        VocabChallengePreferences(
+            isEnabled: true,
+            wordCount: 1,
+            useBank: true,
+            useDictionary: false,
+            introduceNew: false,
+            spacedReviewEnabled: spaced,
+            vocabWords: ["Strategic", "Authentic"],
+            dictionaryWords: [],
+            extraBanned: [],
+            userName: "Ada",
+            speakerLevelRaw: 1
+        )
+    }
+
+    @Test func aMissedWordComesBackTheNextDay() {
+        let store = makeStore()
+        let preferences = bankOnly()
+        let monday = VocabChallengeService.todaysChallenge(
+            preferences: preferences,
+            now: day(2026, 8, 17),
+            store: store
+        )
+        let missed = monday!.words[0].text
+
+        let tuesday = VocabChallengeService.todaysChallenge(
+            preferences: preferences,
+            now: day(2026, 8, 18),
+            store: store
+        )
+        #expect(tuesday?.words.map(\.text) == [missed])
+        #expect(tuesday?.words.first?.isReview == true)
+    }
+
+    @Test func aSpokenWordRestsWhileAnotherGetsTheSlot() {
+        let store = makeStore()
+        let preferences = bankOnly()
+        let monday = VocabChallengeService.todaysChallenge(
+            preferences: preferences,
+            now: day(2026, 8, 17),
+            store: store
+        )
+        let spoken = monday!.words[0].text
+        VocabChallengeService.recordUsage(
+            [VocabWordUsage(word: spoken, count: 1)],
+            preferences: preferences,
+            now: day(2026, 8, 17),
+            store: store
+        )
+
+        let tuesday = VocabChallengeService.todaysChallenge(
+            preferences: preferences,
+            now: day(2026, 8, 18),
+            store: store
+        )
+        #expect(tuesday?.words.map(\.text) != [spoken])
+        #expect(tuesday?.words.count == 1)
+    }
+
+    @Test func gradingIsIdempotentWithinADay() {
+        let store = makeStore()
+        let preferences = bankOnly()
+        let monday = day(2026, 8, 17)
+        let usage = [VocabWordUsage(word: "Strategic", count: 1)]
+        VocabChallengeService.recordUsage(usage, preferences: preferences, now: monday, store: store)
+        let afterFirst = store.reviews()["strategic"]
+        VocabChallengeService.recordUsage(usage, preferences: preferences, now: monday, store: store)
+        #expect(store.reviews()["strategic"] == afterFirst)
+        #expect(afterFirst?.reps == 1)
+    }
+
+    @Test func spacingOffKeepsTheOldPickAndWritesNoSchedule() {
+        let store = makeStore()
+        let preferences = VocabChallengePreferences(
+            isEnabled: true,
+            wordCount: 2,
+            useBank: true,
+            useDictionary: false,
+            introduceNew: true,
+            spacedReviewEnabled: false,
+            vocabWords: ["Strategic", "Authentic"],
+            dictionaryWords: [],
+            extraBanned: [],
+            userName: "Ada",
+            speakerLevelRaw: 1
+        )
+        let result = VocabChallengeService.todaysChallenge(
+            preferences: preferences,
+            now: day(2026, 8, 17),
+            store: store
+        )
+        #expect(result?.words.first?.source == .introduced)
+        #expect(result?.words.allSatisfy { $0.isReview != true } == true)
+
+        VocabChallengeService.recordUsage(
+            [VocabWordUsage(word: "Strategic", count: 2)],
+            preferences: preferences,
+            now: day(2026, 8, 17),
+            store: store
+        )
+        #expect(store.reviews().isEmpty)
     }
 }

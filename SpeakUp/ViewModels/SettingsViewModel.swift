@@ -43,8 +43,6 @@ class SettingsViewModel {
     // Local state - Daily word workout
     var vocabChallengeEnabled: Bool = true
     var vocabChallengeWordCount: Int = 2
-    var vocabChallengeUseBank: Bool = true
-    var vocabChallengeUseDictionary: Bool = true
     var vocabChallengeIntroduceNew: Bool = true
 
     // Local state - Speaker Level
@@ -60,7 +58,7 @@ class SettingsViewModel {
     // Local state - Recording Look
     var waveformStyle: WaveformStyle = .rings
     var recordButtonStyle: RecordButtonStyle = .classic
-    var countdownLook: CountdownLook = .ring
+    var countdownLook: TimerLook = .ring
     var recordingBackdrop: RecordingBackdrop = .base
 
     // Local state - Sound Pack
@@ -223,8 +221,6 @@ class SettingsViewModel {
 
         vocabChallengeEnabled = settings.vocabChallengeEnabled
         vocabChallengeWordCount = settings.vocabChallengeWordCount
-        vocabChallengeUseBank = settings.vocabChallengeUseBank
-        vocabChallengeUseDictionary = settings.vocabChallengeUseDictionary
         vocabChallengeIntroduceNew = settings.vocabChallengeIntroduceNew
 
         // Speaker Level
@@ -240,7 +236,7 @@ class SettingsViewModel {
         // Recording look
         waveformStyle = WaveformStyle(rawValue: settings.waveformStyle) ?? .rings
         recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
-        countdownLook = CountdownLook(rawValue: settings.countdownLook) ?? .ring
+        countdownLook = TimerLook(rawValue: settings.countdownLook) ?? .ring
         recordingBackdrop = RecordingBackdrop(rawValue: settings.countdownBackdrop) ?? .base
 
         // Sound pack
@@ -306,9 +302,12 @@ class SettingsViewModel {
 
         settings.vocabChallengeEnabled = vocabChallengeEnabled
         settings.vocabChallengeWordCount = min(3, max(1, vocabChallengeWordCount))
-        settings.vocabChallengeUseBank = vocabChallengeUseBank
-        settings.vocabChallengeUseDictionary = vocabChallengeUseDictionary
+        // ponytail: sources and spacing are no longer knobs — the picker keeps
+        // the flags so it stays testable, the UI just never turns them off.
+        settings.vocabChallengeUseBank = true
+        settings.vocabChallengeUseDictionary = true
         settings.vocabChallengeIntroduceNew = vocabChallengeIntroduceNew
+        settings.vocabChallengeSpacedReview = true
 
         // Speaker Level
         settings.speakerLevel = speakerLevel.rawValue
@@ -700,6 +699,7 @@ class SettingsViewModel {
         settings.vocabChallengeUseBank = true
         settings.vocabChallengeUseDictionary = true
         settings.vocabChallengeIntroduceNew = true
+        settings.vocabChallengeSpacedReview = true
         settings.customFillerWords = []
         settings.customContextFillerWords = []
         settings.removedDefaultFillers = []
@@ -795,21 +795,6 @@ class SettingsViewModel {
         } catch {
             print("Error clearing data: \(error)")
         }
-    }
-    
-    var vocabChallengePreferences: VocabChallengePreferences {
-        VocabChallengePreferences(
-            isEnabled: vocabChallengeEnabled,
-            wordCount: vocabChallengeWordCount,
-            useBank: vocabChallengeUseBank,
-            useDictionary: vocabChallengeUseDictionary,
-            introduceNew: vocabChallengeIntroduceNew,
-            vocabWords: vocabWords,
-            dictionaryWords: dictationBiasWords,
-            extraBanned: customFillerWords + customContextFillerWords,
-            userName: userName,
-            speakerLevelRaw: speakerLevel.rawValue
-        )
     }
 
     @MainActor

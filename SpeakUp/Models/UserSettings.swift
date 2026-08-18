@@ -39,7 +39,7 @@ final class UserSettings {
     // Look & feel — cosmetic only, raw values of the enums named in comments
     var waveformStyle: Int = 0      // WaveformStyle
     var recordButtonStyle: Int = 0  // RecordButtonStyle
-    var countdownLook: Int = 0      // CountdownLook
+    var countdownLook: Int = 0      // TimerLook
     var countdownBackdrop: Int = 0  // RecordingBackdrop — column name predates it covering the whole session
     var soundPack: Int = 0          // SoundPack (ChirpPlayer.swift)
     var shareCardTheme: Int = 0     // ScoreCardTheme (ScoreCardRenderer.swift)
@@ -93,6 +93,7 @@ final class UserSettings {
     var vocabChallengeUseBank: Bool = true
     var vocabChallengeUseDictionary: Bool = true
     var vocabChallengeIntroduceNew: Bool = true
+    var vocabChallengeSpacedReview: Bool = true
 
     // Dictation
     var autoFormatDictation: Bool = true
@@ -249,6 +250,7 @@ final class UserSettings {
             useBank: vocabChallengeUseBank,
             useDictionary: vocabChallengeUseDictionary,
             introduceNew: vocabChallengeIntroduceNew,
+            spacedReviewEnabled: vocabChallengeSpacedReview,
             vocabWords: vocabWords,
             dictionaryWords: dictationBiasWords,
             extraBanned: customFillerWords + customContextFillerWords,
@@ -594,11 +596,11 @@ enum RecordButtonStyle: Int, Codable, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Countdown Look
+// MARK: - Timer Look
 
 /// Shape of the countdown dial. Orthogonal to `CountdownStyle`, which decides
 /// whether the number counts up or down.
-enum CountdownLook: Int, Codable, CaseIterable, Identifiable {
+enum TimerLook: Int, Codable, CaseIterable, Identifiable {
     case ring = 0
     case orb = 1
     case segments = 2

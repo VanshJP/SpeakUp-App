@@ -8,11 +8,11 @@ struct RecordingView: View {
     @Environment(LLMService.self) private var llmService
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
-    @State private var showingVocabOverlay = false
+    @State private var showingVocabStrip = true
     @State private var overlayWords: [String] = []
     @State private var overlayIntroduced: Set<String> = []
+    @State private var overlayReviewing: Set<String> = []
     @State private var overlayTitle = "Your Words"
-    @State private var overlaySubtitle = ""
     @State private var completedRecording: Recording?
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
@@ -74,9 +74,6 @@ struct RecordingView: View {
             if !viewModel.isRecording {
                 await viewModel.startRecording()
             }
-            if !overlayWords.isEmpty {
-                showingVocabOverlay = true
-            }
         }
         .onDisappear {
             viewModel.cleanup()
@@ -112,21 +109,6 @@ struct RecordingView: View {
                 bottomControls
             }
             .padding()
-
-            if showingVocabOverlay, !overlayWords.isEmpty {
-                VocabOverlayPanel(
-                    title: overlayTitle,
-                    subtitle: overlaySubtitle,
-                    words: overlayWords,
-                    introduced: overlayIntroduced
-                ) {
-                    withAnimation(.spring(response: 0.3)) {
-                        showingVocabOverlay = false
-                    }
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(2)
-            }
         }
     }
 
@@ -312,9 +294,14 @@ struct RecordingView: View {
 
                 Spacer()
 
-                // Voice activity indicator — extracted so it only re-renders
-                // when the boolean flips, not on every 0.1 s audioLevel write.
-                VoiceActivityPill(isSpeaking: viewModel.audioLevel > -40)
+                // Status cluster: how many fillers so far, and whether the mic
+                // is hearing anything. Both read state that changes rarely, so
+                // neither re-renders on the 0.1 s audioLevel write.
+                if viewModel.isRecording {
+                    FillerCounterOverlay(count: viewModel.liveFillerCount)
+                }
+
+                MicLevelPill(isHearing: viewModel.audioService.isHearingInput)
 
                 sessionOptionsMenu
             }
@@ -323,8 +310,18 @@ struct RecordingView: View {
             if let prompt, viewModel.isRecording {
                 compactPromptCard(prompt)
             }
+
+            if showingVocabStrip, !overlayWords.isEmpty {
+                VocabStrip(
+                    words: overlayWords,
+                    introduced: overlayIntroduced,
+                    reviewing: overlayReviewing
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .padding(.top, 50)
+        .animation(AppMotion.settle, value: showingVocabStrip)
     }
 
     /// Framework and vocab used to sit in the top bar as their own circular
@@ -344,7 +341,7 @@ struct RecordingView: View {
             }
 
             if !overlayWords.isEmpty {
-                Toggle(isOn: $showingVocabOverlay) {
+                Toggle(isOn: $showingVocabStrip) {
                     Label(overlayTitle, systemImage: "character.book.closed")
                 }
             }
@@ -364,6 +361,7 @@ struct RecordingView: View {
         guard let settings = userSettings.first else {
             overlayWords = []
             overlayIntroduced = []
+            overlayReviewing = []
             return
         }
 
@@ -375,17 +373,23 @@ struct RecordingView: View {
             overlayIntroduced = Set(
                 challenge.words
                     .filter { $0.source == .introduced }
-                    .map { $0.text.lowercased() }
+                    .map(\.id)
+            )
+            overlayReviewing = Set(
+                challenge.words
+                    .filter { $0.isReview == true }
+                    .map(\.id)
             )
             overlayTitle = "Use today"
-            overlaySubtitle = "Say each one in a sentence."
             return
         }
 
+        // Bank fallback for users with the workout off. Trimmed by the strip
+        // itself — a fifty-word bank is not a recording-screen cue.
         overlayWords = settings.vocabWords
         overlayIntroduced = []
+        overlayReviewing = []
         overlayTitle = "Your Words"
-        overlaySubtitle = ""
     }
 
     private func compactPromptCard(_ prompt: Prompt) -> some View {
@@ -421,12 +425,14 @@ struct RecordingView: View {
             // Timer
             TimerView(
                 remainingTime: viewModel.displayTime,
-                totalTime: TimeInterval(duration.seconds),
                 progress: viewModel.progress,
                 color: viewModel.timerColor,
                 isRecording: viewModel.isRecording,
                 isOvertime: viewModel.isOvertime,
-                timerLabel: viewModel.timerLabel
+                timerLabel: viewModel.timerLabel,
+                // Same dial the countdown just drew — the look is picked once
+                // in Settings and has to survive the hand-off to recording.
+                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
             )
         }
     }
@@ -464,12 +470,11 @@ struct RecordingView: View {
     private var bottomControls: some View {
         // Snapshot observable reads into locals. Each child subview receives
         // only the fields it needs as plain values — SwiftUI short-circuits
-        // child diffs when inputs are unchanged, so waveform (driven by
-        // audioLevel) doesn't re-render on filler-count / coaching-cue
-        // updates, and vice versa.
+        // child diffs when inputs are unchanged, so the waveform (driven by
+        // audioLevel) doesn't re-render on coaching-cue updates, and vice
+        // versa.
         let cue = viewModel.coachingService.currentCue
         let isRecording = viewModel.isRecording
-        let fillerCount = viewModel.liveFillerCount
         let level = viewModel.audioLevel
 
         return VStack(spacing: 24) {
@@ -478,11 +483,6 @@ struct RecordingView: View {
                 coachingCueView(cue)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .id(cue.message)
-            }
-
-            // Live filler counter
-            if isRecording {
-                FillerCounterOverlay(count: fillerCount)
             }
 
             RecordButtonWaveformStack(
@@ -705,38 +705,54 @@ struct CircularWaveformView: View {
     }
 }
 
-// MARK: - Voice Activity Pill
+// MARK: - Mic Level Pill
 
-/// Isolated so the capsule + dot only re-render when the speaking boolean
-/// flips, not on every 0.1 s audioLevel write.
-private struct VoiceActivityPill: View {
-    let isSpeaking: Bool
+/// Answers one question — is the mic hearing me? — and stays quiet otherwise.
+///
+/// This used to read Speaking / Silent off the instantaneous level, so it
+/// strobed between every two words: a label that changes four times a sentence
+/// is read as broken, not informative. `AudioService.isHearingInput` holds a
+/// decaying peak, so this only changes when something is actually wrong, and
+/// the words only appear when there is something to say.
+///
+/// Not private: the drill screen shows the same indicator, driven by the same
+/// service state.
+struct MicLevelPill: View {
+    let isHearing: Bool
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(isSpeaking ? AppColors.success : AppColors.scoreEmpty)
-                .frame(width: 8, height: 8)
-                .animation(.easeInOut(duration: 0.15), value: isSpeaking)
+            Image(systemName: isHearing ? "mic.fill" : "mic.slash.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(isHearing ? AppColors.success : AppColors.warning)
 
-            Text(isSpeaking ? "Speaking" : "Silent")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(isSpeaking ? .white : .white.opacity(0.6))
+            if !isHearing {
+                Text("No sound")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppColors.warning)
+            }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background {
             Capsule()
                 .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .stroke(isHearing ? .clear : AppColors.warning.opacity(0.4), lineWidth: 1)
+                }
         }
+        .animation(AppMotion.settle, value: isHearing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isHearing ? "Microphone is picking up sound" : "No sound reaching the microphone")
     }
 }
 
 // MARK: - Record Button + Waveform Stack
 
 /// POD container for the circular waveform and record button. Isolated so
-/// the waveform subtree does not re-diff when filler-count / coaching-cue
-/// state changes further up in `bottomControls`.
+/// the waveform subtree does not re-diff when coaching-cue state changes
+/// further up in `bottomControls`.
 private struct RecordButtonWaveformStack: View {
     let audioLevel: Float
     let waveformStyle: WaveformStyle
@@ -755,79 +771,64 @@ private struct RecordButtonWaveformStack: View {
     }
 }
 
-// MARK: - Vocab Overlay Panel
+// MARK: - Vocab Strip
 
-struct VocabOverlayPanel: View {
-    var title: String = "Your Words"
-    var subtitle: String = ""
+/// Today's spotlight words, inline in the top bar.
+///
+/// This used to be a glass panel floating over the top of the screen, which
+/// landed squarely on the compact prompt card and hid the thing the speaker was
+/// supposed to be answering. A chip row that takes its own space costs a few
+/// points of height and blocks nothing.
+private struct VocabStrip: View {
     let words: [String]
-    var introduced: Set<String> = []
-    let onDismiss: () -> Void
+    let introduced: Set<String>
+    let reviewing: Set<String>
 
-    @State private var autoHideTask: Task<Void, Never>?
+    /// Mid-sentence is no time to read a list. Anything past a few chips is
+    /// reference material, and reference material belongs on Today.
+    private var shown: [String] { Array(words.prefix(4)) }
 
     var body: some View {
-        VStack {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label(title, systemImage: "character.book.closed")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppColors.primary)
-                    Spacer()
-                    Button("Dismiss vocabulary overlay", systemImage: "xmark") {
-                        onDismiss()
-                    }
-                    .labelStyle(.iconOnly)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.5))
-                }
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "character.book.closed")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+                .padding(.top, 4)
 
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                FlowLayout(spacing: 6) {
-                    ForEach(words, id: \.self) { word in
-                        let isNew = introduced.contains(word.lowercased())
-                        Text(word)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background {
-                                Capsule()
-                                    .fill((isNew ? AppColors.categorySage : AppColors.primary).opacity(0.2))
-                                    .overlay {
-                                        Capsule()
-                                            .strokeBorder(
-                                                (isNew ? AppColors.categorySage : AppColors.primary).opacity(0.3),
-                                                lineWidth: 0.5
-                                            )
-                                    }
-                            }
-                    }
+            FlowLayout(spacing: 6) {
+                ForEach(shown, id: \.self) { word in
+                    chip(word)
                 }
             }
-            .padding(14)
-            .glassCard(cornerRadius: 16)
-            .padding(.horizontal, 20)
-            .padding(.top, 110)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .onTapGesture { onDismiss() }
-        .onAppear {
-            autoHideTask = Task {
-                try? await Task.sleep(for: .seconds(10))
-                guard !Task.isCancelled else { return }
-                await MainActor.run { onDismiss() }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Words to use: \(shown.joined(separator: ", "))")
+    }
+
+    private func chip(_ word: String) -> some View {
+        let tint = tint(for: word)
+        return Text(word)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white.opacity(0.9))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background {
+                Capsule()
+                    .fill(tint.opacity(0.18))
+                    .overlay {
+                        Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.5)
+                    }
             }
-        }
-        .onDisappear {
-            autoHideTask?.cancel()
-        }
+    }
+
+    private func tint(for word: String) -> Color {
+        let key = word.lowercased()
+        if reviewing.contains(key) { return AppColors.primary }
+        if introduced.contains(key) { return AppColors.categorySage }
+        return .white
     }
 }
 

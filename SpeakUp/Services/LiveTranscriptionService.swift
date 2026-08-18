@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import os
 
 @Observable
 class LiveTranscriptionService {
@@ -15,7 +16,10 @@ class LiveTranscriptionService {
 
     private var audioEngine: AVAudioEngine?
     private var recognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    /// Read from the realtime audio thread by the tap block and swapped on the
+    /// main actor at every recognition restart, so it cannot be plain isolated
+    /// state. The critical section is one `append`.
+    private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
     private var lastProcessedSegmentCount = 0
     /// Cumulative offset so `lastSegmentEndTime` stays monotonic across
@@ -124,7 +128,7 @@ class LiveTranscriptionService {
 
     @MainActor
     func stop() {
-        recognitionRequest?.endAudio()
+        requestBox.withLock { $0?.endAudio() }
         stopInternal()
     }
 
@@ -133,21 +137,21 @@ class LiveTranscriptionService {
         // Idempotent across explicit stop() + cancelled-task callbacks.
         // Cleanup runs whenever an engine or request is still held — including
         // the orphaned-engine case after a failed recognition re-arm.
-        let hasWork = isActive || audioEngine != nil || recognitionRequest != nil
+        let hasWork = isActive || audioEngine != nil || requestBox.withLock({ $0 != nil })
         guard hasWork else { return }
 
         isActive = false
         recognitionGeneration += 1
 
+        // Stop first: mutating the tap on a running engine reconfigures the
+        // live AURemoteIO underneath its IO thread.
+        audioEngine?.stop()
         removeTapIfNeeded()
-        if let engine = audioEngine {
-            engine.stop()
-        }
         audioEngine = nil
 
         recognitionTask?.cancel()
         recognitionTask = nil
-        recognitionRequest = nil
+        requestBox.withLock { $0 = nil }
     }
 
     @MainActor
@@ -187,16 +191,24 @@ class LiveTranscriptionService {
         // microphone audio to Apple's servers. It also keeps latency low and
         // avoids network pauses that force early isFinal → restart cycles.
         request.requiresOnDeviceRecognition = true
-        recognitionRequest = request
+        requestBox.withLock { $0 = request }
         lastProcessedSegmentCount = 0
         recognitionGeneration += 1
         let generation = recognitionGeneration
 
-        removeTapIfNeeded()
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-            request.append(buffer)
+        // The tap outlives individual recognition requests. Installing one on a
+        // running engine makes AVAudioEngine reset the input node's format,
+        // which reconfigures AURemoteIO's converter while its IO thread is
+        // inside the input callback — that raced into a null callback pointer
+        // and segfaulted about a minute into every session, at the first
+        // recognition restart. Install once, before `engine.start()`, and swap
+        // the request underneath it.
+        if !isTapInstalled {
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [requestBox] buffer, _ in
+                requestBox.withLock { $0?.append(buffer) }
+            }
+            isTapInstalled = true
         }
-        isTapInstalled = true
 
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             // Hop onto the main actor before touching any state so teardown
@@ -241,17 +253,17 @@ class LiveTranscriptionService {
         recognitionGeneration += 1
         recognitionTask?.cancel()
         recognitionTask = nil
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-
-        removeTapIfNeeded()
+        requestBox.withLock {
+            $0?.endAudio()
+            $0 = nil
+        }
 
         guard attachRecognition(on: engine) else {
             // Leave the audio graph alone for AVAudioRecorder — only drop
             // live-transcription state so metering / capture keep working.
             isActive = false
             recognitionTask = nil
-            recognitionRequest = nil
+            requestBox.withLock { $0 = nil }
             return
         }
     }

@@ -52,8 +52,8 @@ struct ContentView: View {
         CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown
     }
 
-    private var countdownLook: CountdownLook {
-        CountdownLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
+    private var countdownLook: TimerLook {
+        TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
     }
 
     private var recordingBackdrop: RecordingBackdrop {

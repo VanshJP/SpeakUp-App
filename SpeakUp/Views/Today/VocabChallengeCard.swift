@@ -32,7 +32,7 @@ struct VocabChallengeCard: View {
             stateMark
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(challenge.isCompleted ? "Word workout done" : "Word workout")
+                Text(challenge.isCompleted ? "Word Workout Complete" : "Word Workout")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(challenge.isCompleted ? Color.secondary : Color.white)
                     .lineLimit(1)
@@ -114,7 +114,7 @@ struct VocabChallengeCard: View {
                     .foregroundStyle(used ? Color.secondary : Color.white)
                     .strikethrough(used, color: .white.opacity(0.25))
 
-                sourceBadge(word.source)
+                sourceBadge(word)
 
                 Spacer(minLength: 0)
 
@@ -161,8 +161,8 @@ struct VocabChallengeCard: View {
         .accessibilityLabel("\(word.text), \(used ? "used" : "not used yet")")
     }
 
-    private func sourceBadge(_ source: VocabChallengeWord.Source) -> some View {
-        Text(sourceLabel(source))
+    private func sourceBadge(_ word: VocabChallengeWord) -> some View {
+        Text(word.isReview == true ? "Review" : sourceLabel(word.source))
             .font(.system(size: 9, weight: .semibold))
             .foregroundStyle(.white.opacity(0.45))
             .padding(.horizontal, 6)
@@ -203,7 +203,7 @@ struct VocabChallengeResultCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: evaluation.isComplete ? "checkmark.seal.fill" : "character.book.closed")
                         .foregroundStyle(evaluation.isComplete ? AppColors.success : AppColors.categorySage)
-                    Text(evaluation.isComplete ? "Word workout complete" : "Word workout")
+                    Text(evaluation.isComplete ? "Word Workout Complete" : "Word Workout")
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     Text("\(evaluation.used.count)/\(challenge.words.count)")
@@ -243,8 +243,8 @@ struct VocabChallengeResultCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             evaluation.isComplete
-                ? "Word workout complete"
-                : "Word workout \(evaluation.used.count) of \(challenge.words.count)"
+                ? "Word Workout Complete"
+                : "Word Workout \(evaluation.used.count) of \(challenge.words.count)"
         )
     }
 }

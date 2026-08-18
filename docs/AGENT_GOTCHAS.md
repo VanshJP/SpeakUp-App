@@ -128,9 +128,11 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 ---
 
-## 9. Speech recognition: two silent audio-eaters
+## 9. Speech recognition: audio-thread and audio-eater traps
 
 **`DecodingOptions.noSpeechThreshold` is the silence trigger, not a sensitivity dial.** WhisperKit throws away an entire 30 s window — no error, no gap marker, seek just jumps forward — when `noSpeechProb >` the threshold and the window also fails `logProbThreshold` (`SegmentSeeker.findSeekPointAndSegments`). **Lowering it drops more audio, not less.** A value of 0.4 against the 0.6 default was deleting quiet stretches out of the middle and back half of recordings. Same trap shape for `temperatureFallbackCount`: cutting it below the default writes off marginal windows a retry would have decoded.
+
+**Never `installTap` / `removeTap` on a *running* `AVAudioEngine`.** Installing a tap makes AVAudioEngine set the input node's output format, which reconfigures `AURemoteIO`'s converter while its realtime IO thread is inside `AUHALOutputUnit_InputAvailableCallback` — the callback pointer goes null and the process takes `EXC_BAD_ACCESS` on the audio thread, with a backtrace that names no app code. `LiveTranscriptionService` hit this ~60 s into every session, when SFSpeech auto-finalized and `restartRecognitionPreservingEngine` re-installed the tap. **Rule:** install the tap once, before `engine.start()`; to re-arm recognition, swap the `SFSpeechAudioBufferRecognitionRequest` the tap block appends to (`requestBox`, an `OSAllocatedUnfairLock`) and leave the tap alone. On teardown, `engine.stop()` *before* `removeTap`. Same rule for `DictationService` / `ReadAloudService` — both already install pre-start.
 
 **`requiresOnDeviceRecognition` must be set to `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple's servers; `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard it with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
 
@@ -159,3 +161,4 @@ Post-onboarding sequence after first score: `FirstRecordingSetupSheet` → `AppT
 10. Change onboarding without the vision contract (prompt stays visible, user presses record, first score ≠ grade).  
 11. Lower `noSpeechThreshold` "to catch more speech" — it silently deletes whole 30 s windows.  
 12. Make `requiresOnDeviceRecognition` conditional — audio leaves the device exactly when the flag reads false.
+13. `installTap` / `removeTap` on a running `AVAudioEngine` — segfaults the realtime IO thread with no app frames in the trace.

@@ -287,6 +287,12 @@ final class RecordingProcessingCoordinator {
             }
             persisted.transcriptionWords = computed.1
             persisted.analysis = computed.0
+            // Speaking a tracked word is its review — grade it here so the
+            // schedule stays right for users who never open the Today tab.
+            VocabChallengeService.recordUsage(
+                computed.0.vocabWordsUsed,
+                preferences: settings?.vocabChallengePreferences ?? .disabled
+            )
             persisted.isProcessing = false
             persisted.lastProcessingError = nil
             persisted.analysisBlockedByAllowance = false

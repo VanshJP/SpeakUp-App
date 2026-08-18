@@ -8,6 +8,9 @@ nonisolated struct VocabChallengePreferences: Sendable, Equatable {
     var useBank: Bool
     var useDictionary: Bool
     var introduceNew: Bool
+    /// FSRS spacing. Off means the legacy pick: fresh words first, then the
+    /// least-used ones.
+    var spacedReviewEnabled: Bool = true
     var vocabWords: [String]
     var dictionaryWords: [String]
     var extraBanned: [String]
@@ -20,6 +23,7 @@ nonisolated struct VocabChallengePreferences: Sendable, Equatable {
         useBank: true,
         useDictionary: true,
         introduceNew: true,
+        spacedReviewEnabled: true,
         vocabWords: [],
         dictionaryWords: [],
         extraBanned: [],
@@ -34,7 +38,7 @@ nonisolated struct VocabChallengePreferences: Sendable, Equatable {
     /// Cache key for the day's pick. Word lists stay out so adding a bank word
     /// mid-day does not reshuffle the workout already on screen.
     var fingerprint: String {
-        "\(isEnabled)|\(resolvedWordCount)|\(useBank)|\(useDictionary)|\(introduceNew)|\(speakerLevelRaw)"
+        "\(isEnabled)|\(resolvedWordCount)|\(useBank)|\(useDictionary)|\(introduceNew)|\(spacedReviewEnabled)|\(speakerLevelRaw)"
     }
 }
 
@@ -43,6 +47,9 @@ nonisolated struct VocabChallengeWord: Sendable, Equatable, Identifiable, Codabl
     var source: Source
     var gloss: String?
     var prompt: String
+    /// Set when FSRS brought the word back because it was due, not because it
+    /// was new. Optional so day caches written before spacing still decode.
+    var isReview: Bool?
 
     var id: String { text.lowercased() }
 
