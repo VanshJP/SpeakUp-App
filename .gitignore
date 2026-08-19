@@ -17,5 +17,8 @@ xcuserdata/
 # IDE
 .vscode/
 
+# Machine-local Claude Code allowlists (home paths, ad-hoc Bash perms)
+.claude/settings.local.json
+
 # Removed semantic index (agents use docs/features + ripgrep)
 .tokenuinely/
