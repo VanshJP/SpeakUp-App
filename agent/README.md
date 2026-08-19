@@ -37,6 +37,7 @@ First-party: `speakup` (router + verify). Vendored: see `.agents/skills/README.m
 - Skills use YAML `name` / `description` so the agent can decide *whether* to open the body. Nested `references/` are a third layer — open one file, not the folder.
 - `agent/skills` used to be a full duplicate of `.agents/skills` and drifted (different hashes, missing `caveman` / `aso-appstore-screenshots`). Aliases are symlinks so that cannot happen again.
 - A skill-local `CLAUDE.md` is auto-injected by some tools as a workspace rule. Vendor skills must not ship `CLAUDE.md`; root `CLAUDE.md` → `AGENTS.md` is the only one.
+- Build/test is capability-based: run `xcodebuild` when it exists (local Mac). Linux cloud agents grep + rely on CI (`macos-26`). Do not encode a Linux limitation as a universal NEVER.
 
 ## Changing this system
 

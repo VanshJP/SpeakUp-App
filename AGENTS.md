@@ -15,7 +15,7 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 - **Code is truth.** Docs are maps. Conflict → follow code, patch the map in the same PR.
 - **Load the minimum.** One feature doc. One skill. Gotchas only for concurrency, SwiftData, shares, widgets, or audio-thread work.
 - **Search before inventing.** `rg` / Glob on `SpeakUp/`. No semantic index. No whole-tree dumps.
-- **Finish the loop.** Implement, sync the matching feature doc, leave no TODO for work you started.
+- **Finish the loop.** Implement, sync the matching feature doc, prove it (grep always; `xcodebuild` when it exists), leave no TODO for work you started.
 - **High agency.** Do not ask permission for mechanical next steps. Ask only when product intent is ambiguous or a change is destructive.
 - **Do not sycophant.** If a request hits NEVER, refuse and propose a legal alternative.
 - **No drive-by refactors.** Match local style. One concern per change unless asked.
@@ -24,13 +24,14 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 
 ## NEVER
 
-1. Run `xcodebuild`, `xcrun simctl`, `idb`, XCUITest, Simulator, or install SPM/deps. Edit source/docs/config. Hand off exact commands.
-2. SwiftData: additive schema only. Do not rename, remove, or make non-optional a stored `@Attribute`.
-3. `@StateObject` / `@ObservedObject`. ViewModels never take `ModelContext`. Views: `@Query` / `@Environment(\.modelContext)`.
-4. Raw `Color.blue` / opaque cards. UI = `AppColors` / `GlassStyles` / `AppBackground` / `GlassButton`. Sheets: `.appBackground(.subtle)`.
-5. Decode `Recording.analysis` on the main thread in `body`. Never `#Predicate` on Codable blob columns (process crash).
-6. New pure types without `nonisolated` — default isolation is MainActor (`SWIFT_DEFAULT_ACTOR_ISOLATION`). Background work breaks. See `docs/AGENT_GOTCHAS.md`.
-7. Caveman in commits, PRs, or code comments. Chat may be caveman; persisted text is normal English.
+1. Install SPM / run `xcodebuild -resolvePackageDependencies` unless asked (WhisperKit is huge).
+2. Drive Simulator / `idb` / XCUITest click-loops unless the user asked for UI automation **and** a simulator exists.
+3. SwiftData: additive schema only. Do not rename, remove, or make non-optional a stored `@Attribute`.
+4. `@StateObject` / `@ObservedObject`. ViewModels never take `ModelContext`. Views: `@Query` / `@Environment(\.modelContext)`.
+5. Raw `Color.blue` / opaque cards. UI = `AppColors` / `GlassStyles` / `AppBackground` / `GlassButton`. Sheets: `.appBackground(.subtle)`.
+6. Decode `Recording.analysis` on the main thread in `body`. Never `#Predicate` on Codable blob columns (process crash).
+7. New pure types without `nonisolated` — default isolation is MainActor (`SWIFT_DEFAULT_ACTOR_ISOLATION`). Background work breaks. See `docs/AGENT_GOTCHAS.md`.
+8. Caveman in commits, PRs, or code comments. Chat may be caveman; persisted text is normal English.
 
 ---
 
@@ -82,14 +83,20 @@ Schema: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `Curri
 
 ---
 
-## Handoff (developer machine)
+## Build / test
+
+Probe once: `xcodebuild -version`.
+
+| Probe | Do |
+|-------|----|
+| Xcode present | After Swift changes: `test` (or `build` if no test target applies). Do not ask. Same scheme as CI: `SpeakUp`. |
+| Missing / Linux | Do not fake it, do not install Xcode. Grep landmines (playbook → Verify). CI (`.github/workflows/ci.yml`, `macos-26`) runs tests on PR. |
 
 ```bash
-xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' build
-xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' test
+xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
 
-StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`. Static checks agents *can* run: playbook → “Verify without Xcode”.
+If that destination is gone, pick the first available iPhone from `xcrun simctl list devices available` — same as CI. StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`.
 
 ---
 

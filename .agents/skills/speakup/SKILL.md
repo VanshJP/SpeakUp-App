@@ -20,7 +20,7 @@ Kernel (NEVER, stance, map) is always in `/AGENTS.md`. This skill is the next la
 4. Adding a setting / gate / SwiftData field / widget / test → `/docs/AGENT_PLAYBOOK.md` for that recipe.
 5. Load **at most one** vendor skill from `.agents/skills/README.md`.
 6. Code is truth. If the doc disagrees, follow the code and patch the doc in the same PR.
-7. After edits: playbook → “Verify without Xcode”. Hand off `xcodebuild` — do not run it.
+7. After edits: playbook → Verify (grep always). If `xcodebuild -version` works, run tests. If not, do not fake it — CI will.
 
 ## Where things live
 

@@ -1,14 +1,14 @@
 # Agent playbook — workflows
 
-Recipes for frequent changes. After finishing, update the matching `docs/features/*.md` in the same PR. Do **not** run `xcodebuild` / Simulator (root `AGENTS.md`).
+Recipes for frequent changes. After finishing, update the matching `docs/features/*.md` in the same PR. Build/test policy is capability-based — root `AGENTS.md` → Build / test.
 
 Gotchas first: [AGENT_GOTCHAS.md](./AGENT_GOTCHAS.md). Index: [features/README.md](./features/README.md).
 
 ---
 
-## Verify without Xcode
+## Verify
 
-Agents cannot build. Before handing off, grep the **diff** for landmines. A hit in new code → stop, open the matching gotcha.
+Always grep the **diff** for landmines. A hit in new code → stop, open the matching gotcha. Then, if `xcodebuild -version` works, run tests. If it does not (Linux cloud), stop after grep — CI on `macos-26` covers the PR.
 
 ```bash
 # Isolation / UIKit-era state
@@ -30,7 +30,7 @@ rg -n 'requiresOnDeviceRecognition' SpeakUp --glob '*.swift'
 rg -n 'noSpeechThreshold' SpeakUp --glob '*.swift'
 ```
 
-Known-good hits exist (`EntitlementStore.isLifetime`, tap install *before* `engine.start()`, unconditional `requiresOnDeviceRecognition = true`). New call sites outside those files are the bug. Add or extend a test under `SpeakUpTests/` when the change is pure policy / scoring / links — do not execute it; suggest the handoff command.
+Known-good hits exist (`EntitlementStore.isLifetime`, tap install *before* `engine.start()`, unconditional `requiresOnDeviceRecognition = true`). New call sites outside those files are the bug. Add or extend a test under `SpeakUpTests/` when the change is pure policy / scoring / links — execute it when Xcode is present.
 
 ---
 
@@ -55,7 +55,7 @@ Nothing in Settings is gated during the beta ([features/monetization.md](./featu
 4. Do **not** gate `progressCards` unless launch measurement + tests change policy.
 5. Add / extend `SpeakUpTests/MonetizationTests.swift` (pure policy + injected clock).
 6. Update [features/monetization.md](./features/monetization.md) + `RELEASE_CHECKLIST.md` if the boundary ships.
-7. Hand off: developer runs unit tests.
+7. Run `MonetizationTests` when Xcode is present.
 
 ---
 
@@ -92,11 +92,13 @@ Target: `SpeakUpTests/` — **Swift Testing** (`@Test`), `@testable import Speak
 | `nonisolated` types (or `@MainActor` suite if UI-bound) | New `ModelContainer` unless extending an existing pattern |
 | Mirror `MonetizationTests` / `ScoringEngineTests` / `UniversalLinkTests` / `SharedPromptLinkTests` | XCTest-style classes for new files |
 
-Agent does **not** execute tests. Suggest:
+Agent executes tests when `xcodebuild` exists:
 
 ```bash
-xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' test
+xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
+
+If that destination is missing, pick the first available iPhone (see CI). If `xcodebuild` is missing, grep-verify and let CI run.
 
 ---
 
