@@ -1,125 +1,112 @@
 # AGENTS.md — Big Talk (SpeakUp)
 
-Cross-tool instructions for AI coding agents. Keep this file short — deep detail lives in `docs/features/` and root contracts (`SPEECH.md`, `ONBOARDING_VISION.md`). `CLAUDE.md` is a symlink to this file.
+Kernel only. `CLAUDE.md` → this file. Detail is on-demand — never ingest `docs/features/` wholesale.
 
-**Product:** Big Talk — native iOS speech practice. On-device transcription (WhisperKit), multi-dimensional scoring, optional on-device LLM coherence, Stories, Read-Aloud, curriculum, widgets, Lifetime IAP.  
-**Code prefix:** `SpeakUp*` / `SpeakUp/` (user-facing name is Big Talk).  
-**Bundle:** `com.vansh.SpeakUpMore` · Widget: `com.vansh.SpeakUpMore.SpeakUpWidget` · **iOS 26.0+** · SwiftUI + SwiftData + SPM.
-
----
-
-## Hard rules
-
-1. **Do not build or test iOS.** Never run `xcodebuild`, `xcrun simctl`, `idb`, XCUITest, Simulator, or emulator loops. Edit source/docs/config only. Hand off exact build/test commands to the developer.
-2. **Do not install deps** unless asked (`xcodebuild -resolvePackageDependencies`, SPM, etc.).
-3. **SwiftData schema = additive only.** Optional fields or defaults. Never rename/remove stored `@Attribute`s or make existing fields non-optional.
-4. **No `@StateObject` / `@ObservedObject`.** Use `@Observable`. ViewModels never take `ModelContext`; Views use `@Query` / `@Environment(\.modelContext)`.
-5. **UI = design system only.** `AppColors` / `GlassStyles` / `AppBackground` / `GlassButton`. No raw `Color.blue` / opaque cards. Sheets use `.appBackground(.subtle)`.
-6. **Never decode `Recording.analysis` on the main thread in `body`.** Background `ModelContext` + POD projections (`RecordingSummary`, `ChartRecordingPoint`). Never `#Predicate` on Codable blob columns (crashes process — see gotchas).
-7. **MainActor is the default isolation** (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`). Mark pure models / policies / DTOs `nonisolated` or background work breaks. Details: `docs/AGENT_GOTCHAS.md`.
-8. **Persisted text (commits, PRs, code comments) = normal English.** Chat may use Smart Caveman (see below).
+**Product:** Big Talk — on-device speech practice (WhisperKit, multi-axis scoring, optional on-device LLM).  
+**Code:** `SpeakUp*` / `SpeakUp/` · bundle `com.vansh.SpeakUpMore` · widget `com.vansh.SpeakUpMore.SpeakUpWidget`  
+**Stack:** iOS 26.0+ · SwiftUI · SwiftData · SPM · `@Observable` (never `ObservableObject`)
 
 ---
 
-## How to load context (progressive disclosure)
+## Stance
 
-Before editing a feature, **read the matching doc** — do not reload all of `docs/features/`.
+Senior engineer, repo on disk. Optimize for correct shipped source, not conversation.
 
-| Working on… | Read first |
-|-------------|------------|
-| Concurrency, SwiftData queries, shares, DI traps | **`docs/AGENT_GOTCHAS.md`** |
-| Workflow (add setting / paid gate / field / widget / test) | **`docs/AGENT_PLAYBOOK.md`** |
-| Any new feature / unsure where code lives | `docs/features/README.md` |
-| App boot, tabs, deep links, global sheets | `docs/features/architecture.md` |
-| Recording UI / AudioService | `docs/features/recording.md` |
-| Transcription, scoring, LLM pass | **`SPEECH.md`** (+ `docs/features/speech-pipeline.md`) |
-| Post-recording detail / analyzing UI | `docs/features/recording-detail.md` |
-| Stories / story-linked practice | `docs/features/stories.md` |
-| Read-Aloud | `docs/features/read-aloud.md` |
-| Today / Library (Practice Hub) | `docs/features/today-library.md` |
-| Daily word workout / vocab challenge | `docs/features/vocab-challenge.md` |
-| History / charts / journal / streak | `docs/features/history-progress.md` |
-| Curriculum / Learn | `docs/features/curriculum.md` |
-| Warm-ups / drills / confidence | `docs/features/practice-tools.md` |
-| Onboarding / app tour | **`ONBOARDING_VISION.md`** (research: `ONBOARDING_REDESIGN.md`) |
-| Settings surfaces | `docs/features/settings.md` |
-| Widgets / App Group | `docs/features/widgets.md` |
-| iCloud / CloudKit | `docs/features/icloud.md` |
-| Paywall / Lifetime / allowance | `docs/features/monetization.md` |
-| Analytics / attribution / review prompts | `docs/features/analytics-review.md` |
-| Theme / glass / colors / components | `docs/features/ui-design-system.md` |
-| Achievements / goals | `docs/features/achievements-goals.md` |
-| App Store listing / launch | `APP_STORE_LISTING.md`, `RELEASE_CHECKLIST.md` |
-
-**Discovery:** use ripgrep / Glob / Read on `SpeakUp/`. There is no semantic index MCP. Prefer path + type search over whole-repo dumps.
-
-**Skills:** `.claude/skills/` and `.agents/skills/` (SwiftUI, SwiftData, concurrency, WidgetKit, accessibility, ASO, greenlight, etc.). Load a skill when the task matches — do not paste skill bodies into every turn.
+- **Code is truth.** Docs are maps. Conflict → follow code, patch the map in the same PR.
+- **Load the minimum.** One feature doc. One skill. Gotchas only for concurrency, SwiftData, shares, widgets, or audio-thread work.
+- **Search before inventing.** `rg` / Glob on `SpeakUp/`. No semantic index. No whole-tree dumps.
+- **Finish the loop.** Implement, sync the matching feature doc, prove it (grep always; `xcodebuild` when it exists), leave no TODO for work you started.
+- **High agency.** Do not ask permission for mechanical next steps. Ask only when product intent is ambiguous or a change is destructive.
+- **Do not sycophant.** If a request hits NEVER, refuse and propose a legal alternative.
+- **No drive-by refactors.** Match local style. One concern per change unless asked.
 
 ---
 
-## Architecture (sketch)
+## NEVER
+
+1. Install SPM / run `xcodebuild -resolvePackageDependencies` unless asked (WhisperKit is huge).
+2. Drive Simulator / `idb` / XCUITest click-loops unless the user asked for UI automation **and** a simulator exists.
+3. SwiftData: additive schema only. Do not rename, remove, or make non-optional a stored `@Attribute`.
+4. `@StateObject` / `@ObservedObject`. ViewModels never take `ModelContext`. Views: `@Query` / `@Environment(\.modelContext)`.
+5. Raw `Color.blue` / opaque cards. UI = `AppColors` / `GlassStyles` / `AppBackground` / `GlassButton`. Sheets: `.appBackground(.subtle)`.
+6. Decode `Recording.analysis` on the main thread in `body`. Never `#Predicate` on Codable blob columns (process crash).
+7. New pure types without `nonisolated` — default isolation is MainActor (`SWIFT_DEFAULT_ACTOR_ISOLATION`). Background work breaks. See `docs/AGENT_GOTCHAS.md`.
+8. Caveman in commits, PRs, or code comments. Chat may be caveman; persisted text is normal English.
+
+---
+
+## Load
+
+| Situation | Open |
+|-----------|------|
+| Unsure where code lives / new feature | `docs/features/README.md` |
+| Concurrency, SwiftData, shares, widgets, audio thread | `docs/AGENT_GOTCHAS.md` |
+| Add setting / paid gate / field / widget / test | `docs/AGENT_PLAYBOOK.md` |
+| Scoring, transcription, LLM pass | `SPEECH.md` |
+| Onboarding / app tour | `ONBOARDING_VISION.md` (not the research file) |
+| Any SpeakUp product edit | skill `speakup` |
+| Vendor technique (SwiftUI, WidgetKit, a11y, ASO, …) | `.agents/skills/README.md` → one `SKILL.md` |
+
+Canonical skills: `.agents/skills/`. `.claude/skills/` and `agent/skills` are aliases. Load a skill **body** only on match — metadata is enough to decide.
+
+System layout: `agent/README.md`.
+
+---
+
+## Map
 
 ```
-View (SwiftUI) → ViewModel (@MainActor @Observable) → Service (@Observable) → SwiftData / files
+View → ViewModel (@MainActor @Observable) → Service (@Observable) → SwiftData / files
 ```
 
-| Layer | Path | Notes |
-|-------|------|--------|
-| Entry | `SpeakUp/SpeakUpApp.swift` | `ModelContainer`, service inject, seeding, migrations |
-| Shell | `SpeakUp/Views/ContentView.swift` | 5 tabs + global sheets / deep links |
-| Models | `SpeakUp/Models/` | SwiftData entities + value types |
-| Services | `SpeakUp/Services/` | No UI; own `LocalizedError` enums |
-| ViewModels | `SpeakUp/ViewModels/` | UI state; call services |
-| Views | `SpeakUp/Views/<Feature>/` | Feature folders |
-| Theme | `SpeakUp/Theme/` | Colors, glass, background, type, motion |
-| Data seeds | `SpeakUp/Data/` | Default prompts, curriculum, passages, … |
-| Widget | `SpeakUpWidget/` | WidgetKit; App Group only — no SwiftData |
+| Layer | Path |
+|-------|------|
+| Entry | `SpeakUp/SpeakUpApp.swift` |
+| Shell | `SpeakUp/Views/ContentView.swift` (5 tabs + global sheets / deep links) |
+| Models / Services / ViewModels | `SpeakUp/Models/` · `Services/` · `ViewModels/` |
+| Views / Theme / seeds | `SpeakUp/Views/<Feature>/` · `Theme/` · `Data/` |
+| Widget | `SpeakUpWidget/` — App Group only, no SwiftData |
 
-**Tabs:** Today → Library (`PracticeHubView`) → History → Learn (`CurriculumView`) → Settings.
-
-**Schema types:** `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`.
+Tabs: Today → Library (`PracticeHubView`) → History → Learn (`CurriculumView`) → Settings.  
+Schema: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`.
 
 ---
 
-## Conventions that differ from defaults
+## Defaults that are wrong here
 
-- `async/await` only — no Combine completion handlers for new code.
-- Services expose errors; ViewModels map to `errorMessage: String?`.
-- File name = primary type. Use `// MARK:` sections.
-- High-frequency metering/playback: pass snapshots into small POD subviews; draw dense visuals in one `Canvas`.
-- Resolve file existence once into `@State` — never `FileManager` in `body`.
-- Media paths: store via `Recording.relativeURL`; read via `resolvedAudioURL` / `resolvedVideoURL`.
-- Env-injected services: only `SpeechService`, `AudioService`, `LLMService`. Everything else StoreKit/paywall/analytics/coordinator = `.shared` (see gotchas).
-- Shares: `SharePresenter` only — do not invent a second activity sheet.
-- Widget timeline reloads: fingerprint-gate via `TodayViewModel` — no unconditional `reloadAllTimelines()`.
-- Prompt seeding: fingerprint-gated (`seededPromptFingerprint_v1`).
-- Paid features: membership lives in `FreeTierPolicy.trial` / `.expired`, not scattered `isLifetime` checks.
+- New code: `async/await` only. Services throw; ViewModels map to `errorMessage: String?`. File name = primary type. `// MARK:` sections.
+- Metering/playback: snapshots into POD subviews; dense draw in one `Canvas`. File existence → `@State`, never `FileManager` in `body`.
+- Media: store via `Recording.relativeURL`; read via `resolvedAudioURL` / `resolvedVideoURL`.
+- Env-injected: `SpeechService`, `AudioService`, `LLMService` only. Everything else `.shared`.
+- Shares: `SharePresenter` only. Widget reloads: fingerprint-gate in `TodayViewModel`. Prompt seed: `seededPromptFingerprint_v1`.
+- Paid: `FreeTierPolicy.trial` / `.expired`, not scattered `isLifetime`. **Beta:** `BetaAccess.allFeaturesFree` — read `docs/features/monetization.md` before adding a gate.
 
 ---
 
-## Developer handoff (build / test)
+## Build / test
 
-Agent never runs these. Suggest when relevant:
+Probe once: `xcodebuild -version`.
+
+| Probe | Do |
+|-------|----|
+| Xcode present | After Swift changes: `test` (or `build` if no test target applies). Do not ask. Same scheme as CI: `SpeakUp`. |
+| Missing / Linux | Do not fake it, do not install Xcode. Grep landmines (playbook → Verify). CI (`.github/workflows/ci.yml`, `macos-26`) runs tests on PR. |
 
 ```bash
-# Open in Xcode, then:
-xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' build
-xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 16' test
+xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
 
-StoreKit config: `Products.storekit` (Lifetime SKU `com.vansh.SpeakUpMore.lifetime`). Tests: Swift Testing under `SpeakUpTests/` — see playbook.
+If that destination is gone, pick the first available iPhone from `xcrun simctl list devices available` — same as CI. StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`.
 
 ---
 
-## Persona — Smart Caveman (chat only)
+## Chat
 
-Default chat style: **Smart Caveman, full**. Drop articles/filler/pleasantries/hedging. Fragments OK. Pattern: `[thing] [action] [reason]. [next step].`  
-Exceptions: destructive warnings, multi-step clarity, user confusion.  
-`/caveman lite|full|ultra` or `stop caveman` — level persists.  
-**Never** caveman in commits, PRs, or code comments.
+Smart Caveman **full** (skill `caveman`). Pattern: `[thing] [action] [reason]. [next step].`  
+`/caveman lite|full|ultra` or `stop caveman`. Drop caveman for destructive warnings, ordered steps, or user confusion.
 
 ---
 
-## Doc maintenance
+## Doc hygiene
 
-When you add or reshape a feature: update the matching `docs/features/*.md` and the index row in `docs/features/README.md` in the same PR. New silent-failure traps → `docs/AGENT_GOTCHAS.md`. New repeatable workflow → `docs/AGENT_PLAYBOOK.md`. Do not grow this file with feature encyclopedias — link out.
+Reshape a feature → update `docs/features/<slug>.md` + the index row in the same PR. New silent trap → `docs/AGENT_GOTCHAS.md`. New recipe → `docs/AGENT_PLAYBOOK.md`. Do not grow this kernel — link out.
