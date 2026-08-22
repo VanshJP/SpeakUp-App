@@ -42,7 +42,14 @@ extension RecordingViewModel {
         audioLevelSamples.append(level)
 
         coachingService.processAudioLevel(level)
-        coachingService.processFillerDetected(currentCount: liveFillerCount)
+
+        let fillerWordCounts = liveTranscriptionService.liveFillerWordCounts
+        let topCrutch = fillerWordCounts.max { $0.value < $1.value }
+        coachingService.processFillerDetected(
+            currentCount: liveFillerCount,
+            repeatedWord: topCrutch?.key,
+            repeatedCount: topCrutch?.value ?? 0
+        )
 
         let currentWords = liveTranscriptionService.liveWordCount
         let newWords = currentWords - lastCoachingWordCount

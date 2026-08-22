@@ -10,6 +10,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 |------------------|---|
 | Background type / test / `Task.detached` won't compile or deadlocks | 1 |
 | Crash inside CoreData SQL, `#Predicate`, `analysis != nil` | 2 |
+| Advanced analysis metrics nil after reopen; stale mirror | 2b |
 | History/charts hitch; decode in `body` | 3 |
 | Audio/video 404 after reinstall or iCloud | 4 |
 | Allowance leak, paywall, `isLifetime` | 5 |
@@ -24,6 +25,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 
 1. New pure type without `nonisolated` under MainActor default.
 2. `#Predicate` on `Recording.analysis` (or any Codable blob).
+2b. `recording.analysis = …` instead of `setAnalysis(_:)`, or reading `analysis` where the advanced metrics are needed — they are nil on anything read back from the store.
 3. Decode analysis / huge transcripts in list `body` / unbounded `@Query`.
 4. `AllowanceGate.consume` before success, or gate `progressCards` by default.
 5. Auto-paywall before first result without `userInitiated: true`.
@@ -62,6 +64,21 @@ Proven fix: commit `d40543a`. Prefer explicit `EnvironmentKey` over `@Entry` (se
 Proxy: filter via `transcriptionText != nil` (transcript + analysis persist in the same save). See `RecordingProcessingCoordinator.analyzedRecordingCount`.
 
 Same rule for any transformed / blob attribute. If unsure: fetch IDs on a simple column, filter in Swift off the main thread.
+
+---
+
+## 2b. SwiftData drops the advanced analysis metrics
+
+`SpeechAnalysis.init(from:)` sets `enhancedMetrics`, `textQuality`, `sentenceAnalysis`, `vocabComplexity`, `pitchMetrics`, `volumeMetrics`, `rateVariation`, `emphasisMetrics`, `energyArc`, `wpmTimeSeries`, the isolation metrics, and `promptRelevanceScore` to **nil** whenever it is not the mirror decoder. That is deliberate and must stay: SwiftData's internal decoder throws `EXC_BREAKPOINT` on those nested optionals, which is an uncatchable trap, not a Swift error.
+
+The consequence is easy to miss because it does not show up in the session that produced the recording — the struct is still in memory there. It shows up on **every read after that**: reopen the app, and an analysis fetched from the store carries only the headline numbers.
+
+`Recording.analysisJSON` is a full-fidelity JSON mirror written beside `analysis`, decoded through `SpeechAnalysis.decodedMirror(_:)` with `fullFidelityKey` set. Foundation's decoder throws rather than trapping, so it can afford to decode what SwiftData cannot.
+
+- **Write** through `Recording.setAnalysis(_:)`, never `recording.analysis = …`. A direct assignment leaves the mirror stale.
+- **Read** `Recording.fullAnalysis` anywhere the advanced metrics matter — and never from a view `body`, it decodes JSON. Resolve once into `@State`.
+- A read-modify-write cycle (the LLM coherence pass) **must** start from `fullAnalysis`, or it persists a stripped analysis over a good mirror.
+- Aggregations that only need `speechScore` (baselines, the coaching plan) should keep using `analysis` — decoding a window of mirrors to reach nine integers each is pure cost.
 
 ---
 

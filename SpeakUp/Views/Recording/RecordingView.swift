@@ -20,6 +20,9 @@ struct RecordingView: View {
     /// detail page. Nil when there is nothing worth revealing.
     @State private var revealRecording: Recording?
     @State private var revealBaselines = PersonalAverage.Baselines()
+    /// What the speaker is meant to be working on this take. Loaded separately
+    /// from the configure task so resolving it can never delay the countdown.
+    @State private var focusPlan: CoachPlan?
 
     let prompt: Prompt?
     let duration: RecordingDuration
@@ -74,6 +77,19 @@ struct RecordingView: View {
             if !viewModel.isRecording {
                 await viewModel.startRecording()
             }
+        }
+        // Deliberate practice needs the instruction going in. Reading the focus
+        // afterwards on the results screen is always one take too late, so it
+        // rides along here as well.
+        .task {
+            let container = modelContext.container
+            let weights = ScoreWeights(from: userSettings.first)
+            // No session to exclude — this runs before one exists.
+            focusPlan = await PersonalAverage.snapshot(
+                excluding: UUID(),
+                container: container,
+                weights: weights
+            ).plan
         }
         .onDisappear {
             viewModel.cleanup()
@@ -306,6 +322,10 @@ struct RecordingView: View {
                 sessionOptionsMenu
             }
 
+            if let focusPlan, !focusPlan.isGraduating {
+                focusIntentPill(focusPlan)
+            }
+
             // Compact prompt card at top (during recording)
             if let prompt, viewModel.isRecording {
                 compactPromptCard(prompt)
@@ -322,6 +342,33 @@ struct RecordingView: View {
         }
         .padding(.top, 50)
         .animation(AppMotion.settle, value: showingVocabStrip)
+    }
+
+    /// The one thing to hold in mind during this take.
+    ///
+    /// Names the technique before the countdown ends, then drops to just the
+    /// area once recording starts — mid-take is the wrong moment to hand
+    /// somebody a paragraph, but the reminder still has to be there, because
+    /// that is the entire window in which they can act on it.
+    @ViewBuilder
+    private func focusIntentPill(_ plan: CoachPlan) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "scope")
+                .font(.system(size: 10, weight: .semibold))
+
+            Text(viewModel.isRecording
+                 ? plan.focus.title
+                 : "\(plan.focus.title) · \(plan.focus.technique.name)")
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white.opacity(0.85))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+        .transition(.opacity)
+        .accessibilityLabel("This take's focus: \(plan.focus.title). \(plan.focus.technique.name)")
     }
 
     /// Framework and vocab used to sit in the top bar as their own circular

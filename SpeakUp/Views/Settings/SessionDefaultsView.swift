@@ -45,17 +45,6 @@ struct SessionDefaultsView: View {
                                 .tint(AppColors.primary)
                             }
 
-                            divider
-
-                            settingsRow(icon: "arrow.up.arrow.down", title: "Countdown Style") {
-                                Picker("", selection: $viewModel.countdownStyle) {
-                                    ForEach(CountdownStyle.allCases) { style in
-                                        Text(style.displayName).tag(style)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(AppColors.primary)
-                            }
 
                             divider
 
@@ -161,10 +150,6 @@ private struct SessionDefaultsChangeModifiers: ViewModifier {
                 Task { await viewModel.saveSettings() }
             }
             .onChange(of: viewModel.countdownDuration) { _, _ in
-                guard !viewModel.isSyncing else { return }
-                Task { await viewModel.saveSettings() }
-            }
-            .onChange(of: viewModel.countdownStyle) { _, _ in
                 guard !viewModel.isSyncing else { return }
                 Task { await viewModel.saveSettings() }
             }

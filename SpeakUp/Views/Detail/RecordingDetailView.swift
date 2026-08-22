@@ -23,6 +23,9 @@ struct RecordingDetailView: View {
     @State private var isEditingTitle = false
     @State private var editingTitleText = ""
     @State private var showingListenBackEncouragement = false
+    /// Timestamp a coaching surface asked to hear, held while the first-listen
+    /// encouragement sheet is up so the moment is not lost behind it.
+    @State private var pendingPlaybackTime: TimeInterval = 0
     @State private var showingScoreWeights = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var llmInsight: String?
@@ -44,9 +47,28 @@ struct RecordingDetailView: View {
     /// Rolling baselines every number on this screen is read against. Loads in
     /// the background, so all fields start nil and fill in together.
     @State private var baselines = PersonalAverage.Baselines()
-    /// Today's word workout scored against this take. Resolved once on load —
-    /// picking the day's words reads *and writes* UserDefaults, so running it
-    /// from `body` re-picked and re-saved the day on every redraw.
+    /// What the speaker is working on across sessions. Loads with the
+    /// baselines — same fetch, same decode pass.
+    @State private var coachPlan: CoachPlan?
+    /// Quotable moments from this session. Resolved once on load: it reads
+    /// `transcriptionWords`, a Codable blob that must never decode in `body`.
+    @State private var coachEvidence = CoachEvidence()
+    /// Top crutch habits for the LLM prompt, resolved once beside the evidence.
+    @State private var coachCrutchLines: [String] = []
+    /// This session's analysis with the advanced metrics intact — see
+    /// `Recording.fullAnalysis`. Resolved once here because it decodes JSON;
+    /// coaching is the one surface that reads the fields SwiftData drops.
+    @State private var coachAnalysis: SpeechAnalysis?
+    /// The user's last attempt at this same prompt or story, when they have one.
+    @State private var previousTake: PersonalAverage.PreviousTake?
+    /// False for an old session. The focus is current-state, not a property of
+    /// a recording, so it is not shown attached to one it never applied to.
+    @State private var showsFocusCard = false
+    /// This take's word workout, scored against the words of its own day.
+    /// Resolved once on load — picking today's words reads *and writes*
+    /// UserDefaults, so running it from `body` re-picked and re-saved the day
+    /// on every redraw. Recordings with no snapshot from an earlier day stay
+    /// nil: their card hides rather than borrow today's list.
     @State private var vocabWorkout: (challenge: DailyVocabChallenge, evaluation: VocabChallengeEvaluation)?
 
     // Next-step routing — the practice tool that targets this session's weakest area.
@@ -271,6 +293,7 @@ struct RecordingDetailView: View {
 
                 if let analysis = recording.analysis {
                     scoreHero(analysis)
+                    takeComparisonSection(analysis)
                     nextStepSection(analysis, recording: recording)
                     // Challenge CTA sits next to the score — burying it in
                     // Coaching was the moment the share loop went unseen.
@@ -284,7 +307,9 @@ struct RecordingDetailView: View {
                     case .transcript:
                         transcriptTabContent(recording)
                     case .coaching:
-                        coachingTabContent(recording)
+                        // Analysis passed down rather than re-read: every
+                        // `recording.analysis` access decodes the blob again.
+                        coachingTabContent(recording, analysis: analysis)
                     }
                 } else if recording.analysisBlockedByAllowance {
                     // Held back by the free allowance, not broken.
@@ -335,27 +360,63 @@ struct RecordingDetailView: View {
         configurePlaybackState(for: recording)
         populateWPMTimeSeriesIfNeeded()
 
-        // Post-analysis: enhance coherence in background — don't block the detail view
+        // Synchronous and cheap, and everything downstream quotes it, so it
+        // lands before either background pass starts.
+        resolveCoachEvidenceIfNeeded(for: recording)
+
+        // Post-analysis, in the background — don't block the detail view. The
+        // plan loads first on purpose: an insight generated before it resolves
+        // is the context-free one this whole path exists to replace.
         Task {
+            await loadPersonalAverageIfNeeded(excluding: recording.id)
             await enhanceCoherenceIfNeeded()
         }
-
-        loadPersonalAverageIfNeeded(excluding: recording.id)
     }
 
-    /// Loads the baselines the hero delta and the metric tiles read against.
+    /// Loads the baselines the hero delta and the metric tiles read against,
+    /// plus the coaching plan the feedback tab is built around.
     /// See `PersonalAverage` for why the window is bounded.
-    private func loadPersonalAverageIfNeeded(excluding currentID: UUID) {
-        guard baselines.score == nil else { return }
+    private func loadPersonalAverageIfNeeded(excluding currentID: UUID) async {
+        guard baselines.score == nil, coachPlan == nil else { return }
         let container = modelContext.container
+        // Ranked against the user's own weights, so the focus reflects what
+        // actually moves *their* score, not the shipped defaults.
+        let weights = ScoreWeights(from: userSettings.first)
 
-        Task {
-            let loaded = await PersonalAverage.all(excluding: currentID, container: container)
-            await MainActor.run {
-                baselines = loaded
-                considerReviewPromptForStrongResult()
-            }
-        }
+        let subject = recording.flatMap(PersonalAverage.repeatSubject(of:))
+        let date = recording?.date ?? .distantFuture
+
+        let snapshot = await PersonalAverage.snapshot(
+            excluding: currentID,
+            container: container,
+            weights: weights,
+            repeatSubject: subject,
+            currentDate: date
+        )
+        baselines = snapshot.baselines
+        coachPlan = snapshot.plan
+        previousTake = snapshot.previousTake
+        showsFocusCard = snapshot.currentIsInPlanWindow
+        considerReviewPromptForStrongResult()
+    }
+
+    /// Pulls the quotable moments out of this session once.
+    ///
+    /// Coaching that can name the timestamp is coaching the user can check.
+    /// Extraction is pure array work, but it decodes `transcriptionWords` to
+    /// get there, so it happens here rather than anywhere near `body`.
+    private func resolveCoachEvidenceIfNeeded(for recording: Recording) {
+        guard coachAnalysis == nil, let analysis = recording.fullAnalysis else { return }
+        coachAnalysis = analysis
+        coachEvidence = CoachEvidenceService.evidence(
+            for: analysis,
+            words: recording.transcriptionWords
+        )
+        // Same decode, same once-only discipline: the lexicon hits feed the
+        // LLM prompt's crutch-habit block.
+        coachCrutchLines = CrutchSwapsCard.hits(for: recording)
+            .prefix(2)
+            .map { "\"\($0.word)\" x\($0.count)" }
     }
 
     /// A new personal best or a top-band score is the only moment on this
@@ -413,7 +474,7 @@ struct RecordingDetailView: View {
             return "This recording is safe. Tap Try Again to score it now."
         }
         let date = resetsOn.formatted(date: .abbreviated, time: .omitted)
-        return "Your free analyses are used up for now. The audio is safe — it scores automatically on \(date)."
+        return "Your free analyses are used up for now. The audio is safe, it scores automatically on \(date)."
     }
 
     @ViewBuilder
@@ -528,6 +589,26 @@ struct RecordingDetailView: View {
 
     // MARK: - Processing Section (moved to AnalyzingView)
 
+    // MARK: - Take Comparison
+
+    /// Shown only when this prompt has been answered before. The repeat is the
+    /// rep; this is the only place the app says whether it worked.
+    @ViewBuilder
+    private func takeComparisonSection(_ analysis: SpeechAnalysis) -> some View {
+        if let previousTake {
+            let focus = coachPlan?.focus
+            TakeComparisonCard(
+                takeNumber: previousTake.takeNumber,
+                previous: previousTake.overall,
+                current: analysis.speechScore.overall,
+                previousDate: previousTake.date,
+                focus: focus,
+                focusPrevious: focus?.subscore(in: previousTake.subscores),
+                focusCurrent: focus?.subscore(in: analysis.speechScore.subscores)
+            )
+        }
+    }
+
     // MARK: - Next Step
 
     /// Closes the practice loop: names the weakest area and routes to the tool
@@ -535,7 +616,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func nextStepSection(_ analysis: SpeechAnalysis, recording: Recording) -> some View {
         NextStepCard(
-            step: NextStep.from(analysis.speechScore.subscores),
+            step: NextStep.from(analysis.speechScore.subscores, plan: coachPlan),
             onAction: { action in
                 switch action {
                 case .drill(let mode): nextStepDrill = mode
@@ -654,22 +735,53 @@ struct RecordingDetailView: View {
     // MARK: - Filler Words Section
 
     @ViewBuilder
+    /// Filler counts, each occurrence a tappable moment.
+    ///
+    /// A count on its own is trivia — "you said um seven times" is a fact the
+    /// user can do nothing with. The chips turn it into seven things they can
+    /// go listen to, which is the only version that changes behaviour. The
+    /// printed clock times came off: Whisper's stamps drift enough that the
+    /// number was often wrong, and a wrong number reads as a broken app while
+    /// a wrong seek just plays nearby audio.
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader("Filler Words Used", icon: "exclamationmark.bubble.fill")
 
             GlassCard {
-                VStack(spacing: 12) {
+                VStack(spacing: 14) {
                     ForEach(fillerWords.prefix(5)) { filler in
-                        HStack {
-                            Text(filler.word)
-                                .font(.subheadline)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(filler.word)
+                                    .font(.subheadline)
 
-                            Spacer()
+                                Spacer()
 
-                            Text("\(filler.count)×")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(AppColors.warning)
+                                Text("\(filler.count)×")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(AppColors.warning)
+                            }
+
+                            if !filler.timestamps.isEmpty {
+                                FlowLayout(spacing: 6) {
+                                    // Capped: past a dozen chips this stops
+                                    // being a list of moments and becomes wallpaper.
+                                    ForEach(Array(filler.timestamps.sorted().prefix(12).enumerated()), id: \.offset) { index, stamp in
+                                        Button {
+                                            playFrom(stamp)
+                                        } label: {
+                                            Image(systemName: "waveform")
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundStyle(AppColors.warning)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(Capsule().fill(AppColors.warning.opacity(0.15)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Play \(filler.word), occurrence \(index + 1)")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -775,7 +887,8 @@ struct RecordingDetailView: View {
                         showFillerHighlights: showFillerHighlights,
                         showVocabHighlights: showVocabHighlights,
                         showSpeakerTurns: showSpeakerTurns,
-                        hasSpeakerSeparation: hasSpeakerSeparation
+                        hasSpeakerSeparation: hasSpeakerSeparation,
+                        onPlayFrom: { playFrom($0) }
                     )
 
                     if let analysis = recording.analysis, !analysis.vocabWordsUsed.isEmpty {
@@ -965,7 +1078,10 @@ struct RecordingDetailView: View {
         guard vocabWorkout == nil,
               let settings = userSettings.first,
               let analysis = recording.analysis,
-              let challenge = VocabChallengeService.todaysChallenge(
+              let challenge = VocabChallengeService.workout(
+                  forRecordingAt: recording.date,
+                  snapshotDayStamp: recording.vocabChallengeDayStamp,
+                  snapshotWords: recording.vocabChallengeWords,
                   preferences: settings.vocabChallengePreferences
               ),
               !challenge.words.isEmpty else { return }
@@ -991,18 +1107,56 @@ struct RecordingDetailView: View {
         if let analysis = recording.analysis, !analysis.fillerWords.isEmpty {
             fillerWordsSection(analysis.fillerWords)
         }
+
+        // The swaps behind this take's crutch words. Fillers above show
+        // what-and-where; here each habit gets what-to-say-instead.
+        let swaps = CrutchSwapsCard.hits(for: recording)
+        if !swaps.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                GlassSectionHeader("Word Swaps", icon: "arrow.triangle.swap")
+
+                CrutchSwapsCard(hits: swaps) { stamp in
+                    playFrom(stamp)
+                }
+            }
+        }
+    }
+
+    /// Everything the tip service needs beyond the session itself: the user's
+    /// own pace target and weights, the cross-session plan, this session's
+    /// evidence, its crutch habits, and what kind of practice it was.
+    private var coachingContext: CoachingContext {
+        CoachingContext(
+            targetWPM: userSettings.first.resolvedTargetWPM,
+            weights: ScoreWeights(from: userSettings.first),
+            plan: coachPlan,
+            evidence: coachEvidence,
+            crutchLines: coachCrutchLines,
+            sessionKind: recording?.storyId != nil ? "Storytelling" : recording?.prompt?.category
+        )
     }
 
     @ViewBuilder
-    private func coachingTabContent(_ recording: Recording) -> some View {
-        if let analysis = recording.analysis {
-            // AI Insights — available when Apple Intelligence or local LLM is ready
-            if llmService.isAvailable {
-                aiInsightsSection(recording)
-            }
-
-            CoachingTipsView(tips: CoachingTipService.generateTips(from: analysis))
+    private func coachingTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
+        // AI Insights — available when Apple Intelligence or local LLM is ready
+        if llmService.isAvailable {
+            aiInsightsSection(recording)
         }
+
+        CoachingTipsView(
+            plan: showsFocusCard ? coachPlan : nil,
+            // `coachAnalysis` where it has resolved: the advanced metrics half
+            // the tips are written against only survive on that copy.
+            tips: CoachingTipService.generateTips(from: coachAnalysis ?? analysis, context: coachingContext),
+            onPractice: { route in
+                switch route {
+                case .drill(let raw): nextStepDrill = DrillMode(rawValue: raw)
+                case .readAloud: showingNextStepReadAloud = true
+                case .warmUp: showingNextStepWarmUp = true
+                }
+            },
+            onPlayFrom: { playFrom($0) }
+        )
 
         if let feedback = recording.sessionFeedback {
             selfAssessmentSection(feedback)
@@ -1081,11 +1235,12 @@ struct RecordingDetailView: View {
                 GlassButton(title: "Generate AI Coaching", icon: "sparkles", style: .secondary, fullWidth: true) {
                     Haptics.medium()
                     Task {
-                        guard let analysis = recording.analysis else { return }
+                        guard let analysis = coachAnalysis ?? recording.analysis else { return }
                         let transcript = resolvedTranscript(for: recording)
                         llmInsight = await llmService.generateCoachingInsight(
                             from: analysis,
-                            transcript: transcript
+                            transcript: transcript,
+                            context: coachingContext
                         )
                     }
                 }
@@ -1205,7 +1360,7 @@ struct RecordingDetailView: View {
     private func saveReflectionToJournal(_ recording: Recording) {
         storiesViewModel.configure(with: modelContext)
 
-        let title = "Reflection — \(recording.date.formatted(date: .abbreviated, time: .omitted))"
+        let title = "Reflection, \(recording.date.formatted(date: .abbreviated, time: .omitted))"
         storiesViewModel.createStory(
             title: title,
             content: journalReflectionText,
@@ -1528,8 +1683,11 @@ struct RecordingDetailView: View {
         coherenceEnhanceInFlight = true
         defer { coherenceEnhanceInFlight = false }
 
+        // `fullAnalysis`, not `analysis`: this writes the result back, and
+        // writing back the lossy copy would overwrite the mirror with a version
+        // that has every advanced metric stripped out of it.
         guard case .ready(let recording) = detailScreenState,
-              var analysis = recording.analysis else { return }
+              var analysis = recording.fullAnalysis else { return }
 
         let transcript = resolvedTranscript(for: recording)
         guard !transcript.isEmpty else { return }
@@ -1577,7 +1735,10 @@ struct RecordingDetailView: View {
         // Guard against view dismissal during async inference
         guard !Task.isCancelled else { return }
 
-        recording.analysis = analysis
+        recording.setAnalysis(analysis)
+        // Tips read this copy; leaving it stale would show the pre-LLM
+        // relevance score next to a hero that has already moved.
+        coachAnalysis = analysis
         if let storyId = recording.storyId {
             let enhancedScore = analysis.speechScore.overall
             var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
@@ -1595,11 +1756,33 @@ struct RecordingDetailView: View {
         guard !Task.isCancelled else { return }
         llmInsight = await llmService.generateCoachingInsight(
             from: analysis,
-            transcript: transcript
+            transcript: transcript,
+            context: coachingContext
         )
     }
 
     private func togglePlayback(_ recording: Recording) {
+        if audioService.isPlaying {
+            audioService.pause()
+        } else {
+            startPlayback(of: recording, at: 0)
+        }
+    }
+
+    /// Plays the recording from a moment the coaching pointed at.
+    ///
+    /// The whole value of knowing a filler landed at 0:38 is being able to hear
+    /// it. Reading a number about your own voice changes nothing; hearing
+    /// yourself do it is the mechanism the practice runs on.
+    private func playFrom(_ time: TimeInterval) {
+        guard case .ready(let recording) = detailScreenState else { return }
+        Haptics.light()
+        startPlayback(of: recording, at: time)
+    }
+
+    /// One entry point for every play request, so the media checks and the
+    /// first-listen gate cannot drift between the drawer and the tips.
+    private func startPlayback(of recording: Recording, at time: TimeInterval) {
         guard let url = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             playbackErrorMessage = "Audio file is no longer available. It may have been moved or deleted."
             return
@@ -1612,20 +1795,20 @@ struct RecordingDetailView: View {
             return
         }
 
-        if audioService.isPlaying {
-            audioService.pause()
-        } else {
-            // Check for first-time listen-back
-            if let settings = userSettings.first, settings.listenBackCount == 0 {
-                showingListenBackEncouragement = true
-                return
-            }
-            Task {
-                do {
-                    try await audioService.play(url: url)
-                } catch {
-                    playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
-                }
+        // First-time listen-back gets its encouragement sheet first; the
+        // timestamp waits in `pendingPlaybackTime` rather than being dropped.
+        if let settings = userSettings.first, settings.listenBackCount == 0 {
+            pendingPlaybackTime = time
+            showingListenBackEncouragement = true
+            return
+        }
+
+        Task {
+            do {
+                try await audioService.play(url: url, startingAt: time)
+                playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+            } catch {
+                playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
             }
         }
     }
@@ -1646,9 +1829,12 @@ struct RecordingDetailView: View {
             playbackErrorMessage = "This recording is downloading from iCloud. Please try again in a moment."
             return
         }
+        let startTime = pendingPlaybackTime
+        pendingPlaybackTime = 0
         Task {
             do {
-                try await audioService.play(url: url)
+                try await audioService.play(url: url, startingAt: startTime)
+                playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
             } catch {
                 playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
             }
@@ -1756,7 +1942,7 @@ struct GoalProgressBadge: View {
     }
 }
 
-#Preview("Recording Detail — Mock Data") {
+#Preview("Recording Detail, Mock Data") {
     struct PreviewWrapper: View {
         let recordingId: String
         let container: ModelContainer

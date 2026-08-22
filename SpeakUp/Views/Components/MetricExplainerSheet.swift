@@ -122,7 +122,7 @@ extension SubscoreRadarChart {
             return ("How clearly you articulate words. Clear pronunciation makes your message easier to understand.",
                     "Combines voiced frame ratio (articulation quality), word duration consistency, ASR word confidence, hedge word penalty, and an authority score from language analysis.")
         case "pace":
-            return ("Speaking speed and fluency. Optimal pace is conversational — not rushed or dragging.",
+            return ("Speaking speed and fluency. Optimal pace is conversational, not rushed or dragging.",
                     "Gaussian comparison to your target WPM (wider tolerance ±30 WPM), with optional rate variation (18%) and fluency signals (14%) blended in when available.")
         case "fillers":
             return ("How often you use filler words like 'um', 'uh', 'like', and 'you know'.",

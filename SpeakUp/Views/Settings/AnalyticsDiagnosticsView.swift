@@ -60,7 +60,7 @@ struct AnalyticsDiagnosticsView: View {
                 Label("Stays on this device", systemImage: "iphone")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
-                Text("Big Talk records coarse events — that a session finished, roughly how long it took, which screen led where. No audio, no transcripts, no exact scores, no identifiers. Nothing is sent anywhere.")
+                Text("Big Talk records coarse events, that a session finished, roughly how long it took, which screen led where. No audio, no transcripts, no exact scores, no identifiers. Nothing is sent anywhere.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -145,21 +145,21 @@ struct AnalyticsDiagnosticsView: View {
 
     private var trialStateSummary: String {
         switch EntitlementStore.shared.trialState {
-        case .notStarted: return "Not started — begins at the first scored analysis."
+        case .notStarted: return "Not started, begins at the first scored analysis."
         case .active(let endsOn): return "Active · \(PracticeTrial.daysRemaining(until: endsOn)) days left."
-        case .expired: return "Expired — three analyses per 30 days."
+        case .expired: return "Expired, three analyses per 30 days."
         }
     }
     #endif
 
     private func percentSummary(_ rate: Double?) -> String {
-        guard let rate else { return "—" }
+        guard let rate else { return "," }
         return "\(Int((rate * 100).rounded()))%"
     }
 
     private func timeToValueSummary(_ card: AnalyticsScorecard) -> String {
         guard let bucket = card.timeToValueBuckets.max(by: { $0.value < $1.value })?.key else {
-            return "—"
+            return ","
         }
         return bucket
     }

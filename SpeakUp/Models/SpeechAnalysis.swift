@@ -502,22 +502,73 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
         vocabWordsUsed = (try? container.decodeIfPresent([VocabWordUsage].self, forKey: .vocabWordsUsed)) ?? []
 
         // SwiftData's internal decoder throws EXC_BREAKPOINT (uncatchable trap)
-        // when decoding these from older data, so we skip decoding entirely.
-        // New recordings will have these fields populated fresh by SpeechService.
-        volumeMetrics = nil
-        vocabComplexity = nil
-        sentenceAnalysis = nil
-        promptRelevanceScore = nil
-        wpmTimeSeries = nil
-        pitchMetrics = nil
-        rateVariation = nil
-        emphasisMetrics = nil
-        energyArc = nil
-        textQuality = nil
-        audioIsolationMetrics = nil
-        speakerIsolationMetrics = nil
-        enhancedMetrics = nil
+        // when decoding these nested optionals from older data, so that path
+        // still skips them entirely — attempting them there kills the process
+        // rather than throwing something catchable.
+        //
+        // The cost was that every advanced metric vanished the moment a
+        // recording was read back from the store, which is most of what the
+        // coaching layer reasons about. `Recording.analysisJSON` keeps a JSON
+        // mirror that Foundation's decoder reads instead; that decoder throws
+        // on bad data rather than trapping, so it can afford to try. It marks
+        // itself with `fullFidelityKey` and takes the branch below.
+        if decoder.userInfo[Self.fullFidelityKey] == nil {
+            volumeMetrics = nil
+            vocabComplexity = nil
+            sentenceAnalysis = nil
+            promptRelevanceScore = nil
+            wpmTimeSeries = nil
+            pitchMetrics = nil
+            rateVariation = nil
+            emphasisMetrics = nil
+            energyArc = nil
+            textQuality = nil
+            audioIsolationMetrics = nil
+            speakerIsolationMetrics = nil
+            enhancedMetrics = nil
+        } else {
+            volumeMetrics = try container.decodeIfPresent(VolumeMetrics.self, forKey: .volumeMetrics)
+            vocabComplexity = try container.decodeIfPresent(VocabComplexity.self, forKey: .vocabComplexity)
+            sentenceAnalysis = try container.decodeIfPresent(SentenceAnalysis.self, forKey: .sentenceAnalysis)
+            promptRelevanceScore = try container.decodeIfPresent(Int.self, forKey: .promptRelevanceScore)
+            wpmTimeSeries = try container.decodeIfPresent([WPMDataPoint].self, forKey: .wpmTimeSeries)
+            pitchMetrics = try container.decodeIfPresent(PitchMetrics.self, forKey: .pitchMetrics)
+            rateVariation = try container.decodeIfPresent(RateVariationMetrics.self, forKey: .rateVariation)
+            emphasisMetrics = try container.decodeIfPresent(EmphasisMetrics.self, forKey: .emphasisMetrics)
+            energyArc = try container.decodeIfPresent(EnergyArcMetrics.self, forKey: .energyArc)
+            textQuality = try container.decodeIfPresent(TextQualityMetrics.self, forKey: .textQuality)
+            audioIsolationMetrics = try container.decodeIfPresent(AudioIsolationMetrics.self, forKey: .audioIsolationMetrics)
+            speakerIsolationMetrics = try container.decodeIfPresent(SpeakerIsolationMetrics.self, forKey: .speakerIsolationMetrics)
+            enhancedMetrics = try container.decodeIfPresent(EnhancedSpeechMetrics.self, forKey: .enhancedMetrics)
+        }
         llmEnhancedAt = try? container.decodeIfPresent(Date.self, forKey: .llmEnhancedAt)
+    }
+
+    // MARK: - Full-fidelity mirror
+
+    /// Marks a decoder as the JSON-mirror path, which is allowed to decode the
+    /// advanced metrics. Absent on SwiftData's decoder, which must not.
+    nonisolated static let fullFidelityKey = CodingUserInfoKey(rawValue: "bigtalk.speechAnalysis.fullFidelity")!
+
+    /// JSON for `Recording.analysisJSON`.
+    ///
+    /// Drops the two raw sample arrays: both are consumed inside `analyze` and
+    /// never read back off a stored analysis, and both are per-frame series
+    /// large enough to dominate the blob.
+    nonisolated func encodedMirror() -> Data? {
+        var copy = self
+        copy.pitchMetrics?.f0Contour = nil
+        copy.volumeMetrics?.levelSamples = nil
+        return try? JSONEncoder().encode(copy)
+    }
+
+    /// Reads a mirror back with the advanced metrics intact. `nil` when the
+    /// blob predates a field rename or is otherwise unreadable — callers fall
+    /// back to the SwiftData copy, which is lossy but never wrong.
+    nonisolated static func decodedMirror(_ data: Data) -> SpeechAnalysis? {
+        let decoder = JSONDecoder()
+        decoder.userInfo[fullFidelityKey] = true
+        return try? decoder.decode(SpeechAnalysis.self, from: data)
     }
 
     var totalFillerCount: Int {
@@ -598,7 +649,7 @@ nonisolated struct SpeechSubscores: Codable, Sendable, Equatable {
 
 // MARK: - Score Weights
 
-nonisolated struct ScoreWeights {
+nonisolated struct ScoreWeights: Sendable {
     var clarity: Double = 0.18
     var pace: Double = 0.12
     var filler: Double = 0.14

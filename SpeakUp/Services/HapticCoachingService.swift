@@ -27,7 +27,12 @@ class HapticCoachingService {
     private var lastHapticTime: Date = .distantPast
     private var lastCueTime: Date = .distantPast
     private var lastFillerCount = 0
+    /// Crutch words that already earned their named cue this session.
+    private var cuedRepeatedFillers: Set<String> = []
     private var cueDismissTask: Task<Void, Never>?
+
+    /// Uses of one word before it earns the named repeated-filler cue.
+    static let repeatedFillerCueThreshold = 5
 
     /// Gate so one silence window fires one cue, not one per sample tick.
     /// Reset when voice returns (level > -40) and in `reset()`.
@@ -66,7 +71,7 @@ class HapticCoachingService {
                 silenceCueFired = true
                 fireHaptic(.light, double: true)
                 showCue(CoachingCue(
-                    message: "You've been quiet — keep going!",
+                    message: "You've been quiet, keep going!",
                     icon: "waveform.slash",
                     tint: .orange
                 ))
@@ -74,11 +79,29 @@ class HapticCoachingService {
         }
     }
 
-    func processFillerDetected(currentCount: Int) {
+    func processFillerDetected(currentCount: Int, repeatedWord: String? = nil, repeatedCount: Int = 0) {
         guard isEnabled else { return }
 
         let delta = currentCount - lastFillerCount
         lastFillerCount = currentCount
+
+        // One named cue per crutch word per session. Naming the word ("that's
+        // 5× 'like'") trains faster than the generic warning; the gate keeps a
+        // runaway "like" streak from nagging every two seconds.
+        if let word = repeatedWord,
+           repeatedCount >= Self.repeatedFillerCueThreshold,
+           !cuedRepeatedFillers.contains(word) {
+            let fired = showCue(CoachingCue(
+                message: "That's \(repeatedCount)\u{00D7} \u{201C}\(word)\u{201D}, try a pause instead",
+                icon: "exclamationmark.bubble.fill",
+                tint: .orange
+            ))
+            if fired {
+                cuedRepeatedFillers.insert(word)
+                fireHaptic(.warning)
+            }
+            return
+        }
 
         guard delta > 0 else { return }
         fireHaptic(.warning)
@@ -128,6 +151,7 @@ class HapticCoachingService {
         lastHapticTime = .distantPast
         lastCueTime = .distantPast
         lastFillerCount = 0
+        cuedRepeatedFillers = []
         silenceCueFired = false
         cueDismissTask?.cancel()
         currentCue = nil
@@ -165,8 +189,12 @@ class HapticCoachingService {
 
     // MARK: - Written Cue
 
-    private func showCue(_ cue: CoachingCue) {
-        guard Date().timeIntervalSince(lastCueTime) >= cueCooldown else { return }
+    /// Presents a cue unless the cue cooldown is running. Returns whether it
+    /// actually displayed — callers gate one-shot state on the answer so a
+    /// swallowed cue can fire later instead of being lost forever.
+    @discardableResult
+    private func showCue(_ cue: CoachingCue) -> Bool {
+        guard Date().timeIntervalSince(lastCueTime) >= cueCooldown else { return false }
         lastCueTime = Date()
         cueDismissTask?.cancel()
 
@@ -181,6 +209,7 @@ class HapticCoachingService {
                 currentCue = nil
             }
         }
+        return true
     }
 }
 

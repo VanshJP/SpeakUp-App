@@ -19,6 +19,7 @@ Scores are progressive and achievable. A beginner's natural 15–20 s answer lan
 - `SpeakUp/Services/PromptRelevanceService.swift` — keyword + semantic + coherence scoring
 - `SpeakUp/Services/PitchAnalysisService.swift` — vDSP F0 autocorrelation
 - `SpeakUp/Services/LLMService.swift`, `LocalLLMService.swift` — Apple Intelligence / llama.cpp backends
+- `SpeakUp/Services/CoachPlanService.swift`, `CoachEvidenceService.swift`, `CoachingTipService.swift`, `CoachingPrompt.swift` — the coaching layer that reads the scores back out (see `docs/features/recording-detail.md`)
 - `SpeakUp/Models/SpeechAnalysis.swift` — `SpeechAnalysis`, `SpeechSubscores`, `SpeechScore`, `EnhancedSpeechMetrics`, `ScoreWeights`, `TranscriptionWord`, `PauseInfo`
 - Runtime wiring: `SpeakUp/Views/Detail/RecordingDetailView.swift`
 
@@ -405,8 +406,25 @@ The blended value replaces the stored `SpeechAnalysis.speechScore.subscores.rele
 - `HapticCoachingService` fires the silence cue once per silence window via a `silenceCueFired` gate (reset on voice return and in `reset()`), removing repeated `showCue`/`fireHaptic` calls while silence persists. `UIImpactFeedbackGenerator` (light + medium) and `UINotificationFeedbackGenerator` instances are stored and `prepare()`-ed in `init`, reused across the session instead of instantiated per fire.
 - The real-time feedback bar (`bottomControls` in `RecordingView`) snapshots observable reads (`currentCue`, `isRecording`, `liveFillerCount`, `audioLevel`) into locals once per parent re-evaluation and hands each child subview only the fields it needs. `RecordButtonWaveformStack` and `VoiceActivityPill` are POD wrappers so the waveform subtree does not re-diff on filler-count or coaching-cue updates, and the top-bar pill does not re-render until the speaking boolean flips.
 
+## Coaching layer (score → advice)
+
+Scoring answers *how did that go*; the coaching layer answers *what do I do about it*. It consumes `SpeechAnalysis` and adds nothing to the pipeline — no new subscore, no formula change.
+
+- `CoachDimension` — one case per subscore, carrying its title, icon, named technique, drill route, and frozen `analyticsSlug`.
+- `CoachPlanService.plan(window:weights:)` — picks the **focus** from a rolling window as the largest weighted deficit, `(85 − windowMean) × userWeight`, and reports a newest-half-vs-oldest-half trend once ≥ 4 scored sessions exist. Pure; no persisted state, because averaging the window already makes the focus sticky.
+- `CoachEvidenceService.evidence(for:words:)` — the quotable moments: densest filler cluster, opening and closing lines, longest mid-thought hesitation, pace swing, crutch phrase, restart. Primary-speaker words only.
+- `CoachingTipService.generateTips(from:context:)` — ranks tips by weighted deficit, pins the plan's focus first, caps at 3, and keeps signal-quality caveats out of the coaching slots.
+- `CoachingPrompt` — the single system + user prompt for **both** LLM backends. Carries the focus (pinned to tip one), its trend, the user's `resolvedTargetWPM`, the evidence lines, the session's top crutch habits from the lexicon engine, a type-specific coaching angle (`sessionKind`), and the reliability caveats. Adds an anti-praise/anti-vagueness rule block, a worked example tip, and head-and-tail transcript excerpts. Per-backend differences: transcript budget (1600 chars Apple Intelligence, 600 local, 300 when the local profile runs a 512-token window) and `compact` mode, which drops the example/benchmarks blocks for small-context Gemma builds.
+- `CoachingInsightSanitizer` — pure post-processing for model output: bullet stripping, dedupe, cap at 3, filler-as-technique rejection, and the specificity gate (metric+number, or two-plus content-word overlap anywhere in the transcript). Lives beside the prompt so both are testable without a model (`CoachingTests.swift`); `LLMService` owns only the fallback decision.
+
+Sessions with `speechScore.overall == 0` are excluded everywhere in this layer — a zero is the zero-word gate firing, not a measurement of the speaker.
+
+One engine, three surfaces: Today (`CoachFocusCard`, before the session), the recording screen (`focusIntentPill`, during it), and the session's coaching tab (after it). `CoachPlanService.plan(window:weights:)` is the only place a focus is chosen — a second implementation on Today disagreed with this one and was deleted.
+
+Every timestamp the layer produces is playable: `CoachingTip.evidenceTime`, the filler chips, and the transcript words all route through `RecordingDetailView.startPlayback(of:at:)`. A metric the user cannot hear does not change how they speak.
+
 ## Data and decode caveats
-- `SpeechAnalysis.init(from:)` nulls advanced fields for older recordings; forward compatibility via `decodeIfPresent`.
+- `SpeechAnalysis.init(from:)` nulls advanced fields on **every** decode except the full-fidelity mirror path — not just older recordings. `Recording.analysisJSON` + `SpeechAnalysis.decodedMirror(_:)` restore them; write via `Recording.setAnalysis(_:)`, read via `Recording.fullAnalysis`. See `docs/AGENT_GOTCHAS.md` §2b.
 - `Recording.audioLevelSamples` is `@Transient` — not persisted; regenerated from the audio file when needed.
 - `EnhancedSpeechMetrics`, `TextQualityMetrics`, `PitchMetrics`, `AudioIsolationMetrics`, `SpeakerIsolationMetrics` all use `decodeIfPresent` so new fields don't break historical decoding.
 - `ScoreWeights` is `nonisolated`; `ScoreWeights.defaults` is the canonical default value. The `normalized` accessor divides by total to guarantee `Σ weights == 1` at aggregation time.

@@ -58,7 +58,7 @@ struct CurriculumView: View {
         .alert("Lesson Locked", isPresented: $showingLockedInfo) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Finish the earlier lessons first — each one builds on the last.")
+            Text("Finish the earlier lessons first, each one builds on the last.")
         }
     }
 

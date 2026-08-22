@@ -13,22 +13,30 @@ nonisolated struct ChartRecordingPoint: Identifiable, Hashable, Sendable {
     let fillerCount: Int
 }
 
-/// The full charts experience — highlights hero, chart-type picker, time
-/// range, and the selected chart. No background / scroll / nav of its own so
-/// it can be embedded (History Progress tab) or wrapped (`ProgressChartsView`).
+/// The full charts experience — trajectory hero, scenario readiness, then
+/// chart-type picker, time range, and the selected chart. No background /
+/// scroll / nav of its own so it can be embedded (History Progress tab) or
+/// wrapped (`ProgressChartsView`).
+///
+/// Page order follows conclusion → evidence → reference: the hero band answers
+/// "where am I and which way am I moving", scenario readiness answers "which
+/// situation needs work", and metric charts remain reference material below.
 struct ProgressChartsContent: View {
     @Environment(\.modelContext) private var modelContext
 
     // Sorted date-descending, analyzed recordings only.
     @State private var points: [ChartRecordingPoint] = []
     @State private var latestSubscores: SpeechSubscores?
+    @State private var scenarioCards: [ScenarioReadiness] = []
     @State private var isLoading = true
 
     @State private var selectedTab: ChartTab = .score
     @State private var timeRange: TimeRange = .thirtyDays
+    @State private var lexiconProfile: LexiconProfile?
 
     enum ChartTab: String, CaseIterable, Identifiable {
         case score = "Score"
+        case words = "Words"
         case fillers = "Fillers"
         case pace = "Pace"
         case skills = "Skills"
@@ -36,9 +44,12 @@ struct ProgressChartsContent: View {
 
         var id: String { rawValue }
 
+        var usesTimeRange: Bool { self != .skills && self != .words }
+
         var icon: String {
             switch self {
             case .score: return "chart.xyaxis.line"
+            case .words: return "textformat"
             case .fillers: return "exclamationmark.bubble.fill"
             case .pace: return "metronome"
             case .skills: return "star.fill"
@@ -82,10 +93,21 @@ struct ProgressChartsContent: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            // Highlights hero section
+            // Hero band: the page's first answer — latest score, which way
+            // things are moving, and how often you are showing up.
             if points.count >= 2 {
-                highlightsSection
+                heroBand
             }
+
+            // Scenario readiness family. Replaces the former single aggregate
+            // Interview Readiness card, whose composite now survives as the
+            // section's "All scenarios" chip and is computed per scenario
+            // bucket instead.
+            ScenarioReadinessSection(
+                cards: scenarioCards,
+                overallScore: lexiconProfile?.interviewReadiness?.score,
+                analyzedSessions: lexiconProfile?.analyzedSessionCount ?? 0
+            )
 
             // Chart picker + time range. The range used to be a second
             // full-width picker row; as a menu it costs one control instead
@@ -107,14 +129,16 @@ struct ProgressChartsContent: View {
                 .frame(maxWidth: .infinity)
                 .layoutPriority(0)
 
-                if selectedTab != .skills {
+                if selectedTab.usesTimeRange {
                     timeRangeMenu
                         .fixedSize()
                 }
             }
 
             // Chart content
-            if filteredPoints.isEmpty {
+            if selectedTab == .words {
+                LanguageInsightsView(profile: lexiconProfile)
+            } else if filteredPoints.isEmpty {
                 if !isLoading {
                     emptyState
                 }
@@ -130,6 +154,8 @@ struct ProgressChartsContent: View {
                     SubscoreRadarView(subscores: latestSubscores)
                 case .activity:
                     SessionFrequencyChart(points: filteredPoints)
+                case .words:
+                    LanguageInsightsView(profile: lexiconProfile)
                 }
             }
         }
@@ -169,16 +195,20 @@ struct ProgressChartsContent: View {
 
     private func loadPoints() async {
         let container = modelContext.container
-        let result = await Task.detached(priority: .userInitiated) { () -> ([ChartRecordingPoint], SpeechSubscores?) in
+        let result = await Task.detached(priority: .userInitiated) { () -> ([ChartRecordingPoint], SpeechSubscores?, LexiconProfile, [ScenarioReadiness]) in
             let context = ModelContext(container)
             let descriptor = FetchDescriptor<Recording>(
                 sortBy: [SortDescriptor(\.date, order: .reverse)]
             )
-            guard let recordings = try? context.fetch(descriptor) else { return ([], nil) }
+            guard let recordings = try? context.fetch(descriptor) else {
+                return ([], nil, .empty, [])
+            }
 
             var pts: [ChartRecordingPoint] = []
             pts.reserveCapacity(recordings.count)
             var latest: SpeechSubscores?
+            var sessions: [LexiconSessionInput] = []
+            sessions.reserveCapacity(recordings.count)
 
             for r in recordings where !r.isDeleted {
                 guard let analysis = r.analysis else { continue }
@@ -190,134 +220,147 @@ struct ProgressChartsContent: View {
                     wpm: analysis.wordsPerMinute,
                     fillerCount: analysis.totalFillerCount
                 ))
+
+                if let transcript = r.transcriptionText, !transcript.isEmpty {
+                    var fillerCounts: [String: Int] = [:]
+                    for filler in analysis.fillerWords where filler.count > 0 {
+                        fillerCounts[filler.word.lowercased(), default: 0] += filler.count
+                    }
+                    sessions.append(LexiconSessionInput(
+                        date: r.date,
+                        transcript: transcript,
+                        fillerCounts: fillerCounts,
+                        overallScore: analysis.speechScore.overall,
+                        category: r.storyId != nil ? ScenarioReadinessEngine.storyMarker : r.prompt?.category
+                    ))
+                }
             }
-            return (pts, latest)
+
+            // Both engines run inside the same background pass — no second
+            // fetch, no transcripts retained past this closure.
+            let profile = LexiconInsightsEngine.profile(from: sessions)
+            let scenarios = ScenarioReadinessEngine.readiness(from: sessions)
+            return (pts, latest, profile, scenarios)
         }.value
 
         points = result.0
         latestSubscores = result.1
+        lexiconProfile = result.2
+        scenarioCards = result.3
         isLoading = false
     }
 
-    // MARK: - Highlights Section
+    // MARK: - Hero Band
 
-    private var highlightsSection: some View {
-        // `points` is date-descending: first = latest, last = first session.
-        let scores = points.map(\.score)
-        let bestScore = scores.max() ?? 0
-        let latestScore = scores.first ?? 0
-        let firstScore = scores.last ?? 0
-        let totalImprovement = latestScore - firstScore
+    /// One glanceable card answering "where am I and which way am I moving":
+    /// the latest score leads, a momentum verdict sits opposite it (recent
+    /// half vs earlier half of all sessions), and cadence stats close the row.
+    private var heroBand: some View {
+        let trajectory = TrajectorySummary.summarize(points.reversed().map(\.score))
+        let weekStart = Date().startOfWeek
+        let thisWeek = points.filter { $0.date >= weekStart }.count
 
-        // Find best subscore
-        let bestSubscore = bestSubscoreInfo(from: latestSubscores)
-
-        return VStack(spacing: 12) {
-            // Hero highlight card
-            FeaturedGlassCard {
-                HStack(spacing: 16) {
-                    // Left: big number
+        return FeaturedGlassCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Your Journey")
+                        Text("Where You Stand")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
 
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(latestScore)")
+                            Text("\(trajectory.latestScore ?? 0)")
                                 .font(.system(size: 42, weight: .bold, design: .rounded))
                                 .foregroundStyle(.white)
+                                .contentTransition(.numericText())
 
                             Text("pts")
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.secondary)
                         }
-
-                        if totalImprovement != 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: totalImprovement > 0 ? "arrow.up.right" : "arrow.down.right")
-                                    .font(.caption2.weight(.bold))
-                                Text("\(totalImprovement > 0 ? "+" : "")\(totalImprovement) since first session")
-                                    .font(.caption)
-                            }
-                            .foregroundStyle(totalImprovement > 0 ? AppColors.success : AppColors.error)
-                        }
                     }
 
                     Spacer()
 
-                    // Right: personal best badge
-                    VStack(spacing: 6) {
-                        ZStack {
-                            Circle()
-                                .fill(AppColors.warning.opacity(0.15))
-                                .frame(width: 52, height: 52)
+                    trajectoryBadge(trajectory)
+                }
 
-                            Image(systemName: "trophy.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppColors.warning)
-                        }
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 0.5)
 
-                        Text("\(bestScore)")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                HStack(spacing: 14) {
+                    heroStat("\(trajectory.bestScore)", label: "Best", color: AppColors.warning)
 
-                        Text("Best")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    Rectangle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 0.5, height: 30)
+
+                    heroStat("\(trajectory.averageScore)", label: "Average", color: AppColors.primary)
+
+                    Rectangle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 0.5, height: 30)
+
+                    heroStat("\(thisWeek)", label: "This week", color: AppColors.success)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                "Where you stand: latest score \(trajectory.latestScore ?? 0), \(momentumWord(trajectory.momentum)), best \(trajectory.bestScore), average \(trajectory.averageScore), \(thisWeek) sessions this week."
+            )
+        }
+    }
 
-            // Three stat cards row
-            HStack(spacing: 10) {
-                HighlightStatCard(
-                    icon: "number",
-                    label: "Sessions",
-                    value: "\(points.count)",
-                    color: AppColors.primary
-                )
-
-                HighlightStatCard(
-                    icon: bestSubscore.icon,
-                    label: "Strongest",
-                    value: bestSubscore.name,
-                    color: bestSubscore.color
-                )
-
-                HighlightStatCard(
-                    icon: "chart.line.uptrend.xyaxis",
-                    label: "Average",
-                    value: scores.isEmpty ? "—" : "\(scores.reduce(0, +) / scores.count)",
-                    color: AppColors.scoreColor(for: scores.isEmpty ? 0 : scores.reduce(0, +) / scores.count)
-                )
+    @ViewBuilder
+    private func trajectoryBadge(_ trajectory: TrajectorySummary) -> some View {
+        switch trajectory.momentum {
+        case .improving:
+            VStack(alignment: .trailing, spacing: 3) {
+                momentumPill(icon: "arrow.up.right", text: "Improving", color: AppColors.success)
+                if trajectory.delta != 0 { deltaCaption(trajectory.delta, color: AppColors.success) }
+            }
+        case .steady:
+            momentumPill(icon: "arrow.right", text: "Steady", color: Color.white.opacity(0.45))
+        case .slipping:
+            VStack(alignment: .trailing, spacing: 3) {
+                momentumPill(icon: "arrow.down.right", text: "Slipping", color: AppColors.error)
+                if trajectory.delta != 0 { deltaCaption(trajectory.delta, color: AppColors.error) }
             }
         }
     }
 
-    private struct SubscoreInfo {
-        let name: String
-        let icon: String
-        let color: Color
+    private func momentumPill(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.bold))
+            Text(text)
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background { Capsule().fill(color.opacity(0.13)) }
+        .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
     }
 
-    private func bestSubscoreInfo(from subscores: SpeechSubscores?) -> SubscoreInfo {
-        guard let s = subscores else {
-            return SubscoreInfo(name: "—", icon: "star.fill", color: AppColors.primary)
+    private func deltaCaption(_ delta: Int, color: Color) -> some View {
+        Text("\(delta > 0 ? "+" : "")\(delta) recent half")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
+    }
+
+    private func heroStat(_ value: String, label: String, color: Color) -> some View {
+        StatPair(value: value, label: label, valueColor: color)
+            .frame(maxWidth: .infinity)
+    }
+
+    private func momentumWord(_ momentum: ScenarioMomentum) -> String {
+        switch momentum {
+        case .improving: return "improving"
+        case .steady: return "steady"
+        case .slipping: return "slipping"
         }
-
-        let all: [(String, Int, String, Color)] = [
-            ("Clarity", s.clarity, "waveform", AppColors.categoryTeal),
-            ("Pace", s.pace, "metronome", AppColors.categoryBrandBright),
-            ("Fillers", s.fillerUsage, "bubble.left.fill", AppColors.categoryAmber),
-            ("Pauses", s.pauseQuality, "pause.circle.fill", AppColors.categoryIndigo),
-            ("Vocal", s.vocalVariety ?? 0, "speaker.wave.3.fill", AppColors.categoryPlum),
-            ("Delivery", s.delivery ?? 0, "person.fill", AppColors.categoryCopper),
-            ("Vocab", s.vocabulary ?? 0, "character.book.closed", AppColors.categorySage),
-            ("Structure", s.structure ?? 0, "list.bullet", AppColors.categoryNeutralCool),
-        ]
-
-        let best = all.max(by: { $0.1 < $1.1 }) ?? all[0]
-        return SubscoreInfo(name: best.0, icon: best.2, color: best.3)
     }
 
     private var emptyState: some View {
@@ -355,35 +398,6 @@ struct ProgressChartsView: View {
         }
         .navigationTitle("Progress Charts")
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Highlight Stat Card
-
-private struct HighlightStatCard: View {
-    let icon: String
-    let label: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        GlassCard(padding: 12) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(color)
-
-                Text(value)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-        }
     }
 }
 

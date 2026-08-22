@@ -217,7 +217,7 @@ nonisolated enum SharedPromptLink {
         var lines: [String] = []
 
         if let score {
-            let verdictSuffix = verdict.map { " — \($0)" } ?? ""
+            let verdictSuffix = verdict.map { ", \($0)" } ?? ""
             lines.append("\(score) on Big Talk\(verdictSuffix).\(url == nil ? "" : " Beat it?")")
         } else {
             lines.append(url == nil ? "Practising on Big Talk." : "Your turn on Big Talk.")
@@ -238,7 +238,7 @@ nonisolated enum SharedPromptLink {
 }
 
 private extension SharedPromptPayload {
-    var droppingText: SharedPromptPayload {
+    nonisolated var droppingText: SharedPromptPayload {
         var copy = self
         copy.text = nil
         return copy

@@ -84,7 +84,7 @@ struct VoiceCalibrationView: View {
 
             Text(phase == .ready
                  ? "Read the passage below at your natural pace. Big Talk will listen and build your voice profile."
-                 : "Read each word aloud — they'll highlight as you go.")
+                 : "Read each word aloud, they'll highlight as you go.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

@@ -15,6 +15,10 @@ class AudioService: NSObject {
 
     // Playback
     private var audioPlayer: AVAudioPlayer?
+    /// File the current `audioPlayer` was loaded from. Taps on coaching
+    /// surfaces re-request the same URL constantly; this is what lets `play`
+    /// tell "seek the live player" apart from "load a different take".
+    private var playerURL: URL?
     var isPlaying = false
     var playbackProgress: Double = 0
     var playbackDuration: TimeInterval = 0
@@ -243,15 +247,38 @@ class AudioService: NSObject {
     
     // MARK: - Playback
     
-    func play(url: URL) async throws {
+    /// - Parameter startingAt: seconds to begin from. Set before `play()` so the
+    ///   audio never audibly starts at zero and jump-cuts — the coaching screen
+    ///   plays from a timestamp far more often than from the top.
+    func play(url: URL, startingAt startTime: TimeInterval = 0) async throws {
         do {
             try recordingSession?.setCategory(.playback, mode: .default)
             try recordingSession?.setActive(true)
-            
+
+            // The same file is already loaded (playing or paused)? Seek the
+            // live player instead of rebuilding it. Creating a new
+            // AVAudioPlayer tears down and re-primes the decoder, which lands
+            // on the ear as a jump-cut restart — exactly what tapping a word
+            // mid-playback used to feel like.
+            if let player = audioPlayer, playerURL == url {
+                playbackDuration = player.duration
+                seekPlayer(to: startTime)
+                player.play()
+
+                isPlaying = true
+
+                await MainActor.run {
+                    self.startDisplayLink()
+                }
+                return
+            }
+
             audioPlayer = try AVAudioPlayer(contentsOf: url)
+            playerURL = url
             audioPlayer?.delegate = self
             audioPlayer?.prepareToPlay()
             playbackDuration = audioPlayer?.duration ?? 0
+            seekPlayer(to: startTime)
             audioPlayer?.play()
             
             isPlaying = true
@@ -275,16 +302,36 @@ class AudioService: NSObject {
 
         audioPlayer?.stop()
         audioPlayer = nil
+        playerURL = nil
         isPlaying = false
         playbackProgress = 0
         currentPlaybackTime = 0
     }
 
+    /// Fraction-based seek for the drawer scrubber (0…1 of the duration).
     func seek(to progress: Double) {
         guard let player = audioPlayer else { return }
-        player.currentTime = progress * player.duration
-        playbackProgress = progress
+        let clamped = max(0, min(1, progress))
+        player.currentTime = clamped * player.duration
+        playbackProgress = clamped
         currentPlaybackTime = player.currentTime
+    }
+
+    /// Absolute-time seek in seconds — what word taps and coaching stamps
+    /// arrive as. Clamps into the playable range; a request past the end
+    /// lands just short of it rather than falling off.
+    func seek(toTime time: TimeInterval) {
+        seekPlayer(to: time)
+    }
+
+    /// Shared seek core. The final tenth of a second is unusable — seeking
+    /// there plays nothing and reports finished immediately.
+    private func seekPlayer(to time: TimeInterval) {
+        guard let player = audioPlayer, player.duration > 0 else { return }
+        let clamped = min(max(0, time), max(0, player.duration - 0.1))
+        player.currentTime = clamped
+        currentPlaybackTime = clamped
+        playbackProgress = clamped / player.duration
     }
 
     // MARK: - Playback clock

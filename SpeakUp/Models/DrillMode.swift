@@ -20,10 +20,10 @@ enum DrillMode: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .fillerElimination: return "15-second bursts — goal: zero fillers"
-        case .paceControl: return "60 seconds — match the target WPM"
-        case .pausePractice: return "45 seconds — pause deliberately at markers"
-        case .impromptuSprint: return "30 seconds — random prompt, no prep"
+        case .fillerElimination: return "15-second bursts, goal: zero fillers"
+        case .paceControl: return "60 seconds, match the target WPM"
+        case .pausePractice: return "45 seconds, pause deliberately at markers"
+        case .impromptuSprint: return "30 seconds, random prompt, no prep"
         }
     }
 

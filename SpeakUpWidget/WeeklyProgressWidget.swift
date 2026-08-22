@@ -7,11 +7,12 @@ struct WeeklyProgressEntry: TimelineEntry {
     let goalSessions: Int
     let averageScore: Int
     let practiceMinutes: Int
+    let readiness: Int
 }
 
 struct WeeklyProgressProvider: TimelineProvider {
     func placeholder(in context: Context) -> WeeklyProgressEntry {
-        WeeklyProgressEntry(date: .now, sessionCount: 3, goalSessions: 5, averageScore: 75, practiceMinutes: 12)
+        WeeklyProgressEntry(date: .now, sessionCount: 3, goalSessions: 5, averageScore: 75, practiceMinutes: 12, readiness: 78)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WeeklyProgressEntry) -> Void) {
@@ -20,7 +21,8 @@ struct WeeklyProgressProvider: TimelineProvider {
             sessionCount: WidgetDataProvider.weeklySessionCount,
             goalSessions: WidgetDataProvider.weeklyGoalSessions,
             averageScore: WidgetDataProvider.weeklyAverageScore,
-            practiceMinutes: WidgetDataProvider.weeklyPracticeMinutes
+            practiceMinutes: WidgetDataProvider.weeklyPracticeMinutes,
+            readiness: WidgetDataProvider.interviewReadinessScore
         )
         completion(entry)
     }
@@ -31,7 +33,8 @@ struct WeeklyProgressProvider: TimelineProvider {
             sessionCount: WidgetDataProvider.weeklySessionCount,
             goalSessions: WidgetDataProvider.weeklyGoalSessions,
             averageScore: WidgetDataProvider.weeklyAverageScore,
-            practiceMinutes: WidgetDataProvider.weeklyPracticeMinutes
+            practiceMinutes: WidgetDataProvider.weeklyPracticeMinutes,
+            readiness: WidgetDataProvider.interviewReadinessScore
         )
         let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
         completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
@@ -84,6 +87,20 @@ struct WeeklyProgressWidgetView: View {
 
                 Spacer()
 
+                if entry.readiness > 0 {
+                    VStack(spacing: 2) {
+                        Text("Interview")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                        Text("\(entry.readiness)")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(scoreColor(for: entry.readiness))
+                    }
+
+                    Spacer()
+                }
+
                 // Practice minutes
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Practice")
@@ -100,7 +117,9 @@ struct WeeklyProgressWidgetView: View {
         .widgetURL(URL(string: "speakup://record"))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Weekly progress: \(entry.sessionCount) of \(entry.goalSessions) sessions, average score \(entry.averageScore), \(entry.practiceMinutes) practice minutes."
+            "Weekly progress: \(entry.sessionCount) of \(entry.goalSessions) sessions, average score \(entry.averageScore), "
+            + (entry.readiness > 0 ? "interview readiness \(entry.readiness), " : "")
+            + "\(entry.practiceMinutes) practice minutes."
         )
     }
 

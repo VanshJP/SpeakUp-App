@@ -52,24 +52,140 @@ nonisolated enum PersonalAverage {
         }
     }
 
+    /// How far back the same-subject scan looks. Deliberately short: this
+    /// exists for "I just did that again", not for archaeology, and every extra
+    /// row is a materialized blob column.
+    static let repeatScanLimit = 40
+
+    /// The last time the user answered this same prompt or story.
+    ///
+    /// A different prompt every session is variety, not practice. The rep that
+    /// moves anything is the same sixty seconds, twice, with the feedback in
+    /// between — and that is only legible if the second take is shown against
+    /// the first.
+    struct PreviousTake: Sendable {
+        let date: Date
+        let overall: Int
+        let subscores: SpeechSubscores
+        /// Which attempt the session being viewed is. 2 on the first repeat.
+        let takeNumber: Int
+    }
+
+    /// Everything the results screen reads from history in one pass.
+    struct Snapshot: Sendable {
+        var baselines = Baselines()
+        /// What the speaker is working on. Built from the same decode pass —
+        /// a second fetch just to rank subscores would double the cost of the
+        /// most expensive thing this screen does.
+        var plan: CoachPlan?
+        var previousTake: PreviousTake?
+        /// Whether the session being viewed is inside the plan's window.
+        ///
+        /// The plan is always built from the newest sessions, so opening a
+        /// three-month-old recording would otherwise bolt today's focus onto it
+        /// and imply it was what that session was about.
+        var currentIsInPlanWindow = false
+    }
+
+    /// What a session was practising, as one comparable key.
+    ///
+    /// Story wins over prompt, matching how `PromptRelevanceService` picks its
+    /// source text. The two ids are different types — `Story` is keyed by UUID,
+    /// `Prompt` by String — so they are normalised here rather than at the two
+    /// call sites that would otherwise each have to get it right.
+    static func repeatSubject(of recording: Recording) -> String? {
+        if let storyId = recording.storyId { return storyId.uuidString }
+        guard let promptId = recording.prompt?.id, !promptId.isEmpty else { return nil }
+        return promptId
+    }
+
+    /// The most recent earlier attempt at the same prompt or story.
+    ///
+    /// Matches on the relationship without decoding anything: `analysis` is
+    /// only unwrapped for the single row that matches, so scanning the tail
+    /// costs a fault per row rather than a blob decode per row.
+    private static func previousTake(
+        subject: String?,
+        before currentDate: Date,
+        excluding currentID: UUID,
+        in recordings: [Recording]
+    ) -> PreviousTake? {
+        // `Prompt.id` is a String and defaults to empty, so an empty subject is
+        // not an identity — matching on it would pair up unrelated sessions.
+        guard let subject, !subject.isEmpty else { return nil }
+
+        let sameSubject = recordings.filter {
+            $0.id != currentID
+                && $0.date < currentDate
+                && (Self.repeatSubject(of: $0) == subject)
+        }
+        guard let latest = sameSubject.first,
+              let analysis = latest.analysis,
+              analysis.speechScore.overall > 0 else { return nil }
+
+        return PreviousTake(
+            date: latest.date,
+            overall: analysis.speechScore.overall,
+            subscores: analysis.speechScore.subscores,
+            // Everything before this one, plus this one.
+            takeNumber: sameSubject.count + 1
+        )
+    }
+
     /// One fetch, one decode pass, every baseline the screen needs.
     ///
     /// Runs off the main actor: `Recording.analysis` is a Codable blob and
     /// decoding a window of them in a view body would stutter.
     static func all(excluding currentID: UUID, container: ModelContainer) async -> Baselines {
+        await snapshot(excluding: currentID, container: container).baselines
+    }
+
+    /// Baselines plus the coaching plan, from a single fetch and decode.
+    ///
+    /// The plan window deliberately does *not* exclude `currentID`: baselines
+    /// answer "how does this session compare to my others", so the session
+    /// itself must be left out, while the plan answers "what am I working on
+    /// now", which the latest session is part of.
+    /// - Parameter repeatSubject: the prompt or story the session being viewed
+    ///   answered, from `repeatSubject(of:)`, used to find the user's previous
+    ///   attempt at the same thing.
+    static func snapshot(
+        excluding currentID: UUID,
+        container: ModelContainer,
+        weights: ScoreWeights = .defaults,
+        repeatSubject: String? = nil,
+        currentDate: Date = .distantFuture
+    ) async -> Snapshot {
         await Task.detached(priority: .utility) {
             let context = ModelContext(container)
             var descriptor = FetchDescriptor<Recording>(
                 sortBy: [SortDescriptor(\.date, order: .reverse)]
             )
             // One extra row so excluding the current session still leaves a
-            // full window.
-            descriptor.fetchLimit = window + 1
+            // full window; the repeat scan wants a longer tail than that.
+            descriptor.fetchLimit = max(window + 1, repeatSubject == nil ? window + 1 : repeatScanLimit)
 
-            guard let recent = try? context.fetch(descriptor) else { return Baselines() }
+            guard let recent = try? context.fetch(descriptor) else { return Snapshot() }
 
-            let analyses = recent
-                .filter { $0.id != currentID && !$0.isDeleted }
+            let live = recent.filter { !$0.isDeleted }
+            let planWindow = live.prefix(window)
+            let currentIsInPlanWindow = planWindow.contains { $0.id == currentID }
+            let previousTake = previousTake(
+                subject: repeatSubject,
+                before: currentDate,
+                excluding: currentID,
+                in: live
+            )
+            // `analysis`, not `fullAnalysis`: the plan only reads subscores,
+            // which survive SwiftData's decoder intact. Taking the full mirror
+            // here would decode twenty JSON blobs to reach nine integers each.
+            let plan = CoachPlanService.plan(
+                window: planWindow.compactMap(\.analysis),
+                weights: weights
+            )
+
+            let analyses = live
+                .filter { $0.id != currentID }
                 .prefix(window)
                 .compactMap(\.analysis)
                 // A session that scored 0 hit the zero-word gate — a silent or
@@ -79,7 +195,15 @@ nonisolated enum PersonalAverage {
                 // broken rather than encouraging.
                 .filter { $0.speechScore.overall > 0 }
 
-            guard !analyses.isEmpty else { return Baselines() }
+            // No prior session to compare against still leaves a plan — the
+            // focus is worth showing from the very first recording.
+            guard !analyses.isEmpty else {
+                return Snapshot(
+                    plan: plan,
+                    previousTake: previousTake,
+                    currentIsInPlanWindow: currentIsInPlanWindow
+                )
+            }
 
             func mean(_ values: [Double]) -> Int? {
                 guard !values.isEmpty else { return nil }
@@ -88,14 +212,19 @@ nonisolated enum PersonalAverage {
 
             let scores = analyses.map(\.speechScore.overall)
 
-            return Baselines(
-                score: mean(scores.map(Double.init)),
-                wordsPerMinute: mean(analyses.map(\.wordsPerMinute)),
-                fillerCount: mean(analyses.map { Double($0.totalFillerCount) }),
-                pauseCount: mean(analyses.map { Double($0.pauseCount) }),
-                totalWords: mean(analyses.map { Double($0.totalWords) }),
-                best: scores.max(),
-                priorSessionCount: analyses.count
+            return Snapshot(
+                baselines: Baselines(
+                    score: mean(scores.map(Double.init)),
+                    wordsPerMinute: mean(analyses.map(\.wordsPerMinute)),
+                    fillerCount: mean(analyses.map { Double($0.totalFillerCount) }),
+                    pauseCount: mean(analyses.map { Double($0.pauseCount) }),
+                    totalWords: mean(analyses.map { Double($0.totalWords) }),
+                    best: scores.max(),
+                    priorSessionCount: analyses.count
+                ),
+                plan: plan,
+                previousTake: previousTake,
+                currentIsInPlanWindow: currentIsInPlanWindow
             )
         }.value
     }

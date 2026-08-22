@@ -16,7 +16,6 @@ struct SpeakUpWidgetBundle: WidgetBundle {
         QuickPracticeWidget()
         WeeklyProgressWidget()
         StatsRingWidget()
-        DailyChallengeWidget()
         QuickStoryWidget()
     }
 }

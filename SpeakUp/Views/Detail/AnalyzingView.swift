@@ -80,9 +80,9 @@ struct AnalyzingView: View {
 
     private var statusSubtitle: String {
         if isFirstTimeModelDownload {
-            return "One-time download, about 150 MB. Your recording is already saved — leave this screen and it will score itself when the download finishes."
+            return "One-time download, about 150 MB. Your recording is already saved, leave this screen and it will score itself when the download finishes."
         }
-        return isModelLoading ? "Loading the AI model for first-time use" : "Sit tight — we're crunching the numbers"
+        return isModelLoading ? "Loading the AI model for first-time use" : "Sit tight, we're crunching the numbers"
     }
 
     private let stages = [

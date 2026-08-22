@@ -96,6 +96,27 @@ struct RecordingLookView: View {
                         TimerDial(look: look, progress: 0.65, text: "7", caption: "sec")
                             .scaleEffect(0.5)
                     }
+
+                    // Count up / count down used to live in Session Defaults,
+                    // which meant one dial was configured on two screens. It is
+                    // the same choice as the dial's shape, so it sits with it.
+                    group(
+                        title: "Timer Direction",
+                        caption: "Whether the clock counts toward your limit or away from it.",
+                        options: CountdownStyle.allCases,
+                        selected: viewModel.countdownStyle,
+                        name: \.displayName
+                    ) { style in
+                        viewModel.countdownStyle = style
+                    } thumbnail: { style in
+                        TimerDial(
+                            look: viewModel.countdownLook,
+                            progress: style == .countDown ? 0.35 : 0.65,
+                            text: style == .countDown ? "21" : "39",
+                            caption: "sec"
+                        )
+                        .scaleEffect(0.5)
+                    }
                 }
                 .padding(.top, 12)
                 .padding(.bottom, 32)
@@ -107,6 +128,7 @@ struct RecordingLookView: View {
         .onChange(of: viewModel.recordButtonStyle) { _, _ in persist() }
         .onChange(of: viewModel.countdownLook) { _, _ in persist() }
         .onChange(of: viewModel.recordingBackdrop) { _, _ in persist() }
+        .onChange(of: viewModel.countdownStyle) { _, _ in persist() }
         .fullScreenCover(isPresented: $showingPreview) {
             RecordingLookPreview(
                 waveformStyle: viewModel.waveformStyle,

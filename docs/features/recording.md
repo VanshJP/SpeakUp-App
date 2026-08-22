@@ -43,3 +43,9 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 ## Cross-links
 
 [speech-pipeline.md](./speech-pipeline.md) · [recording-detail.md](./recording-detail.md) · [stories.md](./stories.md) · [monetization.md](./monetization.md) · [vocab-challenge.md](./vocab-challenge.md) · [architecture.md](./architecture.md)
+
+## Focus intent pill
+
+`RecordingView.focusIntentPill` shows the current `CoachPlan` focus in the top bar: area plus technique name during the countdown, area alone once recording starts — mid-take is the wrong moment for a paragraph, but the reminder has to be there because that is the only window in which it can be acted on.
+
+Loaded in its own `.task`, separate from the configure task that auto-starts recording, so resolving it can never delay the countdown. Hidden when the plan is graduating (nothing left to work on).

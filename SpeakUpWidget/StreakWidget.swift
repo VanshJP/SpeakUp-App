@@ -93,7 +93,7 @@ struct StreakWidgetView: View {
         .accessibilityLabel(
             entry.streak == 0
                 ? "No streak yet. Tap to start practicing."
-                : "\(entry.streak) day streak.\(isAtRisk ? " At risk — practice today to keep it." : "")"
+                : "\(entry.streak) day streak.\(isAtRisk ? " At risk, practice today to keep it." : "")"
         )
     }
 

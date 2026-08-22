@@ -175,6 +175,49 @@ nonisolated enum VocabChallengeService {
         return next
     }
 
+    // MARK: - Recording snapshots
+
+    /// Rebuilds a challenge from a recording's stored snapshot. Empty word
+    /// lists hide rather than render a hollow card.
+    ///
+    /// Takes plain values instead of `Recording` on purpose: models are
+    /// MainActor-isolated, and this stays callable in tests without a store.
+    static func challenge(
+        dayStamp: String,
+        words: [VocabChallengeWord]
+    ) -> DailyVocabChallenge? {
+        guard !words.isEmpty else { return nil }
+        return DailyVocabChallenge(dayStamp: dayStamp, words: words, usedKeys: [], isCompleted: false)
+    }
+
+    /// The workout one recording is scored against.
+    ///
+    /// - Snapshot present → that day's pick. Authoritative even if the day
+    ///   cache was later skipped or refilled elsewhere: the snapshot captured
+    ///   what the user actually saw when they spoke.
+    /// - No snapshot but recorded today → today's pick, preserving scoring for
+    ///   takes analyzed by an app version older than snapshots.
+    /// - No snapshot and recorded earlier → nil; the detail view hides the
+    ///   card. Guessing would mislabel history loudly, so it stays silent.
+    static func workout(
+        forRecordingAt recordedOn: Date,
+        snapshotDayStamp: String?,
+        snapshotWords: [VocabChallengeWord]?,
+        preferences: VocabChallengePreferences,
+        now: Date = Date(),
+        store: VocabChallengeStore = .standard,
+        calendar: Calendar = .current
+    ) -> DailyVocabChallenge? {
+        guard preferences.isEnabled else { return nil }
+        if let snapshotDayStamp, let snapshotWords {
+            return challenge(dayStamp: snapshotDayStamp, words: snapshotWords)
+        }
+        guard dayStamp(recordedOn, calendar: calendar) == dayStamp(now, calendar: calendar) else {
+            return nil
+        }
+        return todaysChallenge(preferences: preferences, now: now, store: store, calendar: calendar)
+    }
+
     // MARK: - Picking
 
     /// Anki's leech rule, loosely: four missed days running means the word is

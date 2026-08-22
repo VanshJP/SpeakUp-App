@@ -718,7 +718,7 @@ enum DefaultPrompts {
         ),
         PromptData(
             id: "prof-22",
-            text: "How do you manage up — keeping your manager informed and aligned?",
+            text: "How do you manage up, keeping your manager informed and aligned?",
             category: "Professional Development",
             difficulty: .medium
         ),
@@ -1792,7 +1792,7 @@ enum DefaultPrompts {
         ),
         PromptData(
             id: "pers-28",
-            text: "Describe a piece of art — a movie, book, or painting — that profoundly shifted your worldview.",
+            text: "Describe a piece of art, a movie, book, or painting, that profoundly shifted your worldview.",
             category: "Personal Growth",
             difficulty: .medium
         ),

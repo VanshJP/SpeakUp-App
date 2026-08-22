@@ -7,7 +7,7 @@ extension OnboardingGoal {
     /// goals: a user who picks Meetings and Presentations should see the
     /// shared communication material more often than either goal alone would
     /// suggest, which is what "the app listened" means for a multi-pick.
-    var promptCategories: [PromptCategory] {
+    nonisolated var promptCategories: [PromptCategory] {
         switch self {
         case .interviews:
             return [.interviewPrep, .professionalDevelopment, .quickFire]
@@ -40,7 +40,9 @@ extension OnboardingGoal {
 /// Pure value type — no SwiftData, no `Prompt` rows — so the distribution is
 /// testable on its own and callers can build one per load instead of querying
 /// settings per prompt.
-struct PromptMix: Equatable, Sendable {
+/// Pure value type — mixed into nonisolated selection passes and MainActor
+/// call sites alike.
+nonisolated struct PromptMix: Equatable, Sendable {
     /// Multiplier applied to categories the user's goals lean on. Three means a
     /// favored category is drawn roughly three times as often as a neutral one.
     static let favoredWeight = 3
@@ -94,6 +96,53 @@ struct PromptMix: Equatable, Sendable {
     /// written) count as neutral so they stay reachable.
     func weight(forCategory category: String) -> Int {
         weights[category] ?? Self.neutralWeight
+    }
+
+    // MARK: Weakness adaptation
+
+    /// Sessions of one practice type before its language stats count as
+    /// evidence rather than noise.
+    static let adaptiveMinimumSessions = 2
+
+    /// Crutch words per 100 above which a practice type reads as struggling.
+    /// Roughly one filler/hedge/softener every ~17 words.
+    static let adaptiveBoostThreshold: Double = 6.0
+
+    /// A copy of this mix with struggling practice types weighted up, built
+    /// from the cross-session lexicon profile (`LexiconInsightsEngine`).
+    ///
+    /// Rules, in order:
+    /// 1. **The Settings gate still wins.** A disabled category stays at 0 no
+    ///    matter how badly the user speaks in it — steering, not overriding.
+    /// 2. **Evidence first.** Fewer than `adaptiveMinimumSessions` sessions of
+    ///    a type is too thin to steer by.
+    /// 3. **Proportional, capped at 2×.** The boost ramps in above the
+    ///    threshold, so a speaker who struggles everywhere gets a gentle tilt
+    ///    rather than a reshuffle, and a strong speaker sees no change at all.
+    nonisolated func adapted(weakRatesByCategory: [String: (sessions: Int, weakRate: Double)]) -> PromptMix {
+        guard !weakRatesByCategory.isEmpty else { return self }
+
+        var adjusted = weights
+        var didChange = false
+
+        for (category, sample) in weakRatesByCategory {
+            guard sample.sessions >= Self.adaptiveMinimumSessions,
+                  let base = adjusted[category], base > 0,
+                  sample.weakRate > Self.adaptiveBoostThreshold
+            else { continue }
+
+            let strength = min(1.0, (sample.weakRate - Self.adaptiveBoostThreshold) / 8.0)
+            let boosted = min(
+                Int((Double(base) * (1.0 + strength)).rounded()),
+                base * 2
+            )
+            if boosted > base {
+                adjusted[category] = boosted
+                didChange = true
+            }
+        }
+
+        return didChange ? PromptMix(weights: adjusted) : self
     }
 
     /// Deterministic weighted pick over `candidates`, keyed on `seed`. The same

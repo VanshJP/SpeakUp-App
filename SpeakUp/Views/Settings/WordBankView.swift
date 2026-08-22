@@ -50,7 +50,7 @@ struct WordBankView: View {
                 bottomInputBar
             }
         }
-        .navigationTitle("Words")
+        .navigationTitle("Word Lists")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showDismissButton {
@@ -308,8 +308,6 @@ struct WordBankView: View {
 
     private var wordBankTab: some View {
         VStack(spacing: 16) {
-            VocabChallengeSettingsCard(viewModel: viewModel)
-
             // Live dictation preview
             if dictationEngine.isListening {
                 dictationPreview(tint: AppColors.primary)
@@ -364,7 +362,7 @@ struct WordBankView: View {
                         .font(.caption)
                         .foregroundStyle(tint)
                         .symbolEffect(.pulse)
-                    Text("Listening — say words to add")
+                    Text("Listening, say words to add")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(0.6))
                     Spacer()

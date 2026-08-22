@@ -15,6 +15,14 @@ final class Recording {
     var transcriptionText: String?
     var transcriptionWords: [TranscriptionWord]?
     var analysis: SpeechAnalysis?
+    /// Full-fidelity JSON mirror of `analysis`, written beside it.
+    ///
+    /// SwiftData's decoder drops every advanced metric on read (see
+    /// `SpeechAnalysis.init(from:)` for why it has to), so `analysis` comes
+    /// back carrying only the headline numbers once a recording has been read
+    /// from the store rather than just written to it. Coaching reasons about
+    /// exactly the fields that go missing, so it reads `fullAnalysis` instead.
+    var analysisJSON: Data?
     var isProcessing: Bool = false
     var lastProcessingError: String?
     var isFavorite: Bool = false
@@ -27,6 +35,14 @@ final class Recording {
     var storyId: UUID?
     var storyTitle: String?
     var waveformPeaks: [Float]?
+    /// Word-workout snapshot: the day stamp and spotlight words that were live
+    /// when this recording's analysis landed. Written once by
+    /// `RecordingProcessingCoordinator`; the detail view scores this session
+    /// against these words so an older take is judged by its own day's list,
+    /// never today's. Both optional — recordings analyzed before snapshots
+    /// existed simply have none.
+    var vocabChallengeDayStamp: String?
+    var vocabChallengeWords: [VocabChallengeWord]?
     /// Set when the recording was saved but left unanalyzed because the free
     /// allowance was spent. The audio is untouched — analysis runs the moment
     /// the allowance resets or Lifetime is purchased.
@@ -66,6 +82,7 @@ final class Recording {
         self.transcriptionText = transcriptionText
         self.transcriptionWords = transcriptionWords
         self.analysis = analysis
+        self.analysisJSON = analysis?.encodedMirror()
         self.isProcessing = isProcessing
         self.isFavorite = isFavorite
         self.customTitle = customTitle
@@ -73,6 +90,28 @@ final class Recording {
         self.frameworkUsed = frameworkUsed
         self.audioLevelSamples = audioLevelSamples
         self.goalId = goalId
+    }
+
+    // MARK: - Analysis
+
+    /// Writes the analysis and its full-fidelity mirror together.
+    ///
+    /// Always use this rather than assigning `analysis` directly — a write that
+    /// skips the mirror leaves the advanced metrics recoverable only until the
+    /// next launch.
+    func setAnalysis(_ analysis: SpeechAnalysis?) {
+        self.analysis = analysis
+        self.analysisJSON = analysis?.encodedMirror()
+    }
+
+    /// The analysis with its advanced metrics intact.
+    ///
+    /// Decodes a JSON blob, so it must not be called from a view `body` — read
+    /// it once into state. Falls back to the lossy SwiftData copy for
+    /// recordings analyzed before the mirror existed.
+    var fullAnalysis: SpeechAnalysis? {
+        guard let analysisJSON else { return analysis }
+        return SpeechAnalysis.decodedMirror(analysisJSON) ?? analysis
     }
 
     /// Display title: custom title, story title, prompt text, or fallback

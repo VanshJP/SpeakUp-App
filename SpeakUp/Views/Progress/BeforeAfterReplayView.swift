@@ -28,7 +28,7 @@ struct BeforeAfterReplayView: View {
                                         .font(.headline)
                                         .foregroundStyle(AppColors.success)
                                 } else if viewModel.scoreImprovement < 0 {
-                                    Text("Keep practicing — you've got this!")
+                                    Text("Keep practicing, you've got this!")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }
@@ -124,7 +124,7 @@ struct BeforeAfterReplayView: View {
                     Text("Share your progress")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("Scores and dates only — no transcript, prompt, or audio leaves your device.")
+                    Text("Scores and dates only, no transcript, prompt, or audio leaves your device.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

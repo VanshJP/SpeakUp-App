@@ -10,6 +10,11 @@ class LiveTranscriptionService {
     var isActive = false
     var fillerConfig: FillerWordConfig = .default
 
+    /// Monotonic per-word filler counts for the running session. Feeds the
+    /// repeated-filler coaching cue ("that's 5× 'like'") without re-deriving
+    /// counts in the view layer. Reset with the other live counters on start.
+    var liveFillerWordCounts: [String: Int] = [:]
+
     /// Timestamp (relative to recognition start) when the last spoken word ended.
     /// Used to detect sentence boundaries for graceful recording stop.
     var lastSegmentEndTime: TimeInterval = 0
@@ -30,8 +35,11 @@ class LiveTranscriptionService {
     private var recognitionGeneration = 0
     /// `removeTap` crashes if no tap is installed — track it explicitly.
     private var isTapInstalled = false
-    /// Token only — touched from `deinit` (nonisolated) and init.
-    nonisolated(unsafe) private var interruptionObserver: NSObjectProtocol?
+    /// Token only — touched from `deinit` (nonisolated) and init. Kept out of
+    /// observation tracking so the token never participates in change
+    /// notifications, and unsafe because NSObjectProtocol tokens are not
+    /// Sendable but are only ever registered/removed from the main actor.
+    @ObservationIgnored nonisolated(unsafe) private var interruptionObserver: NSObjectProtocol?
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -91,6 +99,7 @@ class LiveTranscriptionService {
 
         liveFillerCount = 0
         liveWordCount = 0
+        liveFillerWordCounts = [:]
         lastSegmentEndTime = 0
         lastProcessedSegmentCount = 0
         segmentTimeOffset = 0
@@ -305,5 +314,35 @@ class LiveTranscriptionService {
         liveFillerCount = max(liveFillerCount, fillerCount)
         liveWordCount = max(liveWordCount, wordCount)
         lastSegmentEndTime = max(lastSegmentEndTime, segmentTimeOffset + endTime)
+
+        updateFillerWordCounts(words: words, timestamps: timestamps, durations: durations)
+    }
+
+    /// Per-word tallies from the same pause-aware pipeline that drives the
+    /// headline count, so the repeated-filler cue names exactly what was said.
+    /// Max-merged per key to stay monotonic across partial revisions.
+    @MainActor
+    private func updateFillerWordCounts(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) {
+        guard words.count == timestamps.count, words.count == durations.count else { return }
+
+        let timings = zip(words, zip(timestamps, durations)).map { pair in
+            RawWordTiming(
+                word: pair.0,
+                start: pair.1.0,
+                end: pair.1.0 + pair.1.1,
+                confidence: 1.0
+            )
+        }
+        let tagged = FillerDetectionPipeline.tagFillers(in: timings, config: fillerConfig)
+
+        var freshCounts: [String: Int] = [:]
+        for word in tagged where word.isFiller {
+            let key = word.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+            guard !key.isEmpty else { continue }
+            freshCounts[key, default: 0] += 1
+        }
+        for (key, count) in freshCounts {
+            liveFillerWordCounts[key] = max(count, liveFillerWordCounts[key] ?? 0)
+        }
     }
 }

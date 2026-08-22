@@ -33,15 +33,13 @@ enum WidgetDataProvider {
         defaults.set(improvementRate, forKey: "weeklyImprovementRate")
     }
 
-    static func updateDailyChallenge(title: String, description: String, icon: String, isCompleted: Bool) {
-        defaults.set(title, forKey: "dailyChallengeTitle")
-        defaults.set(description, forKey: "dailyChallengeDescription")
-        defaults.set(icon, forKey: "dailyChallengeIcon")
-        defaults.set(isCompleted, forKey: "dailyChallengeCompleted")
-    }
 
     static func updateLastPracticeDate(_ date: Date) {
         defaults.set(date.timeIntervalSince1970, forKey: "lastPracticeDate")
+    }
+
+    static func updateInterviewReadiness(_ score: Int) {
+        defaults.set(score, forKey: "interviewReadinessScore")
     }
 
     // MARK: - Story Data

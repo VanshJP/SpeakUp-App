@@ -128,6 +128,83 @@ struct PromptMixSelectionTests {
     }
 }
 
+struct PromptMixAdaptationTests {
+    private let allCategories = Set(PromptCategory.allCases.map(\.rawValue))
+
+    private var baseMix: PromptMix {
+        PromptMix(goals: [.interviews], enabledCategoryNames: allCategories)
+    }
+
+    @Test func strugglingNeutralCategoryGetsBoosted() {
+        let adapted = baseMix.adapted(weakRatesByCategory: [
+            PromptCategory.storytelling.rawValue: (sessions: 4, weakRate: 10.0)
+        ])
+
+        #expect(adapted.weight(forCategory: PromptCategory.storytelling.rawValue) == PromptMix.neutralWeight * 2)
+    }
+
+    @Test func favoredCategoryAlsoBoosts() {
+        let adapted = baseMix.adapted(weakRatesByCategory: [
+            PromptCategory.interviewPrep.rawValue: (sessions: 5, weakRate: 14.0)
+        ])
+
+        #expect(adapted.weight(forCategory: PromptCategory.interviewPrep.rawValue) == PromptMix.favoredWeight * 2)
+    }
+
+    @Test func healthyOrThinEvidenceChangesNothing() {
+        let base = baseMix
+
+        let belowThreshold = base.adapted(weakRatesByCategory: [
+            PromptCategory.storytelling.rawValue: (sessions: 6, weakRate: 5.0)
+        ])
+        #expect(belowThreshold == base)
+
+        let thinEvidence = base.adapted(weakRatesByCategory: [
+            PromptCategory.storytelling.rawValue: (sessions: 1, weakRate: 20.0)
+        ])
+        #expect(thinEvidence == base)
+
+        let emptyInput = base.adapted(weakRatesByCategory: [:])
+        #expect(emptyInput == base)
+    }
+
+    @Test func settingsGateBeatsWeakness() {
+        let enabled = allCategories.subtracting([PromptCategory.storytelling.rawValue])
+        let gated = PromptMix(goals: [.storytelling], enabledCategoryNames: enabled)
+
+        let adapted = gated.adapted(weakRatesByCategory: [
+            PromptCategory.storytelling.rawValue: (sessions: 9, weakRate: 18.0)
+        ])
+
+        #expect(adapted.weight(forCategory: PromptCategory.storytelling.rawValue) == 0)
+    }
+
+    @Test func adaptationSteersTheDailyPick() {
+        // The point of the feature: with interview prep measurably weak, a
+        // seed sweep must surface it more often than the unadapted mix does.
+        let weakCategory = PromptCategory.interviewPrep.rawValue
+        let candidates = PromptCategory.allCases.map { Item(name: $0.rawValue, category: $0.rawValue) }
+        let adapted = baseMix.adapted(weakRatesByCategory: [weakCategory: (sessions: 6, weakRate: 12.0)])
+
+        func hits(_ mix: PromptMix) -> Int {
+            (0..<600).reduce(0) { count, seed in
+                if let pick = mix.pick(from: candidates, seed: seed, category: \.category),
+                   pick.category == weakCategory {
+                    return count + 1
+                }
+                return count
+            }
+        }
+
+        #expect(hits(adapted) > hits(baseMix))
+    }
+
+    private struct Item {
+        let name: String
+        let category: String
+    }
+}
+
 struct DefaultPromptsMixTests {
     @Test func todaysPromptIsStableAcrossCalls() {
         let mix = PromptMix(

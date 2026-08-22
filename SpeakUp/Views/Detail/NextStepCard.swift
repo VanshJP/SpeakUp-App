@@ -25,88 +25,80 @@ struct NextStep {
     /// A session where nothing is weak enough to drill — offer another rep instead.
     var isStrong: Bool { score >= 75 }
 
-    static func from(_ subscores: SpeechSubscores) -> NextStep {
-        // Required subscores are always present; optional ones only join the
-        // comparison when the pipeline actually produced them.
-        var candidates: [(area: String, slug: String, score: Int, step: (String, String, Action))] = [
-            ("Filler words", "filler", subscores.fillerUsage, (
-                "Fillers creep in when you think and talk at the same time. Pause instead.",
-                "Filler Elimination · 15s",
-                .drill(.fillerElimination)
-            )),
-            ("Pace", "pace", subscores.pace, (
-                "Steady pace beats fast. Aim for the target WPM band the whole way.",
-                "Pace Control · 60s",
-                .drill(.paceControl)
-            )),
-            ("Pauses", "pause", subscores.pauseQuality, (
-                "Deliberate pauses read as confidence. Practice landing them on purpose.",
-                "Pause Practice · 45s",
-                .drill(.pausePractice)
-            )),
-            ("Clarity", "clarity", subscores.clarity, (
-                "Articulation is mechanical — reading aloud trains the mouth, not the nerves.",
-                "Read Aloud",
-                .readAloud
-            ))
-        ]
-
-        if let vocalVariety = subscores.vocalVariety {
-            candidates.append(("Vocal variety", "vocal_variety", vocalVariety, (
-                "Flat delivery loses the room. Warm the voice up before you speak.",
-                "Vocal Warm-Up",
-                .warmUp
-            )))
-        }
-        if let delivery = subscores.delivery {
-            candidates.append(("Delivery", "delivery", delivery, (
-                "Energy carries the point. A warm-up raises your baseline before a session.",
-                "Vocal Warm-Up",
-                .warmUp
-            )))
-        }
-        if let vocabulary = subscores.vocabulary {
-            candidates.append(("Vocabulary", "vocabulary", vocabulary, (
-                "Reach for a stronger word under time pressure until it stops being a reach.",
-                "Impromptu Sprint · 30s",
-                .drill(.impromptuSprint)
-            )))
-        }
-        if let structure = subscores.structure {
-            candidates.append(("Structure", "structure", structure, (
-                "Point, reason, example. Sprints force you to build that shape fast.",
-                "Impromptu Sprint · 30s",
-                .drill(.impromptuSprint)
-            )))
-        }
-        if let relevance = subscores.relevance {
-            candidates.append(("Staying on topic", "relevance", relevance, (
-                "Answer the question first, then support it. Don't warm up on the listener.",
-                "Impromptu Sprint · 30s",
-                .drill(.impromptuSprint)
-            )))
-        }
-
-        let weakest = candidates.min { $0.score < $1.score } ?? candidates[0]
-        guard weakest.score < 75 else {
+    /// The action to take after this session.
+    ///
+    /// Follows the cross-session plan when there is one. Picking the weakest
+    /// subscore of the session in hand sends the user somewhere new every time
+    /// — clarity today, pauses tomorrow — which is how people end up with nine
+    /// half-trained habits and no fixed ones. The plan's focus only moves once
+    /// the dimension is actually trained.
+    static func from(_ subscores: SpeechSubscores, plan: CoachPlan? = nil) -> NextStep {
+        if let plan, !plan.isGraduating {
+            let route = route(for: plan.focus)
             return NextStep(
-                area: weakest.area,
-                areaSlug: weakest.slug,
-                score: weakest.score,
-                coaching: "Nothing scored below 75 this session. Bank another rep while it's working.",
+                area: plan.focus.title,
+                areaSlug: plan.focus.analyticsSlug,
+                score: plan.focus.subscore(in: subscores) ?? plan.focusAverage,
+                // The technique, not `plan.headline`: the focus card on the
+                // coaching tab already carries the where-you-are line, and
+                // both are on screen once the user scrolls. This card is the
+                // action, so it says what to do.
+                coaching: plan.focus.technique.how,
+                actionTitle: route.title,
+                action: route.action
+            )
+        }
+
+        let candidates = CoachDimension.allCases.compactMap { dimension -> (CoachDimension, Int)? in
+            dimension.subscore(in: subscores).map { (dimension, $0) }
+        }
+        guard let weakest = candidates.min(by: { $0.1 < $1.1 }) else {
+            return NextStep(
+                area: "Practice",
+                areaSlug: "none",
+                score: 100,
+                coaching: "Bank another rep while it's working.",
                 actionTitle: "Practice Again",
                 action: .practiceAgain
             )
         }
 
+        guard weakest.1 < 75 else {
+            return NextStep(
+                area: weakest.0.title,
+                areaSlug: weakest.0.analyticsSlug,
+                score: weakest.1,
+                coaching: plan?.headline ?? "Nothing scored below 75 this session. Bank another rep while it's working.",
+                actionTitle: "Practice Again",
+                action: .practiceAgain
+            )
+        }
+
+        let route = route(for: weakest.0)
         return NextStep(
-            area: weakest.area,
-            areaSlug: weakest.slug,
-            score: weakest.score,
-            coaching: weakest.step.0,
-            actionTitle: weakest.step.1,
-            action: weakest.step.2
+            area: weakest.0.title,
+            areaSlug: weakest.0.analyticsSlug,
+            score: weakest.1,
+            coaching: weakest.0.technique.how,
+            actionTitle: route.title,
+            action: route.action
         )
+    }
+
+    /// The CTA for a dimension, from the one route definition on
+    /// `CoachDimension`. This card used to carry its own copy of the mapping.
+    private static func route(for dimension: CoachDimension) -> (title: String, action: Action) {
+        switch dimension.practiceRoute {
+        case .readAloud:
+            return ("Read Aloud", .readAloud)
+        case .warmUp:
+            return ("Vocal Warm-Up", .warmUp)
+        case .drill(let raw):
+            guard let mode = DrillMode(rawValue: raw) else {
+                return ("Practice Again", .practiceAgain)
+            }
+            return ("\(mode.title) · \(mode.defaultDurationSeconds)s", .drill(mode))
+        }
     }
 }
 

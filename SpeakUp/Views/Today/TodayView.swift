@@ -8,6 +8,11 @@ struct TodayView: View {
     @Query private var userSettings: [UserSettings]
     @Environment(\.appTour) private var tour
     @State private var showingFirstRecordingSetup = false
+
+    // Arrival moment — fires once per calendar day, on the first open.
+    @AppStorage("lastArrivalDay") private var lastArrivalDay = ""
+    @State private var arrived = false
+    @State private var showArrivalConfetti = false
     @State private var challengeStore = SharedChallengeStore.shared
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
@@ -59,33 +64,27 @@ struct TodayView: View {
                     focusSection
 
                     // 4. Core action — today's prompt + start buttons
-                    VStack(spacing: 20) {
+                    VStack(spacing: 14) {
                         interactivePromptSection
+
+                        // The words and the challenge are the spec for *this*
+                        // take, not homework — so they brief the session right
+                        // above the button instead of sitting below it.
+                        SessionBriefRow(
+                            workout: viewModel.vocabChallenge,
+                            bankWords: userSettings.first?.vocabWords ?? [],
+                            onSkip: { viewModel.skipVocabWord($0) },
+                            onAddToBank: { addSpotlightWordToBank($0) }
+                        )
+
                         startButtonSection
+                            .padding(.top, 6)
                     }
                     .tourAnchor(.todayPrompt)
 
                     // 5. Quick actions
                     toolbarStrip
                         .tourAnchor(.todayTools)
-
-                    // 6. Daily challenge + word workout
-                    if let challenge = viewModel.dailyChallenge {
-                        DailyChallengeCard(challenge: challenge)
-                    }
-
-                    if let workout = viewModel.vocabChallenge {
-                        VocabChallengeCard(
-                            challenge: workout,
-                            bankWords: userSettings.first?.vocabWords ?? [],
-                            onSkip: { word in
-                                viewModel.skipVocabWord(word)
-                            },
-                            onAddToBank: { word in
-                                addSpotlightWordToBank(word)
-                            }
-                        )
-                    }
                 }
                 .padding()
             }
@@ -101,7 +100,13 @@ struct TodayView: View {
             viewModel.configure(with: modelContext)
         }
         .task {
+            playArrivalIfNeeded()
             await checkFirstRunSurfaces()
+        }
+        // The streak is only known once the load finishes, so the moment waits
+        // for it rather than celebrating a zero.
+        .onChange(of: viewModel.isLoading) { _, loading in
+            if !loading { playArrivalIfNeeded() }
         }
         .sheet(isPresented: $showingFirstRecordingSetup, onDismiss: startTourIfNeeded) {
             FirstRecordingSetupSheet()
@@ -151,30 +156,32 @@ struct TodayView: View {
     /// primary action.
     private static let focusMinimumSessions = 2
 
+    /// The instruction the user reads *before* they speak.
+    ///
+    /// This is the placement that makes the focus a training instruction rather
+    /// than a report — the session screen can only ever tell you what to work
+    /// on after the take you could have applied it to.
     @ViewBuilder
     private var focusSection: some View {
-        let samples = viewModel.recentSubscores
-
-        if samples.count >= Self.focusMinimumSessions,
-           let rolling = SpeechSubscores.rollingAverage(samples) {
-            TodayFocusCard(
-                step: NextStep.from(rolling),
-                sessionCount: samples.count,
-                onAction: self.handleFocusAction
+        if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
+            CoachFocusCard(
+                plan: plan,
+                onPractice: self.handleFocusRoute,
+                onPracticeAgain: {
+                    onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+                }
             )
         }
     }
 
-    private func handleFocusAction(_ action: NextStep.Action) {
-        switch action {
-        case .drill(let mode):
-            focusDrill = mode
+    private func handleFocusRoute(_ route: CoachPracticeRoute) {
+        switch route {
+        case .drill(let raw):
+            focusDrill = DrillMode(rawValue: raw)
         case .warmUp:
             showingFocusWarmUp = true
         case .readAloud:
             showingFocusReadAloud = true
-        case .practiceAgain:
-            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
         }
     }
 
@@ -247,6 +254,13 @@ struct TodayView: View {
                 Text(headline)
                     .font(.title2.bold())
                     .foregroundStyle(.white)
+
+                if let line = arrivalLine {
+                    Text(line)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(AppColors.warning)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
             }
 
             Spacer()
@@ -255,11 +269,55 @@ struct TodayView: View {
                 StreakDetailView()
             } label: {
                 StreakChip(streak: viewModel.userStats.currentStreak)
+                    // The chip is the reward, so it is what moves: one spring
+                    // pop on the day's first open, nothing on later ones.
+                    .scaleEffect(arrived ? 1 : 0.6)
+                    .opacity(arrived ? 1 : 0)
             }
             .buttonStyle(.plain)
             .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
         }
         .padding(.top, 4)
+        .overlay {
+            if showArrivalConfetti {
+                ConfettiView()
+                    .frame(height: 400)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// What the streak is actually worth right now. Never claims a day the
+    /// user has not earned — before today's session it names the stake.
+    private var arrivalLine: String? {
+        let streak = viewModel.userStats.currentStreak
+        guard arrived, streak >= 1 else { return nil }
+        return viewModel.practicedToday
+            ? "Day \(streak) locked in"
+            : "Day \(streak), one session keeps it"
+    }
+
+    /// Runs once per calendar day: pops the streak chip, fires a haptic, and
+    /// adds confetti on every seventh day so the milestone still feels rare.
+    private func playArrivalIfNeeded() {
+        let today = Calendar.current.startOfDay(for: .now).ISO8601Format()
+        guard lastArrivalDay != today else {
+            arrived = true
+            return
+        }
+        guard !viewModel.isLoading else { return }
+        lastArrivalDay = today
+
+        let streak = viewModel.userStats.currentStreak
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.55).delay(0.15)) {
+            arrived = true
+        }
+        if streak >= 1 {
+            Haptics.success()
+        }
+        if streak >= 7, streak % 7 == 0 {
+            showArrivalConfetti = true
+        }
     }
 
     private var greeting: String {
@@ -308,21 +366,14 @@ struct TodayView: View {
                 if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
                     onStartStoryPractice?(story)
                 } else {
-                    onStartRecording(
-                        viewModel.todaysPrompt,
-                        viewModel.selectedDuration
-                    )
+                    onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: viewModel.storyPracticeEnabled ? "book.pages" : "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(viewModel.storyPracticeEnabled ? "With Story" : "With Prompt")
-                        .font(.subheadline.weight(.semibold))
-                }
+                startLabel(
+                    icon: viewModel.storyPracticeEnabled ? "book.pages" : "mic.fill",
+                    title: viewModel.storyPracticeEnabled ? "With Story" : "With Prompt"
+                )
                 .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
                 .background {
                     Capsule()
                         .fill(Color.white.opacity(0.94))
@@ -336,32 +387,30 @@ struct TodayView: View {
                 Haptics.medium()
                 onStartRecording(nil, viewModel.selectedDuration)
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Free Practice")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule()
-                                .fill(AppColors.surfaceLift)
-                        }
-                        .overlay {
-                            Capsule()
-                                .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                        }
-                        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                }
-                .clipShape(Capsule())
+                startLabel(icon: "waveform", title: "Free Practice")
+                    .foregroundStyle(.white)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay { Capsule().fill(AppColors.surfaceLift) }
+                            .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+                            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                    }
+                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func startLabel(icon: String, title: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
     }
 
     // MARK: - Interactive Prompt Section
@@ -390,19 +439,6 @@ struct TodayView: View {
                     }
                 )
             } else {
-                HStack {
-                    Label("Today's Prompt", systemImage: "text.bubble.fill")
-                        .font(.headline)
-
-                    Spacer()
-
-                    SmallIconButton(icon: "arrow.clockwise", label: "Different prompt") {
-                        Task {
-                            await viewModel.refreshPrompt()
-                        }
-                    }
-                }
-
                 InteractivePromptCard(
                     prompt: viewModel.todaysPrompt,
                     selectedDuration: $viewModel.selectedDuration,
@@ -497,8 +533,6 @@ struct InteractivePromptCard: View {
     let onTap: () -> Void
     let onRefresh: () -> Void
 
-    @State private var isPulsing = false
-
     var body: some View {
         GlassCard(padding: 20, elevated: true) {
             VStack(alignment: .leading, spacing: 14) {
@@ -533,17 +567,7 @@ struct InteractivePromptCard: View {
 
                     Spacer()
 
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(AppColors.primary)
-                            .frame(width: 8, height: 8)
-                            .scaleEffect(isPulsing ? 1.3 : 1.0)
-                            .opacity(isPulsing ? 0.6 : 1.0)
-
-                        Text("Tap to start")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
+                    SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
                 }
             }
             // Whole card starts the session; the duration Menu still wins
@@ -556,7 +580,6 @@ struct InteractivePromptCard: View {
             .accessibilityHint("Starts a practice recording")
         }
         .redacted(reason: prompt == nil ? .placeholder : [])
-        .ambientLoop(AppMotion.ambient(duration: 1.2)) { isPulsing = true }
     }
 
     private var categoryColor: Color {

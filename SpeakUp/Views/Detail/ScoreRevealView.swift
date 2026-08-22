@@ -239,7 +239,7 @@ struct ScoreRevealView: View {
     }
 }
 
-#Preview("Strong — personal best") {
+#Preview("Strong, personal best") {
     ScoreRevealView(
         score: 91,
         baselines: .init(score: 74, best: 88, priorSessionCount: 6),

@@ -154,7 +154,7 @@ struct GoalsView: View {
     }
 
     private var averageProgressText: String {
-        guard !viewModel.activeGoals.isEmpty else { return "—" }
+        guard !viewModel.activeGoals.isEmpty else { return "," }
         let avg = viewModel.activeGoals.map(\.progressPercentage).reduce(0, +) / viewModel.activeGoals.count
         return "\(avg)%"
     }

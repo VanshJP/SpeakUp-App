@@ -23,7 +23,7 @@ struct RingStatsView: View {
     }
 
     private var improvementText: String {
-        if abs(improvement) < 0.5 { return "—" }
+        if abs(improvement) < 0.5 { return "," }
         let sign = improvement > 0 ? "+" : ""
         return "\(sign)\(Int(improvement.rounded()))%"
     }
@@ -35,7 +35,7 @@ struct RingStatsView: View {
                 GaugeItem(
                     progress: Double(score) / 100,
                     color: AppColors.scoreColor(for: score),
-                    value: score > 0 ? "\(score)" : "—",
+                    value: score > 0 ? "\(score)" : ",",
                     label: "Avg Score"
                 )
 
@@ -72,7 +72,7 @@ struct RingStatsView: View {
 
                     Spacer()
 
-                    Text(bestScore > 0 ? "\(bestScore)" : "—")
+                    Text(bestScore > 0 ? "\(bestScore)" : ",")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .contentTransition(.numericText(value: Double(bestScore)))

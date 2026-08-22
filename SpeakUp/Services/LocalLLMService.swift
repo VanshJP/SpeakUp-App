@@ -333,7 +333,7 @@ final class LocalLLMService {
         guard selectedProfile != profile else { return true }
 
         if case .downloading = modelState {
-            print("[LocalLLM] Refusing profile switch — download in progress for \(selectedProfile.rawValue)")
+            print("[LocalLLM] Refusing profile switch, download in progress for \(selectedProfile.rawValue)")
             return false
         }
         if isModelReady {
@@ -621,34 +621,30 @@ final class LocalLLMService {
 
     func generateCoachingInsight(
         from analysis: SpeechAnalysis,
-        transcript: String
+        transcript: String,
+        context: CoachingContext = CoachingContext()
     ) async -> String? {
-        let systemPrompt = """
-        You are a warm, encouraging public-speaking coach reviewing a session the speaker just finished. Your voice is that of a trusted mentor who has watched them work and wants to point out what actually shaped this delivery — confident, specific, kind, never preachy.
+        // Prompt shared with the Apple Intelligence path. The transcript
+        // budget scales with the profile's context window: on the E4B's 512
+        // tokens a 600-character excerpt plus the full rules crowd the system
+        // instructions out of attention, and the engine's keep-the-tail
+        // truncation would then drop them entirely.
+        let smallWindow = selectedProfile.contextTokenLimit <= 512
+        let budget = smallWindow ? 300 : CoachingPrompt.localTranscriptBudget
 
-        How to think about the speech:
-        1. Find the ONE pattern that most defined this delivery — pace, fillers, pauses, vocal variety, or structure.
-        2. Connect that pattern to how the speech felt to a listener, not just to the metric.
-        3. End with the next concrete exercise the speaker can try.
+        let prompt = CoachingPrompt.user(
+            analysis: analysis,
+            transcript: transcript,
+            context: context,
+            transcriptBudget: budget
+        )
 
-        Speech-science benchmarks to draw on when relevant:
-        - Conversational pace: 130-170 WPM. Above 185 reads as rushing. Below 115 reads as dragging.
-        - Fillers above ~5% of total words erode credibility.
-        - 1-2 second pauses after key points improve audience retention.
-        - Vocal variety (pitch + volume changes) keeps listeners engaged.
-
-        Rules:
-        - Reply with exactly 2-3 tips. No preamble, no closing line.
-        - Start each tip on a new line with •.
-        - Each tip: one short observation that ties the speaker's actual numbers (WPM, filler count, subscores) to how the speech landed, then one specific, doable exercise.
-        - Weave the numbers into the prose — do not list them as bullet facts.
-        - 1-2 sentences per tip. Encouraging, not condescending. No emojis.
-        """
-
-        let prompt = Self.buildCoachingPrompt(from: analysis, transcript: transcript)
-
-        // Slightly higher temperature for more natural coaching language
-        return await generate(prompt: prompt, systemPrompt: systemPrompt, maxTokens: 300, temperature: 0.4)
+        return await generate(
+            prompt: prompt,
+            systemPrompt: CoachingPrompt.system(context: context, compact: smallWindow),
+            maxTokens: 300,
+            temperature: 0.4
+        )
     }
 
     // MARK: - Transcript Quality Evaluation
@@ -759,44 +755,6 @@ final class LocalLLMService {
             logicalFlow: logicalFlow,
             reason: reason
         )
-    }
-
-    private static func buildCoachingPrompt(from analysis: SpeechAnalysis, transcript: String) -> String {
-        let truncatedTranscript = String(transcript.prefix(500))
-
-        var parts: [String] = []
-        parts.append("Speech Performance Summary:")
-        parts.append("- Overall Score: \(analysis.speechScore.overall)/100")
-        parts.append("- Words Per Minute: \(Int(analysis.wordsPerMinute))")
-        parts.append("- Total Words: \(analysis.totalWords)")
-        parts.append("- Filler Words: \(analysis.totalFillerCount)")
-        parts.append("- Pauses: \(analysis.pauseCount) (strategic: \(analysis.strategicPauseCount), hesitations: \(analysis.hesitationPauseCount))")
-
-        let subscores = analysis.speechScore.subscores
-        parts.append("- Clarity: \(subscores.clarity)/100")
-        parts.append("- Pace: \(subscores.pace)/100")
-        parts.append("- Filler Usage Score: \(subscores.fillerUsage)/100")
-        parts.append("- Pause Quality: \(subscores.pauseQuality)/100")
-
-        if let vv = subscores.vocalVariety {
-            parts.append("- Vocal Variety: \(vv)/100")
-        }
-        if let vocab = subscores.vocabulary {
-            parts.append("- Vocabulary: \(vocab)/100")
-        }
-
-        if !analysis.fillerWords.isEmpty {
-            let topFillers = analysis.fillerWords.prefix(3).map { "\($0.word) (\($0.count)x)" }.joined(separator: ", ")
-            parts.append("- Top filler words: \(topFillers)")
-        }
-
-        parts.append("")
-        parts.append("Transcript excerpt:")
-        parts.append(truncatedTranscript)
-        parts.append("")
-        parts.append("Based on this performance, provide 2-3 specific coaching tips to help this speaker improve.")
-
-        return parts.joined(separator: "\n")
     }
 
     // MARK: - Download with Progress

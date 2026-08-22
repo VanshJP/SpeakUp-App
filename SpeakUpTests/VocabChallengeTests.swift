@@ -293,6 +293,157 @@ struct VocabChallengeServiceTests {
     }
 }
 
+struct VocabSnapshotResolverTests {
+    private func makeStore() -> VocabChallengeStore {
+        let suite = "VocabSnapshotResolverTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return VocabChallengeStore(defaults: defaults)
+    }
+
+    private func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return Calendar(identifier: .gregorian).date(from: components)!
+    }
+
+    private func prefs(enabled: Bool = true) -> VocabChallengePreferences {
+        VocabChallengePreferences(
+            isEnabled: enabled,
+            wordCount: 2,
+            useBank: true,
+            useDictionary: false,
+            introduceNew: true,
+            spacedReviewEnabled: true,
+            vocabWords: ["Strategic", "Authentic"],
+            dictionaryWords: [],
+            extraBanned: [],
+            userName: "Ada",
+            speakerLevelRaw: 1
+        )
+    }
+
+    private func words(_ texts: String...) -> [VocabChallengeWord] {
+        texts.map { VocabChallengeWord(text: $0, source: .bank, gloss: nil, prompt: "") }
+    }
+
+    @Test func resolverPicksSnapshotOverTodaysChallenge() {
+        let store = makeStore()
+        let monday = day(2026, 8, 17)
+        let friday = day(2026, 8, 21)
+        // A real pick from Monday so the stamp comes from the store's own path.
+        _ = VocabChallengeService.todaysChallenge(preferences: prefs(), now: monday, store: store)
+        let snapshotStamp = store.cached()?.dayStamp
+
+        let resolved = VocabChallengeService.workout(
+            forRecordingAt: friday,
+            snapshotDayStamp: snapshotStamp,
+            snapshotWords: words("Strategic"),
+            preferences: prefs(),
+            now: friday,
+            store: store
+        )
+
+        #expect(resolved?.dayStamp == "2026-08-17")
+        #expect(resolved?.words.map(\.text) == ["Strategic"])
+    }
+
+    @Test func todayFallbackFiresOnlyForTodaysRecording() {
+        let store = makeStore()
+        let today = day(2026, 8, 21)
+        let direct = VocabChallengeService.todaysChallenge(
+            preferences: prefs(),
+            now: today,
+            store: store
+        )
+        let freshStore = makeStore()
+        let fallback = VocabChallengeService.workout(
+            forRecordingAt: today,
+            snapshotDayStamp: nil,
+            snapshotWords: nil,
+            preferences: prefs(),
+            now: today,
+            store: freshStore
+        )
+        #expect(fallback?.words.map(\.text) == direct?.words.map(\.text))
+
+        let olderStore = makeStore()
+        let older = VocabChallengeService.workout(
+            forRecordingAt: day(2026, 8, 20),
+            snapshotDayStamp: nil,
+            snapshotWords: nil,
+            preferences: prefs(),
+            now: today,
+            store: olderStore
+        )
+        #expect(older == nil)
+    }
+
+    @Test func legacyOlderRecordingHides() {
+        let store = makeStore()
+        let result = VocabChallengeService.workout(
+            forRecordingAt: day(2025, 3, 2),
+            snapshotDayStamp: nil,
+            snapshotWords: nil,
+            preferences: prefs(),
+            now: day(2026, 8, 21),
+            store: store
+        )
+        #expect(result == nil)
+    }
+
+    @Test func emptySnapshotHidesEvenOnItsOwnDay() {
+        let store = makeStore()
+        let result = VocabChallengeService.challenge(dayStamp: "2026-08-17", words: [])
+        #expect(result == nil)
+
+        let workout = VocabChallengeService.workout(
+            forRecordingAt: day(2026, 8, 17),
+            snapshotDayStamp: "2026-08-17",
+            snapshotWords: [],
+            preferences: prefs(),
+            now: day(2026, 8, 17),
+            store: store
+        )
+        #expect(workout == nil)
+    }
+
+    @Test func disabledWorkoutHidesEvenWithSnapshot() {
+        let store = makeStore()
+        let result = VocabChallengeService.workout(
+            forRecordingAt: day(2026, 8, 21),
+            snapshotDayStamp: "2026-08-17",
+            snapshotWords: words("Strategic"),
+            preferences: prefs(enabled: false),
+            now: day(2026, 8, 21),
+            store: store
+        )
+        #expect(result == nil)
+    }
+
+    @Test func dayStampRoundTripsThroughTheSameFormatterTheStoreUses() {
+        let when = day(2026, 8, 17)
+        let stamp = VocabChallengeService.dayStamp(when)
+        #expect(VocabChallengeService.date(fromDayStamp: stamp) == when)
+
+        let store = makeStore()
+        _ = VocabChallengeService.todaysChallenge(preferences: prefs(), now: when, store: store)
+        #expect(store.cached()?.dayStamp == stamp)
+
+        let resolved = VocabChallengeService.workout(
+            forRecordingAt: day(2026, 8, 18),
+            snapshotDayStamp: stamp,
+            snapshotWords: words("Strategic", "Authentic"),
+            preferences: prefs(),
+            now: day(2026, 8, 18),
+            store: makeStore()
+        )
+        #expect(resolved?.dayStamp == stamp)
+    }
+}
+
 struct VocabSchedulerTests {
     @Test func missedWordReturnsSoonerThanSpokenOne() {
         let now = Date()

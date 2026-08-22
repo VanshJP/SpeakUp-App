@@ -134,7 +134,7 @@ struct ScoreWeightsView: View {
                 Label("How Your Score Works", systemImage: "function")
                     .font(.headline)
 
-                Text("Your overall score is built in two stages. First, 9 subscores are combined using your weights. Then a Substance Gate multiplies the result based on speech length and content depth — so short or empty responses always score low regardless of weights.")
+                Text("Your overall score is built in two stages. First, 9 subscores are combined using your weights. Then a Substance Gate multiplies the result based on speech length and content depth, so short or empty responses always score low regardless of weights.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -394,7 +394,7 @@ struct ScoreWeightsView: View {
             ),
             SubscoreDescription(
                 name: "Pace", key: "pace", icon: "speedometer",
-                measures: "Speaking speed and fluency. Optimal pace is conversational — not rushed or dragging.",
+                measures: "Speaking speed and fluency. Optimal pace is conversational, not rushed or dragging.",
                 howCalculated: "Gaussian comparison to your target WPM (wider tolerance ±30 WPM), with optional rate variation (18%) and fluency signals (14%) blended in when available."
             ),
             SubscoreDescription(

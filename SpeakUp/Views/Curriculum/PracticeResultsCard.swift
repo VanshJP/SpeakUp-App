@@ -169,7 +169,7 @@ struct PracticeResultsCard: View {
         } else if score >= 60 {
             return "Solid practice session. Keep building on this."
         } else if score >= 40 {
-            return "Good effort — each session gets you closer."
+            return "Good effort, each session gets you closer."
         } else {
             return "Great start! Awareness is the first step to improvement."
         }

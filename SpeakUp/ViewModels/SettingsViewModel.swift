@@ -417,7 +417,7 @@ class SettingsViewModel {
             return
         }
         guard !isFillerWord(trimmed) else {
-            showVocabError("That's a filler word — we track those separately")
+            showVocabError("That's a filler word, we track those separately")
             return
         }
         guard trimmed.count >= 2 else {
@@ -518,7 +518,7 @@ class SettingsViewModel {
             return
         }
         guard !isFillerWord(trimmed) else {
-            showDictationError("That's a filler word — avoid biasing it")
+            showDictationError("That's a filler word, avoid biasing it")
             return
         }
         dictationBiasWords.append(trimmed)

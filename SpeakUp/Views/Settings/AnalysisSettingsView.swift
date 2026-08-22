@@ -75,6 +75,29 @@ struct AnalysisSettingsView: View {
                             Divider().padding(.vertical, 8)
 
                             NavigationLink {
+                                VoiceProfileView(viewModel: viewModel)
+                            } label: {
+                                HStack {
+                                    Label("Voice Profile", systemImage: "waveform.badge.person.crop")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Text(viewModel.voiceProfileSampleCount > 0
+                                         ? "\(viewModel.voiceProfileSampleCount) sample\(viewModel.voiceProfileSampleCount == 1 ? "" : "s")"
+                                         : "Not calibrated")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .frame(minHeight: 40)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.vertical, 8)
+
+                            NavigationLink {
                                 ScoreWeightsView(viewModel: viewModel)
                             } label: {
                                 HStack {
@@ -100,7 +123,7 @@ struct AnalysisSettingsView: View {
                         }
                     }
 
-                    Text("Analyze your speech patterns for pauses and filler words. Auto pace target learns your natural speaking rate from every recording; turn it off to set a fixed WPM target instead. Score weights let you customize how each metric contributes to your overall score.")
+                    Text("Analyze your speech patterns for pauses and filler words. Auto pace target learns your natural speaking rate from every recording; turn it off to set a fixed WPM target instead. Your voice profile is what it learns from. Score weights let you customize how each metric contributes to your overall score.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)

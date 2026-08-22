@@ -9,7 +9,7 @@ Home Screen glanceables + deep links. Hydrate from App Group — widget process 
 | Role | Path |
 |------|------|
 | Bundle | `SpeakUpWidget/SpeakUpWidgetBundle.swift` |
-| Widgets | `DailyPromptWidget`, `DailyChallengeWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget` |
+| Widgets | `DailyPromptWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget` |
 | Widget read API | `SpeakUpWidget/WidgetDataProvider.swift` |
 | App write API | `SpeakUp/Services/WidgetDataProvider.swift` |
 | Entitlements | `SpeakUpWidget/SpeakUpWidgetExtension.entitlements` |
@@ -18,7 +18,7 @@ Home Screen glanceables + deep links. Hydrate from App Group — widget process 
 
 ## Invariants
 
-1. Keep **keys and payload shapes in sync** across the two `WidgetDataProvider` files when changing shared data.
+1. Keep **keys and payload shapes in sync** across the two `WidgetDataProvider` files when changing shared data. Current keys include `interviewReadinessScore` (written by `TodayViewModel` from the lexicon engine; `0` = no analyzed history, widgets hide the field rather than show a real 0).
 2. Reload timelines via fingerprint gate in `TodayViewModel` — budget WidgetKit refreshes.
 3. Deep links from widgets must match `ContentView` / `UniversalLink` routers.
 4. Never add SwiftData usage inside the widget target.

@@ -11,20 +11,11 @@ struct StreakDetailView: View {
     @State private var recordingDates: [Date] = []
 
     private var streakAchievements: [Achievement] {
-        achievements
-            .filter { $0.id.hasPrefix("streak_") }
-            .sorted { lhs, rhs in
-                (Self.streakAchievementThreshold(id: lhs.id) ?? .max)
-                    < (Self.streakAchievementThreshold(id: rhs.id) ?? .max)
-            }
+        achievements.filter { $0.id.hasPrefix("streak_") }
     }
 
     private var streakAchievementsUnlocked: Int {
         streakAchievements.filter(\.isUnlocked).count
-    }
-
-    private static func streakAchievementThreshold(id: String) -> Int? {
-        Int(id.replacingOccurrences(of: "streak_", with: ""))
     }
 
     private var currentStreak: Int {
@@ -67,29 +58,12 @@ struct StreakDetailView: View {
         return milestones.last { $0 <= currentStreak } ?? 0
     }
 
-    private var encouragement: String {
-        switch currentStreak {
-        case 0: return "Today is day one. Tap the mic and light the flame."
-        case 1: return "First spark. Keep showing up tomorrow and it grows."
-        case 2...3: return "The fire is catching. Don't let it die."
-        case 4...6: return "Four days in, almost a week. You're building a habit."
-        case 7...13: return "A full week strong. The flame is steady now."
-        case 14...29: return "Two weeks. This is real momentum."
-        case 30...59: return "A month of daily practice. Most people never get here."
-        case 60...99: return "Two months deep. Speech is becoming second nature."
-        case 100...364: return "Triple digits. You are one of the few who don't quit."
-        default: return "A year-plus on fire. Legendary."
-        }
-    }
-
     var body: some View {
         PageScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 heroFlame
-                statsRow
                 milestoneCard
                 calendarCard
-                encouragementCard
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -148,63 +122,20 @@ struct StreakDetailView: View {
                     .font(.caption.weight(.heavy))
                     .tracking(4)
                     .foregroundStyle(.white.opacity(isLit ? 0.7 : 0.45))
+
+                // Best is the only other number worth a pixel here, and it is
+                // a footnote to the current one — not its own card.
+                if longestStreak > currentStreak {
+                    Text("Best \(longestStreak) days")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.top, 6)
+                }
             }
         }
         .padding(.top, 12)
     }
 
-    // MARK: - Stats Row
-
-    private var statsRow: some View {
-        HStack(spacing: 12) {
-            statTile(
-                icon: currentStreak > 0 ? "flame.fill" : "flame",
-                iconColor: currentStreak > 0 ? .orange : .white.opacity(0.35),
-                value: "\(currentStreak)",
-                unit: currentStreak == 1 ? "day" : "days",
-                label: "Current"
-            )
-            statTile(
-                icon: "trophy.fill",
-                iconColor: .yellow,
-                value: "\(longestStreak)",
-                unit: longestStreak == 1 ? "day" : "days",
-                label: "Best"
-            )
-        }
-    }
-
-    private func statTile(icon: String, iconColor: Color, value: String, unit: String, label: String) -> some View {
-        GlassCard(tint: iconColor.opacity(0.06), padding: 16) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(iconColor.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(iconColor)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(value)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Text(unit)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                    Text(label)
-                        .font(.caption2.weight(.semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-
-                Spacer(minLength: 0)
-            }
-        }
-    }
 
     // MARK: - Milestone
 
@@ -252,11 +183,9 @@ struct StreakDetailView: View {
                         Divider().overlay(Color.white.opacity(0.08))
 
                         HStack(spacing: 10) {
-                            HStack(spacing: -6) {
-                                ForEach(streakAchievements.prefix(3), id: \.id) { achievement in
-                                    streakAchievementBadge(achievement)
-                                }
-                            }
+                            Image(systemName: "rosette")
+                                .font(.caption)
+                                .foregroundStyle(AppColors.warning)
 
                             Text("\(streakAchievementsUnlocked) of \(streakAchievements.count) streak awards")
                                 .font(.caption.weight(.medium))
@@ -280,22 +209,6 @@ struct StreakDetailView: View {
         .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
     }
 
-    private func streakAchievementBadge(_ achievement: Achievement) -> some View {
-        ZStack {
-            Circle()
-                .fill(achievement.isUnlocked ? AppColors.warning.opacity(0.85) : Color.white.opacity(0.06))
-                .overlay {
-                    Circle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                }
-                .shadow(color: achievement.isUnlocked ? AppColors.warning.opacity(0.4) : .clear, radius: 4, y: 1)
-
-            Image(systemName: achievement.isUnlocked ? achievement.icon : "lock.fill")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(achievement.isUnlocked ? .white : .white.opacity(0.35))
-        }
-        .frame(width: 26, height: 26)
-    }
 
     // MARK: - Calendar
 
@@ -346,31 +259,6 @@ struct StreakDetailView: View {
         }
     }
 
-    // MARK: - Encouragement
-
-    private var encouragementCard: some View {
-        GlassCard(tint: .orange.opacity(0.04)) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "sparkles")
-                    .font(.title3)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.yellow, .orange],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 28)
-
-                Text(encouragement)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 0)
-            }
-        }
-    }
 
     // MARK: - Helpers
 

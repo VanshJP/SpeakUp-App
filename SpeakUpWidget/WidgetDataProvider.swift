@@ -65,28 +65,18 @@ enum WidgetDataProvider {
         defaults?.integer(forKey: "weeklyImprovementRate") ?? 0
     }
 
-    static var dailyChallengeTitle: String {
-        defaults?.string(forKey: "dailyChallengeTitle") ?? "Open app for today's challenge"
-    }
-
-    static var dailyChallengeDescription: String {
-        defaults?.string(forKey: "dailyChallengeDescription") ?? ""
-    }
-
-    static var dailyChallengeIcon: String {
-        defaults?.string(forKey: "dailyChallengeIcon") ?? "target"
-    }
-
-    static var dailyChallengeCompleted: Bool {
-        defaults?.bool(forKey: "dailyChallengeCompleted") ?? false
-    }
-
     static var latestStoryTitle: String {
         defaults?.string(forKey: "latestStoryTitle") ?? ""
     }
 
     static var storyCount: Int {
         defaults?.integer(forKey: "storyCount") ?? 0
+    }
+
+    /// Cross-session interview readiness written by TodayViewModel. `0` means
+    /// no analyzed history yet — widgets treat it as "no data", not a real 0.
+    static var interviewReadinessScore: Int {
+        defaults?.integer(forKey: "interviewReadinessScore") ?? 0
     }
 
     // Streak tracking

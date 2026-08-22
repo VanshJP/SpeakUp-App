@@ -11,25 +11,40 @@ class TodayViewModel {
     var selectedDuration: RecordingDuration = .sixty
     var isLoading = true
     var weeklyProgress: WeeklyProgressData?
-    var dailyChallenge: DailyChallenge?
     var vocabChallenge: DailyVocabChallenge?
     var hideAnsweredPrompts: Bool = false
     var weeklyGoalSessions: Int = 5
     var storyPracticeEnabled: Bool = false
     var todaysStory: Story?
-    var recentSubscores: [SpeechSubscores] = []
+    /// What the speaker is working on. Same engine as the session coaching
+    /// screen — Today used to run its own weaker version (lowest rolling
+    /// subscore over ten sessions, zero-score captures included) and the two
+    /// disagreed about which area to send the user after.
+    var coachPlan: CoachPlan?
     private var modelContext: ModelContext?
     private var lastPracticeDate: Date?
+    /// Drives the once-a-day arrival moment in the Today header.
+    var practicedToday: Bool {
+        guard let lastPracticeDate else { return false }
+        return Calendar.current.isDateInToday(lastPracticeDate)
+    }
     private var answeredPromptIDs: Set<String> = []
     /// Category weighting from the user's onboarding goals, gated by their
     /// enabled categories. Built once per settings load rather than per prompt,
     /// and the only place the category gate is applied now.
     private var promptMix: PromptMix = .uniform
+    /// `promptMix` blended with lexicon weakness boosts — the mix prompt
+    /// selection actually uses. Settings goals stay the base; adaptation only
+    /// tilts categories the user demonstrably struggles in.
+    private var effectivePromptMix: PromptMix = .uniform
     private var hasRerolledPrompt = false
     private var vocabChallengePreferences: VocabChallengePreferences = .disabled
+    private var scoreWeights: ScoreWeights = .defaults
     private var vocabUsedCounts: [String: Int] = [:]
     private var todayTranscripts: [String] = []
     private var todayVocabUsages: [VocabWordUsage] = []
+    /// Cross-session interview readiness, written to the widget payload.
+    private var readinessScore = 0
 
     nonisolated init() {}
 
@@ -55,21 +70,22 @@ class TodayViewModel {
         let heavy = await Self.fetchAndCompute(
             container: container,
             hideAnsweredPrompts: hideAnsweredPrompts,
-            weeklyGoalSessions: weeklyGoalSessions
+            weeklyGoalSessions: weeklyGoalSessions,
+            scoreWeights: scoreWeights,
+            promptMix: promptMix
         )
 
         self.userStats = heavy.userStats
         self.weeklyProgress = heavy.weeklyProgress
-        self.recentSubscores = heavy.recentSubscores
+        self.coachPlan = heavy.coachPlan
         self.answeredPromptIDs = heavy.answeredPromptIDs
         self.lastPracticeDate = heavy.lastPracticeDate
         self.vocabUsedCounts = heavy.vocabUsedCounts
         self.todayTranscripts = heavy.todayTranscripts
         self.todayVocabUsages = heavy.todayVocabUsages
+        self.readinessScore = heavy.readinessScore
+        self.effectivePromptMix = heavy.promptMix
 
-        var challenge = DailyChallengeService.todaysChallenge()
-        challenge.isCompleted = heavy.dailyChallengeCompleted
-        self.dailyChallenge = challenge
         refreshVocabChallenge()
 
         // Load today's prompt (uses answeredPromptIDs populated above)
@@ -95,7 +111,9 @@ class TodayViewModel {
     private static func fetchAndCompute(
         container: ModelContainer,
         hideAnsweredPrompts: Bool,
-        weeklyGoalSessions: Int
+        weeklyGoalSessions: Int,
+        scoreWeights: ScoreWeights,
+        promptMix: PromptMix
     ) async -> TodayHeavyResult {
         await Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
@@ -160,13 +178,8 @@ class TodayViewModel {
 
             let weeklyProgress = WeeklyProgressService.calculate(recordings: recordings)
 
-            // Daily challenge completion
             let todayStart = calendar.startOfDay(for: Date())
             let todayRecordings = recordings.filter { $0.date >= todayStart }
-            let challengeTemplate = DailyChallengeService.todaysChallenge()
-            let challengeCompleted = todayRecordings.contains {
-                DailyChallengeService.evaluate(challenge: challengeTemplate, recording: $0)
-            }
 
             var vocabUsedCounts: [String: Int] = [:]
             var todayTranscripts: [String] = []
@@ -188,20 +201,63 @@ class TodayViewModel {
                 }
             }
 
-            // Recent subscores for weak area (last 10)
-            let recentSubscores: [SpeechSubscores] = recordings
-                .prefix(10)
-                .compactMap { $0.analysis?.speechScore.subscores }
+            // The focus, from the same window and the same weighting the
+            // session coaching screen uses. The crutch hint comes from a
+            // bounded recent-window lexicon pass so the filler focus names
+            // the user's actual #1 habit.
+            var lexiconProfile: LexiconProfile?
+            var crutchHint: CrutchHint?
+            var recentSessions: [LexiconSessionInput] = []
+            recentSessions.reserveCapacity(20)
+            for recording in recordings.prefix(20) {
+                guard let text = recording.transcriptionText, !text.isEmpty else { continue }
+                var fillerCounts: [String: Int] = [:]
+                if let fillerWords = recording.analysis?.fillerWords {
+                    for filler in fillerWords where filler.count > 0 {
+                        fillerCounts[filler.word.lowercased(), default: 0] += filler.count
+                    }
+                }
+                recentSessions.append(LexiconSessionInput(
+                    date: recording.date,
+                    transcript: text,
+                    fillerCounts: fillerCounts,
+                    overallScore: recording.analysis?.speechScore.overall,
+                    category: recording.storyId != nil ? "Story" : recording.prompt?.category
+                ))
+                if recentSessions.count >= 15 { break }
+            }
+            lexiconProfile = LexiconInsightsEngine.profile(from: recentSessions)
+            if let top = lexiconProfile?.crutchWords.first(where: { $0.category == .filler || $0.category == .hedge }),
+               top.count >= CrutchHint.minimumCount {
+                crutchHint = CrutchHint(word: top.word, count: top.count)
+            }
+
+            // Practice types the user demonstrably struggles in get a
+            // proportional weight bump, so Today steers back toward the
+            // weakest material without overriding goals or the settings gate.
+            let weakRatesByCategory: [String: (sessions: Int, weakRate: Double)] = Dictionary(
+                uniqueKeysWithValues: (lexiconProfile?.categoryBreakdown ?? []).map {
+                    ($0.category, (sessions: $0.sessions, weakRate: $0.weakRate))
+                }
+            )
+            let adaptedMix = promptMix.adapted(weakRatesByCategory: weakRatesByCategory)
+
+            let coachPlan = CoachPlanService.plan(
+                window: recordings.prefix(PersonalAverage.window).compactMap(\.analysis),
+                weights: scoreWeights,
+                crutchHint: crutchHint
+            )
 
             return TodayHeavyResult(
                 userStats: userStats,
                 weeklyProgress: weeklyProgress,
                 answeredPromptIDs: answered,
-                recentSubscores: recentSubscores,
-                dailyChallengeCompleted: challengeCompleted,
+                coachPlan: coachPlan,
                 vocabUsedCounts: vocabUsedCounts,
                 todayTranscripts: todayTranscripts,
                 todayVocabUsages: todayVocabUsages,
+                readinessScore: lexiconProfile?.interviewReadiness?.score ?? 0,
+                promptMix: adaptedMix,
                 // Recordings are date-descending; first = latest practice of
                 // any kind, analyzed or not (feeds the streak widget).
                 lastPracticeDate: recordings.first?.date
@@ -229,15 +285,10 @@ class TodayViewModel {
             improvementRate: Int(userStats.improvementRate.rounded())
         )
 
-        // Daily challenge
-        if let challenge = dailyChallenge {
-            WidgetDataProvider.updateDailyChallenge(
-                title: challenge.title,
-                description: challenge.description,
-                icon: challenge.icon,
-                isCompleted: challenge.isCompleted
-            )
+        if readinessScore > 0 {
+            WidgetDataProvider.updateInterviewReadiness(readinessScore)
         }
+
 
         // Track last practice date for streak-at-risk widget. Any recording
         // counts — a session whose transcription failed is still practice.
@@ -280,7 +331,7 @@ class TodayViewModel {
         // category, so beginners see easier rotations and someone practising
         // for interviews mostly meets interview-shaped prompts.
         let level = currentSpeakerLevel(context: context)
-        let todayData = DefaultPrompts.getTodaysPrompt(for: level, mix: promptMix)
+        let todayData = DefaultPrompts.getTodaysPrompt(for: level, mix: effectivePromptMix)
         let targetId = todayData.id
 
         // Fetch all prompts and filter in memory to avoid SwiftData predicate issues
@@ -310,7 +361,7 @@ class TodayViewModel {
             // substitute leans the same way the day's prompt would have.
             if hideAnsweredPrompts, let current = todaysPrompt, answeredPromptIDs.contains(current.id) {
                 let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
-                todaysPrompt = promptMix.pick(
+                todaysPrompt = effectivePromptMix.pick(
                     from: unanswered,
                     seed: DefaultPrompts.todaySeed(),
                     category: \.category
@@ -348,6 +399,9 @@ class TodayViewModel {
                 storyPracticeEnabled = settings.storyPracticeEnabled
                 promptMix = settings.promptMix
                 vocabChallengePreferences = settings.vocabChallengePreferences
+                // The focus is ranked against the user's own weights, so it
+                // reflects what actually moves *their* score.
+                scoreWeights = ScoreWeights(from: settings)
             }
         } catch {
             print("Error loading user settings: \(error)")
@@ -375,7 +429,7 @@ class TodayViewModel {
 
         // Get a random prompt biased by the user's speaker level and goals
         let level = currentSpeakerLevel(context: context)
-        let randomData = DefaultPrompts.getRandomPrompt(for: level, mix: promptMix)
+        let randomData = DefaultPrompts.getRandomPrompt(for: level, mix: effectivePromptMix)
         let targetId = randomData.id
 
         // Fetch all prompts and filter in memory to avoid SwiftData predicate issues
@@ -403,7 +457,7 @@ class TodayViewModel {
             if hideAnsweredPrompts {
                 loadAnsweredPromptIDs(context: context)
                 let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
-                if let pick = promptMix.pickRandom(from: unanswered, category: \.category) {
+                if let pick = effectivePromptMix.pickRandom(from: unanswered, category: \.category) {
                     candidate = pick
                 }
             }
@@ -492,10 +546,12 @@ nonisolated private struct TodayHeavyResult: Sendable {
     let userStats: UserStats
     let weeklyProgress: WeeklyProgressData?
     let answeredPromptIDs: Set<String>
-    let recentSubscores: [SpeechSubscores]
-    let dailyChallengeCompleted: Bool
+    let coachPlan: CoachPlan?
     let vocabUsedCounts: [String: Int]
     let todayTranscripts: [String]
     let todayVocabUsages: [VocabWordUsage]
+    let readinessScore: Int
+    /// Settings mix after weakness adaptation — what selection consumes.
+    let promptMix: PromptMix
     let lastPracticeDate: Date?
 }

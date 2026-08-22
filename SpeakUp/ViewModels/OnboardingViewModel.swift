@@ -192,7 +192,7 @@ final class OnboardingViewModel {
     /// elapsed would re-diff the page 16 times a second for nothing.
     var baselineElapsed: Int = 0
     /// One-line status shown on the ready state after a discarded or failed
-    /// take ("We saved nothing — clean slate.").
+    /// take ("We saved nothing, clean slate.").
     var baselineNote: String?
     private var baselineCountdownTask: Task<Void, Never>?
     /// dBFS samples at ~0.5s cadence, matching what `RecordingViewModel`

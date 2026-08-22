@@ -221,19 +221,7 @@ struct HistoryView: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(aggregated.prefix(15), id: \.word) { item in
-                            HStack(spacing: 5) {
-                                Text(item.word)
-                                    .font(.caption.weight(.medium))
-                                Text("\(item.count)")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(minWidth: 18, minHeight: 18)
-                                    .background(Circle().fill(AppColors.success))
-                            }
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(AppColors.success.opacity(0.12)))
+                            WordCountChip(word: item.word, count: item.count, color: AppColors.success)
                         }
                     }
                 }

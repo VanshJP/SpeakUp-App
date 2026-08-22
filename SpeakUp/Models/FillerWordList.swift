@@ -13,7 +13,9 @@ struct FillerWordConfig: Sendable {
 
 // MARK: - Filler Words List
 
-struct FillerWordList {
+/// Pure word-list logic — consulted from nonisolated lexicon passes and
+/// MainActor call sites alike.
+nonisolated struct FillerWordList {
     // Words that are ALWAYS fillers (hesitation sounds)
     // Includes variations that Whisper might transcribe
     static let unconditionalFillers: Set<String> = [

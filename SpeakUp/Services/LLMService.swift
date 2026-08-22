@@ -70,10 +70,10 @@ final class LLMService {
             // Only react to `.critical` in that mode — iOS will jetsam the
             // process anyway if real exhaustion follows.
             if preferLocal && !isCritical {
-                print("[LLMService] Memory pressure .warning ignored — preferLocalLLM is on")
+                print("[LLMService] Memory pressure .warning ignored, preferLocalLLM is on")
                 return
             }
-            print("[LLMService] Memory pressure (\(isCritical ? "critical" : "warning")) — unloading local LLM")
+            print("[LLMService] Memory pressure (\(isCritical ? "critical" : "warning")), unloading local LLM")
             // Abort any in-flight generation first. `unloadModel` schedules a
             // detached `engine.unload()` that has to take the inference lock,
             // which `generate` holds for the full token-decode loop — without
@@ -175,14 +175,14 @@ final class LLMService {
         let systemPrompt = """
         You format raw dictated speech into lightly-styled Markdown for a personal journal/story entry. \
         The input is a verbatim transcript of someone speaking out loud. Your output will be parsed into rich text, \
-        so it MUST use Markdown syntax — not plain paragraphs. Keep the speaker's exact voice, wording, tense, \
+        so it MUST use Markdown syntax, not plain paragraphs. Keep the speaker's exact voice, wording, tense, \
         and meaning intact. The goal is to make the raw transcript feel like a written entry.
 
         === CLEAN THE TEXT ===
-        - Add sentence punctuation (. ? !) and internal punctuation (, ; : — "…" ').
+        - Add sentence punctuation (. ? !) and internal punctuation (, ; :, "…" ').
         - Capitalize sentence starts, the pronoun "I", and proper nouns (names, places, brands, titles).
         - Remove filler words with no meaning: "um", "uh", "er", "ah", "hmm", and filler uses of "like", "you know", "I mean", "sort of", "kind of", "basically", "literally".
-        - Remove false starts and stuttered repeats. "I— I went to" → "I went to". "so so yesterday" → "so yesterday".
+        - Remove false starts and stuttered repeats. "I, I went to" → "I went to". "so so yesterday" → "so yesterday".
         - Collapse spoken self-corrections to the corrected version. "I went to the store, I mean the market" → "I went to the market".
         - Fix clearly-wrong homophone/transcription slips only when unambiguous (e.g. "their" vs "there"). When in doubt, leave the words alone.
 
@@ -190,7 +190,7 @@ final class LLMService {
         Use formatting SPARINGLY and only when the speaker's content actually calls for it. Default is plain paragraphs. Never format everything.
 
         Paragraphs:
-        - Separate paragraphs with a blank line (two newlines). Break whenever the topic, scene, time, place, or speaker shifts. Long dictation MUST become multiple paragraphs — never return one wall of text.
+        - Separate paragraphs with a blank line (two newlines). Break whenever the topic, scene, time, place, or speaker shifts. Long dictation MUST become multiple paragraphs, never return one wall of text.
 
         Headings (`# Title`, `## Subheading`):
         - Only if the speaker explicitly announces a title or section header ("Chapter one: the beginning", "Part two", "Section titled Morning Routine"). Strip the announcer words and keep the title on its own heading line.
@@ -199,7 +199,7 @@ final class LLMService {
         Bold (`**word**`):
         - The input is a text transcript, so you cannot hear vocal tone. Infer emphasis from TEXTUAL cues only:
           1. Repetition: "really really important" → "**really** important" (collapse the doubled word).
-          2. Explicit intensifiers: "seriously", "literally" (when used for emphasis, not as filler), "I mean", "I want to emphasize", "the key point is", "the main thing is" — bold the phrase they modify, not the intensifier itself.
+          2. Explicit intensifiers: "seriously", "literally" (when used for emphasis, not as filler), "I mean", "I want to emphasize", "the key point is", "the main thing is", bold the phrase they modify, not the intensifier itself.
           3. Exclamation sentences with a clear emphatic target: "That was **huge**!"
           4. Self-labeled takeaways: "the takeaway was **trust your team**", "the lesson is **start small**".
         - Cap at roughly 1–3 short bolded phrases per entry. Never bold whole sentences, never bold every noun, never bold just for decoration.
@@ -208,7 +208,7 @@ final class LLMService {
         - Inner thoughts or self-talk: "I thought, *this can't be happening*", "in my head I was like, *just breathe*".
         - Titles of books, movies, shows, songs, podcasts, albums: *The Great Gatsby*, *Inception*.
         - Foreign words or phrases: *je ne sais quoi*.
-        - Do NOT italicize for generic emphasis — that's what bold is for.
+        - Do NOT italicize for generic emphasis, that's what bold is for.
 
         Bullet list (`- item` per line):
         - Only when the speaker verbally enumerates 2+ discrete items with no ordering ("I need to buy eggs, milk, and bread" → three bullets: `- eggs`, `- milk`, `- bread`). Keep each item short.
@@ -290,24 +290,36 @@ final class LLMService {
 
     // MARK: - Coaching Tips
 
+    /// - Parameter context: the speaker's pace target, focus, and this
+    ///   session's quotable moments. Without it the model can only paraphrase
+    ///   the metrics back; with it, it can coach.
     func generateCoachingInsight(
         from analysis: SpeechAnalysis,
-        transcript: String
+        transcript: String,
+        context: CoachingContext = CoachingContext()
     ) async -> String? {
         isGenerating = true
         defer { isGenerating = false }
 
         if prefersAppleIntelligence {
-            if let raw = await generateCoachingWithAppleIntelligence(analysis: analysis, transcript: transcript) {
-                return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript)
+            if let raw = await generateCoachingWithAppleIntelligence(
+                analysis: analysis,
+                transcript: transcript,
+                context: context
+            ) {
+                return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript, context: context)
             }
             // Apple Intelligence returned nil — try the local model rather than
             // surfacing nothing to the user.
         }
 
         if localLLM.isModelReady {
-            if let raw = await localLLM.generateCoachingInsight(from: analysis, transcript: transcript) {
-                return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript)
+            if let raw = await localLLM.generateCoachingInsight(
+                from: analysis,
+                transcript: transcript,
+                context: context
+            ) {
+                return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript, context: context)
             }
             return nil
         }
@@ -343,10 +355,10 @@ final class LLMService {
         if let promptText, !promptText.isEmpty {
             systemPrompt = """
             You are a speech evaluator. Score this speech 0-100 based on:
-            1. Prompt relevance — Does the speech address the given topic?
-            2. Logical flow — Are ideas connected with transitions?
-            3. Completeness — Does it have an opening, body, and conclusion?
-            4. Fluency — Are sentences well-formed and clear?
+            1. Prompt relevance, Does the speech address the given topic?
+            2. Logical flow, Are ideas connected with transitions?
+            3. Completeness, Does it have an opening, body, and conclusion?
+            4. Fluency, Are sentences well-formed and clear?
             Output EXACTLY in this format with no other text:
             SCORE: <number>
             TOPIC_FOCUS: <one sentence>
@@ -357,10 +369,10 @@ final class LLMService {
         } else {
             systemPrompt = """
             You are a speech coherence evaluator. Score this speech 0-100 based on:
-            1. Internal consistency — Do sentences relate to each other?
-            2. Logical flow — Are ideas connected and ordered logically?
-            3. Topical focus — Does the speaker stay on one thread or ramble?
-            4. Fluency — Are sentences well-formed and clear?
+            1. Internal consistency, Do sentences relate to each other?
+            2. Logical flow, Are ideas connected and ordered logically?
+            3. Topical focus, Does the speaker stay on one thread or ramble?
+            4. Fluency, Are sentences well-formed and clear?
             Output EXACTLY in this format with no other text:
             SCORE: <number>
             TOPIC_FOCUS: <one sentence>
@@ -422,17 +434,23 @@ final class LLMService {
 
     private func generateCoachingWithAppleIntelligence(
         analysis: SpeechAnalysis,
-        transcript: String
+        transcript: String,
+        context: CoachingContext
     ) async -> String? {
         let model = SystemLanguageModel.default
         guard model.isAvailable else { return nil }
 
-        let prompt = buildCoachingPrompt(from: analysis, transcript: transcript)
+        let prompt = CoachingPrompt.user(
+            analysis: analysis,
+            transcript: transcript,
+            context: context,
+            transcriptBudget: CoachingPrompt.appleTranscriptBudget
+        )
 
         do {
             let session = LanguageModelSession(
                 model: model,
-                instructions: coachingSystemPrompt
+                instructions: CoachingPrompt.system(context: context)
             )
             let response = try await session.respond(to: prompt)
             return response.content
@@ -494,187 +512,48 @@ final class LLMService {
         )
     }
 
-    private var coachingSystemPrompt: String {
-        """
-        You are a supportive speech coach. Analyze the speaker's performance and provide \
-        2-3 specific, actionable coaching tips. Be encouraging but honest. Focus on the \
-        most impactful areas for improvement. Keep each tip to 1-2 sentences. \
-        Each tip must reference at least one concrete signal from the summary (numbered metric) \
-        or a short quoted phrase from the transcript excerpt. \
-        Never recommend adding filler words (e.g., "um", "uh", "like", "you know"), \
-        and never present verbal tics as a positive strategy. \
-        Format: Start each tip on a new line with a bullet point (•).
-        """
+    private func sanitizeCoachingInsight(
+        _ raw: String,
+        analysis: SpeechAnalysis,
+        transcript: String,
+        context: CoachingContext
+    ) -> String {
+        // Pure rules live in `CoachingInsightSanitizer` (testable without a
+        // model); this wrapper only owns the fallback decision.
+        let extracted = CoachingInsightSanitizer.tips(from: raw)
+        // Small local models drop the metric label despite the prompt rule,
+        // and a bare "44/100" reads as a verdict from nowhere. The naming
+        // pass runs before specificity so a relabelled score still counts as
+        // its numeric signal.
+        let tips = CoachingInsightSanitizer.namingBareScores(
+            extracted,
+            subscores: analysis.speechScore.subscores
+        )
+
+        guard !tips.isEmpty, CoachingInsightSanitizer.isSpecificEnough(tips, transcript: transcript) else {
+            return deterministicCoachingFallback(analysis: analysis, context: context)
+        }
+
+        return tips.map { "- \($0)" }.joined(separator: "\n")
     }
 
-    private func buildCoachingPrompt(from analysis: SpeechAnalysis, transcript: String) -> String {
-        let truncatedTranscript = String(transcript.prefix(500))
-
-        var parts: [String] = []
-        parts.append("Speech Performance Summary:")
-        parts.append("- Overall Score: \(analysis.speechScore.overall)/100")
-        parts.append("- Words Per Minute: \(Int(analysis.wordsPerMinute))")
-        parts.append("- Total Words: \(analysis.totalWords)")
-        parts.append("- Filler Words: \(analysis.totalFillerCount)")
-        parts.append("- Pauses: \(analysis.pauseCount) (strategic: \(analysis.strategicPauseCount), hesitations: \(analysis.hesitationPauseCount))")
-        if let noise = analysis.audioIsolationMetrics {
-            parts.append("- Noise Isolation: residual \(noise.residualNoiseScore)/100, suppression +\(String(format: "%.1f", noise.suppressionDeltaDb)) dB")
-        }
-        if let speaker = analysis.speakerIsolationMetrics {
-            parts.append("- Speaker Isolation: confidence \(speaker.separationConfidence)/100, primary speaker ratio \(Int(speaker.primarySpeakerWordRatio * 100))%")
-        }
-
-        let subscores = analysis.speechScore.subscores
-        parts.append("- Clarity: \(subscores.clarity)/100")
-        parts.append("- Pace: \(subscores.pace)/100")
-        parts.append("- Filler Usage Score: \(subscores.fillerUsage)/100")
-        parts.append("- Pause Quality: \(subscores.pauseQuality)/100")
-
-        if let vv = subscores.vocalVariety {
-            parts.append("- Vocal Variety: \(vv)/100")
-        }
-        if let vocab = subscores.vocabulary {
-            parts.append("- Vocabulary: \(vocab)/100")
-        }
-
-        if !analysis.fillerWords.isEmpty {
-            let topFillers = analysis.fillerWords.prefix(3).map { "\($0.word) (\($0.count)x)" }.joined(separator: ", ")
-            parts.append("- Top filler words: \(topFillers)")
-        }
-
-        parts.append("")
-        parts.append("Transcript excerpt:")
-        parts.append(truncatedTranscript)
-        parts.append("")
-        parts.append("Based on this performance, provide 2-3 specific coaching tips to help this speaker improve.")
-        parts.append("Every tip must mention either a numeric metric or a short quoted transcript phrase.")
-
-        return parts.joined(separator: "\n")
-    }
-
-    private func sanitizeCoachingInsight(_ raw: String, analysis: SpeechAnalysis, transcript: String) -> String {
-        let lines = raw
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        var bulletTips: [String] = []
-        for line in lines {
-            let stripped = line
-                .replacingOccurrences(of: #"^[\-\*\•\d\.\)\s]+"#, with: "", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !stripped.isEmpty else { continue }
-            bulletTips.append(stripped)
-        }
-
-        // If model returned a paragraph without bullets, treat it as one tip.
-        if bulletTips.isEmpty {
-            let paragraph = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !paragraph.isEmpty {
-                bulletTips = [paragraph]
+    /// What the user sees when the model produced nothing usable.
+    ///
+    /// Not a placeholder. The rule-based tips already carry both halves of a
+    /// real tip, the observation with its evidence and the named technique,
+    /// so the fallback is coaching written by the deterministic path rather
+    /// than an apology for the model.
+    private func deterministicCoachingFallback(
+        analysis: SpeechAnalysis,
+        context: CoachingContext
+    ) -> String {
+        CoachingTipService.generateTips(from: analysis, context: context)
+            .prefix(3)
+            .map { tip in
+                tip.teachingPoint.isEmpty
+                    ? "- \(tip.message)"
+                    : "- \(tip.message) \(tip.teachingPoint)"
             }
-        }
-
-        var seen: Set<String> = []
-        var deduped: [String] = []
-        for tip in bulletTips {
-            if containsDisallowedAdvice(tip) {
-                continue
-            }
-            let key = tip
-                .lowercased()
-                .replacingOccurrences(of: #"[^a-z0-9\s]"#, with: "", options: .regularExpression)
-                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty else { continue }
-            if seen.insert(key).inserted {
-                deduped.append(tip)
-            }
-            if deduped.count == 3 { break }
-        }
-
-        if deduped.isEmpty || !isInsightSpecificEnough(deduped, transcript: transcript) {
-            return deterministicCoachingFallback(analysis: analysis, transcript: transcript)
-        }
-
-        return deduped.map { "- \($0)" }.joined(separator: "\n")
-    }
-
-    private func isInsightSpecificEnough(
-        _ tips: [String],
-        transcript: String
-    ) -> Bool {
-        let combined = tips.joined(separator: " ").lowercased()
-        let hasNumericSignal = combined.range(of: #"\b\d+\b"#, options: .regularExpression) != nil
-        let metricKeywords = [
-            "wpm", "filler", "fillers", "pause", "pauses", "clarity", "pace",
-            "score", "vocabulary", "structure", "relevance"
-        ]
-        let hasMetricKeyword = metricKeywords.contains { combined.contains($0) }
-        if hasMetricKeyword && hasNumericSignal {
-            return true
-        }
-
-        let transcriptTokens = transcript
-            .lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { $0.count >= 5 }
-        guard !transcriptTokens.isEmpty else { return false }
-        let tokenSet = Set(transcriptTokens.prefix(24))
-        return tokenSet.contains { token in combined.contains(token) }
-    }
-
-    private func deterministicCoachingFallback(analysis: SpeechAnalysis, transcript: String) -> String {
-        let deterministicTips = CoachingTipService.generateTips(from: analysis).prefix(3)
-        var lines: [String] = []
-        lines.reserveCapacity(3)
-
-        let snippet = transcript
-            .split(whereSeparator: \.isNewline)
-            .first?
-            .split(separator: " ")
-            .prefix(8)
-            .joined(separator: " ") ?? ""
-        if !snippet.isEmpty {
-            lines.append("- In your transcript (\"\(snippet)...\"), tighten phrasing and land each point with a clear finish.")
-        }
-
-        for tip in deterministicTips {
-            let line = "- \(tip.message)"
-            if !lines.contains(line) {
-                lines.append(line)
-            }
-            if lines.count == 3 { break }
-        }
-
-        if lines.isEmpty {
-            lines = [
-                "- You are at \(Int(analysis.wordsPerMinute)) WPM; stay near 130-170 WPM by pausing briefly after each key point.",
-                "- You used \(analysis.totalFillerCount) fillers; replace each filler with a 1-second silent pause.",
-                "- Your clarity score is \(analysis.speechScore.subscores.clarity); slow the first sentence and over-enunciate consonant endings."
-            ]
-        }
-
-        return lines.prefix(3).joined(separator: "\n")
-    }
-
-    private func containsDisallowedAdvice(_ tip: String) -> Bool {
-        let lowered = tip.lowercased()
-        let containsFillerTerm = lowered.range(
-            of: #"\b(um|uh|like|you know|i mean|basically)\b"#,
-            options: .regularExpression
-        ) != nil
-        let encouragesAction = lowered.range(
-            of: #"\b(use|add|include|say|insert|try)\b"#,
-            options: .regularExpression
-        ) != nil
-
-        if containsFillerTerm && encouragesAction {
-            return true
-        }
-        if lowered.contains("filler word") && lowered.contains("help") {
-            return true
-        }
-        return false
+            .joined(separator: "\n")
     }
 }

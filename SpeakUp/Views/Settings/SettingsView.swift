@@ -86,7 +86,16 @@ struct SettingsView: View {
             settingsLink(
                 icon: "character.book.closed",
                 iconColor: AppColors.categorySage,
-                title: "Words",
+                title: "Word Workout",
+                subtitle: workoutSubtitle
+            ) {
+                WordWorkoutSettingsView(viewModel: viewModel)
+            }
+
+            settingsLink(
+                icon: "list.bullet.rectangle",
+                iconColor: AppColors.categorySage,
+                title: "Word Lists",
                 subtitle: wordsSubtitle
             ) {
                 WordBankView(viewModel: viewModel, showDismissButton: false)
@@ -128,7 +137,7 @@ struct SettingsView: View {
                 icon: "externaldrive.fill",
                 iconColor: AppColors.accent,
                 title: "Data Management",
-                subtitle: "Export, reset, or manage data"
+                subtitle: "Reset settings or clear all data"
             ) {
                 DataManagementView(viewModel: viewModel)
             }
@@ -223,7 +232,7 @@ struct SettingsView: View {
         if iCloudSyncEnabled {
             return "Syncing across your devices"
         }
-        return "Disabled — recordings stay on this device"
+        return "Disabled, recordings stay on this device"
     }
 
     // MARK: - Helpers
@@ -233,21 +242,23 @@ struct SettingsView: View {
         return name.isEmpty ? "Set your name" : name
     }
 
+    /// Two counts and nothing else. The old version tried to name four things
+    /// at once and every one of them truncated — the row is `.lineLimit(1)`.
     private var wordsSubtitle: String {
-        var parts: [String] = []
-        if viewModel.vocabWords.count > 0 {
-            parts.append("\(viewModel.vocabWords.count) vocab")
-        }
+        var parts: [String] = ["\(viewModel.vocabWords.count) vocab"]
         if viewModel.dictationBiasWords.count > 0 {
             parts.append("\(viewModel.dictationBiasWords.count) dictation")
         }
         if viewModel.hasFillerCustomizations {
-            parts.append("fillers customized")
+            parts.append("custom fillers")
         }
-        if viewModel.vocabChallengeEnabled {
-            parts.append("daily workout")
-        }
-        return parts.isEmpty ? "Vocab, dictation, and filler words" : parts.joined(separator: ", ")
+        return parts.joined(separator: " · ")
+    }
+
+    private var workoutSubtitle: String {
+        guard viewModel.vocabChallengeEnabled else { return "Off" }
+        let count = viewModel.vocabChallengeWordCount
+        return "\(count) word\(count == 1 ? "" : "s") a day"
     }
 
     private var aiModelSubtitle: String {

@@ -52,7 +52,7 @@ class WhisperService {
     /// total elapsed time is what lets a 10-minute recording finish: the flat
     /// 90 s cap this replaced timed those out, and each timeout fell through
     /// the chain to Apple Speech, which returns a truncated transcript.
-    private static let decodeStallTimeout: TimeInterval = 60
+    nonisolated private static let decodeStallTimeout: TimeInterval = 60
 
     /// Backstop for the one failure the stall detector cannot see: a decoder
     /// that keeps emitting tokens while the seek point never advances through

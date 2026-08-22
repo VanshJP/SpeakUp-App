@@ -51,7 +51,7 @@ enum ScreenshotSeeder {
             the first time he mentioned her, he could not finish the sentence. \
             He just grinned at the floor.
 
-            That is when I knew. He has never once been lost for words — until \
+            That is when I knew. He has never once been lost for words, until \
             her. So here is to the person who finally made my friend stop \
             talking, and to the two of them, who now get to spend a lifetime \
             interrupting each other.
@@ -173,7 +173,7 @@ enum ScreenshotSeeder {
     private static let interviewTranscript = """
     So, um, the honest answer is that I did not start out wanting to run the \
     team. I was, like, perfectly happy shipping features. What changed was a \
-    project that went sideways — we missed the date by six weeks, and, you \
+    project that went sideways, we missed the date by six weeks, and, you \
     know, nobody could say exactly when it had gone wrong. That was the part \
     that bothered me. So I started writing the decisions down, um, every week, \
     and sharing them. Six months later that habit was the reason we caught the \

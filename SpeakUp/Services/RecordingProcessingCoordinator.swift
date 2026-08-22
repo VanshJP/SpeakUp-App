@@ -192,11 +192,15 @@ final class RecordingProcessingCoordinator {
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
         let startedAt = Date()
+        // One pick feeds transcript detection, FSRS grading, and the snapshot
+        // persisted below, so all three agree even if the user edits the
+        // workout while transcription is still running.
+        let vocabWorkout = VocabChallengeService.todaysChallenge(
+            preferences: settings?.vocabChallengePreferences ?? .disabled
+        )
         let vocabWords = VocabMatcher.mergeUnique(
             settings?.vocabWords ?? [],
-            VocabChallengeService.detectionWords(
-                preferences: settings?.vocabChallengePreferences ?? .disabled
-            )
+            vocabWorkout?.words.map(\.text) ?? []
         )
         let scoreWeights = ScoreWeights(from: settings)
 
@@ -286,13 +290,22 @@ final class RecordingProcessingCoordinator {
                 persisted.transcriptionText = text
             }
             persisted.transcriptionWords = computed.1
-            persisted.analysis = computed.0
+            persisted.setAnalysis(computed.0)
             // Speaking a tracked word is its review — grade it here so the
             // schedule stays right for users who never open the Today tab.
             VocabChallengeService.recordUsage(
                 computed.0.vocabWordsUsed,
                 preferences: settings?.vocabChallengePreferences ?? .disabled
             )
+            // Snapshot the workout as it stood the moment analysis landed.
+            // The detail view scores this recording against these words
+            // forever, so an older take can never be judged by a later day's
+            // list. Only a non-empty pick writes one; failure paths above
+            // return before this, so no snapshot outlives a failed analysis.
+            if let vocabWorkout, !vocabWorkout.words.isEmpty {
+                persisted.vocabChallengeDayStamp = vocabWorkout.dayStamp
+                persisted.vocabChallengeWords = vocabWorkout.words
+            }
             persisted.isProcessing = false
             persisted.lastProcessingError = nil
             persisted.analysisBlockedByAllowance = false
