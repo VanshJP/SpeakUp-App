@@ -20,7 +20,7 @@ struct FillerPipelineTests {
 
     @Test func hesitationSoundsAreAlwaysFillers() {
         let tagged = FillerDetectionPipeline.tagFillers(in: timings(["um", "uh", "hmm"]))
-        #expect(tagged.allSatisfy(\.isFiller))
+        #expect(tagged.allSatisfy { $0.isFiller })
     }
 
     @Test func regularWordsAreNotFillers() {
