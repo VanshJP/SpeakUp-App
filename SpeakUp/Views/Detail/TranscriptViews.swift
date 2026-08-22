@@ -12,26 +12,20 @@ struct TranscriptContentView: View {
     let showVocabHighlights: Bool
     let showSpeakerTurns: Bool
     let hasSpeakerSeparation: Bool
-    /// Plays from a word's start time. The transcript is the one place where
-    /// every moment already has a timestamp attached, which makes it the
-    /// natural scrubber — tap the word, hear yourself say it.
-    var onPlayFrom: ((TimeInterval) -> Void)?
 
     var body: some View {
         if showSpeakerTurns && hasSpeakerSeparation {
             SpeakerTurnTranscriptView(
                 turns: turns,
                 showFillerHighlights: showFillerHighlights,
-                showVocabHighlights: showVocabHighlights,
-                onPlayFrom: onPlayFrom
+                showVocabHighlights: showVocabHighlights
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         } else {
             HighlightedTranscriptView(
                 words: words,
                 showFillerHighlights: showFillerHighlights,
-                showVocabHighlights: showVocabHighlights,
-                onPlayFrom: onPlayFrom
+                showVocabHighlights: showVocabHighlights
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
@@ -44,7 +38,6 @@ struct HighlightedTranscriptView: View {
     let words: [TranscriptionWord]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
-    var onPlayFrom: ((TimeInterval) -> Void)?
 
     var body: some View {
         FlowLayout(spacing: 4) {
@@ -52,8 +45,7 @@ struct HighlightedTranscriptView: View {
                 WordView(
                     word: word,
                     showFillerHighlight: showFillerHighlights && word.isFiller,
-                    showVocabHighlight: showVocabHighlights && word.isVocabWord,
-                    onPlayFrom: onPlayFrom
+                    showVocabHighlight: showVocabHighlights && word.isVocabWord
                 )
             }
         }
@@ -70,7 +62,6 @@ struct SpeakerTurnTranscriptView: View {
     let turns: [SpeakerTurn]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
-    var onPlayFrom: ((TimeInterval) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -89,8 +80,7 @@ struct SpeakerTurnTranscriptView: View {
                     HighlightedTranscriptView(
                         words: turn.words,
                         showFillerHighlights: showFillerHighlights,
-                        showVocabHighlights: showVocabHighlights,
-                        onPlayFrom: onPlayFrom
+                        showVocabHighlights: showVocabHighlights
                     )
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -108,7 +98,6 @@ struct WordView: View {
     let word: TranscriptionWord
     let showFillerHighlight: Bool
     let showVocabHighlight: Bool
-    var onPlayFrom: ((TimeInterval) -> Void)?
 
     private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
 
@@ -123,32 +112,13 @@ struct WordView: View {
     }
 
     var body: some View {
-        // The gesture is attached only when there is somewhere to play from.
-        // An unconditional `onTapGesture` would still swallow the tap when the
-        // handler is nil, which breaks the excerpt card's own tap-to-open.
-        // Unusable timestamps are the second gate: Whisper's alignment heads
-        // emit zero (or non-finite) starts often enough that tapping such a
-        // word jumped to the top of the take instead of the word itself.
-        if let onPlayFrom, hasPlayableTimestamp {
-            label
-                // A word is a small target, so the hit area is widened rather
-                // than the glyph. Inset matches half the layout spacing so
-                // neighbours meet without overlapping and stealing taps. No
-                // button chrome: 300 buttons would read as a form, not prose.
-                .contentShape(.rect.inset(by: -2))
-                .onTapGesture { onPlayFrom(word.start) }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Plays from this word")
-        } else {
-            label
-        }
-    }
-
-    /// A start of exactly zero is only trustworthy for the first word of a
-    /// take; anywhere else it is a dropped alignment stamp. The drawer's play
-    /// button still covers "from the top", so no gesture is the safe default.
-    private var hasPlayableTimestamp: Bool {
-        word.start.isFinite && word.start > 0
+        // Plain prose — no tap gesture. Tapping the transcript used to start
+        // playback from the tapped word, which read as the recording playing
+        // itself whenever someone just wanted to read or select text.
+        // Playback starts only from explicit controls: the drawer's play
+        // button, the waveform scrubber, and the play-chips on fillers,
+        // swaps, and coach tips.
+        label
     }
 
     private var label: some View {

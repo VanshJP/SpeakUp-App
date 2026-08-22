@@ -45,15 +45,17 @@ extension View {
 
 // MARK: - Glass Section Header
 
-struct GlassSectionHeader: View {
+struct GlassSectionHeader<Accessory: View>: View {
     let title: String
     let icon: String?
-    
-    init(_ title: String, icon: String? = nil) {
+    var accessory: Accessory
+
+    init(_ title: String, icon: String? = nil, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
         self.icon = icon
+        self.accessory = accessory()
     }
-    
+
     var body: some View {
         HStack(spacing: 8) {
             if let icon {
@@ -65,7 +67,54 @@ struct GlassSectionHeader: View {
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.92))
             Spacer()
+            accessory
         }
         .padding(.horizontal, 4)
+    }
+}
+
+extension GlassSectionHeader where Accessory == EmptyView {
+    init(_ title: String, icon: String? = nil) {
+        self.init(title, icon: icon) { EmptyView() }
+    }
+}
+
+// MARK: - Glass Card Title
+
+/// Card-level title row — the quieter sibling of `GlassSectionHeader`: same
+/// anatomy (icon, name, trailing accessory), one register down in size.
+/// Chart cards and multi-card sections use it so card headers stop being
+/// hand-rolled `Label`s with drifting fonts, while section headers keep the
+/// headline weight above them.
+struct GlassCardTitle<Accessory: View>: View {
+    let title: String
+    let icon: String?
+    var accessory: Accessory
+
+    init(_ title: String, icon: String? = nil, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.icon = icon
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.92))
+            Spacer()
+            accessory
+        }
+    }
+}
+
+extension GlassCardTitle where Accessory == EmptyView {
+    init(_ title: String, icon: String? = nil) {
+        self.init(title, icon: icon) { EmptyView() }
     }
 }

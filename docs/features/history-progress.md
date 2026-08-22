@@ -21,19 +21,40 @@ language profile, metric charts, then-vs-now replay, PDF journal export.
 | Model | `ProgressCardData.swift` |
 | Tests | `SpeakUpTests/LexiconInsightsTests.swift`, `SpeakUpTests/ScenarioReadinessTests.swift` |
 
-## Progress page shape (conclusion → evidence → reference)
+## Progress page shape (conclusion → evidence → guidance)
 
-The Progress section answers three questions in order:
+`HistoryView.progressContent` owns the page rhythm in one `VStack(spacing: 20)`
+— every chapter sits the same distance apart. Order follows the user's actual
+intent: verdict, then the charts they came for, then guidance.
 
 1. **Where am I and which way am I moving?** — one hero band
-   (`ProgressChartsContent.heroBand`) once ≥ 2 analyzed sessions exist: latest
-   score, a momentum verdict (Improving / Steady / Slipping from recent-half vs
-   early-half mean of all session scores), and cadence stats (Best · Average ·
-   This week). Replaces the former "Your Journey" card plus three stat cards.
-2. **Which situation needs work?** — the scenario readiness family (below).
-3. **Reference** — chart tabs (`ChartTab`: Score / Words / Fillers / Pace /
-   Skills / Activity) and the secondary tools row (compare, replay, goals,
-   journal) that `HistoryView.progressContent` appends.
+   (`ProgressChartsContent.heroBand`) shown only once loading finished and
+   ≥ 2 analyzed sessions exist: the latest score inside a ring gauge (scale
+   made physical), the momentum verdict opposite it ("+N pts lately" caption
+   beneath), then cadence stats (Best · Average · This week).
+2. **Evidence — trends first.** The trends chapter (`GlassSectionHeader`
+   "Trends" with a "N sessions" accessory): chart tabs (`ChartTab`: Score /
+   Pace / Fillers / Language / Skills / Activity), time-range menu, and the
+   selected chart. All trend plots share `TrendChart.plotHeight` (210) so tab
+   switches don't reflow; card headers use `GlassCardTitle`. The picker is
+   icon-free text segments in a `ViewThatFits`: equal-width single row when
+   six labels fit, scrolling rail at accessibility sizes — every destination
+   visible, nothing hiding behind an unmarked scroll. Skills renders
+   `SkillBreakdownCard` (the same `SubscoreRadarChart` sunburst as the
+   session detail hero).
+3. **Guidance — which situation needs work?** The scenario family (below)
+   collapsed into ONE ranked card under `GlassSectionHeader("Where to
+   Improve")`.
+
+State is consolidated at the body level: while loading → bare spinner;
+< 2 analyzed sessions → one `EmptyStateCard` ("Your Progress Starts Here" /
+"One Take In"). No scattered empty states firing at once.
+
+The tail after `ProgressChartsContent`: Practice Tools only — a 2×2 grid of
+`ToolTileLabel` tiles (compare, listen back, goals, journal; compare/listen
+hidden until two summaries exist). Word Bank usage moved inside the Language
+tab (`ProgressChartsContent.vocabWords` → `LanguageInsightsView`), so the
+page ends at tools instead of an orphaned chip rail.
 
 ## Scenario readiness
 
@@ -58,26 +79,64 @@ readiness cards so "how ready am I" gets a concrete object.
     Personal Growth, Describe & Explain, Current Events & Opinions
   - **Everything Else** ← freeform takes and unrecognized custom categories;
     rendered only when such sessions exist, never as an invitation.
-- **Card contents:** ring + score, band label (Ready / Strong position /
-  Getting there / Building blocks), momentum badge (half-split score trend
-  via `TrajectorySummary`), and a "Holding it back: 'like' ×12" line from the
-  bucket's dominant crutch.
+- **Card hierarchy:** one ranked card, weakest first (the section header says
+  so). Each practiced scenario is a row that stacks downward instead of
+  splitting into two columns: title + momentum glyph + score on one baseline,
+  a `TickMeter` at the score's fraction (the same meter `ScoreHeroCard` uses,
+  so "how far along" reads without comparing bare numbers), a meta line
+  "band · N sessions · early read", and — when there is one — a full-width
+  line naming the habit costing the most ("'really' costs you most here —
+  1× so far"). That line used to share a truncating caption with the session
+  count and got cut mid-word. Unpracticed core scenarios follow in the same
+  list as dimmed rows ending in "Not yet" (previously a `plus.circle` that
+  looked tappable and was wired to nothing). A quiet footer line carries the
+  combined readiness composite.
 - **Thin-data honesty:** < 4 sessions (`ScenarioReadiness.confidenceThreshold`)
   marks the card "early read" and caps its score at 84
   (`earlyReadScoreCap`) so thin data can never claim "Ready".
-- **Ordering rule:** practiced cards sort lowest readiness first (ties broken
+- **Momentum has one encoding.** `ScenarioMomentum.symbolName` / `.label` /
+  `.tint` (extension in `ScenarioReadinessSection.swift`, mirroring
+  `CrutchCategory.badgeColor`) back both the hero's filled pill and the
+  readiness rows' inline glyph. They were separate switches and had already
+  drifted — slipping was red in one and amber in the other on the same
+  screen. Slipping is amber: a dipping score wants attention, `AppColors.error`
+  reads as broken.
+- **Ordering rule:** practiced rows sort lowest readiness first (ties broken
   by more sessions). Justification: the hero band already answered
-  trajectory; the section's next job is directing attention to the
-  highest-leverage gap. Unpracticed core scenarios render as compact
-  invitation rows pointing at what practicing there builds.
-- **Aggregate survival:** the old composite survives only as the small
-  "All scenarios · N" chip in the section header — the full-card slot belongs
-  to concrete scenarios now.
+  trajectory; this section's job is directing attention to the
+  highest-leverage gap.
 
-## Words tab (language profile)
+## Language tab (language profile)
 
-The **Words** tab (`ChartTab.words`) renders the cross-session lexicon profile
-as supporting detail under the scenario family.
+The **Language** tab (`ChartTab.words`) renders the cross-session lexicon
+profile plus Word Bank practice words — deliberately the ONE word home on the
+page. Every section explains itself: each card carries one line saying what it
+counts and why that matters, impact verbs and recurring topics share one "Word
+Mix" card with labeled groups, and "Word Bank in Practice" states what it
+counts ("Saved words from your daily workouts, counted across your takes").
+
+- **Advice is never a chip.** Crutch-word swaps render as one wrapped
+  sentence ("Try instead  'significant' · cut it · 'genuinely' sparingly"),
+  not capsules. As capsules they sat one card above the Word Mix chips and
+  read as more words the speaker had said — and a pill reading "cut it" is
+  shaped identically to a pill reading "significant". In running text the
+  quoted entries are the wording to borrow and the unquoted ones are the move
+  to make.
+- **One chip family.** `WordCountChip` has a single form — tinted capsule,
+  hairline, quiet tinted count. The filled-badge variant is gone; three word
+  lists in a column previously used three different chip treatments and read
+  as three unrelated systems. Tint plus the group label carries the meaning.
+- **Topic hygiene.** `LexiconInsightsEngine.stopwords` covers contractions
+  ("i'm", "wasn't" — `NLTokenizer` keeps them whole and `normalize` only trims
+  the ends, so the stems never match) and the speech verbs that frame a topic
+  without being one ("want", "know", "think", "say", "tell"). Untreated they
+  outranked real subjects in "Topics you return to". The list stops there on
+  purpose: "make", "take" and "use" stay out, because "make films" is the kind
+  of subject it must not eat. Blast radius is `contentWords` only — fillers,
+  hedges, intensifiers, vague nouns and impact verbs are all matched and
+  `continue`d earlier in the loop, which is also the trap: a word in both
+  lists silently takes the earlier branch.
+  `stopwordsStayDisjointFromTheClassifiedLists` guards it.
 
 - **Engine:** `LexiconInsightsEngine` (pure, `nonisolated`) consumes
   `[LexiconSessionInput]` — one per recording: date, transcript, pipeline

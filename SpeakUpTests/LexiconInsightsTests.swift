@@ -331,4 +331,40 @@ struct LexiconInsightsTests {
         let fallback = SessionWordHit(word: "zzzunmapped", category: .vague, count: 4, timestamps: [])
         #expect(fallback.swaps == ["name the specifics"])
     }
+
+    /// The word loop tests `intensifierWords` / `vagueWords` / `powerVerbs`
+    /// before `stopwords` and `continue`s on each hit, so a word in both places
+    /// is silently dropped from the earlier list's counts. Nothing at the call
+    /// site makes that visible — this does.
+    @Test
+    func stopwordsStayDisjointFromTheClassifiedLists() {
+        let stopwords = LexiconInsightsEngine.stopwords
+
+        #expect(stopwords.isDisjoint(with: LexiconInsightsEngine.intensifierWords))
+        #expect(stopwords.isDisjoint(with: LexiconInsightsEngine.vagueWords))
+        #expect(stopwords.isDisjoint(with: LexiconInsightsEngine.powerVerbs))
+        #expect(stopwords.isDisjoint(with: Set(LexiconInsightsEngine.hedgePhrases)))
+    }
+
+    /// `NLTokenizer` keeps contractions whole and `normalize` only trims the
+    /// ends, so "i'm" never reduces to the stopword "i".
+    @Test
+    func contractionsDoNotSurfaceAsTopics() {
+        let profile = LexiconInsightsEngine.profile(from: [
+            makeSession(
+                "I'm building the migration and it's the migration that wasn't finished. I'm proud of the migration.",
+                daysAgo: 2
+            ),
+            makeSession(
+                "The migration shipped. I'm glad it's done and it wasn't easy.",
+                daysAgo: 1
+            )
+        ])
+
+        let topics = profile.contentWords.map(\.word)
+        #expect(!topics.contains("i'm"))
+        #expect(!topics.contains("it's"))
+        #expect(!topics.contains("wasn't"))
+        #expect(topics.contains("migration"))
+    }
 }

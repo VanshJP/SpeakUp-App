@@ -887,8 +887,7 @@ struct RecordingDetailView: View {
                         showFillerHighlights: showFillerHighlights,
                         showVocabHighlights: showVocabHighlights,
                         showSpeakerTurns: showSpeakerTurns,
-                        hasSpeakerSeparation: hasSpeakerSeparation,
-                        onPlayFrom: { playFrom($0) }
+                        hasSpeakerSeparation: hasSpeakerSeparation
                     )
 
                     if let analysis = recording.analysis, !analysis.vocabWordsUsed.isEmpty {

@@ -13,7 +13,8 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 | Glass | `SpeakUp/Theme/GlassStyles.swift` — cards, buttons, modifiers |
 | Type / motion | `AppType.swift`, `AppMotion.swift` |
 | Glass helpers | `SpeakUp/Extensions/View+Glass.swift`, `Haptics.swift` |
-| Components | `SpeakUp/Views/Components/` — `GlassCard`, `GlassButton`, `MetricTile`, `RingStatsView`, `FlowLayout`, `RichTextEditor`, `AppTourView`, … |
+| Components | `SpeakUp/Views/Components/` — `GlassCard`, `GlassButton`, `MetricTile`, `RingStatsView`, `FlowLayout`, `RichTextEditor`, `AppTourView`, `ToolTile`, … |
+| Header roles | Section = `GlassSectionHeader` (headline, page chapters). Card = `GlassCardTitle` (subheadline, chart/insight cards). Both take a trailing accessory closure. |
 
 ## Hard rules
 

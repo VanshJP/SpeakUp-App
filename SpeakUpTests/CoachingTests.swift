@@ -490,10 +490,19 @@ struct CoachingPromptTests {
         let full = CoachingPrompt.system(context: CoachingContext())
         let compact = CoachingPrompt.system(context: CoachingContext(), compact: true)
 
-        #expect(full.contains("never a bare number"))
-        #expect(compact.contains("never a bare number"))
+        // Compact only declines to append the benchmarks tail, so it is a
+        // strict prefix of full. Asserting the shape means a reworded rule
+        // can't fail this test while the rule is still there — the previous
+        // version pinned a hand-copied sentence and broke on an edit that
+        // changed nothing about the behaviour.
+        #expect(full.hasPrefix(compact))
+
+        // The ban itself, and the names that make it enforceable. Short
+        // fragment on purpose: if "bare number" stops appearing, the rule
+        // really has changed and this SHOULD fail.
+        #expect(compact.contains("bare number"))
+        #expect(compact.contains(CoachingPrompt.dimensionNameList))
         for title in CoachDimension.allCases.map(\.title) {
-            #expect(full.contains(title))
             #expect(compact.contains(title))
         }
     }

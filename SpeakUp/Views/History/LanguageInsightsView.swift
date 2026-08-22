@@ -4,11 +4,16 @@ import Charts
 // MARK: - Language Insights View
 
 /// Supporting detail under scenario readiness: the cross-session lexicon
-/// profile. The former aggregate Interview Readiness card and the By Practice
-/// Type rows lived here; both are superseded by the per-scenario readiness
-/// cards (`ScenarioReadinessSection`).
+/// profile plus the Word Bank practice words. This tab is deliberately the
+/// ONE language home on the Progress page — every section names what it
+/// counts and why it matters, and suggestions read as sentences ("Try
+/// instead: …"), never as unlabeled chips.
 struct LanguageInsightsView: View {
     let profile: LexiconProfile?
+    /// Saved Word Bank words spotted across takes. Lives here so the page
+    /// has one word story instead of a lexicon tab plus an orphaned chip
+    /// rail at the page tail.
+    var vocabWords: [VocabCount] = []
 
     var body: some View {
         VStack(spacing: 12) {
@@ -19,12 +24,12 @@ struct LanguageInsightsView: View {
                     crutchWordsCard(profile)
                 }
 
-                if !profile.powerVerbs.isEmpty {
-                    powerVerbsCard(profile)
+                if !profile.powerVerbs.isEmpty || !profile.contentWords.isEmpty {
+                    wordMixCard(profile)
                 }
 
-                if !profile.contentWords.isEmpty {
-                    commonWordsCard(profile)
+                if !vocabWords.isEmpty {
+                    vocabPracticeCard
                 }
 
                 if profile.trendPoints.count >= 2 {
@@ -50,12 +55,7 @@ struct LanguageInsightsView: View {
     private func wordPrintHero(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Your Language Print", systemImage: "character.magnify")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
+                GlassCardTitle("Your Language Print", icon: "character.magnify") {
                     Text("\(profile.totalWords) words tracked")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -85,6 +85,10 @@ struct LanguageInsightsView: View {
                         alignment: .trailing
                     )
                 }
+
+                Text("Counts per 100 spoken words.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -129,16 +133,15 @@ struct LanguageInsightsView: View {
     private func crutchWordsCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Crutch Words", systemImage: "exclamationmark.bubble.fill")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
+                GlassCardTitle("Crutch Words", icon: "exclamationmark.bubble.fill") {
                     Text("lower is better")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+
+                Text("Words that soften a point instead of making it.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
 
                 VStack(spacing: 0) {
                     ForEach(Array(profile.crutchWords.prefix(6).enumerated()), id: \.element.id) { index, usage in
@@ -146,14 +149,14 @@ struct LanguageInsightsView: View {
                             MetricRowDivider()
                         }
 
-                        crutchRow(rank: index + 1, usage: usage)
+                        crutchRow(usage)
                     }
                 }
             }
         }
     }
 
-    private func crutchRow(rank: Int, usage: WordUsageSummary) -> some View {
+    private func crutchRow(_ usage: WordUsageSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("\u{201C}\(usage.word)\u{201D}")
@@ -180,16 +183,21 @@ struct LanguageInsightsView: View {
             .accessibilityLabel("\(usage.word), \(categoryLabel(usage.category)), \(usage.count) times, \(directionLabel(usage.direction)).")
 
             if !usage.swapsPreview.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(usage.swapsPreview, id: \.self) { swap in
-                        Text(swap)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(AppColors.primary.opacity(0.13)))
-                    }
-                }
+                // Advice, not vocabulary. As capsules these sat one card above
+                // the Word Mix chips and read as "more words you said" — and a
+                // pill saying "cut it" is indistinguishable from a pill saying
+                // "significant". As a sentence, the quoted entries are the
+                // wording to borrow and the unquoted ones are the move to make.
+                (
+                    Text("Try instead  ").foregroundStyle(.tertiary)
+                        + Text(usage.swapsPreview.joined(separator: "  ·  "))
+                        .foregroundStyle(AppColors.primary)
+                )
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // The interpunct scans well but VoiceOver reads it aloud.
+                .accessibilityLabel("Try instead: \(usage.swapsPreview.joined(separator: ", "))")
             }
         }
         .padding(.vertical, 8)
@@ -229,42 +237,93 @@ struct LanguageInsightsView: View {
         direction.rawValue
     }
 
-    // MARK: Power verbs
+    // MARK: Word mix
 
-    private func powerVerbsCard(_ profile: LexiconProfile) -> some View {
+    /// Impact verbs and recurring topics in ONE card with labeled groups —
+    /// the former two separate chip stacks read as two unexplained word
+    /// lists; now the card says what each group is for.
+    private func wordMixCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Impact Verbs You Lean On", systemImage: "bolt.fill")
-                        .font(.subheadline.weight(.semibold))
+                GlassCardTitle("Word Mix", icon: "square.grid.2x2")
 
-                    Spacer()
-
-                    Text("higher is better")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                if !profile.powerVerbs.isEmpty {
+                    wordGroup(
+                        label: "Impact verbs",
+                        context: "Action words that land a result. These are what lift the Impact rate above.",
+                        words: Array(profile.powerVerbs.prefix(15)),
+                        tint: AppColors.success
+                    )
                 }
 
-                FlowLayout(spacing: 8) {
-                    ForEach(profile.powerVerbs.prefix(15)) { usage in
-                        WordCountChip(word: usage.word, count: usage.count, color: AppColors.success)
+                if !profile.contentWords.isEmpty {
+                    if !profile.powerVerbs.isEmpty {
+                        MetricRowDivider()
                     }
+
+                    wordGroup(
+                        label: "Topics you return to",
+                        context: "What your answers keep circling back to. A short list means a narrow story bank — worth widening before an interview.",
+                        words: Array(profile.contentWords.prefix(12)),
+                        tint: AppColors.primary
+                    )
                 }
             }
         }
     }
 
-    // MARK: Most used words
+    /// Label, one line of why it matters, then the chips. One tint drives the
+    /// label and its chips together — a group whose heading disagreed with its
+    /// own chips is the drift this consolidation exists to prevent.
+    private func wordGroup(
+        label: String,
+        context: String,
+        words: [WordUsageSummary],
+        tint: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
 
-    private func commonWordsCard(_ profile: LexiconProfile) -> some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Most Used Content Words", systemImage: "text.justify.left")
-                    .font(.subheadline.weight(.semibold))
+                Text(context)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            FlowLayout(spacing: 8) {
+                ForEach(words) { usage in
+                    WordCountChip(word: usage.word, count: usage.count, color: tint)
+                }
+            }
+        }
+    }
+
+    // MARK: Word Bank practice
+
+    /// The user's saved practice words and how often they landed in real
+    /// takes. Formerly a clipped chip rail at the very bottom of the page;
+    /// here it sits inside the language story with one line of context.
+    private var vocabPracticeCard: some View {
+        let totalUses = vocabWords.reduce(0) { $0 + $1.count }
+
+        return GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                GlassCardTitle("Word Bank in Practice", icon: "character.book.closed") {
+                    Text("\(totalUses) uses")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Saved words from your daily workouts, counted across your takes.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
 
                 FlowLayout(spacing: 8) {
-                    ForEach(profile.contentWords.prefix(12)) { usage in
-                        WordCountChip(word: usage.word, count: usage.count, color: AppColors.primary, showsBadge: false)
+                    ForEach(vocabWords.prefix(15), id: \.word) { item in
+                        WordCountChip(word: item.word, count: item.count, color: AppColors.categoryBrandBright)
                     }
                 }
             }
@@ -276,14 +335,11 @@ struct LanguageInsightsView: View {
     private func trendCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Language Over Time", systemImage: "chart.line.uptrend.xyaxis")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
-                    legendDot(color: AppColors.categoryAmber, label: "Weak")
-                    legendDot(color: AppColors.success, label: "Impact")
+                GlassCardTitle("Language Over Time", icon: "chart.line.uptrend.xyaxis") {
+                    HStack(spacing: 10) {
+                        legendDot(color: AppColors.categoryAmber, label: "Weak")
+                        legendDot(color: AppColors.success, label: "Impact")
+                    }
                 }
 
                 Chart {
@@ -321,7 +377,7 @@ struct LanguageInsightsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .frame(height: 180)
+                .frame(height: TrendChart.plotHeight)
                 .accessibilityLabel(
                     "Weekly weak language versus impact verb rates across \(profile.trendPoints.count) weeks."
                 )
@@ -350,8 +406,16 @@ struct LanguageInsightsView: View {
     private func suggestionsCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Coach Notes", systemImage: "lightbulb.fill")
-                    .font(.subheadline.weight(.semibold))
+                GlassCardTitle("Coach Notes", icon: "lightbulb.fill")
+
+                // Says only what `makeSuggestions` actually does: it fires a
+                // fixed set of rules against the numbers on this page and
+                // keeps the first four. It does NOT rank by impact, and the
+                // list can include positive notes — so no "N things to fix".
+                Text("What your numbers on this page add up to. At most four at a time.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 VStack(spacing: 0) {
                     ForEach(Array(profile.suggestions.enumerated()), id: \.element.id) { index, suggestion in

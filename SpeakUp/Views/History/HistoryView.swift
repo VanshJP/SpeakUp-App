@@ -10,7 +10,6 @@ struct HistoryView: View {
     @State private var summaryToDelete: RecordingSummary?
     @State private var showingDeleteAlert = false
     @State private var selectedSection: HistorySection = .recordings
-    @Query private var userSettings: [UserSettings]
 
     var onSelectRecording: (String) -> Void
     var onShowBeforeAfter: () -> Void = {}
@@ -108,73 +107,54 @@ struct HistoryView: View {
 
     // MARK: - Progress Content
 
-    // The Progress tab now shows the charts directly — the same experience the
-    // old "Progress Charts" card used to navigate to. Secondary tools
-    // (compare, replay, goals, journal) are folded into one compact card.
-    @ViewBuilder
+    // The Progress tab shows the charts directly — the same experience the
+    // old "Progress Charts" card used to navigate to. One VStack owns the
+    // page rhythm: every chapter (conclusion, trends, guidance, tools) sits
+    // 20pt apart. Word Bank usage renders inside the Language tab now, so the
+    // page ends at Practice Tools instead of an orphaned chip rail.
     private var progressContent: some View {
-        ProgressChartsContent()
-        progressToolsSection
-        vocabUsageSection
+        VStack(spacing: 20) {
+            ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
+            progressToolsSection
+        }
     }
 
     // MARK: - Progress Tools (compact secondary actions)
 
     private var progressToolsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("More", icon: "ellipsis.circle")
+            GlassSectionHeader("Practice Tools", icon: "ellipsis.circle")
 
-            GlassCard(padding: 16) {
-                VStack(spacing: 0) {
-                    if viewModel.summaries.count >= 2 {
-                        NavigationLink { ComparisonView() } label: {
-                            toolRowLabel(icon: "arrow.left.arrow.right", title: "Compare Sessions")
-                        }
-                        .buttonStyle(GlassPressStyle())
-                        toolDivider
-                        Button { onShowBeforeAfter() } label: {
-                            toolRowLabel(icon: "headphones", title: "Listen to Progress")
-                        }
-                        .buttonStyle(GlassPressStyle())
-                        toolDivider
-                    }
-
-                    Button { onShowGoals() } label: {
-                        toolRowLabel(icon: "target", title: "Goals")
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
+                if viewModel.summaries.count >= 2 {
+                    NavigationLink { ComparisonView() } label: {
+                        ToolTileLabel(icon: "arrow.left.arrow.right", title: "Compare Sessions", tint: AppColors.categoryIndigo)
                     }
                     .buttonStyle(GlassPressStyle())
-                    toolDivider
-                    Button { onShowJournalExport() } label: {
-                        toolRowLabel(icon: "square.and.arrow.up", title: "Export Journal")
+
+                    Button { onShowBeforeAfter() } label: {
+                        ToolTileLabel(icon: "headphones", title: "Listen to Progress", tint: AppColors.categoryPlum)
                     }
                     .buttonStyle(GlassPressStyle())
                 }
+
+                Button { onShowGoals() } label: {
+                    ToolTileLabel(icon: "target", title: "Goals", tint: AppColors.categorySage)
+                }
+                .buttonStyle(GlassPressStyle())
+
+                Button { onShowJournalExport() } label: {
+                    ToolTileLabel(icon: "square.and.arrow.up", title: "Export Journal", tint: AppColors.categoryAmber)
+                }
+                .buttonStyle(GlassPressStyle())
             }
         }
-    }
-
-    private var toolDivider: some View {
-        Rectangle()
-            .fill(.white.opacity(0.06))
-            .frame(height: 0.5)
-    }
-
-    private func toolRowLabel(icon: String, title: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(AppColors.primary)
-                .frame(width: 26)
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 14)
-        .contentShape(Rectangle())
     }
 
     // MARK: - Pinned Section Picker
@@ -194,40 +174,6 @@ struct HistoryView: View {
             label: { $0.label },
             icon: { $0.icon }
         )
-    }
-
-    // MARK: - Vocab Usage Section
-
-    @ViewBuilder
-    private var vocabUsageSection: some View {
-        let hasVocabWords = !(userSettings.first?.vocabWords ?? []).isEmpty
-        let aggregated = viewModel.aggregatedVocab
-
-        if hasVocabWords && !aggregated.isEmpty {
-            let totalUses = aggregated.reduce(0) { $0 + $1.count }
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Vocab Words", systemImage: "character.book.closed")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Text("\(totalUses) uses")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(aggregated.prefix(15), id: \.word) { item in
-                            WordCountChip(word: item.word, count: item.count, color: AppColors.success)
-                        }
-                    }
-                }
-                .scrollIndicators(.hidden)
-            }
-        }
     }
 
     // MARK: - Filter Menu

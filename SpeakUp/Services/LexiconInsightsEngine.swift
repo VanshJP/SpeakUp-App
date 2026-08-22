@@ -275,6 +275,14 @@ nonisolated enum LexiconInsightsEngine {
         "establishes", "establishing"
     ]
 
+    /// Words that never become a "topic you return to".
+    ///
+    /// Blast radius is exactly `contentWords`: by the time this check runs,
+    /// fillers, hedges, intensifiers, vague nouns and impact verbs have each
+    /// been counted and `continue`d, so nothing here can suppress a crutch or
+    /// an impact verb. The corollary is a trap — a word listed both here and
+    /// in `intensifierWords` / `vagueWords` / `powerVerbs` silently takes the
+    /// earlier branch, so this list must stay disjoint from those.
     static let stopwords: Set<String> = [
         "the", "a", "an", "and", "or", "but", "so", "because", "if", "then", "than",
         "that", "this", "these", "those", "i", "me", "my", "mine", "we", "us", "our",
@@ -287,7 +295,23 @@ nonisolated enum LexiconInsightsEngine {
         "where", "not", "no", "yes", "yeah", "okay", "ok", "right", "well", "there",
         "here", "up", "down", "out", "off", "over", "under", "again", "also", "too",
         "even", "still", "back", "now", "one", "two", "all", "any", "some", "more",
-        "most", "other"
+        "most", "other",
+        // Contractions. `NLTokenizer` emits "i'm" and "wasn't" as single
+        // tokens and `normalize` only strips punctuation from the ends, so the
+        // apostrophe survives and the stems above never match. Untreated they
+        // outranked real subjects in "Topics you return to".
+        "i'm", "i've", "i'll", "i'd", "we're", "we've", "we'll", "we'd",
+        "you're", "you've", "you'll", "you'd", "they're", "they've", "they'll",
+        "he's", "she's", "it's", "that's", "there's", "here's", "what's",
+        "who's", "let's", "isn't", "aren't", "wasn't", "weren't", "don't",
+        "doesn't", "didn't", "can't", "cannot", "couldn't", "won't", "wouldn't",
+        "shouldn't", "hasn't", "haven't", "hadn't", "ain't",
+        // Speech verbs that frame a topic without being one — "I *think* the
+        // migration mattered" is about the migration. Deliberately narrow:
+        // "make", "take" and "use" are NOT here, because "make films" and
+        // "take deposits" are exactly the subjects this list must not eat.
+        "want", "wants", "wanted", "know", "knows", "knew", "think", "thinks",
+        "thought", "say", "says", "said", "tell", "tells", "told"
     ]
 
     static let alternatives: [String: [String]] = [

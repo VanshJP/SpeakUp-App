@@ -13,6 +13,12 @@ nonisolated struct ChartRecordingPoint: Identifiable, Hashable, Sendable {
     let fillerCount: Int
 }
 
+/// Shared plot height for every Progress trend chart. One value, because a
+/// tab switch that also resizes the well below it reads as layout jitter.
+enum TrendChart {
+    static let plotHeight: CGFloat = 210
+}
+
 /// The full charts experience — trajectory hero, scenario readiness, then
 /// chart-type picker, time range, and the selected chart. No background /
 /// scroll / nav of its own so it can be embedded (History Progress tab) or
@@ -24,6 +30,10 @@ nonisolated struct ChartRecordingPoint: Identifiable, Hashable, Sendable {
 struct ProgressChartsContent: View {
     @Environment(\.modelContext) private var modelContext
 
+    /// Saved Word Bank usage, rendered inside the Language tab. Optional so
+    /// the standalone wrapper (`ProgressChartsView`) needs no plumbing.
+    var vocabWords: [VocabCount] = []
+
     // Sorted date-descending, analyzed recordings only.
     @State private var points: [ChartRecordingPoint] = []
     @State private var latestSubscores: SpeechSubscores?
@@ -33,29 +43,19 @@ struct ProgressChartsContent: View {
     @State private var selectedTab: ChartTab = .score
     @State private var timeRange: TimeRange = .thirtyDays
     @State private var lexiconProfile: LexiconProfile?
+    @State private var heroRingShown = false
 
     enum ChartTab: String, CaseIterable, Identifiable {
         case score = "Score"
-        case words = "Words"
-        case fillers = "Fillers"
         case pace = "Pace"
+        case fillers = "Fillers"
+        case words = "Language"
         case skills = "Skills"
         case activity = "Activity"
 
         var id: String { rawValue }
 
         var usesTimeRange: Bool { self != .skills && self != .words }
-
-        var icon: String {
-            switch self {
-            case .score: return "chart.xyaxis.line"
-            case .words: return "textformat"
-            case .fillers: return "exclamationmark.bubble.fill"
-            case .pace: return "metronome"
-            case .skills: return "star.fill"
-            case .activity: return "calendar"
-            }
-        }
     }
 
     enum TimeRange: String, CaseIterable, Identifiable {
@@ -92,55 +92,103 @@ struct ProgressChartsContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Hero band: the page's first answer — latest score, which way
-            // things are moving, and how often you are showing up.
-            if points.count >= 2 {
-                heroBand
+        Group {
+            if isLoading {
+                loadingState
+            } else if points.count < 2 {
+                earlyState
+            } else {
+                VStack(spacing: 20) {
+                    // Conclusion — where am I and which way am I moving.
+                    heroBand
+
+                    // Evidence — trends first. The user comes here for the
+                    // charts; guidance waits until the data has been seen.
+                    trendsSection
+
+                    // Guidance — which situation needs work.
+                    ScenarioReadinessSection(
+                        cards: scenarioCards,
+                        overallScore: lexiconProfile?.interviewReadiness?.score,
+                        analyzedSessions: lexiconProfile?.analyzedSessionCount ?? 0
+                    )
+                }
+            }
+        }
+        .task { await loadPoints() }
+    }
+
+    private var loadingState: some View {
+        ProgressView()
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 56)
+    }
+
+    /// One calm card replaces the formerly scattered empty states — the hero
+    /// hiding, the readiness quiet-state, and a bare chart well all firing at
+    /// once read as three broken things instead of one early page.
+    private var earlyState: some View {
+        EmptyStateCard(
+            icon: "chart.line.uptrend.xyaxis",
+            title: points.isEmpty ? "Your Progress Starts Here" : "One Take In",
+            message: points.isEmpty
+                ? "Record your first session. After two takes Big Talk maps where you stand and which way you are moving."
+                : "One more recorded session and your trajectory, readiness map, and trend charts appear here."
+        )
+    }
+
+    private var trendsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Trends", icon: "chart.xyaxis.line") {
+                Text("\(points.count) sessions")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            // Scenario readiness family. Replaces the former single aggregate
-            // Interview Readiness card, whose composite now survives as the
-            // section's "All scenarios" chip and is computed per scenario
-            // bucket instead.
-            ScenarioReadinessSection(
-                cards: scenarioCards,
-                overallScore: lexiconProfile?.interviewReadiness?.score,
-                analyzedSessions: lexiconProfile?.analyzedSessionCount ?? 0
-            )
+            // Chart picker + time range. Six short labels render as one
+            // equal-width segment row whenever they fit — every destination
+            // visible, nothing hiding behind an unmarked scroll. At
+            // accessibility sizes it drops to a scrolling rail instead of
+            // truncating.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    SectionPicker(
+                        sections: ChartTab.allCases,
+                        selection: $selectedTab,
+                        label: { $0.rawValue },
+                        layout: .equalWidth,
+                        framed: false
+                    )
 
-            // Chart picker + time range. The range used to be a second
-            // full-width picker row; as a menu it costs one control instead
-            // of four and only appears where it applies.
-            //
-            // The picker is unframed because the History screen already stacks
-            // a framed picker directly above this row. It is bounded to the
-            // leftover width (and yields it via the low layout priority) so the
-            // menu keeps its intrinsic width instead of being pushed off-screen.
-            HStack(spacing: 10) {
-                SectionPicker(
-                    sections: ChartTab.allCases,
-                    selection: $selectedTab,
-                    label: { $0.rawValue },
-                    icon: { $0.icon },
-                    layout: .scrollable,
-                    framed: false
-                )
-                .frame(maxWidth: .infinity)
-                .layoutPriority(0)
+                    timeRangeSlot
+                }
 
-                if selectedTab.usesTimeRange {
-                    timeRangeMenu
-                        .fixedSize()
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionPicker(
+                        sections: ChartTab.allCases,
+                        selection: $selectedTab,
+                        label: { $0.rawValue },
+                        layout: .scrollable,
+                        framed: false
+                    )
+                    .frame(maxWidth: .infinity)
+                    .layoutPriority(0)
+
+                    timeRangeSlot
                 }
             }
 
             // Chart content
             if selectedTab == .words {
-                LanguageInsightsView(profile: lexiconProfile)
+                LanguageInsightsView(profile: lexiconProfile, vocabWords: vocabWords)
             } else if filteredPoints.isEmpty {
-                if !isLoading {
-                    emptyState
+                GlassCard {
+                    EmptyStateInline(
+                        icon: "chart.line.uptrend.xyaxis",
+                        message: points.isEmpty
+                            ? "Complete a few recordings to see your progress trends."
+                            : "No sessions in this window yet. Try widening the time range."
+                    )
                 }
             } else {
                 switch selectedTab {
@@ -151,15 +199,25 @@ struct ProgressChartsContent: View {
                 case .pace:
                     PaceTrendChart(points: filteredPoints)
                 case .skills:
-                    SubscoreRadarView(subscores: latestSubscores)
+                    SkillBreakdownCard(subscores: latestSubscores, overallScore: points.first?.score ?? 0)
                 case .activity:
                     SessionFrequencyChart(points: filteredPoints)
                 case .words:
-                    LanguageInsightsView(profile: lexiconProfile)
+                    LanguageInsightsView(profile: lexiconProfile, vocabWords: vocabWords)
                 }
             }
         }
-        .task { await loadPoints() }
+    }
+
+    /// The range menu holds its slot on every tab — hidden and inert where a
+    /// range doesn't apply, so switching to Skills or Language doesn't reflow
+    /// the row.
+    private var timeRangeSlot: some View {
+        timeRangeMenu
+            .fixedSize()
+            .opacity(selectedTab.usesTimeRange ? 1 : 0)
+            .disabled(!selectedTab.usesTimeRange)
+            .accessibilityHidden(!selectedTab.usesTimeRange)
     }
 
     private var timeRangeMenu: some View {
@@ -252,133 +310,109 @@ struct ProgressChartsContent: View {
 
     // MARK: - Hero Band
 
-    /// One glanceable card answering "where am I and which way am I moving":
-    /// the latest score leads, a momentum verdict sits opposite it (recent
-    /// half vs earlier half of all sessions), and cadence stats close the row.
+    /// The page's conclusion in two rows: ring + eyebrow + momentum pill on
+    /// one line, cadence on the next. Everything that used its own line —
+    /// the header, "of 100", the delta — now rides beside something else.
     private var heroBand: some View {
         let trajectory = TrajectorySummary.summarize(points.reversed().map(\.score))
         let weekStart = Date().startOfWeek
         let thisWeek = points.filter { $0.date >= weekStart }.count
+        let latest = trajectory.latestScore ?? 0
 
-        return FeaturedGlassCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
+        return FeaturedGlassCard(padding: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RingProgress(
+                            progress: heroRingShown ? Double(latest) / 100 : 0,
+                            color: AppColors.scoreColor(for: latest),
+                            lineWidth: 6
+                        )
+
+                        Text("\(latest)")
+                            .font(.system(size: 21, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText())
+                    }
+                    .frame(width: 58, height: 58)
+                    .animation(AppMotion.reveal.delay(0.1), value: heroRingShown)
+                    .onAppear { heroRingShown = true }
+
+                    // Eyebrow rides beside the ring instead of above it — the
+                    // header line was pure height.
+                    VStack(alignment: .leading, spacing: 5) {
                         Text("Where You Stand")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
+                            .eyebrowStyle()
 
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(trajectory.latestScore ?? 0)")
-                                .font(.system(size: 42, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .contentTransition(.numericText())
-
-                            Text("pts")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        }
+                        trajectoryBadge(trajectory)
                     }
 
-                    Spacer()
-
-                    trajectoryBadge(trajectory)
+                    Spacer(minLength: 0)
                 }
 
-                Rectangle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(height: 0.5)
-
-                HStack(spacing: 14) {
-                    heroStat("\(trajectory.bestScore)", label: "Best", color: AppColors.warning)
-
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(width: 0.5, height: 30)
-
-                    heroStat("\(trajectory.averageScore)", label: "Average", color: AppColors.primary)
-
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(width: 0.5, height: 30)
-
-                    heroStat("\(thisWeek)", label: "This week", color: AppColors.success)
+                HStack(spacing: 0) {
+                    heroCadence("\(trajectory.bestScore)", label: "Best", color: AppColors.warning)
+                    cadenceDivider
+                    heroCadence("\(trajectory.averageScore)", label: "Average", color: AppColors.primary)
+                    cadenceDivider
+                    heroCadence("\(thisWeek)", label: "This week", color: AppColors.success)
                 }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
-                "Where you stand: latest score \(trajectory.latestScore ?? 0), \(momentumWord(trajectory.momentum)), best \(trajectory.bestScore), average \(trajectory.averageScore), \(thisWeek) sessions this week."
+                "Where you stand: latest score \(latest) of 100, \(trajectory.momentum.label.lowercased()), best \(trajectory.bestScore), average \(trajectory.averageScore), \(thisWeek) sessions this week."
             )
         }
     }
 
-    @ViewBuilder
+    /// Value and label on ONE baseline — half the height of the former
+    /// stacked pair, same information.
+    private func heroCadence(_ value: String, label: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(value)
+                .font(.statValue)
+                .monospacedDigit()
+                .foregroundStyle(color)
+
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var cadenceDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.08))
+            .frame(width: 0.5, height: 18)
+    }
+
+    /// The hero's momentum pill, reading its symbol/word/tint from
+    /// `ScenarioMomentum` so it can never disagree with the inline glyph the
+    /// readiness rows use further down the same page.
     private func trajectoryBadge(_ trajectory: TrajectorySummary) -> some View {
-        switch trajectory.momentum {
-        case .improving:
-            VStack(alignment: .trailing, spacing: 3) {
-                momentumPill(icon: "arrow.up.right", text: "Improving", color: AppColors.success)
-                if trajectory.delta != 0 { deltaCaption(trajectory.delta, color: AppColors.success) }
+        let momentum = trajectory.momentum
+
+        return HStack(spacing: 7) {
+            HStack(spacing: 4) {
+                Image(systemName: momentum.symbolName)
+                    .font(.caption2.weight(.bold))
+                Text(momentum.label)
+                    .font(.caption.weight(.semibold))
             }
-        case .steady:
-            momentumPill(icon: "arrow.right", text: "Steady", color: Color.white.opacity(0.45))
-        case .slipping:
-            VStack(alignment: .trailing, spacing: 3) {
-                momentumPill(icon: "arrow.down.right", text: "Slipping", color: AppColors.error)
-                if trajectory.delta != 0 { deltaCaption(trajectory.delta, color: AppColors.error) }
+            .foregroundStyle(momentum.tint)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background { Capsule().fill(momentum.tint.opacity(0.13)) }
+            .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+
+            // Steady means the delta is within ±3 — printing "+1 pts lately"
+            // beside a pill that says nothing changed is noise, not evidence.
+            if momentum != .steady, trajectory.delta != 0 {
+                Text("\(trajectory.delta > 0 ? "+" : "")\(trajectory.delta) pts")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(momentum.tint)
             }
-        }
-    }
-
-    private func momentumPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.bold))
-            Text(text)
-                .font(.caption.weight(.semibold))
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background { Capsule().fill(color.opacity(0.13)) }
-        .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
-    }
-
-    private func deltaCaption(_ delta: Int, color: Color) -> some View {
-        Text("\(delta > 0 ? "+" : "")\(delta) recent half")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(color)
-    }
-
-    private func heroStat(_ value: String, label: String, color: Color) -> some View {
-        StatPair(value: value, label: label, valueColor: color)
-            .frame(maxWidth: .infinity)
-    }
-
-    private func momentumWord(_ momentum: ScenarioMomentum) -> String {
-        switch momentum {
-        case .improving: return "improving"
-        case .steady: return "steady"
-        case .slipping: return "slipping"
-        }
-    }
-
-    private var emptyState: some View {
-        GlassCard {
-            VStack(spacing: 12) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.white.opacity(0.15))
-                Text("Not enough data yet")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Text("Complete a few recordings to see your progress trends.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.3))
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
         }
     }
 }
@@ -408,6 +442,11 @@ struct ScoreProgressChart: View {
 
     @State private var selectedIndex: Int?
 
+    /// Measured plot width, so the footer stats span exactly the shaded area
+    /// and not the y-axis gutter. Measured rather than hardcoded because the
+    /// gutter grows when the axis prints a three-digit score.
+    @State private var plotWidth: CGFloat = 0
+
     private var dataPoints: [(date: Date, score: Int, id: UUID)] {
         points
             .map { (date: $0.date, score: $0.score, id: $0.id) }
@@ -435,12 +474,7 @@ struct ScoreProgressChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Overall Score", systemImage: "chart.xyaxis.line")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
+                GlassCardTitle("Overall Score", icon: "chart.xyaxis.line") {
                     if dataPoints.count >= 3 {
                         HStack(spacing: 4) {
                             Circle().fill(AppColors.primary.opacity(0.4)).frame(width: 6, height: 6)
@@ -529,8 +563,18 @@ struct ScoreProgressChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .chartPlotStyle { plot in
+                        plot.background {
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onChange(of: geo.size.width, initial: true) { _, width in
+                                        plotWidth = width
+                                    }
+                            }
+                        }
+                    }
                     .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
-                    .frame(height: 220)
+                    .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
                         "Overall score over time, \(dataPoints.count) sessions, latest \(dataPoints.last?.score ?? 0), best \(dataPoints.map(\.score).max() ?? 0)."
                     )
@@ -568,11 +612,17 @@ struct ScoreProgressChart: View {
                         .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else if !dataPoints.isEmpty {
+                        // Leading / centre / trailing across the plot area, so
+                        // the three readings sit under the chart they summarise
+                        // rather than running out under the axis labels.
                         HStack(spacing: 16) {
-                            chartStat("Latest", value: "\(dataPoints.last?.score ?? 0)", color: AppColors.scoreColor(for: dataPoints.last?.score ?? 0))
-                            chartStat("Average", value: "\(dataPoints.map(\.score).reduce(0, +) / dataPoints.count)", color: AppColors.primary)
-                            chartStat("Best", value: "\(dataPoints.map(\.score).max() ?? 0)", color: AppColors.warning)
+                            StatPair(value: "\(dataPoints.last?.score ?? 0)", label: "Latest", valueColor: AppColors.scoreColor(for: dataPoints.last?.score ?? 0), alignment: .leading)
+                            Spacer(minLength: 0)
+                            StatPair(value: "\(dataPoints.map(\.score).reduce(0, +) / dataPoints.count)", label: "Average", valueColor: AppColors.primary)
+                            Spacer(minLength: 0)
+                            StatPair(value: "\(dataPoints.map(\.score).max() ?? 0)", label: "Best", valueColor: AppColors.warning, alignment: .trailing)
                         }
+                        .frame(width: plotWidth > 0 ? plotWidth : nil, alignment: .leading)
                     }
                 } else {
                     EmptyStateInline(
@@ -584,17 +634,6 @@ struct ScoreProgressChart: View {
         }
     }
 
-    private func chartStat(_ label: String, value: String, color: Color = AppColors.primary) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.headline.weight(.bold))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
 }
 
 // MARK: - Filler Trend Chart
@@ -626,12 +665,7 @@ struct FillerTrendChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Filler Words per Session", systemImage: "exclamationmark.bubble.fill")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
+                GlassCardTitle("Filler Words per Session", icon: "exclamationmark.bubble.fill") {
                     // Trend indicator (lower is better for fillers)
                     if weeklyData.count >= 2 {
                         HStack(spacing: 4) {
@@ -674,7 +708,7 @@ struct FillerTrendChart: View {
                         }
                     }
                     .chartDateScrub(over: weeklyData, selection: $selectedIndex) { $0.weekStart }
-                    .frame(height: 200)
+                    .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
                         "Average filler words per session by week, \(weeklyData.count) weeks, latest \(String(format: "%.1f", weeklyData.last?.avgFillers ?? 0))."
                     )
@@ -782,12 +816,7 @@ struct PaceTrendChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Pace (WPM)", systemImage: "metronome")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
+                GlassCardTitle("Pace (WPM)", icon: "metronome") {
                     Text("\(inRangePercent)% in range")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(inRangePercent >= 70 ? AppColors.success : inRangePercent >= 40 ? AppColors.warning : AppColors.error)
@@ -860,7 +889,7 @@ struct PaceTrendChart: View {
                         }
                     }
                     .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
-                    .frame(height: 220)
+                    .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
                         "Speaking pace over time, \(dataPoints.count) sessions, \(inRangePercent) percent within target range."
                     )
@@ -918,151 +947,44 @@ struct PaceTrendChart: View {
     }
 }
 
-// MARK: - Subscore Radar View
+// MARK: - Skill Breakdown Card
 
-struct SubscoreRadarView: View {
+/// The Skills tab: one sunburst over the latest take's subscores on a shared
+/// 0–100 scale — the same component as the session detail hero, so "my skill
+/// shape" reads identically in both places. Strongest and weakest axes are
+/// marked on the labels themselves; tapping a wedge or label opens its
+/// explainer.
+struct SkillBreakdownCard: View {
     let subscores: SpeechSubscores?
-
-    @State private var animateBars = false
-
-    private var latestSubscores: SpeechSubscores? { subscores }
-
-    private struct RadarPoint: Identifiable {
-        let label: String
-        let value: Double
-        let color: Color
-        let icon: String
-
-        var id: String { label }
-    }
-
-    private var radarPoints: [RadarPoint] {
-        guard let s = latestSubscores else { return [] }
-        return [
-            RadarPoint(label: "Clarity", value: Double(s.clarity), color: AppColors.categoryTeal, icon: "waveform"),
-            RadarPoint(label: "Pace", value: Double(s.pace), color: AppColors.categoryBrandBright, icon: "metronome"),
-            RadarPoint(label: "Fillers", value: Double(s.fillerUsage), color: AppColors.warning, icon: "bubble.left.fill"),
-            RadarPoint(label: "Pauses", value: Double(s.pauseQuality), color: AppColors.categoryIndigo, icon: "pause.circle.fill"),
-            RadarPoint(label: "Vocal", value: Double(s.vocalVariety ?? 50), color: AppColors.categoryPlum, icon: "speaker.wave.3.fill"),
-            RadarPoint(label: "Delivery", value: Double(s.delivery ?? 50), color: AppColors.error, icon: "person.fill"),
-            RadarPoint(label: "Vocab", value: Double(s.vocabulary ?? 50), color: AppColors.success, icon: "character.book.closed"),
-            RadarPoint(label: "Structure", value: Double(s.structure ?? 50), color: AppColors.warning, icon: "list.bullet"),
-        ]
-    }
-
-    private var strongest: RadarPoint? {
-        radarPoints.max(by: { $0.value < $1.value })
-    }
-
-    private var weakest: RadarPoint? {
-        radarPoints.min(by: { $0.value < $1.value })
-    }
+    let overallScore: Int
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Strongest / Weakest callout cards
-            if let strong = strongest, let weak = weakest {
-                HStack(spacing: 10) {
-                    GlassCard(tint: strong.color.opacity(0.08), padding: 12) {
-                        HStack(spacing: 8) {
-                            Image(systemName: strong.icon)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(strong.color)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Strongest")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                HStack(spacing: 4) {
-                                    Text(strong.label)
-                                        .font(.caption.weight(.bold))
-                                    Text("\(Int(strong.value))")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(strong.color)
-                                }
-                            }
-                        }
-                    }
-
-                    GlassCard(tint: weak.color.opacity(0.08), padding: 12) {
-                        HStack(spacing: 8) {
-                            Image(systemName: weak.icon)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(weak.color)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Focus Area")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                HStack(spacing: 4) {
-                                    Text(weak.label)
-                                        .font(.caption.weight(.bold))
-                                    Text("\(Int(weak.value))")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(weak.color)
-                                }
-                            }
-                        }
-                    }
+        GlassCard {
+            VStack(alignment: .leading, spacing: 12) {
+                GlassCardTitle("Skill Breakdown", icon: "star.fill") {
+                    Text("Latest take")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
-            }
 
-            GlassCard {
-                VStack(alignment: .leading, spacing: 16) {
-                    Label("Skill Breakdown (Latest)", systemImage: "star.fill")
-                        .font(.subheadline.weight(.semibold))
+                if let s = subscores {
+                    let axes = SubscoreRadarChart.Axis.from(subscores: s, isPromptRelevance: false)
 
-                    if radarPoints.isEmpty {
-                        Text("No analysis data available")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 100)
-                    } else {
-                        VStack(spacing: 10) {
-                            ForEach(radarPoints) { point in
-                                HStack(spacing: 8) {
-                                    Image(systemName: point.icon)
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(point.color)
-                                        .frame(width: 16)
+                    SubscoreRadarChart(
+                        axes: axes,
+                        overallScore: overallScore,
+                        emphasizedAxisIDs: SubscoreRadarChart.Axis.emphasisIDs(in: axes)
+                    )
+                    .frame(height: 260)
+                    .frame(maxWidth: .infinity)
 
-                                    Text(point.label)
-                                        .font(.caption.weight(.medium))
-                                        .frame(width: 56, alignment: .trailing)
-                                        .foregroundStyle(.secondary)
-
-                                    GeometryReader { geo in
-                                        ZStack(alignment: .leading) {
-                                            Capsule()
-                                                .fill(Color.white.opacity(0.08))
-
-                                            Capsule()
-                                                .fill(
-                                                    LinearGradient(
-                                                        colors: [point.color.opacity(0.4), point.color.opacity(0.8)],
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .frame(width: animateBars ? geo.size.width * (point.value / 100) : 0)
-                                        }
-                                    }
-                                    .frame(height: 14)
-
-                                    Text("\(Int(point.value))")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(AppColors.scoreColor(for: Int(point.value)))
-                                        .frame(width: 28, alignment: .trailing)
-                                }
-                            }
-                        }
-                    }
+                    Text("Tap a segment to see what it measures.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    EmptyStateInline(icon: "star.fill", message: "No analysis data available")
                 }
-            }
-        }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
-                animateBars = true
             }
         }
     }
@@ -1101,12 +1023,7 @@ struct SessionFrequencyChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Sessions per Week", systemImage: "calendar")
-                        .font(.subheadline.weight(.semibold))
-
-                    Spacer()
-
+                GlassCardTitle("Sessions per Week", icon: "calendar") {
                     if weeklyCounts.count >= 2 {
                         Text("\(goalHitRate)% goal hit")
                             .font(.caption2.weight(.semibold))
@@ -1153,7 +1070,7 @@ struct SessionFrequencyChart: View {
                         }
                     }
                     .chartDateScrub(over: weeklyCounts, selection: $selectedIndex) { $0.weekStart }
-                    .frame(height: 200)
+                    .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
                         "Sessions per week, \(weeklyCounts.count) weeks, \(goalHitRate) percent of weeks hit the goal."
                     )
