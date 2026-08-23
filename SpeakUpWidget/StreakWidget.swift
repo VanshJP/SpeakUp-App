@@ -5,31 +5,79 @@ struct StreakEntry: TimelineEntry {
     let date: Date
     let streak: Int
     let hasPracticedToday: Bool
+    let urgency: Urgency
 }
 
 struct StreakProvider: TimelineProvider {
     func placeholder(in context: Context) -> StreakEntry {
-        StreakEntry(date: .now, streak: 5, hasPracticedToday: true)
+        StreakEntry(date: .now, streak: 5, hasPracticedToday: true, urgency: .none)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (StreakEntry) -> Void) {
-        completion(StreakEntry(
-            date: .now,
-            streak: WidgetDataProvider.currentStreak,
-            hasPracticedToday: WidgetDataProvider.hasPracticedToday
-        ))
+        completion(entry(at: .now))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<StreakEntry>) -> Void) {
-        let entry = StreakEntry(
-            date: .now,
+        let calendar = Calendar.current
+        var entries = [entry(at: .now)]
+
+        // Bake the message for each urgency band into its own entry so it
+        // flips on time even when the next system refresh lands late.
+        if entries[0].urgency != .none {
+            entries.append(contentsOf: urgencyBoundaries(after: .now, calendar: calendar)
+                .prefix(3)
+                .map { entry(at: $0) })
+        }
+
+        let tail = entries[entries.count - 1]
+        let hours = (entries[0].urgency != .none) ? 1 : 2
+        var nextUpdate = calendar.date(byAdding: .hour, value: hours, to: tail.date) ?? tail.date
+        if entries[0].urgency != .none {
+            // At-risk, the tail band entry can sit ~24h out (tomorrow's last
+            // boundary), which would freeze the baked-in streak/hasPracticed
+            // state until then. Cap the system refresh at an hour from now;
+            // the band entries above still flip their messages on time.
+            nextUpdate = min(nextUpdate, calendar.date(byAdding: .hour, value: 1, to: .now) ?? .now)
+        }
+        completion(Timeline(entries: entries, policy: .after(nextUpdate)))
+    }
+
+    // MARK: - Private
+
+    private func entry(at date: Date) -> StreakEntry {
+        StreakEntry(
+            date: date,
             streak: WidgetDataProvider.currentStreak,
-            hasPracticedToday: WidgetDataProvider.hasPracticedToday
+            hasPracticedToday: WidgetDataProvider.hasPracticedToday,
+            urgency: Self.urgency(
+                at: date,
+                isAtRisk: WidgetDataProvider.currentStreak > 0 && !WidgetDataProvider.hasPracticedToday
+            )
         )
-        // Refresh hourly when streak is at risk
-        let hours = (entry.streak > 0 && !entry.hasPracticedToday) ? 1 : 2
-        let nextUpdate = Calendar.current.date(byAdding: .hour, value: hours, to: .now) ?? .now
-        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+    }
+
+    private static func urgency(at date: Date, isAtRisk: Bool) -> Urgency {
+        guard isAtRisk else { return .none }
+        switch Calendar.current.component(.hour, from: date) {
+        case ..<12: return .low
+        case ..<17: return .moderate
+        case ..<20: return .high
+        default: return .critical
+        }
+    }
+
+    /// Next local 12:00 / 17:00 / 20:00 rollovers after `date`.
+    private func urgencyBoundaries(after date: Date, calendar: Calendar) -> [Date] {
+        var boundaries: [Date] = []
+        for dayOffset in 0...1 {
+            guard let dayStart = calendar.date(byAdding: .day, value: dayOffset, to: calendar.startOfDay(for: date)) else { continue }
+            for hour in [12, 17, 20] {
+                guard let boundary = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: dayStart),
+                      boundary > date else { continue }
+                boundaries.append(boundary)
+            }
+        }
+        return boundaries.sorted()
     }
 }
 
@@ -43,12 +91,7 @@ struct StreakWidgetView: View {
     }
 
     private var urgency: Urgency {
-        guard isAtRisk else { return .none }
-        let hour = Calendar.current.component(.hour, from: entry.date)
-        if hour >= 20 { return .critical }
-        if hour >= 17 { return .high }
-        if hour >= 12 { return .moderate }
-        return .low
+        entry.urgency
     }
 
     private var accentColor: Color {
@@ -108,7 +151,7 @@ struct StreakWidgetView: View {
     }
 }
 
-private enum Urgency {
+enum Urgency {
     case none, low, moderate, high, critical
 }
 
@@ -132,6 +175,6 @@ struct StreakWidget: Widget {
 #Preview("At Risk", as: .systemSmall) {
     StreakWidget()
 } timeline: {
-    StreakEntry(date: .now, streak: 7, hasPracticedToday: false)
+    StreakEntry(date: .now, streak: 7, hasPracticedToday: false, urgency: .high)
 }
 

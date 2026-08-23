@@ -1,8 +1,12 @@
 import SwiftUI
 import SwiftData
+import os
 
 @main
 struct SpeakUpApp: App {
+    // Property-initializer context (ModelContainer) runs before any instance exists.
+    nonisolated private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "AppLifecycle")
+
     // Shared services – injected via .environment() so views don't recreate them
     @State private var speechService = SpeechService()
     @State private var audioService = AudioService()
@@ -11,17 +15,7 @@ struct SpeakUpApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Recording.self,
-            Prompt.self,
-            UserGoal.self,
-            UserSettings.self,
-            Achievement.self,
-            CurriculumProgress.self,
-            RecordingGroup.self,
-            Story.self,
-            StoryFolder.self,
-        ])
+        let schema = Schema(versionedSchema: SchemaV1.self)
 
         // Respect user's iCloud sync preference (read from UserDefaults since
         // SwiftData isn't available yet at ModelContainer creation time).
@@ -36,10 +30,17 @@ struct SpeakUpApp: App {
         )
 
         do {
-            // Lightweight migrations (new models, optional fields, defaults) are automatic
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            // Lightweight migrations (new models, optional fields, defaults) are automatic;
+            // heavy changes go through `SpeakUpMigrationPlan` stages.
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: SpeakUpMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
         } catch {
-            print("Failed to create ModelContainer: \(error)")
+            // CloudKit-strip signal: this launch loses sync until the
+            // underlying open failure is fixed. See AGENT_GOTCHAS §17.
+            Self.logger.error("CloudKit ModelContainer failed; falling back to local store: \(error.localizedDescription, privacy: .private(mask: .hash))")
 
             // Fallback: try without CloudKit (existing store may not be CloudKit-compatible)
             let localConfig = ModelConfiguration(
@@ -49,9 +50,13 @@ struct SpeakUpApp: App {
             )
 
             do {
-                return try ModelContainer(for: schema, configurations: [localConfig])
+                return try ModelContainer(
+                    for: schema,
+                    migrationPlan: SpeakUpMigrationPlan.self,
+                    configurations: [localConfig]
+                )
             } catch {
-                print("Failed to create local ModelContainer: \(error)")
+                Self.logger.error("Local ModelContainer failed; falling back to IN-MEMORY store (data appears empty): \(error.localizedDescription, privacy: .private(mask: .hash))")
 
                 // Last resort: in-memory store – avoids silent data deletion
                 let fallbackConfig = ModelConfiguration(
@@ -60,7 +65,11 @@ struct SpeakUpApp: App {
                 )
 
                 do {
-                    return try ModelContainer(for: schema, configurations: [fallbackConfig])
+                    return try ModelContainer(
+                        for: schema,
+                        migrationPlan: SpeakUpMigrationPlan.self,
+                        configurations: [fallbackConfig]
+                    )
                 } catch {
                     fatalError("Could not create ModelContainer: \(error)")
                 }
@@ -76,6 +85,12 @@ struct SpeakUpApp: App {
                 .environment(audioService)
                 .environment(llmService)
                 .task {
+                    // Assigned before any await so the LLM load below can
+                    // always free Whisper's RAM before claiming its own.
+                    llmService.localLLM.preloadCleanupHandler = { [weak speechService] in
+                        await speechService?.unloadWhisperModel()
+                    }
+
                     // Settings must exist before anything else reads them
                     await ensureSettingsExist()
 
@@ -161,6 +176,9 @@ struct SpeakUpApp: App {
                     )
                 }
                 AnalyticsService.shared.log(.sessionStart())
+            } else if newPhase == .background {
+                // The debounced write may never fire once suspended.
+                AnalyticsService.shared.flushNow()
             }
         }
     }
@@ -200,6 +218,7 @@ struct SpeakUpApp: App {
                 let dropped = (kept === keeper) ? prompt : keeper
                 for recording in dropped.recordings ?? [] {
                     recording.prompt = kept
+                    recording.promptId = kept.id
                 }
                 byID[prompt.id] = kept
                 duplicates.append(dropped)
@@ -233,7 +252,7 @@ struct SpeakUpApp: App {
                 forKey: Self.seededPromptCountKey
             )
         } catch {
-            print("Error seeding prompts: \(error)")
+            Self.logger.error("Error seeding prompts: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -255,7 +274,7 @@ struct SpeakUpApp: App {
             }
             try context.save()
         } catch {
-            print("Error seeding achievements: \(error)")
+            Self.logger.error("Error seeding achievements: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -280,7 +299,7 @@ struct SpeakUpApp: App {
                 ChirpPlayer.shared.pack = SoundPack(rawValue: settings.soundPack) ?? .soft
             }
         } catch {
-            print("Error ensuring settings: \(error)")
+            Self.logger.error("Error ensuring settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -350,7 +369,7 @@ struct SpeakUpApp: App {
 
             UserDefaults.standard.set(true, forKey: urlMigrationFlagKey)
         } catch {
-            print("Error migrating recording URLs: \(error)")
+            Self.logger.error("Error migrating recording URLs: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -374,7 +393,7 @@ struct SpeakUpApp: App {
             }
             try context.save()
         } catch {
-            print("Error seeding story folders: \(error)")
+            Self.logger.error("Error seeding story folders: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -391,7 +410,7 @@ struct SpeakUpApp: App {
                 try context.save()
             }
         } catch {
-            print("Error seeding curriculum: \(error)")
+            Self.logger.error("Error seeding curriculum: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 }

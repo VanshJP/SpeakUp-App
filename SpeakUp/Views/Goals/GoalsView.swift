@@ -125,7 +125,7 @@ struct GoalsView: View {
                     value: averageProgressText,
                     label: "Avg Progress",
                     icon: "chart.bar.fill",
-                    tint: .orange
+                    tint: AppColors.warning
                 )
             }
         }

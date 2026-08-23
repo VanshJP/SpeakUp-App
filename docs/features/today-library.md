@@ -26,7 +26,7 @@
 
 ## Invariants
 
-1. Fingerprint-gate `WidgetCenter.reloadAllTimelines()` from `TodayViewModel` — never reload unconditionally.
+1. Fingerprint-gate `WidgetCenter.reloadAllTimelines()` from `TodayViewModel` — never reload unconditionally. Mechanism: `updateWidgetData()` joins a 12-component payload (streak, prompt text/category/id, last score, weekly count/goal/avg/minutes, improvement rate, readiness, last practice date), `WidgetDataProvider.todayPayloadChanged` SHA-256s it and stores the digest under `widgetStateFingerprint` in the App Group. Unchanged → skip **both** the App Group writes and the reload; `loadData` runs on every Today appearance and pull-to-refresh, so without this gate every visit burned a WidgetKit refresh.
 2. First-run after onboarding: `FirstRecordingSetupSheet` then `AppTourView` (sequential; tour model on `ContentView`).
 3. Library sections: `.prompts` / `.stories` / `.tools`. Recording start callbacks bubble to `ContentView`.
 4. Prompt category gates for the wheel live in Settings (`PromptSettingsView`).
@@ -35,6 +35,7 @@
 7. Word workout is **not** a Today card. It renders as `SessionBriefRow`, a single strip between the prompt card and the start button — it is the spec for the take you are about to record, and recording is the only way it completes. `VocabChallengeCard` is deleted. Skip and add-to-bank hang off each chip as a tap `Menu`. Not a sheet (a full screen of chrome for two rare verbs, and it covered the prompt) and not a `contextMenu` (nobody long-presses a chip they have no reason to think is interactive). The chip carries a chevron and new words carry a sage dot — keep both, they are what makes the row look like a control. Do not put the row back below the start button — nothing under the CTA gets read. Knobs live in Settings → Word Workout. See [vocab-challenge.md](./vocab-challenge.md).
 8. **The rotating daily challenge is deleted** (model, service, widget, and `SessionBriefRow` row). Nobody used it, and it competed with the word workout for the same strip. Do not reintroduce a second daily objective — the prompt and the words are the day's spec.
 9. **Arrival moment.** `TodayView.playArrivalIfNeeded()` fires once per calendar day, keyed on the `lastArrivalDay` AppStorage stamp: the streak chip springs in, a success haptic fires, and `ConfettiView` runs on every seventh day. It waits on `viewModel.isLoading` so it never celebrates a streak of zero, and `arrivalLine` never claims a day the user has not earned — before today's session it reads "one session keeps it".
+10. Goal progress refresh fires from Today's load but never blocks it: `GoalProgressService.refreshGoals` freezes per-goal windows on the main actor, scans recordings on a background `ModelContext`, then applies outcome diffs back on main. The scan decodes one analysis blob per session — inline, it stalled every Today visit as history grew.
 
 ## Cross-links
 

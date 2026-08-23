@@ -81,10 +81,11 @@ class JournalExportService {
             if !analyzedSorted.isEmpty {
                 y += 8
                 y = drawText("Average Subscores", at: y, attrs: subheaderAttrs, indent: 10)
-                let avgClarity = analyzedSorted.map { $0.analysis!.speechScore.subscores.clarity }.reduce(0, +) / analyzedSorted.count
-                let avgPace = analyzedSorted.map { $0.analysis!.speechScore.subscores.pace }.reduce(0, +) / analyzedSorted.count
-                let avgFiller = analyzedSorted.map { $0.analysis!.speechScore.subscores.fillerUsage }.reduce(0, +) / analyzedSorted.count
-                let avgPause = analyzedSorted.map { $0.analysis!.speechScore.subscores.pauseQuality }.reduce(0, +) / analyzedSorted.count
+                let subscores = analyzedSorted.compactMap(\.analysis).map { $0.speechScore.subscores }
+                let avgClarity = subscores.map(\.clarity).reduce(0, +) / subscores.count
+                let avgPace = subscores.map(\.pace).reduce(0, +) / subscores.count
+                let avgFiller = subscores.map(\.fillerUsage).reduce(0, +) / subscores.count
+                let avgPause = subscores.map(\.pauseQuality).reduce(0, +) / subscores.count
                 y = drawText("Clarity: \(avgClarity)/100  •  Pace: \(avgPace)/100  •  Filler Usage: \(avgFiller)/100  •  Pauses: \(avgPause)/100", at: y, attrs: bodyAttrs, indent: 10)
             }
 

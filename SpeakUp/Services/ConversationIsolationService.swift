@@ -32,20 +32,13 @@ enum ConversationIsolationService {
         words: [TranscriptionWord],
         audioURL: URL,
         totalDuration: TimeInterval,
-        persistentProfile: VoiceProfile? = nil,
-        preloadedSamples: (samples: [Float], sampleRate: Double)? = nil
+        persistentProfile: VoiceProfile? = nil
     ) -> ([TranscriptionWord], SpeakerIsolationMetrics?, VoiceProfileUpdate?) {
         guard words.count >= 12, totalDuration >= 8 else {
             return (words, nil, nil)
         }
-        let mono: MonoPCM
-        if let preloaded = preloadedSamples {
-            mono = MonoPCM(samples: preloaded.samples, sampleRate: preloaded.sampleRate)
-        } else {
-            guard let loaded = loadMonoPCM(url: audioURL) else {
-                return (words, nil, nil)
-            }
-            mono = loaded
+        guard let mono = MonoPCM.decode(url: audioURL) else {
+            return (words, nil, nil)
         }
 
         let sortedWords = words.enumerated().sorted { $0.element.start < $1.element.start }
@@ -243,7 +236,7 @@ enum ConversationIsolationService {
     /// Extract a baseline voice profile from a calibration audio recording.
     /// Splits the audio into fixed-size windows and computes median F0/energy.
     nonisolated static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
-        guard let mono = loadMonoPCM(url: audioURL) else { return nil }
+        guard let mono = MonoPCM.decode(url: audioURL) else { return nil }
 
         let windowDuration = 0.08 // 80ms windows
         let windowSamples = Int(mono.sampleRate * windowDuration)
@@ -402,57 +395,5 @@ enum ConversationIsolationService {
             return (sorted[mid - 1] + sorted[mid]) / 2.0
         }
         return sorted[mid]
-    }
-
-    struct MonoPCM {
-        let samples: [Float]
-        let sampleRate: Double
-    }
-
-    nonisolated static func loadMonoPCM(url: URL) -> MonoPCM? {
-        guard let file = try? AVAudioFile(forReading: url) else { return nil }
-        let sourceFormat = file.processingFormat
-        let sampleRate = sourceFormat.sampleRate
-        let frameCount = AVAudioFrameCount(file.length)
-        guard frameCount > 0 else { return nil }
-
-        guard let monoFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 1,
-            interleaved: false
-        ) else { return nil }
-
-        guard let monoBuffer = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: frameCount) else {
-            return nil
-        }
-
-        if sourceFormat.channelCount == 1 && sourceFormat.commonFormat == .pcmFormatFloat32 {
-            do {
-                try file.read(into: monoBuffer)
-            } catch {
-                return nil
-            }
-        } else {
-            guard let sourceBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
-                return nil
-            }
-            do {
-                try file.read(into: sourceBuffer)
-            } catch {
-                return nil
-            }
-            guard let converter = AVAudioConverter(from: sourceFormat, to: monoFormat) else { return nil }
-            let status = converter.convert(to: monoBuffer, error: nil) { [sourceBuffer] _, outStatus in
-                outStatus.pointee = .haveData
-                return sourceBuffer
-            }
-            guard status != .error else { return nil }
-        }
-
-        guard let channel = monoBuffer.floatChannelData else { return nil }
-        let count = Int(monoBuffer.frameLength)
-        let samples = Array(UnsafeBufferPointer(start: channel[0], count: count))
-        return MonoPCM(samples: samples, sampleRate: sampleRate)
     }
 }

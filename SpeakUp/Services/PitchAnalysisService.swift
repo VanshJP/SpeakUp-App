@@ -1,11 +1,10 @@
 import Foundation
-import AVFoundation
 import Accelerate
 
 /// On-device pitch (F0) analysis using autocorrelation via Apple's Accelerate framework.
 /// Extracts fundamental frequency contour, variation metrics, and prosody scores from recorded audio.
-/// Zero external dependencies — uses only AVFoundation + vDSP.
-enum PitchAnalysisService {
+/// Zero external dependencies — operates on `MonoPCM` with vDSP only.
+nonisolated enum PitchAnalysisService {
 
     // MARK: - Configuration
 
@@ -17,14 +16,13 @@ enum PitchAnalysisService {
 
     // MARK: - Public API
 
-    /// Analyze the pitch characteristics of an audio file.
-    /// Returns nil if the file cannot be read or has insufficient voiced frames.
-    static func analyze(audioURL: URL) -> PitchMetrics? {
-        guard let samples = loadMonoPCM(url: audioURL) else { return nil }
-        guard samples.sampleRate > 0 else { return nil }
+    /// Analyze the pitch characteristics of a decoded mono PCM buffer.
+    /// Returns nil if there are insufficient voiced frames.
+    static func analyze(monoPCM: MonoPCM) -> PitchMetrics? {
+        guard monoPCM.sampleRate > 0 else { return nil }
 
-        let sr = samples.sampleRate
-        let data = samples.data
+        let sr = monoPCM.sampleRate
+        let data = monoPCM.samples
 
         let windowSize = max(1, Int(windowDuration * sr))
         let hopSize = max(1, Int(hopDuration * sr))
@@ -36,14 +34,23 @@ enum PitchAnalysisService {
         var f0Values: [Float] = []
         var totalFrames = 0
 
-        var offset = 0
-        while offset + windowSize <= data.count {
-            totalFrames += 1
-            let window = Array(data[offset..<(offset + windowSize)])
-            if let f0 = estimateF0(window: window, sampleRate: sr, minLag: minLag, maxLag: maxLag) {
-                f0Values.append(f0)
+        // Hoisted per-recording scratch: one Hann window and one reusable
+        // windowed-frame buffer, instead of two allocations per frame.
+        var hannWindow = [Float](repeating: 0, count: windowSize)
+        vDSP_hann_window(&hannWindow, vDSP_Length(windowSize), Int32(vDSP_HALF_WINDOW))
+        var windowed = [Float](repeating: 0, count: windowSize)
+
+        data.withUnsafeBufferPointer { dataPtr in
+            guard let base = dataPtr.baseAddress else { return }
+            var offset = 0
+            while offset + windowSize <= data.count {
+                totalFrames += 1
+                vDSP_vmul(base + offset, 1, hannWindow, 1, &windowed, 1, vDSP_Length(windowSize))
+                if let f0 = estimateF0(windowed: windowed, sampleRate: sr, minLag: minLag, maxLag: maxLag) {
+                    f0Values.append(f0)
+                }
+                offset += hopSize
             }
-            offset += hopSize
         }
 
         guard f0Values.count >= 5 else { return nil }
@@ -64,10 +71,13 @@ enum PitchAnalysisService {
         // Median filter with 5-frame window to smooth single-frame outliers
         var filtered = corrected
         let filterRadius = 2
+        var medianWindow = [Float](repeating: 0, count: filterRadius * 2 + 1)
         for i in filterRadius..<(corrected.count - filterRadius) {
-            var window = Array(corrected[(i - filterRadius)...(i + filterRadius)])
-            window.sort()
-            filtered[i] = window[filterRadius]  // Median
+            for j in -filterRadius...filterRadius {
+                medianWindow[j + filterRadius] = corrected[i + j]
+            }
+            medianWindow.sort()
+            filtered[i] = medianWindow[filterRadius]  // Median
         }
 
         let mean = filtered.reduce(0, +) / Float(filtered.count)
@@ -115,14 +125,9 @@ enum PitchAnalysisService {
 
     // MARK: - F0 Estimation (Autocorrelation)
 
-    private static func estimateF0(window: [Float], sampleRate: Double, minLag: Int, maxLag: Int) -> Float? {
-        let n = window.count
+    private static func estimateF0(windowed: [Float], sampleRate: Double, minLag: Int, maxLag: Int) -> Float? {
+        let n = windowed.count
         guard maxLag < n, minLag < maxLag else { return nil }
-
-        var windowed = [Float](repeating: 0, count: n)
-        var hannWindow = [Float](repeating: 0, count: n)
-        vDSP_hann_window(&hannWindow, vDSP_Length(n), Int32(vDSP_HALF_WINDOW))
-        vDSP_vmul(window, 1, hannWindow, 1, &windowed, 1, vDSP_Length(n))
 
         var energy: Float = 0
         vDSP_dotpr(windowed, 1, windowed, 1, &energy, vDSP_Length(n))
@@ -131,68 +136,33 @@ enum PitchAnalysisService {
         var bestLag = minLag
         var bestCorr: Float = -1
 
-        for lag in minLag...maxLag {
-            var corr: Float = 0
-            let overlapLen = n - lag
-            guard overlapLen > 0 else { continue }
-            vDSP_dotpr(windowed, 1, Array(windowed[lag...]), 1, &corr, vDSP_Length(overlapLen))
+        // Zero-copy pointer offsets per lag — same operand lengths as the
+        // previous Array-slice copies, so dot products are unchanged.
+        windowed.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            for lag in minLag...maxLag {
+                let overlapLen = n - lag
+                guard overlapLen > 0 else { continue }
+                var corr: Float = 0
+                vDSP_dotpr(base, 1, base + lag, 1, &corr, vDSP_Length(overlapLen))
 
-            var energy0: Float = 0
-            var energy1: Float = 0
-            vDSP_dotpr(windowed, 1, windowed, 1, &energy0, vDSP_Length(overlapLen))
-            vDSP_dotpr(Array(windowed[lag...]), 1, Array(windowed[lag...]), 1, &energy1, vDSP_Length(overlapLen))
-            let norm = sqrt(energy0 * energy1)
-            guard norm > 1e-10 else { continue }
-            corr /= norm
+                var energy0: Float = 0
+                var energy1: Float = 0
+                vDSP_dotpr(base, 1, base, 1, &energy0, vDSP_Length(overlapLen))
+                vDSP_dotpr(base + lag, 1, base + lag, 1, &energy1, vDSP_Length(overlapLen))
+                let norm = sqrt(energy0 * energy1)
+                guard norm > 1e-10 else { continue }
+                corr /= norm
 
-            if corr > bestCorr {
-                bestCorr = corr
-                bestLag = lag
+                if corr > bestCorr {
+                    bestCorr = corr
+                    bestLag = lag
+                }
             }
         }
 
         guard bestCorr >= voicedThreshold else { return nil }
         return Float(sampleRate) / Float(bestLag)
-    }
-
-    // MARK: - Audio Loading
-
-    private struct MonoSamples {
-        let data: [Float]
-        let sampleRate: Double
-    }
-
-    private static func loadMonoPCM(url: URL) -> MonoSamples? {
-        guard let file = try? AVAudioFile(forReading: url) else { return nil }
-        let format = file.processingFormat
-        let sampleRate = format.sampleRate
-        let frameCount = AVAudioFrameCount(file.length)
-        guard frameCount > 0 else { return nil }
-
-        guard let monoFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
-                                              sampleRate: sampleRate,
-                                              channels: 1,
-                                              interleaved: false) else { return nil }
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: frameCount) else { return nil }
-
-        if format.channelCount == 1 && format.commonFormat == .pcmFormatFloat32 {
-            do { try file.read(into: buffer) } catch { return nil }
-        } else {
-            guard let originalBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
-            do { try file.read(into: originalBuffer) } catch { return nil }
-            guard let converter = AVAudioConverter(from: format, to: monoFormat) else { return nil }
-            let status = converter.convert(to: buffer, error: nil) { _, outStatus in
-                outStatus.pointee = .haveData
-                return originalBuffer
-            }
-            guard status != .error else { return nil }
-        }
-
-        guard let channelData = buffer.floatChannelData else { return nil }
-        let count = Int(buffer.frameLength)
-        let data = Array(UnsafeBufferPointer(start: channelData[0], count: count))
-        return MonoSamples(data: data, sampleRate: sampleRate)
     }
 
     // MARK: - Pitch-Energy Correlation

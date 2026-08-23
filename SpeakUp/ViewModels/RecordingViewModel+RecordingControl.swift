@@ -111,6 +111,9 @@ extension RecordingViewModel {
 
             return recording
         } catch {
+            // The m4a already materialized; drop the orphan so a failed save
+            // never leaves media behind that no row points at.
+            ICloudStorageService.shared.removeFile(at: url)
             self.error = error
             return nil
         }

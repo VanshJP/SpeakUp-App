@@ -2,45 +2,36 @@ import Foundation
 import SwiftUI
 import SwiftData
 
+/// Value projection of one recording for the comparison screen — decoded once
+/// on a background context so picker redraws never touch an analysis blob.
+nonisolated struct ComparisonRecordingPoint: Identifiable {
+    let id: UUID
+    let date: Date
+    /// Overall score; nil when the take was never analyzed.
+    let score: Int?
+    let wpm: Double
+    let fillerCount: Int
+    let clarity: Int
+    let pace: Int
+    let pauseQuality: Int
+
+    var hasAnalysis: Bool { score != nil }
+}
+
 @Observable
 class ComparisonViewModel {
-    var recordingA: Recording?
-    var recordingB: Recording?
-    var allRecordings: [Recording] = []
-
-    private var modelContext: ModelContext?
-
-    func configure(with context: ModelContext) {
-        self.modelContext = context
-        loadRecordings()
+    var summaries: [ComparisonRecordingPoint] = []
+    var selectionA: UUID? {
+        didSet { rebuildDerivedState() }
+    }
+    var selectionB: UUID? {
+        didSet { rebuildDerivedState() }
     }
 
-    private func loadRecordings() {
-        guard let context = modelContext else { return }
-        let descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        allRecordings = (try? context.fetch(descriptor)) ?? []
-
-        // Auto-select first vs latest
-        if allRecordings.count >= 2 {
-            recordingA = allRecordings.last  // oldest
-            recordingB = allRecordings.first // newest
-        }
-    }
-
-    /// The share card for the current selection. Dates, counts, and scores
-    /// only — see `ProgressCardData` for why it is a value type.
-    var progressCard: ProgressCardData? {
-        guard let a = recordingA, let b = recordingB else { return nil }
-        return ProgressCardData.make(
-            first: a.analysis,
-            firstDate: a.date,
-            latest: b.analysis,
-            latestDate: b.date,
-            sessionCount: allRecordings.filter { $0.analysis != nil }.count
-        )
-    }
+    /// Plain-value snapshots consumed directly in bodies — rebuilt only when a
+    /// picker selection changes, never per redraw.
+    private(set) var progressCard: ProgressCardData?
+    private(set) var deltas: [Delta] = []
 
     struct Delta {
         let label: String
@@ -59,21 +50,105 @@ class ComparisonViewModel {
         }
     }
 
-    var deltas: [Delta] {
-        guard let a = recordingA?.analysis, let b = recordingB?.analysis else { return [] }
-        return [
-            Delta(label: "Score", valueA: "\(a.speechScore.overall)", valueB: "\(b.speechScore.overall)",
-                  improved: b.speechScore.overall > a.speechScore.overall),
-            Delta(label: "WPM", valueA: "\(Int(a.wordsPerMinute))", valueB: "\(Int(b.wordsPerMinute))",
+    var scoreA: Int { point(for: selectionA)?.score ?? 0 }
+    var scoreB: Int { point(for: selectionB)?.score ?? 0 }
+
+    private func point(for id: UUID?) -> ComparisonRecordingPoint? {
+        guard let id else { return nil }
+        return summaries.first { $0.id == id }
+    }
+
+    func configure(with context: ModelContext) {
+        // Once-configured: refetching on every onAppear would reset the
+        // user's A/B picks and flash zeros mid-interaction.
+        guard summaries.isEmpty else { return }
+
+        let container = context.container
+        Task { [weak self] in
+            let points = await Task.detached(priority: .userInitiated) { () -> [ComparisonRecordingPoint] in
+                let context = ModelContext(container)
+                let descriptor = FetchDescriptor<Recording>(
+                    sortBy: [SortDescriptor(\.date, order: .reverse)]
+                )
+                let recordings = (try? context.fetch(descriptor)) ?? []
+
+                return recordings.map { recording -> ComparisonRecordingPoint in
+                    guard let analysis = recording.analysis else {
+                        return ComparisonRecordingPoint(
+                            id: recording.id,
+                            date: recording.date,
+                            score: nil,
+                            wpm: 0,
+                            fillerCount: 0,
+                            clarity: 0,
+                            pace: 0,
+                            pauseQuality: 0
+                        )
+                    }
+                    return ComparisonRecordingPoint(
+                        id: recording.id,
+                        date: recording.date,
+                        score: analysis.speechScore.overall,
+                        wpm: analysis.wordsPerMinute,
+                        fillerCount: analysis.totalFillerCount,
+                        clarity: analysis.speechScore.subscores.clarity,
+                        pace: analysis.speechScore.subscores.pace,
+                        pauseQuality: analysis.speechScore.subscores.pauseQuality
+                    )
+                }
+            }.value
+
+            guard let self else { return }
+            summaries = points
+
+            // Auto-select oldest vs latest, matching the previous behavior.
+            if points.count >= 2 {
+                selectionA = points.last?.id // oldest
+                selectionB = points.first?.id // newest
+            } else {
+                selectionA = nil
+                selectionB = nil
+            }
+        }
+    }
+
+    /// Rebuilds every body-facing value from cached points — pure arithmetic,
+    /// no SwiftData, no blob decoding.
+    private func rebuildDerivedState() {
+        guard let a = point(for: selectionA), let b = point(for: selectionB),
+              a.hasAnalysis, b.hasAnalysis else {
+            progressCard = nil
+            deltas = []
+            return
+        }
+
+        progressCard = ProgressCardData(
+            firstDate: a.date,
+            latestDate: b.date,
+            firstScore: a.score ?? 0,
+            latestScore: b.score ?? 0,
+            sessionCount: summaries.filter(\.hasAnalysis).count,
+            rows: [
+                .init(label: "Clarity", before: a.clarity, after: b.clarity, lowerIsBetter: false),
+                .init(label: "Pace", before: a.pace, after: b.pace, lowerIsBetter: false),
+                .init(label: "Pauses", before: a.pauseQuality, after: b.pauseQuality, lowerIsBetter: false),
+                .init(label: "Fillers", before: a.fillerCount, after: b.fillerCount, lowerIsBetter: true)
+            ]
+        )
+
+        deltas = [
+            Delta(label: "Score", valueA: "\(a.score ?? 0)", valueB: "\(b.score ?? 0)",
+                  improved: (b.score ?? 0) > (a.score ?? 0)),
+            Delta(label: "WPM", valueA: "\(Int(a.wpm))", valueB: "\(Int(b.wpm))",
                   improved: nil),
-            Delta(label: "Fillers", valueA: "\(a.totalFillerCount)", valueB: "\(b.totalFillerCount)",
-                  improved: b.totalFillerCount < a.totalFillerCount),
-            Delta(label: "Clarity", valueA: "\(a.speechScore.subscores.clarity)", valueB: "\(b.speechScore.subscores.clarity)",
-                  improved: b.speechScore.subscores.clarity > a.speechScore.subscores.clarity),
-            Delta(label: "Pace", valueA: "\(a.speechScore.subscores.pace)", valueB: "\(b.speechScore.subscores.pace)",
-                  improved: b.speechScore.subscores.pace > a.speechScore.subscores.pace),
-            Delta(label: "Pauses", valueA: "\(a.speechScore.subscores.pauseQuality)", valueB: "\(b.speechScore.subscores.pauseQuality)",
-                  improved: b.speechScore.subscores.pauseQuality > a.speechScore.subscores.pauseQuality),
+            Delta(label: "Fillers", valueA: "\(a.fillerCount)", valueB: "\(b.fillerCount)",
+                  improved: b.fillerCount < a.fillerCount),
+            Delta(label: "Clarity", valueA: "\(a.clarity)", valueB: "\(b.clarity)",
+                  improved: b.clarity > a.clarity),
+            Delta(label: "Pace", valueA: "\(a.pace)", valueB: "\(b.pace)",
+                  improved: b.pace > a.pace),
+            Delta(label: "Pauses", valueA: "\(a.pauseQuality)", valueB: "\(b.pauseQuality)",
+                  improved: b.pauseQuality > a.pauseQuality),
         ]
     }
 }

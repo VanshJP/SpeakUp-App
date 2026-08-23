@@ -438,8 +438,6 @@ struct ProgressChartsView: View {
 // MARK: - Score Progress Chart
 
 struct ScoreProgressChart: View {
-    let points: [ChartRecordingPoint]
-
     @State private var selectedIndex: Int?
 
     /// Measured plot width, so the footer stats span exactly the shaded area
@@ -447,35 +445,59 @@ struct ScoreProgressChart: View {
     /// gutter grows when the axis prints a three-digit score.
     @State private var plotWidth: CGFloat = 0
 
-    private var dataPoints: [(date: Date, score: Int, id: UUID)] {
-        points
-            .map { (date: $0.date, score: $0.score, id: $0.id) }
-            .sorted { $0.date < $1.date }
-    }
+    /// Sorted points, trend line, and y-domain built once per `points` change.
+    /// Scrubbing mutates `selectedIndex` on every frame and must not re-run
+    /// any of this math in body.
+    nonisolated private struct PlotModel {
+        let points: [ChartRecordingPoint]
+        let trend: [TrendPoint]
+        let yDomain: ClosedRange<Int>
+        let averageScore: Int
+        let bestScore: Int
 
-    /// Moving average (3-point) to smooth outliers
-    private var trendLine: [(date: Date, score: Double)] {
-        guard dataPoints.count >= 3 else { return [] }
-        var result: [(date: Date, score: Double)] = []
-        for i in 1..<(dataPoints.count - 1) {
-            let avg = Double(dataPoints[i-1].score + dataPoints[i].score + dataPoints[i+1].score) / 3.0
-            result.append((date: dataPoints[i].date, score: avg))
+        nonisolated struct TrendPoint: Identifiable {
+            let id: UUID
+            let date: Date
+            let score: Double
         }
-        return result
+
+        init(points source: [ChartRecordingPoint]) {
+            let sorted = source.sorted { $0.date < $1.date }
+            self.points = sorted
+
+            var trend: [TrendPoint] = []
+            if sorted.count >= 3 {
+                for i in 1..<(sorted.count - 1) {
+                    let avg = Double(sorted[i-1].score + sorted[i].score + sorted[i+1].score) / 3.0
+                    trend.append(TrendPoint(id: sorted[i].id, date: sorted[i].date, score: avg))
+                }
+            }
+            self.trend = trend
+
+            let scores = sorted.map(\.score)
+            yDomain = max(0, (scores.min() ?? 0) - 10)...min(100, (scores.max() ?? 100) + 10)
+            averageScore = scores.isEmpty ? 0 : scores.reduce(0, +) / scores.count
+            bestScore = scores.max() ?? 0
+        }
     }
 
-    private var yDomain: ClosedRange<Int> {
-        let scores = dataPoints.map(\.score)
-        let minScore = max(0, (scores.min() ?? 0) - 10)
-        let maxScore = min(100, (scores.max() ?? 100) + 10)
-        return minScore...maxScore
+    private let model: PlotModel
+
+    init(points: [ChartRecordingPoint]) {
+        _selectedIndex = State(initialValue: nil)
+        model = PlotModel(points: points)
+    }
+
+    private var selectedPointID: UUID? {
+        guard let selectedIndex, selectedIndex < model.points.count else { return nil }
+        return model.points[selectedIndex].id
     }
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 GlassCardTitle("Overall Score", icon: "chart.xyaxis.line") {
-                    if dataPoints.count >= 3 {
+                    if model.points.count >= 3 {
                         HStack(spacing: 4) {
                             Circle().fill(AppColors.primary.opacity(0.4)).frame(width: 6, height: 6)
                             Text("Trend")
@@ -485,10 +507,10 @@ struct ScoreProgressChart: View {
                     }
                 }
 
-                if dataPoints.count >= 2 {
+                if model.points.count >= 2 {
                     Chart {
                         // Area under curve
-                        ForEach(Array(dataPoints.enumerated()), id: \.offset) { _, point in
+                        ForEach(model.points) { point in
                             AreaMark(
                                 x: .value("Date", point.date),
                                 y: .value("Score", point.score)
@@ -504,7 +526,7 @@ struct ScoreProgressChart: View {
                         }
 
                         // Data line
-                        ForEach(Array(dataPoints.enumerated()), id: \.offset) { _, point in
+                        ForEach(model.points) { point in
                             LineMark(
                                 x: .value("Date", point.date),
                                 y: .value("Score", point.score)
@@ -515,7 +537,7 @@ struct ScoreProgressChart: View {
                         }
 
                         // Smoothed trend line
-                        ForEach(Array(trendLine.enumerated()), id: \.offset) { _, point in
+                        ForEach(model.trend) { point in
                             LineMark(
                                 x: .value("Date", point.date),
                                 y: .value("Trend", point.score),
@@ -527,28 +549,27 @@ struct ScoreProgressChart: View {
                         }
 
                         // Data points with score-based coloring
-                        ForEach(Array(dataPoints.enumerated()), id: \.offset) { index, point in
+                        ForEach(model.points) { point in
                             PointMark(
                                 x: .value("Date", point.date),
                                 y: .value("Score", point.score)
                             )
                             .foregroundStyle(
-                                selectedIndex == index
+                                selectedPointID == point.id
                                     ? AppColors.scoreColor(for: point.score)
                                     : AppColors.primary
                             )
-                            .symbolSize(selectedIndex == index ? 60 : 24)
+                            .symbolSize(selectedPointID == point.id ? 60 : 24)
                         }
 
                         // Selected point annotation
-                        if let idx = selectedIndex, idx < dataPoints.count {
-                            let point = dataPoints[idx]
-                            RuleMark(x: .value("Selected", point.date))
+                        if let idx = selectedIndex, idx < model.points.count {
+                            RuleMark(x: .value("Selected", model.points[idx].date))
                                 .foregroundStyle(.white.opacity(0.2))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
                     }
-                    .chartYScale(domain: yDomain)
+                    .chartYScale(domain: model.yDomain)
                     .chartYAxis {
                         AxisMarks(values: .automatic(desiredCount: 4)) { _ in
                             AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
@@ -573,15 +594,15 @@ struct ScoreProgressChart: View {
                             }
                         }
                     }
-                    .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
+                    .chartDateScrub(over: model.points, selection: $selectedIndex) { $0.date }
                     .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
-                        "Overall score over time, \(dataPoints.count) sessions, latest \(dataPoints.last?.score ?? 0), best \(dataPoints.map(\.score).max() ?? 0)."
+                        "Overall score over time, \(model.points.count) sessions, latest \(model.points.last?.score ?? 0), best \(model.bestScore)."
                     )
 
                     // Selected point detail or summary stats
-                    if let idx = selectedIndex, idx < dataPoints.count {
-                        let point = dataPoints[idx]
+                    if let idx = selectedIndex, idx < model.points.count {
+                        let point = model.points[idx]
                         HStack(spacing: 16) {
                             HStack(spacing: 6) {
                                 Circle()
@@ -599,7 +620,7 @@ struct ScoreProgressChart: View {
                             Spacer()
 
                             if idx > 0 {
-                                let delta = point.score - dataPoints[idx - 1].score
+                                let delta = point.score - model.points[idx - 1].score
                                 HStack(spacing: 3) {
                                     Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
                                         .font(.caption2.weight(.bold))
@@ -611,16 +632,16 @@ struct ScoreProgressChart: View {
                         }
                         .padding(.horizontal, 4)
                         .transition(.opacity)
-                    } else if !dataPoints.isEmpty {
+                    } else if !model.points.isEmpty {
                         // Leading / centre / trailing across the plot area, so
                         // the three readings sit under the chart they summarise
                         // rather than running out under the axis labels.
                         HStack(spacing: 16) {
-                            StatPair(value: "\(dataPoints.last?.score ?? 0)", label: "Latest", valueColor: AppColors.scoreColor(for: dataPoints.last?.score ?? 0), alignment: .leading)
+                            StatPair(value: "\(model.points.last?.score ?? 0)", label: "Latest", valueColor: AppColors.scoreColor(for: model.points.last?.score ?? 0), alignment: .leading)
                             Spacer(minLength: 0)
-                            StatPair(value: "\(dataPoints.map(\.score).reduce(0, +) / dataPoints.count)", label: "Average", valueColor: AppColors.primary)
+                            StatPair(value: "\(model.averageScore)", label: "Average", valueColor: AppColors.primary)
                             Spacer(minLength: 0)
-                            StatPair(value: "\(dataPoints.map(\.score).max() ?? 0)", label: "Best", valueColor: AppColors.warning, alignment: .trailing)
+                            StatPair(value: "\(model.bestScore)", label: "Best", valueColor: AppColors.warning, alignment: .trailing)
                         }
                         .frame(width: plotWidth > 0 ? plotWidth : nil, alignment: .leading)
                     }
@@ -636,6 +657,17 @@ struct ScoreProgressChart: View {
 
 }
 
+// MARK: - Weekly Bucket
+
+/// One ISO-week aggregate for the weekly bar charts. The week start doubles
+/// as stable chart identity, replacing enumerated-offset IDs that thrashed on
+/// scrub redraws.
+nonisolated struct WeeklyBucket: Identifiable {
+    let id: Date
+    let avgFillers: Double
+    let sessionCount: Int
+}
+
 // MARK: - Filler Trend Chart
 
 struct FillerTrendChart: View {
@@ -643,7 +675,7 @@ struct FillerTrendChart: View {
 
     @State private var selectedIndex: Int?
 
-    private var weeklyData: [(weekStart: Date, avgFillers: Double, sessionCount: Int)] {
+    private var weeklyData: [WeeklyBucket] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: points) { p in
             calendar.startOfDay(for: p.date.startOfWeek)
@@ -652,14 +684,19 @@ struct FillerTrendChart: View {
         return grouped.map { (weekStart, recs) in
             let totalFillers = recs.map(\.fillerCount).reduce(0, +)
             let avg = recs.isEmpty ? 0 : Double(totalFillers) / Double(recs.count)
-            return (weekStart: weekStart, avgFillers: avg, sessionCount: recs.count)
+            return WeeklyBucket(id: weekStart, avgFillers: avg, sessionCount: recs.count)
         }
-        .sorted { $0.weekStart < $1.weekStart }
+        .sorted { $0.id < $1.id }
     }
 
     private var overallTrend: Double {
         guard weeklyData.count >= 2 else { return 0 }
         return weeklyData.last!.avgFillers - weeklyData.first!.avgFillers
+    }
+
+    private var selectedBucketID: Date? {
+        guard let selectedIndex, selectedIndex < weeklyData.count else { return nil }
+        return weeklyData[selectedIndex].id
     }
 
     var body: some View {
@@ -680,13 +717,13 @@ struct FillerTrendChart: View {
 
                 if weeklyData.count >= 2 {
                     Chart {
-                        ForEach(Array(weeklyData.enumerated()), id: \.offset) { index, point in
+                        ForEach(weeklyData) { point in
                             BarMark(
-                                x: .value("Week", point.weekStart, unit: .weekOfYear),
+                                x: .value("Week", point.id, unit: .weekOfYear),
                                 y: .value("Avg Fillers", point.avgFillers)
                             )
                             .foregroundStyle(
-                                selectedIndex == index
+                                selectedBucketID == point.id
                                     ? (point.avgFillers > 10 ? AppColors.error : point.avgFillers > 5 ? AppColors.warning : AppColors.success)
                                     : (point.avgFillers > 10 ? AppColors.error.opacity(0.6) : point.avgFillers > 5 ? AppColors.warning.opacity(0.6) : AppColors.success.opacity(0.6))
                             )
@@ -707,7 +744,7 @@ struct FillerTrendChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartDateScrub(over: weeklyData, selection: $selectedIndex) { $0.weekStart }
+                    .chartDateScrub(over: weeklyData, selection: $selectedIndex) { $0.id }
                     .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
                         "Average filler words per session by week, \(weeklyData.count) weeks, latest \(String(format: "%.1f", weeklyData.last?.avgFillers ?? 0))."
@@ -717,7 +754,7 @@ struct FillerTrendChart: View {
                     if let idx = selectedIndex, idx < weeklyData.count {
                         let week = weeklyData[idx]
                         HStack(spacing: 12) {
-                            Text(week.weekStart.formatted(.dateTime.month(.abbreviated).day()))
+                            Text(week.id.formatted(.dateTime.month(.abbreviated).day()))
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.secondary)
 
@@ -771,18 +808,40 @@ struct FillerTrendChart: View {
 // MARK: - Pace Trend Chart
 
 struct PaceTrendChart: View {
-    let points: [ChartRecordingPoint]
-
     @Query private var userSettings: [UserSettings]
     @State private var selectedIndex: Int?
 
-    private var dataPoints: [(date: Date, wpm: Double)] {
-        points
-            .compactMap { p in
-                guard p.wpm > 0 else { return nil }
-                return (date: p.date, wpm: p.wpm)
+    /// Sorted, WPM-valid points and point-derived stats built once per
+    /// `points` change so scrub frames re-run none of it in body.
+    nonisolated private struct PlotModel {
+        let points: [PlotPoint]
+        let yDomain: ClosedRange<Double>
+        let avgWPM: Double
+
+        nonisolated struct PlotPoint: Identifiable {
+            let id: UUID
+            let date: Date
+            let wpm: Double
+        }
+
+        init(points source: [ChartRecordingPoint]) {
+            self.points = source.compactMap { p in
+                p.wpm > 0 ? PlotPoint(id: p.id, date: p.date, wpm: p.wpm) : nil
             }
             .sorted { $0.date < $1.date }
+
+            let wpms = points.map(\.wpm)
+            yDomain = max(60, (wpms.min() ?? 100) - 20)...min(250, (wpms.max() ?? 200) + 20)
+            avgWPM = wpms.isEmpty ? 0 : wpms.reduce(0, +) / Double(wpms.count)
+        }
+    }
+
+    private let model: PlotModel
+
+    init(points: [ChartRecordingPoint]) {
+        _userSettings = Query()
+        _selectedIndex = State(initialValue: nil)
+        model = PlotModel(points: points)
     }
 
     private var targetWPM: Double {
@@ -794,23 +853,15 @@ struct PaceTrendChart: View {
         (targetWPM - 10)...(targetWPM + 10)
     }
 
-    private var yDomain: ClosedRange<Double> {
-        let wpms = dataPoints.map(\.wpm)
-        let minWPM = max(60, (wpms.min() ?? 100) - 20)
-        let maxWPM = min(250, (wpms.max() ?? 200) + 20)
-        return minWPM...maxWPM
-    }
-
-    private var avgWPM: Double {
-        let wpms = dataPoints.map(\.wpm)
-        guard !wpms.isEmpty else { return 0 }
-        return wpms.reduce(0, +) / Double(wpms.count)
+    private var selectedPointID: UUID? {
+        guard let selectedIndex, selectedIndex < model.points.count else { return nil }
+        return model.points[selectedIndex].id
     }
 
     private var inRangePercent: Int {
-        guard !dataPoints.isEmpty else { return 0 }
-        let inRange = dataPoints.filter { optimalRange.contains($0.wpm) }.count
-        return Int(Double(inRange) / Double(dataPoints.count) * 100)
+        guard !model.points.isEmpty else { return 0 }
+        let inRange = model.points.filter { optimalRange.contains($0.wpm) }.count
+        return Int(Double(inRange) / Double(model.points.count) * 100)
     }
 
     var body: some View {
@@ -822,7 +873,7 @@ struct PaceTrendChart: View {
                         .foregroundStyle(inRangePercent >= 70 ? AppColors.success : inRangePercent >= 40 ? AppColors.warning : AppColors.error)
                 }
 
-                if dataPoints.count >= 2 {
+                if model.points.count >= 2 {
                     Chart {
                         // Optimal range band
                         RectangleMark(
@@ -842,7 +893,7 @@ struct PaceTrendChart: View {
                             }
 
                         // Line
-                        ForEach(Array(dataPoints.enumerated()), id: \.offset) { _, point in
+                        ForEach(model.points) { point in
                             LineMark(
                                 x: .value("Date", point.date),
                                 y: .value("WPM", point.wpm)
@@ -853,7 +904,7 @@ struct PaceTrendChart: View {
                         }
 
                         // Points colored by whether they're in the optimal range
-                        ForEach(Array(dataPoints.enumerated()), id: \.offset) { index, point in
+                        ForEach(model.points) { point in
                             PointMark(
                                 x: .value("Date", point.date),
                                 y: .value("WPM", point.wpm)
@@ -861,19 +912,19 @@ struct PaceTrendChart: View {
                             .foregroundStyle(
                                 optimalRange.contains(point.wpm)
                                     ? AppColors.success
-                                    : (point.wpm > optimalRange.upperBound ? AppColors.warning : AppColors.warning)
+                                    : AppColors.warning
                             )
-                            .symbolSize(selectedIndex == index ? 60 : 24)
+                            .symbolSize(selectedPointID == point.id ? 60 : 24)
                         }
 
                         // Selected indicator
-                        if let idx = selectedIndex, idx < dataPoints.count {
-                            RuleMark(x: .value("Selected", dataPoints[idx].date))
+                        if let idx = selectedIndex, idx < model.points.count {
+                            RuleMark(x: .value("Selected", model.points[idx].date))
                                 .foregroundStyle(.white.opacity(0.2))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
                     }
-                    .chartYScale(domain: yDomain)
+                    .chartYScale(domain: model.yDomain)
                     .chartYAxis {
                         AxisMarks(values: .automatic(desiredCount: 4)) { _ in
                             AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4]))
@@ -888,14 +939,14 @@ struct PaceTrendChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartDateScrub(over: dataPoints, selection: $selectedIndex) { $0.date }
+                    .chartDateScrub(over: model.points, selection: $selectedIndex) { $0.date }
                     .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
-                        "Speaking pace over time, \(dataPoints.count) sessions, \(inRangePercent) percent within target range."
+                        "Speaking pace over time, \(model.points.count) sessions, \(inRangePercent) percent within target range."
                     )
 
-                    if let idx = selectedIndex, idx < dataPoints.count {
-                        let point = dataPoints[idx]
+                    if let idx = selectedIndex, idx < model.points.count {
+                        let point = model.points[idx]
                         let inRange = optimalRange.contains(point.wpm)
                         HStack(spacing: 12) {
                             Text(point.date.formatted(.dateTime.month(.abbreviated).day()))
@@ -930,7 +981,7 @@ struct PaceTrendChart: View {
 
                             HStack(spacing: 4) {
                                 Circle().fill(AppColors.categoryBrandBright).frame(width: 6, height: 6)
-                                Text("Avg: \(Int(avgWPM))")
+                                Text("Avg: \(Int(model.avgWPM))")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -992,6 +1043,13 @@ struct SkillBreakdownCard: View {
 
 // MARK: - Session Frequency Chart
 
+/// One ISO-week session count for the frequency chart — no filler stats to
+/// fabricate, unlike `WeeklyBucket`.
+nonisolated private struct WeeklyFrequencyBucket: Identifiable {
+    let id: Date
+    let sessionCount: Int
+}
+
 struct SessionFrequencyChart: View {
     let points: [ChartRecordingPoint]
 
@@ -1002,22 +1060,27 @@ struct SessionFrequencyChart: View {
         userSettings.first?.weeklyGoalSessions ?? 5
     }
 
-    private var weeklyCounts: [(weekStart: Date, count: Int)] {
+    private var weeklyCounts: [WeeklyFrequencyBucket] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: points) { p in
             calendar.startOfDay(for: p.date.startOfWeek)
         }
 
         return grouped.map { (weekStart, recs) in
-            (weekStart: weekStart, count: recs.count)
+            WeeklyFrequencyBucket(id: weekStart, sessionCount: recs.count)
         }
-        .sorted { $0.weekStart < $1.weekStart }
+        .sorted { $0.id < $1.id }
     }
 
     private var goalHitRate: Int {
         guard !weeklyCounts.isEmpty else { return 0 }
-        let hit = weeklyCounts.filter { $0.count >= weeklyGoal }.count
+        let hit = weeklyCounts.filter { $0.sessionCount >= weeklyGoal }.count
         return Int(Double(hit) / Double(weeklyCounts.count) * 100)
+    }
+
+    private var selectedWeekID: Date? {
+        guard let selectedIndex, selectedIndex < weeklyCounts.count else { return nil }
+        return weeklyCounts[selectedIndex].id
     }
 
     var body: some View {
@@ -1042,15 +1105,15 @@ struct SessionFrequencyChart: View {
                                     .foregroundStyle(AppColors.primary.opacity(0.6))
                             }
 
-                        ForEach(Array(weeklyCounts.enumerated()), id: \.offset) { index, point in
+                        ForEach(weeklyCounts) { point in
                             BarMark(
-                                x: .value("Week", point.weekStart, unit: .weekOfYear),
-                                y: .value("Sessions", point.count)
+                                x: .value("Week", point.id, unit: .weekOfYear),
+                                y: .value("Sessions", point.sessionCount)
                             )
                             .foregroundStyle(
-                                selectedIndex == index
-                                    ? (point.count >= weeklyGoal ? AppColors.primary : Color.white.opacity(0.5))
-                                    : (point.count >= weeklyGoal ? AppColors.primary.opacity(0.7) : Color.white.opacity(0.25))
+                                selectedWeekID == point.id
+                                    ? (point.sessionCount >= weeklyGoal ? AppColors.primary : Color.white.opacity(0.5))
+                                    : (point.sessionCount >= weeklyGoal ? AppColors.primary.opacity(0.7) : Color.white.opacity(0.25))
                             )
                             .cornerRadius(6)
                         }
@@ -1069,7 +1132,7 @@ struct SessionFrequencyChart: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .chartDateScrub(over: weeklyCounts, selection: $selectedIndex) { $0.weekStart }
+                    .chartDateScrub(over: weeklyCounts, selection: $selectedIndex) { $0.id }
                     .frame(height: TrendChart.plotHeight)
                     .accessibilityLabel(
                         "Sessions per week, \(weeklyCounts.count) weeks, \(goalHitRate) percent of weeks hit the goal."
@@ -1078,22 +1141,22 @@ struct SessionFrequencyChart: View {
                     if let idx = selectedIndex, idx < weeklyCounts.count {
                         let week = weeklyCounts[idx]
                         HStack(spacing: 12) {
-                            Text("Week of \(week.weekStart.formatted(.dateTime.month(.abbreviated).day()))")
+                            Text("Week of \(week.id.formatted(.dateTime.month(.abbreviated).day()))")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.secondary)
 
                             Spacer()
 
                             HStack(spacing: 4) {
-                                Text("\(week.count)")
+                                Text("\(week.sessionCount)")
                                     .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(week.count >= weeklyGoal ? AppColors.primary : .primary)
+                                    .foregroundStyle(week.sessionCount >= weeklyGoal ? AppColors.primary : .primary)
                                 Text("/ \(weeklyGoal)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
 
-                            if week.count >= weeklyGoal {
+                            if week.sessionCount >= weeklyGoal {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(AppColors.success)

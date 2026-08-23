@@ -20,9 +20,23 @@ final class EntitlementStore {
         static let debugOverride = "debug.forceLifetimeEntitlement"
     }
 
-    /// Shared with the widget extension. Falls back to standard defaults if the
-    /// App Group is unavailable so entitlement never silently resets.
+    /// Shared with the widget extension. Processes without the App Group
+    /// entitlement (Xcode Previews, some test hosts) fall back to standard
+    /// defaults so entitlement never silently resets there either.
     private let defaults: UserDefaults
+
+    /// Touching an App Group suite from a process that lacks its entitlement
+    /// is what makes cfprefsd log "kCFPreferencesAnyUser … detaching"; probe
+    /// the container first and skip the suite entirely when absent.
+    private static func makeDefaults() -> UserDefaults {
+        if FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: WidgetDataProvider.suiteName
+        ) != nil,
+           let suite = UserDefaults(suiteName: WidgetDataProvider.suiteName) {
+            return suite
+        }
+        return .standard
+    }
 
     /// What StoreKit last verified. Read `isLifetime` instead — during the
     /// beta the two differ.
@@ -49,7 +63,7 @@ final class EntitlementStore {
     private(set) var hasVerifiedThisLaunch = false
 
     private init() {
-        let suite = UserDefaults(suiteName: WidgetDataProvider.suiteName) ?? .standard
+        let suite = Self.makeDefaults()
         defaults = suite
         ownsLifetime = suite.bool(forKey: Key.isLifetime)
         purchaseDate = suite.object(forKey: Key.purchasedAt) as? Date
@@ -82,6 +96,8 @@ final class EntitlementStore {
         return trialState.isExpired ? .expired : .trial
     }
 
+    /// Restore-seam for the paywall reintroduction; intentionally unused while
+    /// `BetaAccess.allFeaturesFree` holds. See docs/features/monetization.md.
     func isUnlocked(_ feature: PaidFeature) -> Bool {
         isLifetime || !policy.gates(feature)
     }

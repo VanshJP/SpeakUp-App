@@ -12,7 +12,7 @@ struct ComparisonView: View {
 
             PageScrollView {
                 VStack(spacing: 16) {
-                    if viewModel.allRecordings.count >= 2 {
+                    if viewModel.summaries.count >= 2 {
                         // Hero score summary
                         heroSummarySection
 
@@ -64,8 +64,8 @@ struct ComparisonView: View {
     // MARK: - Hero Summary
 
     private var heroSummarySection: some View {
-        let scoreA = viewModel.recordingA?.analysis?.speechScore.overall ?? 0
-        let scoreB = viewModel.recordingB?.analysis?.speechScore.overall ?? 0
+        let scoreA = viewModel.scoreA
+        let scoreB = viewModel.scoreB
         let change = scoreB - scoreA
 
         return FeaturedGlassCard(
@@ -158,8 +158,8 @@ struct ComparisonView: View {
                     label: "First",
                     icon: "a.circle.fill",
                     color: AppColors.primary,
-                    selection: $viewModel.recordingA,
-                    recordings: viewModel.allRecordings
+                    selectionID: $viewModel.selectionA,
+                    points: viewModel.summaries
                 )
 
                 Image(systemName: "arrow.right")
@@ -171,8 +171,8 @@ struct ComparisonView: View {
                     label: "Latest",
                     icon: "b.circle.fill",
                     color: AppColors.categoryBrandBright,
-                    selection: $viewModel.recordingB,
-                    recordings: viewModel.allRecordings
+                    selectionID: $viewModel.selectionB,
+                    points: viewModel.summaries
                 )
             }
         }
@@ -255,11 +255,15 @@ private struct RecordingPicker: View {
     let label: String
     let icon: String
     let color: Color
-    @Binding var selection: Recording?
-    let recordings: [Recording]
+    @Binding var selectionID: UUID?
+    let points: [ComparisonRecordingPoint]
+
+    private var selection: ComparisonRecordingPoint? {
+        points.first { $0.id == selectionID }
+    }
 
     private var score: Int {
-        selection?.analysis?.speechScore.overall ?? 0
+        selection?.score ?? 0
     }
 
     var body: some View {
@@ -275,8 +279,8 @@ private struct RecordingPicker: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if let sel = selection {
-                    Text(sel.date.formatted(date: .abbreviated, time: .omitted))
+                if let selection {
+                    Text(selection.date.formatted(date: .abbreviated, time: .omitted))
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
 
@@ -298,14 +302,14 @@ private struct RecordingPicker: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .topTrailing) {
                 Menu {
-                    ForEach(recordings) { recording in
+                    ForEach(points) { point in
                         Button {
-                            selection = recording
+                            selectionID = point.id
                         } label: {
                             HStack {
-                                Text(recording.date.formatted(date: .abbreviated, time: .shortened))
+                                Text(point.date.formatted(date: .abbreviated, time: .shortened))
                                 Spacer()
-                                Text("\(recording.analysis?.speechScore.overall ?? 0) pts")
+                                Text("\(point.score ?? 0) pts")
                             }
                         }
                     }

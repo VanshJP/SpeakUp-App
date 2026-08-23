@@ -23,6 +23,7 @@ On-device behavioural logging (no upload by default), install/deep-link attribut
 3. Review triggers: `strong_result` / `share_completed` / `achievement_unlocked`. Rules in `ReviewEligibility`: once per launch, after first result, **not on paywall**, once per version, ≥60 days between asks.
 4. Shares must go through `SharePresenter` so `.shareCompleted` fires only on **completed** shares (dismiss ≠ share). The score-card caption (prompt quote + try-link) is an extra activity item on that same presenter — do not add a second `UIActivityViewController`. `SharePresenter` presents from the *topmost* controller, because `ShareCardSheet` is itself a sheet. `ShareCardSheet`'s Save/Copy buttons log `share_complete` directly with a `recording_detail_save` / `recording_detail_copy` trigger.
 5. Product-page attribution notes: `APP_STORE_PRODUCT_PAGES.md`.
+6. Monetization funnel seams exist with **no producer**: `AnalyticsEvent.paywallQualified(trigger:source:)` and the scorecard's `qualifiedPaywallViews` / conversion math survive as restore scaffolding, but nothing logs `paywall_qualified` while the beta keeps the paywall UI deleted — qualified views read zero and conversion reads nil ([monetization.md](./monetization.md)). Do not treat that zero as a bug or synthesize qualifier events.
 
 ## Cross-links
 

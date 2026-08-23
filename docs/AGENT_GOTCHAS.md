@@ -20,6 +20,14 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | Missing transcript chunks / audio-thread `EXC_BAD_ACCESS` / audio leaving device | 9 |
 | Onboarding / first-run coach | 10 |
 | Full-screen page pans sideways | 11 |
+| SwiftData fetch traps in unit tests (iOS 26.5 runner) | 12 |
+| Fresh simulator runtime: NLP tagger returns nothing | 13 |
+| `@Observable` dict literal `[]` won't compile | 14 |
+| Giant modifier chain → bogus "no return statements" | 15 |
+| Direct `AVAudioFile` decode in scoring consumers | 16 |
+| Legacy store + `SchemaV1`: verify before release; CloudKit-strip fallback | 17 |
+| New projection column reads nil on legacy rows | 18 |
+| CloudKit push warning / cfprefsd "detaching" console noise | 19 |
 
 ## Punch list
 
@@ -180,3 +188,53 @@ Post-onboarding after first score: `FirstRecordingSetupSheet` → `AppTourView` 
 ## 11. Full-screen pages use `PageScrollView`
 
 A plain `ScrollView` pans sideways the moment a child measures wider than the viewport. Use `PageScrollView`. Deliberate horizontal rails stay `ScrollView(.horizontal)`. Details: [features/ui-design-system.md](./features/ui-design-system.md).
+
+---
+
+## 12. SwiftData traps inside the iOS 26.5 simulator test runner
+
+On Xcode 26.6 / iOS 26.5, **any** `ModelContainer` fetch or insert in a unit test traps `EXC_BREAKPOINT` inside SwiftData — while the shipping app runs the identical code path on the identical runtime. Test-runner regression, not a product bug; do not "fix" the app. The three container tests in `SharedPromptResolverTests` (struct lives in `SpeakUpTests/SharedPromptLinkTests.swift`) are `.disabled("SwiftData traps in iOS 26.5 test runner (Xcode 26.6)")` until the toolchain is fixed — re-enable them then.
+
+---
+
+## 13. Fresh simulator runtimes have no on-device NLP models
+
+A brand-new simulator runtime ships without the NLP assets, so `NLTagger(.lexicalClass)` returns **zero tags** — no error. Every signal downstream of lexical tagging (gibberish recognized-ratio, content-word density) silently degrades to its no-data path, and characterization assertions written against real tags fail for reasons that have nothing to do with the code. Tests gate on the `NLPCapability.lexicalTaggingWorks` probe (`SpeechScoringEngineCharacterizationTests`) instead of assuming tags exist; keep it that way.
+
+---
+
+## 14. Init `@Observable` dictionaries with `[:]`, never `[]`
+
+An `@Observable` type's dictionary-typed stored property initialized with `[]` trips the `ObservationTracked` macro: *"use [:] to get an empty dictionary literal"*. Arrays accept `[]`; dictionaries do not. Always write `[:]`.
+
+---
+
+## 15. Giant SwiftUI builder chains blow the type-checker budget
+
+10+ chained modifiers — especially ones carrying `Binding`s — under MainActor-default isolation can exceed the type-checker's budget and surface as bogus *"no return statements"* errors pointing at a body that plainly returns. Split trailing modifier clusters into `private func` helpers taking a `some View` base with explicit `return` (the pattern used across `Views/`); don't contort the body.
+
+---
+
+## 16. Audio consumers take `MonoPCM`, not `AVAudioFile`
+
+Pre-refactor, one analysis whole-file-decoded the PCM three times (isolation preprocess, speaker labeling, pitch), materializing ~115 MB per 10-minute take each time. Now every consumer takes a `MonoPCM` value and decodes via `MonoPCM.decode(url:)` only where its gating requires samples — short takes that gate out of speaker labeling decode nothing. Do not reintroduce direct `AVAudioFile` reads in scoring consumers.
+
+---
+
+## 17. Opening a pre-`SchemaV1` store through the versioned schema is unverified on device
+
+Every shipped install wrote its store under an *unversioned* schema; the container now opens stores through `Schema(versionedSchema: SchemaV1.self)` with an empty-stage `SpeakUpMigrationPlan`. Lightweight migration is expected to handle this silently, but no test or device run has opened a HEAD-era store through the new plan — SwiftData traps aren't catchable in unit tests on this toolchain (see §12's cousin problem). **Before the next release build: install over a pre-upgrade store and confirm launch + data.** If container creation ever throws, the fallback chain strips CloudKit first (`SpeakUpApp` logs "falling back to local store" — sync dies quietly for that launch) and then goes in-memory (app looks empty).
+
+---
+
+## 18. Legacy rows carry nil denormalized projections until first touch
+
+`Recording.promptId` / `overallScore` are additive columns: rows written before they existed read nil forever unless something writes them. Consumers must fall back to the source of truth (`recording.prompt?.id`, `fullAnalysis`) rather than treating nil as unknown-and-skip — nil means *legacy*, not *missing*. The AllPrompts progress scan backfills `promptId` opportunistically; do the same for any new projection column before shipping a scalar-only reader.
+
+---
+
+## 19. Console noise that is (and is not) a bug
+
+**`BUG IN CLIENT OF CLOUDKIT: … 'remote-notification' background mode`** — real misconfiguration when the sync toggle is on: CloudKit push needs `UIBackgroundModes = [remote-notification]` in the app's Info.plist. It lives in `SpeakUp/Info.plist`; if it ever disappears, subscriptions stop delivering and widgets/notifications silently degrade.
+
+**`CFPrefsPlistSource … kCFPreferencesAnyUser with a container … detaching from cfprefsd`** — fired by touching an App Group suite from a process that does not hold the entitlement (Xcode Previews, some test hosts). Harmless to the shipping app, but don't chase it with re-runs. Both `WidgetDataProvider`s guard on `FileManager.containerURL(forSecurityApplicationGroupIdentifier:) != nil` before touching the suite and return nil otherwise — keep that guard; never "fix" it by falling back to `.standard`, which would write widget data into a domain the widget can never read.

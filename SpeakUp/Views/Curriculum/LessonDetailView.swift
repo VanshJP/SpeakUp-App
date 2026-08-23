@@ -213,11 +213,11 @@ struct LessonDetailView: View {
 
     private func dotColor(for index: Int, activity: CurriculumActivity) -> Color {
         if completedActivityIds.contains(activity.id) || viewModel.isActivityCompleted(activity.id) {
-            return .green
+            return AppColors.success
         } else if index == currentStepIndex {
             return AppColors.primary
         } else {
-            return .gray.opacity(0.3)
+            return AppColors.categoryNeutral.opacity(0.3)
         }
     }
 

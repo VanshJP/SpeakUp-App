@@ -175,8 +175,10 @@ struct CrutchSwapsCard: View {
 
     /// The take's worst habits, ready to render: two-plus occurrences, ranked,
     /// capped at six rows. A one-off word is not a habit worth coaching.
-    static func hits(for recording: Recording) -> [SessionWordHit] {
-        guard let words = recording.transcriptionWords, !words.isEmpty else { return [] }
+    /// Takes the already-resolved words — the caller's `transcriptionWords`
+    /// access decodes a blob, so it must happen once in setup, not per render.
+    static func hits(from words: [TranscriptionWord]?) -> [SessionWordHit] {
+        guard let words, !words.isEmpty else { return [] }
 
         return Array(
             LexiconInsightsEngine.sessionHits(from: words)

@@ -30,13 +30,30 @@ struct DailyPromptProvider: TimelineProvider {
             promptCategory: WidgetDataProvider.todaysPromptCategory,
             promptId: WidgetDataProvider.todaysPromptId
         )
-        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+        // Payload only changes at daily rollover; intraday changes arrive via
+        // fingerprint-gated app reloads.
+        let calendar = Calendar.current
+        let nextMidnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: entry.date))
+        completion(Timeline(entries: [entry], policy: .after(nextMidnight ?? entry.date)))
     }
 }
 
 struct DailyPromptWidgetView: View {
     let entry: DailyPromptEntry
+
+    /// Mirrors `SharedPromptLink.customSchemeURL` so IDs with spaces or
+    /// non-ASCII characters survive the round trip.
+    private var recordURL: URL? {
+        var components = URLComponents()
+        components.scheme = "speakup"
+        components.host = "record"
+        // Empty id → no queryItems, matching `SharedPromptLink.customSchemeURL`
+        // (whose parser drops empty values anyway).
+        if !entry.promptId.isEmpty {
+            components.queryItems = [URLQueryItem(name: "prompt", value: entry.promptId)]
+        }
+        return components.url
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -81,7 +98,7 @@ struct DailyPromptWidgetView: View {
             }
         }
         .padding()
-        .widgetURL(URL(string: "speakup://record?prompt=\(entry.promptId)"))
+        .widgetURL(recordURL)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Daily prompt: \(entry.promptText). Tap to practice.")
     }

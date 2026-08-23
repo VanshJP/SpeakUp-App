@@ -30,7 +30,7 @@ Entry: `RecordingDetailView.task` (main actor).
 1. **Configure** — `settingsViewModel.configure(with:)`; `await loadRecording()` fetches `Recording` from SwiftData.
 2. **Prepare detail assets** — waveform, playback state.
 3. **Enqueue** — `enqueueProcessingIfNeeded(recording)` delegates to `RecordingProcessingCoordinator.shared.enqueue(recordingID:modelContext:speechService:llmService:)` when `recording.analysis == nil`. No-op if analysis already exists. Sets `recording.isProcessing = true` only on `force: true`.
-4. **Background tasks after ready** — `populateWPMTimeSeriesIfNeeded()` fills missing series; `enhanceCoherenceIfNeeded()` kicks off non-blocking LLM coherence enhancement (see §7).
+4. **Background tasks after ready** — `populateWPMTimeSeriesIfNeeded()` fills missing series (through the `fullAnalysis`/`setAnalysis` mirror, so the coherence pass cannot clobber it); `loadPersonalAverageIfNeeded()` computes the 20-session baseline; `enhanceCoherenceIfNeeded()` kicks off non-blocking LLM coherence enhancement (see §7).
 
 `RecordingProcessingCoordinator` (`@MainActor`, singleton) owns job state:
 - `activeRecordingIDs: Set<UUID>` dedupes concurrent `enqueue` calls (`guard !activeRecordingIDs.contains(recordingID) else { return }`).
@@ -44,7 +44,7 @@ Entry: `RecordingDetailView.task` (main actor).
      **`noSpeechThreshold` is the silence trigger, not a speech-sensitivity dial.** WhisperKit discards a whole 30 s window — silently — when `noSpeechProb >` it and the window also fails `logProbThreshold`. Lowering it drops *more* audio; 0.6 is the WhisperKit/OpenAI default and anything below it deletes quiet stretches.
      No outer timeout. The Whisper leg runs a **stall watchdog**: WhisperKit's per-token callback stamps a heartbeat, and the decode is abandoned only after `decodeStallTimeout` (60 s) with no beat, plus a loose `decodeCeiling` backstop for a decoder that beats without advancing. Elapsed-time caps are wrong here — a flat 90 s one used to time out long recordings and drop them onto Apple Speech. The Apple leg force-resumes on a duration-scaled timer instead, having no callback.
      Result carries **every** transcribed word — speaker isolation labels `isPrimarySpeaker`, it never deletes words — plus `transcriptionText`, `audioIsolationMetrics`, `speakerIsolationMetrics`, and optional `voiceProfileUpdate` produced by `ConversationIsolationService.labelPrimarySpeaker(...)`. The primary-speaker gate is applied for **scoring only**, inside `analyze`.
-  6. `analyzeTranscript(...)` dispatches to `DispatchQueue.global(qos: .userInitiated)`, invokes `SpeechService.analyze(...)`, then marks vocab words via `markVocabWordsInTranscription(...)`.
+  6. `analyzeTranscript(...)` runs scoring detached — `Task.detached` invoking `SpeechAnalysisPipeline.analyze(...)` (`nonisolated` pure statics; the old GCD bridge compiled clean under MainActor-default isolation but still hopped to the main actor) — and marks vocab words inside that same detached pass via `VocabMatcher.mark(...)`.
   7. **Voice profile update** — if `conversationDetected || (filteredOutWordCount ≥ 4 && speakerSwitchCount ≥ 3)`: EMA with `α = 0.3` on `UserSettings.voiceProfileF0Hz` / `voiceProfileEnergyDb`; increment `voiceProfileSampleCount`.
   8. Persist `transcriptionText`, `transcriptionWords`, `analysis`, clear `isProcessing`, `try modelContext.save()`. On error, still clear `isProcessing` + save.
 
@@ -425,7 +425,7 @@ Every timestamp the layer produces is playable: `CoachingTip.evidenceTime`, the 
 
 ## Data and decode caveats
 - `SpeechAnalysis.init(from:)` nulls advanced fields on **every** decode except the full-fidelity mirror path — not just older recordings. `Recording.analysisJSON` + `SpeechAnalysis.decodedMirror(_:)` restore them; write via `Recording.setAnalysis(_:)`, read via `Recording.fullAnalysis`. See `docs/AGENT_GOTCHAS.md` §2b.
-- `Recording.audioLevelSamples` is `@Transient` — not persisted; regenerated from the audio file when needed.
+- Live level samples persist: `Recording.audioLevelSamplesData` holds a JSON-encoded `[Float]` (additive schema column); `audioLevelSamples` is its decoding accessor — keep it out of view bodies. Persisted samples restore real delivery metrics on relaunch. When the column is empty **and** the audio file is still local, `RecordingProcessingCoordinator` regenerates approximate dB peaks from the file for scoring only — it does not write them back.
 - `EnhancedSpeechMetrics`, `TextQualityMetrics`, `PitchMetrics`, `AudioIsolationMetrics`, `SpeakerIsolationMetrics` all use `decodeIfPresent` so new fields don't break historical decoding.
 - `ScoreWeights` is `nonisolated`; `ScoreWeights.defaults` is the canonical default value. The `normalized` accessor divides by total to guarantee `Σ weights == 1` at aggregation time.
 - `Recording.transcriptionWords` stores `[TranscriptionWord]` Codable-encoded; older rows predating speaker isolation decode with `isPrimarySpeaker = true` and `speakerConfidence = nil`.

@@ -23,6 +23,8 @@ Home Screen glanceables + deep links. Hydrate from App Group — widget process 
 3. Deep links from widgets must match `ContentView` / `UniversalLink` routers.
 4. Never add SwiftData usage inside the widget target.
 5. Entitlement cache lives in the same App Group suite — don’t invent a second suite name.
+6. **Coordinator contract:** after each successful analysis, `RecordingProcessingCoordinator` writes the two values an analysis actually changes (`lastScore`, `lastPracticeDate`) directly to the App Group — widgets render from that snapshot, not SwiftData, so a bare reload would re-render stale numbers — then calls `WidgetDataProvider.resetTodayFingerprint()` so the change gate reports a diff on Today's next visit and the full payload is rewritten wholesale, then reloads timelines.
+7. **Refresh cadence:** `StreakWidget` bakes each urgency band's message into its own timeline entry at the local 12:00 / 17:00 / 20:00 rollovers (one entry per band instead of one static entry), and `DailyPromptWidget` schedules `.after(nextMidnight)` — intraday payload changes arrive via fingerprint-gated app reloads, not widget polling.
 
 ## Cross-links
 

@@ -17,11 +17,26 @@ enum LLMBackend: Equatable, Sendable {
     case none
 }
 
+/// Why the most recent optional-result pass came back empty. Diagnostics
+/// only: reason codes identify the failing stage — never prompt or
+/// transcript content (logs/analytics carry no user text).
+struct LLMPassFailure: Equatable, Sendable {
+    let pass: String
+    let reason: String
+}
+
 // MARK: - LLMService
 
 @MainActor @Observable
 final class LLMService {
     var isGenerating = false
+
+    /// Set whenever an optional-result pass returns `nil` despite attempting;
+    /// cleared at each attempt start. Reason codes only — no user content.
+    private(set) var lastFailure: LLMPassFailure?
+
+    /// Touched from the off-main memory-pressure handler, hence nonisolated.
+    nonisolated private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LLMService")
 
     /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
@@ -70,10 +85,10 @@ final class LLMService {
             // Only react to `.critical` in that mode — iOS will jetsam the
             // process anyway if real exhaustion follows.
             if preferLocal && !isCritical {
-                print("[LLMService] Memory pressure .warning ignored, preferLocalLLM is on")
+                logger.debug("Memory pressure .warning ignored, preferLocalLLM is on")
                 return
             }
-            print("[LLMService] Memory pressure (\(isCritical ? "critical" : "warning")), unloading local LLM")
+            logger.debug("Memory pressure (\((isCritical ? "critical" : "warning"), privacy: .public)), unloading local LLM")
             // Abort any in-flight generation first. `unloadModel` schedules a
             // detached `engine.unload()` that has to take the inference lock,
             // which `generate` holds for the full token-decode loop — without
@@ -146,14 +161,21 @@ final class LLMService {
     /// Falls back from Apple Intelligence to the local model if the AI call
     /// returns nil (e.g. simulator, feature disabled).
     func generateText(prompt: String, systemPrompt: String) async -> String? {
+        lastFailure = nil
         if prefersAppleIntelligence {
             if let result = await generateWithAppleIntelligence(prompt: prompt, systemPrompt: systemPrompt) {
                 return result
             }
+            // Reason already recorded by the Apple Intelligence leg.
         }
         if localLLM.isModelReady {
-            return await localLLM.generate(prompt: prompt, systemPrompt: systemPrompt)
+            if let result = await localLLM.generate(prompt: prompt, systemPrompt: systemPrompt) {
+                return result
+            }
+            recordFailure(pass: "generateText", reason: "localReturnedNil")
+            return nil
         }
+        recordFailure(pass: "generateText", reason: "noBackendReady")
         return nil
     }
 
@@ -275,16 +297,23 @@ final class LLMService {
     // MARK: - Coherence Evaluation
 
     func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {
+        lastFailure = nil
         if prefersAppleIntelligence {
             if let result = await evaluateCoherenceWithAppleIntelligence(transcript: transcript, promptText: promptText) {
                 return result
             }
+            // Reason already recorded by the Apple Intelligence leg.
         }
 
         if localLLM.isModelReady {
-            return await localLLM.evaluateCoherence(transcript: transcript, promptText: promptText)
+            if let result = await localLLM.evaluateCoherence(transcript: transcript, promptText: promptText) {
+                return result
+            }
+            recordFailure(pass: "coherence", reason: "localReturnedNil")
+            return nil
         }
 
+        recordFailure(pass: "coherence", reason: "noBackendReady")
         return nil
     }
 
@@ -300,6 +329,7 @@ final class LLMService {
     ) async -> String? {
         isGenerating = true
         defer { isGenerating = false }
+        lastFailure = nil
 
         if prefersAppleIntelligence {
             if let raw = await generateCoachingWithAppleIntelligence(
@@ -321,26 +351,35 @@ final class LLMService {
             ) {
                 return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript, context: context)
             }
+            recordFailure(pass: "coachingInsight", reason: "localReturnedNil")
             return nil
         }
 
+        recordFailure(pass: "coachingInsight", reason: "noBackendReady")
         return nil
     }
 
     // MARK: - Transcript Quality Evaluation
 
     func evaluateTranscriptQuality(transcript: String) async -> (structure: Int, vocabulary: Int)? {
+        lastFailure = nil
         if prefersAppleIntelligence {
             if let result = await evaluateTranscriptQualityWithAppleIntelligence(transcript: transcript) {
                 return result
             }
+            // Reason already recorded by the Apple Intelligence leg.
         }
 
         // Fall back to local LLM
         if localLLM.isModelReady {
-            return await localLLM.evaluateTranscriptQuality(transcript: transcript)
+            if let result = await localLLM.evaluateTranscriptQuality(transcript: transcript) {
+                return result
+            }
+            recordFailure(pass: "transcriptQuality", reason: "localReturnedNil")
+            return nil
         }
 
+        recordFailure(pass: "transcriptQuality", reason: "noBackendReady")
         return nil
     }
 
@@ -428,8 +467,34 @@ final class LLMService {
             }
         }
 
-        guard let s = structure, let v = vocabulary else { return nil }
+        guard let s = structure, let v = vocabulary else {
+            lastFailure = LLMPassFailure(pass: "appleTranscriptQuality", reason: "unparsableResponse")
+            return nil
+        }
         return (structure: max(0, min(100, s)), vocabulary: max(0, min(100, v)))
+    }
+
+    /// Stable error identifier (domain#code) for diagnostics. Message text is
+    /// deliberately omitted so no prompt/response content can leak into logs.
+    private static func appleFailureReason(_ error: Error) -> String {
+        if error is CancellationError { return "cancelled" }
+        let nsError = error as NSError
+        return "\(nsError.domain)#\(nsError.code)"
+    }
+
+    /// Records a leg failure. When an earlier leg of the same pass already
+    /// failed (the Apple leg), its reason is preserved and tagged rather than
+    /// overwritten, so a fallback leg failing too cannot erase the primary
+    /// cause. Codes only — no user content.
+    private func recordFailure(pass: String, reason: String) {
+        guard let previous = lastFailure else {
+            lastFailure = LLMPassFailure(pass: pass, reason: reason)
+            return
+        }
+        lastFailure = LLMPassFailure(
+            pass: pass,
+            reason: "apple: \(previous.reason); local: \(reason)"
+        )
     }
 
     private func generateCoachingWithAppleIntelligence(
@@ -438,7 +503,10 @@ final class LLMService {
         context: CoachingContext
     ) async -> String? {
         let model = SystemLanguageModel.default
-        guard model.isAvailable else { return nil }
+        guard model.isAvailable else {
+            lastFailure = LLMPassFailure(pass: "appleCoaching", reason: "modelUnavailable")
+            return nil
+        }
 
         let prompt = CoachingPrompt.user(
             analysis: analysis,
@@ -455,14 +523,18 @@ final class LLMService {
             let response = try await session.respond(to: prompt)
             return response.content
         } catch {
-            print("FoundationModels coaching error: \(error)")
+            logger.error("FoundationModels coaching error: \(Self.appleFailureReason(error), privacy: .public)")
+            lastFailure = LLMPassFailure(pass: "appleCoaching", reason: Self.appleFailureReason(error))
             return nil
         }
     }
 
     private func generateWithAppleIntelligence(prompt: String, systemPrompt: String) async -> String? {
         let model = SystemLanguageModel.default
-        guard model.isAvailable else { return nil }
+        guard model.isAvailable else {
+            lastFailure = LLMPassFailure(pass: "appleGeneration", reason: "modelUnavailable")
+            return nil
+        }
 
         isGenerating = true
         defer { isGenerating = false }
@@ -475,7 +547,8 @@ final class LLMService {
             let response = try await session.respond(to: prompt)
             return response.content
         } catch {
-            print("FoundationModels generation error: \(error)")
+            logger.error("FoundationModels generation error: \(Self.appleFailureReason(error), privacy: .public)")
+            lastFailure = LLMPassFailure(pass: "appleGeneration", reason: Self.appleFailureReason(error))
             return nil
         }
     }

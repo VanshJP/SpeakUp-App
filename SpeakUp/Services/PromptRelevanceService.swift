@@ -1,7 +1,7 @@
 import Foundation
 import NaturalLanguage
 
-enum PromptRelevanceService {
+nonisolated enum PromptRelevanceService {
 
     // MARK: - Public API
 
@@ -62,13 +62,13 @@ enum PromptRelevanceService {
     ) async -> Int? {
         let ruleBasedScore = coherenceScore(transcript: transcript)
 
-        if let llm = llmService, llm.isAvailable {
+        if let llm = llmService, await MainActor.run(body: { llm.isAvailable }) {
             if let llmResult = await llm.evaluateCoherence(transcript: transcript, promptText: promptText) {
                 let ruleBase = Double(ruleBasedScore ?? 50)
 
                 // Backend-aware blending: trust larger models more
                 let llmWeight: Double
-                switch llm.activeBackend {
+                switch await MainActor.run(body: { llm.activeBackend }) {
                 case .appleIntelligence:
                     llmWeight = 0.60
                 case .localLLM:

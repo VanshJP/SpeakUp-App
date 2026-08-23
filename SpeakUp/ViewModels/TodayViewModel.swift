@@ -2,9 +2,12 @@ import Foundation
 import SwiftUI
 import SwiftData
 import WidgetKit
+import os
 
 @Observable
 class TodayViewModel {
+    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "Today")
+
     var todaysPrompt: Prompt?
     var userStats: UserStats = UserStats()
     var activeGoals: [UserGoal] = []
@@ -266,34 +269,59 @@ class TodayViewModel {
     }
 
     private func updateWidgetData() {
+        let lastScore = userStats.scoreHistory.first?.score
+        let recentScores = userStats.scoreHistory.map(\.score)
+        let avgScore = recentScores.isEmpty ? 0 : recentScores.reduce(0, +) / recentScores.count
+        let practiceMinutes = Int(weeklyProgress?.totalMinutes ?? 0)
+
+        // Fingerprint-gate: loadData runs on every Today appearance and
+        // pull-to-refresh, so skip both the writes and the reload when nothing
+        // the widgets display changed.
+        var payload: [String] = [
+            String(userStats.currentStreak),
+            todaysPrompt?.text ?? "",
+            todaysPrompt?.category ?? "",
+            todaysPrompt?.id ?? "",
+        ]
+        payload.append(lastScore.map(String.init) ?? "")
+        payload.append(String(userStats.weeklySessionCount))
+        payload.append(String(userStats.weeklyGoalSessions))
+        payload.append(String(avgScore))
+        payload.append(String(practiceMinutes))
+        payload.append(String(userStats.improvementRate.rounded()))
+        payload.append(String(readinessScore))
+        payload.append(lastPracticeDate.map { String($0.timeIntervalSince1970) } ?? "")
+        guard WidgetDataProvider.todayPayloadChanged(payload) else { return }
+
         WidgetDataProvider.updateStreak(userStats.currentStreak)
         if let prompt = todaysPrompt {
             WidgetDataProvider.updateTodaysPrompt(text: prompt.text, category: prompt.category, id: prompt.id)
         }
-        if let lastScore = userStats.scoreHistory.first?.score {
+        if let lastScore {
             WidgetDataProvider.updateLastScore(lastScore)
         }
 
         // Weekly progress
-        let recentScores = userStats.scoreHistory.map(\.score)
-        let avgScore = recentScores.isEmpty ? 0 : recentScores.reduce(0, +) / recentScores.count
         WidgetDataProvider.updateWeeklyProgress(
             sessionCount: userStats.weeklySessionCount,
             goalSessions: userStats.weeklyGoalSessions,
             averageScore: avgScore,
-            practiceMinutes: Int(weeklyProgress?.totalMinutes ?? 0),
+            practiceMinutes: practiceMinutes,
             improvementRate: Int(userStats.improvementRate.rounded())
         )
 
-        if readinessScore > 0 {
-            WidgetDataProvider.updateInterviewReadiness(readinessScore)
-        }
+        // Unconditional writes: the fingerprint above already recorded the new
+        // payload, so skipping a regressed value here would strand stale widget
+        // data marked current forever. The gate is the only skip mechanism.
+        WidgetDataProvider.updateInterviewReadiness(readinessScore)
 
 
         // Track last practice date for streak-at-risk widget. Any recording
         // counts — a session whose transcription failed is still practice.
         if let lastPracticeDate {
             WidgetDataProvider.updateLastPracticeDate(lastPracticeDate)
+        } else {
+            WidgetDataProvider.clearLastPracticeDate()
         }
 
         WidgetCenter.shared.reloadAllTimelines()
@@ -368,10 +396,10 @@ class TodayViewModel {
                 ) ?? current
             }
         } catch {
-            print("Error loading today's prompt: \(error)")
+            logger.error("Error loading today's prompt: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
-    
+
     @MainActor
     private func loadActiveGoals(context: ModelContext) async {
         GoalProgressService.refreshGoals(in: context)
@@ -383,7 +411,7 @@ class TodayViewModel {
         do {
             activeGoals = try context.fetch(descriptor)
         } catch {
-            print("Error loading active goals: \(error)")
+            logger.error("Error loading active goals: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     
@@ -404,7 +432,7 @@ class TodayViewModel {
                 scoreWeights = ScoreWeights(from: settings)
             }
         } catch {
-            print("Error loading user settings: \(error)")
+            logger.error("Error loading user settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
 
     }
@@ -467,7 +495,7 @@ class TodayViewModel {
             }
             hasRerolledPrompt = true
         } catch {
-            print("Error refreshing prompt: \(error)")
+            logger.error("Error refreshing prompt: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     
@@ -488,7 +516,7 @@ class TodayViewModel {
             let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
             todaysStory = stories[dayOfYear % stories.count]
         } catch {
-            print("Error loading today's story: \(error)")
+            logger.error("Error loading today's story: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -504,7 +532,7 @@ class TodayViewModel {
                 todaysStory = stories.randomElement()
             }
         } catch {
-            print("Error refreshing story: \(error)")
+            logger.error("Error refreshing story: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 

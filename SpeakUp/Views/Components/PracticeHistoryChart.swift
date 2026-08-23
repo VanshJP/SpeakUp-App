@@ -88,13 +88,66 @@ struct PracticeHistoryChart: View {
     }
 }
 
+// MARK: - Practice Recording Summary
+
+/// Value projection of one practice take — decoded once at load time so
+/// chart and metric bodies never touch a `Recording.analysis` blob.
+nonisolated struct PracticeRecordingSummary: Identifiable {
+    let id: UUID
+    let date: Date
+    let score: Int?
+    let wpm: Double
+    let fillerCount: Int
+    let duration: TimeInterval
+
+    static func from(recordings: [Recording]) -> [PracticeRecordingSummary] {
+        recordings.map { recording in
+            let analysis = recording.analysis
+            return PracticeRecordingSummary(
+                id: recording.id,
+                date: recording.date,
+                score: analysis?.speechScore.overall,
+                wpm: analysis?.wordsPerMinute ?? 0,
+                fillerCount: analysis?.totalFillerCount ?? 0,
+                duration: recording.actualDuration
+            )
+        }
+    }
+}
+
 // MARK: - Practice Metrics Row
 
 struct PracticeMetricsRow: View {
-    let recordings: [Recording]
+    let recordings: [PracticeRecordingSummary]
+
+    /// Avg, best, and total time in ONE pass over already-decoded values.
+    private var aggregate: (avgScore: Int?, bestScore: Int?, totalDuration: String) {
+        var scoreTotal = 0
+        var scoreCount = 0
+        var bestScore: Int?
+        var durationTotal: TimeInterval = 0
+
+        for summary in recordings {
+            durationTotal += summary.duration
+            guard let score = summary.score else { continue }
+            scoreTotal += score
+            scoreCount += 1
+            if bestScore == nil || score > bestScore! {
+                bestScore = score
+            }
+        }
+
+        let avgScore = scoreCount > 0 ? scoreTotal / scoreCount : nil
+        if durationTotal < 60 {
+            return (avgScore, bestScore, "\(Int(durationTotal))s")
+        }
+        return (avgScore, bestScore, "\(Int(durationTotal) / 60)m")
+    }
 
     var body: some View {
-        GlassCard(padding: 14) {
+        let stats = aggregate
+
+        return GlassCard(padding: 14) {
             HStack(spacing: 0) {
                 metricItem(
                     icon: "mic.fill",
@@ -107,25 +160,25 @@ struct PracticeMetricsRow: View {
 
                 metricItem(
                     icon: "chart.line.uptrend.xyaxis",
-                    value: avgScore.map { "\($0)" } ?? "--",
+                    value: stats.avgScore.map { "\($0)" } ?? "--",
                     label: "Avg Score",
-                    color: avgScore.map { AppColors.scoreColor(for: $0) } ?? .secondary
+                    color: stats.avgScore.map { AppColors.scoreColor(for: $0) } ?? .secondary
                 )
 
                 metricDivider
 
                 metricItem(
                     icon: "flame.fill",
-                    value: bestScore.map { "\($0)" } ?? "--",
+                    value: stats.bestScore.map { "\($0)" } ?? "--",
                     label: "Best",
-                    color: bestScore.map { AppColors.scoreColor(for: $0) } ?? .secondary
+                    color: stats.bestScore.map { AppColors.scoreColor(for: $0) } ?? .secondary
                 )
 
                 metricDivider
 
                 metricItem(
                     icon: "clock",
-                    value: totalDuration,
+                    value: stats.totalDuration,
                     label: "Total Time",
                     color: AppColors.info
                 )
@@ -153,23 +206,6 @@ struct PracticeMetricsRow: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-    private var avgScore: Int? {
-        let scores = recordings.compactMap { $0.analysis?.speechScore.overall }
-        guard !scores.isEmpty else { return nil }
-        return scores.reduce(0, +) / scores.count
-    }
-
-    private var bestScore: Int? {
-        recordings.compactMap { $0.analysis?.speechScore.overall }.max()
-    }
-
-    private var totalDuration: String {
-        let total = recordings.reduce(0.0) { $0 + $1.actualDuration }
-        if total < 60 { return "\(Int(total))s" }
-        let minutes = Int(total) / 60
-        return "\(minutes)m"
-    }
 }
 
 // MARK: - Data Point
@@ -180,14 +216,14 @@ struct PracticeDataPoint: Identifiable {
     let score: Int
     let date: Date
 
-    static func from(recordings: [Recording]) -> [PracticeDataPoint] {
-        let sorted = recordings
-            .filter { $0.analysis?.speechScore.overall != nil }
+    static func from(summaries: [PracticeRecordingSummary]) -> [PracticeDataPoint] {
+        let sorted = summaries
+            .filter { $0.score != nil }
             .sorted { $0.date < $1.date }
 
-        return sorted.enumerated().compactMap { index, recording in
-            guard let score = recording.analysis?.speechScore.overall else { return nil }
-            return PracticeDataPoint(index: index + 1, score: score, date: recording.date)
+        return sorted.enumerated().compactMap { index, summary in
+            guard let score = summary.score else { return nil }
+            return PracticeDataPoint(index: index + 1, score: score, date: summary.date)
         }
     }
 }

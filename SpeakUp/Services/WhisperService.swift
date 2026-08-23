@@ -23,6 +23,11 @@ class WhisperService {
     /// reentrant — two recordings processed concurrently (coordinator jobs for
     /// different recordingIDs) would race one shared instance: torn-down model
     /// under live inference, double model loads.
+    ///
+    /// Release ordering stays safe because the signal fires only after
+    /// transcribe's task group has awaited every child, and it is the
+    /// heartbeat's abort flag — not cancellation — that actually stops
+    /// WhisperKit's internal decode first. See `DecodeHeartbeat`.
     private let semaphore = AsyncSemaphore(value: 1)
 
     // Filler word prompt to encourage capturing hesitations
@@ -160,6 +165,11 @@ class WhisperService {
             transcriptionProgress = 1.0
         }
 
+        // One heartbeat per call, created before the try block so the
+        // cancellation path below can still reach it. A fresh instance also
+        // clears any abort state a previous run left behind.
+        let heartbeat = DecodeHeartbeat()
+
         do {
             // Tokenize prompt to condition the model toward fillers + user dictionary words.
             // Whisper's prompt context is capped (~224 tokens). If the encoded prompt exceeds
@@ -213,7 +223,6 @@ class WhisperService {
             // `decodeStallTimeout`. Only one result is ever returned here: without
             // a `chunkingStrategy` WhisperKit decodes the whole file in a single
             // task, so `.first` is the complete transcript, not the first chunk.
-            let heartbeat = DecodeHeartbeat()
             let ceiling = WhisperService.decodeCeiling(for: audioURL)
             let result: WhisperTranscriptionResult = try await withThrowingTaskGroup(of: WhisperTranscriptionResult.self) { group in
                 group.addTask {
@@ -222,8 +231,10 @@ class WhisperService {
                         decodeOptions: options,
                         callback: { _ in
                             heartbeat.beat()
-                            // Anything but an explicit `false` lets decoding run on.
-                            return true
+                            // `false` is WhisperKit's documented early-stop:
+                            // the only way to actually halt its internal
+                            // decode, since task cancellation never reaches it.
+                            return !heartbeat.shouldAbort
                         }
                     )
                     guard let first = results.first else {
@@ -237,6 +248,11 @@ class WhisperService {
                         try await Task.sleep(for: .seconds(5))
                         guard heartbeat.secondsSinceLastBeat < WhisperService.decodeStallTimeout,
                               Date() < deadline else {
+                            // Stop the decode BEFORE bailing — once this error
+                            // unwinds, the semaphore hands the shared instance
+                            // to the next caller and a still-running decode
+                            // would race it.
+                            heartbeat.requestAbort()
                             throw WhisperServiceError.transcriptionTimedOut
                         }
                     }
@@ -251,6 +267,11 @@ class WhisperService {
             // Process the WhisperKit result into our format
             return processWhisperResult(result)
 
+        } catch is CancellationError {
+            // External cancellation (job cancelled, app backgrounding): same
+            // zombie risk as the watchdog — stop the decode before unwinding.
+            heartbeat.requestAbort()
+            throw CancellationError()
         } catch {
             throw WhisperServiceError.transcriptionFailed(error)
         }
@@ -371,9 +392,13 @@ class WhisperService {
 /// WhisperKit invokes the transcription callback from a detached background
 /// task, once per decoded token, so this must be thread-safe and must not touch
 /// actor-isolated state. The watchdog reads `secondsSinceLastBeat` to tell a
-/// slow recording (beating steadily) from a hung decoder (silent).
+/// slow recording (beating steadily) from a hung decoder (silent), and flips
+/// `shouldAbort` to make the callback stop the decode — cancelling the await
+/// alone never reaches WhisperKit's internals, which would leave a zombie
+/// decode running while the semaphore lets the next caller in.
 nonisolated private final class DecodeHeartbeat: @unchecked Sendable {
     private var lastBeat = Date()
+    private var abortRequested = false
     private let lock = NSLock()
 
     func beat() {
@@ -386,6 +411,20 @@ nonisolated private final class DecodeHeartbeat: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return Date().timeIntervalSince(lastBeat)
+    }
+
+    /// One-way switch: set by the watchdog before it throws and by the
+    /// cancellation path. A fresh instance per transcribe call resets it.
+    func requestAbort() {
+        lock.lock()
+        abortRequested = true
+        lock.unlock()
+    }
+
+    var shouldAbort: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return abortRequested
     }
 }
 

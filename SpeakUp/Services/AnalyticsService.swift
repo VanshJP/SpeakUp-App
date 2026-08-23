@@ -13,6 +13,7 @@ protocol AnalyticsSink: AnyObject {
     nonisolated func record(_ event: RecordedAnalyticsEvent)
     nonisolated func allEvents() -> [RecordedAnalyticsEvent]
     nonisolated func reset()
+    nonisolated func flushNow()
 }
 
 /// Coarse behavioural measurement that keeps the no-account, nothing-uploaded
@@ -67,6 +68,12 @@ final class AnalyticsService {
     func reset() {
         sink.reset()
         recentEvents = []
+    }
+
+    /// Writes buffered events to disk immediately instead of waiting out the
+    /// debounce — called when the app backgrounds.
+    func flushNow() {
+        sink.flushNow()
     }
 
     // MARK: - Scorecard
@@ -150,6 +157,14 @@ nonisolated final class LocalAnalyticsSink: AnalyticsSink, @unchecked Sendable {
         try? data.write(to: fileURL, options: .atomic)
     }
 
+    func flushNow() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.flushScheduled = false
+            self.flush()
+        }
+    }
+
     private static func load(from url: URL) -> [RecordedAnalyticsEvent] {
         guard let data = try? Data(contentsOf: url) else { return [] }
         let decoder = JSONDecoder()
@@ -167,6 +182,8 @@ nonisolated struct AnalyticsScorecard {
     let activations: Int
     let practiceStarts: Int
     let analysesCompleted: Int
+    /// Permanently 0 while the paywall is deleted; kept so the restore path
+    /// (docs/features/monetization.md) reads the same scorecard shape.
     let qualifiedPaywallViews: Int
     let purchases: Int
     let shares: Int

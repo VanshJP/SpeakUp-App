@@ -11,6 +11,7 @@ This doc only lists wiring and agent gotchas.
 | Role | Path |
 |------|------|
 | Orchestrator | `SpeakUp/Services/SpeechService.swift` |
+| Scoring pipeline | `SpeechAnalysisPipeline` (`nonisolated` enum, bottom of `SpeakUp/Services/SpeechService.swift`) |
 | Job queue | `SpeakUp/Services/RecordingProcessingCoordinator.swift` |
 | Scoring | `SpeakUp/Services/SpeechScoringEngine.swift` |
 | Whisper / fallback | `WhisperService`, `SpeechService.transcribeWithAppleSpeech` |
@@ -28,7 +29,7 @@ This doc only lists wiring and agent gotchas.
 1. Detail (or coordinator) enqueues when `recording.analysis == nil`.
 2. Dedupe on `recordingID` inside `RecordingProcessingCoordinator`.
 3. Transcription order: isolation → WhisperKit → raw-URL retry → reload retry → Apple Speech (`SpeechService.transcribeWithAppleSpeech`, not `DictationService`).
-4. Primary-speaker labeling → `SpeechService.analyze(...)`.
+4. Primary-speaker labeling → scoring leg runs detached: `Task.detached` invokes `SpeechAnalysisPipeline.analyze(...)` (the coordinator's old `DispatchQueue.global` bridge is gone — under MainActor-default isolation it compiled clean and still hopped to the main actor).
 5. Optional LLM coherence enhance (Apple Intelligence → local llama → skip).
 6. On success: `AllowanceGate.consume` (not before).
 
@@ -43,7 +44,9 @@ This doc only lists wiring and agent gotchas.
 - Every `SFSpeech*RecognitionRequest` in the app sets `requiresOnDeviceRecognition = true` unconditionally. On-device is a product claim (`APP_STORE_LISTING.md` §3), so an unavailable recognizer must fail rather than fall back to Apple's servers. Never make it conditional on `supportsOnDeviceRecognition` — that flag reads false while assets install.
 - Lowering `DecodingOptions.noSpeechThreshold` makes WhisperKit drop *more* audio, one whole 30 s window at a time, with no error.
 - Score philosophy: progressive (short casual ≈ 50–65; solid minute ≈ 75–90; only empty/gibberish ≪ 20).
-- Pure scoring types are `nonisolated` — required under MainActor-default isolation (`/docs/AGENT_GOTCHAS.md`).
+- Pure scoring types are `nonisolated` — required under MainActor-default isolation (`/docs/AGENT_GOTCHAS.md`). That now includes the pipeline itself plus every engine it calls: `SpeechAnalysisPipeline`, `SpeechScoringEngine`, `PitchAnalysisService`, `TextAnalysisService`, `PromptRelevanceService`, `AudioWaveformGenerator`.
+- Deletion flows must call `RecordingProcessingCoordinator.cancelProcessing(recordingID:)` **before** removing the recording row. The coordinator keeps a per-recording `Task` handle (`activeTasks`), so cancel actually stops the work instead of only striking the id from the dedupe set; best-effort by design — a leg past its last cancellation check still finishes, and every persist re-fetches first.
+- The Whisper stall watchdog works because `DecodeHeartbeat` carries a one-way abort flag that WhisperKit's per-token transcription callback checks: cancelling the awaited task alone never reaches WhisperKit internals, so without the flag a watchdog timeout abandoned the await but left a zombie decode running while the semaphore let the next caller in.
 
 ## Cross-links
 

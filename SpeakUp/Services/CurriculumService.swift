@@ -102,10 +102,15 @@ class CurriculumService {
         let recordingDescriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date)])
         let recordings = (try? context.fetch(recordingDescriptor)) ?? []
 
+        // One decode pass over history: every `recording.analysis` access
+        // re-decodes a JSON blob, so per-activity reads made this
+        // O(activities × recordings). Activities evaluate against the signals.
+        let signals = CurriculumSessionSignals.scan(recordings)
+
         var didMutate = false
         let allActivities = phases.flatMap { $0.lessons }.flatMap { $0.activities }
         for activity in allActivities {
-            guard inferCompletion(for: activity, recordings: recordings) else { continue }
+            guard inferCompletion(for: activity, signals: signals) else { continue }
             autoCompletedActivityIds.insert(activity.id)
             if !progress.completedActivityIds.contains(activity.id) {
                 progress.completedActivityIds.append(activity.id)
@@ -166,9 +171,7 @@ class CurriculumService {
         phases.flatMap(\.lessons).first { $0.id == lessonId }
     }
 
-    private func inferCompletion(for activity: CurriculumActivity, recordings: [Recording]) -> Bool {
-        let analyzed = recordings.compactMap(\.analysis)
-
+    private func inferCompletion(for activity: CurriculumActivity, signals: CurriculumSessionSignals) -> Bool {
         switch activity.type {
         case .lesson:
             return false
@@ -187,63 +190,53 @@ class CurriculumService {
 
         case .review:
             if activity.id == "w4_l4_a1" || activity.id == "w4_l3_a2" {
-                return analyzed.count >= 2
+                return signals.analyzedCount >= 2
             }
-            return !recordings.isEmpty
+            return signals.recordingCount > 0
 
         case .practice:
-            return inferPracticeCompletion(for: activity, recordings: recordings, analyzedCount: analyzed.count)
+            return inferPracticeCompletion(for: activity, signals: signals)
         }
     }
 
     private func inferPracticeCompletion(
         for activity: CurriculumActivity,
-        recordings: [Recording],
-        analyzedCount: Int
+        signals: CurriculumSessionSignals
     ) -> Bool {
         switch activity.id {
         case "w1_l1_a2":
-            return recordings.contains { $0.actualDuration >= 50 }
+            return signals.durationReached(50)
         case "w1_l2_a2":
-            return recordings.contains { ($0.analysis?.totalFillerCount ?? 0) > 0 }
+            return signals.hasAnyFiller
         case "w1_l3_a2":
-            return recordings.contains { ($0.analysis?.wordsPerMinute ?? 0) > 0 }
+            return signals.hasPositivePace
         case "w2_l1_a2":
-            return CurriculumActivitySignalStore.completedExerciseIDs.contains("box_breathing") && !recordings.isEmpty
+            return CurriculumActivitySignalStore.completedExerciseIDs.contains("box_breathing") && signals.recordingCount > 0
         case "w2_l2_a2":
-            return recordings.contains {
-                guard let analysis = $0.analysis else { return false }
-                return analysis.totalWords >= 25 && analysis.totalFillerCount <= 2
-            }
+            return signals.hasFocusedTake
         case "w2_l3_a2":
-            return recordings.contains {
-                guard let analysis = $0.analysis else { return false }
-                return analysis.totalWords >= 30 && (130...170).contains(Int(analysis.wordsPerMinute.rounded()))
-            }
+            return signals.hasOnPaceTake
         case "w3_l1_a2":
-            return recordings.contains { ($0.frameworkUsed ?? "").localizedCaseInsensitiveContains("prep") } || analyzedCount > 0
+            return signals.hasPrepFramework || signals.analyzedCount > 0
         case "w3_l2_a2":
-            return recordings.contains { ($0.frameworkUsed ?? "").localizedCaseInsensitiveContains("star") } || analyzedCount > 0
+            return signals.hasStarFramework || signals.analyzedCount > 0
         case "w3_l3_a2":
-            return recordings.contains { ($0.analysis?.pauseCount ?? 0) >= 3 }
+            return signals.hasDeliberatePauses
         case "w3_l4_a2":
-            return recordings.contains {
-                guard let sentenceAnalysis = $0.analysis?.sentenceAnalysis else { return false }
-                return sentenceAnalysis.totalSentences >= 3 && sentenceAnalysis.incompleteSentences <= 2
-            }
+            return signals.hasStructuredTake
         case "w4_l2_a2":
-            return recordings.contains { $0.prompt != nil }
+            return signals.hasPromptedTake
         case "w4_l3_a1":
-            return recordings.contains { $0.actualDuration >= 170 }
+            return signals.durationReached(170)
         default:
             let requiredSeconds = requiredDurationSeconds(in: "\(activity.title) \(activity.description)")
             if requiredSeconds > 0 {
-                return recordings.contains { $0.actualDuration >= requiredSeconds - 5 }
+                return signals.durationReached(requiredSeconds - 5)
             }
             if activity.title.localizedCaseInsensitiveContains("read aloud") {
                 return CurriculumActivitySignalStore.hasCompletedReadAloud
             }
-            return !recordings.isEmpty
+            return signals.recordingCount > 0
         }
     }
 
@@ -263,5 +256,83 @@ class CurriculumService {
             return value * 60
         }
         return value
+    }
+}
+
+// MARK: - Session Signals
+
+/// Everything auto-completion infers from practice history, projected in one
+/// pass. `Recording.analysis` is a Codable blob that re-decodes on every
+/// access — reading it per activity made a refresh O(activities × sessions).
+nonisolated struct CurriculumSessionSignals {
+    private(set) var recordingCount = 0
+    private(set) var analyzedCount = 0
+    private(set) var longestDuration: TimeInterval = 0
+    private(set) var hasAnyFiller = false
+    private(set) var hasPositivePace = false
+    /// A take with at least 25 words and at most 2 fillers.
+    private(set) var hasFocusedTake = false
+    /// A take with at least 30 words at 130–170 wpm.
+    private(set) var hasOnPaceTake = false
+    private(set) var hasPrepFramework = false
+    private(set) var hasStarFramework = false
+    private(set) var hasDeliberatePauses = false
+    /// At least 3 sentences, no more than 2 left incomplete.
+    private(set) var hasStructuredTake = false
+    private(set) var hasPromptedTake = false
+
+    static func scan(_ recordings: [Recording]) -> CurriculumSessionSignals {
+        var signals = CurriculumSessionSignals()
+        signals.recordingCount = recordings.count
+
+        for recording in recordings {
+            // The single decode this session contributes to the refresh.
+            let analysis = recording.analysis
+            if analysis != nil {
+                signals.analyzedCount += 1
+            }
+            if recording.actualDuration > signals.longestDuration {
+                signals.longestDuration = recording.actualDuration
+            }
+            if (analysis?.totalFillerCount ?? 0) > 0 {
+                signals.hasAnyFiller = true
+            }
+            if (analysis?.wordsPerMinute ?? 0) > 0 {
+                signals.hasPositivePace = true
+            }
+            if let analysis, analysis.totalWords >= 25 && analysis.totalFillerCount <= 2 {
+                signals.hasFocusedTake = true
+            }
+            if let analysis,
+               analysis.totalWords >= 30,
+               (130...170).contains(Int(analysis.wordsPerMinute.rounded())) {
+                signals.hasOnPaceTake = true
+            }
+            if (analysis?.pauseCount ?? 0) >= 3 {
+                signals.hasDeliberatePauses = true
+            }
+            if let sentences = analysis?.sentenceAnalysis,
+               sentences.totalSentences >= 3, sentences.incompleteSentences <= 2 {
+                signals.hasStructuredTake = true
+            }
+            let framework = recording.frameworkUsed ?? ""
+            if framework.localizedCaseInsensitiveContains("prep") {
+                signals.hasPrepFramework = true
+            }
+            if framework.localizedCaseInsensitiveContains("star") {
+                signals.hasStarFramework = true
+            }
+            if recording.prompt != nil {
+                signals.hasPromptedTake = true
+            }
+        }
+
+        return signals
+    }
+
+    /// Guarded on having any history so an empty library never reads as "a
+    /// take under every threshold" once `seconds` dips to zero or below.
+    func durationReached(_ seconds: TimeInterval) -> Bool {
+        recordingCount > 0 && longestDuration >= seconds
     }
 }

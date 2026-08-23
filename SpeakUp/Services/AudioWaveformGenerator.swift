@@ -1,7 +1,7 @@
 import AVFoundation
 import CoreGraphics
 
-enum AudioWaveformGenerator {
+nonisolated enum AudioWaveformGenerator {
     /// Normalize raw peaks (0...1) into UI bar heights for the detail drawer.
     static func heights(
         from peaks: [Float],

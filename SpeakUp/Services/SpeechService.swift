@@ -2,9 +2,12 @@ import Foundation
 import Speech
 import AVFoundation
 import NaturalLanguage
+import os
 
 @Observable
 class SpeechService {
+    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "Speech")
+
     // State
     var isTranscribing = false
     var hasPermission = false
@@ -44,6 +47,11 @@ class SpeechService {
         await whisperService.loadModel(modelVariant: "base")
     }
 
+    /// Unload the Whisper model to free memory (e.g. before the local LLM loads)
+    func unloadWhisperModel() async {
+        await whisperService.unloadModel()
+    }
+
     // MARK: - Permission
 
     func requestPermission() async -> Bool {
@@ -72,6 +80,7 @@ class SpeechService {
             Task { await self.setTranscribingState(isTranscribing: false) }
         }
         let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        var causes: [String] = []
 
         do {
             let primary = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
@@ -79,7 +88,9 @@ class SpeechService {
             if !text.isEmpty {
                 return text
             }
+            causes.append("whisper: empty transcript")
         } catch {
+            causes.append(Self.chainCause(backend: "whisper", error))
             // Retry below (model reload + fallback)
         }
 
@@ -93,22 +104,48 @@ class SpeechService {
             if !text.isEmpty {
                 return text
             }
+            causes.append("whisper_reload: empty transcript")
         } catch {
+            causes.append(Self.chainCause(backend: "whisper_reload", error))
             // Fall through to Apple Speech fallback.
         }
 
         let fallback = try await transcribeWithAppleSpeech(audioURL: audioURL)
         let fallbackText = trim(fallback.text)
         guard !fallbackText.isEmpty else {
-            throw SpeechServiceError.transcriptionFailed(
-                NSError(
-                    domain: "SpeechService",
-                    code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: "No speech detected in recording."]
-                )
-            )
+            throw noSpeechError(causes: causes + ["apple_speech: empty transcript"])
         }
         return fallbackText
+    }
+
+    // MARK: - Fallback Cause Tracking
+
+    /// UserInfo key carrying the joined fallback-chain causes. Purely
+    /// diagnostic — `localizedDescription` stays the stable user-facing string.
+    private static let fallbackCausesKey = "SpeechService.fallbackCauses"
+
+    /// One link of the fallback chain: backend tag + error domain#code,
+    /// matching the codes-only diagnostics pattern LLMService uses. Message
+    /// text stays out so the userInfo string carries no user content.
+    private static func chainCause(backend: String, _ error: Error) -> String {
+        let nsError = error as NSError
+        return "\(backend): \(nsError.domain)#\(nsError.code)"
+    }
+
+    /// Terminal "no speech" failure: logs the accumulated chain and embeds it
+    /// in userInfo so a bare "No speech detected" stays diagnosable.
+    private func noSpeechError(causes: [String]) -> SpeechServiceError {
+        logger.error("Speech fallback chain exhausted: \(causes.joined(separator: " | "), privacy: .private(mask: .hash))")
+        return .transcriptionFailed(
+            NSError(
+                domain: "SpeechService",
+                code: -2,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "No speech detected in recording.",
+                    Self.fallbackCausesKey: causes.joined(separator: " | ")
+                ]
+            )
+        )
     }
 
     // MARK: - Transcription
@@ -129,7 +166,13 @@ class SpeechService {
 
         let preparation = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let isolationResult = SpeechIsolationService.preprocessIfBeneficial(audioURL: audioURL)
+                // Decode only what isolation preprocess needs here; speaker
+                // labeling / pitch analysis decode again post-transcription
+                // so no PCM stays resident during the Whisper pass.
+                let monoPCM = MonoPCM.decode(url: audioURL)
+                let isolationResult = monoPCM.flatMap {
+                    SpeechIsolationService.preprocessIfBeneficial(monoPCM: $0)
+                }
                 let transcriptionURL = isolationResult?.processedAudioURL ?? audioURL
                 continuation.resume(returning: (isolationResult, transcriptionURL))
             }
@@ -169,13 +212,13 @@ class SpeechService {
                 var finalWords = wordsAfterFillerRetagging
                 // Speaker acoustics from the raw capture — isolation preprocess can
                 // flatten energy/F0 and mis-label the primary speaker.
-                let preloaded = ConversationIsolationService.loadMonoPCM(url: audioURL)
+                // Reuses the PCM decoded once at the top of `transcribe`; no
+                // decode happens when `labelPrimarySpeaker` gates out short takes.
                 let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
                     words: finalWords,
                     audioURL: audioURL,
                     totalDuration: result.duration,
-                    persistentProfile: voiceProfile,
-                    preloadedSamples: preloaded.map { ($0.samples, $0.sampleRate) }
+                    persistentProfile: voiceProfile
                 )
                 finalWords = speakerLabeled.0
                 let speakerIsolationMetrics = speakerLabeled.1
@@ -221,6 +264,7 @@ class SpeechService {
         let isUsable: (SpeechTranscriptionResult) -> Bool = { result in
             !trim(result.text).isEmpty || !result.words.isEmpty
         }
+        var causes: [String] = []
 
         do {
             let primary = try await whisperService.transcribe(
@@ -231,7 +275,9 @@ class SpeechService {
                 lastTranscriptionBackend = "whisper"
                 return primary
             }
+            causes.append("whisper: empty result")
         } catch {
+            causes.append(Self.chainCause(backend: "whisper", error))
             // Retry path below.
         }
 
@@ -247,7 +293,9 @@ class SpeechService {
                     lastTranscriptionBackend = "whisper_raw"
                     return raw
                 }
+                causes.append("whisper_raw: empty result")
             } catch {
+                causes.append(Self.chainCause(backend: "whisper_raw", error))
                 // Continue to model reload.
             }
         }
@@ -265,7 +313,9 @@ class SpeechService {
                 lastTranscriptionBackend = "whisper_reload"
                 return retry
             }
+            causes.append("whisper_reload: empty result")
         } catch {
+            causes.append(Self.chainCause(backend: "whisper_reload", error))
             // Fall through to Apple Speech.
         }
 
@@ -277,13 +327,7 @@ class SpeechService {
             return apple
         }
 
-        throw SpeechServiceError.transcriptionFailed(
-            NSError(
-                domain: "SpeechService",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "No speech detected in recording."]
-            )
-        )
+        throw noSpeechError(causes: causes + ["apple_speech: empty result"])
     }
 
     /// Fallback transcription using Apple's SFSpeechRecognizer
@@ -396,9 +440,152 @@ class SpeechService {
         )
     }
     
+    private func transcriptText(from words: [TranscriptionWord], fallback: String) -> String {
+        let resolved = words
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return resolved.isEmpty ? fallback : resolved
+    }
+
+    // MARK: - LLM Enhancement
+
+    /// Post-analysis step: re-evaluate coherence with LLM blending, enhance structure/vocabulary
+    /// with transcript quality evaluation, and recalculate overall score.
+    /// `promptText` enables prompt-aware coherence scoring for prompted sessions.
+    func enhanceWithLLM(
+        analysis: inout SpeechAnalysis,
+        transcript: String,
+        llmService: LLMService,
+        promptText: String? = nil,
+        scoreWeights: ScoreWeights = .defaults
+    ) async {
+        guard llmService.isAvailable, transcript.count >= 25 else { return }
+        let backend = llmService.activeBackend
+        let baselineSubscores = analysis.speechScore.subscores
+        let baselineOverall = analysis.speechScore.overall
+
+        let componentMaxDelta: Int
+        let overallMaxDelta: Int
+        switch backend {
+        case .appleIntelligence:
+            componentMaxDelta = 20
+            overallMaxDelta = 14
+        case .localLLM:
+            componentMaxDelta = 16
+            overallMaxDelta = 10
+        case .none:
+            return
+        }
+
+        // 1. Enhanced coherence scoring (prompt-aware)
+        if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
+            transcript: transcript,
+            llmService: llmService,
+            promptText: promptText
+        ) {
+            let stabilized = stabilizedLLMScore(
+                baseline: baselineSubscores.relevance ?? analysis.promptRelevanceScore ?? 50,
+                candidate: enhancedCoherence,
+                maxDelta: componentMaxDelta
+            )
+            analysis.promptRelevanceScore = stabilized
+            analysis.speechScore.subscores.relevance = stabilized
+        }
+
+        // 2. Transcript quality evaluation (structure + vocabulary)
+        if let quality = await llmService.evaluateTranscriptQuality(transcript: transcript) {
+            // Blend LLM scores with existing rule-based subscores.
+            // Increased blend so active models have a perceptible impact.
+            let llmWeight: Double = llmService.activeBackend == .appleIntelligence ? 0.45 : 0.40
+            let ruleWeight = 1.0 - llmWeight
+
+            if let existingStructure = analysis.speechScore.subscores.structure {
+                let blended = Double(quality.structure) * llmWeight + Double(existingStructure) * ruleWeight
+                analysis.speechScore.subscores.structure = stabilizedLLMScore(
+                    baseline: existingStructure,
+                    candidate: Int(blended.rounded()),
+                    maxDelta: componentMaxDelta
+                )
+            }
+
+            if let existingVocab = analysis.speechScore.subscores.vocabulary {
+                let blended = Double(quality.vocabulary) * llmWeight + Double(existingVocab) * ruleWeight
+                analysis.speechScore.subscores.vocabulary = stabilizedLLMScore(
+                    baseline: existingVocab,
+                    candidate: Int(blended.rounded()),
+                    maxDelta: componentMaxDelta
+                )
+            }
+        }
+
+        // 3. Recalculate overall score with all updated subscores
+        var newOverall = SpeechAnalysisPipeline.calculateOverallScore(
+            subscores: analysis.speechScore.subscores,
+            weights: scoreWeights
+        )
+
+        // 4. Re-apply substance multiplier after LLM enhancement
+        // This ensures LLM cannot inflate scores for gibberish/near-empty speech
+        if let em = analysis.enhancedMetrics {
+            newOverall = SpeechScoringEngine.applySubstanceMultiplier(
+                overallScore: newOverall,
+                substanceScore: em.substanceScore
+            )
+            newOverall = SpeechScoringEngine.applyGibberishGate(
+                score: newOverall,
+                gibberishConfidence: em.gibberishConfidence
+            )
+        }
+
+        analysis.speechScore.overall = stabilizedLLMScore(
+            baseline: baselineOverall,
+            candidate: newOverall,
+            maxDelta: overallMaxDelta
+        )
+        analysis.llmEnhancedAt = Date()
+    }
+
+    // MARK: - WPM Time Series
+
+    /// Implementation lives in `SpeechAnalysisPipeline`; this wrapper stays
+    /// because the detail view builds playback charts off a bare service.
+    func computeWPMTimeSeries(
+        words: [TranscriptionWord],
+        actualDuration: TimeInterval,
+        windowSize: TimeInterval = 5.0
+    ) -> [WPMDataPoint] {
+        SpeechAnalysisPipeline.computeWPMTimeSeries(
+            words: words,
+            actualDuration: actualDuration,
+            windowSize: windowSize
+        )
+    }
+
+    // MARK: - LLM Score Stabilization
+
+    private func stabilizedLLMScore(baseline: Int, candidate: Int, maxDelta: Int) -> Int {
+        let boundedCandidate = max(0, min(100, candidate))
+        let delta = boundedCandidate - baseline
+        let clampedDelta = max(-maxDelta, min(maxDelta, delta))
+        return max(0, min(100, baseline + clampedDelta))
+    }
+}
+
+// MARK: - Scoring Pipeline
+
+/// The transcription-to-`SpeechAnalysis` scoring pipeline as pure statics.
+///
+/// Isolation comes from the TYPE under the project's MainActor default, so
+/// these steps were silently main-bound no matter which queue invoked them —
+/// the coordinator's old GCD bridge compiled clean and still hopped. Every
+/// member here is pure value math over PODs, so the whole enum opts out with
+/// one `nonisolated` and the coordinator can detach the leg outright.
+nonisolated enum SpeechAnalysisPipeline {
+
     // MARK: - Analysis
 
-    func analyze(
+    static func analyze(
         transcription: SpeechTranscriptionResult,
         actualDuration: TimeInterval,
         vocabWords: [String] = [],
@@ -501,8 +688,10 @@ class SpeechService {
         let vocabComplexity = !scoringWords.isEmpty ? analyzeVocabComplexity(words: scoringWords) : nil
         let sentenceAnalysis = !scoringWords.isEmpty ? analyzeSentenceStructure(words: scoringWords) : nil
 
-        // Advanced analyses
-        let pitchMetrics: PitchMetrics? = audioURL != nil ? PitchAnalysisService.analyze(audioURL: audioURL!) : nil
+        // Advanced analyses — decode the take for pitch scoring.
+        let pitchMetrics: PitchMetrics? = audioURL.flatMap {
+            MonoPCM.decode(url: $0)
+        }.flatMap { PitchAnalysisService.analyze(monoPCM: $0) }
         let rateVariation = analyzeRateVariation(words: scoringWords, actualDuration: scoringDuration)
         let emphasisMetrics = analyzeEmphasis(
             words: scoringWords,
@@ -647,7 +836,7 @@ class SpeechService {
 
     // MARK: - Content Density
 
-    private func contentDensityScore(words: [TranscriptionWord]) -> Int {
+    private static func contentDensityScore(words: [TranscriptionWord]) -> Int {
         let nonFillerWords = words.filter { !$0.isFiller }
         guard !nonFillerWords.isEmpty else { return 0 }
 
@@ -671,13 +860,13 @@ class SpeechService {
         "just", "also", "very", "too", "its", "all", "been", "being"
     ]
 
-    private func effectiveSpeechDuration(words: [TranscriptionWord], fallback: TimeInterval) -> TimeInterval {
+    private static func effectiveSpeechDuration(words: [TranscriptionWord], fallback: TimeInterval) -> TimeInterval {
         guard let first = words.first, let last = words.last else { return fallback }
         let activeWindow = max(0, last.end - first.start)
         return max(activeWindow, min(fallback, 5.0))
     }
 
-    private func applyReliabilityStabilization(score: Int, reliability: Double, neutralAnchor: Int) -> Int {
+    private static func applyReliabilityStabilization(score: Int, reliability: Double, neutralAnchor: Int) -> Int {
         // Only apply stabilization when reliability is genuinely degraded.
         // The original code clamped reliability to max(0.55, ...) which meant even
         // perfect solo sessions (reliability = 1.0) got a 0% pull toward the neutral
@@ -695,7 +884,7 @@ class SpeechService {
         return max(0, min(100, Int(blended.rounded())))
     }
 
-    private func combinedReliabilityScore(
+    private static func combinedReliabilityScore(
         audioIsolationMetrics: AudioIsolationMetrics?,
         speakerIsolationMetrics: SpeakerIsolationMetrics?
     ) -> Double {
@@ -737,7 +926,7 @@ class SpeechService {
         }
     }
 
-    private func shouldScoreUsingPrimarySpeakerWords(
+    private static func shouldScoreUsingPrimarySpeakerWords(
         totalWords: Int,
         primaryWordsCount: Int,
         speakerIsolationMetrics: SpeakerIsolationMetrics?
@@ -770,17 +959,10 @@ class SpeechService {
         return hasConversationEvidence
     }
 
-    private func transcriptText(from words: [TranscriptionWord], fallback: String) -> String {
-        let resolved = words
-            .map(\.word)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return resolved.isEmpty ? fallback : resolved
-    }
 
     // MARK: - Subscore Calculation
 
-    private func calculateSubscores(
+    private static func calculateSubscores(
         wordsPerMinute: Double,
         fillerRatio: Double,
         totalWords: Int,
@@ -1092,7 +1274,7 @@ class SpeechService {
     }
 
     /// Pause scoring with gentler penalties so beginners aren't crushed by natural hesitations.
-    private func calculatePauseScore(
+    private static func calculatePauseScore(
         metadata: [PauseInfo],
         fillerRatio: Double,
         wordsPerMinute: Double,
@@ -1135,7 +1317,7 @@ class SpeechService {
         return max(0, min(100, Int(score)))
     }
 
-    private func calculateOverallScore(subscores: SpeechSubscores, weights: ScoreWeights = .defaults) -> Int {
+    static func calculateOverallScore(subscores: SpeechSubscores, weights: ScoreWeights = .defaults) -> Int {
         let w = weights.normalized
         var weighted = Double(subscores.clarity) * w.clarity +
                        Double(subscores.pace) * w.pace +
@@ -1170,107 +1352,10 @@ class SpeechService {
         return max(0, min(100, Int(score)))
     }
 
-    // MARK: - LLM Enhancement
-
-    /// Post-analysis step: re-evaluate coherence with LLM blending, enhance structure/vocabulary
-    /// with transcript quality evaluation, and recalculate overall score.
-    /// `promptText` enables prompt-aware coherence scoring for prompted sessions.
-    func enhanceWithLLM(
-        analysis: inout SpeechAnalysis,
-        transcript: String,
-        llmService: LLMService,
-        promptText: String? = nil,
-        scoreWeights: ScoreWeights = .defaults
-    ) async {
-        guard llmService.isAvailable, transcript.count >= 25 else { return }
-        let backend = llmService.activeBackend
-        let baselineSubscores = analysis.speechScore.subscores
-        let baselineOverall = analysis.speechScore.overall
-
-        let componentMaxDelta: Int
-        let overallMaxDelta: Int
-        switch backend {
-        case .appleIntelligence:
-            componentMaxDelta = 20
-            overallMaxDelta = 14
-        case .localLLM:
-            componentMaxDelta = 16
-            overallMaxDelta = 10
-        case .none:
-            return
-        }
-
-        // 1. Enhanced coherence scoring (prompt-aware)
-        if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
-            transcript: transcript,
-            llmService: llmService,
-            promptText: promptText
-        ) {
-            let stabilized = stabilizedLLMScore(
-                baseline: baselineSubscores.relevance ?? analysis.promptRelevanceScore ?? 50,
-                candidate: enhancedCoherence,
-                maxDelta: componentMaxDelta
-            )
-            analysis.promptRelevanceScore = stabilized
-            analysis.speechScore.subscores.relevance = stabilized
-        }
-
-        // 2. Transcript quality evaluation (structure + vocabulary)
-        if let quality = await llmService.evaluateTranscriptQuality(transcript: transcript) {
-            // Blend LLM scores with existing rule-based subscores.
-            // Increased blend so active models have a perceptible impact.
-            let llmWeight: Double = llmService.activeBackend == .appleIntelligence ? 0.45 : 0.40
-            let ruleWeight = 1.0 - llmWeight
-
-            if let existingStructure = analysis.speechScore.subscores.structure {
-                let blended = Double(quality.structure) * llmWeight + Double(existingStructure) * ruleWeight
-                analysis.speechScore.subscores.structure = stabilizedLLMScore(
-                    baseline: existingStructure,
-                    candidate: Int(blended.rounded()),
-                    maxDelta: componentMaxDelta
-                )
-            }
-
-            if let existingVocab = analysis.speechScore.subscores.vocabulary {
-                let blended = Double(quality.vocabulary) * llmWeight + Double(existingVocab) * ruleWeight
-                analysis.speechScore.subscores.vocabulary = stabilizedLLMScore(
-                    baseline: existingVocab,
-                    candidate: Int(blended.rounded()),
-                    maxDelta: componentMaxDelta
-                )
-            }
-        }
-
-        // 3. Recalculate overall score with all updated subscores
-        var newOverall = calculateOverallScore(
-            subscores: analysis.speechScore.subscores,
-            weights: scoreWeights
-        )
-
-        // 4. Re-apply substance multiplier after LLM enhancement
-        // This ensures LLM cannot inflate scores for gibberish/near-empty speech
-        if let em = analysis.enhancedMetrics {
-            newOverall = SpeechScoringEngine.applySubstanceMultiplier(
-                overallScore: newOverall,
-                substanceScore: em.substanceScore
-            )
-            newOverall = SpeechScoringEngine.applyGibberishGate(
-                score: newOverall,
-                gibberishConfidence: em.gibberishConfidence
-            )
-        }
-
-        analysis.speechScore.overall = stabilizedLLMScore(
-            baseline: baselineOverall,
-            candidate: newOverall,
-            maxDelta: overallMaxDelta
-        )
-        analysis.llmEnhancedAt = Date()
-    }
 
     // MARK: - WPM Time Series
 
-    func computeWPMTimeSeries(
+    static func computeWPMTimeSeries(
         words: [TranscriptionWord],
         actualDuration: TimeInterval,
         windowSize: TimeInterval = 5.0
@@ -1335,9 +1420,23 @@ class SpeechService {
         return dataPoints
     }
 
+
     // MARK: - Volume Analysis
 
-    func analyzeVolume(samples: [Float]) -> VolumeMetrics {
+    // MARK: - Vocabulary Complexity Analysis
+
+    // MARK: - Sentence Structure Analysis
+
+    // MARK: - Structure Helpers
+
+    // MARK: - Rate Variation Analysis
+
+    // MARK: - Emphasis Detection
+
+    // MARK: - Energy Arc Analysis
+
+
+    nonisolated static func analyzeVolume(samples: [Float]) -> VolumeMetrics {
         guard !samples.isEmpty else { return VolumeMetrics() }
 
         let average = samples.reduce(0, +) / Float(samples.count)
@@ -1397,9 +1496,7 @@ class SpeechService {
         )
     }
 
-    // MARK: - Vocabulary Complexity Analysis
-
-    func analyzeVocabComplexity(words: [TranscriptionWord]) -> VocabComplexity {
+    nonisolated static func analyzeVocabComplexity(words: [TranscriptionWord]) -> VocabComplexity {
         guard !words.isEmpty else { return VocabComplexity() }
 
         let cleaned = words.map { $0.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
@@ -1458,9 +1555,7 @@ class SpeechService {
         )
     }
 
-    // MARK: - Sentence Structure Analysis
-
-    func analyzeSentenceStructure(words: [TranscriptionWord]) -> SentenceAnalysis {
+    nonisolated static func analyzeSentenceStructure(words: [TranscriptionWord]) -> SentenceAnalysis {
         guard !words.isEmpty else { return SentenceAnalysis() }
 
         // Split into sentences based on long pauses (>1.0s) or punctuation
@@ -1559,22 +1654,7 @@ class SpeechService {
         )
     }
 
-    // MARK: - Structure Helpers
-
-    private func standardDeviation(_ values: [Double]) -> Double {
-        guard values.count >= 2 else { return 0 }
-        let mean = values.reduce(0, +) / Double(values.count)
-        let variance = values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count)
-        return sqrt(variance)
-    }
-
-    func markVocabWordsInTranscription(_ words: [TranscriptionWord], vocabWords: [String]) -> [TranscriptionWord] {
-        VocabMatcher.mark(words, vocabWords: vocabWords)
-    }
-
-    // MARK: - Rate Variation Analysis
-
-    func analyzeRateVariation(words: [TranscriptionWord], actualDuration: TimeInterval) -> RateVariationMetrics {
+    nonisolated static func analyzeRateVariation(words: [TranscriptionWord], actualDuration: TimeInterval) -> RateVariationMetrics {
         guard words.count >= 10, actualDuration > 5 else { return RateVariationMetrics() }
 
         let windowSize: TimeInterval = 10.0
@@ -1617,9 +1697,7 @@ class SpeechService {
         )
     }
 
-    // MARK: - Emphasis Detection
-
-    func analyzeEmphasis(
+    nonisolated static func analyzeEmphasis(
         words: [TranscriptionWord],
         actualDuration: TimeInterval,
         pitchContour: [Float]? = nil,
@@ -1712,9 +1790,7 @@ class SpeechService {
         )
     }
 
-    // MARK: - Energy Arc Analysis
-
-    func analyzeEnergyArc(samples: [Float], words: [TranscriptionWord], actualDuration: TimeInterval) -> EnergyArcMetrics {
+    nonisolated static func analyzeEnergyArc(samples: [Float], words: [TranscriptionWord], actualDuration: TimeInterval) -> EnergyArcMetrics {
         guard !samples.isEmpty, actualDuration > 5 else { return EnergyArcMetrics() }
 
         // Smooth samples with a moving average to reduce noise
@@ -1793,19 +1869,17 @@ class SpeechService {
         )
     }
 
-    // MARK: - LLM Score Stabilization
-
-    private func stabilizedLLMScore(baseline: Int, candidate: Int, maxDelta: Int) -> Int {
-        let boundedCandidate = max(0, min(100, candidate))
-        let delta = boundedCandidate - baseline
-        let clampedDelta = max(-maxDelta, min(maxDelta, delta))
-        return max(0, min(100, baseline + clampedDelta))
+    private static func standardDeviation(_ values: [Double]) -> Double {
+        guard values.count >= 2 else { return 0 }
+        let mean = values.reduce(0, +) / Double(values.count)
+        let variance = values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count)
+        return sqrt(variance)
     }
 }
 
 // MARK: - Result Types
 
-struct SpeechTranscriptionResult {
+nonisolated struct SpeechTranscriptionResult {
     let text: String
     let words: [TranscriptionWord]
     let duration: TimeInterval
@@ -1830,7 +1904,7 @@ struct SpeechTranscriptionResult {
     }
 }
 
-struct PauseInfo {
+nonisolated struct PauseInfo {
     let duration: TimeInterval
     let isTransition: Bool
     let startTime: TimeInterval

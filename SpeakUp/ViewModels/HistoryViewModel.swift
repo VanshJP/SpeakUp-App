@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SwiftUI
 import SwiftData
 
@@ -31,6 +32,7 @@ nonisolated struct VocabCount: Hashable, Sendable {
 
 @MainActor @Observable
 class HistoryViewModel {
+    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "History")
     var summaries: [RecordingSummary] = []
     var isLoading = true
 
@@ -136,32 +138,46 @@ class HistoryViewModel {
 
     // MARK: - Mutations
 
+    private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "History")
+
     func deleteRecording(id: UUID) async {
         guard let context = modelContext else { return }
+
+        // Stop any in-flight analysis before the row disappears.
+        RecordingProcessingCoordinator.shared.cancelProcessing(recordingID: id)
 
         var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
 
         guard let recording = (try? context.fetch(descriptor))?.first else { return }
 
-        if let audioURL = recording.resolvedAudioURL {
-            ICloudStorageService.shared.removeFile(at: audioURL)
-        }
-        if let videoURL = recording.resolvedVideoURL {
-            ICloudStorageService.shared.removeFile(at: videoURL)
-        }
-        if let thumbnailURL = recording.resolvedThumbnailURL {
-            ICloudStorageService.shared.removeFile(at: thumbnailURL)
-        }
+        // Capture media locations before deleting — the row is invalid after save.
+        let audioURL = recording.resolvedAudioURL
+        let videoURL = recording.resolvedVideoURL
+        let thumbnailURL = recording.resolvedThumbnailURL
 
-        summaries.removeAll { $0.id == id }
-
+        // Delete the row first, files second: a crash in between strands an
+        // orphan file (sweepable) rather than a dangling row pointing at
+        // deleted media (fatal).
         context.delete(recording)
 
         do {
             try context.save()
         } catch {
-            print("Error deleting recording: \(error)")
+            logger.error("Failed to delete recording row: \(error.localizedDescription, privacy: .private(mask: .hash))")
+            return
+        }
+
+        summaries.removeAll { $0.id == id }
+
+        if let audioURL {
+            ICloudStorageService.shared.removeFile(at: audioURL)
+        }
+        if let videoURL {
+            ICloudStorageService.shared.removeFile(at: videoURL)
+        }
+        if let thumbnailURL {
+            ICloudStorageService.shared.removeFile(at: thumbnailURL)
         }
     }
 

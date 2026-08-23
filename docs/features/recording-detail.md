@@ -24,6 +24,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 ## Invariants
 
 1. Resolve `resolvedAudioURL` / file existence **once** into `@State` — not in `body`.
+1a. Same discipline for every blob-backed input: `resolveSessionDataIfNeeded(for:)` decodes `fullAnalysis` plus timed words into state exactly once (speaker turns, crutch hits, and coach evidence derive in that same pass) and `body` reads only the caches. Transcripts past 600 words page through chunked `LazyVStack`s instead of building one eager FlowLayout over every word. Retries clear the transcript caches before re-enqueueing so they rebuild from the fresh words; WPM backfill and the LLM coherence pass both read/write through `fullAnalysis`/`setAnalysis`, so neither strips the other's advanced metrics; deleting here calls `cancelProcessing(recordingID:)` before the row goes.
 2. `ReviewRequestService.markFirstResultSeen()` only when analysis completed — gates the review prompt.
 3. Deferred-by-allowance UI offers Try Again only — no unlock path exists during the beta, and `AllowanceGate` never defers while `BetaAccess.allFeaturesFree` is true.
 4. Processing: prefer `RecordingProcessingCoordinator` over ad-hoc parallel jobs.

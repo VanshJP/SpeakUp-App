@@ -10,11 +10,10 @@ enum SpeechIsolationService {
         let metrics: AudioIsolationMetrics
     }
 
-    static func preprocessIfBeneficial(audioURL: URL) -> Result? {
-        guard let mono = loadMonoPCM(url: audioURL) else { return nil }
-        guard mono.samples.count > Int(mono.sampleRate * 1.5) else { return nil }
+    static func preprocessIfBeneficial(monoPCM: MonoPCM) -> Result? {
+        guard monoPCM.samples.count > Int(monoPCM.sampleRate * 1.5) else { return nil }
 
-        let baselineSNR = estimateSNR(samples: mono.samples, sampleRate: mono.sampleRate)
+        let baselineSNR = estimateSNR(samples: monoPCM.samples, sampleRate: monoPCM.sampleRate)
 
         // Skip processing if audio already has excellent signal quality.
         // Lowered threshold from 18 dB to 22 dB:
@@ -26,9 +25,9 @@ enum SpeechIsolationService {
         //   downstream speaker isolation quality.
         guard baselineSNR < 22.0 else { return nil }
 
-        let highPassed = applyHighPassFilter(to: mono.samples)
-        let gated = applyAdaptiveNoiseGate(to: highPassed, sampleRate: mono.sampleRate)
-        let improvedSNR = estimateSNR(samples: gated, sampleRate: mono.sampleRate)
+        let highPassed = applyHighPassFilter(to: monoPCM.samples)
+        let gated = applyAdaptiveNoiseGate(to: highPassed, sampleRate: monoPCM.sampleRate)
+        let improvedSNR = estimateSNR(samples: gated, sampleRate: monoPCM.sampleRate)
         let delta = improvedSNR - baselineSNR
 
         // Skip writing an alternate file when enhancement does not improve signal quality.
@@ -37,7 +36,7 @@ enum SpeechIsolationService {
         let outputURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("speakup_isolated_\(UUID().uuidString).caf")
 
-        guard writeMonoPCM(samples: gated, sampleRate: mono.sampleRate, to: outputURL) else {
+        guard writeMonoPCM(samples: gated, sampleRate: monoPCM.sampleRate, to: outputURL) else {
             return nil
         }
 
@@ -180,58 +179,6 @@ enum SpeechIsolationService {
     }
 
     // MARK: - Audio I/O
-
-    private struct MonoPCM {
-        let samples: [Float]
-        let sampleRate: Double
-    }
-
-    private static func loadMonoPCM(url: URL) -> MonoPCM? {
-        guard let file = try? AVAudioFile(forReading: url) else { return nil }
-        let sourceFormat = file.processingFormat
-        let sampleRate = sourceFormat.sampleRate
-        let frameCount = AVAudioFrameCount(file.length)
-        guard frameCount > 0 else { return nil }
-
-        guard let monoFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 1,
-            interleaved: false
-        ) else { return nil }
-
-        guard let targetBuffer = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: frameCount) else {
-            return nil
-        }
-
-        if sourceFormat.channelCount == 1 && sourceFormat.commonFormat == .pcmFormatFloat32 {
-            do {
-                try file.read(into: targetBuffer)
-            } catch {
-                return nil
-            }
-        } else {
-            guard let sourceBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
-                return nil
-            }
-            do {
-                try file.read(into: sourceBuffer)
-            } catch {
-                return nil
-            }
-            guard let converter = AVAudioConverter(from: sourceFormat, to: monoFormat) else { return nil }
-            let status = converter.convert(to: targetBuffer, error: nil) { _, outStatus in
-                outStatus.pointee = .haveData
-                return sourceBuffer
-            }
-            guard status != .error else { return nil }
-        }
-
-        guard let channelData = targetBuffer.floatChannelData else { return nil }
-        let sampleCount = Int(targetBuffer.frameLength)
-        let samples = Array(UnsafeBufferPointer(start: channelData[0], count: sampleCount))
-        return MonoPCM(samples: samples, sampleRate: sampleRate)
-    }
 
     private static func writeMonoPCM(samples: [Float], sampleRate: Double, to outputURL: URL) -> Bool {
         guard let format = AVAudioFormat(

@@ -14,7 +14,8 @@ struct StoryDetailView: View {
 
     @State private var showingDeleteAlert = false
     @State private var showCopied = false
-    @State private var linkedRecordings: [Recording] = []
+    @State private var recordingSummaries: [PracticeRecordingSummary] = []
+    @State private var chartPoints: [PracticeDataPoint] = []
     @State private var showingMoveSheet = false
     @State private var showingEditor = false
     @State private var toastMessage: String?
@@ -29,7 +30,7 @@ struct StoryDetailView: View {
                 VStack(spacing: 20) {
                     heroHeader
                     primaryActions
-                    if !linkedRecordings.isEmpty {
+                    if !recordingSummaries.isEmpty {
                         metricsSection
                         practiceChartSection
                     }
@@ -73,7 +74,7 @@ struct StoryDetailView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingEditor, onDismiss: {
-            linkedRecordings = viewModel.linkedRecordings(for: story)
+            reloadRecordings()
         }) {
             NavigationStack {
                 StoryEditorView(
@@ -98,8 +99,16 @@ struct StoryDetailView: View {
             Text("This story will be permanently deleted.")
         }
         .onAppear {
-            linkedRecordings = viewModel.linkedRecordings(for: story)
+            reloadRecordings()
         }
+    }
+
+    /// One decode pass at load time — bodies render the value snapshots only.
+    private func reloadRecordings() {
+        recordingSummaries = PracticeRecordingSummary.from(
+            recordings: viewModel.linkedRecordings(for: story)
+        )
+        chartPoints = PracticeDataPoint.from(summaries: recordingSummaries)
     }
 
     // MARK: - Hero Header
@@ -231,16 +240,16 @@ struct StoryDetailView: View {
     // MARK: - Metrics + chart
 
     private var metricsSection: some View {
-        PracticeMetricsRow(recordings: linkedRecordings)
+        PracticeMetricsRow(recordings: recordingSummaries)
     }
 
     @ViewBuilder
     private var practiceChartSection: some View {
-        if !linkedRecordings.isEmpty {
+        if !chartPoints.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 GlassSectionHeader("Practice Progress", icon: "chart.line.uptrend.xyaxis")
                 PracticeHistoryChart(
-                    dataPoints: PracticeDataPoint.from(recordings: linkedRecordings),
+                    dataPoints: chartPoints,
                     accentColor: AppColors.primary
                 )
             }
@@ -404,7 +413,7 @@ struct StoryDetailView: View {
 
     @ViewBuilder
     private var recordingsSection: some View {
-        if !linkedRecordings.isEmpty {
+        if !recordingSummaries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     GlassSectionHeader("Practice History", icon: "waveform")
@@ -417,24 +426,23 @@ struct StoryDetailView: View {
                 }
 
                 LazyVStack(spacing: 10) {
-                    ForEach(linkedRecordings) { recording in
+                    ForEach(recordingSummaries) { summary in
                         NavigationLink {
-                            RecordingDetailView(recordingId: recording.id.uuidString)
+                            RecordingDetailView(recordingId: summary.id.uuidString)
                         } label: {
                             GlassCard(padding: 12) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(recording.date.formatted(date: .abbreviated, time: .shortened))
+                                        Text(summary.date.formatted(date: .abbreviated, time: .shortened))
                                             .font(.subheadline)
                                             .foregroundStyle(.white)
                                         HStack(spacing: 8) {
-                                            Text(recording.formattedDuration)
-                                            if let wpm = recording.analysis?.wordsPerMinute, wpm > 0 {
-                                                Text("\(Int(wpm)) wpm")
+                                            Text(summary.duration.minutesSeconds)
+                                            if summary.wpm > 0 {
+                                                Text("\(Int(summary.wpm)) wpm")
                                             }
-                                            let fillerCount = recording.analysis?.totalFillerCount ?? 0
-                                            if fillerCount > 0 {
-                                                Text("\(fillerCount) fillers")
+                                            if summary.fillerCount > 0 {
+                                                Text("\(summary.fillerCount) fillers")
                                             }
                                         }
                                         .font(.caption2)
@@ -443,7 +451,7 @@ struct StoryDetailView: View {
 
                                     Spacer()
 
-                                    if let score = recording.analysis?.speechScore.overall {
+                                    if let score = summary.score {
                                         Text("\(score)")
                                             .font(.system(size: 22, weight: .bold, design: .rounded))
                                             .foregroundStyle(AppColors.scoreColor(for: score))
@@ -463,7 +471,7 @@ struct StoryDetailView: View {
     }
 
     private var averageScore: Int? {
-        let scores = linkedRecordings.compactMap { $0.analysis?.speechScore.overall }
+        let scores = recordingSummaries.compactMap(\.score)
         guard !scores.isEmpty else { return nil }
         return scores.reduce(0, +) / scores.count
     }

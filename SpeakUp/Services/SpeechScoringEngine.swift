@@ -28,7 +28,7 @@ import NaturalLanguage
 //
 // All processing is 100% on-device using Apple NaturalLanguage framework.
 
-enum SpeechScoringEngine {
+nonisolated enum SpeechScoringEngine {
 
     // MARK: - Public Entry Point
 
@@ -458,6 +458,14 @@ enum SpeechScoringEngine {
         let isDefinitelyGibberish: Bool  // Hard flag for score gating
     }
 
+    /// Lexical classes signal 2 counts as "recognized English". Canonical
+    /// home: the NLPCapability probe consumes this set, so a tag-set drift
+    /// flips test branches visibly instead of passing two divergent literals
+    /// silently.
+    nonisolated static let gibberishKnownTags: Set<NLTag> = [.noun, .verb, .adjective, .adverb, .pronoun,
+                                                              .determiner, .particle, .preposition, .conjunction,
+                                                              .interjection, .number]
+
     /// Multi-signal gibberish detection.
     /// Returns a confidence score (0-1) and a hard flag for score gating.
     ///
@@ -505,14 +513,11 @@ enum SpeechScoringEngine {
         tagger.string = scoringText
         var totalTokens = 0
         var recognizedTokens = 0
-        let knownTags: Set<NLTag> = [.noun, .verb, .adjective, .adverb, .pronoun,
-                                      .determiner, .particle, .preposition, .conjunction,
-                                      .interjection, .number]
 
         tagger.enumerateTags(in: scoringText.startIndex..<scoringText.endIndex,
                               unit: .word, scheme: .lexicalClass) { tag, _ in
             totalTokens += 1
-            if let tag, knownTags.contains(tag) { recognizedTokens += 1 }
+            if let tag, gibberishKnownTags.contains(tag) { recognizedTokens += 1 }
             return true
         }
 

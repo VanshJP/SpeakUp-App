@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import os
 
 // MARK: - Word Match State
 
@@ -50,8 +51,15 @@ class ReadAloudService {
 
     private var audioEngine: AVAudioEngine?
     private var recognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    /// Read from the realtime audio thread by the tap block and torn down on
+    /// the main actor, so it cannot be plain isolated state. The critical
+    /// section is one `append`; nilling it from `stopInternal()` while the tap
+    /// was mid-append segfaulted exactly like LiveTranscriptionService's war story.
+    private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
+
+    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    private var isTapInstalled = false
 
 
     init() {
@@ -97,7 +105,7 @@ class ReadAloudService {
         // audio to Apple's servers. If the on-device assets are not available
         // the request fails, and failing is the correct outcome here.
         request.requiresOnDeviceRecognition = true
-        self.recognitionRequest = request
+        requestBox.withLock { $0 = request }
 
         let inputNode = engine.inputNode
         var recordingFormat = inputNode.inputFormat(forBus: 0)
@@ -109,9 +117,10 @@ class ReadAloudService {
             throw ReadAloudError.audioEngineFailure("Invalid microphone format \(recordingFormat)")
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [requestBox] buffer, _ in
+            requestBox.withLock { $0?.append(buffer) }
         }
+        isTapInstalled = true
 
         do {
             engine.prepare()
@@ -127,7 +136,11 @@ class ReadAloudService {
             guard let self else { return }
 
             if let result {
-                self.processResult(result)
+                // Apple fires this callback on an internal queue; hop to the
+                // main actor before processResult touches observable state.
+                Task { @MainActor in
+                    self.processResult(result)
+                }
             }
 
             if error != nil || (result?.isFinal ?? false) {
@@ -141,18 +154,21 @@ class ReadAloudService {
     // MARK: - Stop
 
     func stop() {
-        recognitionRequest?.endAudio()
+        requestBox.withLock { $0?.endAudio() }
         stopInternal()
     }
 
     private func stopInternal() {
         audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
+        if isTapInstalled {
+            audioEngine?.inputNode.removeTap(onBus: 0)
+            isTapInstalled = false
+        }
         audioEngine = nil
 
         recognitionTask?.cancel()
         recognitionTask = nil
-        recognitionRequest = nil
+        requestBox.withLock { $0 = nil }
         isListening = false
     }
 

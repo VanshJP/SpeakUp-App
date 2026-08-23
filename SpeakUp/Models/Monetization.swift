@@ -6,8 +6,9 @@ import Foundation
 /// allowance accounting, no buy button anywhere in the app.
 ///
 /// StoreKit stays wired up underneath — a real purchase still verifies and
-/// still persists — so turning monetization back on for the App Store build is
-/// this one line, not a re-integration.
+/// still persists. Flipping this flag alone does not restore monetization:
+/// the paywall views and call sites were deleted with it. Follow
+/// docs/features/monetization.md as the restore guide before shipping paid.
 nonisolated enum BetaAccess {
     static let allFeaturesFree = true
 }

@@ -387,11 +387,11 @@ struct StoryEditorView: View {
 
     private func tagColor(_ type: StoryTagType) -> Color {
         switch type {
-        case .friend: return .blue
-        case .date: return .orange
-        case .location: return .green
-        case .topic: return .purple
-        case .custom: return .gray
+        case .friend: return AppColors.categoryIndigo
+        case .date: return AppColors.categoryAmber
+        case .location: return AppColors.categorySage
+        case .topic: return AppColors.categoryPlum
+        case .custom: return AppColors.categoryNeutral
         }
     }
 

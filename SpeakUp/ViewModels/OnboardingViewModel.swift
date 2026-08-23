@@ -589,7 +589,7 @@ final class OnboardingViewModel {
 
     func checkNotificationPermission() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        hasNotificationPermission = settings.authorizationStatus == .authorized
+        hasNotificationPermission = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
     }
 
     func requestNotificationPermission() async {

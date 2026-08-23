@@ -35,6 +35,26 @@ final class Recording {
     var storyId: UUID?
     var storyTitle: String?
     var waveformPeaks: [Float]?
+    /// Denormalized projections maintained beside `setAnalysis`/insert for
+    /// cheap stats queries — never predicate on the Codable `analysis` blob.
+    var overallScore: Int?
+    var promptId: String?
+    /// Persisted mirror of the live level samples (JSON-encoded `[Float]`), so
+    /// resumed analyses keep real delivery metrics across relaunch.
+    var audioLevelSamplesData: Data?
+
+    /// Live level samples over `audioLevelSamplesData`. Decodes JSON on access —
+    /// keep reads out of view bodies.
+    var audioLevelSamples: [Float]? {
+        get {
+            guard let data = audioLevelSamplesData else { return nil }
+            return try? JSONDecoder().decode([Float].self, from: data)
+        }
+        set {
+            audioLevelSamplesData = newValue.flatMap { try? JSONEncoder().encode($0) }
+        }
+    }
+
     /// Word-workout snapshot: the day stamp and spotlight words that were live
     /// when this recording's analysis landed. Written once by
     /// `RecordingProcessingCoordinator`; the detail view scores this session
@@ -47,7 +67,6 @@ final class Recording {
     /// allowance was spent. The audio is untouched — analysis runs the moment
     /// the allowance resets or Lifetime is purchased.
     var analysisBlockedByAllowance: Bool = false
-    @Transient var audioLevelSamples: [Float]? = nil
 
     init(
         id: UUID = UUID(),
@@ -83,6 +102,8 @@ final class Recording {
         self.transcriptionWords = transcriptionWords
         self.analysis = analysis
         self.analysisJSON = analysis?.encodedMirror()
+        self.overallScore = analysis?.speechScore.overall
+        self.promptId = prompt?.id
         self.isProcessing = isProcessing
         self.isFavorite = isFavorite
         self.customTitle = customTitle
@@ -94,7 +115,8 @@ final class Recording {
 
     // MARK: - Analysis
 
-    /// Writes the analysis and its full-fidelity mirror together.
+    /// Writes the analysis and its full-fidelity mirror together, refreshing
+    /// the `overallScore` projection beside them.
     ///
     /// Always use this rather than assigning `analysis` directly — a write that
     /// skips the mirror leaves the advanced metrics recoverable only until the
@@ -102,6 +124,7 @@ final class Recording {
     func setAnalysis(_ analysis: SpeechAnalysis?) {
         self.analysis = analysis
         self.analysisJSON = analysis?.encodedMirror()
+        self.overallScore = analysis?.speechScore.overall
     }
 
     /// The analysis with its advanced metrics intact.

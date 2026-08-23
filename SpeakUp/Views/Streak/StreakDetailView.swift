@@ -143,7 +143,7 @@ struct StreakDetailView: View {
         NavigationLink {
             AchievementGalleryView()
         } label: {
-            GlassCard(tint: .orange.opacity(0.06)) {
+            GlassCard(tint: AppColors.warning.opacity(0.06)) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Label("Next Milestone", systemImage: "target")

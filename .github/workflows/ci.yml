@@ -31,7 +31,7 @@ jobs:
           xcodebuild -version
           swift --version
 
-      # WhisperKit and llama.swift are the slow part of a cold build, and
+      # WhisperKit and llama.swift are the slow part of a cold *clone*, and
       # neither changes between runs unless the pins move.
       - name: Cache Swift packages
         uses: actions/cache@v4
@@ -40,12 +40,27 @@ jobs:
           key: ${{ runner.os }}-spm-${{ hashFiles('SpeakUp.xcodeproj/project.pbxproj', 'SpeakUp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: ${{ runner.os }}-spm-
 
+      # Cloning is only half the cost: DerivedData is wiped on every run, so
+      # llama.cpp's C++ sources and everything else recompile from scratch.
+      # A fixed -derivedDataPath (below) plus this cache turns rebuilds into
+      # incremental ones whenever neither the project nor the pins moved.
+      # The workflow file is part of the key: macos-26 is unpinned, so a
+      # toolchain rotation must invalidate the cache instead of poisoning
+      # incremental C++ builds against the new Xcode.
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: .derived-data
+          key: ${{ runner.os }}-dd-${{ hashFiles('SpeakUp.xcodeproj/project.pbxproj') }}-${{ hashFiles('SpeakUp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ${{ runner.os }}-dd-
+
       - name: Resolve packages
         run: |
           xcodebuild -resolvePackageDependencies \
             -project SpeakUp.xcodeproj \
             -scheme SpeakUp \
-            -clonedSourcePackagesDirPath .spm-cache
+            -clonedSourcePackagesDirPath .spm-cache \
+            -derivedDataPath .derived-data
 
       # Resolved at runtime rather than hardcoded: simulator device names move
       # with every Xcode release, and a stale name fails the job for a reason
@@ -67,6 +82,7 @@ jobs:
             -scheme SpeakUp \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -clonedSourcePackagesDirPath .spm-cache \
+            -derivedDataPath .derived-data \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify

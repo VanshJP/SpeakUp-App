@@ -289,8 +289,10 @@ class LiveTranscriptionService {
         }
 
         // Skip reprocessing when the recognizer revises existing segments
-        // without adding new words. Post-recording analysis handles precision.
-        guard wordCount != lastProcessedSegmentCount else { return }
+        // without adding new words; a shrinking partial must not rewind the
+        // watermark either. Post-recording analysis handles precision.
+        guard wordCount > lastProcessedSegmentCount else { return }
+        let processedCount = lastProcessedSegmentCount
         lastProcessedSegmentCount = wordCount
 
         let words = segments.map { $0.substring }
@@ -315,12 +317,22 @@ class LiveTranscriptionService {
         liveWordCount = max(liveWordCount, wordCount)
         lastSegmentEndTime = max(lastSegmentEndTime, segmentTimeOffset + endTime)
 
-        updateFillerWordCounts(words: words, timestamps: timestamps, durations: durations)
+        // Tag only the segments this revision added. Re-running the tagger
+        // over the whole transcript on every ~1 Hz partial made long sessions
+        // quadratic on the main actor; seen segments are final for live display.
+        updateFillerWordCounts(
+            words: Array(words[processedCount...]),
+            timestamps: Array(timestamps[processedCount...]),
+            durations: Array(durations[processedCount...])
+        )
     }
 
     /// Per-word tallies from the same pause-aware pipeline that drives the
     /// headline count, so the repeated-filler cue names exactly what was said.
-    /// Max-merged per key to stay monotonic across partial revisions.
+    /// Receives only the segments added since the last partial and accumulates
+    /// additively — each segment index is counted exactly once per recognition
+    /// request, and `lastProcessedSegmentCount` resets to 0 on every restart so
+    /// the next request's segments continue the tallies instead of colliding.
     @MainActor
     private func updateFillerWordCounts(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) {
         guard words.count == timestamps.count, words.count == durations.count else { return }
@@ -335,14 +347,10 @@ class LiveTranscriptionService {
         }
         let tagged = FillerDetectionPipeline.tagFillers(in: timings, config: fillerConfig)
 
-        var freshCounts: [String: Int] = [:]
         for word in tagged where word.isFiller {
             let key = word.word.lowercased().trimmingCharacters(in: .punctuationCharacters)
             guard !key.isEmpty else { continue }
-            freshCounts[key, default: 0] += 1
-        }
-        for (key, count) in freshCounts {
-            liveFillerWordCounts[key] = max(count, liveFillerWordCounts[key] ?? 0)
+            liveFillerWordCounts[key, default: 0] += 1
         }
     }
 }

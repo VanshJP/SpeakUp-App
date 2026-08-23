@@ -213,7 +213,11 @@ class AudioService: NSObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Clear any pending completion handler
+        // A pending stopRecording() continuation is parked on this closure.
+        // Dropping it leaked the continuation and hung that caller forever —
+        // resolve it as cancelled instead. Nilling afterwards means the
+        // delegate's callback for recorder.stop() below cannot double-resume.
+        recordingCompletion?(false)
         recordingCompletion = nil
 
         audioRecorder?.stop()

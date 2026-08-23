@@ -25,7 +25,7 @@ Presented as sheets from Today / `ContentView` — **not** a tab.
 | Service | `SpeakUp/Services/GoalProgressService.swift` |
 | Model | `SpeakUp/Models/UserGoal.swift` |
 
-Progress updates from recording pipeline / history signals. Keep templates and progress math in the service, not duplicated in views.
+Progress updates from recording pipeline / history signals. Mechanics: `GoalProgressService.refreshGoals` snapshots each goal's window on the main actor, scans all recordings on a background `ModelContext` (`Task.detached`; one analysis decode feeds every goal whose window contains the session), then applies `GoalProgressOutcome` diffs back on the main context and saves only real changes. Called from Today's load and `GoalsView`. Keep templates and progress math in the service, not duplicated in views.
 
 ## Cross-links
 

@@ -38,7 +38,7 @@ struct BeforeAfterReplayView: View {
                             // Early recording card
                             recordingCard(
                                 title: "Your First Session",
-                                recording: viewModel.earliestRecording,
+                                snapshot: viewModel.earliestSnapshot,
                                 isPlaying: playingEarly,
                                 onPlay: { playEarly() }
                             )
@@ -60,7 +60,7 @@ struct BeforeAfterReplayView: View {
                             // Latest recording card
                             recordingCard(
                                 title: "Your Latest Session",
-                                recording: viewModel.latestRecording,
+                                snapshot: viewModel.latestSnapshot,
                                 isPlaying: playingLatest,
                                 onPlay: { playLatest() }
                             )
@@ -146,21 +146,21 @@ struct BeforeAfterReplayView: View {
         }
     }
 
-    private func recordingCard(title: String, recording: Recording?, isPlaying: Bool, onPlay: @escaping () -> Void) -> some View {
+    private func recordingCard(title: String, snapshot: ReplaySessionSnapshot?, isPlaying: Bool, onPlay: @escaping () -> Void) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 Text(title)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppColors.primary)
 
-                if let recording {
+                if let snapshot {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(recording.date.formatted(date: .abbreviated, time: .shortened))
+                            Text(snapshot.date.formatted(date: .abbreviated, time: .shortened))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 
-                            if let score = recording.analysis?.speechScore.overall {
+                            if let score = snapshot.score {
                                 HStack(spacing: 4) {
                                     Text("\(score)")
                                         .font(.title2.weight(.bold))
@@ -183,12 +183,10 @@ struct BeforeAfterReplayView: View {
                     }
 
                     // Stats row
-                    if let analysis = recording.analysis {
-                        HStack(spacing: 16) {
-                            statItem(label: "WPM", value: "\(Int(analysis.wordsPerMinute))")
-                            statItem(label: "Fillers", value: "\(analysis.totalFillerCount)")
-                            statItem(label: "Words", value: "\(analysis.totalWords)")
-                        }
+                    HStack(spacing: 16) {
+                        statItem(label: "WPM", value: "\(Int(snapshot.wpm))")
+                        statItem(label: "Fillers", value: "\(snapshot.fillerCount)")
+                        statItem(label: "Words", value: "\(snapshot.wordCount)")
                     }
                 }
             }

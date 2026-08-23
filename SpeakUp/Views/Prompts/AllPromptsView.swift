@@ -2,11 +2,20 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
+/// Per-category prompt totals with answered counts — built once per load so
+/// the category grid does two dictionary lookups per tile instead of two
+/// full-array reduces. Keyed by raw category string.
+nonisolated struct PromptCategoryProgress {
+    let total: Int
+    let answered: Int
+}
+
 struct AllPromptsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Prompt.category) private var allPrompts: [Prompt]
 
     @State private var answeredPromptIDs: Set<String> = []
+    @State private var categoryCounts: [String: PromptCategoryProgress] = [:]
     @State private var selectedFilter: PromptFilter = .all
     @State private var selectedCategory: PromptCategory?
     @State private var selectedDifficulty: PromptDifficulty?
@@ -71,104 +80,118 @@ extension AllPromptsView {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 16) {
-            if selectedCategory == nil {
-                VStack(spacing: 16) {
-                    filterChips
-                    landingContent
-                }
-                .transition(.asymmetric(
-                    insertion: .push(from: .leading),
-                    removal: .push(from: .trailing)
-                ))
-            } else {
-                categoryDetailContent
+        // One filter+sort pass per render, threaded down to every consumer.
+        let prompts = filteredPrompts
+
+        return screenDecorations(
+            VStack(spacing: 16) {
+                if selectedCategory == nil {
+                    VStack(spacing: 16) {
+                        filterChips
+                        landingContent(prompts)
+                    }
                     .transition(.asymmetric(
-                        insertion: .push(from: .trailing),
-                        removal: .push(from: .leading)
+                        insertion: .push(from: .leading),
+                        removal: .push(from: .trailing)
                     ))
-            }
-        }
-        .task {
-            await loadAnsweredPromptIDs()
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                toolbarFilterMenu
-            }
-        }
-        .sheet(isPresented: $showingAddPrompt) {
-            AddPromptView()
-        }
-        .sheet(isPresented: $showingPromptWheel) {
-            PromptWheelView { prompt in
-                showingPromptWheel = false
-                if let onSelectPrompt {
-                    onSelectPrompt(prompt)
-                }
-            }
-        }
-        .fileImporter(
-            isPresented: $showingFileImporter,
-            allowedContentTypes: [UTType.commaSeparatedText],
-            allowsMultipleSelection: false
-        ) { result in
-            handleFileImport(result)
-        }
-        .alert("Import Prompts", isPresented: Binding(
-            get: { importConfirmation != nil },
-            set: { if !$0 { importConfirmation = nil } }
-        )) {
-            Button("Cancel", role: .cancel) { importConfirmation = nil }
-            Button("Import") { confirmImport() }
-        } message: {
-            if let confirmation = importConfirmation {
-                let newCount = confirmation.newCount
-                let dupeCount = confirmation.duplicateCount
-                if dupeCount > 0 {
-                    Text("Import \(newCount) new prompt\(newCount == 1 ? "" : "s")? (\(dupeCount) duplicate\(dupeCount == 1 ? "" : "s") will be skipped.)")
                 } else {
-                    Text("Import \(newCount) prompt\(newCount == 1 ? "" : "s")? They will be added as custom prompts.")
+                    categoryDetailContent(prompts)
+                        .transition(.asymmetric(
+                            insertion: .push(from: .trailing),
+                            removal: .push(from: .leading)
+                        ))
                 }
-            }
-        }
-        .alert("Delete Prompt?", isPresented: Binding(
-            get: { promptToDelete != nil },
-            set: { if !$0 { promptToDelete = nil } }
-        )) {
-            Button("Cancel", role: .cancel) { promptToDelete = nil }
-            Button("Delete", role: .destructive) {
-                if let prompt = promptToDelete {
-                    deletePrompt(prompt)
-                }
-                promptToDelete = nil
-            }
-        } message: {
-            Text("This prompt will be permanently deleted.")
-        }
-        .alert("Error", isPresented: $showingError) {
-            Button("OK") {}
-        } message: {
-            if let errorMessage {
-                Text(errorMessage)
-            }
-        }
+            },
+            prompts: prompts
+        )
     }
 
+    /// Sheet/importer/alert tail, kept out of `body` so each builder
+    /// expression stays inside the compiler's type-check budget.
+    private func screenDecorations(_ base: some View, prompts: [Prompt]) -> some View {
+        base
+            .task {
+                await loadAnsweredPromptIDs()
+            }
+            .onChange(of: allPrompts.count) { _, _ in
+                Task { await loadAnsweredPromptIDs() }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    toolbarFilterMenu(prompts)
+                }
+            }
+            .sheet(isPresented: $showingAddPrompt) {
+                AddPromptView()
+            }
+            .sheet(isPresented: $showingPromptWheel) {
+                PromptWheelView { prompt in
+                    showingPromptWheel = false
+                    if let onSelectPrompt {
+                        onSelectPrompt(prompt)
+                    }
+                }
+            }
+            .fileImporter(
+                isPresented: $showingFileImporter,
+                allowedContentTypes: [UTType.commaSeparatedText],
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileImport(result)
+            }
+            .alert("Import Prompts", isPresented: Binding(
+                get: { importConfirmation != nil },
+                set: { if !$0 { importConfirmation = nil } }
+            )) {
+                Button("Cancel", role: .cancel) { importConfirmation = nil }
+                Button("Import") { confirmImport() }
+            } message: {
+                if let confirmation = importConfirmation {
+                    let newCount = confirmation.newCount
+                    let dupeCount = confirmation.duplicateCount
+                    if dupeCount > 0 {
+                        Text("Import \(newCount) new prompt\(newCount == 1 ? "" : "s")? (\(dupeCount) duplicate\(dupeCount == 1 ? "" : "s") will be skipped.)")
+                    } else {
+                        Text("Import \(newCount) prompt\(newCount == 1 ? "" : "s")? They will be added as custom prompts.")
+                    }
+                }
+            }
+            .alert("Delete Prompt?", isPresented: Binding(
+                get: { promptToDelete != nil },
+                set: { if !$0 { promptToDelete = nil } }
+            )) {
+                Button("Cancel", role: .cancel) { promptToDelete = nil }
+                Button("Delete", role: .destructive) {
+                    if let prompt = promptToDelete {
+                        deletePrompt(prompt)
+                    }
+                    promptToDelete = nil
+                }
+            } message: {
+                Text("This prompt will be permanently deleted.")
+            }
+            .alert("Error", isPresented: $showingError) {
+                Button("OK") {}
+            } message: {
+                if let errorMessage {
+                    Text(errorMessage)
+                }
+            }
+    }
     // MARK: - Toolbar Menus
 
-    private var toolbarFilterMenu: some View {
+    private func toolbarFilterMenu(_ prompts: [Prompt]) -> some View {
         Menu {
             Section("Export & Import") {
                 Button {
-                    csvService.shareCSV(prompts: filteredPrompts)
+                    csvService.shareCSV(prompts: prompts)
                 } label: {
                     Label(
-                        hasActiveFilters ? "Export Filtered (\(filteredPrompts.count))" : "Export All Prompts",
+                        hasActiveFilters ? "Export Filtered (\(prompts.count))" : "Export All Prompts",
                         systemImage: "square.and.arrow.up"
                     )
                 }
-                .disabled(filteredPrompts.isEmpty)
+                .disabled(prompts.isEmpty)
 
                 Button {
                     showingFileImporter = true
@@ -282,7 +305,7 @@ extension AllPromptsView {
     // MARK: - Landing Content (Category-First)
 
     @ViewBuilder
-    private var landingContent: some View {
+    private func landingContent(_ prompts: [Prompt]) -> some View {
         spinTheWheelCard
 
         // A non-"All" chip is a request to see prompts, not categories —
@@ -290,13 +313,13 @@ extension AllPromptsView {
         if selectedFilter == .all {
             categoriesSection
         } else {
-            HStack { countLabel; Spacer(minLength: 0) }
-            promptResults
+            HStack { countLabel(prompts); Spacer(minLength: 0) }
+            promptResults(prompts)
         }
     }
 
-    private var countLabel: some View {
-        Text("\(filteredPrompts.count) prompt\(filteredPrompts.count == 1 ? "" : "s")")
+    private func countLabel(_ prompts: [Prompt]) -> some View {
+        Text("\(prompts.count) prompt\(prompts.count == 1 ? "" : "s")")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
@@ -357,8 +380,9 @@ extension AllPromptsView {
     }
 
     private func categoryGridCard(_ category: PromptCategory) -> some View {
-        let total = count(for: category)
-        let done = answeredCount(for: category)
+        let progress = categoryCounts[category.rawValue]
+        let total = progress?.total ?? 0
+        let done = progress?.answered ?? 0
         let color = category.color
 
         return Button {
@@ -407,19 +431,18 @@ extension AllPromptsView {
     // MARK: - Category Detail Content
 
     @ViewBuilder
-    private var categoryDetailContent: some View {
+    private func categoryDetailContent(_ prompts: [Prompt]) -> some View {
         HStack(spacing: 10) {
             backToCategoriesButton
-            countLabel
+            countLabel(prompts)
             Spacer(minLength: 0)
         }
         activeFiltersRow
-        promptResults
+        promptResults(prompts)
     }
 
     @ViewBuilder
-    private var promptResults: some View {
-        let prompts = filteredPrompts
+    private func promptResults(_ prompts: [Prompt]) -> some View {
         if prompts.isEmpty {
             emptyState
         } else {
@@ -454,22 +477,6 @@ extension AllPromptsView {
             .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Category Helpers
-
-    private func count(for category: PromptCategory) -> Int {
-        allPrompts.reduce(into: 0) { partial, prompt in
-            if prompt.category == category.rawValue { partial += 1 }
-        }
-    }
-
-    private func answeredCount(for category: PromptCategory) -> Int {
-        allPrompts.reduce(into: 0) { partial, prompt in
-            if prompt.category == category.rawValue && answeredPromptIDs.contains(prompt.id) {
-                partial += 1
-            }
-        }
     }
 
     // MARK: - Prompt List & Grid
@@ -512,13 +519,52 @@ extension AllPromptsView {
 
     private func loadAnsweredPromptIDs() async {
         let container = modelContext.container
-        let ids = await Task.detached(priority: .userInitiated) {
+        let result = await Task.detached(priority: .userInitiated) { () -> (ids: Set<String>, counts: [String: PromptCategoryProgress]) in
             let context = ModelContext(container)
-            let descriptor = FetchDescriptor<Recording>()
-            let recordings = (try? context.fetch(descriptor)) ?? []
-            return Set(recordings.compactMap { $0.prompt?.id })
+            let recordings = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
+            let prompts = (try? context.fetch(FetchDescriptor<Prompt>())) ?? []
+
+            // Denormalized promptId keeps the common path off relationship
+            // traversal. Rows written before the column existed carry nil, so
+            // fall back to the relationship — and write the backfill through
+            // this context so the fast path converges.
+            let categoryByPromptID = Dictionary(
+                prompts.map { ($0.id, $0.category) },
+                uniquingKeysWith: { first, _ in first }
+            )
+
+            var ids: Set<String> = []
+            ids.reserveCapacity(recordings.count)
+            var answeredByCategory: [String: Int] = [:]
+            for recording in recordings {
+                guard let promptId = recording.promptId ?? recording.prompt?.id else { continue }
+                if recording.promptId == nil {
+                    recording.promptId = promptId
+                }
+                if ids.insert(promptId).inserted, let category = categoryByPromptID[promptId] {
+                    answeredByCategory[category, default: 0] += 1
+                }
+            }
+            if context.hasChanges {
+                try? context.save()
+            }
+
+            var totals: [String: Int] = [:]
+            for prompt in prompts {
+                totals[prompt.category, default: 0] += 1
+            }
+
+            var counts: [String: PromptCategoryProgress] = [:]
+            for (category, total) in totals {
+                counts[category] = PromptCategoryProgress(
+                    total: total,
+                    answered: answeredByCategory[category] ?? 0
+                )
+            }
+            return (ids, counts)
         }.value
-        answeredPromptIDs = ids
+        answeredPromptIDs = result.ids
+        categoryCounts = result.counts
     }
 
     private func deletePrompt(_ prompt: Prompt) {

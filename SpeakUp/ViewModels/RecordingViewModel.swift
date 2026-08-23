@@ -81,12 +81,20 @@ class RecordingViewModel {
     /// Call / Siri interruption — recording has no pause, so we save & stop.
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
 
+    /// Environment-injected analysis services, captured at configure time so
+    /// the coordinator gets the same instances this session used (Whisper
+    /// model state, LLM availability). Not observable — no view reads them.
+    @ObservationIgnored var speechService: SpeechService?
+    @ObservationIgnored var llmService: LLMService?
+
     func configure(
         with context: ModelContext,
         prompt: Prompt?,
         duration: RecordingDuration,
         timerEndBehavior: TimerEndBehavior = .saveAndStop,
-        countdownStyle: CountdownStyle = .countUp
+        countdownStyle: CountdownStyle = .countUp,
+        speechService: SpeechService,
+        llmService: LLMService
     ) {
         self.modelContext = context
         self.prompt = prompt
@@ -95,7 +103,24 @@ class RecordingViewModel {
         self.timerEndBehavior = timerEndBehavior
         self.countdownStyle = countdownStyle
         self.progress = countdownStyle == .countDown ? 1.0 : 0.0
+        self.speechService = speechService
+        self.llmService = llmService
         installInterruptionHandling()
+    }
+
+    /// Hands the finished take to the analysis pipeline. Views go through here
+    /// rather than touching the coordinator directly so enqueue stays a
+    /// view-model decision (and stays testable without a view).
+    func submitForAnalysis(_ recording: Recording) {
+        guard let speechService, let llmService, let modelContext else { return }
+        // The coordinator dedupes by recording ID, so a double-tap here is
+        // harmless by construction.
+        RecordingProcessingCoordinator.shared.enqueue(
+            recordingID: recording.id,
+            modelContext: modelContext,
+            speechService: speechService,
+            llmService: llmService
+        )
     }
 
     // MARK: - Interruptions

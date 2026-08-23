@@ -54,6 +54,22 @@ enum SharePresenter {
         return true
     }
 
+    /// Presents a file URL (e.g. the prompt CSV export) with no analytics
+    /// attached.
+    static func present(url: URL) {
+        guard let root = rootViewController else { return }
+
+        let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+
+        if let popover = activity.popoverPresentationController {
+            popover.sourceView = root.view
+            popover.sourceRect = CGRect(x: root.view.bounds.midX, y: root.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+
+        root.present(activity, animated: true)
+    }
+
     /// The *topmost* presented controller, not the window root. Callers now
     /// include `ShareCardSheet`, which is itself a presented sheet — presenting
     /// on the root while it is up throws "already presenting" and no share

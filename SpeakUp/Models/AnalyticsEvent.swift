@@ -134,6 +134,8 @@ extension AnalyticsEvent {
 
     /// Only ever logged for a paywall shown *after* a complete first result,
     /// which is what makes the qualified-conversion metric meaningful.
+    /// Producer is deleted during beta (paywall UI removed); kept as the
+    /// restore seam — see docs/features/monetization.md.
     static func paywallQualified(trigger: String, source: String?) -> AnalyticsEvent {
         AnalyticsEvent("paywall_qualified", funnel: .monetization, dimensions: [
             "trigger": trigger,

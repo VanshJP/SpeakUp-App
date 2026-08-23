@@ -1,5 +1,6 @@
 import Foundation
 import LlamaSwift
+import os
 
 // MARK: - Types
 
@@ -208,6 +209,8 @@ final class LocalLLMService {
 
     // MARK: - Private
 
+    // Sendable — reachable from the MainActor service and the off-main orphan sweep alike.
+    nonisolated private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LocalLLM")
     nonisolated private let engine = LLMInferenceEngine()
     @ObservationIgnored private var activeURLSessionTask: URLSessionDownloadTask?
     private var unloadTimer: Timer?
@@ -299,7 +302,7 @@ final class LocalLLMService {
             includingPropertiesForKeys: nil
         )) ?? []
         for file in contents where !known.contains(file.lastPathComponent) {
-            print("[LocalLLM] Removing orphaned model file: \(file.lastPathComponent)")
+            Self.logger.debug("Removing orphaned model file: \(file.lastPathComponent, privacy: .public)")
             try? FileManager.default.removeItem(at: file)
         }
     }
@@ -333,7 +336,7 @@ final class LocalLLMService {
         guard selectedProfile != profile else { return true }
 
         if case .downloading = modelState {
-            print("[LocalLLM] Refusing profile switch, download in progress for \(selectedProfile.rawValue)")
+            Self.logger.debug("Refusing profile switch, download in progress for \(self.selectedProfile.rawValue, privacy: .public)")
             return false
         }
         if isModelReady {
@@ -487,7 +490,7 @@ final class LocalLLMService {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if self.isModelReady {
-                    print("[LocalLLM] Auto-unloading after 180s of inactivity")
+                    Self.logger.debug("Auto-unloading after 180s of inactivity")
                     self.unloadModel()
                 }
             }
@@ -504,7 +507,7 @@ final class LocalLLMService {
 
         // Pre-inference memory check
         guard Self.hasSufficientMemory() else {
-            print("[LocalLLM] Insufficient memory for inference, skipping")
+            Self.logger.error("Insufficient memory for inference, skipping")
             return nil
         }
 
@@ -880,6 +883,9 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
 /// runs on a background thread via the internal serial lock.
 nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
+    // Same category as the service logger — one stream for both layers.
+    nonisolated private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LocalLLM")
+
     private var model: OpaquePointer?                       // llama_model *
     private var ctx: OpaquePointer?                         // llama_context *
     private var smpl: UnsafeMutablePointer<llama_sampler>?  // llama_sampler *
@@ -979,7 +985,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         let loadedModel = llama_model_load_from_file(modelPath, mparams)
 
         guard let loadedModel else {
-            print("[LocalLLM] Failed to load model from: \(modelPath)")
+            Self.logger.error("Failed to load model from: \(modelPath, privacy: .private(mask: .hash))")
             llama_backend_free()
             throw LocalLLMError.modelInitFailed
         }
@@ -1041,7 +1047,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
         let loadedCtx = llama_init_from_model(loadedModel, cparams)
         guard let loadedCtx else {
-            print("[LocalLLM] Failed to create context")
+            Self.logger.error("Failed to create context")
             llama_model_free(loadedModel)
             model = nil
             llama_backend_free()
@@ -1058,7 +1064,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         llama_sampler_chain_add(chain, llama_sampler_init_dist(0))
         smpl = chain
 
-        print("[LocalLLM] Model loaded. ctx=\(contextTokenLimit) gen_threads=\(genThreads) batch_threads=\(batchThreads)")
+        Self.logger.debug("Model loaded. ctx=\(self.contextTokenLimit) gen_threads=\(genThreads) batch_threads=\(batchThreads)")
     }
 
     // MARK: - Generate
@@ -1075,7 +1081,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         // 1. Tokenize the prompt
         let tokens = tokenize(text: prompt, model: model)
         guard !tokens.isEmpty else {
-            print("[LocalLLM] Tokenization produced no tokens")
+            Self.logger.error("Tokenization produced no tokens")
             lock.unlock()
             return nil
         }
@@ -1110,7 +1116,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             let promptBatch = llama_batch_get_one(&chunk, Int32(chunkCount))
 
             guard llama_decode(ctx, promptBatch) == 0 else {
-                print("[LocalLLM] Failed to decode prompt chunk")
+                Self.logger.error("Failed to decode prompt chunk")
                 lock.unlock()
                 return nil
             }
@@ -1126,7 +1132,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             // the worst-case post-cancel latency under ~1s on CPU-bound runs
             // so a memory-pressure abort completes before jetsam fires.
             if i % 8 == 0 && isCancelled {
-                print("[LocalLLM] Generation cancelled")
+                Self.logger.debug("Generation cancelled")
                 break
             }
 
@@ -1145,7 +1151,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             var nextToken = newToken
             let nextBatch = llama_batch_get_one(&nextToken, 1)
             guard llama_decode(ctx, nextBatch) == 0 else {
-                print("[LocalLLM] Failed to decode generated token")
+                Self.logger.error("Failed to decode generated token")
                 break
             }
         }

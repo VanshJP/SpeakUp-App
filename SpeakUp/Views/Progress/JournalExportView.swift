@@ -1,6 +1,13 @@
 import SwiftUI
 import SwiftData
 
+/// Score + date projection of one analyzed take, decoded off the main thread
+/// so summary math in `body` never re-reads analysis blobs.
+nonisolated struct JournalScorePoint {
+    let date: Date
+    let score: Int
+}
+
 struct JournalExportView: View {
     private static let journalDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -9,15 +16,16 @@ struct JournalExportView: View {
     }()
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recording.date, order: .reverse) private var allRecordings: [Recording]
     @Query private var achievements: [Achievement]
 
     @State private var selectedRange: DateRangeOption = .lastMonth
     @State private var includeAchievements = true
     @State private var isExporting = false
-    @State private var pdfURL: URL?
-    @State private var showingShare = false
     @State private var errorMessage: String?
+    /// Analyzed takes across all ranges, date-ascending; filtered purely per render.
+    @State private var scorePoints: [JournalScorePoint] = []
 
     enum DateRangeOption: String, CaseIterable, Identifiable {
         case lastWeek = "Week"
@@ -50,31 +58,40 @@ struct JournalExportView: View {
         allRecordings.filter { $0.date >= selectedRange.dateFilter }
     }
 
-    private var analyzedSorted: [Recording] {
-        filteredRecordings.filter { $0.analysis != nil }.sorted { $0.date < $1.date }
-    }
-
-    private var totalMinutes: Int {
-        Int(filteredRecordings.reduce(0.0) { $0 + $1.actualDuration }) / 60
-    }
-
-    private var averageScore: Int {
-        let scores = analyzedSorted.compactMap { $0.analysis?.speechScore.overall }
-        guard !scores.isEmpty else { return 0 }
-        return scores.reduce(0, +) / scores.count
-    }
-
-    private var improvement: Int {
-        let scores = analyzedSorted.compactMap { $0.analysis?.speechScore.overall }
-        guard scores.count >= 2 else { return 0 }
-        return (scores.last ?? 0) - (scores.first ?? 0)
-    }
-
     private var unlockedAchievementsCount: Int {
         achievements.filter { $0.isUnlocked }.count
     }
 
+    /// One background decode pass on appear; range filtering is pure date
+    /// math done per render against these values. A cancelled pass (view
+    /// already gone) never writes.
+    private func loadScorePoints() async {
+        let container = modelContext.container
+        let points = await Task.detached(priority: .userInitiated) { () -> [JournalScorePoint] in
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>(
+                sortBy: [SortDescriptor(\.date, order: .forward)]
+            )
+            let recordings = (try? context.fetch(descriptor)) ?? []
+            return recordings.compactMap { recording in
+                guard let score = recording.analysis?.speechScore.overall else { return nil }
+                return JournalScorePoint(date: recording.date, score: score)
+            }
+        }.value
+
+        guard !Task.isCancelled else { return }
+        scorePoints = points
+    }
+
     var body: some View {
+        let rangeSessions = filteredRecordings
+        let totalMinutes = Int(rangeSessions.reduce(0.0) { $0 + $1.actualDuration }) / 60
+        let rangeScores = scorePoints.filter { $0.date >= selectedRange.dateFilter }
+        let averageScore = rangeScores.isEmpty ? 0 : rangeScores.map(\.score).reduce(0, +) / rangeScores.count
+        let improvement = rangeScores.count >= 2
+            ? (rangeScores.last?.score ?? 0) - (rangeScores.first?.score ?? 0)
+            : 0
+
         ZStack {
             AppBackground()
 
@@ -87,7 +104,7 @@ struct JournalExportView: View {
 
                             Spacer()
 
-                            Text("\(filteredRecordings.count) sessions")
+                            Text("\(rangeSessions.count) sessions")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -123,7 +140,7 @@ struct JournalExportView: View {
 
                         FeaturedGlassCard {
                             JournalSummaryView(
-                                totalSessions: filteredRecordings.count,
+                                totalSessions: rangeSessions.count,
                                 totalMinutes: totalMinutes,
                                 averageScore: averageScore,
                                 improvement: improvement,
@@ -149,7 +166,7 @@ struct JournalExportView: View {
                     ) {
                         exportPDF()
                     }
-                    .disabled(filteredRecordings.isEmpty || isExporting)
+                    .disabled(rangeSessions.isEmpty || isExporting)
                 }
                 .padding()
             }
@@ -162,10 +179,8 @@ struct JournalExportView: View {
                 Button("Done") { dismiss() }
             }
         }
-        .sheet(isPresented: $showingShare) {
-            if let url = pdfURL {
-                ShareSheet(items: [url])
-            }
+        .task {
+            await loadScorePoints()
         }
     }
 
@@ -199,26 +214,12 @@ struct JournalExportView: View {
 
             do {
                 try data.write(to: tempURL)
-                pdfURL = tempURL
                 isExporting = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showingShare = true
-                }
+                SharePresenter.present(url: tempURL)
             } catch {
                 errorMessage = "Could not save PDF: \(error.localizedDescription)"
                 isExporting = false
             }
         }
     }
-}
-
-// Simple share sheet wrapper
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

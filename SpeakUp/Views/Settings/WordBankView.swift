@@ -571,7 +571,7 @@ struct WordBankView: View {
                 } else {
                     FlowLayout(spacing: 6) {
                         ForEach(unconditional, id: \.word) { item in
-                            chipView(item.word, tint: item.isCustom ? .orange : .red) {
+                            chipView(item.word, tint: item.isCustom ? AppColors.warning : AppColors.error) {
                                 withAnimation(.spring(duration: 0.25)) {
                                     viewModel.removeFillerWord(item.word)
                                 }
@@ -601,7 +601,7 @@ struct WordBankView: View {
                 } else {
                     FlowLayout(spacing: 6) {
                         ForEach(contextual, id: \.word) { item in
-                            chipView(item.word, tint: .blue) {
+                            chipView(item.word, tint: AppColors.info) {
                                 withAnimation(.spring(duration: 0.25)) {
                                     viewModel.removeFillerWord(item.word)
                                 }

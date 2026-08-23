@@ -58,7 +58,9 @@ struct RecordingView: View {
                 prompt: prompt,
                 duration: duration,
                 timerEndBehavior: timerEndBehavior,
-                countdownStyle: countdownStyle
+                countdownStyle: countdownStyle,
+                speechService: speechService,
+                llmService: llmService
             )
             viewModel.goalId = goalId
             viewModel.storyId = storyId
@@ -569,12 +571,7 @@ struct RecordingView: View {
 
     private func handleRecordingCompletion(_ recording: Recording) {
         guard completedRecording == nil, !hasNavigated else { return }
-        RecordingProcessingCoordinator.shared.enqueue(
-            recordingID: recording.id,
-            modelContext: modelContext,
-            speechService: speechService,
-            llmService: llmService
-        )
+        viewModel.submitForAnalysis(recording)
         Haptics.success()
         withAnimation(AppMotion.settle) {
             completedRecording = recording

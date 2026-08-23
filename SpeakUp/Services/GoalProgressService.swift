@@ -1,19 +1,57 @@
 import Foundation
 import SwiftData
 
+/// Per-goal numbers from the background scan — plain values, so the main
+/// context only applies diffs (pattern: `HistoryViewModel.RecordingSummary`).
+nonisolated struct GoalProgressOutcome: Sendable {
+    let current: Int
+}
+
+/// What the scanner needs per goal. Built on the main actor; the window is
+/// frozen at dispatch (`min(deadline, Date())`), matching when the old inline
+/// pass computed it.
+nonisolated struct GoalProgressRequest: Sendable {
+    let id: UUID
+    let type: GoalType
+    let startDate: Date
+    let effectiveEnd: Date
+}
+
 @MainActor
 enum GoalProgressService {
     static func refreshGoals(in context: ModelContext) {
-        let goalDescriptor = FetchDescriptor<UserGoal>()
-        let recordingDescriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date)])
+        guard let goals = try? context.fetch(FetchDescriptor<UserGoal>()),
+              !goals.isEmpty else { return }
 
-        guard let goals = try? context.fetch(goalDescriptor),
-              let recordings = try? context.fetch(recordingDescriptor) else { return }
+        let requests = goals.map { goal in
+            GoalProgressRequest(
+                id: goal.id,
+                type: goal.type,
+                startDate: goal.startDate,
+                effectiveEnd: min(goal.deadline, Date())
+            )
+        }
+
+        // The scan decodes one analysis blob per session; doing that on the
+        // main context stalled every Today load and GoalsView open.
+        let container = context.container
+        Task {
+            let outcomes = await Self.computeOutcomes(requests: requests, container: container)
+            applyOutcomes(outcomes, to: context)
+        }
+    }
+
+    // MARK: - Apply
+
+    private static func applyOutcomes(_ outcomes: [UUID: GoalProgressOutcome], to context: ModelContext) {
+        guard let goals = try? context.fetch(FetchDescriptor<UserGoal>()) else { return }
 
         var didMutate = false
         for goal in goals {
+            guard let outcome = outcomes[goal.id] else { continue }
             let snapshot = goalSnapshot(goal)
-            applyProgress(for: goal, recordings: recordings)
+            goal.current = max(0, outcome.current)
+            goal.isCompleted = goal.current >= goal.target
             if snapshot != goalSnapshot(goal) {
                 didMutate = true
             }
@@ -24,40 +62,74 @@ enum GoalProgressService {
         }
     }
 
-    private static func applyProgress(for goal: UserGoal, recordings: [Recording]) {
-        let effectiveEnd = min(goal.deadline, Date())
-        let relevant = recordings.filter { $0.date >= goal.startDate && $0.date <= effectiveEnd }
-
-        let currentValue: Int
-        switch goal.type {
-        case .sessionsPerWeek:
-            currentValue = relevant.count
-
-        case .practiceStreak:
-            currentValue = maxStreakDays(in: relevant.map(\.date))
-
-        case .totalMinutes:
-            let totalMinutes = relevant.reduce(0.0) { $0 + $1.actualDuration } / 60.0
-            currentValue = Int(totalMinutes.rounded())
-
-        case .improveScore:
-            let scores = relevant
-                .compactMap { $0.analysis?.speechScore.overall }
-            currentValue = scoreImprovement(from: scores)
-
-        case .reduceFiller:
-            let ratios = relevant.compactMap { recording -> Double? in
-                guard let analysis = recording.analysis, analysis.totalWords > 0 else { return nil }
-                return Double(analysis.totalFillerCount) / Double(analysis.totalWords)
-            }
-            currentValue = fillerReductionPercent(from: ratios)
-        }
-
-        goal.current = max(0, currentValue)
-        goal.isCompleted = goal.current >= goal.target
+    private static func goalSnapshot(_ goal: UserGoal) -> String {
+        "\(goal.id.uuidString)|\(goal.current)|\(goal.isCompleted)"
     }
 
-    private static func maxStreakDays(in dates: [Date]) -> Int {
+    // MARK: - Scan
+
+    nonisolated private static func computeOutcomes(
+        requests: [GoalProgressRequest],
+        container: ModelContainer
+    ) async -> [UUID: GoalProgressOutcome] {
+        await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date)])
+            guard let recordings = try? context.fetch(descriptor) else { return [:] }
+
+            var sessionCounts: [UUID: Int] = [:]
+            var streakDates: [UUID: [Date]] = [:]
+            var totalSeconds: [UUID: TimeInterval] = [:]
+            var scores: [UUID: [Int]] = [:]
+            var fillerRatios: [UUID: [Double]] = [:]
+
+            for recording in recordings {
+                // One decode feeds every goal whose window this session falls in.
+                let analysis = recording.analysis
+                for request in requests where recording.date >= request.startDate && recording.date <= request.effectiveEnd {
+                    switch request.type {
+                    case .sessionsPerWeek:
+                        sessionCounts[request.id, default: 0] += 1
+                    case .practiceStreak:
+                        streakDates[request.id, default: []].append(recording.date)
+                    case .totalMinutes:
+                        totalSeconds[request.id, default: 0] += recording.actualDuration
+                    case .improveScore:
+                        if let score = analysis?.speechScore.overall {
+                            scores[request.id, default: []].append(score)
+                        }
+                    case .reduceFiller:
+                        if let analysis, analysis.totalWords > 0 {
+                            fillerRatios[request.id, default: []].append(
+                                Double(analysis.totalFillerCount) / Double(analysis.totalWords)
+                            )
+                        }
+                    }
+                }
+            }
+
+            var outcomes: [UUID: GoalProgressOutcome] = [:]
+            for request in requests {
+                let currentValue: Int
+                switch request.type {
+                case .sessionsPerWeek:
+                    currentValue = sessionCounts[request.id] ?? 0
+                case .practiceStreak:
+                    currentValue = maxStreakDays(in: streakDates[request.id] ?? [])
+                case .totalMinutes:
+                    currentValue = Int(((totalSeconds[request.id] ?? 0) / 60.0).rounded())
+                case .improveScore:
+                    currentValue = scoreImprovement(from: scores[request.id] ?? [])
+                case .reduceFiller:
+                    currentValue = fillerReductionPercent(from: fillerRatios[request.id] ?? [])
+                }
+                outcomes[request.id] = GoalProgressOutcome(current: currentValue)
+            }
+            return outcomes
+        }.value
+    }
+
+    nonisolated private static func maxStreakDays(in dates: [Date]) -> Int {
         let startOfDays = Set(dates.map { Calendar.current.startOfDay(for: $0) })
         let sorted = startOfDays.sorted()
         guard !sorted.isEmpty else { return 0 }
@@ -78,7 +150,7 @@ enum GoalProgressService {
         return best
     }
 
-    private static func scoreImprovement(from scores: [Int]) -> Int {
+    nonisolated private static func scoreImprovement(from scores: [Int]) -> Int {
         guard scores.count >= 2 else { return 0 }
         let baselineSample = Array(scores.prefix(min(3, scores.count)))
         let recentSample = Array(scores.suffix(min(3, scores.count)))
@@ -88,7 +160,7 @@ enum GoalProgressService {
         return max(0, Int((recent - baseline).rounded()))
     }
 
-    private static func fillerReductionPercent(from ratios: [Double]) -> Int {
+    nonisolated private static func fillerReductionPercent(from ratios: [Double]) -> Int {
         guard ratios.count >= 2 else { return 0 }
 
         let midpoint = max(1, ratios.count / 2)
@@ -102,9 +174,5 @@ enum GoalProgressService {
 
         let reduction = max(0, (firstAvg - secondAvg) / firstAvg * 100)
         return Int(reduction.rounded())
-    }
-
-    private static func goalSnapshot(_ goal: UserGoal) -> String {
-        "\(goal.id.uuidString)|\(goal.current)|\(goal.isCompleted)"
     }
 }

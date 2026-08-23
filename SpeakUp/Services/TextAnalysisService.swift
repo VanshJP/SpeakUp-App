@@ -4,7 +4,7 @@ import NaturalLanguage
 /// On-device text quality analysis for speech transcripts.
 /// Detects hedge words, power words, rhetorical devices, and transition variety.
 /// Uses only Apple NaturalLanguage framework — no external dependencies.
-enum TextAnalysisService {
+nonisolated enum TextAnalysisService {
 
     // MARK: - Public API
 

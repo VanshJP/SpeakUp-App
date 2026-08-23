@@ -22,7 +22,7 @@ class NotificationService {
     
     func checkPermission() async {
         let settings = await center.notificationSettings()
-        hasPermission = settings.authorizationStatus == .authorized
+        hasPermission = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
     }
     
     // MARK: - Daily Reminder
