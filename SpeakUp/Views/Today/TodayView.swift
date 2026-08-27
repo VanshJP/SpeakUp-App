@@ -161,7 +161,7 @@ struct TodayView: View {
                 onAddToBank: { addSpotlightWordToBank($0) }
             )
 
-            startButtonSection
+            startButtons
                 .padding(.top, 2)
         }
     }
@@ -392,11 +392,7 @@ struct TodayView: View {
         .simultaneousGesture(TapGesture().onEnded { Haptics.medium() })
     }
 
-    // MARK: - Start Button Section
-
-    private var startButtonSection: some View {
-        startButtons
-    }
+    // MARK: - Start Buttons
 
     private var startButtons: some View {
         HStack(spacing: 12) {
