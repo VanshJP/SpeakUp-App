@@ -9,7 +9,7 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 | Role | Path |
 |------|------|
 | Hub | `SpeakUp/Views/Settings/SettingsView.swift` |
-| Pages | `ProfileSettingsView`, `TodayHomeCustomizeView` (Today Layout), `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceProfileView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordWorkoutSettingsView`, `WordBankView`, `RecordingLookView`, `AnalyticsDiagnosticsView` |
+| Pages | `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceProfileView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordWorkoutSettingsView`, `WordBankView`, `RecordingLookView`, `AnalyticsDiagnosticsView` |
 | Privacy & data | `SpeakUp/Views/Settings/PrivacyDataView.swift` |
 | VM | `SettingsViewModel.swift` |
 | Model | `UserSettings.swift`, `SupportLinks.swift` |
@@ -28,7 +28,7 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 
 10. Voice profile lives on `VoiceProfileView`, reached from **Analysis**, not Data Management. It is an input to scoring — Auto Pace Target learns from it — not data hygiene, and filing it beside "Clear All Data" hid it. `DataManagementView` is reset-settings and clear-all-data only, and its hub subtitle says exactly that: there is no export on that screen (journal export is History → Progress → More).
 
-11. **Today Layout** (`TodayHomeCustomizeView`, hub row under You) edits `UserSettings.todayHomeLayoutRaw`. Same editor as Today's customize sheet; push with `showsDoneButton: false`. See [today-library.md](./today-library.md).
+11. **There is no Today Layout row.** Today's layout is edited on Today, in place (toolbar control or long-press), the way every Apple "customize" surface works — Home screen, Control Center, Safari start page. A Settings row that jumped tabs and flipped another screen into edit mode would be a signpost pretending to be a control. See [today-library.md](./today-library.md).
 
 12. **No dead ends.** The hub's AI Features row names the action when nothing is active ("Set up on-device AI"), never "Not available" — the local model is always downloadable, so a state label that only reports the device is noise. Same rule inside `AIModelSettingsView`: the Apple Intelligence card renders only when `appleIntelligenceAvailable` (its badge is then always "Active"); when unavailable the Local AI Model card leads the page, because that is the one card with an action.
 

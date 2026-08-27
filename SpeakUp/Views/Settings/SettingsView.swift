@@ -42,15 +42,6 @@ struct SettingsView: View {
             }
 
             settingsLink(
-                icon: "rectangle.3.group",
-                iconColor: AppColors.categoryIndigo,
-                title: "Today Layout",
-                subtitle: "Reorder or hide the blocks on Today"
-            ) {
-                TodayHomeCustomizeView(showsDoneButton: false)
-            }
-
-            settingsLink(
                 icon: "bell.fill",
                 iconColor: AppColors.categoryAmber,
                 title: "Reminders",

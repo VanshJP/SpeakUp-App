@@ -8,6 +8,7 @@ struct TodayView: View {
 
     @Query private var userSettings: [UserSettings]
     @Environment(\.appTour) private var tour
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingFirstRecordingSetup = false
 
     // Arrival moment — fires once per calendar day, on the first open.
@@ -21,7 +22,11 @@ struct TodayView: View {
     @State private var focusDrill: DrillMode?
     @State private var showingFocusWarmUp = false
     @State private var showingFocusReadAloud = false
-    @State private var showingHomeCustomize = false
+    /// Home-screen edit mode, in place. The blocks below are the real ones —
+    /// frozen, wiggling, and draggable — not stand-ins on a sheet.
+    @State private var isEditingLayout = false
+    @State private var dropTarget: TodayHomeModule?
+    @State private var trayTargeted = false
 
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowReadAloud: () -> Void
@@ -48,6 +53,14 @@ struct TodayView: View {
 
                     // 1. Header — date + streak chip + customize
                     topHeaderRow
+                        .allowsHitTesting(!isEditingLayout)
+
+                    if isEditingLayout {
+                        Text("Drag a block to move it. Tap ⊖ to hide one.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
                     if let challenge = challengeStore.pending {
                         FriendChallengeCard(
@@ -59,8 +72,14 @@ struct TodayView: View {
 
                     // Modular home — Bevel-style. Order and visibility come from
                     // `UserSettings.todayHomeLayoutRaw`; session is always forced on.
+                    // Editing happens right here: same blocks, wiggling in place.
                     ForEach(homeModules) { module in
-                        homeModuleView(module)
+                        editableModule(module)
+                    }
+
+                    if isEditingLayout {
+                        hiddenTray
+                        resetLayoutButton
                     }
                 }
                 .padding()
@@ -74,12 +93,16 @@ struct TodayView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Haptics.light()
-                    showingHomeCustomize = true
+                    withAnimation(AppMotion.slide) { isEditingLayout.toggle() }
                 } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.body.weight(.semibold))
+                    if isEditingLayout {
+                        Text("Done").fontWeight(.semibold)
+                    } else {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.body.weight(.semibold))
+                    }
                 }
-                .accessibilityLabel("Customize Today")
+                .accessibilityLabel(isEditingLayout ? "Finish customizing Today" : "Customize Today")
             }
         }
         .refreshable {
@@ -105,13 +128,6 @@ struct TodayView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingHomeCustomize) {
-            NavigationStack {
-                TodayHomeCustomizeView()
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
         .sheet(item: $focusDrill) { mode in
             DrillSelectionView(initialMode: mode)
                 .presentationDetents([.large])
@@ -124,6 +140,314 @@ struct TodayView: View {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
+    }
+
+    // MARK: - Layout Editing
+
+    /// A Today block, editable in place. Not a preview of the block — the block
+    /// itself, frozen and wiggling, which is the whole point: you rearrange the
+    /// page while looking at the page.
+    @ViewBuilder
+    private func editableModule(_ module: TodayHomeModule) -> some View {
+        if isEditingLayout {
+            Group {
+                if moduleHasContent(module) {
+                    homeModuleView(module)
+                } else {
+                    dormantModuleCard(module)
+                }
+            }
+            .allowsHitTesting(false)
+            .overlay {
+                // Grab layer above the frozen block: gives the drag something
+                // to catch, and swallows taps meant for the controls beneath.
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.white.opacity(0.001))
+            }
+            .overlay(alignment: .topLeading) {
+                if !module.isPinned {
+                    removeBadge(module).offset(x: -8, y: -8)
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppColors.primary, lineWidth: dropTarget == module ? 2 : 0)
+            }
+            .wiggle(active: !reduceMotion, phase: module.wigglePhase)
+            .draggable(module.rawValue)
+            .dropDestination(for: String.self) { items, _ in
+                guard let dragged = items.compactMap(TodayHomeModule.init(rawValue:)).first else { return false }
+                insertModule(dragged, before: module)
+                return true
+            } isTargeted: { targeted in
+                withAnimation(AppMotion.slide) {
+                    if targeted { dropTarget = module }
+                    else if dropTarget == module { dropTarget = nil }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(module.title)
+            .accessibilityActions {
+                // Drag is unreachable for assistive tech; same moves, spelled out.
+                Button("Move up") { shiftModule(module, by: -1) }
+                Button("Move down") { shiftModule(module, by: 1) }
+                if !module.isPinned {
+                    Button("Hide") { setModuleVisible(module, false) }
+                }
+            }
+        } else {
+            homeModuleView(module)
+                // The Home-screen gesture: hold the page to rearrange it.
+                // Simultaneous so it never eats a tap meant for a control.
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                        Haptics.medium()
+                        withAnimation(AppMotion.slide) { isEditingLayout = true }
+                    }
+                )
+        }
+    }
+
+    private func removeBadge(_ module: TodayHomeModule) -> some View {
+        Button {
+            Haptics.selection()
+            setModuleVisible(module, false)
+        } label: {
+            Image(systemName: "minus.circle.fill")
+                .font(.system(size: 22))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, Color.black.opacity(0.6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Hide \(module.title)")
+    }
+
+    /// Weekly recap and Coach focus render nothing until they have data. In edit
+    /// mode that would be an invisible, undraggable gap where a block should be,
+    /// so the block states itself and says when it will show up for real.
+    private func moduleHasContent(_ module: TodayHomeModule) -> Bool {
+        switch module {
+        case .rings, .session, .tools, .learn:
+            return true
+        case .weeklyRecap:
+            guard let progress = viewModel.weeklyProgress else { return false }
+            return progress.hasRecap && shouldShowWeeklyRecap
+        case .focus:
+            guard let plan = viewModel.coachPlan else { return false }
+            return plan.sessionCount >= Self.focusMinimumSessions
+        }
+    }
+
+    private func dormantModuleCard(_ module: TodayHomeModule) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: module.icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.10))
+                }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(module.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                Text(dormantHint(module))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(AppColors.cardStroke, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                }
+        }
+    }
+
+    private func dormantHint(_ module: TodayHomeModule) -> String {
+        switch module {
+        case .weeklyRecap: return "Shows up once there's a week worth comparing"
+        case .focus: return "Shows up after \(Self.focusMinimumSessions) analyzed sessions"
+        default: return "Nothing to show right now"
+        }
+    }
+
+    // MARK: - Hidden Tray
+
+    /// Where hidden blocks wait, and a drop target — so hiding a block is
+    /// either its ⊖ or a drag down here.
+    private var hiddenTray: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Hidden")
+                .eyebrowStyle()
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if hiddenModules.isEmpty {
+                Text("Nothing hidden — every block is on Today.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 14)
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                    spacing: 10
+                ) {
+                    ForEach(hiddenModules) { module in
+                        trayChip(module)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.black.opacity(0.16))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(
+                            trayTargeted ? AppColors.primary : AppColors.cardStroke,
+                            style: StrokeStyle(lineWidth: trayTargeted ? 2 : 1, dash: [5, 4])
+                        )
+                }
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let dragged = items.compactMap(TodayHomeModule.init(rawValue:)).first,
+                  !dragged.isPinned else { return false }
+            Haptics.selection()
+            setModuleVisible(dragged, false)
+            return true
+        } isTargeted: { targeted in
+            withAnimation(AppMotion.slide) { trayTargeted = targeted }
+        }
+    }
+
+    private func trayChip(_ module: TodayHomeModule) -> some View {
+        Button {
+            Haptics.selection()
+            setModuleVisible(module, true)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: module.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .background {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.white.opacity(0.10))
+                    }
+
+                Text(module.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 17))
+                    .foregroundStyle(AppColors.primary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
+                    }
+            }
+        }
+        .buttonStyle(GlassPressStyle())
+        .draggable(module.rawValue)
+        .accessibilityLabel("Add \(module.title) to Today. \(module.subtitle)")
+    }
+
+    private var resetLayoutButton: some View {
+        Button {
+            Haptics.light()
+            withAnimation(AppMotion.slide) {
+                // Empty raw is the "never customized" marker TodayHomeLayout
+                // resolves back to the factory default.
+                userSettings.first?.todayHomeLayoutRaw = []
+                try? modelContext.save()
+            }
+        } label: {
+            Text("Reset to default")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppColors.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+        }
+        .buttonStyle(GlassPressStyle())
+    }
+
+    // MARK: - Layout Mutations
+
+    private var hiddenModules: [TodayHomeModule] {
+        TodayHomeModule.allCases.filter { !homeModules.contains($0) && !$0.isPinned }
+    }
+
+    /// The dragged block takes the target's slot, whether it came from
+    /// elsewhere in the stack or from the tray.
+    private func insertModule(_ dragged: TodayHomeModule, before target: TodayHomeModule) {
+        guard dragged != target else { return }
+        var list = homeModules
+        list.removeAll { $0 == dragged }
+        let index = list.firstIndex(of: target) ?? list.count
+        list.insert(dragged, at: index)
+        Haptics.selection()
+        withAnimation(AppMotion.slide) {
+            dropTarget = nil
+            writeLayout(list)
+        }
+    }
+
+    private func shiftModule(_ module: TodayHomeModule, by delta: Int) {
+        var list = homeModules
+        guard let index = list.firstIndex(of: module) else { return }
+        let destination = index + delta
+        guard list.indices.contains(destination) else { return }
+        list.swapAt(index, destination)
+        withAnimation(AppMotion.slide) { writeLayout(list) }
+    }
+
+    private func setModuleVisible(_ module: TodayHomeModule, _ on: Bool) {
+        var list = homeModules
+        if on {
+            guard !list.contains(module) else { return }
+            // Put a re-added block back where it belongs rather than at the end.
+            if module == .weeklyRecap, let rings = list.firstIndex(of: .rings) {
+                list.insert(module, at: rings + 1)
+            } else if module == .focus, let session = list.firstIndex(of: .session) {
+                list.insert(module, at: session)
+            } else {
+                list.append(module)
+            }
+        } else {
+            guard !module.isPinned else { return }
+            list.removeAll { $0 == module }
+        }
+        withAnimation(AppMotion.slide) { writeLayout(list) }
+    }
+
+    private func writeLayout(_ list: [TodayHomeModule]) {
+        guard let settings = userSettings.first else { return }
+        settings.todayHomeLayoutRaw = TodayHomeLayout.encode(list)
+        try? modelContext.save()
     }
 
     // MARK: - Home Modules
@@ -845,4 +1169,45 @@ struct DurationPill: View {
         )
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self], inMemory: true)
+}
+
+// MARK: - Wiggle
+
+private extension TodayHomeModule {
+    /// Stable per-block offset so the stack doesn't wobble in lockstep — the
+    /// Home screen's icons are each a little out of phase with their neighbours.
+    var wigglePhase: Double {
+        Double(TodayHomeModule.allCases.firstIndex(of: self) ?? 0) * 0.035
+    }
+}
+
+private extension View {
+    /// Home-screen jiggle. Off under Reduce Motion, where a permanently moving
+    /// page is exactly the thing the setting exists to stop.
+    func wiggle(active: Bool, phase: Double) -> some View {
+        modifier(WiggleModifier(active: active, phase: phase))
+    }
+}
+
+/// Rocks between -0.4° and +0.4°. The rest angle has to be one end of the
+/// swing rather than zero, or `autoreverses` tilts the block one way only and
+/// the page looks like it is leaning instead of wiggling.
+private struct WiggleModifier: ViewModifier {
+    let active: Bool
+    let phase: Double
+
+    @State private var swung = false
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(active ? (swung ? 0.4 : -0.4) : 0))
+            .animation(
+                active
+                    ? .easeInOut(duration: 0.17).repeatForever(autoreverses: true).delay(phase)
+                    : nil,
+                value: swung
+            )
+            .onAppear { swung = active }
+            .onChange(of: active) { _, isActive in swung = isActive }
+    }
 }
