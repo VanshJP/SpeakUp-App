@@ -64,6 +64,17 @@ enum DrillMode: String, CaseIterable, Identifiable {
         case .impromptuSprint: return 30
         }
     }
+
+    /// What the session actually shows while you run it — the concrete thing
+    /// a tile promises so the format is understood before committing.
+    var liveFeedback: String {
+        switch self {
+        case .fillerElimination: return "Live filler counter"
+        case .paceControl: return "Live WPM vs. target band"
+        case .pausePractice: return "Guided pause markers"
+        case .impromptuSprint: return "Surprise topic on the clock"
+        }
+    }
 }
 
 struct DrillResult: Identifiable {

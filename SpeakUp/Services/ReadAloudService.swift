@@ -45,6 +45,11 @@ class ReadAloudService {
     var mismatchedWordCount: Int = 0
     var isListening = false
 
+    /// Set when the recognizer dies mid-session (missing on-device assets,
+    /// engine loss). The view model surfaces this as a result notice instead
+    /// of letting the session end in a confident-looking zero.
+    var recognitionFailureMessage: String?
+
     private var referenceWords: [String] = []
     private var normalizedReference: [String] = []
     private var lastProcessedTranscript: String = ""
@@ -86,6 +91,7 @@ class ReadAloudService {
         matchedWordCount = 0
         mismatchedWordCount = 0
         lastProcessedTranscript = ""
+        recognitionFailureMessage = nil
     }
 
     // MARK: - Start Listening
@@ -93,6 +99,13 @@ class ReadAloudService {
     func start() throws {
         guard let recognizer, recognizer.isAvailable else {
             throw ReadAloudError.speechNotAvailable
+        }
+
+        // Idempotent, same rule as LiveTranscriptionService: a Retry racing a
+        // ghost start must not stack a second engine and tap on top of the
+        // first — tear the old graph down before building a new one.
+        if audioEngine != nil || isTapInstalled || recognitionTask != nil {
+            stopInternal()
         }
 
         let engine = AVAudioEngine()
@@ -145,7 +158,15 @@ class ReadAloudService {
 
             if error != nil || (result?.isFinal ?? false) {
                 Task { @MainActor in
-                    self.isListening = false
+                    // A dead recognizer must not leave the engine running with
+                    // a hot mic behind a "Not listening" label — and it must
+                    // not end as a silent zero either. Full teardown here, and
+                    // the message travels out via recognitionFailureMessage.
+                    if let error, self.recognitionFailureMessage == nil {
+                        self.recognitionFailureMessage =
+                            ReadAloudError.recognitionFailed(error.localizedDescription).errorDescription
+                    }
+                    self.stopInternal()
                 }
             }
         }
@@ -212,47 +233,98 @@ class ReadAloudService {
     }
 
     private func computeWordStates(from spokenWords: [String]) -> (states: [WordMatchState], refIndex: Int, matched: Int, mismatched: Int) {
-        var newStates = Array(repeating: WordMatchState.upcoming, count: referenceWords.count)
+        Self.computeAlignment(
+            reference: referenceWords,
+            normalizedReference: normalizedReference,
+            spokenWords: spokenWords
+        )
+    }
+
+    /// Pure alignment core, static and nonisolated so unit tests can pin its
+    /// behavior directly (default isolation would otherwise fence it behind
+    /// the main actor).
+    ///
+    /// Greedy left-to-right match. Handles the two ways real reading drifts
+    /// from the page:
+    /// - **Skipped words** (reader drops a word): a spoken word that matches a
+    ///   nearby *reference* word marks everything between as `.skipped`.
+    /// - **Inserted words** (filler, stumble): a spoken word matching nothing
+    ///   is checked against what the *next* spoken word resolves to — if that
+    ///   lands on the current or an upcoming reference word, the first word
+    ///   was an insertion, not a miss. Single-word lookahead keeps skip vs
+    ///   insert deterministic; deeper stumbles re-sync on the next partial
+    ///   result anyway.
+    nonisolated static func computeAlignment(
+        reference: [String],
+        normalizedReference: [String],
+        spokenWords: [String]
+    ) -> (states: [WordMatchState], refIndex: Int, matched: Int, mismatched: Int) {
+        var newStates = Array(repeating: WordMatchState.upcoming, count: reference.count)
         var refIndex = 0
         var matched = 0
         var mismatched = 0
 
-        for spokenWord in spokenWords {
-            guard refIndex < referenceWords.count else { break }
+        func markSkipped(_ range: Range<Int>) {
+            for j in range {
+                newStates[j] = .skipped
+                mismatched += 1
+            }
+        }
 
-            let spokenNorm = Self.normalize(spokenWord)
+        var spokenIndex = 0
+        while spokenIndex < spokenWords.count {
+            guard refIndex < reference.count else { break }
+
+            let spokenNorm = normalize(spokenWords[spokenIndex])
             let expectedNorm = normalizedReference[refIndex]
 
             if spokenNorm == expectedNorm {
                 newStates[refIndex] = .matched
                 matched += 1
                 refIndex += 1
-            } else {
-                let lookAhead = min(refIndex + 3, referenceWords.count)
-                var foundAhead = false
+                spokenIndex += 1
+                continue
+            }
 
-                if lookAhead > refIndex + 1 {
-                    for i in (refIndex + 1)..<lookAhead {
-                        if spokenNorm == normalizedReference[i] {
-                            for j in refIndex..<i {
-                                newStates[j] = .skipped
-                                mismatched += 1
-                            }
-                            newStates[i] = .matched
-                            matched += 1
-                            refIndex = i + 1
-                            foundAhead = true
-                            break
-                        }
-                    }
-                }
+            // Skipped-reference path: this spoken word belongs further ahead
+            // in the passage.
+            let lookAhead = min(refIndex + 3, reference.count)
+            var foundAhead = false
 
-                if !foundAhead {
-                    newStates[refIndex] = .mismatched(spoken: spokenWord)
-                    mismatched += 1
-                    refIndex += 1
+            if lookAhead > refIndex + 1 {
+                for i in (refIndex + 1)..<lookAhead where spokenNorm == normalizedReference[i] {
+                    markSkipped(refIndex..<i)
+                    newStates[i] = .matched
+                    matched += 1
+                    refIndex = i + 1
+                    foundAhead = true
+                    break
                 }
             }
+            if foundAhead {
+                spokenIndex += 1
+                continue
+            }
+
+            // Insertion path: if the NEXT spoken word resolves at or near the
+            // current position, this word was said in passing ("um") — drop it
+            // without consuming a reference word or counting a miss.
+            let nextIndex = spokenIndex + 1
+            if nextIndex < spokenWords.count {
+                let nextNorm = normalize(spokenWords[nextIndex])
+                let nextResolvesHere = !nextNorm.isEmpty && nextNorm == expectedNorm
+                let nextResolvesAhead = normalizedReference[(refIndex + 1)..<lookAhead]
+                    .contains { $0 == nextNorm }
+                if nextResolvesHere || nextResolvesAhead {
+                    spokenIndex += 1
+                    continue
+                }
+            }
+
+            newStates[refIndex] = .mismatched(spoken: spokenWords[spokenIndex])
+            mismatched += 1
+            refIndex += 1
+            spokenIndex += 1
         }
 
         if refIndex < newStates.count {
@@ -281,15 +353,78 @@ class ReadAloudService {
 
     // MARK: - Helpers
 
-    static func normalize(_ word: String) -> String {
+    /// Canonical form used for matching. Case, curly apostrophes, hyphens,
+    /// and punctuation all fold away — and spelled numbers collapse to digits,
+    /// because the page says "seventy-two" while the recognizer writes "72".
+    nonisolated static func normalize(_ word: String) -> String {
         let lowered = word
             .lowercased()
             .replacingOccurrences(of: "’", with: "'")
             .replacingOccurrences(of: "-", with: "")
             .replacingOccurrences(of: "'", with: "")
 
-        return lowered
+        let stripped = lowered
             .trimmingCharacters(in: .punctuationCharacters)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return Self.spelledNumberValue(stripped) ?? stripped
+    }
+
+    /// Parses tokens composed entirely of number words to their digit string.
+    /// Handles both spaced ("one hundred") and fused ("onehundred",
+    /// "seventytwo" — hyphens were stripped upstream) forms by greedily
+    /// consuming the longest number-word prefix at each step. Returns nil for
+    /// anything containing a non-number word — including plain digits, which
+    /// are already canonical.
+    private nonisolated static func spelledNumberValue(_ token: String) -> String? {
+        guard !token.isEmpty, token.contains(where: \.isLetter) else { return nil }
+
+        let lexicon: [String: Int] = [
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9,
+            "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+            "fourteen": 14, "fifteen": 15, "sixteen": 16,
+            "seventeen": 17, "eighteen": 18, "nineteen": 19,
+            "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+            "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+            "hundred": 0, "thousand": 0, "and": 0
+        ]
+        let scaleMarkers: Set<String> = ["hundred", "thousand"]
+        let sortedWords = lexicon.keys.sorted { $0.count > $1.count }
+
+        var parts: [String] = []
+        var rest = Substring(token)
+        while !rest.isEmpty {
+            if rest.first == " " {
+                rest = rest.dropFirst()
+                continue
+            }
+            guard let match = sortedWords.first(where: { rest.hasPrefix($0) }) else {
+                return nil
+            }
+            parts.append(match)
+            rest = rest.dropFirst(match.count)
+        }
+
+        var total = 0
+        var current = 0
+        var sawNumberWord = false
+
+        for part in parts where part != "and" {
+            if let value = lexicon[part], !scaleMarkers.contains(part) {
+                current += value
+                sawNumberWord = true
+            } else if part == "hundred" {
+                current = max(current, 1) * 100
+                sawNumberWord = true
+            } else if part == "thousand" {
+                total += max(current, 1) * 1000
+                current = 0
+                sawNumberWord = true
+            }
+        }
+
+        guard sawNumberWord else { return nil }
+        return String(total + current)
     }
 }

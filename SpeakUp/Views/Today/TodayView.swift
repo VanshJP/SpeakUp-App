@@ -3,6 +3,7 @@ import SwiftData
 
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(LLMService.self) private var llmService
     @State private var viewModel = TodayViewModel()
 
     @Query private var userSettings: [UserSettings]
@@ -23,12 +24,12 @@ struct TodayView: View {
     @State private var showingHomeCustomize = false
 
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
-    var onShowWheel: () -> Void
+    var onShowReadAloud: () -> Void
     var onShowWarmUps: () -> Void
     var onShowDrills: () -> Void
     var onShowConfidence: () -> Void
     var onShowCurriculum: () -> Void
-    var onStartStoryPractice: ((Story) -> Void)?
+    var onStartStoryPractice: ((Story, RecordingDuration) -> Void)?
 
     /// Ordered visible modules from Settings. Empty storage → factory default.
     private var homeModules: [TodayHomeModule] {
@@ -90,6 +91,9 @@ struct TodayView: View {
         .task {
             playArrivalIfNeeded()
             await checkFirstRunSurfaces()
+            // Fire-and-forget: tops up the fresh-word pool while the user is
+            // looking at Today, so tomorrow's workout has novel words ready.
+            viewModel.warmVocabFreshWords(llmService: llmService)
         }
         // The streak is only known once the load finishes, so the moment waits
         // for it rather than celebrating a zero.
@@ -147,22 +151,14 @@ struct TodayView: View {
         }
     }
 
+    /// The card owns the whole brief now — topic, length, words, and Start —
+    /// so the module is just the header plus that one object. The header takes
+    /// `promptSectionTitle` because a story day is not a prompt day.
     private var sessionModule: some View {
         VStack(alignment: .leading, spacing: 14) {
-            GlassSectionHeader("Today's session", icon: "mic.fill")
+            GlassSectionHeader(promptSectionTitle, icon: "mic.fill")
 
             interactivePromptSection
-
-            // The words are the spec for *this* take — brief above the button.
-            SessionBriefRow(
-                workout: viewModel.vocabChallenge,
-                bankWords: userSettings.first?.vocabWords ?? [],
-                onSkip: { viewModel.skipVocabWord($0) },
-                onAddToBank: { addSpotlightWordToBank($0) }
-            )
-
-            startButtons
-                .padding(.top, 2)
         }
     }
 
@@ -222,6 +218,18 @@ struct TodayView: View {
         case .readAloud:
             showingFocusReadAloud = true
         }
+    }
+
+    /// Today's words, built here because the handlers need the `modelContext`,
+    /// then handed down as a value so both cards render the identical footer
+    /// without four more init parameters each.
+    private var sessionWords: SessionWordsRow {
+        SessionWordsRow(
+            workout: viewModel.vocabChallenge,
+            bankWords: userSettings.first?.vocabWords ?? [],
+            onSkip: { viewModel.skipVocabWord($0) },
+            onAddToBank: { addSpotlightWordToBank($0) }
+        )
     }
 
     private func addSpotlightWordToBank(_ word: VocabChallengeWord) {
@@ -392,104 +400,59 @@ struct TodayView: View {
         .simultaneousGesture(TapGesture().onEnded { Haptics.medium() })
     }
 
-    // MARK: - Start Buttons
+    // MARK: - Start Footer
 
-    private var startButtons: some View {
-        HStack(spacing: 12) {
-            Button {
+    /// The one hero action on Today, handed to whichever brief card renders so
+    /// button and subject are the same object. Twin capsules and a segmented
+    /// picker both failed here; read `docs/features/today-library.md`
+    /// invariants 11–13 before changing it.
+    private var sessionStartFooter: SessionStartFooter {
+        SessionStartFooter(
+            startHint: "Records a \(viewModel.selectedDuration.displayName) take on the topic above",
+            freeHint: "Records a \(viewModel.selectedDuration.displayName) take with no topic",
+            onStart: {
                 Haptics.medium()
                 if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
-                    onStartStoryPractice?(story)
+                    onStartStoryPractice?(story, viewModel.selectedDuration)
                 } else {
                     onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
                 }
-            } label: {
-                startLabel(
-                    icon: viewModel.storyPracticeEnabled ? "book.pages" : "mic.fill",
-                    title: viewModel.storyPracticeEnabled ? "With Story" : "With Prompt"
-                )
-                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                .background {
-                    Capsule()
-                        .fill(Color.white.opacity(0.94))
-                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
-                }
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-
-            Button {
+            },
+            onFreeTalk: {
                 Haptics.medium()
                 onStartRecording(nil, viewModel.selectedDuration)
-            } label: {
-                startLabel(icon: "waveform", title: "Free Practice")
-                    .foregroundStyle(.white)
-                    .background {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay { Capsule().fill(AppColors.surfaceLift) }
-                            .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
-                            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                    }
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func startLabel(icon: String, title: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        )
     }
 
     // MARK: - Interactive Prompt Section
 
+    /// Story days practice a story, so the label above the card says which
+    /// brief sits below — the card header alone didn't say whose take it was.
+    private var promptSectionTitle: String {
+        (viewModel.storyPracticeEnabled && viewModel.todaysStory != nil)
+            ? "Today's story"
+            : "Today's prompt"
+    }
+
+    @ViewBuilder
     private var interactivePromptSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
-                HStack {
-                    Label("Today's Story", systemImage: "book.pages.fill")
-                        .font(.headline)
-
-                    Spacer()
-
-                    SmallIconButton(icon: "arrow.clockwise", label: "Different story") {
-                        Task {
-                            await viewModel.refreshStory()
-                        }
-                    }
-                }
-
-                StoryPromptCard(
-                    story: story,
-                    selectedDuration: $viewModel.selectedDuration,
-                    onTap: {
-                        onStartStoryPractice?(story)
-                    }
-                )
-            } else {
-                InteractivePromptCard(
-                    prompt: viewModel.todaysPrompt,
-                    selectedDuration: $viewModel.selectedDuration,
-                    onTap: {
-                        onStartRecording(
-                            viewModel.todaysPrompt,
-                            viewModel.selectedDuration
-                        )
-                    },
-                    onRefresh: {
-                        Task {
-                            await viewModel.refreshPrompt()
-                        }
-                    }
-                )
-            }
+        if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
+            StoryPromptCard(
+                story: story,
+                selectedDuration: $viewModel.selectedDuration,
+                words: sessionWords,
+                footer: sessionStartFooter,
+                onRefresh: { Task { await viewModel.refreshStory() } }
+            )
+        } else {
+            InteractivePromptCard(
+                prompt: viewModel.todaysPrompt,
+                selectedDuration: $viewModel.selectedDuration,
+                words: sessionWords,
+                footer: sessionStartFooter,
+                onRefresh: { Task { await viewModel.refreshPrompt() } }
+            )
         }
     }
 
@@ -605,8 +568,7 @@ struct TodayView: View {
         case .warmUp: onShowWarmUps()
         case .drills: onShowDrills()
         case .calm: onShowConfidence()
-        case .wheel: onShowWheel()
-        case .readAloud: showingFocusReadAloud = true
+        case .readAloud: onShowReadAloud()
         case .learn: onShowCurriculum()
         }
     }
@@ -723,16 +685,35 @@ private struct PrepToolTile: View {
 
 // MARK: - Interactive Prompt Card
 
+/// Today's topic: the brief and its action in one object. Header, prompt text,
+/// words row, then the Start capsule as the footer — the button used to float
+/// between this card and the tools strip, a third island that belonged to
+/// neither neighbor.
+///
+/// Still not a control: no whole-card tap (the invisible gesture fought the
+/// duration `Menu` for the same taps). The Start button is the only way to
+/// begin.
+///
+/// Never line-limit the prompt: it clipped at four lines, which is the one
+/// thing a prompt card must not do. The size comes from 14pt padding and 18pt
+/// type instead.
 struct InteractivePromptCard: View {
     let prompt: Prompt?
     @Binding var selectedDuration: RecordingDuration
-    let onTap: () -> Void
+    let words: SessionWordsRow
+    let footer: SessionStartFooter
     let onRefresh: () -> Void
 
+    private var redaction: RedactionReasons {
+        prompt == nil ? .placeholder : []
+    }
+
     var body: some View {
-        GlassCard(padding: 20, elevated: true) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
+        GlassCard(padding: 14, elevated: true) {
+            VStack(alignment: .leading, spacing: 10) {
+                // Everything *about* the take on one line, so the space under
+                // the text belongs to the words alone.
+                HStack(spacing: 6) {
                     HStack(spacing: 5) {
                         Image(systemName: categoryIcon)
                             .font(.system(size: 10, weight: .semibold))
@@ -740,42 +721,52 @@ struct InteractivePromptCard: View {
                             .font(.system(size: 11, weight: .semibold))
                             .textCase(.uppercase)
                             .tracking(0.6)
+                            .lineLimit(1)
+                            // Shrinks before it truncates; "Current Events &
+                            // Opinions" is the one that needs the headroom.
+                            .minimumScaleFactor(0.8)
                     }
                     .foregroundStyle(categoryColor)
 
-                    Spacer()
+                    Spacer(minLength: 4)
 
                     if let difficulty = prompt?.difficulty {
                         StatusPill.difficulty(difficulty)
                     }
-                }
 
-                Text(prompt?.text ?? "Loading today's prompt...")
-                    .font(.title3.weight(.semibold))
-                    .lineSpacing(3)
-                    .lineLimit(4)
-                    .foregroundStyle(prompt == nil ? .secondary : .primary)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack {
                     DurationPill(selectedDuration: $selectedDuration)
 
-                    Spacer()
-
+                    // Reroll belongs beside the thing it rerolls; in a footer
+                    // it cost a whole 44pt row. The negative gutter trims the
+                    // layout box back to the header's height and edge, while
+                    // the tap target itself stays 44pt.
                     SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
+                        .padding(.trailing, -6)
+                        .padding(.vertical, -6)
                 }
+                .redacted(reason: redaction)
+
+                Text(prompt?.text ?? "Loading today's prompt...")
+                    .font(.system(size: 18, weight: .semibold))
+                    .lineSpacing(2)
+                    .foregroundStyle(prompt == nil ? .secondary : .primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .redacted(reason: redaction)
+
+                // Carries its own divider, so a day with no word workout ends
+                // the brief at the prompt text.
+                words
+                    .redacted(reason: redaction)
+
+                // The action lives with the brief it starts; loading state
+                // never redacts it into looking broken.
+                footer
+                    .padding(.top, 4)
             }
-            // Whole card starts the session; the duration Menu still wins
-            // its own taps because child controls take gesture priority.
-            .contentShape(Rectangle())
-            .onTapGesture { Haptics.medium(); onTap() }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(prompt.map { "Daily prompt: \($0.text)" } ?? "Loading today's prompt")
-            .accessibilityHint("Starts a practice recording")
+            .accessibilityElement(children: .contain)
         }
-        .redacted(reason: prompt == nil ? .placeholder : [])
     }
 
     private var categoryColor: Color {
@@ -786,6 +777,70 @@ struct InteractivePromptCard: View {
     private var categoryIcon: String {
         guard let category = prompt?.category else { return "questionmark.circle" }
         return PromptCategory(rawValue: category)?.iconName ?? "text.bubble"
+    }
+}
+
+// MARK: - Session Start Footer
+
+/// The page's one hero action: a filled capsule and one quiet escape hatch.
+/// Lives inside whichever brief card renders so the button can't drift away
+/// from the thing it starts.
+///
+/// No prompt is not a mode you set and then confirm — it is a different way to
+/// start, so it is a second start: quiet, unmistakably subordinate, one tap,
+/// always visible. Give it a filled or stroked shape and it becomes the twin
+/// capsule again; contrast only.
+struct SessionStartFooter: View {
+    var showFreeTalk = true
+    let startHint: String
+    let freeHint: String
+    let onStart: () -> Void
+    let onFreeTalk: () -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Button {
+                onStart()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Start Speaking")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
+                .background {
+                    Capsule()
+                        .fill(Color.white.opacity(0.94))
+                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
+                }
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(startHint)
+
+            if showFreeTalk {
+                Button {
+                    onFreeTalk()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Talk without a prompt")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    // 0.8 white on glass reads as a control only because it
+                    // sits beside the capsule; alone it would be a caption.
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(freeHint)
+            }
+        }
     }
 }
 
@@ -861,14 +916,13 @@ struct DurationPill: View {
     NavigationStack {
         TodayView(
             onStartRecording: { _, _ in },
-            onShowWheel: {},
+            onShowReadAloud: {},
             onShowWarmUps: {},
             onShowDrills: {},
             onShowConfidence: {},
             onShowCurriculum: {},
-            onStartStoryPractice: { _ in }
+            onStartStoryPractice: { _, _ in }
         )
     }
     .modelContainer(for: [Recording.self, Prompt.self, UserGoal.self, UserSettings.self, Achievement.self], inMemory: true)
 }
-

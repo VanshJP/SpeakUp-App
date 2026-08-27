@@ -1,16 +1,23 @@
 import SwiftUI
 
+/// Today's story, in the same slot and the same skeleton as
+/// `InteractivePromptCard`: header, text, words row, Start footer.
+///
+/// A reading surface, not a control. The whole-card tap it used to carry needed
+/// a pulsing "Tap to practice" caption to be discoverable at all, which is the
+/// tell that it was the wrong affordance — the Start capsule in the footer is
+/// the action now, and reroll moved into the header with the length.
 struct StoryPromptCard: View {
     let story: Story
     @Binding var selectedDuration: RecordingDuration
-    let onTap: () -> Void
-
-    @State private var isPulsing = false
+    let words: SessionWordsRow
+    let footer: SessionStartFooter
+    let onRefresh: () -> Void
 
     var body: some View {
-        GlassCard(padding: 20, elevated: true) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
+        GlassCard(padding: 14, elevated: true) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
                     HStack(spacing: 5) {
                         Image(systemName: "book.pages")
                             .font(.system(size: 10, weight: .semibold))
@@ -21,19 +28,27 @@ struct StoryPromptCard: View {
                     }
                     .foregroundStyle(AppColors.primary)
 
-                    Spacer()
+                    Spacer(minLength: 4)
 
                     if story.practiceCount > 0 {
                         Text("\(story.practiceCount) practice\(story.practiceCount == 1 ? "" : "s")")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+
+                    DurationPill(selectedDuration: $selectedDuration)
+
+                    // Negative gutter trims the 44pt tap frame back to the
+                    // header's height and edge; the target itself stays 44pt.
+                    SmallIconButton(icon: "arrow.clockwise", label: "Different story", action: onRefresh)
+                        .padding(.trailing, -6)
+                        .padding(.vertical, -6)
                 }
 
                 Text(story.title.isEmpty ? "Untitled Story" : story.title)
-                    .font(.title3.weight(.semibold))
-                    .lineSpacing(3)
-                    .lineLimit(2)
+                    .font(.system(size: 18, weight: .semibold))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !story.contentPreview.isEmpty {
@@ -44,32 +59,14 @@ struct StoryPromptCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                HStack {
-                    DurationPill(selectedDuration: $selectedDuration)
+                words
 
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(AppColors.primary)
-                            .frame(width: 8, height: 8)
-                            .scaleEffect(isPulsing ? 1.3 : 1.0)
-                            .opacity(isPulsing ? 0.6 : 1.0)
-
-                        Text("Tap to practice")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                // Same footer as the prompt card — one hero action on the page,
+                // owned by whichever brief renders.
+                footer
+                    .padding(.top, 4)
             }
-            // Whole card starts practice; the duration Menu still wins its own taps.
-            .contentShape(Rectangle())
-            .onTapGesture { Haptics.medium(); onTap() }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel("Story: \(story.title.isEmpty ? "Untitled Story" : story.title)")
-            .accessibilityHint("Starts a practice recording with this story")
+            .accessibilityElement(children: .contain)
         }
-        .ambientLoop(AppMotion.ambient(duration: 1.2)) { isPulsing = true }
     }
 }

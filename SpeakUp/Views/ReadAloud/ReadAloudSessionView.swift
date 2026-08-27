@@ -11,6 +11,10 @@ struct ReadAloudSessionView: View {
     @State private var lastAutoScrolledWordIndex = 0
     @State private var didAutoStartSession = false
 
+    /// Passage text is the one surface the reader must see to perform; it has
+    /// to scale with their Dynamic Type setting like any other reading text.
+    @ScaledMetric(relativeTo: .title2) private var passageFontSize: CGFloat = 22
+
     var body: some View {
         ZStack {
             AppBackground(style: .recording)
@@ -70,6 +74,7 @@ struct ReadAloudSessionView: View {
             if let result = viewModel.result {
                 ReadAloudResultView(result: result, onRetry: {
                     showingResult = false
+                    lastAutoScrolledWordIndex = 0
                     Task { await viewModel.retryPassage() }
                 }, onDone: {
                     showingResult = false
@@ -85,7 +90,13 @@ struct ReadAloudSessionView: View {
                 micActive: viewModel.isListening
             )
         }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
             Button("OK") {
                 viewModel.reset()
                 dismiss()
@@ -144,6 +155,7 @@ struct ReadAloudSessionView: View {
                 .background {
                     Capsule().fill(.ultraThinMaterial)
                 }
+                .accessibilityLabel("Elapsed \(viewModel.formattedElapsedTime)")
 
             Spacer()
 
@@ -152,6 +164,7 @@ struct ReadAloudSessionView: View {
                 Circle()
                     .fill(accuracyColor)
                     .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
                 Text("\(Int(viewModel.accuracyPercentage))%")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
@@ -161,6 +174,8 @@ struct ReadAloudSessionView: View {
             .background {
                 Capsule().fill(.ultraThinMaterial)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Accuracy \(Int(viewModel.accuracyPercentage)) percent")
         }
         .padding(.horizontal, 20)
         .padding(.top, 60)
@@ -187,6 +202,9 @@ struct ReadAloudSessionView: View {
             }
         }
         .frame(height: 6)
+        .accessibilityElement()
+        .accessibilityLabel("Passage progress")
+        .accessibilityValue("\(Int(viewModel.progressPercentage * 100)) percent")
     }
 
     // MARK: - Passage Text
@@ -199,7 +217,7 @@ struct ReadAloudSessionView: View {
             ForEach(Array(words.enumerated()), id: \.offset) { index, word in
                 let state = index < states.count ? states[index] : WordMatchState.upcoming
                 Text(word)
-                    .font(.system(size: 22, weight: wordWeight(for: index), design: .default))
+                    .font(.system(size: passageFontSize, weight: wordWeight(for: index), design: .default))
                     .foregroundStyle(wordColor(for: index, state: state))
                     .underline(isProcessedHighlight(state))
                     .padding(.vertical, 2)
@@ -215,8 +233,26 @@ struct ReadAloudSessionView: View {
                         Haptics.light()
                         selectedWord = WordDetail(word: word, index: index, state: state)
                     }
+                    .accessibilityLabel(wordLabel(word, state: state))
                     .id("word_\(index)")
             }
+        }
+    }
+
+    /// Words not yet reached are noise to VoiceOver; processed words carry
+    /// their match state so a non-visual reader can audit their reading.
+    private func wordLabel(_ word: String, state: WordMatchState) -> String {
+        switch state {
+        case .upcoming:
+            return ""
+        case .current:
+            return "\(word), current"
+        case .matched:
+            return word
+        case .mismatched(let spoken):
+            return "missed \(word), you said \(spoken)"
+        case .skipped:
+            return "\(word), skipped"
         }
     }
 
@@ -265,10 +301,13 @@ struct ReadAloudSessionView: View {
                 Circle()
                     .fill(viewModel.isListening ? AppColors.success : AppColors.scoreEmpty)
                     .frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
                 Text(viewModel.isListening ? "Listening..." : "Not listening")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Microphone \(viewModel.isListening ? "listening" : "not listening")")
 
             Spacer()
 
@@ -297,6 +336,11 @@ struct ReadAloudSessionView: View {
                         )
                 }
             }
+            // Disabled while the engine is still starting — a tap during the
+            // authorization await used to produce a ghost "0%" result and,
+            // worse, leave the engine starting underneath it.
+            .disabled(!viewModel.isListening)
+            .opacity(viewModel.isListening ? 1 : 0.5)
         }
     }
 }

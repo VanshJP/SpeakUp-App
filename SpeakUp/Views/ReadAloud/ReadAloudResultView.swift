@@ -8,6 +8,8 @@ struct ReadAloudResultView: View {
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
 
+    @ScaledMetric(relativeTo: .body) private var reviewFontSize: CGFloat = 16
+
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
@@ -16,7 +18,7 @@ struct ReadAloudResultView: View {
                 VStack(spacing: 24) {
                     // Header
                     VStack(spacing: 8) {
-                        Text("Session Complete")
+                        Text(result.notice == nil ? "Session Complete" : "Session Ended")
                             .font(.title2.bold())
 
                         Text(result.passage.title)
@@ -68,13 +70,32 @@ struct ReadAloudResultView: View {
                             label: "Time",
                             color: AppColors.info
                         )
+                    }
 
-                        StatBadge(
-                            icon: "text.word.spacing",
-                            value: "\(result.totalWords)",
-                            label: "Words",
-                            color: AppColors.categoryPlum
-                        )
+                    // Pace closes the loop the passage card opened — it
+                    // promised ≈150 wpm, so the result reports what actually
+                    // happened. Hidden on very short takes where WPM is noise.
+                    if let paceLabel {
+                        Text(paceLabel)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Degraded-session notice: recognition died mid-read or
+                    // nothing was heard. Says so instead of standing as 0%.
+                    if let notice = result.notice {
+                        GlassCard(tint: AppColors.warning.opacity(0.08), padding: 14) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(AppColors.warning)
+                                Text(notice)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .accessibilityElement(children: .combine)
                     }
 
                     // Word review
@@ -110,37 +131,8 @@ struct ReadAloudResultView: View {
             Label("Word Review", systemImage: "doc.text.magnifyingglass")
                 .font(.headline)
 
-            GlassCard {
-                WrappingHStack(alignment: .leading, spacing: 6, lineSpacing: 10) {
-                    ForEach(Array(result.passage.words.enumerated()), id: \.offset) { index, word in
-                        Text(word)
-                            .font(.system(size: 16))
-                            .foregroundStyle(reviewWordColor(for: index))
-                            .underline(isWordTappable(at: index) && isWordHighlighted(at: index))
-                            .padding(.vertical, 1)
-                            .onTapGesture {
-                                guard isWordTappable(at: index) else { return }
-                                Haptics.light()
-                                selectedWord = WordDetail(
-                                    word: word,
-                                    index: index,
-                                    state: result.wordStates[index]
-                                )
-                            }
-                    }
-                }
-            }
-
-            // Hint
-            HStack(spacing: 6) {
-                Image(systemName: "hand.tap")
-                    .foregroundStyle(AppColors.primary)
-                Text("Tap a word for pronunciation & definition")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption)
-
-            // Legend
+            // Legend and hint come first — a reader needs the color key
+            // before they scan the wall of words, not after.
             HStack(spacing: 16) {
                 legendItem(color: AppColors.success, label: "Matched")
                 legendItem(color: AppColors.error, label: "Mismatched")
@@ -148,20 +140,60 @@ struct ReadAloudResultView: View {
                 legendItem(color: .white.opacity(0.4), label: "Not reached")
             }
             .font(.caption2)
+
+            HStack(spacing: 6) {
+                Image(systemName: "hand.tap")
+                    .foregroundStyle(AppColors.primary)
+                Text("Tap a highlighted word for pronunciation & definition")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+
+            GlassCard {
+                WrappingHStack(alignment: .leading, spacing: 6, lineSpacing: 10) {
+                    ForEach(Array(result.passage.words.enumerated()), id: \.offset) { index, word in
+                        let state = index < result.wordStates.count ? result.wordStates[index] : WordMatchState.upcoming
+                        Text(word)
+                            .font(.system(size: reviewFontSize))
+                            .foregroundStyle(reviewWordColor(for: index))
+                            .underline(isWordTappable(state) && isWordHighlighted(state))
+                            .padding(.vertical, 1)
+                            .onTapGesture {
+                                guard isWordTappable(state) else { return }
+                                Haptics.light()
+                                selectedWord = WordDetail(word: word, index: index, state: state)
+                            }
+                            .accessibilityLabel(reviewWordLabel(word, state: state))
+                    }
+                }
+            }
         }
     }
 
-    private func isWordTappable(at index: Int) -> Bool {
-        guard index < result.wordStates.count else { return false }
-        switch result.wordStates[index] {
+    /// Same grammar as the live session's labels, so the two surfaces read
+    /// identically under VoiceOver.
+    private func reviewWordLabel(_ word: String, state: WordMatchState) -> String {
+        switch state {
+        case .upcoming, .current:
+            return ""
+        case .matched:
+            return word
+        case .mismatched(let spoken):
+            return "missed \(word), you said \(spoken)"
+        case .skipped:
+            return "\(word), skipped"
+        }
+    }
+
+    private func isWordTappable(_ state: WordMatchState) -> Bool {
+        switch state {
         case .matched, .mismatched, .skipped: return true
         case .upcoming, .current: return false
         }
     }
 
-    private func isWordHighlighted(at index: Int) -> Bool {
-        guard index < result.wordStates.count else { return false }
-        switch result.wordStates[index] {
+    private func isWordHighlighted(_ state: WordMatchState) -> Bool {
+        switch state {
         case .mismatched, .skipped: return true
         default: return false
         }
@@ -189,6 +221,15 @@ struct ReadAloudResultView: View {
 
     private var formattedTime: String {
         result.timeTaken.minutesSeconds
+    }
+
+    /// Actual pace against the ≈150 wpm the passage card promised. Needs a
+    /// long enough take to mean anything.
+    private var paceLabel: String? {
+        guard result.timeTaken > 5 else { return nil }
+        let spoken = result.matchedWords + result.mismatchedWords
+        let wpm = Double(spoken) / (result.timeTaken / 60)
+        return "\(Int(wpm.rounded())) wpm · target ≈150"
     }
 
     private var scoreColor: Color {

@@ -11,11 +11,19 @@ struct PracticeHubView: View {
     @State private var showingBatchAdd = false
     @State private var showingNewStory = false
 
-    // Practice tools — presented locally; each is a self-contained sheet.
-    @State private var showingWarmUps = false
-    @State private var showingDrills = false
-    @State private var showingReadAloud = false
-    @State private var showingConfidence = false
+    // Practice tools — pushed as full pages from here (Library is where you
+    // browse, so a tool gets the whole screen). Today's quick tiles and the
+    // focus card keep presenting them as sheets.
+    private enum LibraryTool: String, Identifiable {
+        case warmUps
+        case drills
+        case readAloud
+        case confidence
+
+        var id: String { rawValue }
+    }
+
+    @State private var activeTool: LibraryTool?
 
     let onSelectPrompt: (Prompt) -> Void
     var onStartStoryPractice: ((Story) -> Void)? = nil
@@ -87,6 +95,18 @@ struct PracticeHubView: View {
                 onSendToDrill: onSendToDrill
             )
         }
+        .navigationDestination(item: $activeTool) { tool in
+            switch tool {
+            case .warmUps:
+                WarmUpListView(isPushed: true)
+            case .drills:
+                DrillSelectionView(isPushed: true)
+            case .readAloud:
+                ReadAloudSelectionView(isPushed: true)
+            case .confidence:
+                ConfidenceToolsView(isPushed: true)
+            }
+        }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()
         }
@@ -107,64 +127,9 @@ struct PracticeHubView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingWarmUps) {
-            WarmUpListView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingDrills) {
-            DrillSelectionView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingReadAloud) {
-            ReadAloudSelectionView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingConfidence) {
-            ConfidenceToolsView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
     }
 
     // MARK: - Tools
-
-    /// Browsable catalog of every prep surface. Copy comes from
-    /// `PracticeToolKind` so Today tiles and these rows tell the same story.
-    private var tools: [PracticeTool] {
-        [
-            PracticeTool(
-                kind: .warmUp,
-                meta: Self.countMeta(
-                    DefaultWarmUps.all.count,
-                    "exercise",
-                    seconds: DefaultWarmUps.all.map(\.durationSeconds)
-                )
-            ) { showingWarmUps = true },
-            PracticeTool(
-                kind: .drills,
-                meta: Self.countMeta(
-                    DrillMode.allCases.count,
-                    "mode",
-                    seconds: DrillMode.allCases.map(\.defaultDurationSeconds)
-                )
-            ) { showingDrills = true },
-            PracticeTool(
-                kind: .readAloud,
-                meta: "\(DefaultReadAloudPassages.all.count) passages · scored"
-            ) { showingReadAloud = true },
-            PracticeTool(
-                kind: .calm,
-                meta: Self.countMeta(
-                    DefaultConfidenceExercises.all.count,
-                    "exercise",
-                    seconds: DefaultConfidenceExercises.all.map { $0.durationMinutes * 60 }
-                )
-            ) { showingConfidence = true }
-        ]
-    }
 
     /// "4 exercises · 1–3 min" — count plus the real time range, so a row says
     /// what it costs before you tap it. Computed from the seed data rather than
@@ -181,6 +146,41 @@ struct PracticeHubView: View {
         return "\(countText) · \(range)"
     }
 
+    /// Browsable catalog of every prep surface. Copy comes from
+    /// `PracticeToolKind` so Today tiles and these rows tell the same story.
+    private var tools: [PracticeTool] {
+        [
+            PracticeTool(
+                kind: .warmUp,
+                meta: Self.countMeta(
+                    DefaultWarmUps.all.count,
+                    "exercise",
+                    seconds: DefaultWarmUps.all.map(\.durationSeconds)
+                )
+            ) { activeTool = .warmUps },
+            PracticeTool(
+                kind: .drills,
+                meta: Self.countMeta(
+                    DrillMode.allCases.count,
+                    "mode",
+                    seconds: DrillMode.allCases.map(\.defaultDurationSeconds)
+                )
+            ) { activeTool = .drills },
+            PracticeTool(
+                kind: .readAloud,
+                meta: "\(DefaultReadAloudPassages.all.count) passages · scored"
+            ) { activeTool = .readAloud },
+            PracticeTool(
+                kind: .calm,
+                meta: Self.countMeta(
+                    DefaultConfidenceExercises.all.count,
+                    "exercise",
+                    seconds: DefaultConfidenceExercises.all.map { $0.durationMinutes * 60 }
+                )
+            ) { activeTool = .confidence }
+        ]
+    }
+
     private var toolsSection: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visible = query.isEmpty
@@ -193,6 +193,10 @@ struct PracticeHubView: View {
 
         return VStack(alignment: .leading, spacing: 14) {
             if query.isEmpty {
+                Text("Practice Tools")
+                    .eyebrowStyle()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 toolsIntro
             }
 

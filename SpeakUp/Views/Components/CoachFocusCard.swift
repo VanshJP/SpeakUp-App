@@ -24,7 +24,10 @@ struct CoachFocusCard: View {
     private var showsCTA: Bool { onPractice != nil || onPracticeAgain != nil }
 
     var body: some View {
-        GlassCard(padding: 18, elevated: showsCTA) {
+        // Never `elevated`: the Start Speaking capsule inside today's prompt
+        // card is the one hero on the page, and this card used to fight it
+        // with an identical white capsule one scroll apart.
+        GlassCard(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
                 header
 
@@ -105,21 +108,33 @@ struct CoachFocusCard: View {
         }
     }
 
+    /// Quiet on purpose. This routes at the tool that trains the focus, but
+    /// the page's one hero action is Start Speaking in the prompt card — a
+    /// second filled capsule here split the hierarchy in two.
     private func cta(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button {
+        let tint = AppColors.tint(for: plan.focus)
+        return Button {
             Haptics.medium()
             action()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.callout.weight(.semibold))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
             }
-            .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background { Capsule().fill(Color.white.opacity(0.94)) }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background {
+                Capsule()
+                    .fill(tint.opacity(0.12))
+                    .overlay {
+                        Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.5)
+                    }
+            }
         }
         .buttonStyle(GlassPressStyle())
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Tool Tile
+// MARK: - Compact Tool Tile
 
 /// Compact action tile for secondary tool grids — the Today quick-action
 /// recipe (material tile, identity-tinted icon, caption label) extracted so

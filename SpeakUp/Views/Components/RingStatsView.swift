@@ -23,78 +23,68 @@ struct RingStatsView: View {
     }
 
     private var improvementText: String {
-        if abs(improvement) < 0.5 { return "," }
+        if abs(improvement) < 0.5 { return "-" }
         let sign = improvement > 0 ? "+" : ""
         return "\(sign)\(Int(improvement.rounded()))%"
     }
 
     var body: some View {
-        VStack(spacing: 18) {
-            // Three standalone gauges — value inside, label beneath.
-            HStack(spacing: 0) {
-                GaugeItem(
-                    progress: Double(score) / 100,
-                    color: AppColors.scoreColor(for: score),
-                    value: score > 0 ? "\(score)" : ",",
-                    label: "Avg Score"
-                )
+        // Shared card chrome, not a hand-rolled twin: the background used to
+        // duplicate `GlassCard` at radius 24 while every neighbor sat at 18,
+        // which is exactly the shape drift that makes a page read as islands.
+        GlassCard(padding: 20) {
+            VStack(spacing: 18) {
+                // Three standalone gauges — value inside, label beneath.
+                HStack(spacing: 0) {
+                    GaugeItem(
+                        progress: Double(score) / 100,
+                        color: AppColors.scoreColor(for: score),
+                        value: score > 0 ? "\(score)" : "-",
+                        label: "Avg Score"
+                    )
 
-                GaugeItem(
-                    progress: Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)),
-                    color: AppColors.primary,
-                    value: "\(sessions)/\(sessionsGoal)",
-                    label: "This Week"
-                )
+                    GaugeItem(
+                        progress: Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)),
+                        color: AppColors.primary,
+                        value: "\(sessions)/\(sessionsGoal)",
+                        label: "This Week"
+                    )
 
-                GaugeItem(
-                    progress: improvementRingProgress,
-                    color: improvementColor,
-                    value: improvementText,
-                    label: "Trend"
-                )
-            }
+                    GaugeItem(
+                        progress: improvementRingProgress,
+                        color: improvementColor,
+                        value: improvementText,
+                        label: "Trend"
+                    )
+                }
 
-            // Best-score footer under a hairline, integrated into the card.
-            VStack(spacing: 12) {
-                Rectangle()
-                    .fill(.white.opacity(0.08))
-                    .frame(height: 0.5)
+                // Best-score footer under a hairline, integrated into the card.
+                VStack(spacing: 12) {
+                    Rectangle()
+                        .fill(.white.opacity(0.08))
+                        .frame(height: 0.5)
 
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trophy.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppColors.scoreColor(for: bestScore))
-                        Text("Best score")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trophy.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.scoreColor(for: bestScore))
+                            Text("Best score")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Text(bestScore > 0 ? "\(bestScore)" : "-")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText(value: Double(bestScore)))
                     }
-
-                    Spacer()
-
-                    Text(bestScore > 0 ? "\(bestScore)" : ",")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText(value: Double(bestScore)))
                 }
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(AppColors.surfaceLift)
-
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.3), radius: 18, y: 9)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Stats: 7-day trend \(improvementText), \(sessions) of \(sessionsGoal) sessions this week, average score \(score) out of 100, best score \(bestScore)")
     }

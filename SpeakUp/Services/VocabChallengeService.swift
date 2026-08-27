@@ -32,13 +32,15 @@ nonisolated enum VocabChallengeService {
         preferences: VocabChallengePreferences,
         now: Date = Date(),
         store: VocabChallengeStore = .standard,
+        generated: GeneratedVocabStore = .standard,
         usedCounts: [String: Int] = [:]
     ) -> [String] {
         todaysChallenge(
             preferences: preferences,
             usedCounts: usedCounts,
             now: now,
-            store: store
+            store: store,
+            generated: generated
         )?.words.map(\.text) ?? []
     }
 
@@ -47,6 +49,7 @@ nonisolated enum VocabChallengeService {
         usedCounts: [String: Int] = [:],
         now: Date = Date(),
         store: VocabChallengeStore = .standard,
+        generated: GeneratedVocabStore = .standard,
         calendar: Calendar = .current
     ) -> DailyVocabChallenge? {
         guard preferences.isEnabled else { return nil }
@@ -75,7 +78,8 @@ nonisolated enum VocabChallengeService {
                 skipped: skipped,
                 seed: seed,
                 reviews: reviews,
-                now: now
+                now: now,
+                generated: generated
             )
             if filled.isEmpty { return emptyChallenge(dayStamp: stamp) }
             store.save(.init(dayStamp: stamp, fingerprint: fingerprint, words: filled))
@@ -89,7 +93,8 @@ nonisolated enum VocabChallengeService {
             skipped: skipped,
             seed: seed,
             reviews: reviews,
-            now: now
+            now: now,
+            generated: generated
         )
         if picked.isEmpty { return emptyChallenge(dayStamp: stamp) }
         store.save(.init(dayStamp: stamp, fingerprint: fingerprint, words: picked))
@@ -235,13 +240,17 @@ nonisolated enum VocabChallengeService {
         skipped: Set<String>,
         seed: Int,
         reviews: [String: VocabReviewState],
-        now: Date
+        now: Date,
+        generated: GeneratedVocabStore
     ) -> [VocabChallengeWord] {
         let target = preferences.resolvedWordCount
         var picked = existing
         var exclude = skipped
             .union(existing.map { $0.text.lowercased() })
             .union(bannedKeys(preferences))
+        // Words spotlighted recently, scheduled or not. Only fresh picks
+        // respect this — a due review is spaced repetition doing its job.
+        let recent = recentlySpotlighted(reviews: reviews, now: now)
 
         let spaced = preferences.spacedReviewEnabled
         let ranked = rankedPool(
@@ -249,7 +258,8 @@ nonisolated enum VocabChallengeService {
             usedCounts: usedCounts,
             seed: seed,
             reviews: reviews,
-            now: now
+            now: now,
+            generated: generated
         )
 
         func drain(_ pool: [VocabChallengeWord]) {
@@ -275,8 +285,9 @@ nonisolated enum VocabChallengeService {
         if reserveIntro, !introAlready, picked.count < target {
             if let intro = pickIntroduced(
                 preferences: preferences,
-                exclude: exclude.union(scheduled),
-                seed: seed
+                exclude: exclude.union(scheduled).union(recent),
+                seed: seed,
+                generated: generated
             ) {
                 picked.append(intro)
                 exclude.insert(intro.text.lowercased())
@@ -288,9 +299,10 @@ nonisolated enum VocabChallengeService {
         if picked.count < target, preferences.introduceNew {
             let extras = pickIntroducedMany(
                 preferences: preferences,
-                exclude: exclude.union(scheduled),
+                exclude: exclude.union(scheduled).union(recent),
                 seed: seed &+ 17,
-                count: target - picked.count
+                count: target - picked.count,
+                generated: generated
             )
             picked.append(contentsOf: extras)
             exclude.formUnion(extras.map { $0.text.lowercased() })
@@ -363,6 +375,38 @@ nonisolated enum VocabChallengeService {
         return keys
     }
 
+    /// How long a freshly shown word stays off the fresh-draw list. FSRS owns
+    /// deliberate returns; this only stops chance from re-dealing a card the
+    /// user just saw.
+    private static let freshnessWindowDays = 21
+
+    /// Keys graded inside the freshness window. Day stamps sort as strings, so
+    /// a lexicographic cutoff is exact.
+    private static func recentlySpotlighted(
+        reviews: [String: VocabReviewState],
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Set<String> {
+        guard let cutoff = calendar.date(byAdding: .day, value: -freshnessWindowDays, to: now) else {
+            return []
+        }
+        let cutoffStamp = dayStamp(cutoff, calendar: calendar)
+        return Set(
+            reviews.compactMap { key, state in
+                state.lastGradedDay >= cutoffStamp ? key : nil
+            }
+        )
+    }
+
+    /// The workout's full word book: the curated lexicon plus everything the
+    /// on-device model has added since.
+    private static func lexiconEntry(
+        for key: String,
+        generated: GeneratedVocabStore
+    ) -> VocabLexiconEntry? {
+        DefaultVocabLexicon.entry(for: key) ?? generated.entry(for: key)
+    }
+
     /// `primary` is what today should draw from; `deferred` is everything FSRS
     /// wants to leave alone for now, kept only as a fallback.
     private static func rankedPool(
@@ -370,12 +414,13 @@ nonisolated enum VocabChallengeService {
         usedCounts: [String: Int],
         seed: Int,
         reviews: [String: VocabReviewState],
-        now: Date
+        now: Date,
+        generated: GeneratedVocabStore
     ) -> (primary: [VocabChallengeWord], deferred: [VocabChallengeWord]) {
         var pool: [VocabChallengeWord] = []
         if preferences.useBank {
             for word in preferences.vocabWords {
-                guard let candidate = makeCandidate(word, source: .bank, preferences: preferences) else { continue }
+                guard let candidate = makeCandidate(word, source: .bank, preferences: preferences, generated: generated) else { continue }
                 pool.append(candidate)
             }
         }
@@ -383,7 +428,7 @@ nonisolated enum VocabChallengeService {
             let bankKeys = Set(preferences.vocabWords.map { $0.lowercased() })
             for word in preferences.dictionaryWords {
                 if bankKeys.contains(word.lowercased()) { continue }
-                guard let candidate = makeCandidate(word, source: .dictionary, preferences: preferences) else { continue }
+                guard let candidate = makeCandidate(word, source: .dictionary, preferences: preferences, generated: generated) else { continue }
                 pool.append(candidate)
             }
         }
@@ -391,10 +436,11 @@ nonisolated enum VocabChallengeService {
         // A word the workout taught is scheduled too, even when the user never
         // tapped Add. Without this a new word is spotlighted once and only ever
         // returns by chance, which is the opposite of what spacing is for.
+        // Generated words get schedules on the same terms — they are first-class.
         if preferences.spacedReviewEnabled, preferences.introduceNew {
             var known = Set(pool.map(\.id))
             for (key, state) in reviews where state.due <= now && !known.contains(key) {
-                guard let entry = DefaultVocabLexicon.entry(for: key),
+                guard let entry = lexiconEntry(for: key, generated: generated),
                       WordSafety.allowsForChallenge(entry.word),
                       !WordSafety.isUserName(entry.word, userName: preferences.userName) else { continue }
                 pool.append(
@@ -450,12 +496,13 @@ nonisolated enum VocabChallengeService {
     private static func makeCandidate(
         _ word: String,
         source: VocabChallengeWord.Source,
-        preferences: VocabChallengePreferences
+        preferences: VocabChallengePreferences,
+        generated: GeneratedVocabStore
     ) -> VocabChallengeWord? {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard WordSafety.allowsForChallenge(trimmed) else { return nil }
         if WordSafety.isUserName(trimmed, userName: preferences.userName) { return nil }
-        let entry = DefaultVocabLexicon.entry(for: trimmed)
+        let entry = lexiconEntry(for: trimmed.lowercased(), generated: generated)
         return VocabChallengeWord(
             text: trimmed,
             source: source,
@@ -475,25 +522,39 @@ nonisolated enum VocabChallengeService {
     private static func pickIntroduced(
         preferences: VocabChallengePreferences,
         exclude: Set<String>,
-        seed: Int
+        seed: Int,
+        generated: GeneratedVocabStore
     ) -> VocabChallengeWord? {
-        pickIntroducedMany(preferences: preferences, exclude: exclude, seed: seed, count: 1).first
+        pickIntroducedMany(
+            preferences: preferences,
+            exclude: exclude,
+            seed: seed,
+            count: 1,
+            generated: generated
+        ).first
     }
 
     private static func pickIntroducedMany(
         preferences: VocabChallengePreferences,
         exclude: Set<String>,
         seed: Int,
-        count: Int
+        count: Int,
+        generated: GeneratedVocabStore
     ) -> [VocabChallengeWord] {
         guard count > 0 else { return [] }
         let owned = Set(preferences.vocabWords.map { $0.lowercased() })
             .union(preferences.dictionaryWords.map { $0.lowercased() })
             .union(exclude)
 
-        let level = min(2, max(0, preferences.speakerLevelRaw))
-        let all = DefaultVocabLexicon.entries.filter { entry in
+        let level = preferences.resolvedIntroLevel
+        // Curated words first so a generated duplicate of a curated one loses;
+        // per-key dedupe keeps the shuffled prefix from holding the same word
+        // twice.
+        var seenKeys: Set<String> = []
+        let all = (DefaultVocabLexicon.entries + generated.entries()).filter { entry in
             let key = entry.word.lowercased()
+            guard !seenKeys.contains(key) else { return false }
+            seenKeys.insert(key)
             return !owned.contains(key) && WordSafety.allowsForChallenge(entry.word)
         }
         let preferred = all.filter { $0.level == level }

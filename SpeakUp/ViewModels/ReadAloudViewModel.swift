@@ -19,6 +19,10 @@ struct ReadAloudResult {
     let mismatchedWords: Int
     let timeTaken: TimeInterval
     let wordStates: [WordMatchState]
+    /// Set when the session ended without a fair measurement — the recognizer
+    /// died mid-read, or nothing was heard at all. The result screen shows it
+    /// instead of letting a bare "0% · Complete" stand as a verdict.
+    var notice: String?
 
     var score: Int {
         Int(accuracy.rounded())
@@ -30,6 +34,12 @@ struct ReadAloudResult {
 @MainActor @Observable
 class ReadAloudViewModel {
     let service = ReadAloudService()
+
+    /// Session-scoped audio service: owns mic permission and the
+    /// record-capable session configuration. The read-aloud engine taps the
+    /// input directly, but without this setup a fresh launch runs under
+    /// whatever ambient category lingers — silent buffers, cryptic failures.
+    private let audioService = AudioService()
 
     var selectedDifficulty: ReadAloudDifficulty? {
         didSet { applyFilters() }
@@ -88,10 +98,19 @@ class ReadAloudViewModel {
         elapsedTime = 0
 
         let authorized = await service.requestAuthorization()
+        // The auto-start runs in the session view's `.task`, which cancels on
+        // disappear — bail rather than spin up an engine nobody will stop.
+        guard !Task.isCancelled else { return }
         guard authorized else {
             errorMessage = ReadAloudError.authorizationDenied.errorDescription
             return
         }
+
+        guard await audioService.requestPermission() else {
+            errorMessage = "Microphone access is needed to score your reading. Enable it in Settings."
+            return
+        }
+        guard !Task.isCancelled else { return }
 
         do {
             try service.start()
@@ -115,6 +134,7 @@ class ReadAloudViewModel {
         guard let passage = selectedPassage else { return }
 
         let timeTaken = startTime.map { Date().timeIntervalSince($0) } ?? 0
+        let heardNothing = service.matchedWordCount == 0 && service.mismatchedWordCount == 0 && timeTaken > 3
 
         result = ReadAloudResult(
             passage: passage,
@@ -123,7 +143,8 @@ class ReadAloudViewModel {
             totalWords: passage.wordCount,
             mismatchedWords: service.mismatchedWordCount,
             timeTaken: timeTaken,
-            wordStates: service.wordStates
+            wordStates: service.wordStates,
+            notice: notice(for: timeTaken, heardNothing: heardNothing)
         )
 
         sessionState = .finished
@@ -131,7 +152,23 @@ class ReadAloudViewModel {
         if service.matchedWordCount > 0 {
             CurriculumActivitySignalStore.markReadAloudCompleted()
         }
-        Haptics.success()
+        if result?.notice != nil {
+            Haptics.warning()
+        } else {
+            Haptics.success()
+        }
+    }
+
+    /// A degraded session says so on its result screen instead of standing as
+    /// a verdict: recognition died mid-read, or the mic never picked up a word.
+    private func notice(for timeTaken: TimeInterval, heardNothing: Bool) -> String? {
+        if let failure = service.recognitionFailureMessage {
+            return failure
+        }
+        if heardNothing {
+            return "We didn't catch any words — try speaking up, or move somewhere quieter."
+        }
+        return nil
     }
 
     func reset() {
@@ -166,6 +203,13 @@ class ReadAloudViewModel {
                 try? await Task.sleep(for: .milliseconds(250))
                 guard let self, let start = self.startTime else { continue }
                 self.elapsedTime = Date().timeIntervalSince(start)
+
+                // A recognizer that died mid-read ends the session now —
+                // letting the clock run on produces a confident-looking zero.
+                if self.service.recognitionFailureMessage != nil && self.sessionState == .listening {
+                    self.stopSession()
+                    continue
+                }
 
                 // Auto-stop if service finished
                 if self.service.isComplete && self.sessionState == .listening {

@@ -1,62 +1,58 @@
 import SwiftUI
 
-/// The spec for the take you are about to record: today's spotlight words, on
-/// one line, directly above the start button.
+/// Today's words, inside the prompt card under a hairline the row draws itself
+/// — so a day with no workout ends the card at the prompt text, no stray rule.
 ///
-/// These used to be a full card at the bottom of Today — below the start
-/// button, which is where nobody looks, and framed as separate homework. They
-/// are not homework: recording is the only way they complete. So they sit with
-/// the prompt as the brief for this session.
+/// Duration does not belong on this line. It sat here until the three-word cap
+/// pushed the last chip onto a second row directly beneath the pill, orphaned
+/// next to a control it has nothing to do with — and the width the pill took is
+/// what forced that wrap. It lives in the card header now.
 ///
-/// Skip and add-to-bank hang off each chip as a tap `Menu`, not a sheet and not
-/// a long-press. A sheet was a whole screen of chrome for two rare verbs and it
-/// covered the prompt; a context menu hid them completely. The chevron on each
-/// chip is the affordance, and a dot marks the words that are new today.
-struct SessionBriefRow: View {
-    let workout: DailyVocabChallenge?
+/// Skip and add-to-bank hang off each chip as a tap `Menu`: a sheet was a whole
+/// screen of chrome for two rare verbs and it covered the prompt, a
+/// `contextMenu` hid them completely. The chevron is the affordance and the
+/// sage dot marks a word introduced today.
+struct SessionWordsRow: View {
+    var workout: DailyVocabChallenge?
     var bankWords: [String] = []
     var onSkip: ((VocabChallengeWord) -> Void)?
     var onAddToBank: ((VocabChallengeWord) -> Void)?
 
+    /// `FlowLayout` top-aligns a line, so children of mixed height come out
+    /// ragged. One height for every chip is the whole fix.
+    private let chipHeight: CGFloat = 26
+
     var body: some View {
-        if !(workout?.words.isEmpty ?? true) {
-            VStack(alignment: .leading, spacing: 8) {
-                if let workout, !workout.words.isEmpty {
-                    wordRow(workout)
+        if let workout, !workout.words.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Rectangle()
+                    .fill(AppColors.cardStroke)
+                    .frame(height: 1)
+                    .accessibilityHidden(true)
+
+                // `USE` is the label these chips spent their whole life
+                // without — two bare words explain nothing on their own.
+                FlowLayout(spacing: 6) {
+                    Text("USE")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.35))
+                        .frame(height: chipHeight)
+                        .accessibilityHidden(true)
+
+                    ForEach(workout.words) { word in
+                        wordChip(word, used: workout.isUsed(word))
+                            .frame(height: chipHeight)
+                    }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            // A `Rectangle` has no ideal width, so the `VStack` would otherwise
+            // size to the chips and the rule would stop short of the card edge.
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AppColors.surfaceLift)
-                    }
-            }
         }
     }
 
     // MARK: - Words
-
-    private func wordRow(_ workout: DailyVocabChallenge) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "character.book.closed")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4))
-                .padding(.top, 6)
-
-            FlowLayout(spacing: 6) {
-                ForEach(workout.words) { word in
-                    wordChip(word, used: workout.isUsed(word))
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
 
     private func wordChip(_ word: VocabChallengeWord, used: Bool) -> some View {
         let tint: Color = used ? AppColors.success : .white
@@ -111,9 +107,8 @@ struct SessionBriefRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(word.text)\(isNew ? ", new word" : ""), \(used ? "used" : "not used yet")")
+        .accessibilityLabel("Work in the word \(word.text)\(isNew ? ", new word" : ""), \(used ? "used" : "not used yet")")
         .accessibilityHint(word.gloss ?? word.coachLine)
         .accessibilityAddTraits(.isButton)
     }
-
 }

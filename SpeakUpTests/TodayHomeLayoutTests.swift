@@ -61,7 +61,11 @@ struct PracticeToolKindTests {
     func todayStripCount() {
         #expect(PracticeToolKind.todayStripDefaults.count == 4)
         #expect(PracticeToolKind.todayStripDefaults.contains(.warmUp))
-        #expect(!PracticeToolKind.todayStripDefaults.contains(.readAloud))
+        #expect(PracticeToolKind.todayStripDefaults.contains(.drills))
+        #expect(PracticeToolKind.todayStripDefaults.contains(.calm))
+        // Read Aloud took the Wheel's slot: the Wheel lives in Library →
+        // Prompts, where you pick what to say, not in the prep strip.
+        #expect(PracticeToolKind.todayStripDefaults.contains(.readAloud))
         #expect(!PracticeToolKind.todayStripDefaults.contains(.learn))
     }
 }

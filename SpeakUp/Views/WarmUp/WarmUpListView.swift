@@ -5,6 +5,11 @@ struct WarmUpListView: View {
     @State private var viewModel = WarmUpViewModel()
     @State private var showingExercise = false
 
+    /// When true the list is pushed onto a caller-owned `NavigationStack`
+    /// (Library → Tools): no inner stack, and the sheet's ✕ gives way to the
+    /// system back button.
+    var isPushed: Bool = false
+
     var sourceStory: Story?
 
     /// Denominator for every row's duration arc. Scoped to the visible
@@ -15,71 +20,75 @@ struct WarmUpListView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground()
+        if isPushed {
+            content
+        } else {
+            NavigationStack {
+                content
+            }
+        }
+    }
 
-                PageScrollView {
-                    VStack(spacing: 16) {
-                        ToolPurposeBanner(tool: .warmUp)
+    private var content: some View {
+        ZStack {
+            AppBackground()
 
-                        if let story = sourceStory {
-                            sourceStoryBanner(story)
-                        }
+            PageScrollView {
+                VStack(spacing: 16) {
+                    // Page identity: the eyebrow names the family, the
+                    // banner carries outcome + best-for from PracticeToolKind
+                    // so Today, Library, and this sheet tell one story.
+                    // Same header grammar as Drills, Read Aloud, and Calm.
+                    Text("Get Ready")
+                        .eyebrowStyle()
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                        // Category picker
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(WarmUpCategory.allCases) { category in
-                                    FilterPill(
-                                        title: category.displayName,
-                                        icon: category.icon,
-                                        isSelected: viewModel.selectedCategory == category,
-                                        color: category.color
-                                    ) {
-                                        withAnimation(AppMotion.slide) {
-                                            viewModel.selectedCategory = category
-                                        }
-                                    }
+                    ToolPurposeBanner(tool: .warmUp)
+
+                    if let story = sourceStory {
+                        sourceStoryBanner(story)
+                    }
+
+                    // Category picker — All first, so the page opens
+                    // showing the whole map instead of one slice of it.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            FilterPill(
+                                title: "All",
+                                icon: "square.grid.2x2",
+                                isSelected: viewModel.selectedCategory == nil
+                            ) {
+                                withAnimation(AppMotion.slide) {
+                                    viewModel.selectedCategory = nil
                                 }
                             }
-                        }
 
-                        // Exercise cards
-                        if viewModel.exercises.isEmpty {
-                            EmptyStateCard(
-                                icon: "wind",
-                                title: "Nothing here",
-                                message: "No warm-ups in this category yet. Try another one."
-                            )
-                        } else {
-                            LazyVStack(spacing: 12) {
-                                ForEach(viewModel.exercises) { exercise in
-                                    PracticeItemRow(
-                                        title: exercise.title,
-                                        subtitle: exercise.instructions,
-                                        icon: exercise.category.icon,
-                                        tint: exercise.category.color,
-                                        durationFraction: PracticeItemRow.fraction(
-                                            Double(exercise.durationSeconds),
-                                            longest: longestExerciseSeconds
-                                        ),
-                                        durationLabel: "\(exercise.durationSeconds)s",
-                                        accessory: .play
-                                    ) {
-                                        viewModel.selectExercise(exercise)
-                                        showingExercise = true
+                            ForEach(WarmUpCategory.allCases) { category in
+                                FilterPill(
+                                    title: category.displayName,
+                                    icon: category.icon,
+                                    isSelected: viewModel.selectedCategory == category,
+                                    color: category.color
+                                ) {
+                                    withAnimation(AppMotion.slide) {
+                                        viewModel.selectedCategory = category
                                     }
                                 }
                             }
                         }
                     }
-                    .padding()
+
+                    exerciseContent
                 }
+                .padding()
             }
-            .navigationTitle("Warm-Ups")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+        .navigationTitle("Warm-Ups")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            // The ✕ is a sheet affordance; a pushed page closes with Back.
+            if !isPushed {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -89,9 +98,88 @@ struct WarmUpListView: View {
                     }
                 }
             }
-            .fullScreenCover(isPresented: $showingExercise) {
-                WarmUpExerciseView(viewModel: viewModel)
+        }
+        .fullScreenCover(isPresented: $showingExercise) {
+            WarmUpExerciseView(viewModel: viewModel)
+        }
+    }
+
+    // MARK: - Exercise Content
+
+    /// Unfiltered shows every category as a labeled section (name, what it's
+    /// for, how many), so browsing teaches the taxonomy. A filter collapses
+    /// to the single matching group.
+    @ViewBuilder
+    private var exerciseContent: some View {
+        if let selected = viewModel.selectedCategory {
+            if viewModel.exercises.isEmpty {
+                EmptyStateCard(
+                    icon: "wind",
+                    title: "Nothing here",
+                    message: "No warm-ups in this category yet. Try another one.",
+                    buttonTitle: "Show All",
+                    buttonAction: {
+                        withAnimation(AppMotion.slide) {
+                            viewModel.selectedCategory = nil
+                        }
+                    }
+                )
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(viewModel.exercises) { exercise in
+                        exerciseRow(exercise)
+                    }
+                }
             }
+        } else {
+            VStack(spacing: 20) {
+                ForEach(WarmUpCategory.allCases) { category in
+                    categorySection(category)
+                }
+            }
+        }
+    }
+
+    private func categorySection(_ category: WarmUpCategory) -> some View {
+        let items = viewModel.exercises.filter { $0.category == category }
+        guard !items.isEmpty else { return AnyView(EmptyView()) }
+
+        return AnyView(
+            VStack(alignment: .leading, spacing: 10) {
+                GlassSectionHeader(category.displayName, icon: category.icon) {
+                    Text("\(items.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(category.purpose)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LazyVStack(spacing: 12) {
+                    ForEach(items) { exercise in
+                        exerciseRow(exercise)
+                    }
+                }
+            }
+        )
+    }
+
+    private func exerciseRow(_ exercise: WarmUpExercise) -> some View {
+        PracticeItemRow(
+            title: exercise.title,
+            subtitle: exercise.instructions,
+            icon: exercise.category.icon,
+            tint: exercise.category.color,
+            durationFraction: PracticeItemRow.fraction(
+                Double(exercise.durationSeconds),
+                longest: longestExerciseSeconds
+            ),
+            durationLabel: "\(exercise.durationSeconds)s",
+            accessory: .play
+        ) {
+            viewModel.selectExercise(exercise)
+            showingExercise = true
         }
     }
 

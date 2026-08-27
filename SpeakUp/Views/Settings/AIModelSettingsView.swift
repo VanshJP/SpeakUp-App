@@ -12,7 +12,13 @@ struct AIModelSettingsView: View {
 
             PageScrollView {
                 VStack(spacing: 20) {
-                    appleIntelligenceCard
+                    // Apple Intelligence is only shown when it exists on this
+                    // device — a permanent "Not Available" badge told the user
+                    // nothing they could act on and sat above the card that
+                    // actually has an action (download the local model).
+                    if llmService.appleIntelligenceAvailable {
+                        appleIntelligenceCard
+                    }
                     localModelCard
                     dictationCard
                     featuresCard
@@ -81,21 +87,14 @@ struct AIModelSettingsView: View {
 
                 Spacer()
 
-                if llmService.appleIntelligenceAvailable {
-                    Text("Active")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(AppColors.success))
-                } else {
-                    Text("Not Available")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
-                }
+                // Only rendered when Apple Intelligence is on this device,
+                // so there is exactly one state to show.
+                Text("Active")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(AppColors.success))
             }
         }
     }

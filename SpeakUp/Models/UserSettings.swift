@@ -94,6 +94,10 @@ final class UserSettings {
     var vocabChallengeUseDictionary: Bool = true
     var vocabChallengeIntroduceNew: Bool = true
     var vocabChallengeSpacedReview: Bool = true
+    // Word-level control for fresh picks: 0 follows `speakerLevel`, 1–3 pin
+    // beginner / intermediate / advanced. Raw Int like every enum-backed knob
+    // so lightweight migration stays automatic.
+    var vocabChallengeLevelOverride: Int = 0
 
     // Dictation
     var autoFormatDictation: Bool = true
@@ -265,7 +269,8 @@ final class UserSettings {
             dictionaryWords: dictationBiasWords,
             extraBanned: customFillerWords + customContextFillerWords,
             userName: userName,
-            speakerLevelRaw: speakerLevel
+            speakerLevelRaw: speakerLevel,
+            levelOverrideRaw: vocabChallengeLevelOverride
         )
     }
 

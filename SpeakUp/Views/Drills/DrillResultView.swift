@@ -42,34 +42,13 @@ struct DrillResultView: View {
 
             // Buttons
             VStack(spacing: 12) {
-                Button {
+                GlassButton(title: "Try Again", style: .primary, size: .large, fullWidth: true) {
                     onTryAgain()
-                } label: {
-                    Text("Try Again")
-                        .font(.headline)
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Capsule().fill(Color.white.opacity(0.94)))
-                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                 }
-                .buttonStyle(GlassPressStyle())
 
-                Button {
+                GlassButton(title: "Done", style: .secondary, size: .large, fullWidth: true) {
                     onDone()
-                } label: {
-                    Text("Done")
-                        .font(.headline)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
-                        }
                 }
-                .buttonStyle(GlassPressStyle())
             }
             .padding(.bottom, 20)
         }

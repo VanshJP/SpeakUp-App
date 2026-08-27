@@ -9,6 +9,11 @@ struct CountdownOverlayView: View {
     let countdownStyle: CountdownStyle
     var look: TimerLook = .ring
     var backdrop: RecordingBackdrop = .base
+    /// Optional context line for flows that prep for a named format rather
+    /// than read a prompt — drills show the mode and what it costs. nil keeps
+    /// the recording layout byte-identical.
+    var prepTitle: String? = nil
+    var prepSubtitle: String? = nil
     let onComplete: () -> Void
     let onCancel: () -> Void
     @Binding var selectedGoalId: UUID?
@@ -46,6 +51,8 @@ struct CountdownOverlayView: View {
         countdownStyle: CountdownStyle = .countDown,
         look: TimerLook = .ring,
         backdrop: RecordingBackdrop = .base,
+        prepTitle: String? = nil,
+        prepSubtitle: String? = nil,
         selectedGoalId: Binding<UUID?> = .constant(nil),
         challenge: SharedChallenge? = nil,
         onComplete: @escaping () -> Void,
@@ -57,6 +64,8 @@ struct CountdownOverlayView: View {
         self.countdownStyle = countdownStyle
         self.look = look
         self.backdrop = backdrop
+        self.prepTitle = prepTitle
+        self.prepSubtitle = prepSubtitle
         self._selectedGoalId = selectedGoalId
         self.challenge = challenge
         self.onComplete = onComplete
@@ -82,6 +91,34 @@ struct CountdownOverlayView: View {
                 }
 
                 Spacer(minLength: 0)
+
+                // Prep context for prompt-less flows (drills): what you
+                // picked and what it costs — or, for impromptu, the topic to
+                // start thinking about.
+                if let prepTitle {
+                    VStack(spacing: 4) {
+                        Text(prepTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+
+                        if let prepSubtitle, !prepSubtitle.isEmpty {
+                            Text(prepSubtitle)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.6))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 12)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5)
+                            }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
 
                 TimerDial(
                     look: look,

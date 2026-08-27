@@ -14,6 +14,10 @@ class DrillViewModel {
     var score: Int = 0
     var result: DrillResult?
     var isComplete = false
+    /// Set when the audio/recognition stack can't run (mic denied, speech
+    /// recognition off, dead engine). The session view surfaces it and exits —
+    /// a drill that can't hear must not end as a confident "Zero fillers!".
+    var errorMessage: String?
 
     // Audio level for waveform visualization (same as RecordingViewModel)
     var audioLevel: Float = -160
@@ -39,7 +43,6 @@ class DrillViewModel {
 
     // Impromptu Sprint state
     var impromptuPrompt: String = ""
-
     private static let impromptuTopics = [
         "Describe your perfect weekend from start to finish",
         "Why is your favorite food the best one out there?",
@@ -64,6 +67,11 @@ class DrillViewModel {
     private var timer: Timer?
     private var audioLevelTimer: Timer?
     private var totalDuration: Int = 0
+    /// Whether live transcription is actually running for this drill. Pause
+    /// Practice scores from mic metering alone; the other three modes score
+    /// from transcription, so a silent death there must end the drill early
+    /// rather than let the clock run out on zeros.
+    private var transcriptionLive = false
 
     /// Lifetime drill count. Held in UserDefaults rather than on the view model
     /// because a fresh instance is built per sheet presentation, and a counter
@@ -89,6 +97,8 @@ class DrillViewModel {
         isActive = true
         isComplete = false
         result = nil
+        errorMessage = nil
+        transcriptionLive = false
 
         // Pause Practice: schedule 3 pause windows evenly across the drill
         pauseMarkerActive = false
@@ -104,40 +114,61 @@ class DrillViewModel {
             pauseTimings = []
         }
 
-        // Impromptu Sprint: pick a random topic
-        if mode == .impromptuSprint {
+        // Impromptu Sprint: keep the topic picked at selection time (so the
+        // prep countdown can show it and retries stay fair); only fall back
+        // to a fresh pick when entering without one.
+        if mode == .impromptuSprint, impromptuPrompt.isEmpty {
             impromptuPrompt = Self.impromptuTopics.randomElement() ?? "Talk about anything!"
         }
 
         Task {
-            await startAudio()
-            startTimer()
+            if await startAudio() {
+                startTimer()
+            }
         }
     }
 
-    private func startAudio() async {
+    /// Picks the impromptu topic up front so the prep countdown can show it —
+    /// the countdown is exactly when prep matters.
+    func prepareImpromptuTopic() {
+        impromptuPrompt = Self.impromptuTopics.randomElement() ?? "Talk about anything!"
+    }
+
+    private func startAudio() async -> Bool {
         do {
-            // Start the recorder so the audio session is active
+            // Start the recorder so the audio session is active. Throws on
+            // mic-permission denial — surfaced, never swallowed.
             _ = try await audioService.startRecording()
-
-            // Drills never produce a `Recording`, so the session number they
-            // report is the drill count, not a position in the practice log.
-            drillsStarted += 1
-            AnalyticsService.shared.log(
-                .practiceStarted(useCase: "drill", sessionNumber: drillsStarted)
-            )
-
-            // Start audio level monitoring (same as RecordingViewModel)
-            startAudioLevelMonitoring()
-
-            // Start live transcription for filler/word detection
-            let authorized = await liveTranscriptionService.requestAuthorization()
-            if authorized {
-                liveTranscriptionService.start()
-            }
         } catch {
-            print("DrillViewModel: failed to start audio: \(error)")
+            errorMessage = "Microphone unavailable: \(error.localizedDescription). Check Settings → Privacy → Microphone."
+            isActive = false
+            return false
         }
+
+        // Drills never produce a `Recording`, so the session number they
+        // report is the drill count, not a position in the practice log.
+        drillsStarted += 1
+        AnalyticsService.shared.log(
+            .practiceStarted(useCase: "drill", sessionNumber: drillsStarted)
+        )
+
+        // Start audio level monitoring (same as RecordingViewModel)
+        startAudioLevelMonitoring()
+
+        let authorized = await liveTranscriptionService.requestAuthorization()
+        guard authorized else {
+            if selectedMode != .pausePractice {
+                errorMessage = "Speech recognition is off for this app. Enable it in Settings to run this drill."
+                isActive = false
+                return false
+            }
+            // Pause Practice scores silence from metering alone.
+            return true
+        }
+
+        liveTranscriptionService.start()
+        transcriptionLive = liveTranscriptionService.isActive
+        return true
     }
 
     // MARK: - Timer
@@ -154,12 +185,24 @@ class DrillViewModel {
     private func tick() {
         guard isActive else { return }
 
-        if timeRemaining > 0 {
+        // Recognition dying mid-drill (interruption, recognizer loss) must end
+        // the scoring window now — letting the clock run on produces silent
+        // zeros for every mode that scores from transcription.
+        if transcriptionLive, selectedMode != .pausePractice,
+           !liveTranscriptionService.isActive {
+            finishDrill(endedEarly: true)
+            return
+        }
+
+        // Decrement-then-finish inside the same tick: finishing on a later
+        // tick stretched every drill one second past its advertised length.
+        if timeRemaining > 1 {
             timeRemaining -= 1
             if selectedMode == .pausePractice {
                 updatePauseState()
             }
         } else {
+            timeRemaining = 0
             finishDrill()
         }
     }
@@ -221,7 +264,7 @@ class DrillViewModel {
 
     // MARK: - Finish Drill
 
-    func finishDrill() {
+    func finishDrill(endedEarly: Bool = false) {
         isActive = false
         timer?.invalidate()
         timer = nil
@@ -238,7 +281,7 @@ class DrillViewModel {
         let finalWPM = elapsed > 2 ? Double(liveWordCount) / elapsed * 60 : 0
 
         let drillScore: Int
-        let details: String
+        var details: String
         let passed: Bool
 
         // Flush any in-progress pause window before scoring
@@ -277,6 +320,11 @@ class DrillViewModel {
             details = "Spoke with \(finalFillerCount) filler(s) on an impromptu topic"
         }
 
+        // An early end is context the score needs, not a footnote.
+        if endedEarly {
+            details += " — ended early: recognition stopped"
+        }
+
         result = DrillResult(
             mode: mode,
             score: drillScore,
@@ -300,5 +348,8 @@ class DrillViewModel {
         stopAudioLevelMonitoring()
         liveTranscriptionService.stop()
         audioService.cleanup()
+        // Fresh topic on the next selection; a kept topic would let "Try
+        // Again" leak across different drill entries.
+        impromptuPrompt = ""
     }
 }

@@ -42,8 +42,11 @@ struct CurriculumView: View {
                     Haptics.light()
                     showingAwards = true
                 } label: {
-                    Image(systemName: "trophy")
+                    // Gold and filled: awards are the one celebratory affordance
+                    // in the chrome, so it reads as a prize rather than a setting.
+                    Image(systemName: "trophy.fill")
                         .font(.body.weight(.semibold))
+                        .foregroundStyle(AppColors.scoreGood)
                 }
                 .accessibilityLabel("Achievements")
             }

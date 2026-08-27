@@ -9,7 +9,6 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
     case drills
     case readAloud
     case calm
-    case wheel
     case learn
 
     var id: String { rawValue }
@@ -21,7 +20,6 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .drills: return "Drills"
         case .readAloud: return "Read Aloud"
         case .calm: return "Calm"
-        case .wheel: return "Wheel"
         case .learn: return "Learn"
         }
     }
@@ -33,7 +31,6 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .drills: return "Drills"
         case .readAloud: return "Read Aloud"
         case .calm: return "Calm"
-        case .wheel: return "Prompt Wheel"
         case .learn: return "Learning Path"
         }
     }
@@ -45,7 +42,6 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .drills: return "Fix one weakness in under a minute"
         case .readAloud: return "Train clarity on a fixed passage"
         case .calm: return "Settle nerves so the take starts clean"
-        case .wheel: return "Spin a surprise prompt and go"
         case .learn: return "Follow a week-by-week speaking curriculum"
         }
     }
@@ -57,7 +53,6 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .drills: return "Best when a score highlights fillers, pace, or pauses"
         case .readAloud: return "Best when clarity or articulation needs reps"
         case .calm: return "Best right before a high-stakes session"
-        case .wheel: return "Best when you want variety without picking a prompt"
         case .learn: return "Best when you want structure instead of free practice"
         }
     }
@@ -68,7 +63,6 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .drills: return "bolt.fill"
         case .readAloud: return "text.book.closed"
         case .calm: return "heart.fill"
-        case .wheel: return "shuffle"
         case .learn: return "map.fill"
         }
     }
@@ -79,13 +73,14 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         case .drills: return AppColors.toolDrill
         case .readAloud: return AppColors.toolReadAloud
         case .calm: return AppColors.toolCalm
-        case .wheel: return AppColors.toolWheel
         case .learn: return AppColors.primary
         }
     }
 
-    /// Tools that appear on Today's prep strip by default.
-    static let todayStripDefaults: [PracticeToolKind] = [.warmUp, .drills, .calm, .wheel]
+    /// Tools that appear on Today's prep strip by default. The Prompt Wheel
+    /// is deliberately absent — it lives in Library → Prompts, where you pick
+    /// what to say, not in the strip that gets your voice ready.
+    static let todayStripDefaults: [PracticeToolKind] = [.warmUp, .drills, .calm, .readAloud]
 
     /// Map a coach practice route onto the tool that owns that work.
     static func recommended(for route: CoachPracticeRoute?) -> PracticeToolKind? {

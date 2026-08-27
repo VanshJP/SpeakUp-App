@@ -30,7 +30,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         case .weeklyRecap: return "What changed since last week (when there is news)"
         case .focus: return "The one thing to work on before you speak"
         case .session: return "Prompt, word workout, and start buttons — always on"
-        case .tools: return "Warm-up, drills, calm, and the prompt wheel"
+        case .tools: return "Warm-up, drills, calm, and read-aloud"
         case .learn: return "Jump into this week's curriculum lesson"
         }
     }

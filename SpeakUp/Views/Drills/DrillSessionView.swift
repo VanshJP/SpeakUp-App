@@ -59,6 +59,22 @@ struct DrillSessionView: View {
                 ChirpPlayer.shared.play(active ? .hold : .tick)
             }
         }
+        // A drill whose audio/recognition stack failed must not linger as a
+        // frozen timer — say why, then leave.
+        .alert(
+            "Couldn't start the drill",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                viewModel.cleanup()
+                dismiss()
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
     }
 
     // MARK: - Top Bar
@@ -121,12 +137,15 @@ struct DrillSessionView: View {
         VStack(spacing: 28) {
             // Mode-specific metric
             if let mode = viewModel.selectedMode {
-                switch mode {
-                case .fillerElimination: fillerDisplay
-                case .paceControl:       paceDisplay
-                case .pausePractice:     pauseDisplay
-                case .impromptuSprint:   impromptuDisplay
+                Group {
+                    switch mode {
+                    case .fillerElimination: fillerDisplay
+                    case .paceControl:       paceDisplay
+                    case .pausePractice:     pauseDisplay
+                    case .impromptuSprint:   impromptuDisplay
+                    }
                 }
+                .accessibilityElement(children: .combine)
             }
 
             TimerView(
@@ -233,6 +252,9 @@ struct DrillSessionView: View {
                     .font(.caption.weight(.medium).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.6))
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Pause markers")
+            .accessibilityValue("\(viewModel.pauseMarkersHit) of \(viewModel.pauseMarkersTotal)")
         }
     }
 

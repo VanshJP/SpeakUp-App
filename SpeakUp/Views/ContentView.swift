@@ -10,7 +10,7 @@ struct ContentView: View {
     @State private var selectedTab: AppTab = .today
     @State private var showingCountdown = false
     @State private var showingRecording = false
-    @State private var showingPromptWheel = false
+    @State private var showingReadAloud = false
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
     @State private var pendingRecordingNavigation: String?
@@ -75,8 +75,8 @@ struct ContentView: View {
                         adoptChallengeIfMatching(prompt)
                         showingCountdown = true
                     },
-                    onShowWheel: {
-                        showingPromptWheel = true
+                    onShowReadAloud: {
+                        showingReadAloud = true
                     },
                     onShowWarmUps: {
                         showingWarmUps = true
@@ -90,10 +90,10 @@ struct ContentView: View {
                     onShowCurriculum: {
                         selectedTab = .learn
                     },
-                    onStartStoryPractice: { story in
+                    onStartStoryPractice: { story, duration in
                         recordingPrompt = nil
                         recordingStoryId = story.id
-                        recordingDuration = .sixty
+                        recordingDuration = duration
                         recordingChallenge = nil
                         showingCountdown = true
                     }
@@ -257,17 +257,10 @@ struct ContentView: View {
                 }
             )
         }
-        .sheet(isPresented: $showingPromptWheel) {
-            PromptWheelView(onSelectPrompt: { prompt in
-                showingPromptWheel = false
-                recordingPrompt = prompt
-                recordingChallenge = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showingCountdown = true
-                }
-            })
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showingReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingGoals) {
             GoalsView()

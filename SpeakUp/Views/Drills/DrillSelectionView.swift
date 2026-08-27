@@ -9,6 +9,11 @@ struct DrillSelectionView: View {
     @State private var showingCountdown = false
     @State private var selectedDrillMode: DrillMode?
 
+    /// When true the grid is pushed onto a caller-owned `NavigationStack`
+    /// (Library → Tools): no inner stack, and the sheet's ✕ gives way to the
+    /// system back button.
+    var isPushed: Bool = false
+
     var sourceStory: Story?
     /// Arms a specific drill on open — used when a session's weakest subscore
     /// routes the user straight to the drill that targets it.
@@ -20,65 +25,100 @@ struct DrillSelectionView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppBackground()
-
-                PageScrollView {
-                    VStack(spacing: 20) {
-                        ToolPurposeBanner(tool: .drills)
-                            .padding(.horizontal)
-
-                        if let story = sourceStory {
-                            sourceStoryBanner(story)
-                                .padding(.horizontal)
-                        }
-
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(DrillMode.allCases) { mode in
-                                Button {
-                                    selectedDrillMode = mode
-                                    showingCountdown = true
-                                } label: {
-                                    GlassCard {
-                                        VStack(alignment: .leading, spacing: 10) {
-                                            Image(systemName: mode.icon)
-                                                .font(.title2.weight(.semibold))
-                                                .foregroundStyle(mode.color)
-
-                                            Text(mode.title)
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(.primary)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                            Text(mode.outcome)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .multilineTextAlignment(.leading)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .lineLimit(3)
-                                                .fixedSize(horizontal: false, vertical: true)
-
-                                            Text(mode.description)
-                                                .font(.caption.weight(.bold))
-                                                .foregroundStyle(mode.color)
-                                        }
-                                        .padding(.vertical, 4)
-                                        .frame(maxWidth: .infinity, minHeight: 150, maxHeight: 150, alignment: .topLeading)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                        }
-                        .padding(.horizontal)
-                    }
-                    .padding(.top)
-                }
+        if isPushed {
+            content
+        } else {
+            NavigationStack {
+                content
             }
-            .navigationTitle("Quick Drills")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+    }
+
+    private var content: some View {
+        ZStack {
+            AppBackground()
+
+            PageScrollView {
+                VStack(spacing: 20) {
+                    // Same header grammar as Warm-Ups, Read Aloud, and Calm.
+                    Text("Sharpen Up")
+                        .eyebrowStyle()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+
+                    ToolPurposeBanner(tool: .drills)
+                        .padding(.horizontal)
+
+                    if let story = sourceStory {
+                        sourceStoryBanner(story)
+                            .padding(.horizontal)
+                    }
+
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(DrillMode.allCases) { mode in
+                            Button {
+                                Haptics.medium()
+                                // Impromptu picks its topic now so the prep
+                                // countdown can show it — that window is the
+                                // thinking time the format promises.
+                                if mode == .impromptuSprint {
+                                    viewModel.prepareImpromptuTopic()
+                                }
+                                selectedDrillMode = mode
+                                showingCountdown = true
+                            } label: {
+                                GlassCard {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Image(systemName: mode.icon)
+                                            .font(.title2.weight(.semibold))
+                                            .foregroundStyle(mode.color)
+
+                                        Text(mode.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.primary)
+
+                                        // Outcome first: what the drill fixes.
+                                        Text(mode.outcome)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.leading)
+                                            .lineLimit(3)
+                                            .fixedSize(horizontal: false, vertical: true)
+
+                                        // What the session shows while it
+                                        // runs — the concrete promise that
+                                        // makes the format legible.
+                                        Label(mode.liveFeedback, systemImage: "waveform.path.ecg")
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(mode.color)
+                                            .lineLimit(1)
+
+                                        // Duration + mechanic is the cost line.
+                                        Text(mode.description)
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(mode.color)
+                                            .lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 4)
+                                    .frame(minHeight: 176, maxHeight: 176, alignment: .topLeading)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.top)
+            }
+        }
+        .navigationTitle("Quick Drills")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            // The ✕ is a sheet affordance; a pushed page closes with Back.
+            if !isPushed {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -88,39 +128,39 @@ struct DrillSelectionView: View {
                     }
                 }
             }
-            .fullScreenCover(isPresented: $showingSession) {
-                DrillSessionView(viewModel: viewModel)
+        }
+        .fullScreenCover(isPresented: $showingSession) {
+            DrillSessionView(viewModel: viewModel)
+        }
+        .overlay {
+            if showingCountdown, let mode = selectedDrillMode {
+                CountdownOverlayView(
+                    prompt: nil,
+                    duration: .thirty,
+                    countdownDuration: userSettings.first?.countdownDuration ?? 15,
+                    countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
+                    look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
+                    backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
+                    prepTitle: mode.title,
+                    prepSubtitle: mode == .impromptuSprint ? viewModel.impromptuPrompt : mode.description,
+                    onComplete: {
+                        showingCountdown = false
+                        viewModel.startDrill(mode: mode)
+                        showingSession = true
+                    },
+                    onCancel: {
+                        showingCountdown = false
+                        selectedDrillMode = nil
+                    }
+                )
+                .transition(.opacity)
             }
-            .overlay {
-                if showingCountdown {
-                    CountdownOverlayView(
-                        prompt: nil,
-                        duration: .thirty,
-                        countdownDuration: userSettings.first?.countdownDuration ?? 15,
-                        countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
-                        look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
-                        backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
-                        onComplete: {
-                            showingCountdown = false
-                            if let mode = selectedDrillMode {
-                                viewModel.startDrill(mode: mode)
-                                showingSession = true
-                            }
-                        },
-                        onCancel: {
-                            showingCountdown = false
-                            selectedDrillMode = nil
-                        }
-                    )
-                    .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.3), value: showingCountdown)
-            .task {
-                guard let initialMode else { return }
-                selectedDrillMode = initialMode
-                showingCountdown = true
-            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showingCountdown)
+        .task {
+            guard let initialMode else { return }
+            selectedDrillMode = initialMode
+            showingCountdown = true
         }
     }
 
