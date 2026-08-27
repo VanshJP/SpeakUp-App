@@ -2,17 +2,19 @@
 
 ## Purpose
 
-**Today** — home: rings, focus/prompt, streak, word workout, weekly recap, quick tools, story shortcut.  
-**Library** — unified browser: prompts, stories, tools (warm-ups, drills, read-aloud, confidence).
+**Today** — home: modular blocks (rings, focus, session, prep tools, optional learn), streak, word workout, weekly recap. Users customize which blocks show and in what order (Bevel-style).  
+**Library** — unified browser: prompts, stories, tools (warm-ups, drills, read-aloud, calm).
 
 ## Key files — Today
 
 | Role | Path |
 |------|------|
-| Views | `SpeakUp/Views/Today/` — `TodayView`, `SessionBriefRow`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard` |
+| Views | `SpeakUp/Views/Today/` — `TodayView`, `TodayHomeCustomizeView`, `SessionBriefRow`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard` |
+| Layout | `SpeakUp/Models/TodayHomeModule.swift` — `TodayHomeModule`, `TodayHomeLayout` |
+| Tool catalog | `SpeakUp/Models/PracticeToolKind.swift` — shared titles / outcomes / best-for |
 | VM | `SpeakUp/ViewModels/TodayViewModel.swift` |
 | Services | `WeeklyProgressService`, `VocabChallengeService` |
-| Components | `RingStatsView`, `StreakChip` |
+| Components | `RingStatsView`, `StreakChip`, `ToolPurposeBanner` |
 | Widget writes | `SpeakUp/Services/WidgetDataProvider.swift` |
 
 ## Key files — Library
@@ -36,6 +38,8 @@
 8. **The rotating daily challenge is deleted** (model, service, widget, and `SessionBriefRow` row). Nobody used it, and it competed with the word workout for the same strip. Do not reintroduce a second daily objective — the prompt and the words are the day's spec.
 9. **Arrival moment.** `TodayView.playArrivalIfNeeded()` fires once per calendar day, keyed on the `lastArrivalDay` AppStorage stamp: the streak chip springs in, a success haptic fires, and `ConfettiView` runs on every seventh day. It waits on `viewModel.isLoading` so it never celebrates a streak of zero, and `arrivalLine` never claims a day the user has not earned — before today's session it reads "one session keeps it".
 10. Goal progress refresh fires from Today's load but never blocks it: `GoalProgressService.refreshGoals` freezes per-goal windows on the main actor, scans recordings on a background `ModelContext`, then applies outcome diffs back on main. The scan decodes one analysis blob per session — inline, it stalled every Today visit as history grew.
+11. **Customizable home.** Visible modules and order live in additive `UserSettings.todayHomeLayoutRaw` (`[String]` of `TodayHomeModule` raw values). Empty = factory default via `TodayHomeLayout.resolve`. **Session is always forced visible** — it cannot be hidden. Learn is off by default so Today stays a practice surface. Customize from the Today toolbar (`slider.horizontal.3`), the Prep tools "Edit" control, or Settings → Today Layout (`TodayHomeCustomizeView`). Pinned in `TodayHomeLayoutTests`.
+12. **Prep tools strip** uses `PracticeToolKind` outcome copy (not one-word labels). When a coach plan exists (or the user has not practiced today), a "Suggested before you start" banner routes to the matching tool — including Read Aloud even though that tool's grid tile lives in Library.
 
 ## Cross-links
 
@@ -47,6 +51,6 @@
 
 The same profile also steers **prompt selection**: `TodayViewModel` blends the settings mix with lexicon weakness rates via `PromptMix.adapted(weakRatesByCategory:)`, so practice types the user measurably struggles in (≥ 2 sessions, weak rate above threshold) draw up to 2× more often. Rules that must not regress: the Settings gate always wins (disabled stays 0), evidence gates noise out, and boosts cap at 2× base weight. Pinned in `PromptMixAdaptationTests`.
 
-**This is the placement that matters.** The session coaching screen can only tell you what to work on *after* the take you could have applied it to; Today is where the focus becomes an instruction. It sits directly above the prompt and the start button for that reason — do not move it below them.
+**This is the placement that matters.** The session coaching screen can only tell you what to work on *after* the take you could have applied it to; Today is where the focus becomes an instruction. Default layout puts it directly above the session module for that reason — users can reorder via customize, but do not remove the focus→session instructional pairing from the factory default.
 
 `TodayFocusCard` and `SpeechSubscores.rollingAverage` are gone. That card ranked by lowest rolling subscore over ten sessions with failed captures averaged in, while the session screen ranked by weighted deficit over twenty with them excluded — two engines that routinely named different areas on the same day. One engine now: `CoachPlanService.plan(window:weights:)`. Do not add a second.

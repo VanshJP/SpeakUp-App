@@ -41,6 +41,15 @@ struct SettingsView: View {
             }
 
             settingsLink(
+                icon: "rectangle.3.group",
+                iconColor: AppColors.categoryIndigo,
+                title: "Today Layout",
+                subtitle: todayLayoutSubtitle
+            ) {
+                TodayHomeCustomizeView(showsDoneButton: false)
+            }
+
+            settingsLink(
                 icon: "slider.horizontal.3",
                 iconColor: AppColors.primary,
                 title: "Session Defaults",
@@ -240,6 +249,12 @@ struct SettingsView: View {
     private var profileSubtitle: String {
         let name = viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty ? "Set your name" : name
+    }
+
+    private var todayLayoutSubtitle: String {
+        let modules = viewModel.settings?.todayHomeModules ?? TodayHomeModule.defaultVisible
+        let count = modules.count
+        return "\(count) block\(count == 1 ? "" : "s") on Today"
     }
 
     /// Two counts and nothing else. The old version tried to name four things

@@ -104,6 +104,11 @@ final class UserSettings {
     // Guided layout walkthrough, shown once after the first score lands.
     var hasSeenAppTour: Bool = false
 
+    // Today home layout — ordered raw values of visible `TodayHomeModule`s.
+    // Empty means factory default (never customized). Session is always forced
+    // visible by `TodayHomeLayout.resolve`. Additive; see today-library.md.
+    var todayHomeLayoutRaw: [String] = []
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 
@@ -213,6 +218,11 @@ final class UserSettings {
     // Helper to get enabled categories as enum values
     var enabledCategories: [PromptCategory] {
         enabledPromptCategories.compactMap { PromptCategory(rawValue: $0) }
+    }
+
+    /// Resolved Today modules in display order. Empty storage → factory default.
+    var todayHomeModules: [TodayHomeModule] {
+        TodayHomeLayout.resolve(todayHomeLayoutRaw)
     }
 
     // MARK: - Pace Target Resolution

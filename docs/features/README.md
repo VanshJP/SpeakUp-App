@@ -23,7 +23,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | Analyzing / detail / share | [recording-detail.md](./recording-detail.md) | `Views/Detail/`, `SharePresenter`, `SharedPromptLink` | gotchas §2b, §3, §7 | — |
 | Stories | [stories.md](./stories.md) | `Views/Stories/`, `Story*`, `StoryTaggingService` | — | — |
 | Read-Aloud | [read-aloud.md](./read-aloud.md) | `Views/ReadAloud/`, `ReadAloudService` | gotchas §9 | `axiom-media` |
-| Today / Practice Hub | [today-library.md](./today-library.md) | `Views/Today/`, `Views/Practice/` | — | — |
+| Today / Practice Hub | [today-library.md](./today-library.md) | `Views/Today/`, `Views/Practice/`, `TodayHomeModule`, `PracticeToolKind` | — | — |
 | Daily word workout | [vocab-challenge.md](./vocab-challenge.md) | `VocabChallengeService`, `Views/Today/VocabChallengeResultCard.swift` | — | — |
 | History / trajectory / readiness / journal | [history-progress.md](./history-progress.md) | `Views/History/`, `Views/Progress/`, `Views/Streak/`, `ScenarioReadinessEngine` | gotchas §2b, §3 | — |
 | Learn / curriculum | [curriculum.md](./curriculum.md) | `Views/Curriculum/`, `CurriculumService` | monetization.md | — |

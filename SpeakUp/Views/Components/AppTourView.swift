@@ -45,10 +45,10 @@ enum AppTourStep: Int, CaseIterable {
         switch self {
         case .record: return "Today"
         case .stats: return "Where you stand"
-        case .tools: return "Quick tools"
+        case .tools: return "Prep tools"
         case .library: return "The Library"
         case .history: return "History"
-        case .learn: return "Learn"
+        case .learn: return "Learning Path"
         case .presets: return "Your recording preset"
         }
     }
@@ -60,13 +60,13 @@ enum AppTourStep: Int, CaseIterable {
         case .stats:
             return "Streak up top, rings for sessions and scores. Tap the rings for full charts."
         case .tools:
-            return "Warm-ups, drills, the prompt wheel, and calm-down tools. One tap each."
+            return "Warm-ups open the voice, drills fix one weakness, calm settles nerves, and the wheel surprises you with a prompt. Customize which blocks show on Today anytime."
         case .library:
-            return "Prompts, your stories, read-aloud passages, drills. All your practice material in one place."
+            return "Prompts and Stories are what you speak. Tools are how you prep — warm-ups, drills, read-aloud, calm."
         case .history:
             return "Every take and score, your baseline included. This is where the line climbs."
         case .learn:
-            return "A weekly curriculum with lessons, for when you want structure instead of free practice."
+            return "A week-by-week curriculum when you want structure. Free drills stay under Library → Tools."
         case .presets:
             return "Session Defaults holds recording length, countdown, and live feedback. Set it up the way you like."
         }

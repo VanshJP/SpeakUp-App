@@ -9,7 +9,7 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 | Role | Path |
 |------|------|
 | Hub | `SpeakUp/Views/Settings/SettingsView.swift` |
-| Pages | `ProfileSettingsView`, `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceProfileView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordWorkoutSettingsView`, `WordBankView`, `RecordingLookView`, `AnalyticsDiagnosticsView` |
+| Pages | `ProfileSettingsView`, `TodayHomeCustomizeView` (Today Layout), `SessionDefaultsView`, `AnalysisSettingsView`, `AIModelSettingsView`, `FeedbackSettingsView`, `PromptSettingsView`, `ScoreWeightsView`, `VoiceProfileView`, `VoiceCalibrationView`, `ReminderSettingsView`, `DataManagementView`, `WordWorkoutSettingsView`, `WordBankView`, `RecordingLookView`, `AnalyticsDiagnosticsView` |
 | Privacy & data | `SpeakUp/Views/Settings/PrivacyDataView.swift` |
 | VM | `SettingsViewModel.swift` |
 | Model | `UserSettings.swift`, `SupportLinks.swift` |
@@ -27,6 +27,8 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 9. Daily word workout has its own hub row (**Word Workout** → `WordWorkoutSettingsView`), holding `VocabChallengeSettingsCard`: master toggle, words per day, "Teach new words". It is not inside `WordBankView` — the workout is the feature and the bank is one of its inputs, so burying the knobs above a word list two levels down had it backwards. `WordBankView` is now **Word Lists** (vocab / dictation / fillers) and stays one tabbed screen: the three tabs share a pinned bottom input bar and one `DictationService`, so splitting them into separate screens would triplicate both. Additive `UserSettings` fields; default on. The bank / dictionary / spaced-review source flags are still stored but no longer surfaced — always `true`. See [vocab-challenge.md](./vocab-challenge.md).
 
 10. Voice profile lives on `VoiceProfileView`, reached from **Analysis**, not Data Management. It is an input to scoring — Auto Pace Target learns from it — not data hygiene, and filing it beside "Clear All Data" hid it. `DataManagementView` is reset-settings and clear-all-data only, and its hub subtitle says exactly that: there is no export on that screen (journal export is History → Progress → More).
+
+11. **Today Layout** (`TodayHomeCustomizeView`, hub row under You) edits `UserSettings.todayHomeLayoutRaw`. Same editor as Today's customize sheet; push with `showsDoneButton: false`. See [today-library.md](./today-library.md).
 
 ## Cross-links
 

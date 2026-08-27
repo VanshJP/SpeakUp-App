@@ -20,6 +20,7 @@ struct TodayView: View {
     @State private var focusDrill: DrillMode?
     @State private var showingFocusWarmUp = false
     @State private var showingFocusReadAloud = false
+    @State private var showingHomeCustomize = false
 
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowWheel: () -> Void
@@ -29,6 +30,11 @@ struct TodayView: View {
     var onShowCurriculum: () -> Void
     var onShowAchievements: () -> Void = {}
     var onStartStoryPractice: ((Story) -> Void)?
+
+    /// Ordered visible modules from Settings. Empty storage → factory default.
+    private var homeModules: [TodayHomeModule] {
+        userSettings.first?.todayHomeModules ?? TodayHomeModule.defaultVisible
+    }
 
     var body: some View {
         ZStack {
@@ -40,7 +46,7 @@ struct TodayView: View {
             PageScrollView {
                 VStack(spacing: 20) {
 
-                    // 1. Header — date + streak chip
+                    // 1. Header — date + streak chip + customize
                     topHeaderRow
 
                     if let challenge = challengeStore.pending {
@@ -51,40 +57,11 @@ struct TodayView: View {
                         )
                     }
 
-                    // 2. Where you stand (tap → full Progress charts).
-                    ringStatsSection
-                        .tourAnchor(.todayStats)
-
-                    // 2b. What changed since last week — once per week, dismissable.
-                    weeklyRecapSection
-
-                    // 3. What to do about it. Reads as the conclusion drawn
-                    //    from the rings directly above, which is why it sits
-                    //    between the stats and the generic prompt path.
-                    focusSection
-
-                    // 4. Core action — today's prompt + start buttons
-                    VStack(spacing: 14) {
-                        interactivePromptSection
-
-                        // The words and the challenge are the spec for *this*
-                        // take, not homework — so they brief the session right
-                        // above the button instead of sitting below it.
-                        SessionBriefRow(
-                            workout: viewModel.vocabChallenge,
-                            bankWords: userSettings.first?.vocabWords ?? [],
-                            onSkip: { viewModel.skipVocabWord($0) },
-                            onAddToBank: { addSpotlightWordToBank($0) }
-                        )
-
-                        startButtonSection
-                            .padding(.top, 6)
+                    // Modular home — Bevel-style. Order and visibility come from
+                    // `UserSettings.todayHomeLayoutRaw`; session is always forced on.
+                    ForEach(homeModules) { module in
+                        homeModuleView(module)
                     }
-                    .tourAnchor(.todayPrompt)
-
-                    // 5. Quick actions
-                    toolbarStrip
-                        .tourAnchor(.todayTools)
                 }
                 .padding()
             }
@@ -93,6 +70,18 @@ struct TodayView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Haptics.light()
+                    showingHomeCustomize = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.body.weight(.semibold))
+                }
+                .accessibilityLabel("Customize Today")
+            }
+        }
         .refreshable {
             await viewModel.loadData()
         }
@@ -113,6 +102,13 @@ struct TodayView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingHomeCustomize) {
+            NavigationStack {
+                TodayHomeCustomizeView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(item: $focusDrill) { mode in
             DrillSelectionView(initialMode: mode)
                 .presentationDetents([.large])
@@ -124,6 +120,50 @@ struct TodayView: View {
         .sheet(isPresented: $showingFocusReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
+        }
+    }
+
+    // MARK: - Home Modules
+
+    @ViewBuilder
+    private func homeModuleView(_ module: TodayHomeModule) -> some View {
+        switch module {
+        case .rings:
+            ringStatsSection
+                .tourAnchor(.todayStats)
+        case .weeklyRecap:
+            weeklyRecapSection
+        case .focus:
+            // What to do about the rings. Sits above the prompt so the focus
+            // is an instruction for the take, not a post-session report.
+            focusSection
+        case .session:
+            sessionModule
+                .tourAnchor(.todayPrompt)
+        case .tools:
+            prepToolsSection
+                .tourAnchor(.todayTools)
+        case .learn:
+            learnShortcutCard
+        }
+    }
+
+    private var sessionModule: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            GlassSectionHeader("Today's session", icon: "mic.fill")
+
+            interactivePromptSection
+
+            // The words are the spec for *this* take — brief above the button.
+            SessionBriefRow(
+                workout: viewModel.vocabChallenge,
+                bankWords: userSettings.first?.vocabWords ?? [],
+                onSkip: { viewModel.skipVocabWord($0) },
+                onAddToBank: { addSpotlightWordToBank($0) }
+            )
+
+            startButtonSection
+                .padding(.top, 2)
         }
     }
 
@@ -458,71 +498,232 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Quick Actions Strip
+    // MARK: - Prep Tools
 
-    // Four shortcuts, not six — Vocab lives in Settings and Read-Aloud in the
-    // Library's Tools section, so Today keeps only what starts a session now.
-    private var toolbarStrip: some View {
-        HStack(spacing: 8) {
-            quickActionTile(icon: "wind", label: "Warm Up", color: AppColors.toolWarmUp) {
-                onShowWarmUps()
+    /// Outcome-labelled tiles plus an optional coach recommendation. Four
+    /// tools that start prep now — Read-Aloud lives in Library Tools.
+    private var prepToolsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader("Prep tools", icon: "wrench.and.screwdriver.fill") {
+                Button {
+                    Haptics.light()
+                    showingHomeCustomize = true
+                } label: {
+                    Text("Edit")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Customize Today layout")
             }
-            quickActionTile(icon: "bolt.fill", label: "Drills", color: AppColors.toolDrill) {
-                onShowDrills()
+
+            if let recommended = recommendedPrepTool {
+                recommendedToolBanner(recommended)
             }
-            quickActionTile(icon: "heart.fill", label: "Calm", color: AppColors.toolCalm) {
-                onShowConfidence()
-            }
-            quickActionTile(icon: "shuffle", label: "Wheel", color: AppColors.toolWheel) {
-                onShowWheel()
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
+                ForEach(PracticeToolKind.todayStripDefaults) { tool in
+                    Button {
+                        Haptics.light()
+                        openPrepTool(tool)
+                    } label: {
+                        PrepToolTile(tool: tool, isHighlighted: recommendedPrepTool == tool)
+                    }
+                    .buttonStyle(QuickActionTileStyle())
+                }
             }
         }
     }
 
-    private func quickActionTile(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            Haptics.light()
-            action()
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(color)
-                    .frame(height: 22)
+    /// Coach route wins when we have enough sessions; otherwise warm-up is the
+    /// honest default before a cold take.
+    private var recommendedPrepTool: PracticeToolKind? {
+        if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
+            return PracticeToolKind.recommended(for: plan.focus.practiceRoute)
+        }
+        if !viewModel.practicedToday {
+            return .warmUp
+        }
+        return nil
+    }
 
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
+    private func recommendedToolBanner(_ tool: PracticeToolKind) -> some View {
+        Button {
+            Haptics.medium()
+            openPrepTool(tool)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: tool.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(tool.color)
+                    .frame(width: 36, height: 36)
+                    .background {
+                        Circle().fill(tool.color.opacity(0.18))
+                    }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Suggested before you start")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+                        .tracking(0.5)
+                    Text(tool.shortTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(tool.outcome)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(12)
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AppColors.surfaceLift)
+                            .fill(tool.color.opacity(0.08))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
+                            .stroke(tool.color.opacity(0.3), lineWidth: 0.5)
                     }
-                    .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(QuickActionTileStyle())
+        .buttonStyle(GlassPressStyle())
+    }
+
+    private func openPrepTool(_ tool: PracticeToolKind) {
+        switch tool {
+        case .warmUp: onShowWarmUps()
+        case .drills: onShowDrills()
+        case .calm: onShowConfidence()
+        case .wheel: onShowWheel()
+        case .readAloud: showingFocusReadAloud = true
+        case .learn: onShowCurriculum()
+        }
+    }
+
+    // MARK: - Learn Shortcut
+
+    private var learnShortcutCard: some View {
+        Button {
+            Haptics.medium()
+            onShowCurriculum()
+        } label: {
+            GlassCard(tint: AppColors.primary.opacity(0.08), padding: 16) {
+                HStack(spacing: 14) {
+                    Image(systemName: PracticeToolKind.learn.icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                        .frame(width: 40, height: 40)
+                        .background {
+                            Circle().fill(AppColors.primary.opacity(0.18))
+                        }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(PracticeToolKind.learn.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text(PracticeToolKind.learn.outcome)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("\(PracticeToolKind.learn.title). \(PracticeToolKind.learn.outcome)")
     }
 
     private struct QuickActionTileStyle: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
-                .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
-                .brightness(configuration.isPressed ? 0.1 : 0)
+                .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+                .brightness(configuration.isPressed ? 0.08 : 0)
                 .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
         }
     }
 
+}
+
+// MARK: - Prep Tool Tile
+
+/// Dense Today tile: icon, short title, one-line outcome. Replaces the old
+/// one-word labels that did not say what each tool was for.
+private struct PrepToolTile: View {
+    let tool: PracticeToolKind
+    var isHighlighted: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: tool.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(tool.color)
+                Spacer(minLength: 0)
+                if isHighlighted {
+                    Circle()
+                        .fill(tool.color)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+            }
+
+            Text(tool.shortTitle)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Text(tool.outcome)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 28, alignment: .topLeading)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AppColors.surfaceLift)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            isHighlighted ? tool.color.opacity(0.45) : AppColors.cardStroke,
+                            lineWidth: isHighlighted ? 1 : 0.5
+                        )
+                }
+                .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tool.shortTitle). \(tool.outcome)")
+        .accessibilityAddTraits(.isButton)
+    }
 }
 
 // MARK: - Interactive Prompt Card

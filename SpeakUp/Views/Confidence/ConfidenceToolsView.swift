@@ -23,6 +23,8 @@ struct ConfidenceToolsView: View {
 
                 PageScrollView {
                     VStack(spacing: 16) {
+                        ToolPurposeBanner(tool: .calm)
+
                         // Category tabs
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -71,7 +73,7 @@ struct ConfidenceToolsView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Confidence Tools")
+            .navigationTitle("Calm")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

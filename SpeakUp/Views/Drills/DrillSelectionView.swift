@@ -26,15 +26,13 @@ struct DrillSelectionView: View {
 
                 PageScrollView {
                     VStack(spacing: 20) {
+                        ToolPurposeBanner(tool: .drills)
+                            .padding(.horizontal)
+
                         if let story = sourceStory {
                             sourceStoryBanner(story)
                                 .padding(.horizontal)
                         }
-
-                        Text("Choose a drill to sharpen a specific skill.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
 
                         LazyVGrid(columns: columns, spacing: 12) {
                             ForEach(DrillMode.allCases) { mode in
@@ -43,27 +41,30 @@ struct DrillSelectionView: View {
                                     showingCountdown = true
                                 } label: {
                                     GlassCard {
-                                        VStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 10) {
                                             Image(systemName: mode.icon)
-                                                .font(.largeTitle)
+                                                .font(.title2.weight(.semibold))
                                                 .foregroundStyle(mode.color)
 
                                             Text(mode.title)
                                                 .font(.subheadline.weight(.semibold))
                                                 .foregroundStyle(.primary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                            Text(mode.outcome)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .multilineTextAlignment(.leading)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .lineLimit(3)
+                                                .fixedSize(horizontal: false, vertical: true)
 
                                             Text(mode.description)
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                                .multilineTextAlignment(.center)
-                                                .lineLimit(2)
-
-                                            Text("\(mode.defaultDurationSeconds)s")
                                                 .font(.caption.weight(.bold))
                                                 .foregroundStyle(mode.color)
                                         }
                                         .padding(.vertical, 4)
-                                        .frame(maxWidth: .infinity, minHeight: 140, maxHeight: 140)
+                                        .frame(maxWidth: .infinity, minHeight: 150, maxHeight: 150, alignment: .topLeading)
                                     }
                                 }
                                 .buttonStyle(.plain)

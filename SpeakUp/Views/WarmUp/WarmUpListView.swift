@@ -21,6 +21,8 @@ struct WarmUpListView: View {
 
                 PageScrollView {
                     VStack(spacing: 16) {
+                        ToolPurposeBanner(tool: .warmUp)
+
                         if let story = sourceStory {
                             sourceStoryBanner(story)
                         }
