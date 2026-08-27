@@ -1,15 +1,13 @@
 import SwiftUI
 
 struct ConfidenceToolsView: View {
-    @Environment(\.dismiss) private var dismiss
     /// nil = all categories. The page opens unfiltered so the whole map of
     /// exercises is visible; a category pill narrows from there.
     @State private var selectedCategory: ConfidenceCategory?
     @State private var showingExercise: ConfidenceExercise?
 
-    /// When true the list is pushed onto a caller-owned `NavigationStack`
-    /// (Library → Tools): no inner stack, and the sheet's ✕ gives way to the
-    /// system back button.
+    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools). See
+    /// `ToolPage`, which owns what that changes.
     var isPushed: Bool = false
 
     private var exercises: [ConfidenceExercise] {
@@ -23,78 +21,29 @@ struct ConfidenceToolsView: View {
     }
 
     var body: some View {
-        if isPushed {
-            content
-        } else {
-            NavigationStack {
-                content
-            }
-        }
-    }
-
-    private var content: some View {
-        ZStack {
-            AppBackground()
-
-            PageScrollView {
-                VStack(spacing: 16) {
-                    // One line, not a banner card: the nav bar already names
-                    // the page, so the header says what the tool gets you and
-                    // gets out of the way. Copy comes from PracticeToolKind.
-                    Text(PracticeToolKind.calm.outcome)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    // Category tabs — All first.
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            FilterPill(
-                                title: "All",
-                                icon: "square.grid.2x2",
-                                isSelected: selectedCategory == nil
-                            ) {
-                                withAnimation(AppMotion.slide) {
-                                    selectedCategory = nil
-                                }
-                            }
-
-                            ForEach(ConfidenceCategory.allCases) { category in
-                                FilterPill(
-                                    title: category.displayName,
-                                    icon: category.icon,
-                                    isSelected: selectedCategory == category,
-                                    color: category.color
-                                ) {
-                                    withAnimation(AppMotion.slide) {
-                                        selectedCategory = category
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    exerciseContent
+        ToolPage(tool: .calm, isPushed: isPushed) {
+            ToolFilterBar {
+                FilterPill(
+                    title: "All",
+                    icon: "square.grid.2x2",
+                    isSelected: selectedCategory == nil
+                ) {
+                    withAnimation(AppMotion.slide) { selectedCategory = nil }
                 }
-                .padding()
-            }
-        }
-        .navigationTitle("Calm")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            // The ✕ is a sheet affordance; a pushed page closes with Back.
-            if !isPushed {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.white)
+
+                ForEach(ConfidenceCategory.allCases) { category in
+                    FilterPill(
+                        title: category.displayName,
+                        icon: category.icon,
+                        isSelected: selectedCategory == category,
+                        color: category.color
+                    ) {
+                        withAnimation(AppMotion.slide) { selectedCategory = category }
                     }
                 }
             }
+
+            exerciseContent
         }
         .fullScreenCover(item: $showingExercise) { exercise in
             ConfidenceExerciseView(exercise: exercise)
@@ -166,9 +115,11 @@ struct ConfidenceToolsView: View {
                 Double(exercise.durationMinutes),
                 longest: longestExerciseMinutes
             ),
-            // Cost before commit: minutes *and* how many steps that buys —
-            // a 10-step ladder and a 4-step reset read very differently.
-            durationLabel: "\(exercise.durationMinutes)m · \(exercise.steps.count) steps"
+            durationLabel: "\(exercise.durationMinutes)m",
+            // Cost before commit: minutes in the dial, and how many steps that
+            // buys in the chip — a 10-step ladder and a 4-step reset read very
+            // differently, and both never fit in the dial's 8pt label.
+            tag: "\(exercise.steps.count) steps"
         ) {
             Haptics.medium()
             showingExercise = exercise

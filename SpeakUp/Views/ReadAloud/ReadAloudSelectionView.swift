@@ -1,129 +1,106 @@
 import SwiftUI
 
 struct ReadAloudSelectionView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = ReadAloudViewModel()
     @State private var showingSession = false
 
-    /// When true the list is pushed onto a caller-owned `NavigationStack`
-    /// (Library → Tools): no inner stack, and the sheet's ✕ gives way to the
-    /// system back button.
+    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools). See
+    /// `ToolPage`, which owns what that changes.
     var isPushed: Bool = false
 
-    var body: some View {
-        if isPushed {
-            content
-        } else {
-            NavigationStack {
-                content
-            }
-        }
+    /// Denominator for each row's arc, scoped to what the filters leave
+    /// visible — within one set the relative lengths are what's worth reading.
+    private var longestPassageWords: Double {
+        Double(viewModel.passages.map(\.wordCount).max() ?? 0)
     }
 
-    private var content: some View {
-        ZStack {
-            AppBackground()
+    var body: some View {
+        ToolPage(tool: .readAloud, isPushed: isPushed) {
+            // Two axes, one grammar: both rows lead with All, so neither can
+            // strand you in a filtered state with no way back.
+            ToolFilterBar {
+                FilterPill(
+                    title: "All",
+                    isSelected: viewModel.selectedDifficulty == nil
+                ) {
+                    withAnimation(AppMotion.slide) { viewModel.selectedDifficulty = nil }
+                }
 
-            PageScrollView {
-                VStack(spacing: 16) {
-                    // One line, not a banner card: the nav bar already names
-                    // the page, so the header says what the tool gets you and
-                    // gets out of the way. Copy comes from PracticeToolKind.
-                    Text(PracticeToolKind.readAloud.outcome)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    // Difficulty filter
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            FilterPill(
-                                title: "All",
-                                isSelected: viewModel.selectedDifficulty == nil
-                            ) {
-                                withAnimation(AppMotion.slide) {
-                                    viewModel.selectedDifficulty = nil
-                                }
-                            }
-
-                            ForEach(ReadAloudDifficulty.allCases) { difficulty in
-                                FilterPill(
-                                    title: difficulty.displayName,
-                                    isSelected: viewModel.selectedDifficulty == difficulty,
-                                    color: AppColors.difficultyColor(difficulty)
-                                ) {
-                                    withAnimation(AppMotion.slide) {
-                                        viewModel.selectedDifficulty = viewModel.selectedDifficulty == difficulty ? nil : difficulty
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Category filter
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(ReadAloudCategory.allCases) { category in
-                                FilterPill(
-                                    title: category.displayName,
-                                    icon: category.icon,
-                                    isSelected: viewModel.selectedCategory == category
-                                ) {
-                                    withAnimation(AppMotion.slide) {
-                                        viewModel.selectedCategory = viewModel.selectedCategory == category ? nil : category
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Passage cards
-                    if viewModel.selectedDifficulty != nil || viewModel.selectedCategory != nil {
-                        Text("\(viewModel.passages.count) of \(DefaultReadAloudPassages.all.count) passages")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    LazyVStack(spacing: 12) {
-                        if viewModel.passages.isEmpty {
-                            EmptyStateCard(
-                                icon: "text.book.closed",
-                                title: "Nothing here",
-                                message: "No passages match these filters. Try clearing one."
-                            )
-                        } else {
-                            ForEach(viewModel.passages) { passage in
-                                Button {
-                                    Haptics.medium()
-                                    viewModel.selectedPassage = passage
-                                    showingSession = true
-                                } label: {
-                                    PassageCard(passage: passage)
-                                }
-                                .buttonStyle(GlassPressStyle())
-                            }
+                ForEach(ReadAloudDifficulty.allCases) { difficulty in
+                    FilterPill(
+                        title: difficulty.displayName,
+                        isSelected: viewModel.selectedDifficulty == difficulty,
+                        color: AppColors.difficultyColor(difficulty)
+                    ) {
+                        withAnimation(AppMotion.slide) {
+                            viewModel.selectedDifficulty = viewModel.selectedDifficulty == difficulty ? nil : difficulty
                         }
                     }
                 }
-                .padding()
             }
-        }
-        .navigationTitle("Read Aloud")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            // The ✕ is a sheet affordance; a pushed page closes with Back.
-            if !isPushed {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.white)
+
+            ToolFilterBar {
+                FilterPill(
+                    title: "All",
+                    icon: "square.grid.2x2",
+                    isSelected: viewModel.selectedCategory == nil
+                ) {
+                    withAnimation(AppMotion.slide) { viewModel.selectedCategory = nil }
+                }
+
+                ForEach(ReadAloudCategory.allCases) { category in
+                    FilterPill(
+                        title: category.displayName,
+                        icon: category.icon,
+                        isSelected: viewModel.selectedCategory == category
+                    ) {
+                        withAnimation(AppMotion.slide) {
+                            viewModel.selectedCategory = viewModel.selectedCategory == category ? nil : category
+                        }
+                    }
+                }
+            }
+
+            if viewModel.selectedDifficulty != nil || viewModel.selectedCategory != nil {
+                Text("\(viewModel.passages.count) of \(DefaultReadAloudPassages.all.count) passages")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVStack(spacing: 12) {
+                if viewModel.passages.isEmpty {
+                    EmptyStateCard(
+                        icon: "text.book.closed",
+                        title: "Nothing here",
+                        message: "No passages match these filters. Try clearing one.",
+                        buttonTitle: "Show All",
+                        buttonAction: {
+                            withAnimation(AppMotion.slide) {
+                                viewModel.selectedDifficulty = nil
+                                viewModel.selectedCategory = nil
+                            }
+                        }
+                    )
+                } else {
+                    ForEach(viewModel.passages) { passage in
+                        PracticeItemRow(
+                            title: passage.title,
+                            // The passage itself is the subtitle: you pick one
+                            // by reading a line of it, not by its name.
+                            subtitle: passage.text,
+                            icon: passage.category.icon,
+                            tint: AppColors.difficultyColor(passage.difficulty),
+                            durationFraction: PracticeItemRow.fraction(
+                                Double(passage.wordCount),
+                                longest: longestPassageWords
+                            ),
+                            durationLabel: Self.estimatedTime(passage.wordCount),
+                            tag: "\(passage.difficulty.displayName) · \(passage.wordCount) words"
+                        ) {
+                            Haptics.medium()
+                            viewModel.selectedPassage = passage
+                            showingSession = true
+                        }
                     }
                 }
             }
@@ -137,63 +114,14 @@ struct ReadAloudSelectionView: View {
 
 }
 
-// MARK: - Passage Card
+// MARK: - Cost
 
-private struct PassageCard: View {
-    let passage: ReadAloudPassage
-
-    var body: some View {
-        GlassCard(tint: difficultyColor.opacity(0.06)) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label(passage.category.displayName, systemImage: passage.category.icon)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    StatusPill(
-                        text: passage.difficulty.displayName,
-                        color: difficultyColor,
-                        fillOpacity: 0.2
-                    )
-                }
-
-                Text(passage.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                Text(passage.text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-
-                HStack(spacing: 12) {
-                    Label("\(passage.wordCount) words", systemImage: "text.word.spacing")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    Label(estimatedTime, systemImage: "clock")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Image(systemName: "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.primary)
-                }
-            }
-        }
-    }
-
-    private var difficultyColor: Color { AppColors.difficultyColor(passage.difficulty) }
-
+extension ReadAloudSelectionView {
     /// Rough cost at a conversational ~150 wpm, so a passage says what it
-    /// takes before you commit.
-    private var estimatedTime: String {
-        let minutes = Double(passage.wordCount) / 150.0
-        if minutes < 1 { return "<1 min" }
-        return "≈\(Int(minutes.rounded())) min"
+    /// takes before you commit. Short enough to sit inside the row's dial.
+    static func estimatedTime(_ wordCount: Int) -> String {
+        let minutes = Double(wordCount) / 150.0
+        if minutes < 1 { return "<1m" }
+        return "\(Int(minutes.rounded()))m"
     }
 }
