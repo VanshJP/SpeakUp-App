@@ -40,13 +40,14 @@ struct DrillSelectionView: View {
 
             PageScrollView {
                 VStack(spacing: 20) {
-                    // Same header grammar as Warm-Ups, Read Aloud, and Calm.
-                    Text("Sharpen Up")
-                        .eyebrowStyle()
+                    // One line, not a banner card: the nav bar already names
+                    // the page, so the header says what the tool gets you and
+                    // gets out of the way. Copy comes from PracticeToolKind.
+                    Text(PracticeToolKind.drills.outcome)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-
-                    ToolPurposeBanner(tool: .drills)
                         .padding(.horizontal)
 
                     if let story = sourceStory {

@@ -38,12 +38,14 @@ struct ConfidenceToolsView: View {
 
             PageScrollView {
                 VStack(spacing: 16) {
-                    // Same header grammar as Warm-Ups, Drills, and Read Aloud.
-                    Text("Settle Down")
-                        .eyebrowStyle()
+                    // One line, not a banner card: the nav bar already names
+                    // the page, so the header says what the tool gets you and
+                    // gets out of the way. Copy comes from PracticeToolKind.
+                    Text(PracticeToolKind.calm.outcome)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-
-                    ToolPurposeBanner(tool: .calm)
 
                     // Category tabs — All first.
                     ScrollView(.horizontal, showsIndicators: false) {

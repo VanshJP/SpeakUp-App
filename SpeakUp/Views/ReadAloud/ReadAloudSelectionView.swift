@@ -26,12 +26,14 @@ struct ReadAloudSelectionView: View {
 
             PageScrollView {
                 VStack(spacing: 16) {
-                    // Same header grammar as Warm-Ups, Drills, and Calm.
-                    Text("Read Aloud")
-                        .eyebrowStyle()
+                    // One line, not a banner card: the nav bar already names
+                    // the page, so the header says what the tool gets you and
+                    // gets out of the way. Copy comes from PracticeToolKind.
+                    Text(PracticeToolKind.readAloud.outcome)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-
-                    ToolPurposeBanner(tool: .readAloud)
 
                     // Difficulty filter
                     ScrollView(.horizontal, showsIndicators: false) {

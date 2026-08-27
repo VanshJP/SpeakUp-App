@@ -1,8 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// Bevel-style Today layout editor: toggle modules on/off, drag to reorder.
+/// Bevel-style Today layout editor: switch blocks on or off, drag to reorder.
 /// Session stays pinned — it is the action the home screen exists to start.
+///
+/// Built on `List` rather than the app's usual card stack because reordering is
+/// the whole point of the screen: `.onMove` in a permanently-active edit mode
+/// gives real drag handles, which is what the old up/down chevron pair was
+/// imitating with three controls per row.
 struct TodayHomeCustomizeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -19,61 +24,57 @@ struct TodayHomeCustomizeView: View {
         ZStack {
             AppBackground(style: .subtle)
 
-            PageScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Show, hide, and reorder the blocks on Today. Today's session stays on — it is how you start a take.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    GlassCard(padding: 0) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(visible.enumerated()), id: \.element.id) { index, module in
-                                moduleRow(module, index: index)
-                                if index < visible.count - 1 || !hiddenModules.isEmpty {
-                                    Divider().opacity(0.35)
-                                }
-                            }
-
-                            ForEach(Array(hiddenModules.enumerated()), id: \.element.id) { index, module in
-                                moduleRow(module, index: nil)
-                                if index < hiddenModules.count - 1 {
-                                    Divider().opacity(0.35)
-                                }
-                            }
-                        }
+            List {
+                Section {
+                    ForEach(visible) { module in
+                        moduleRow(module)
                     }
+                    .onMove(perform: move)
+                } header: {
+                    sectionHeader("On Today", hint: visible.count > 1 ? "Drag to reorder" : nil)
+                } footer: {
+                    footnote("Today's session can't be switched off — it is how you start a take.")
+                }
 
+                if !hiddenModules.isEmpty {
+                    Section {
+                        ForEach(hiddenModules) { module in
+                            moduleRow(module)
+                        }
+                    } header: {
+                        sectionHeader("Hidden", hint: nil)
+                    } footer: {
+                        footnote("Switch one back on and it returns to Today in its usual place.")
+                    }
+                }
+
+                Section {
                     Button {
                         Haptics.light()
-                        withAnimation(AppMotion.slide) {
-                            visible = TodayHomeModule.defaultVisible
-                        }
-                        guard let settings = userSettings.first else { return }
-                        settings.todayHomeLayoutRaw = []
-                        try? modelContext.save()
+                        resetToDefault()
                     } label: {
                         Text("Reset to default")
                             .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 4)
                     }
-                    .buttonStyle(GlassPressStyle())
-                    .background {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                            }
-                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(glassRowBackground)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 }
-                .padding()
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .scrollIndicators(.hidden)
+            // Always-on edit mode: the handles are the affordance, so hiding
+            // them behind an Edit button would just be the old problem again.
+            .environment(\.editMode, .constant(.active))
         }
         .navigationTitle("Customize Today")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if showsDoneButton {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -92,40 +93,48 @@ struct TodayHomeCustomizeView: View {
         }
     }
 
+    // MARK: - Rows
+
     private var hiddenModules: [TodayHomeModule] {
         TodayHomeModule.allCases.filter { !visible.contains($0) && !$0.isPinned }
     }
 
-    @ViewBuilder
-    private func moduleRow(_ module: TodayHomeModule, index: Int?) -> some View {
+    private func moduleRow(_ module: TodayHomeModule) -> some View {
         let isVisible = visible.contains(module)
 
-        HStack(spacing: 12) {
+        return HStack(spacing: 12) {
             Image(systemName: module.icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isVisible ? AppColors.primary : .secondary)
-                .frame(width: 28)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isVisible ? AppColors.primary : Color.secondary)
+                .frame(width: 32, height: 32)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill((isVisible ? AppColors.primary : Color.white).opacity(0.14))
+                }
 
-            VStack(alignment: .leading, spacing: 2) {
+            // The description is the point of this screen — you are choosing
+            // blocks by what they do, not by name — so it reads at caption on
+            // secondary and wraps instead of truncating.
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(module.title)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isVisible ? .primary : .secondary)
+                        .foregroundStyle(isVisible ? .white : .white.opacity(0.6))
+
                     if module.isPinned {
-                        Text("Required")
+                        Text("Always on")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.tertiary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background {
-                                Capsule().fill(AppColors.surfaceLift)
-                            }
+                            .background { Capsule().fill(AppColors.surfaceLift) }
                     }
                 }
+
                 Text(module.subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 0)
@@ -144,40 +153,56 @@ struct TodayHomeCustomizeView: View {
                 .labelsHidden()
                 .tint(AppColors.primary)
             }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .listRowBackground(glassRowBackground)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(module.title). \(module.subtitle)")
+    }
 
-            if let index, isVisible, !module.isPinned {
-                VStack(spacing: 2) {
-                    Button {
-                        Haptics.light()
-                        move(module, from: index, by: -1)
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.caption.weight(.bold))
-                            .frame(width: 28, height: 24)
-                    }
-                    .disabled(index == 0)
-                    .opacity(index == 0 ? 0.3 : 1)
+    // MARK: - Chrome
 
-                    Button {
-                        Haptics.light()
-                        move(module, from: index, by: 1)
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.bold))
-                            .frame(width: 28, height: 24)
-                    }
-                    .disabled(index >= visible.count - 1)
-                    .opacity(index >= visible.count - 1 ? 0.3 : 1)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Reorder \(module.title)")
+    private var glassRowBackground: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppColors.surfaceLift)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
+            }
+    }
+
+    private func sectionHeader(_ title: String, hint: String?) -> some View {
+        HStack {
+            Text(title)
+                .eyebrowStyle()
+            Spacer(minLength: 0)
+            if let hint {
+                Text(hint)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .opacity(isVisible ? 1 : 0.72)
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 6, trailing: 20))
     }
+
+    private func footnote(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .textCase(nil)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 4, trailing: 20))
+    }
+
+    // MARK: - Mutations
 
     private func setVisible(_ module: TodayHomeModule, _ on: Bool) {
         if on {
@@ -195,13 +220,21 @@ struct TodayHomeCustomizeView: View {
         }
     }
 
-    private func move(_ module: TodayHomeModule, from index: Int, by delta: Int) {
-        let destination = index + delta
-        guard visible.indices.contains(destination) else { return }
-        withAnimation(AppMotion.slide) {
-            visible.swapAt(index, destination)
-        }
+    private func move(from source: IndexSet, to destination: Int) {
+        visible.move(fromOffsets: source, toOffset: destination)
+        Haptics.light()
         persist()
+    }
+
+    private func resetToDefault() {
+        withAnimation(AppMotion.slide) {
+            visible = TodayHomeModule.defaultVisible
+        }
+        guard let settings = userSettings.first else { return }
+        // Empty raw is the "never customized" marker TodayHomeLayout resolves
+        // back to the factory default, so reset clears rather than rewrites.
+        settings.todayHomeLayoutRaw = []
+        try? modelContext.save()
     }
 
     private func persist() {

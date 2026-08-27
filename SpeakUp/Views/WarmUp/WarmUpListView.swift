@@ -35,15 +35,14 @@ struct WarmUpListView: View {
 
             PageScrollView {
                 VStack(spacing: 16) {
-                    // Page identity: the eyebrow names the family, the
-                    // banner carries outcome + best-for from PracticeToolKind
-                    // so Today, Library, and this sheet tell one story.
-                    // Same header grammar as Drills, Read Aloud, and Calm.
-                    Text("Get Ready")
-                        .eyebrowStyle()
+                    // One line, not a banner card: the nav bar already names
+                    // the page, so the header says what the tool gets you and
+                    // gets out of the way. Copy comes from PracticeToolKind.
+                    Text(PracticeToolKind.warmUp.outcome)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-
-                    ToolPurposeBanner(tool: .warmUp)
 
                     if let story = sourceStory {
                         sourceStoryBanner(story)

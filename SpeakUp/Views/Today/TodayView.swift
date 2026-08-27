@@ -458,22 +458,14 @@ struct TodayView: View {
 
     // MARK: - Prep Tools
 
-    /// Outcome-labelled tiles plus an optional coach recommendation. Four
-    /// tools that start prep now — Read-Aloud lives in Library Tools.
+    /// Four doors, icon and name only. The tiles used to carry a two-line
+    /// outcome apiece, which turned a 2x2 grid into a wall of small grey text;
+    /// the one tool worth explaining is explained by the banner above it, and
+    /// the rest introduce themselves on arrival. No inline Edit control here —
+    /// this section is not what it edits, and Today's toolbar already owns it.
     private var prepToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Prep tools", icon: "wrench.and.screwdriver.fill") {
-                Button {
-                    Haptics.light()
-                    showingHomeCustomize = true
-                } label: {
-                    Text("Edit")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Customize Today layout")
-            }
+            GlassSectionHeader("Prep tools", icon: "wrench.and.screwdriver.fill")
 
             if let recommended = recommendedPrepTool {
                 recommendedToolBanner(recommended)
@@ -491,9 +483,9 @@ struct TodayView: View {
                         Haptics.light()
                         openPrepTool(tool)
                     } label: {
-                        PrepToolTile(tool: tool, isHighlighted: recommendedPrepTool == tool)
+                        ToolTileLabel(icon: tool.icon, title: tool.shortTitle, tint: tool.color)
                     }
-                    .buttonStyle(QuickActionTileStyle())
+                    .buttonStyle(GlassPressStyle())
                 }
             }
         }
@@ -526,18 +518,14 @@ struct TodayView: View {
                     }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Suggested before you start")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
-                    Text(tool.shortTitle)
+                    Text("Start with \(tool.shortTitle)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                     Text(tool.outcome)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)
@@ -561,6 +549,7 @@ struct TodayView: View {
             }
         }
         .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("Start with \(tool.title). \(tool.outcome)")
     }
 
     private func openPrepTool(_ tool: PracticeToolKind) {
@@ -612,75 +601,6 @@ struct TodayView: View {
         .accessibilityLabel("\(PracticeToolKind.learn.title). \(PracticeToolKind.learn.outcome)")
     }
 
-    private struct QuickActionTileStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label
-                .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-                .brightness(configuration.isPressed ? 0.08 : 0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
-        }
-    }
-
-}
-
-// MARK: - Prep Tool Tile
-
-/// Dense Today tile: icon, short title, one-line outcome. Replaces the old
-/// one-word labels that did not say what each tool was for.
-private struct PrepToolTile: View {
-    let tool: PracticeToolKind
-    var isHighlighted: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: tool.icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(tool.color)
-                Spacer(minLength: 0)
-                if isHighlighted {
-                    Circle()
-                        .fill(tool.color)
-                        .frame(width: 6, height: 6)
-                        .accessibilityHidden(true)
-                }
-            }
-
-            Text(tool.shortTitle)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-
-            Text(tool.outcome)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(minHeight: 28, alignment: .topLeading)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(AppColors.surfaceLift)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            isHighlighted ? tool.color.opacity(0.45) : AppColors.cardStroke,
-                            lineWidth: isHighlighted ? 1 : 0.5
-                        )
-                }
-                .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(tool.shortTitle). \(tool.outcome)")
-        .accessibilityAddTraits(.isButton)
-    }
 }
 
 // MARK: - Interactive Prompt Card
