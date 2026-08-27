@@ -28,7 +28,6 @@ struct TodayView: View {
     var onShowDrills: () -> Void
     var onShowConfidence: () -> Void
     var onShowCurriculum: () -> Void
-    var onShowAchievements: () -> Void = {}
     var onStartStoryPractice: ((Story) -> Void)?
 
     /// Ordered visible modules from Settings. Empty storage → factory default.
@@ -862,47 +861,6 @@ struct DurationPill: View {
     }
 }
 
-// MARK: - Practice Tool Card
-
-struct PracticeToolCard: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let color: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            GlassCard(tint: color.opacity(0.08), padding: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(color.opacity(0.15))
-                            .frame(width: 30, height: 30)
-                        Image(systemName: icon)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(color)
-                    }
-
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: 92)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 #Preview {
     NavigationStack {
         TodayView(
@@ -912,7 +870,6 @@ struct PracticeToolCard: View {
             onShowDrills: {},
             onShowConfidence: {},
             onShowCurriculum: {},
-            onShowAchievements: {},
             onStartStoryPractice: { _ in }
         )
     }

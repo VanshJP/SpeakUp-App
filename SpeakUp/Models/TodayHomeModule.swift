@@ -83,14 +83,6 @@ nonisolated enum TodayHomeLayout {
         return ordered
     }
 
-    /// Full catalog for the customize editor: visible modules first (in order),
-    /// then every hidden module in CaseIterable order.
-    static func editorRows(visibleRaw: [String]) -> [TodayHomeModule] {
-        let visible = resolve(visibleRaw)
-        let hidden = TodayHomeModule.allCases.filter { !visible.contains($0) }
-        return visible + hidden
-    }
-
     static func encode(_ modules: [TodayHomeModule]) -> [String] {
         modules.map(\.rawValue)
     }

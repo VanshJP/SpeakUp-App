@@ -26,7 +26,6 @@ struct ContentView: View {
     @State private var showingConfidenceTools = false
     @State private var showingBeforeAfter = false
     @State private var showingJournalExport = false
-    @State private var showingAchievements = false
     @State private var showingStoryEditor = false
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
@@ -90,9 +89,6 @@ struct ContentView: View {
                     },
                     onShowCurriculum: {
                         selectedTab = .learn
-                    },
-                    onShowAchievements: {
-                        showingAchievements = true
                     },
                     onStartStoryPractice: { story in
                         recordingPrompt = nil
@@ -302,13 +298,6 @@ struct ContentView: View {
             ConfidenceToolsView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingAchievements) {
-            NavigationStack {
-                AchievementGalleryView()
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingBeforeAfter) {
             BeforeAfterReplayView()
