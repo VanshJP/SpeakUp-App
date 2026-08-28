@@ -46,11 +46,6 @@ struct WordWorkoutSettingsView: View {
                         }
                     }
                     .buttonStyle(.plain)
-
-                    Text("Spotlight words appear above the start button on Today and again while you record. Speaking one is its review, there is no quiz.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
                 }
                 .padding()
             }

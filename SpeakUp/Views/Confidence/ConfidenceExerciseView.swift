@@ -20,6 +20,7 @@ struct ConfidenceExerciseView: View {
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(.ultraThinMaterial))
                     }
+                    .accessibilityLabel("Close exercise")
                     Spacer()
                 }
                 .padding(.top, 8)
@@ -53,28 +54,31 @@ struct ConfidenceExerciseView: View {
             Spacer()
 
             // Step card
-            VStack(spacing: 16) {
-                Image(systemName: exercise.category.icon)
-                    .font(.system(size: 36))
-                    .foregroundStyle(exercise.category.color)
+            GlassCard(cornerRadius: 20, tint: exercise.category.color) {
+                VStack(spacing: 16) {
+                    Image(systemName: exercise.category.icon)
+                        .font(.system(size: 36))
+                        .foregroundStyle(exercise.category.color)
+                        .accessibilityHidden(true)
 
-                Text(exercise.steps[currentStepIndex])
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .padding(.horizontal)
+                    Text(exercise.step(safelyAt: currentStepIndex))
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+                // Re-identifying on the step index is what makes the swap
+                // animate — a bare Text replacement snaps.
+                .id(currentStepIndex)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
-            .padding(.vertical, 28)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(exercise.category.color.opacity(0.08))
-                    }
-            }
+            // One element: "Step 2 of 6" then the text, instead of a symbol
+            // name announcement followed by an orphaned counter.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
+            .accessibilityValue(exercise.step(safelyAt: currentStepIndex))
 
             Spacer()
 
@@ -93,6 +97,7 @@ struct ConfidenceExerciseView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72))
                 .foregroundStyle(AppColors.success)
+                .accessibilityHidden(true)
 
             Text("Well done!")
                 .font(.title2.weight(.bold))
@@ -112,58 +117,38 @@ struct ConfidenceExerciseView: View {
     private var navigationControls: some View {
         VStack(spacing: 12) {
             if isComplete {
-                Button {
+                GlassButton(title: "Done", style: .primary, size: .large, fullWidth: true) {
                     dismiss()
-                } label: {
-                    Text("Done")
-                        .font(.headline)
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Capsule().fill(Color.white.opacity(0.94)))
-                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                 }
-                .buttonStyle(GlassPressStyle())
             } else {
                 HStack(spacing: 12) {
                     if currentStepIndex > 0 {
-                        Button {
+                        GlassButton(title: "Back", style: .secondary, size: .large, fullWidth: true) {
                             ChirpPlayer.shared.play(.tick)
-                            withAnimation { currentStepIndex -= 1 }
-                        } label: {
-                            Text("Back")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background {
-                                    Capsule()
-                                        .fill(.ultraThinMaterial)
-                                        .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
-                                }
+                            withAnimation(AppMotion.slide) { currentStepIndex -= 1 }
                         }
-                        .buttonStyle(GlassPressStyle())
                     }
 
-                    Button {
-                        ChirpPlayer.shared.play(.tick)
-                        withAnimation {
+                    GlassButton(
+                        title: currentStepIndex < exercise.steps.count - 1 ? "Next" : "Complete",
+                        style: .primary,
+                        size: .large,
+                        fullWidth: true
+                    ) {
+                        withAnimation(AppMotion.slide) {
                             if currentStepIndex < exercise.steps.count - 1 {
                                 currentStepIndex += 1
+                                ChirpPlayer.shared.play(.tick)
                             } else {
                                 isComplete = true
+                                // Finishing used to sound identical to every
+                                // step press — the "you did it" moment gets
+                                // its own release breath and success haptic.
+                                ChirpPlayer.shared.play(.exhale)
+                                Haptics.success()
                             }
                         }
-                    } label: {
-                        Text(currentStepIndex < exercise.steps.count - 1 ? "Next" : "Complete")
-                            .font(.headline)
-                            .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Capsule().fill(Color.white.opacity(0.94)))
-                            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                     }
-                    .buttonStyle(GlassPressStyle())
                 }
             }
         }

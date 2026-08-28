@@ -3,7 +3,9 @@ import SwiftUI
 
 @Observable
 class WarmUpViewModel {
-    var selectedCategory: WarmUpCategory = .breathing
+    /// nil = all categories. The page opens unfiltered so the whole map of
+    /// warm-ups is visible; a category pill narrows from there.
+    var selectedCategory: WarmUpCategory?
     var currentExercise: WarmUpExercise?
     var currentStepIndex = 0
     var isRunning = false
@@ -15,7 +17,8 @@ class WarmUpViewModel {
     private var timer: Timer?
 
     var exercises: [WarmUpExercise] {
-        DefaultWarmUps.all.filter { $0.category == selectedCategory }
+        guard let selectedCategory else { return DefaultWarmUps.all }
+        return DefaultWarmUps.all.filter { $0.category == selectedCategory }
     }
 
     var currentStep: ExerciseStep? {
@@ -66,7 +69,15 @@ class WarmUpViewModel {
         )
         currentStepIndex = 0
         isComplete = false
+        // A runner left running by a mid-exercise ✕ must not present the next
+        // one pre-paused — the play button would need two taps to start.
+        isRunning = false
         timeRemaining = steps.first?.durationSeconds ?? 0
+    }
+
+    /// Prepares the same exercise for another run without leaving the runner.
+    func goAgain() {
+        reset()
     }
 
     func start() {
@@ -103,9 +114,13 @@ class WarmUpViewModel {
     private func tick() {
         guard isRunning else { return }
 
-        if timeRemaining > 0 {
+        if timeRemaining > 1 {
             timeRemaining -= 1
         } else {
+            // Finish inside this tick. Waiting for a later tick displayed 0
+            // for a full second and stretched every labeled duration —
+            // 4-7-8 breathing actually ran 5-8-9.
+            timeRemaining = 0
             advanceStep()
         }
     }
@@ -146,5 +161,6 @@ class WarmUpViewModel {
     func cleanup() {
         timer?.invalidate()
         timer = nil
+        isRunning = false
     }
 }

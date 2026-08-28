@@ -92,19 +92,24 @@ nonisolated enum WordSafety {
 
     /// Lowercased whole tokens. Do not substring-match this set.
     private static let blocked: Set<String> = [
-        "anal", "anus", "arsehole", "asshole", "ballsack", "bastard", "bitch",
-        "blowjob", "bollocks", "boner", "boob", "boobs", "bugger", "clit",
-        "clitoris", "cock", "cocks", "coon", "cum", "cunt", "dick",
-        "dildo", "dyke", "ejaculate", "fag", "faggot", "fags", "felch",
+        "anal", "anus", "arse", "arsehole", "asses", "asshole", "ballsack",
+        "bastard", "bastards", "bitch", "bitches", "blowjob", "bollocks",
+        "boner", "boob", "boobs", "bugger", "clit", "clitoris", "cock",
+        "cocks", "coon", "coons", "crap", "crapped", "crappy", "cum", "cunt",
+        "cunts", "damn", "dammit", "damned", "dick", "dildo", "dyke",
+        "dykes", "ejaculate", "fag", "faggot", "faggots", "fags", "felch",
         "fellate", "fellatio", "felching", "fuck", "fucked", "fucker",
-        "fucking", "fucks", "fudgepacker", "goddamn", "homo", "handjob",
-        "jizz", "kike", "labia", "muff", "nigga", "nigger", "nutsack",
-        "orgasm", "penis", "piss", "pissed", "porn", "porno", "pube", "pubes",
+        "fuckers", "fucking", "fucks", "fudgepacker", "goddamn", "goddammit",
+        "homo", "homos", "horny", "handjob", "hell", "hooker", "hump",
+        "jizz", "kike", "kikes", "labia", "muff", "negro", "nigga",
+        "niggas", "nigger", "niggers", "nutsack", "orgasm", "penis", "pimp",
+        "piss", "pissed", "porn", "porno", "prick", "pube", "pubes",
         "pussy", "queef", "rape", "rapist", "rectum", "retard", "retarded",
-        "rimjob", "semen", "shit", "shite", "shits", "shitty",
+        "rimjob", "scrotum", "semen", "shit", "shite", "shits", "shitty",
         "slut", "sluts", "smegma", "spunk", "tit", "tits", "titties",
-        "twat", "vagina", "wank", "wanker", "whore", "whores",
-        "chink", "gook", "spic", "spick", "tranny", "wetback",
+        "twat", "twats", "vagina", "wank", "wanker", "wankers", "whore",
+        "whores", "chink", "chinks", "gook", "gooks", "spic", "spics",
+        "spick", "trannie", "trannies", "tranny", "wetback", "wetbacks",
         "motherfucker", "motherfuckers", "cocksucker", "cocksuckers"
     ]
 }

@@ -13,6 +13,7 @@ struct SettingsView: View {
             PageScrollView {
                 VStack(spacing: 16) {
                     settingsMenuCard
+                    aboutFooter
                 }
                 .padding()
             }
@@ -41,20 +42,10 @@ struct SettingsView: View {
             }
 
             settingsLink(
-                icon: "slider.horizontal.3",
-                iconColor: AppColors.primary,
-                title: "Session Defaults",
-                subtitle: viewModel.defaultDuration.displayName + ", " + viewModel.countdownDuration.displayName + " countdown"
-            ) {
-                SessionDefaultsView(viewModel: viewModel)
-            }
-            .tourAnchor(.settingsPresets)
-
-            settingsLink(
                 icon: "bell.fill",
                 iconColor: AppColors.categoryAmber,
                 title: "Reminders",
-                subtitle: viewModel.dailyReminderEnabled ? reminderTimeString : "Off"
+                subtitle: viewModel.dailyReminderEnabled ? "Change your reminder time" : "Turn on a daily practice reminder"
             ) {
                 ReminderSettingsView(viewModel: viewModel)
             }
@@ -62,11 +53,23 @@ struct SettingsView: View {
             GlassSectionHeader("Practice & Scoring", icon: "waveform")
                 .padding(.top, 8)
 
+            // Session Defaults opens the group: everything here shapes a take,
+            // and the defaults are the first knob a new speaker needs.
+            settingsLink(
+                icon: "slider.horizontal.3",
+                iconColor: AppColors.primary,
+                title: "Session Defaults",
+                subtitle: "Choose take length, countdown, and goal"
+            ) {
+                SessionDefaultsView(viewModel: viewModel)
+            }
+            .tourAnchor(.settingsPresets)
+
             settingsLink(
                 icon: "waveform.badge.magnifyingglass",
                 iconColor: AppColors.categoryNeutralCool,
                 title: "Analysis",
-                subtitle: "Target: \(viewModel.displayTargetWPM) WPM"
+                subtitle: "Tune pace, fillers, and score weights"
             ) {
                 AnalysisSettingsView(viewModel: viewModel)
             }
@@ -75,10 +78,7 @@ struct SettingsView: View {
                 icon: "waveform.circle",
                 iconColor: AppColors.categoryBrandBright,
                 title: "Recording Look",
-                // Two of the four, because the row is `.lineLimit(1)` and four
-                // names truncate at default type on a small phone. These are
-                // the two you see the whole session.
-                subtitle: "\(viewModel.recordingBackdrop.displayName) · \(viewModel.waveformStyle.displayName)"
+                subtitle: "Pick your backdrop, waveform, and timer"
             ) {
                 RecordingLookView(viewModel: viewModel)
             }
@@ -87,7 +87,7 @@ struct SettingsView: View {
                 icon: "character.book.closed",
                 iconColor: AppColors.categorySage,
                 title: "Word Workout",
-                subtitle: workoutSubtitle
+                subtitle: viewModel.vocabChallengeEnabled ? "Adjust words per day and level" : "Turn on the daily word workout"
             ) {
                 WordWorkoutSettingsView(viewModel: viewModel)
             }
@@ -96,7 +96,7 @@ struct SettingsView: View {
                 icon: "list.bullet.rectangle",
                 iconColor: AppColors.categorySage,
                 title: "Word Lists",
-                subtitle: wordsSubtitle
+                subtitle: "Add vocab, dictation, and filler words"
             ) {
                 WordBankView(viewModel: viewModel, showDismissButton: false)
             }
@@ -105,7 +105,7 @@ struct SettingsView: View {
                 icon: "text.quote",
                 iconColor: AppColors.categoryCopper,
                 title: "Prompts",
-                subtitle: "\(viewModel.enabledPromptCategories.count) categories"
+                subtitle: "Choose which prompt categories appear"
             ) {
                 PromptSettingsView(viewModel: viewModel)
             }
@@ -114,7 +114,7 @@ struct SettingsView: View {
                 icon: "bubble.left.and.text.bubble.right",
                 iconColor: AppColors.categoryPlum,
                 title: "Session Feedback",
-                subtitle: "\(viewModel.activeFeedbackQuestions.count) questions"
+                subtitle: "Choose your post-session questions"
             ) {
                 FeedbackSettingsView(viewModel: viewModel)
             }
@@ -141,16 +141,39 @@ struct SettingsView: View {
             ) {
                 DataManagementView(viewModel: viewModel)
             }
-
-            settingsLink(
-                icon: "info.circle",
-                iconColor: AppColors.accent,
-                title: "About",
-                subtitle: "v\(viewModel.appVersion) (\(viewModel.buildNumber))"
-            ) {
-                AboutSettingsView()
-            }
         }
+    }
+
+    /// Demoted to a quiet footer row: version and legal links are read once,
+    /// not configured, so About no longer earns a card inside a section.
+    private var aboutFooter: some View {
+        NavigationLink {
+            AboutSettingsView()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "info.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text("About Big Talk")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("v\(viewModel.appVersion) (\(viewModel.buildNumber))")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.top, 2)
     }
 
     // MARK: - iCloud Sync
@@ -229,57 +252,29 @@ struct SettingsView: View {
         if !ICloudStorageService.shared.isICloudReachable {
             return "Sign in to iCloud in Settings to enable"
         }
-        if iCloudSyncEnabled {
-            return "Syncing across your devices"
-        }
-        return "Disabled, recordings stay on this device"
+        return "Sync recordings across your devices"
     }
 
     // MARK: - Helpers
 
+    /// Hub subtitles name the action the page performs, never the current
+    /// value — every row reads as something you can do.
     private var profileSubtitle: String {
         let name = viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Set your name" : name
-    }
-
-    /// Two counts and nothing else. The old version tried to name four things
-    /// at once and every one of them truncated — the row is `.lineLimit(1)`.
-    private var wordsSubtitle: String {
-        var parts: [String] = ["\(viewModel.vocabWords.count) vocab"]
-        if viewModel.dictationBiasWords.count > 0 {
-            parts.append("\(viewModel.dictationBiasWords.count) dictation")
-        }
-        if viewModel.hasFillerCustomizations {
-            parts.append("custom fillers")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private var workoutSubtitle: String {
-        guard viewModel.vocabChallengeEnabled else { return "Off" }
-        let count = viewModel.vocabChallengeWordCount
-        return "\(count) word\(count == 1 ? "" : "s") a day"
+        return name.isEmpty ? "Set your name" : "Edit your name"
     }
 
     private var aiModelSubtitle: String {
         switch llmService.activeBackend {
         case .appleIntelligence:
-            return "Apple Intelligence"
+            return "Manage Apple Intelligence"
         case .localLLM:
-            return llmService.localLLM.modelDisplayName
+            return "Manage \(llmService.localLLM.modelDisplayName)"
         case .none:
-            return "Not available"
+            // Nothing is active yet, but the local model is always
+            // downloadable — the row should name the action, not a dead end.
+            return "Set up on-device AI"
         }
-    }
-
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.timeStyle = .short
-        return f
-    }()
-
-    private var reminderTimeString: String {
-        "Daily at " + Self.timeFormatter.string(from: viewModel.reminderTime)
     }
 
     private func settingsLink<Destination: View>(

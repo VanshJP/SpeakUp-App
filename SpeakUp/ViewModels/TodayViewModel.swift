@@ -566,6 +566,15 @@ class TodayViewModel {
         )
         vocabChallenge = VocabChallengeService.applying(evaluation, to: built)
     }
+
+    /// Asks the on-device model to top up the fresh-word pool when it is
+    /// running low. Detached from the UI: no state change, no error surface,
+    /// and the curated lexicon covers every failure.
+    @MainActor
+    func warmVocabFreshWords(llmService: LLMService) {
+        let preferences = vocabChallengePreferences
+        Task { await VocabFreshWordGenerator.refillIfNeeded(preferences: preferences, llmService: llmService) }
+    }
 }
 
 // MARK: - Sendable result types

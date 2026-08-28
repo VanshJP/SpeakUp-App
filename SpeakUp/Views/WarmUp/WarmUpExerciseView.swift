@@ -1,8 +1,14 @@
 import SwiftUI
+import UIKit
 
 struct WarmUpExerciseView: View {
     var viewModel: WarmUpViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingExitConfirm = false
+
+    /// Announces each step change to VoiceOver — the countdown numeral and
+    /// the chirps are otherwise silent context for a non-visual reader.
+    @State private var announcedStepIndex = -1
 
     var body: some View {
         ZStack {
@@ -12,8 +18,15 @@ struct WarmUpExerciseView: View {
                 // Close button
                 HStack {
                     Button {
-                        viewModel.cleanup()
-                        dismiss()
+                        // Parity with the drill runner: an active session asks
+                        // before it discards your progress.
+                        if viewModel.isRunning {
+                            Haptics.warning()
+                            showingExitConfirm = true
+                        } else {
+                            viewModel.cleanup()
+                            dismiss()
+                        }
                     } label: {
                         Image(systemName: "xmark")
                             .font(.title2.weight(.semibold))
@@ -25,6 +38,19 @@ struct WarmUpExerciseView: View {
                     Spacer()
                 }
                 .padding(.top, 8)
+                .confirmationDialog(
+                    "End this warm-up?",
+                    isPresented: $showingExitConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("End Warm-Up", role: .destructive) {
+                        viewModel.cleanup()
+                        dismiss()
+                    }
+                    Button("Keep Going", role: .cancel) {}
+                } message: {
+                    Text("Progress in this warm-up won't be saved.")
+                }
 
                 if viewModel.isComplete {
                     completeView
@@ -40,6 +66,15 @@ struct WarmUpExerciseView: View {
             }
             .padding()
         }
+        .onChange(of: viewModel.currentStepIndex) { _, newIndex in
+            guard !viewModel.isComplete, newIndex != announcedStepIndex,
+                  let step = viewModel.currentStep else { return }
+            announcedStepIndex = newIndex
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "\(step.label), \(viewModel.timeRemaining) seconds"
+            )
+        }
     }
 
     // MARK: - Exercise Content
@@ -50,6 +85,24 @@ struct WarmUpExerciseView: View {
                 .font(.headline)
                 .foregroundStyle(.white.opacity(0.6))
 
+            // Where you are in the exercise — the breathing circle carries
+            // this visually, but a 12-step articulation drill had no position
+            // affordance at all until this counter existed.
+            VStack(spacing: 6) {
+                Text("Step \(viewModel.currentStepIndex + 1) of \(viewModel.currentExercise?.steps.count ?? 0)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.4))
+
+                ProgressView(
+                    value: Double(viewModel.currentStepIndex + 1),
+                    total: Double(max(1, viewModel.currentExercise?.steps.count ?? 1))
+                )
+                .tint(viewModel.currentExercise?.category.color)
+                .padding(.horizontal, 40)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(viewModel.currentStepIndex + 1) of \(viewModel.currentExercise?.steps.count ?? 0)")
+
             if let step = viewModel.currentStep {
                 if viewModel.currentExercise?.category == .breathing {
                     BreathingAnimationView(
@@ -57,6 +110,7 @@ struct WarmUpExerciseView: View {
                         isRunning: viewModel.isRunning,
                         duration: TimeInterval(step.durationSeconds)
                     )
+                    .accessibilityHidden(true)
                 }
 
                 Text(step.label)
@@ -65,10 +119,12 @@ struct WarmUpExerciseView: View {
                     .multilineTextAlignment(.center)
 
                 Text("\(viewModel.timeRemaining)")
-                    .font(.system(size: 64, weight: .bold, design: .rounded))
+                    .font(.displayNumeral)
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())
                     .animation(.default, value: viewModel.timeRemaining)
+                    .accessibilityLabel("\(viewModel.timeRemaining) seconds remaining")
+                    .accessibilityAddTraits(.updatesFrequently)
             }
         }
     }
@@ -168,6 +224,20 @@ struct WarmUpExerciseView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+        // One swipe adjusts; no need to hunt for the tiny −/+ buttons.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Rounds")
+        .accessibilityValue("\(viewModel.selectedRounds)")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                viewModel.rebuildWithRounds(min(viewModel.selectedRounds + 1, 10))
+            case .decrement:
+                viewModel.rebuildWithRounds(max(viewModel.selectedRounds - 1, 1))
+            @unknown default:
+                break
+            }
+        }
     }
 
     // MARK: - Complete
@@ -179,6 +249,7 @@ struct WarmUpExerciseView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72))
                 .foregroundStyle(AppColors.success)
+                .accessibilityHidden(true)
 
             Text("Exercise Complete!")
                 .font(.title2.weight(.bold))
@@ -190,19 +261,16 @@ struct WarmUpExerciseView: View {
 
             Spacer()
 
-            Button {
-                viewModel.cleanup()
-                dismiss()
-            } label: {
-                Text("Done")
-                    .font(.headline)
-                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Capsule().fill(Color.white.opacity(0.94)))
-                    .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+            VStack(spacing: 12) {
+                GlassButton(title: "Done", style: .primary, size: .large, fullWidth: true) {
+                    viewModel.cleanup()
+                    dismiss()
+                }
+
+                GlassButton(title: "Go Again", icon: "arrow.clockwise", style: .secondary, fullWidth: true) {
+                    viewModel.goAgain()
+                }
             }
-            .buttonStyle(GlassPressStyle())
         }
     }
 }

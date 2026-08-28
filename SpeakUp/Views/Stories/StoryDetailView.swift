@@ -191,8 +191,7 @@ struct StoryDetailView: View {
     // MARK: - Primary Actions grid
 
     /// One light pill for the action you came here to take, two secondary
-    /// pills for the side doors. `PracticeToolCard` is not used here: it is a
-    /// fixed-height grid tile, and at this width it left half of itself empty.
+    /// pills for the side doors.
     ///
     /// There is deliberately no score tile — the metrics row directly beneath
     /// already reports best and average, and a fourth tile that only displayed

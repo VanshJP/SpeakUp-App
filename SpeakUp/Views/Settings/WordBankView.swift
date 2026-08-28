@@ -706,12 +706,32 @@ struct WordBankView: View {
 
 // MARK: - Daily word workout
 
+/// The word-level knob. Raw value 0 follows the speaker level; 1–3 pin a
+/// lexicon tier, matching `VocabChallengePreferences.levelOverrideRaw`.
+private enum VocabLevelChoice: Int {
+    case automatic = 0
+    case easy = 1
+    case medium = 2
+    case hard = 3
+
+    var label: String {
+        switch self {
+        case .automatic: return "Auto"
+        case .easy: return "Easy"
+        case .medium: return "Medium"
+        case .hard: return "Hard"
+        }
+    }
+}
+
+private let vocabLevelChoices: [VocabLevelChoice] = [.automatic, .easy, .medium, .hard]
+
 struct VocabChallengeSettingsCard: View {
     @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         GlassCard {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 Toggle(isOn: $viewModel.vocabChallengeEnabled) {
                     HStack(spacing: 10) {
                         Image(systemName: "character.book.closed")
@@ -768,6 +788,30 @@ struct VocabChallengeSettingsCard: View {
                     .tint(AppColors.primary)
                     .onChange(of: viewModel.vocabChallengeIntroduceNew) { _, _ in
                         viewModel.saveVocabChallengeSettings()
+                    }
+
+                    // Only meaningful while fresh words exist: the tier shapes
+                    // what gets taught, so it hides when teaching is off — below
+                    // the toggle, so flipping it never moves rows under the finger.
+                    if viewModel.vocabChallengeIntroduceNew {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Word level")
+                                .font(.subheadline)
+                            // Four labels will not fit beside a title, so unlike
+                            // "Words per day" the pills get their own row.
+                            HStack(spacing: 6) {
+                                ForEach(vocabLevelChoices, id: \.rawValue) { choice in
+                                    CardPill(
+                                        label: choice.label,
+                                        isSelected: viewModel.vocabChallengeLevelOverride == choice.rawValue
+                                    ) {
+                                        viewModel.vocabChallengeLevelOverride = choice.rawValue
+                                        viewModel.saveVocabChallengeSettings()
+                                    }
+                                    .accessibilityLabel("Word level \(choice.label)")
+                                }
+                            }
+                        }
                     }
                 }
             }

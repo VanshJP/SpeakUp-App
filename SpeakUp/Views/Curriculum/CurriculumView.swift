@@ -16,6 +16,8 @@ struct CurriculumView: View {
                 // to do next, then the browsable list. Previously two gradient
                 // hero cards stacked here and competed for the same attention.
                 LazyVStack(spacing: 20) {
+                    learnIntro
+
                     progressHeader
 
                     if let currentLesson = viewModel.currentLesson,
@@ -40,8 +42,11 @@ struct CurriculumView: View {
                     Haptics.light()
                     showingAwards = true
                 } label: {
-                    Image(systemName: "trophy")
+                    // Gold and filled: awards are the one celebratory affordance
+                    // in the chrome, so it reads as a prize rather than a setting.
+                    Image(systemName: "trophy.fill")
                         .font(.body.weight(.semibold))
+                        .foregroundStyle(AppColors.scoreGood)
                 }
                 .accessibilityLabel("Achievements")
             }
@@ -60,6 +65,37 @@ struct CurriculumView: View {
         } message: {
             Text("Finish the earlier lessons first, each one builds on the last.")
         }
+    }
+
+    // MARK: - Intro
+
+    /// Separates Learn from Library Tools: this tab is a curriculum path, not
+    /// a menu of warm-ups and drills.
+    private var learnIntro: some View {
+        GlassCard(tint: AppColors.primary.opacity(0.06), padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: PracticeToolKind.learn.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                    Text(PracticeToolKind.learn.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+
+                Text(PracticeToolKind.learn.outcome)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Lessons unlock in order. Warm-ups, drills, and calm live under Library → Tools when you need a quick rep instead of a full lesson.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Progress Header

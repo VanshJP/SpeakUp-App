@@ -94,6 +94,10 @@ final class UserSettings {
     var vocabChallengeUseDictionary: Bool = true
     var vocabChallengeIntroduceNew: Bool = true
     var vocabChallengeSpacedReview: Bool = true
+    // Word-level control for fresh picks: 0 follows `speakerLevel`, 1–3 pin
+    // beginner / intermediate / advanced. Raw Int like every enum-backed knob
+    // so lightweight migration stays automatic.
+    var vocabChallengeLevelOverride: Int = 0
 
     // Dictation
     var autoFormatDictation: Bool = true
@@ -103,6 +107,11 @@ final class UserSettings {
 
     // Guided layout walkthrough, shown once after the first score lands.
     var hasSeenAppTour: Bool = false
+
+    // Today home layout — ordered raw values of visible `TodayHomeModule`s.
+    // Empty means factory default (never customized). Session is always forced
+    // visible by `TodayHomeLayout.resolve`. Additive; see today-library.md.
+    var todayHomeLayoutRaw: [String] = []
 
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
@@ -215,6 +224,11 @@ final class UserSettings {
         enabledPromptCategories.compactMap { PromptCategory(rawValue: $0) }
     }
 
+    /// Resolved Today modules in display order. Empty storage → factory default.
+    var todayHomeModules: [TodayHomeModule] {
+        TodayHomeLayout.resolve(todayHomeLayoutRaw)
+    }
+
     // MARK: - Pace Target Resolution
 
     /// The effective pace target for scoring AND charts — the single source of
@@ -255,7 +269,8 @@ final class UserSettings {
             dictionaryWords: dictationBiasWords,
             extraBanned: customFillerWords + customContextFillerWords,
             userName: userName,
-            speakerLevelRaw: speakerLevel
+            speakerLevelRaw: speakerLevel,
+            levelOverrideRaw: vocabChallengeLevelOverride
         )
     }
 

@@ -29,10 +29,21 @@ enum ConfidenceCategory: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .calming: return .green
-        case .visualization: return .blue
-        case .progressive: return .orange
-        case .affirmation: return .pink
+        case .calming: return AppColors.categorySage
+        case .visualization: return AppColors.categoryIndigo
+        case .progressive: return AppColors.categoryCopper
+        case .affirmation: return AppColors.categoryAmber
+        }
+    }
+
+    /// What this category is *for* — the one line a section header shows so
+    /// someone browsing understands why the grouping exists.
+    var purpose: String {
+        switch self {
+        case .calming: return "Settle nerves in the moment."
+        case .visualization: return "Rehearse success before it's real."
+        case .progressive: return "Small steps past the fear."
+        case .affirmation: return "Reset the inner monologue."
         }
     }
 }
@@ -44,4 +55,11 @@ struct ConfidenceExercise: Identifiable {
     let description: String
     let steps: [String]
     let durationMinutes: Int
+
+    /// Bounds-checked step access. Every seed ships steps, but an empty or
+    /// shorter list must degrade to a placeholder instead of trapping.
+    func step(safelyAt index: Int) -> String {
+        guard steps.indices.contains(index) else { return "" }
+        return steps[index]
+    }
 }

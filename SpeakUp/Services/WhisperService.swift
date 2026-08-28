@@ -264,8 +264,14 @@ class WhisperService {
 
             transcriptionProgress = 1.0
 
-            // Process the WhisperKit result into our format
-            return processWhisperResult(result)
+            // Process the WhisperKit result into our format. Detached because
+            // the word-timing walk over a long transcript is pure CPU that has
+            // no business on the main actor — this used to run inline and
+            // stalled any sheet presentation racing it (e.g. tapping Calm
+            // right after a take finishes).
+            return await Task.detached(priority: .userInitiated) {
+                Self.processWhisperResult(result)
+            }.value
 
         } catch is CancellationError {
             // External cancellation (job cancelled, app backgrounding): same
@@ -289,8 +295,10 @@ class WhisperService {
         return "\(fillerPrompt) \(dictionaryLine)"
     }
 
-    /// Process WhisperKit result into our SpeechTranscriptionResult format with filler detection
-    private func processWhisperResult(_ result: WhisperTranscriptionResult) -> SpeechTranscriptionResult {
+    /// Process WhisperKit result into our SpeechTranscriptionResult format with filler detection.
+    /// `nonisolated`: runs detached off the main actor, so it can touch no
+    /// actor-isolated state — pure value math over POD timings.
+    nonisolated private static func processWhisperResult(_ result: WhisperTranscriptionResult) -> SpeechTranscriptionResult {
         // Collect all word timings from all segments
         var rawTimings: [RawWordTiming] = []
 
@@ -351,7 +359,7 @@ class WhisperService {
     /// previous *end*, so one overshooting end timestamp shifted every word after it.
     ///
     /// Expects `rawTimings` sorted by start.
-    static func normalizeTimings(_ rawTimings: [RawWordTiming]) -> [RawWordTiming] {
+    nonisolated static func normalizeTimings(_ rawTimings: [RawWordTiming]) -> [RawWordTiming] {
         var normalized: [RawWordTiming] = []
         normalized.reserveCapacity(rawTimings.count)
 

@@ -69,7 +69,16 @@ struct VocabLexiconTests {
             #expect(!seen.contains(key), "Duplicate lexicon word: \(entry.word)")
             seen.insert(key)
         }
-        #expect(DefaultVocabLexicon.entries.count >= 60)
+        #expect(DefaultVocabLexicon.entries.count >= 300)
+    }
+
+    @Test func everyTierHasDeepReserve() {
+        // A thin tier cycles fast and the workout starts repeating itself;
+        // each tier needs months of runway at three words a day.
+        for level in 0...2 {
+            let tier = DefaultVocabLexicon.entries.filter { $0.level == level }
+            #expect(tier.count >= 100, "Tier \(level) too thin: \(tier.count)")
+        }
     }
 
     @Test func lookupIsCaseInsensitive() {
@@ -104,7 +113,8 @@ struct VocabChallengeServiceTests {
         dictionary: [String] = ["Kubernetes"],
         extraBanned: [String] = [],
         userName: String = "Ada",
-        level: Int = 1
+        level: Int = 1,
+        levelOverride: Int = 0
     ) -> VocabChallengePreferences {
         VocabChallengePreferences(
             isEnabled: enabled,
@@ -117,7 +127,8 @@ struct VocabChallengeServiceTests {
             dictionaryWords: dictionary,
             extraBanned: extraBanned,
             userName: userName,
-            speakerLevelRaw: level
+            speakerLevelRaw: level,
+            levelOverrideRaw: levelOverride
         )
     }
 
@@ -290,6 +301,60 @@ struct VocabChallengeServiceTests {
         )
         #expect(result?.words.map(\.text) == ["Kubernetes"])
         #expect(result?.words.first?.source == .dictionary)
+    }
+
+    @Test func forcedLevelPinsTheIntroTier() {
+        let store = makeStore()
+        // Speaker says beginner; the override pins advanced anyway.
+        let result = VocabChallengeService.todaysChallenge(
+            preferences: prefs(
+                count: 3,
+                useBank: true,
+                useDictionary: false,
+                introduceNew: true,
+                bank: [],
+                dictionary: [],
+                level: 0,
+                levelOverride: 3
+            ),
+            now: day(2026, 8, 17),
+            store: store
+        )
+        let intros = result?.words.filter { $0.source == .introduced } ?? []
+        #expect(!intros.isEmpty)
+        for word in intros {
+            let tier = DefaultVocabLexicon.entry(for: word.text)?.level
+            #expect(tier == 2, "\(word.text) is tier \(tier ?? -1), not advanced")
+        }
+    }
+
+    @Test func changingLevelInvalidatesTheDayCache() {
+        let store = makeStore()
+        let now = day(2026, 8, 17)
+        _ = VocabChallengeService.todaysChallenge(
+            preferences: prefs(count: 1, useBank: true, useDictionary: false, introduceNew: true, bank: [], dictionary: []),
+            now: now,
+            store: store
+        )
+        let before = store.cached()?.fingerprint
+
+        // The override must resolve to a tier the default speaker level (1)
+        // isn't already on: pinning the tier you're effectively on is a no-op
+        // by design — the fingerprint keys on the resolved tier, so the day's
+        // pick survives it instead of reshuffling mid-day.
+        _ = VocabChallengeService.todaysChallenge(
+            preferences: prefs(count: 1, useBank: true, useDictionary: false, introduceNew: true, bank: [], dictionary: [], levelOverride: 3),
+            now: now,
+            store: store
+        )
+        let after = store.cached()?.fingerprint
+
+        #expect(before != after)
+        // The re-pick honors the new tier immediately, same calendar day.
+        let picked = store.cached()?.words.first
+        if let picked {
+            #expect(DefaultVocabLexicon.entry(for: picked.text)?.level == 2)
+        }
     }
 }
 
@@ -601,5 +666,107 @@ struct VocabSpacedReviewTests {
             store: store
         )
         #expect(store.reviews().isEmpty)
+    }
+}
+
+struct FreshWordSanitizerTests {
+    private func sanitize(_ output: String, excluding: Set<String> = []) -> [VocabLexiconEntry] {
+        FreshWordSanitizer.sanitize(output, level: 2, excluding: excluding)
+    }
+
+    @Test func parsesWellFormedLines() {
+        let kept = sanitize("Perspicacious | Sees through fog on first contact. | Use it about a sharp question.")
+        #expect(kept.count == 1)
+        #expect(kept[0].word == "Perspicacious")
+        #expect(kept[0].level == 2)
+        #expect(kept[0].gloss == "Sees through fog on first contact.")
+    }
+
+    @Test func normalizesCasingAndStripsListManners() {
+        let kept = sanitize("1. **TRENCHANT** | Sharp and brief. | Use it about a short critique.")
+        #expect(kept.map(\.word) == ["Trenchant"])
+    }
+
+    @Test func blocksProfanitySlursAndFillers() {
+        let kept = sanitize("""
+        Damn | A curse word. | Use it nowhere.
+        Like | A filler word. | Use it never.
+        Asshole | A rude word. | Use it never.
+        Resonant | Matches what listeners feel. | Use it about a story that landed.
+        """)
+        #expect(kept.map(\.word) == ["Resonant"])
+    }
+
+    @Test func rejectsPhrasesDigitsAndJunk() {
+        let kept = sanitize("""
+        Turn of phrase | Not one word. | Use it never.
+        E-loquence | Hyphens are not letters. | Use it never.
+        Grav1tas | Digits are not letters. | Use it never.
+        Ok | Too short to spotlight. | Use it never.
+        Gravitas | Seriousness that quiets rooms. | Use it about slow numbers.
+        """)
+        #expect(kept.map(\.word) == ["Gravitas"])
+    }
+
+    @Test func dedupesAndRespectsKnownKeys() {
+        let output = """
+        Magnanimous | Wins without gloating. | Use it about praise for a rival.
+        magnanimous | Duplicate in different case. | Use it again.
+        Lapidary | Already curated. | Use it anyway.
+        """
+        let kept = sanitize(output, excluding: ["lapidary"])
+        #expect(kept.map(\.word) == ["Magnanimous"])
+    }
+
+    @Test func rejectsGlossesThatMerelyEchoTheWord() {
+        let kept = sanitize("Equivocate | To equivocate is to hedge. | Use it about hedging.")
+        #expect(kept.isEmpty)
+    }
+}
+
+struct GeneratedVocabStoreTests {
+    private func makeStore() -> (GeneratedVocabStore, UserDefaults) {
+        let suite = "GeneratedVocabStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return (GeneratedVocabStore(defaults: defaults), defaults)
+    }
+
+    private func entry(_ word: String) -> VocabLexiconEntry {
+        VocabLexiconEntry(word: word, gloss: "Test gloss.", prompt: "Use it in a test.", level: 1)
+    }
+
+    @Test func roundTripsAndDeduplicates() {
+        let (store, _) = makeStore()
+        store.append(entry("Quixotic"))
+        store.append(entry("quixotic"))
+        store.append(entry("Lambent"))
+        #expect(store.entries().map(\.word).sorted() == ["Lambent", "Quixotic"])
+        #expect(store.entry(for: "QUIXOTIC")?.word == "Quixotic")
+        #expect(store.contains("lambent"))
+    }
+
+    @Test func knownKeysIncludeSeenHistory() {
+        let (store, _) = makeStore()
+        store.append(entry("Fulgent"))
+        #expect(store.knownKeys().contains("fulgent"))
+    }
+
+    @Test func capacityTrimsOldest() {
+        let (store, _) = makeStore()
+        // Overflow the ring, then confirm a late arrival survives intact.
+        for i in 0..<210 {
+            store.append(entry("Quiescent\(i)"))
+        }
+        store.append(entry("Zephyrlike"))
+        #expect(store.entries().count <= 200)
+        #expect(store.contains("Zephyrlike"))
+        #expect(!store.contains("Quiescent0"))
+    }
+
+    @Test func isolatedDefaultsDoNotLeak() {
+        let (store, _) = makeStore()
+        #expect(store.entries().isEmpty)
+        #expect(!store.contains("Anything"))
     }
 }

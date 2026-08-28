@@ -11,11 +11,19 @@ struct PracticeHubView: View {
     @State private var showingBatchAdd = false
     @State private var showingNewStory = false
 
-    // Practice tools — presented locally; each is a self-contained sheet.
-    @State private var showingWarmUps = false
-    @State private var showingDrills = false
-    @State private var showingReadAloud = false
-    @State private var showingConfidence = false
+    // Practice tools — pushed as full pages from here (Library is where you
+    // browse, so a tool gets the whole screen). Today's quick tiles and the
+    // focus card keep presenting them as sheets.
+    private enum LibraryTool: String, Identifiable {
+        case warmUps
+        case drills
+        case readAloud
+        case confidence
+
+        var id: String { rawValue }
+    }
+
+    @State private var activeTool: LibraryTool?
 
     let onSelectPrompt: (Prompt) -> Void
     var onStartStoryPractice: ((Story) -> Void)? = nil
@@ -87,6 +95,18 @@ struct PracticeHubView: View {
                 onSendToDrill: onSendToDrill
             )
         }
+        .navigationDestination(item: $activeTool) { tool in
+            switch tool {
+            case .warmUps:
+                WarmUpListView(isPushed: true)
+            case .drills:
+                DrillSelectionView(isPushed: true)
+            case .readAloud:
+                ReadAloudSelectionView(isPushed: true)
+            case .confidence:
+                ConfidenceToolsView(isPushed: true)
+            }
+        }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()
         }
@@ -107,52 +127,9 @@ struct PracticeHubView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingWarmUps) {
-            WarmUpListView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingDrills) {
-            DrillSelectionView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingReadAloud) {
-            ReadAloudSelectionView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingConfidence) {
-            ConfidenceToolsView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
     }
 
     // MARK: - Tools
-
-    /// The practice tools used to live only behind six small tiles on Today.
-    /// They belong in the Library — this is the browsable list of everything
-    /// you can practice with.
-    private var tools: [PracticeTool] {
-        [
-            PracticeTool(icon: "wind", color: AppColors.toolWarmUp, title: "Warm-Ups",
-                         subtitle: "Breathing, tongue twisters, vocal reps",
-                         meta: Self.countMeta(DefaultWarmUps.all.count, "exercise",
-                                              seconds: DefaultWarmUps.all.map(\.durationSeconds))) { showingWarmUps = true },
-            PracticeTool(icon: "bolt.fill", color: AppColors.toolDrill, title: "Drills",
-                         subtitle: "Short reps against one weakness",
-                         meta: Self.countMeta(DrillMode.allCases.count, "mode",
-                                              seconds: DrillMode.allCases.map(\.defaultDurationSeconds))) { showingDrills = true },
-            PracticeTool(icon: "text.book.closed", color: AppColors.toolReadAloud, title: "Read Aloud",
-                         subtitle: "Passages scored for pronunciation",
-                         meta: "\(DefaultReadAloudPassages.all.count) passages · scored") { showingReadAloud = true },
-            PracticeTool(icon: "heart.fill", color: AppColors.toolCalm, title: "Calm",
-                         subtitle: "Settle nerves before you speak",
-                         meta: Self.countMeta(DefaultConfidenceExercises.all.count, "exercise",
-                                              seconds: DefaultConfidenceExercises.all.map { $0.durationMinutes * 60 })) { showingConfidence = true }
-        ]
-    }
 
     /// "4 exercises · 1–3 min" — count plus the real time range, so a row says
     /// what it costs before you tap it. Computed from the seed data rather than
@@ -169,15 +146,60 @@ struct PracticeHubView: View {
         return "\(countText) · \(range)"
     }
 
+    /// Browsable catalog of every prep surface. Copy comes from
+    /// `PracticeToolKind` so Today tiles and these rows tell the same story.
+    private var tools: [PracticeTool] {
+        [
+            PracticeTool(
+                kind: .warmUp,
+                meta: Self.countMeta(
+                    DefaultWarmUps.all.count,
+                    "exercise",
+                    seconds: DefaultWarmUps.all.map(\.durationSeconds)
+                )
+            ) { activeTool = .warmUps },
+            PracticeTool(
+                kind: .drills,
+                meta: Self.countMeta(
+                    DrillMode.allCases.count,
+                    "mode",
+                    seconds: DrillMode.allCases.map(\.defaultDurationSeconds)
+                )
+            ) { activeTool = .drills },
+            PracticeTool(
+                kind: .readAloud,
+                meta: "\(DefaultReadAloudPassages.all.count) passages · scored"
+            ) { activeTool = .readAloud },
+            PracticeTool(
+                kind: .calm,
+                meta: Self.countMeta(
+                    DefaultConfidenceExercises.all.count,
+                    "exercise",
+                    seconds: DefaultConfidenceExercises.all.map { $0.durationMinutes * 60 }
+                )
+            ) { activeTool = .confidence }
+        ]
+    }
+
     private var toolsSection: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visible = query.isEmpty
             ? tools
             : tools.filter {
-                $0.title.localizedStandardContains(query) || $0.subtitle.localizedStandardContains(query)
+                $0.kind.title.localizedStandardContains(query)
+                    || $0.kind.outcome.localizedStandardContains(query)
+                    || $0.kind.bestFor.localizedStandardContains(query)
             }
 
-        return VStack(spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
+            if query.isEmpty {
+                Text("Practice Tools")
+                    .eyebrowStyle()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                toolsIntro
+            }
+
             if visible.isEmpty {
                 // Search that matches nothing used to render a silent blank
                 // scroll, which reads as a broken screen rather than a result.
@@ -194,30 +216,57 @@ struct PracticeHubView: View {
         }
     }
 
+    /// Explains how Tools differ from Prompts and Stories so the third Library
+    /// segment is not just another list of cards with icons.
+    private var toolsIntro: some View {
+        GlassCard(tint: AppColors.primary.opacity(0.06), padding: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Prep and targeted reps")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("Prompts and Stories are what you speak. Tools are how you get ready — warm the voice, drill one weakness, settle nerves, or score a read-aloud.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private func toolRow(_ tool: PracticeTool) -> some View {
         Button {
             Haptics.medium()
             tool.action()
         } label: {
-            GlassCard(cornerRadius: 16, padding: 14) {
-                HStack(spacing: 14) {
-                    Image(systemName: tool.icon)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(tool.color)
-                        .frame(width: 24)
+            GlassCard(cornerRadius: 16, tint: tool.kind.color.opacity(0.06), padding: 16) {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: tool.kind.icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(tool.kind.color)
+                        .frame(width: 40, height: 40)
+                        .background {
+                            Circle().fill(tool.kind.color.opacity(0.18))
+                        }
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(tool.title)
-                            .font(.subheadline.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(tool.kind.title)
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(.white)
-                        Text(tool.subtitle)
-                            .font(.caption2)
+
+                        Text(tool.kind.outcome)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(tool.kind.bestFor)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
+
                         Text(tool.meta)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.tertiary)
-                            .lineLimit(1)
+                            .padding(.top, 2)
                     }
 
                     Spacer(minLength: 0)
@@ -225,10 +274,12 @@ struct PracticeHubView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.tertiary)
+                        .padding(.top, 4)
                 }
             }
         }
         .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("\(tool.kind.title). \(tool.kind.outcome). \(tool.meta)")
     }
 
     // MARK: - Floating Action Button
@@ -333,15 +384,12 @@ struct PracticeHubView: View {
 // MARK: - Practice Tool
 
 private struct PracticeTool: Identifiable {
-    let icon: String
-    let color: Color
-    let title: String
-    let subtitle: String
+    let kind: PracticeToolKind
     /// Count + time cost. The line that makes a mixed-type list navigable.
     let meta: String
     let action: () -> Void
 
-    var id: String { title }
+    var id: String { kind.id }
 }
 
 // MARK: - Practice Section Enum

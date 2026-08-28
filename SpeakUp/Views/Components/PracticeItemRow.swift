@@ -25,8 +25,14 @@ struct PracticeItemRow: View {
     let tint: Color
     /// This item's length as a share of the longest in the visible set, 0–1.
     let durationFraction: Double
+    /// Short enough to sit inside a 46pt dial — "45s", "3m", "≈2 min". Detail
+    /// that does not fit goes in `tag`; the dial used to be handed
+    /// "3m · 4 steps" and rendered it at 8pt, which nobody could read.
     let durationLabel: String
-    var accessory: Accessory = .chevron
+    /// Optional qualifier chip: what the session shows while it runs, how many
+    /// steps it has, how hard the passage is.
+    var tag: String?
+    var accessory: Accessory = .play
     let action: () -> Void
 
     var body: some View {
@@ -46,6 +52,16 @@ struct PracticeItemRow: View {
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
                             .lineLimit(2)
+
+                        if let tag {
+                            Text(tag)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(tint)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background { Capsule().fill(tint.opacity(0.16)) }
+                                .padding(.top, 2)
+                        }
                     }
 
                     Spacer(minLength: 8)
@@ -65,7 +81,7 @@ struct PracticeItemRow: View {
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title), \(durationLabel). \(subtitle)")
+        .accessibilityLabel([title, durationLabel, tag, subtitle].compactMap { $0 }.joined(separator: ". "))
     }
 
     private var durationDial: some View {

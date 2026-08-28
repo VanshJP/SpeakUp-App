@@ -44,6 +44,8 @@ class SettingsViewModel {
     var vocabChallengeEnabled: Bool = true
     var vocabChallengeWordCount: Int = 2
     var vocabChallengeIntroduceNew: Bool = true
+    /// 0 follows the speaker level; 1–3 pin beginner / intermediate / advanced.
+    var vocabChallengeLevelOverride: Int = 0
 
     // Local state - Speaker Level
     var speakerLevel: SpeakerLevel = .intermediate
@@ -222,6 +224,7 @@ class SettingsViewModel {
         vocabChallengeEnabled = settings.vocabChallengeEnabled
         vocabChallengeWordCount = settings.vocabChallengeWordCount
         vocabChallengeIntroduceNew = settings.vocabChallengeIntroduceNew
+        vocabChallengeLevelOverride = settings.vocabChallengeLevelOverride
 
         // Speaker Level
         speakerLevel = settings.resolvedSpeakerLevel
@@ -302,6 +305,7 @@ class SettingsViewModel {
 
         settings.vocabChallengeEnabled = vocabChallengeEnabled
         settings.vocabChallengeWordCount = min(3, max(1, vocabChallengeWordCount))
+        settings.vocabChallengeLevelOverride = min(3, max(0, vocabChallengeLevelOverride))
         // ponytail: sources and spacing are no longer knobs — the picker keeps
         // the flags so it stays testable, the UI just never turns them off.
         settings.vocabChallengeUseBank = true
@@ -696,6 +700,7 @@ class SettingsViewModel {
         settings.dictationBiasWords = []
         settings.vocabChallengeEnabled = true
         settings.vocabChallengeWordCount = 2
+        settings.vocabChallengeLevelOverride = 0
         settings.vocabChallengeUseBank = true
         settings.vocabChallengeUseDictionary = true
         settings.vocabChallengeIntroduceNew = true
