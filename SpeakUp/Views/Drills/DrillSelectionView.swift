@@ -84,6 +84,7 @@ struct DrillSelectionView: View {
                     prepSubtitle: mode == .impromptuSprint ? viewModel.impromptuPrompt : mode.description,
                     onComplete: {
                         showingCountdown = false
+                        viewModel.targetWPM = userSettings.first.resolvedTargetWPM
                         viewModel.startDrill(mode: mode)
                         showingSession = true
                     },

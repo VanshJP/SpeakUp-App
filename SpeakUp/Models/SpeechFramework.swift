@@ -48,6 +48,17 @@ enum SpeechFramework: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Maps a curriculum `frameworkHint` ("PREP", "STAR", …) onto a case.
+    static func fromCurriculumHint(_ hint: String?) -> SpeechFramework? {
+        guard let hint else { return nil }
+        let normalized = hint.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return nil }
+        return allCases.first {
+            $0.rawValue == normalized
+                || $0.displayName.lowercased() == normalized
+        }
+    }
+
     var sections: [FrameworkSection] {
         switch self {
         case .prep:

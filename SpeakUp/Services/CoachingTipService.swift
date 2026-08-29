@@ -291,7 +291,7 @@ nonisolated enum CoachingTipService {
         return CoachingTip(
             dimension: .fillers,
             icon: CoachDimension.fillers.icon,
-            title: percentage > 8 ? "Fillers Are Costing You" : "Trim the Fillers",
+            title: percentage > 8 ? "Name the Crutch" : "Trim the Fillers",
             message: message,
             teachingPoint: "\(technique.name): \(technique.how) Aim for under 3%, around \(wordBudget) in a take this length.",
             suggestedPractice: CoachDimension.fillers.practiceRoute,

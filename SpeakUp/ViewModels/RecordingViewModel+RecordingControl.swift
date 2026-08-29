@@ -74,7 +74,8 @@ extension RecordingViewModel {
             audioURL: url,
             isProcessing: true,
             audioLevelSamples: audioLevelSamples,
-            goalId: goalId
+            goalId: goalId,
+            frameworkUsed: frameworkUsed?.displayName
         )
 
         recording.storyId = storyId

@@ -22,6 +22,9 @@ class RecordingViewModel {
     /// Overrides the practice-start funnel when the session came from a
     /// friend-challenge link (`share` → `shared_prompt`).
     var sessionSource: String?
+    /// Structure overlay the speaker chose (or a lesson pre-selected). Persisted
+    /// on the recording so curriculum signals can detect PREP/STAR practice.
+    var frameworkUsed: SpeechFramework?
 
     // Timer
     var remainingTime: TimeInterval = 60

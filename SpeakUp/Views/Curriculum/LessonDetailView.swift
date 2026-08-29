@@ -6,6 +6,7 @@ struct LessonDetailView: View {
     @Bindable var viewModel: CurriculumViewModel
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query private var userSettings: [UserSettings]
 
     @State private var currentStepIndex: Int = 0
     @State private var activeSheet: ActiveSheet?
@@ -18,7 +19,7 @@ struct LessonDetailView: View {
     // MARK: - ActiveSheet
 
     enum ActiveSheet: Identifiable {
-        case recording(duration: RecordingDuration)
+        case recording(duration: RecordingDuration, framework: SpeechFramework?)
         case drill(DrillViewModel)
         case warmUp(WarmUpViewModel)
         case confidence(ConfidenceExercise)
@@ -301,7 +302,10 @@ struct LessonDetailView: View {
                 GlassButton(title: "Start Practice", icon: "mic.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     let duration = recordingDuration(from: activity.targetDuration)
-                    activeSheet = .recording(duration: duration)
+                    activeSheet = .recording(
+                        duration: duration,
+                        framework: SpeechFramework.fromCurriculumHint(activity.frameworkHint)
+                    )
                 }
             }
         }
@@ -351,6 +355,7 @@ struct LessonDetailView: View {
                 GlassButton(title: "Start Drill", icon: "bolt.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     let vm = DrillViewModel()
+                    vm.targetWPM = userSettings.first.resolvedTargetWPM
                     vm.startDrill(mode: mode)
                     activeSheet = .drill(vm)
                 }
@@ -611,10 +616,11 @@ struct LessonDetailView: View {
     @ViewBuilder
     private func sheetContent(for sheet: ActiveSheet) -> some View {
         switch sheet {
-        case .recording(let duration):
+        case .recording(let duration, let framework):
             RecordingView(
                 prompt: nil,
                 duration: duration,
+                initialFramework: framework,
                 onComplete: { recording in
                     practiceResult = recording
                     completeCurrentActivity()

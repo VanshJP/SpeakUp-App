@@ -653,11 +653,11 @@ private struct MotivationalTipCard: View {
         (icon: "checkmark.circle.fill", text: "Your recording is already saved. Scoring can take a moment."),
         (icon: "timer", text: "Short sessions count. Consistency matters more than length."),
         (icon: "headphones", text: "Listening back once can reveal patterns that are hard to hear live."),
-        (icon: "chart.line.uptrend.xyaxis", text: "A rough take is still useful data. It does not define your ability."),
-        (icon: "hand.raised.fill", text: "Practice is allowed to feel awkward. That is what practice is for."),
-        (icon: "sparkles", text: "The goal is not perfection. Try one useful adjustment at a time."),
-        (icon: "waveform", text: "Pace, clarity, and pauses naturally vary between takes."),
-        (icon: "heart.fill", text: "You already did the part that took courage: pressing record.")
+        (icon: "text.bubble", text: "While you wait: name your top filler. Next take, swap it for a pause."),
+        (icon: "speedometer", text: "Pace tip: breathe at sentence ends. That alone pulls many speakers onto target."),
+        (icon: "pause.circle", text: "A one-beat pause after a key point is a technique, not a stall."),
+        (icon: "list.bullet", text: "Structure tip: lead with the point, then the reason — PREP in two moves."),
+        (icon: "scope", text: "One adjustment per take beats chasing every score at once.")
     ]
 
     var body: some View {
