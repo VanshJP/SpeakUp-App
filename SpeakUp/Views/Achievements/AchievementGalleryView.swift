@@ -115,6 +115,8 @@ struct AchievementGalleryView: View {
                 Spacer(minLength: 0)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(unlockedCount) of \(totalCount) achievements unlocked")
     }
 }
 
@@ -122,6 +124,7 @@ struct AchievementGalleryView: View {
 
 private struct AchievementCard: View {
     let achievement: Achievement
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     var body: some View {
@@ -149,7 +152,7 @@ private struct AchievementCard: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // Date or locked indicator
                 Group {
@@ -172,10 +175,26 @@ private struct AchievementCard: View {
         }
         .opacity(achievement.isUnlocked ? 1 : 0.6)
         .scaleEffect(appeared ? 1 : 0.95)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
         .onAppear {
-            withAnimation(.spring(duration: 0.4)) {
+            if reduceMotion {
                 appeared = true
+            } else {
+                withAnimation(.spring(duration: 0.4)) {
+                    appeared = true
+                }
             }
         }
+    }
+
+    private var accessibilitySummary: String {
+        let status: String
+        if let date = achievement.unlockedDate {
+            status = "Unlocked \(date.formatted(date: .abbreviated, time: .omitted))"
+        } else {
+            status = "Locked"
+        }
+        return "\(achievement.title). \(achievement.descriptionText). \(status)"
     }
 }

@@ -627,8 +627,6 @@ struct TodayView: View {
             showingCoachMomentReadAloud = true
         case .practiceAgain:
             onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
-        case .dismissOnly:
-            break
         }
     }
 
@@ -733,13 +731,17 @@ struct TodayView: View {
         lastArrivalDay = today
 
         let streak = viewModel.userStats.currentStreak
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.55).delay(0.15)) {
+        if reduceMotion {
             arrived = true
+        } else {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.55).delay(0.15)) {
+                arrived = true
+            }
         }
         if streak >= 1 {
             Haptics.success()
         }
-        if streak >= 7, streak % 7 == 0 {
+        if !reduceMotion, streak >= 7, streak % 7 == 0 {
             showArrivalConfetti = true
         }
     }
@@ -788,7 +790,6 @@ struct TodayView: View {
             startHint: "Records a \(viewModel.selectedDuration.displayName) take on the topic above",
             freeHint: "Records a \(viewModel.selectedDuration.displayName) take with no topic",
             onStart: {
-                Haptics.medium()
                 if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
                     onStartStoryPractice?(story, viewModel.selectedDuration)
                 } else {
@@ -796,7 +797,6 @@ struct TodayView: View {
                 }
             },
             onFreeTalk: {
-                Haptics.medium()
                 onStartRecording(nil, viewModel.selectedDuration)
             }
         )
@@ -863,6 +863,7 @@ struct TodayView: View {
                         ToolTileLabel(icon: tool.icon, title: tool.shortTitle, tint: tool.color)
                     }
                     .buttonStyle(GlassPressStyle())
+                    .accessibilityLabel("\(tool.title). \(tool.outcome)")
                 }
             }
         }
@@ -1197,6 +1198,10 @@ struct DurationPill: View {
                     .fill(.ultraThinMaterial)
             }
         }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel("Recording length, \(selectedDuration.displayName)")
+        .accessibilityHint("Opens recording length options")
     }
 }
 

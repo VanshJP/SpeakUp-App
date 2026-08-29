@@ -39,6 +39,8 @@ struct GlassButtonLabel: View {
         .frame(maxWidth: fullWidth ? .infinity : nil)
         .background { backgroundView }
         .clipShape(Capsule())
+        // Outside the clip so the primary elevation is actually visible.
+        .shadow(color: shadowColor, radius: shadowRadius, y: shadowYOffset)
     }
 
     private var foregroundColor: Color {
@@ -52,13 +54,27 @@ struct GlassButtonLabel: View {
         }
     }
 
+    private var shadowColor: Color {
+        switch style {
+        case .primary: return .black.opacity(0.28)
+        case .secondary, .outline, .danger: return .clear
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        style == .primary ? 10 : 0
+    }
+
+    private var shadowYOffset: CGFloat {
+        style == .primary ? 4 : 0
+    }
+
     @ViewBuilder
     private var backgroundView: some View {
         switch style {
         case .primary:
             Capsule()
                 .fill(Color.white.opacity(0.94))
-                .shadow(color: .black.opacity(0.28), radius: 10, y: 4)
         case .secondary:
             Capsule()
                 .fill(.ultraThinMaterial)
@@ -153,6 +169,8 @@ struct GlassButton: View {
         }
         .buttonStyle(GlassPressStyle())
         .disabled(isLoading)
+        .accessibilityLabel(title)
+        .accessibilityValue(isLoading ? "Loading" : "")
     }
 }
 

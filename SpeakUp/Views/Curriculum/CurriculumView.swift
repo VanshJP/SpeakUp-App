@@ -191,6 +191,8 @@ struct CurriculumView: View {
             }
         }
         .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("Continue \(lesson.title), \(Self.lessonMeta(lesson))")
+        .accessibilityHint(lesson.objective)
     }
 
     // MARK: - Phase Section
@@ -253,6 +255,14 @@ struct CurriculumView: View {
             if isCurrent { return .current }
             return .available
         }()
+        let stateLabel: String = {
+            switch state {
+            case .completed: return "Completed"
+            case .locked: return "Locked"
+            case .current: return "Current lesson"
+            case .available: return "Available"
+            }
+        }()
 
         return LessonPathRow(
             state: state,
@@ -263,6 +273,9 @@ struct CurriculumView: View {
         ) {
             lessonLabel(lesson, isLocked: isLocked, alignedLeading: isLeading(index))
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(lesson.title), \(stateLabel)")
+        .accessibilityHint(lesson.objective)
     }
 
     /// Text hugs the node, so it flips alignment with it.
@@ -284,7 +297,7 @@ struct CurriculumView: View {
             Text(lesson.objective)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(alignedLeading ? .leading : .trailing)
         .opacity(isLocked ? 0.55 : 1.0)

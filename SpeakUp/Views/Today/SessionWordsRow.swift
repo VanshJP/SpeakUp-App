@@ -20,7 +20,7 @@ struct SessionWordsRow: View {
 
     /// `FlowLayout` top-aligns a line, so children of mixed height come out
     /// ragged. One height for every chip is the whole fix.
-    private let chipHeight: CGFloat = 26
+    private let chipHeight: CGFloat = 44
 
     var body: some View {
         if let workout, !workout.words.isEmpty {
@@ -42,7 +42,6 @@ struct SessionWordsRow: View {
 
                     ForEach(workout.words) { word in
                         wordChip(word, used: workout.isUsed(word))
-                            .frame(height: chipHeight)
                     }
                 }
             }
@@ -106,6 +105,9 @@ struct SessionWordsRow: View {
             }
         }
         .buttonStyle(.plain)
+        // Visual capsule stays compact; the Menu gets a full HIG-sized target.
+        .frame(minHeight: chipHeight)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Work in the word \(word.text)\(isNew ? ", new word" : ""), \(used ? "used" : "not used yet")")
         .accessibilityHint(word.gloss ?? word.coachLine)

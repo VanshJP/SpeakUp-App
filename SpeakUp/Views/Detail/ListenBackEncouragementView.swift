@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct ListenBackEncouragementView: View {
-    let onDismiss: () -> Void
+    let onContinue: () -> Void
+    let onCancel: () -> Void
+
+    @AccessibilityFocusState private var titleFocused: Bool
 
     var body: some View {
         ZStack {
@@ -15,6 +18,7 @@ struct ListenBackEncouragementView: View {
 
                 Text("About Hearing Your Voice")
                     .font(.title3.weight(.bold))
+                    .accessibilityFocused($titleFocused)
 
                 Text("Hearing your own voice feels weird, that's totally normal! Everyone sounds different to themselves.\n\nThis is actually a superpower for improvement. Listening back helps you notice patterns you'd never catch in the moment.")
                     .font(.body)
@@ -28,8 +32,15 @@ struct ListenBackEncouragementView: View {
                     fullWidth: true
                 ) {
                     Haptics.medium()
-                    onDismiss()
+                    onContinue()
                 }
+
+                Button("Not now") {
+                    Haptics.light()
+                    onCancel()
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
             }
             .padding(24)
             .background {
@@ -41,6 +52,15 @@ struct ListenBackEncouragementView: View {
                     }
             }
             .padding(32)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) {
+            Haptics.light()
+            onCancel()
+        }
+        .onAppear {
+            titleFocused = true
         }
     }
 }

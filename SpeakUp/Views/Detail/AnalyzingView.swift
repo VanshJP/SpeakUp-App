@@ -442,6 +442,10 @@ private struct ScaleInput: View {
                     }
                     .buttonStyle(.plain)
                     .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                    .accessibilityLabel("\(option.label), \(value) of 5")
+                    .accessibilityAddTraits(
+                        isSelected ? [.isButton, .isSelected] : .isButton
+                    )
                 }
             }
 
@@ -540,6 +544,10 @@ private struct YesNoInput: View {
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(
+            isSelected ? [.isButton, .isSelected] : .isButton
+        )
     }
 }
 

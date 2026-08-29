@@ -29,7 +29,9 @@ struct CoachMomentCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
+                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel("Dismiss coach note")
                 }
 
@@ -53,7 +55,8 @@ struct CoachMomentCard: View {
                         Haptics.medium()
                         onAccept()
                     }
-                    .accessibilityLabel(moment.actionTitle)
+                    .accessibilityLabel("\(moment.actionTitle), coach note action")
+                    .accessibilityHint(moment.title)
                 }
             }
         }
@@ -76,22 +79,29 @@ struct CoachMomentOverlay: View {
     let onAccept: () -> Void
     let onDismiss: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AccessibilityFocusState private var titleFocused: Bool
     @State private var showContent = false
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
+                .onTapGesture {
+                    Haptics.light()
+                    onDismiss()
+                }
 
             VStack(spacing: 24) {
-                ConfettiView()
-                    .frame(height: 120)
+                if !reduceMotion {
+                    ConfettiView()
+                        .frame(height: 120)
+                }
 
                 Image(systemName: overlayIcon)
                     .font(.system(size: 56))
                     .foregroundStyle(AppColors.primary)
-                    .symbolEffect(.bounce, value: showContent)
+                    .symbolEffect(.bounce, value: reduceMotion ? false : showContent)
 
                 VStack(spacing: 8) {
                     Text("Coach note")
@@ -104,6 +114,7 @@ struct CoachMomentOverlay: View {
                         .font(.title.weight(.bold))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
+                        .accessibilityFocused($titleFocused)
 
                     Text(moment.body)
                         .font(.subheadline)
@@ -137,11 +148,22 @@ struct CoachMomentOverlay: View {
             .scaleEffect(showContent ? 1 : 0.92)
             .opacity(showContent ? 1 : 0)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) {
+            Haptics.light()
+            onDismiss()
+        }
         .onAppear {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+            if reduceMotion {
                 showContent = true
+            } else {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                    showContent = true
+                }
             }
             Haptics.success()
+            titleFocused = true
         }
     }
 

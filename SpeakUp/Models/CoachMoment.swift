@@ -53,7 +53,6 @@ nonisolated enum CoachMomentAction: Sendable, Equatable {
     case openDrill(String)
     case openReadAloud
     case practiceAgain
-    case dismissOnly
 }
 
 nonisolated enum CoachMomentSurface: String, Sendable {
@@ -119,6 +118,28 @@ nonisolated struct CoachMomentBudget: Sendable, Equatable {
         let key = CoachMomentEngine.weekKey(for: now, calendar: calendar)
         if key == weekKey { return self }
         return CoachMomentBudget(weekKey: key, celebrationsUsed: 0, deliveredIDs: deliveredIDs)
+    }
+
+    /// Records either acceptance or dismissal. Seeing the celebration spends
+    /// its weekly slot either way; dismissing it must not unlock another one.
+    func recordingDelivery(
+        of moment: CoachMoment,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> CoachMomentBudget {
+        var next = rolling(now: now, calendar: calendar)
+        let isNewDelivery = !next.deliveredIDs.contains(moment.id)
+        if isNewDelivery, moment.isCelebration {
+            next.celebrationsUsed = min(
+                Self.weeklyCelebrationCap,
+                next.celebrationsUsed + 1
+            )
+        }
+        next.deliveredIDs = CoachMomentEngine.cappedDeliveredIDs(
+            next.deliveredIDs,
+            adding: moment.id
+        )
+        return next
     }
 }
 
@@ -217,7 +238,8 @@ nonisolated enum CoachMomentEngine {
             guard let moment = moment(
                 for: signal,
                 snapshot: snapshot,
-                dayKey: day
+                dayKey: day,
+                calendar: calendar
             ) else { continue }
             if let surface, moment.surface != surface { continue }
             if delivered.contains(moment.id) { continue }
@@ -231,7 +253,8 @@ nonisolated enum CoachMomentEngine {
     private static func moment(
         for signal: CoachMomentSignal,
         snapshot: CoachMomentSnapshot,
-        dayKey: String
+        dayKey: String,
+        calendar: Calendar
     ) -> CoachMoment? {
         let name = snapshot.userName.trimmingCharacters(in: .whitespacesAndNewlines)
         let greet = name.isEmpty ? nil : name
@@ -281,10 +304,10 @@ nonisolated enum CoachMomentEngine {
 
         case .practiceAnniversary:
             guard let first = snapshot.firstPracticeDate else { return nil }
-            let days = Calendar.current.dateComponents(
+            let days = calendar.dateComponents(
                 [.day],
-                from: Calendar.current.startOfDay(for: first),
-                to: Calendar.current.startOfDay(for: snapshot.now)
+                from: calendar.startOfDay(for: first),
+                to: calendar.startOfDay(for: snapshot.now)
             ).day ?? 0
             return CoachMoment(
                 id: "anniversary-\(days)",

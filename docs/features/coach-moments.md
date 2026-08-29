@@ -36,18 +36,21 @@ Care notes never spend the weekly celebration budget. Celebrations cap at **1 pe
 1. User-facing label is **Coach note** — never "hospitality", "ghosts", or Guidara jargon.
 2. No transcript keyword mining. Signals come from scores, streaks, and dates only.
 3. Welcome-back copy never names how many days were missed.
-4. Every note is dismissible; dismiss still marks delivered so it does not nag all day.
+4. Every note is dismissible. Dismiss records delivery; a dismissed celebration still spends the weekly slot so another cannot replace it.
 5. Analytics: `milestone(type: coach_moment_<signal>)` only — no transcript text.
+6. Detail notes run only for the result reached directly from the recording that just finished. Opening old History or Story recordings is inert.
 
 ## Invariants
 
 1. Pure judgement stays in `CoachMomentEngine` — `nonisolated`, injectable `now`, no `ModelContext`. Service owns fetch + pending slots.
 2. Additive `UserSettings` only. Empty week key / zero used / empty lists = never shown.
 3. Delivered moment ids are capped (~40) so CloudKit rows do not grow forever.
-4. First-axis wins persist `CoachDimension.rawValue` on consume so the toast is once per dimension.
+4. First-axis wins persist `CoachDimension.rawValue` on accept **or dismiss** so the toast is once per dimension.
 5. One pending note **per surface** (`pendingToday` / `pendingDetail` / `pendingOverlay`). Today eval must not clobber a detail soft-landing. Achievements overlay outranks coach-note overlay.
-6. `CoachMomentEngine.propose(..., surface:)` filters by surface so Today care cannot starve an overlay celebration on the same visit.
+6. Today evaluates care before celebrations. A welcome-back note beats anniversary confetti when both apply.
 7. No new Today home module — transient card like `FriendChallengeCard`, not a customizable block.
+8. Soft-landing and first-axis-clear notes replace `NextStepCard`; two adjacent retry actions are not shown. Filler celebration keeps Next Step because its drill and the standing cross-session focus can differ.
+9. A pending overlay is never silently replaced by a concurrent Today/detail reload. Leaving a fresh detail implicitly dismisses its pending note so it cannot leak onto the next result.
 
 ## Cross-links
 

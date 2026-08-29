@@ -311,30 +311,14 @@ struct ReadAloudSessionView: View {
 
             Spacer()
 
-            // Stop button
-            Button {
+            GlassButton(
+                title: "Done",
+                icon: "stop.fill",
+                style: .primary,
+                size: .medium
+            ) {
                 Haptics.medium()
                 viewModel.stopSession()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "stop.fill")
-                        .font(.body.weight(.semibold))
-                    Text("Done")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 14)
-                .background {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                }
             }
             // Disabled while the engine is still starting — a tap during the
             // authorization await used to produce a ghost "0%" result and,

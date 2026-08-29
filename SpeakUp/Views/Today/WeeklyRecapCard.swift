@@ -24,8 +24,11 @@ struct WeeklyRecapCard: View {
                         Image(systemName: "xmark")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 28, height: 28)
                     }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel("Dismiss weekly recap")
                 }
 
@@ -62,7 +65,8 @@ struct WeeklyRecapCard: View {
                 }
             }
         }
-        .accessibilityElement(children: .combine)
+        // Keep the dismiss button independently reachable to VoiceOver.
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Subviews

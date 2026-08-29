@@ -107,6 +107,8 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
             .contentShape(RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityValue(isSelected ? "Selected" : "")
     }
 
     // MARK: - Style values

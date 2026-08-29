@@ -14,6 +14,9 @@ struct ContentView: View {
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
     @State private var pendingRecordingNavigation: String?
+    /// Only the result reached directly from RecordingView may generate a
+    /// coach note. Browsing an old History row must stay inert.
+    @State private var freshResultRecordingId: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
     @State private var coachMoments = CoachMomentService.shared
@@ -145,15 +148,22 @@ struct ContentView: View {
                 .navigationDestination(item: $selectedRecordingId) { recordingId in
                     RecordingDetailView(
                         recordingId: recordingId,
+                        allowsCoachMoments: freshResultRecordingId == recordingId,
                         onPracticeAgain: { prompt in
                             recordingPrompt = prompt
                             recordingStoryId = nil
                             recordingDuration = .sixty
                             recordingChallenge = nil
                             showingCountdown = true
+                        },
+                        onShowConfidence: {
+                            showingConfidenceTools = true
                         }
                     )
                     .onDisappear {
+                        if freshResultRecordingId == recordingId {
+                            freshResultRecordingId = nil
+                        }
                         selectedRecordingId = nil
                     }
                 }
@@ -246,6 +256,7 @@ struct ContentView: View {
                 sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
+                    freshResultRecordingId = recording.id.uuidString
                     selectedTab = .history
                     showingRecording = false
                     SharedChallengeStore.shared.dismiss()
@@ -487,7 +498,7 @@ struct ContentView: View {
             showingConfidenceTools = true
         case .openWarmUp:
             showingWarmUps = true
-        case .openDrill:
+        case .openDrill(_):
             showingDrills = true
         case .openReadAloud:
             showingReadAloud = true
@@ -497,8 +508,6 @@ struct ContentView: View {
             recordingDuration = .sixty
             recordingChallenge = nil
             showingCountdown = true
-        case .dismissOnly:
-            break
         }
     }
 

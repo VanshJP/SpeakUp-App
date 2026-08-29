@@ -201,6 +201,31 @@ struct CoachMomentBudgetTests {
         #expect(moment?.surface == .overlay)
     }
 
+    @Test func welcomeBackCareBeatsAnAnniversaryCelebration() {
+        let moment = CoachMomentEngine.propose(
+            snapshot: snap(
+                daysSince: 6,
+                firstPractice: t0.addingTimeInterval(-30 * day)
+            ),
+            budget: emptyBudget()
+        )
+        #expect(moment?.signal == .returnFromLapse)
+        #expect(moment?.surface == .today)
+    }
+
+    @Test func softLandingCareBeatsAnAnniversaryCelebration() {
+        let moment = CoachMomentEngine.propose(
+            snapshot: snap(
+                firstPractice: t0.addingTimeInterval(-30 * day),
+                overall: 30,
+                words: 80
+            ),
+            budget: emptyBudget()
+        )
+        #expect(moment?.signal == .softLanding)
+        #expect(moment?.surface == .detail)
+    }
+
     @Test func deliveredIdsAreNotReProposed() {
         let snapshot = snap(daysSince: 6)
         guard let first = CoachMomentEngine.propose(snapshot: snapshot, budget: emptyBudget()) else {
@@ -227,6 +252,47 @@ struct CoachMomentBudgetTests {
         #expect(next.count == 40)
         #expect(next.last == "fresh")
         #expect(!next.contains("id-0"))
+    }
+
+    @Test func seeingACelebrationSpendsTheWeeklySlotEvenWhenDismissed() {
+        let budget = emptyBudget()
+        guard let celebration = CoachMomentEngine.propose(
+            snapshot: snap(streak: 7, practicedToday: true),
+            budget: budget,
+            surface: .overlay
+        ) else {
+            Issue.record("expected a streak celebration")
+            return
+        }
+
+        // Both accept and dismiss call this same pure transition.
+        let spent = budget.recordingDelivery(of: celebration, now: t0)
+        #expect(spent.celebrationsUsed == CoachMomentBudget.weeklyCelebrationCap)
+        #expect(spent.deliveredIDs.contains(celebration.id))
+
+        let second = CoachMomentEngine.propose(
+            snapshot: snap(fillers: 0, words: 80),
+            budget: spent,
+            surface: .detail
+        )
+        #expect(second == nil)
+    }
+
+    @Test func recordingTheSameDeliveryTwiceDoesNotDoubleSpend() {
+        let budget = emptyBudget()
+        guard let celebration = CoachMomentEngine.propose(
+            snapshot: snap(streak: 7, practicedToday: true),
+            budget: budget,
+            surface: .overlay
+        ) else {
+            Issue.record("expected a streak celebration")
+            return
+        }
+
+        let once = budget.recordingDelivery(of: celebration, now: t0)
+        let twice = once.recordingDelivery(of: celebration, now: t0)
+        #expect(twice.celebrationsUsed == 1)
+        #expect(twice.deliveredIDs.filter { $0 == celebration.id }.count == 1)
     }
 }
 

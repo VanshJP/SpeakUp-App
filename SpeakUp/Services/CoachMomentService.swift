@@ -19,14 +19,17 @@ final class CoachMomentService {
 
     // MARK: - Today
 
-    /// Call after Today's heavy load. Welcome-back and anniversary / streak
-    /// overlays that belong on the home surface.
+    /// Call after Today's heavy load. A welcome-back note wins over a
+    /// celebration when both apply; care should never be displaced by confetti.
     func evaluateToday(
         context: ModelContext,
         stats: UserStats,
         practicedToday: Bool,
         lastPracticeDate: Date?
     ) {
+        // A visible celebration owns the moment until the user accepts or
+        // dismisses it. Never silently replace it during a concurrent reload.
+        guard pendingOverlay == nil else { return }
         guard let settings = Self.fetchSettings(context: context) else { return }
 
         let snapshot = Self.buildSnapshot(
@@ -34,30 +37,32 @@ final class CoachMomentService {
             settings: settings,
             stats: stats,
             practicedToday: practicedToday,
-            lastPracticeDate: lastPracticeDate,
-            latest: nil
+            lastPracticeDate: lastPracticeDate
         )
 
         let budget = settings.coachMomentBudget
-        if let overlay = CoachMomentEngine.propose(
+        guard let moment = CoachMomentEngine.propose(
             snapshot: snapshot,
-            budget: budget,
-            surface: .overlay
-        ) {
-            pendingOverlay = overlay
+            budget: budget
+        ) else {
             pendingToday = nil
+            pendingOverlay = nil
             return
         }
 
-        guard let moment = CoachMomentEngine.propose(
-            snapshot: snapshot,
-            budget: budget,
-            surface: .today
-        ) else {
+        switch moment.surface {
+        case .today:
+            pendingToday = moment
+            pendingOverlay = nil
+        case .overlay:
+            pendingOverlay = moment
             pendingToday = nil
-            return
+        case .detail:
+            // Today's snapshot has no latest-take metrics, so no detail signal
+            // can be produced. Keep the guard explicit if that ever changes.
+            pendingOverlay = nil
+            pendingToday = nil
         }
-        pendingToday = moment
     }
 
     // MARK: - After session
@@ -67,9 +72,9 @@ final class CoachMomentService {
     func evaluateAfterSession(
         context: ModelContext,
         analysis: SpeechAnalysis,
-        practicedToday: Bool = true,
-        currentStreak: Int? = nil
+        practicedToday: Bool = true
     ) {
+        guard pendingOverlay == nil else { return }
         guard let settings = Self.fetchSettings(context: context) else { return }
 
         let newlyCleared = CoachMomentEngine.newlyCleared(
@@ -79,7 +84,9 @@ final class CoachMomentService {
 
         let snapshot = CoachMomentSnapshot(
             now: .now,
-            currentStreak: currentStreak ?? 0,
+            // Streak celebrations are evaluated on Today, where the full
+            // stats snapshot already exists. Avoid a second history scan here.
+            currentStreak: 0,
             practicedToday: practicedToday,
             daysSinceLastPractice: 0,
             firstPracticeDate: Self.firstPracticeDate(context: context),
@@ -90,25 +97,26 @@ final class CoachMomentService {
             userName: settings.userName
         )
 
-        let budget = settings.coachMomentBudget
-        if let overlay = CoachMomentEngine.propose(
+        guard let moment = CoachMomentEngine.propose(
             snapshot: snapshot,
-            budget: budget,
-            surface: .overlay
-        ) {
-            pendingOverlay = overlay
+            budget: settings.coachMomentBudget
+        ) else {
+            pendingDetail = nil
+            pendingOverlay = nil
             return
         }
 
-        guard let moment = CoachMomentEngine.propose(
-            snapshot: snapshot,
-            budget: budget,
-            surface: .detail
-        ) else {
+        switch moment.surface {
+        case .detail:
+            pendingDetail = moment
+            pendingOverlay = nil
+        case .overlay:
+            pendingOverlay = moment
             pendingDetail = nil
-            return
+        case .today:
+            pendingDetail = nil
+            pendingOverlay = nil
         }
-        pendingDetail = moment
     }
 
     // MARK: - Consume
@@ -119,46 +127,48 @@ final class CoachMomentService {
             return
         }
 
-        var budget = settings.coachMomentBudget.rolling(now: .now)
-        if moment.isCelebration {
-            budget.celebrationsUsed += 1
-        }
-        budget.deliveredIDs = CoachMomentEngine.cappedDeliveredIDs(
-            budget.deliveredIDs,
-            adding: moment.id
+        let budget = settings.coachMomentBudget.recordingDelivery(
+            of: moment,
+            now: .now
         )
         settings.apply(budget: budget)
-
-        if moment.signal == .firstAxisClear {
-            let raw = moment.id.hasPrefix("axis-")
-                ? String(moment.id.dropFirst("axis-".count))
-                : (moment.detailSlug ?? "")
-            if CoachDimension(rawValue: raw) != nil,
-               !settings.coachMomentClearedDimensionsRaw.contains(raw) {
-                settings.coachMomentClearedDimensionsRaw.append(raw)
-            }
-        }
+        markAxisClearedIfNeeded(for: moment, settings: settings)
 
         try? context.save()
         AnalyticsService.shared.log(.milestone(type: "coach_moment_\(moment.signal.rawValue)"))
         clear(moment)
     }
 
-    /// Dismiss without spending celebration budget — still mark delivered so
-    /// the same note does not reappear all day.
+    /// Dismiss still records delivery. A celebration that was seen and waved
+    /// away spent its weekly slot; another one must not replace it.
     func dismiss(_ moment: CoachMoment, context: ModelContext) {
         guard let settings = Self.fetchSettings(context: context) else {
             clear(moment)
             return
         }
-        var budget = settings.coachMomentBudget.rolling(now: .now)
-        budget.deliveredIDs = CoachMomentEngine.cappedDeliveredIDs(
-            budget.deliveredIDs,
-            adding: moment.id
+        let budget = settings.coachMomentBudget.recordingDelivery(
+            of: moment,
+            now: .now
         )
         settings.apply(budget: budget)
+        markAxisClearedIfNeeded(for: moment, settings: settings)
         try? context.save()
         clear(moment)
+    }
+
+    private func markAxisClearedIfNeeded(
+        for moment: CoachMoment,
+        settings: UserSettings
+    ) {
+        guard moment.signal == .firstAxisClear else { return }
+        let raw = moment.id.hasPrefix("axis-")
+            ? String(moment.id.dropFirst("axis-".count))
+            : (moment.detailSlug ?? "")
+        guard CoachDimension(rawValue: raw) != nil,
+              !settings.coachMomentClearedDimensionsRaw.contains(raw) else {
+            return
+        }
+        settings.coachMomentClearedDimensionsRaw.append(raw)
     }
 
     private func clear(_ moment: CoachMoment) {
@@ -179,8 +189,7 @@ final class CoachMomentService {
         settings: UserSettings,
         stats: UserStats,
         practicedToday: Bool,
-        lastPracticeDate: Date?,
-        latest: SpeechAnalysis?
+        lastPracticeDate: Date?
     ) -> CoachMomentSnapshot {
         let calendar = Calendar.current
         let daysSince: Int? = {
@@ -192,17 +201,12 @@ final class CoachMomentService {
             ).day
         }()
 
-        let recent = latestRecording(context: context)
-
         return CoachMomentSnapshot(
             now: .now,
             currentStreak: stats.currentStreak,
             practicedToday: practicedToday,
             daysSinceLastPractice: daysSince,
             firstPracticeDate: firstPracticeDate(context: context),
-            latestOverall: latest?.speechScore.overall ?? recent?.overallScore,
-            latestFillerCount: latest?.totalFillerCount,
-            latestTotalWords: latest?.totalWords,
             newlyClearedDimensions: [],
             userName: settings.userName
         )
@@ -214,14 +218,6 @@ final class CoachMomentService {
         )
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first?.date
-    }
-
-    private static func latestRecording(context: ModelContext) -> Recording? {
-        var descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
     }
 
     private static func fetchSettings(context: ModelContext) -> UserSettings? {

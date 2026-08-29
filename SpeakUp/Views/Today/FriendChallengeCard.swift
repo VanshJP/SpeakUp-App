@@ -28,7 +28,9 @@ struct FriendChallengeCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
+                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel("Dismiss friend challenge")
                 }
 

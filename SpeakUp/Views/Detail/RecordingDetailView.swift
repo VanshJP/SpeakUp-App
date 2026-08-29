@@ -8,9 +8,14 @@ struct RecordingDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let recordingId: String
+    /// True only when navigation came directly from the recording that just
+    /// finished. History browsing never generates a new coach note.
+    var allowsCoachMoments = false
     /// Re-runs the session that produced this recording. Owned by ContentView
     /// because the countdown + recording covers live at the app root.
     var onPracticeAgain: ((Prompt?) -> Void)? = nil
+    /// Opens confidence tools from any coach action that routes there.
+    var onShowConfidence: (() -> Void)? = nil
 
     @State private var recording: Recording?
     @State private var isLoading = true
@@ -247,6 +252,11 @@ struct RecordingDetailView: View {
         }
         .onDisappear {
             audioService.stop()
+            if allowsCoachMoments, let moment = coachMoments.pendingDetail {
+                // Leaving the fresh result is an implicit dismiss. Record it
+                // so this note cannot leak onto the next session.
+                coachMoments.dismiss(moment, context: modelContext)
+            }
         }
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
@@ -300,10 +310,15 @@ struct RecordingDetailView: View {
         }
         .overlay {
             if showingListenBackEncouragement {
-                ListenBackEncouragementView {
-                    showingListenBackEncouragement = false
-                    proceedWithPlayback()
-                }
+                ListenBackEncouragementView(
+                    onContinue: {
+                        showingListenBackEncouragement = false
+                        proceedWithPlayback()
+                    },
+                    onCancel: {
+                        showingListenBackEncouragement = false
+                    }
+                )
                 .transition(.opacity)
             }
         }
@@ -326,14 +341,17 @@ struct RecordingDetailView: View {
                 if let analysis = coachAnalysis {
                     scoreHero(analysis)
                     takeComparisonSection(analysis)
-                    if let moment = coachMoments.pendingDetail {
+                    if allowsCoachMoments, let moment = coachMoments.pendingDetail {
                         CoachMomentCard(
                             moment: moment,
                             onAccept: { acceptCoachMoment(moment, recording: recording) },
                             onDismiss: { coachMoments.dismiss(moment, context: modelContext) }
                         )
                     }
-                    nextStepSection(analysis, recording: recording)
+                    if coachMoments.pendingDetail?.signal != .softLanding,
+                       coachMoments.pendingDetail?.signal != .firstAxisClear {
+                        nextStepSection(analysis, recording: recording)
+                    }
                     // Challenge CTA sits next to the score — burying it in
                     // Coaching was the moment the share loop went unseen.
                     shareCTASection(recording)
@@ -422,7 +440,11 @@ struct RecordingDetailView: View {
 
     /// Soft landing / first-axis win / filler breakthrough — once per open.
     private func evaluateCoachMomentIfNeeded(for recording: Recording) {
-        guard !coachMomentEvaluated, let analysis = coachAnalysis else { return }
+        guard allowsCoachMoments,
+              !coachMomentEvaluated,
+              let analysis = coachAnalysis else {
+            return
+        }
         coachMomentEvaluated = true
         CoachMomentService.shared.evaluateAfterSession(
             context: modelContext,
@@ -524,7 +546,12 @@ struct RecordingDetailView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .primary) {
+                GlassButton(
+                    title: "Try Again",
+                    icon: "arrow.clockwise",
+                    style: .primary,
+                    fullWidth: true
+                ) {
                     Haptics.light()
                     enqueueProcessingIfNeeded(recording, force: true)
                 }
@@ -561,7 +588,12 @@ struct RecordingDetailView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                GlassButton(title: "Analyze Again", icon: "arrow.clockwise", style: .secondary) {
+                GlassButton(
+                    title: "Analyze Again",
+                    icon: "arrow.clockwise",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
                     Haptics.medium()
                     enqueueProcessingIfNeeded(recording, force: true)
                 }
@@ -708,7 +740,7 @@ struct RecordingDetailView: View {
         coachMoments.consume(moment, context: modelContext)
         switch action {
         case .openConfidence:
-            onPracticeAgain?(recording.prompt)
+            onShowConfidence?()
         case .openWarmUp:
             showingCoachMomentWarmUp = true
         case .openDrill(let raw):
@@ -717,8 +749,6 @@ struct RecordingDetailView: View {
             showingCoachMomentReadAloud = true
         case .practiceAgain:
             onPracticeAgain?(recording.prompt)
-        case .dismissOnly:
-            break
         }
     }
 
@@ -934,6 +964,7 @@ struct RecordingDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Show speaker turns")
+                        .accessibilityValue(showSpeakerTurns ? "On" : "Off")
                     }
 
                     if let analysis = coachAnalysis, !analysis.fillerWords.isEmpty {
@@ -952,6 +983,7 @@ struct RecordingDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Highlight filler words")
+                        .accessibilityValue(showFillerHighlights ? "On" : "Off")
                     }
 
                     if let analysis = coachAnalysis, !analysis.vocabWordsUsed.isEmpty {
@@ -970,6 +1002,7 @@ struct RecordingDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Highlight vocabulary words")
+                        .accessibilityValue(showVocabHighlights ? "On" : "Off")
                     }
                 }
             }
@@ -1172,7 +1205,7 @@ struct RecordingDetailView: View {
     private func shareCTASection(_ recording: Recording) -> some View {
         let hasPrompt = recording.prompt != nil
         GlassCard(tint: AppColors.primary.opacity(0.1)) {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(hasPrompt ? "Challenge a friend" : "Share your score")
                         .font(.subheadline.weight(.medium))
@@ -1183,18 +1216,14 @@ struct RecordingDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Spacer(minLength: 0)
-
-                Button {
+                GlassButton(
+                    title: hasPrompt ? "Share challenge" : "Share score",
+                    icon: "square.and.arrow.up",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
                     Haptics.light()
                     pendingShareRecording = recording
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("Share")
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(AppColors.primary)
                 }
                 .accessibilityLabel(hasPrompt ? "Challenge a friend" : "Share your score")
             }

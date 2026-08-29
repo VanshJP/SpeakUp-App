@@ -452,30 +452,18 @@ extension AllPromptsView {
     }
 
     private var backToCategoriesButton: some View {
-        Button {
+        GlassButton(
+            title: "All categories",
+            icon: "chevron.left",
+            style: .secondary,
+            size: .small
+        ) {
             Haptics.light()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 selectedCategory = nil
             }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.left")
-                    .font(.caption.weight(.bold))
-                if let category = selectedCategory {
-                    Image(systemName: category.iconName)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(category.color)
-                    Text(category.shortName)
-                        .font(.caption.weight(.semibold))
-                }
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background { Capsule().fill(.ultraThinMaterial) }
-            .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
         }
-        .buttonStyle(.plain)
+        .accessibilityHint("Returns to the category list")
     }
 
     // MARK: - Prompt List & Grid
