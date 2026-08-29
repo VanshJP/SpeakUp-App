@@ -71,7 +71,7 @@ Order inside `analyze`:
 1. Sort words by `start` (Whisper/Apple Speech can emit out-of-order segments).
 2. `shouldScoreUsingPrimarySpeakerWords(...)` gates speaker-isolated scoring on `totalWords ≥ 12`, primary-speaker ratio in `[0.55, 0.90]`, `separationConfidence ≥ 62`, and conversation evidence.
 3. `scoringWords` = primary-speaker words when gated, else sorted words. `scoringText = scoringWords.map(\.word).joined(separator: " ")`.
-4. Single pass builds `fillerCounts` and `pauseMetadata: [PauseInfo]` — gap threshold **0.4 s**, gaps > 10 s capped, `isTransition = previous word ends with .?!`.
+4. Single pass builds `fillerCounts` and `pauseMetadata: [PauseInfo]` — gap threshold **0.4 s**, gaps > 10 s capped, `isTransition = previous word ends with .?!`. Filler rows sort by count descending, then word ascending for deterministic ties.
 5. WPM = `totalWords / (max(actualDuration, 1) / 60)` — uses **full recording duration**, not voiced window (prevents inflated WPM when there's dead time).
 6. Guarded sub-analyses: `analyzeVolume(samples:)`, `analyzeVocabComplexity(words:)`, `analyzeSentenceStructure(words:)`, `PitchAnalysisService.analyze(audioURL:)`, `analyzeRateVariation(...)`, `analyzeEmphasis(...)`, `analyzeEnergyArc(...)`, `TextAnalysisService.analyze(text:totalWords:)`.
 7. **Zero-score gate.**

@@ -656,7 +656,11 @@ nonisolated enum SpeechAnalysisPipeline {
         // Build filler words array
         let fillerWords = fillerCounts.map { key, value in
             FillerWord(word: key, count: value.count, timestamps: value.timestamps)
-        }.sorted { $0.count > $1.count }
+        }.sorted { lhs, rhs in
+            // Dictionary iteration order is undefined. Count ties need a
+            // stable key or identical analyses can reorder rows between runs.
+            lhs.count == rhs.count ? lhs.word < rhs.word : lhs.count > rhs.count
+        }
 
         let totalFillers = fillerWords.reduce(0) { $0 + $1.count }
         let scoringDuration = effectiveSpeechDuration(words: scoringWords, fallback: actualDuration)

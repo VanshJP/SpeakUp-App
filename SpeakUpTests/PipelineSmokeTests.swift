@@ -121,6 +121,8 @@ struct PipelineSmokeTests {
         // Filler tallies are stable even though their row IDs are not.
         #expect(first.fillerWords.map(\.word) == second.fillerWords.map(\.word))
         #expect(first.fillerWords.map(\.count) == second.fillerWords.map(\.count))
+        // Equal counts use a lexical tie-breaker, never Dictionary order.
+        #expect(first.fillerWords.map(\.word) == ["uh", "um"])
     }
 
     @Test func emptyWordsReturnNonCrashingDefaults() {
