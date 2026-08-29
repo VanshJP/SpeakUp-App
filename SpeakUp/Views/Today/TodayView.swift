@@ -14,8 +14,8 @@ struct TodayView: View {
     // Arrival moment — fires once per calendar day, on the first open.
     @AppStorage("lastArrivalDay") private var lastArrivalDay = ""
     @State private var arrived = false
-    @State private var showArrivalConfetti = false
     @State private var challengeStore = SharedChallengeStore.shared
+    @State private var coachMoments = CoachMomentService.shared
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
     // RecordingDetailView so both entry points land on the same tool.
@@ -67,6 +67,14 @@ struct TodayView: View {
                             challenge: challenge,
                             onAccept: { acceptFriendChallenge(challenge) },
                             onDismiss: { challengeStore.dismiss() }
+                        )
+                    }
+
+                    if let moment = coachMoments.pendingToday {
+                        CoachMomentCard(
+                            moment: moment,
+                            onAccept: { acceptCoachMoment(moment) },
+                            onDismiss: { dismissCoachMoment(moment) }
                         )
                     }
 
@@ -579,6 +587,28 @@ struct TodayView: View {
         onStartRecording(prompt, viewModel.selectedDuration)
     }
 
+    // MARK: - Coach notes
+
+    private func acceptCoachMoment(_ moment: CoachMoment) {
+        coachMoments.consume(moment, context: modelContext)
+        performCoachMomentAction(moment.action)
+    }
+
+    private func dismissCoachMoment(_ moment: CoachMoment) {
+        coachMoments.dismiss(moment, context: modelContext)
+    }
+
+    private func performCoachMomentAction(_ action: CoachMomentAction) {
+        switch action {
+        case .openConfidence:
+            onShowConfidence()
+        case .practiceAgain:
+            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+        case .close:
+            break
+        }
+    }
+
     // MARK: - First Run Surfaces
 
     /// The two things that wait for a score before they earn the user's
@@ -629,7 +659,11 @@ struct TodayView: View {
                 if let line = arrivalLine {
                     Text(line)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(AppColors.warning)
+                        .foregroundStyle(
+                            viewModel.practicedToday
+                                ? AnyShapeStyle(AppColors.success)
+                                : AnyShapeStyle(.secondary)
+                        )
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
@@ -649,13 +683,6 @@ struct TodayView: View {
             .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
         }
         .padding(.top, 4)
-        .overlay {
-            if showArrivalConfetti {
-                ConfettiView()
-                    .frame(height: 400)
-                    .allowsHitTesting(false)
-            }
-        }
     }
 
     /// What the streak is actually worth right now. Never claims a day the
@@ -664,12 +691,13 @@ struct TodayView: View {
         let streak = viewModel.userStats.currentStreak
         guard arrived, streak >= 1 else { return nil }
         return viewModel.practicedToday
-            ? "Day \(streak) locked in"
-            : "Day \(streak), one session keeps it"
+            ? "Day \(streak) — nice work today"
+            : "Day \(streak) so far — practice when you're ready"
     }
 
-    /// Runs once per calendar day: pops the streak chip, fires a haptic, and
-    /// adds confetti on every seventh day so the milestone still feels rare.
+    /// Runs once per calendar day: pops the streak chip and fires one haptic.
+    /// Milestones already have achievement celebrations; duplicating confetti
+    /// here made the same practice feel like three separate events.
     private func playArrivalIfNeeded() {
         let today = Calendar.current.startOfDay(for: .now).ISO8601Format()
         guard lastArrivalDay != today else {
@@ -680,14 +708,15 @@ struct TodayView: View {
         lastArrivalDay = today
 
         let streak = viewModel.userStats.currentStreak
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.55).delay(0.15)) {
+        if reduceMotion {
             arrived = true
+        } else {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.55).delay(0.15)) {
+                arrived = true
+            }
         }
         if streak >= 1 {
             Haptics.success()
-        }
-        if streak >= 7, streak % 7 == 0 {
-            showArrivalConfetti = true
         }
     }
 
@@ -735,7 +764,6 @@ struct TodayView: View {
             startHint: "Records a \(viewModel.selectedDuration.displayName) take on the topic above",
             freeHint: "Records a \(viewModel.selectedDuration.displayName) take with no topic",
             onStart: {
-                Haptics.medium()
                 if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
                     onStartStoryPractice?(story, viewModel.selectedDuration)
                 } else {
@@ -743,7 +771,6 @@ struct TodayView: View {
                 }
             },
             onFreeTalk: {
-                Haptics.medium()
                 onStartRecording(nil, viewModel.selectedDuration)
             }
         )
@@ -810,6 +837,7 @@ struct TodayView: View {
                         ToolTileLabel(icon: tool.icon, title: tool.shortTitle, tint: tool.color)
                     }
                     .buttonStyle(GlassPressStyle())
+                    .accessibilityLabel("\(tool.title). \(tool.outcome)")
                 }
             }
         }
@@ -1043,30 +1071,21 @@ struct SessionStartFooter: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Button {
+            GlassButton(
+                title: "Start Speaking",
+                icon: "mic.fill",
+                style: .primary,
+                size: .large,
+                fullWidth: true
+            ) {
+                Haptics.medium()
                 onStart()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Start Speaking")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                .background {
-                    Capsule()
-                        .fill(Color.white.opacity(0.94))
-                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
-                }
-                .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
             .accessibilityHint(startHint)
 
             if showFreeTalk {
                 Button {
+                    Haptics.light()
                     onFreeTalk()
                 } label: {
                     HStack(spacing: 6) {
@@ -1153,6 +1172,10 @@ struct DurationPill: View {
                     .fill(.ultraThinMaterial)
             }
         }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel("Recording length, \(selectedDuration.displayName)")
+        .accessibilityHint("Opens recording length options")
     }
 }
 

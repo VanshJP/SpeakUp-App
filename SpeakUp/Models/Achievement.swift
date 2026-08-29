@@ -64,19 +64,19 @@ enum AchievementDefinition: String, CaseIterable {
 
     var descriptionText: String {
         switch self {
-        case .firstRecording: return "Complete your first recording"
-        case .tenSessions: return "Complete 10 practice sessions"
-        case .fiftySessions: return "Complete 50 practice sessions"
-        case .hundredSessions: return "Complete 100 practice sessions"
-        case .streak3: return "Practice 3 days in a row"
-        case .streak7: return "Practice 7 days in a row"
-        case .streak30: return "Practice 30 days in a row"
-        case .score80: return "Score 80 or higher"
-        case .score95: return "Score 95 or higher"
-        case .zeroFillers: return "Complete a session with zero filler words"
-        case .allCategories: return "Record in every prompt category"
-        case .listenBack: return "Listen to your own recording for the first time"
-        case .wordWorkout: return "Use three vocabulary words in a single session"
+        case .firstRecording: return "Your first recording"
+        case .tenSessions: return "10 practice sessions"
+        case .fiftySessions: return "50 practice sessions"
+        case .hundredSessions: return "100 practice sessions"
+        case .streak3: return "3 practice days in a row"
+        case .streak7: return "7 practice days in a row"
+        case .streak30: return "30 practice days in a row"
+        case .score80: return "A score of 80 or higher"
+        case .score95: return "A score of 95 or higher"
+        case .zeroFillers: return "A session with zero filler words"
+        case .allCategories: return "A recording in every prompt category"
+        case .listenBack: return "Listening back for the first time"
+        case .wordWorkout: return "Three vocabulary words in one session"
         }
     }
 
@@ -105,5 +105,11 @@ enum AchievementDefinition: String, CaseIterable {
             descriptionText: descriptionText,
             icon: icon
         )
+    }
+
+    func refreshDisplay(on achievement: Achievement) {
+        achievement.title = title
+        achievement.descriptionText = descriptionText
+        achievement.icon = icon
     }
 }

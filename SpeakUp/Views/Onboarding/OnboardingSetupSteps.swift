@@ -66,7 +66,7 @@ struct OnboardingMicStep: View {
             return "Big Talk listens only while you're recording. Audio stays on this iPhone."
         }
         if heardVoice {
-            return "Got you. That's the voice we'll be listening to."
+            return "Mic looks good. Nothing is saved until you press record."
         }
         return "Say anything. Try \"testing, one two three.\""
     }
@@ -479,7 +479,7 @@ struct OnboardingReminderStep: View {
                             Text("Daily practice nudge")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
-                            Text("We'll also warn you when a streak is about to lapse.")
+                            Text("One reminder at the time you choose. Nothing else.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -503,8 +503,8 @@ struct OnboardingReminderStep: View {
                 GlassCard(padding: 12) {
                     VStack(alignment: .leading, spacing: 9) {
                         OnboardingBullet(icon: "clock", text: "One reminder a day, at a time you choose.")
-                        OnboardingBullet(icon: "flame.fill", text: "A heads-up when your streak is about to break.", tint: AppColors.warning)
-                        OnboardingBullet(icon: "bell.slash", text: "Nothing else. Turn it off any time in Settings.")
+                        OnboardingBullet(icon: "bell.slash", text: "No streak warnings or surprise nudges.")
+                        OnboardingBullet(icon: "gearshape", text: "Change it or turn it off any time in Settings.")
                     }
                 }
             }

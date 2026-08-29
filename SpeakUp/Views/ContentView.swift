@@ -14,8 +14,12 @@ struct ContentView: View {
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
     @State private var pendingRecordingNavigation: String?
+    /// Only the result reached directly from RecordingView may generate a
+    /// coach note. Browsing an old History row must stay inert.
+    @State private var freshResultRecordingId: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
+    @State private var coachMoments = CoachMomentService.shared
     /// Owned here because the tour crosses tabs: it drives `selectedTab` and
     /// draws over the tab bar, neither of which a single tab's root can do.
     @State private var appTour = AppTourModel()
@@ -144,15 +148,22 @@ struct ContentView: View {
                 .navigationDestination(item: $selectedRecordingId) { recordingId in
                     RecordingDetailView(
                         recordingId: recordingId,
+                        allowsCoachMoments: freshResultRecordingId == recordingId,
                         onPracticeAgain: { prompt in
                             recordingPrompt = prompt
                             recordingStoryId = nil
                             recordingDuration = .sixty
                             recordingChallenge = nil
                             showingCountdown = true
+                        },
+                        onShowConfidence: {
+                            showingConfidenceTools = true
                         }
                     )
                     .onDisappear {
+                        if freshResultRecordingId == recordingId {
+                            freshResultRecordingId = nil
+                        }
                         selectedRecordingId = nil
                     }
                 }
@@ -243,8 +254,24 @@ struct ContentView: View {
                 goalId: recordingGoalId,
                 storyId: recordingStoryId,
                 sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
+                onSavedAndClosed: { recording in
+                    Task {
+                        // The user chose to leave the analyzing screen. Wait
+                        // for its existing coordinator job rather than missing
+                        // score-based unlocks or starting a second analysis.
+                        while RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
+                            try? await Task.sleep(for: .milliseconds(500))
+                            guard !Task.isCancelled else { return }
+                        }
+                        await achievementService.checkAchievements(context: modelContext)
+                        // Save & close means no replacement interruption. Keep
+                        // unlock state, but do not surface an overlay now.
+                        achievementService.clearNewlyUnlocked()
+                    }
+                },
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
+                    freshResultRecordingId = recording.id.uuidString
                     selectedTab = .history
                     showingRecording = false
                     SharedChallengeStore.shared.dismiss()
@@ -320,15 +347,20 @@ struct ContentView: View {
             if let achievement = achievementService.newlyUnlocked {
                 AchievementUnlockedView(achievement: achievement) {
                     achievementService.clearNewlyUnlocked()
-                    // Celebration just landed — the one moment a rating ask is
-                    // welcome. The service decides whether to spend one.
-                    if ReviewRequestService.shared.requestIfEligible(
-                        .achievementUnlocked,
-                        settings: userSettings.first
-                    ) {
-                        try? modelContext.save()
-                    }
                 }
+                .zIndex(10)
+            } else if let moment = coachMoments.pendingOverlay {
+                CoachMomentOverlay(
+                    moment: moment,
+                    onAccept: {
+                        let action = moment.action
+                        coachMoments.consume(moment, context: modelContext)
+                        performCoachMomentAction(action)
+                    },
+                    onDismiss: {
+                        coachMoments.dismiss(moment, context: modelContext)
+                    }
+                )
                 .zIndex(10)
             }
         }
@@ -463,6 +495,23 @@ struct ContentView: View {
         AnalyticsService.shared.log(
             .onboardingStep("app_tour", action: completed ? "complete" : "skip")
         )
+    }
+
+    // MARK: - Coach notes
+
+    private func performCoachMomentAction(_ action: CoachMomentAction) {
+        switch action {
+        case .openConfidence:
+            showingConfidenceTools = true
+        case .practiceAgain:
+            recordingPrompt = nil
+            recordingStoryId = nil
+            recordingDuration = .sixty
+            recordingChallenge = nil
+            showingCountdown = true
+        case .close:
+            break
+        }
     }
 
     // MARK: - Onboarding

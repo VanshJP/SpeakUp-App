@@ -15,7 +15,7 @@ Unlockable achievements (gallery + confetti sheet) and user-defined goals with p
 
 Presented as sheets from Today / `ContentView` — **not** a tab.
 
-**Gotchas:** CloudKit can duplicate Achievement rows — service dedupes by id. Unlock may trigger review ask (`ReviewRequestService`). New definition cases are inserted on launch (`SpeakUpApp`) and again in `evaluateAll` if a row is missing.
+**Gotchas:** CloudKit can duplicate Achievement rows — service dedupes by id. Celebrations are in-app only: no milestone notification and no review ask. New definition cases are inserted on launch (`SpeakUpApp`) and again in `evaluateAll` if a row is missing; existing rows refresh title/description/icon from `AchievementDefinition` without touching unlock state.
 
 ## Goals
 

@@ -90,6 +90,13 @@ private struct CoachingTipRow: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!hasTeachingPoint)
+                .accessibilityLabel(tip.title)
+                .accessibilityValue(
+                    hasTeachingPoint
+                        ? (isExpanded ? "Expanded" : "Collapsed")
+                        : "No additional detail"
+                )
+                .accessibilityHint(hasTeachingPoint ? "Shows the teaching point" : "")
 
                 // Always visible, never behind the chevron. The message names
                 // a timestamp the user has no memory of; if the way to hear it
@@ -156,6 +163,7 @@ private struct CoachingTipRow: View {
                             .buttonStyle(.plain)
                             .disabled(onPractice == nil)
                             .accessibilityLabel("Start \(label.title)")
+                            .accessibilityHint(onPractice == nil ? "Not available" : "")
                         }
                     }
                     .padding(.top, 8)

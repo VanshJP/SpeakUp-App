@@ -71,15 +71,15 @@ struct DefaultCurriculum {
                         .lesson(
                             id: "w1_l3_a1",
                             title: "The ideal pace range",
-                            description: "130-170 words per minute is considered the optimal range for clear communication.",
+                            description: "Conversational speaking usually sits near 150 words per minute. Your Settings target is the number that matters for scoring.",
                             content: LessonContent(sections: [
-                                .concepts(title: "Speaking Pace Explained", body: "The sweet spot for conversational speaking is 130-170 words per minute (WPM).\nBelow 130 WPM can feel slow and cause listeners to lose focus. Above 170 WPM makes it hard for people to follow your ideas.\nPace naturally varies, you might speed up when excited and slow down for emphasis. That variation is actually good.", icon: "speedometer"),
+                                .concepts(title: "Speaking Pace Explained", body: "A useful conversational default is around 150 words per minute (WPM), with room on either side.\nWell below your target can feel slow and cause listeners to drift. Well above it makes ideas hard to follow.\nPace naturally varies — you might speed up when excited and slow down for emphasis. That variation is useful when you choose it on purpose.\nBig Talk scores pace against your personal target (Settings → Pace). Auto-calibration can move that target as you practice.", icon: "speedometer"),
                                 .example(title: "Famous Speakers' Pace", body: "Martin Luther King Jr.'s \"I Have a Dream\" averaged ~100 WPM, deliberately slow for dramatic impact.\nJohn F. Kennedy's inaugural address was ~135 WPM, measured and presidential.\nCasual TED talks typically range 150-170 WPM, energetic but clear."),
                                 .tip("If you tend to rush, try breathing between sentences. Each breath creates a natural pause that slows you down without feeling forced."),
-                                .keyTakeaway("Pace isn't about hitting an exact number, it's about being clear and comfortable. Know your range, then adjust with intention."),
+                                .keyTakeaway("Pace isn't about hitting an exact universal number — it's about being clear and comfortable relative to your target. Know your range, then adjust with intention."),
                             ])
                         ),
-                        .practice(id: "w1_l3_a2", title: "Record focusing on pace", description: "Record a session and pay attention to your WPM in the analysis. Are you in the 130-170 range?", duration: 60),
+                        .practice(id: "w1_l3_a2", title: "Record focusing on pace", description: "Record a session and check your WPM against your pace target in the analysis. Are you near it, or consistently fast/slow?", duration: 60),
                     ]
                 ),
 
@@ -94,7 +94,7 @@ struct DefaultCurriculum {
                             title: "Score breakdown",
                             description: "Your overall score combines clarity, pace, filler usage, and pause quality. Each tells you something different.",
                             content: LessonContent(sections: [
-                                .concepts(title: "Your Score Components", body: "Clarity, How well-formed and complete your sentences are. Trails off and restarts lower this score.\nPace, How close to the optimal 130-170 WPM range you speak. Consistency matters too.\nFiller Usage, Fewer filler words means a higher score. This tracks \"um,\" \"uh,\" \"like,\" and similar words.\nPause Quality, Strategic pauses (between ideas) help your score. Hesitation pauses (mid-sentence) lower it.", icon: "chart.bar.fill"),
+                                .concepts(title: "Your Score Components", body: "Clarity, How well-formed and complete your sentences are. Trails off and restarts lower this score.\nPace, How close you speak to your personal target WPM (default ~150; Settings can calibrate). Consistency inside the take matters too.\nFiller Usage, Fewer filler words means a higher score. This tracks \"um,\" \"uh,\" \"like,\" and similar words.\nPause Quality, Strategic pauses (between ideas) help your score. Hesitation pauses (mid-sentence) lower it.", icon: "chart.bar.fill"),
                                 .tip("Don't try to improve everything at once. Pick your lowest-scoring area and focus on that for a week. Small, targeted improvements compound into big results."),
                                 .keyTakeaway("Your overall score is the average of multiple skills. Improving any single component lifts the whole score."),
                             ])
@@ -177,7 +177,7 @@ struct DefaultCurriculum {
                             ])
                         ),
                         .drill(id: "w2_l3_a1", title: "Pace control drill", description: "A 60-second drill where you match a target WPM. The gauge shows you in real time whether you're too fast or slow.", mode: "paceControl"),
-                        .practice(id: "w2_l3_a2", title: "Controlled pace recording", description: "Record a 60-second session focusing on maintaining 130-170 WPM. Breathe between sentences to keep steady.", duration: 60),
+                        .practice(id: "w2_l3_a2", title: "Controlled pace recording", description: "Record a 60-second session focusing on holding near your pace target. Breathe between sentences to keep steady.", duration: 60),
                     ]
                 ),
 
@@ -349,7 +349,7 @@ struct DefaultCurriculum {
                             title: "Think on your feet",
                             description: "Learn the AREA method, a framework for organizing your thoughts instantly when you have zero prep time.",
                             content: LessonContent(sections: [
-                                .concepts(title: "The AREA Method for Impromptu Speaking", body: "When someone puts you on the spot, your brain panics because it has no structure. AREA gives you one instantly:\nAssertion, State your position in one sentence. \"I believe remote work is here to stay.\"\nReason, Give one clear reason why. \"It's proven that flexible work increases both productivity and retention.\"\nEvidence, Support with a specific example or fact. \"Our company saw a 15% increase in output after going hybrid.\"\nAssertion, Restate your position to close the loop. \"That's why I believe remote work is the future.\"", icon: "bolt.fill"),
+                                .concepts(title: "The AREA Method for Impromptu Speaking", body: "When someone puts you on the spot, your brain panics because it has no structure. AREA gives you one instantly:\nAssertion, State your position in one sentence. \"I believe remote work is here to stay.\"\nReason, Give one clear reason why. \"Flexible work often increases both productivity and retention.\"\nEvidence, Support with a specific example or fact. \"Our company saw a 15% increase in output after going hybrid.\"\nAssertion, Restate your position to close the loop. \"That's why I believe remote work is the future.\"", icon: "bolt.fill"),
                                 .concepts(title: "The 3-Second Rule", body: "When asked an unexpected question, take 3 seconds before answering. Not 1, not 5, exactly 3.\nIn those 3 seconds: breathe, pick your Assertion, and choose one Reason. That's all you need to start.\nMost people start talking immediately because silence feels threatening. But those 3 seconds are the difference between rambling and a structured response.", icon: "clock"),
                                 .tip("If you get a question you're not prepared for, bridge to what you do know. \"That's a great question. What I can tell you is...\" or \"I'm not sure about that specifically, but what I do know is...\" This buys you time and keeps you in control.", title: "The Bridge Technique"),
                                 .keyTakeaway("Impromptu doesn't mean unstructured. AREA gives you a framework you can deploy in 3 seconds. The more you practice, the more automatic it becomes."),
@@ -892,7 +892,7 @@ struct DefaultCurriculum {
                     title: "Conversation Confidence",
                     objective: "Build lasting confidence in social situations through repeated practice.",
                     activities: [
-                        .exercise(id: "w9_l4_a1", title: "Pre-social warm-up", description: "Do a quick breathing exercise followed by vocal warm-up to get in a confident, relaxed state before social interactions.", exerciseId: "calming"),
+                        .exercise(id: "w9_l4_a1", title: "Pre-social warm-up", description: "Do a quick breathing exercise followed by vocal warm-up to get in a confident, relaxed state before social interactions.", exerciseId: "box_breathing"),
                         .practice(id: "w9_l4_a2", title: "Party scenario practice", description: "You're at a friend's party. Record yourself introducing yourself to an imaginary group, asking about how they know the host, sharing a brief story, and keeping the energy warm and approachable.", duration: 120),
                         .review(id: "w9_l4_a3", title: "Conversation skills review", description: "Listen back to your conversation practices from this week. Notice: Did your openers sound natural? Did your follow-up questions go deeper? Did your exits feel graceful? Identify one specific area to keep working on."),
                     ]

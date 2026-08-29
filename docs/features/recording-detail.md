@@ -13,6 +13,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Playback | `PlaybackDrawer`, `RecordingDetailPlaybackViewModel` |
 | Transcript | `TranscriptViews`, `TranscriptExcerptCard`, `WPMChartView` |
 | Coaching / next | `CoachPlanService`, `CoachEvidenceService`, `CoachingTipService`, `CoachingPrompt`, `CoachingTipsView`, `NextStepCard`, `TakeComparisonCard`, `ListenBackEncouragementView` |
+| Coach note | `CoachMomentService.evaluateAfterSession` → `CoachMomentCard` above next step (axis mark); a soft landing replaces the next-step card so retry is never duplicated. See [coach-moments.md](./coach-moments.md). |
 | Word workout result | `VocabChallengeResultCard` on the breakdown tab when today's spotlight words exist |
 | Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each occurrence a playable stamp, each habit carrying swap suggestions |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
@@ -28,6 +29,9 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 2. `ReviewRequestService.markFirstResultSeen()` only when analysis completed — gates the review prompt.
 3. Deferred-by-allowance UI offers Try Again only — no unlock path exists during the beta, and `AllowanceGate` never defers while `BetaAccess.allFeaturesFree` is true.
 4. Processing: prefer `RecordingProcessingCoordinator` over ad-hoc parallel jobs.
+4a. Coach moments are fresh-result-only (`ContentView.freshResultRecordingId` → `RecordingDetailView.allowsCoachMoments`). Browsing an old History/Story recording never evaluates or shows a new note.
+4b. The full-screen post-recording analyzing state always offers **Save & close**. The saved recording remains in History and the coordinator keeps scoring in the background; a model download must never trap the user. `ContentView` waits for that existing job, then evaluates achievements silently — unlock state stays correct without replacing the user's chosen exit with an overlay.
+4c. Recovery copy protects the work: "Couldn't score this take" + "Your recording is safe." Raw backend errors never appear on the result screen, and playback failures never interpolate `localizedDescription`.
 5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
 6. Share score / progress cards via `SharePresenter` only (completed-share analytics). Score-card shares that include the prompt also attach a caption with a try-this-prompt URL (`SharedPromptLink`); do not invent a second activity sheet.
 7. Prompt text on a share card and in the share URL is opt-in. Scores-only shares must not put the prompt (or `beat`) on the link. Story sessions may show the title on the card but never encode story body into the URL.
@@ -58,6 +62,7 @@ Stickiness comes from averaging the window, not from stored state. There is no p
 10. Tips are ranked by weighted deficit, then by dimension name. The tiebreak is load-bearing — `sort` is not stable and `generateTips` runs in `body`, so equal deficits would otherwise reorder between redraws.
 11. Signal-quality notes (noise, overlapping speakers) are `.signal` kind and only fill leftover slots. They are caveats about the recording, never coaching, and must never displace a real tip.
 12. Pace copy reads `UserSettings.resolvedTargetWPM`, never a hardcoded band. Auto-calibration moves the target, and fixed "130-170" copy contradicts the pace subscore whenever it does.
+12a. `AnalyzingView`'s tip carousel is coach-waiting copy (technique while you wait), not therapy reassurance. Keep Save & close; do not soft-pedal into "you were brave for pressing record."
 13. `CoachDimension.analyticsSlug` is frozen — those strings predate the enum and feed the `next_action_taken` funnel. `rawValue` is not a substitute.
 13a. The focus card is `CoachFocusCard` in `Views/Components/`, shared with Today. It is hidden when `Snapshot.currentIsInPlanWindow` is false — the plan is always built from the newest sessions, so showing it on a three-month-old recording would imply that focus was what the session was about. The focus *tip* still appears; it is derived from that session's own numbers.
 13b. `CoachDimension.practiceRoute` is the only dimension → tool mapping. Clarity goes to Read Aloud, delivery and vocal variety to the warm-up; forcing those into the nearest drill printed "Try Pause Practice" under a tip about pitch range. `NextStepCard` and the tip rows both read it — they used to carry separate copies.

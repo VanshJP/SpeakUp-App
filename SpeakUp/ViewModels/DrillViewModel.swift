@@ -14,9 +14,11 @@ class DrillViewModel {
     var score: Int = 0
     var result: DrillResult?
     var isComplete = false
+    /// Pace-control target from the user's settings (default 150).
+    var targetWPM: Int = 150
     /// Set when the audio/recognition stack can't run (mic denied, speech
     /// recognition off, dead engine). The session view surfaces it and exits —
-    /// a drill that can't hear must not end as a confident "Zero fillers!".
+    /// a drill that can't hear must not end as a confident clean run.
     var errorMessage: String?
 
     // Audio level for waveform visualization (same as RecordingViewModel)
@@ -294,14 +296,17 @@ class DrillViewModel {
         case .fillerElimination:
             drillScore = finalFillerCount == 0 ? 100 : max(0, 100 - finalFillerCount * 25)
             passed = finalFillerCount == 0
-            details = finalFillerCount == 0 ? "Perfect! Zero fillers!" : "\(finalFillerCount) filler(s) detected"
+            details = finalFillerCount == 0
+                ? "Clean run — zero fillers"
+                : "\(finalFillerCount) filler(s) detected"
 
         case .paceControl:
             let sigma = 35.0
-            let deviation = finalWPM - 150.0
+            let target = Double(targetWPM)
+            let deviation = finalWPM - target
             drillScore = max(0, Int(100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))))
             passed = drillScore >= 70
-            details = "Average pace: \(Int(finalWPM)) WPM (target: 130-170)"
+            details = "Average pace: \(Int(finalWPM)) WPM (target: \(targetWPM))"
 
         case .pausePractice:
             drillScore = pauseMarkersTotal > 0
@@ -309,7 +314,7 @@ class DrillViewModel {
                 : 0
             passed = pauseMarkersHit >= 2
             if pauseMarkersHit == pauseMarkersTotal {
-                details = "Perfect! Hit all \(pauseMarkersTotal) pause markers!"
+                details = "All \(pauseMarkersTotal) pause markers hit"
             } else {
                 details = "Hit \(pauseMarkersHit) of \(pauseMarkersTotal) pause markers"
             }

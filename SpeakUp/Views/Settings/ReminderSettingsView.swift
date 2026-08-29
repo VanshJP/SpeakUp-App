@@ -38,7 +38,7 @@ struct ReminderSettingsView: View {
                         }
                     }
 
-                    Text("Get a daily notification to practice your speaking skills.")
+                    Text("One optional reminder at a time you choose. No streak warnings, and you can turn it off anytime.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)

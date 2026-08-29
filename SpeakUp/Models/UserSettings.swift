@@ -113,6 +113,16 @@ final class UserSettings {
     // visible by `TodayHomeLayout.resolve`. Additive; see today-library.md.
     var todayHomeLayoutRaw: [String] = []
 
+    // Coach notes — weekly celebration budget + delivery memory.
+    // Additive defaults: empty week key / zero used / empty lists mean "never
+    // shown a celebration note yet". See docs/features/coach-moments.md.
+    var coachMomentWeekKey: String = ""
+    var coachMomentCelebrationsUsedThisWeek: Int = 0
+    var coachMomentDeliveredIDs: [String] = []
+    /// `CoachDimension.rawValue`s that have cleared mastery at least once —
+    /// drives the first-axis-win note so it fires once per dimension.
+    var coachMomentClearedDimensionsRaw: [String] = []
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 
@@ -227,6 +237,22 @@ final class UserSettings {
     /// Resolved Today modules in display order. Empty storage → factory default.
     var todayHomeModules: [TodayHomeModule] {
         TodayHomeLayout.resolve(todayHomeLayoutRaw)
+    }
+
+    /// Weekly celebration budget for coach notes. Empty week key rolls into a
+    /// fresh week on first read after the calendar week changes.
+    var coachMomentBudget: CoachMomentBudget {
+        CoachMomentBudget(
+            weekKey: coachMomentWeekKey,
+            celebrationsUsed: coachMomentCelebrationsUsedThisWeek,
+            deliveredIDs: coachMomentDeliveredIDs
+        ).rolling(now: .now)
+    }
+
+    func apply(budget: CoachMomentBudget) {
+        coachMomentWeekKey = budget.weekKey
+        coachMomentCelebrationsUsedThisWeek = budget.celebrationsUsed
+        coachMomentDeliveredIDs = budget.deliveredIDs
     }
 
     // MARK: - Pace Target Resolution

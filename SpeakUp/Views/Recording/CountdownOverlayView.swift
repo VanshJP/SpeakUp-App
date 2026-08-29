@@ -254,7 +254,7 @@ struct CountdownOverlayView: View {
 
     private var challengeFooter: String {
         if let score = challenge?.beatScore {
-            return "They scored \(score). Can you beat it?"
+            return "They scored \(score). Your turn, same prompt, your pace."
         }
         if challenge != nil {
             return "A friend sent you this prompt"

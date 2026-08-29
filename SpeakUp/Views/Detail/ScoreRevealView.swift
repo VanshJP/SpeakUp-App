@@ -157,7 +157,7 @@ struct ScoreRevealView: View {
             // Name the lever rather than the shortfall — the detail screen's
             // next-step card picks this same thread up.
             if let weakestAxisLabel {
-                return "\(weakestAxisLabel) held this one back"
+                return "Next lever: \(weakestAxisLabel)"
             }
             return "Every take is data. Let's look at why."
 

@@ -90,7 +90,7 @@ struct TakeComparisonCard: View {
         } else if delta >= 3 {
             return "Moved in the right direction. Run it once more and see if it holds."
         } else if delta <= -8 {
-            return "Worse than last time. Second takes often are, you are thinking about the mechanics instead of the point. Run a third."
+            return "Down from last time. Second takes often are, because you are thinking about the mechanics instead of the point. A third usually settles it."
         } else if delta <= -3 {
             return "Slightly down. One take either way is noise; the third one tells you which."
         }

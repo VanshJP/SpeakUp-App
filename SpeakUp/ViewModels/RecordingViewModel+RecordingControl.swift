@@ -73,6 +73,7 @@ extension RecordingViewModel {
             mediaType: .audio,
             audioURL: url,
             isProcessing: true,
+            frameworkUsed: frameworkUsed?.displayName,
             audioLevelSamples: audioLevelSamples,
             goalId: goalId
         )

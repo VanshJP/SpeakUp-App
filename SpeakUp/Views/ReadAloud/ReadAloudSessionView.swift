@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReadAloudSessionView: View {
     @Bindable var viewModel: ReadAloudViewModel
@@ -91,19 +92,34 @@ struct ReadAloudSessionView: View {
             )
         }
         .alert(
-            "Error",
+            readAloudErrorNeedsSettings ? "Access Needed" : "Couldn't Start Read Aloud",
             isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )
         ) {
-            Button("OK") {
+            Button("Close", role: .cancel) {
                 viewModel.reset()
                 dismiss()
             }
+            if readAloudErrorNeedsSettings {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            }
         } message: {
-            Text(viewModel.errorMessage ?? "")
+            Text(
+                readAloudErrorNeedsSettings
+                    ? "Check microphone and Speech Recognition access, then try again when you're ready."
+                    : "Read Aloud couldn't start this time. Close this screen and try again when you're ready."
+            )
         }
+    }
+
+    private var readAloudErrorNeedsSettings: Bool {
+        viewModel.errorMessage?.localizedCaseInsensitiveContains("settings") == true
     }
 
     // MARK: - Top Bar
@@ -311,30 +327,14 @@ struct ReadAloudSessionView: View {
 
             Spacer()
 
-            // Stop button
-            Button {
+            GlassButton(
+                title: "Done",
+                icon: "stop.fill",
+                style: .primary,
+                size: .medium
+            ) {
                 Haptics.medium()
                 viewModel.stopSession()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "stop.fill")
-                        .font(.body.weight(.semibold))
-                    Text("Done")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 14)
-                .background {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.primary, AppColors.categoryBrandBright.opacity(0.85)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                }
             }
             // Disabled while the engine is still starting — a tap during the
             // authorization await used to produce a ghost "0%" result and,

@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct ListenBackEncouragementView: View {
-    let onDismiss: () -> Void
+    let onContinue: () -> Void
+    let onCancel: () -> Void
+
+    @AccessibilityFocusState private var titleFocused: Bool
 
     var body: some View {
         ZStack {
@@ -15,24 +18,29 @@ struct ListenBackEncouragementView: View {
 
                 Text("About Hearing Your Voice")
                     .font(.title3.weight(.bold))
+                    .accessibilityFocused($titleFocused)
 
-                Text("Hearing your own voice feels weird, that's totally normal! Everyone sounds different to themselves.\n\nThis is actually a superpower for improvement. Listening back helps you notice patterns you'd never catch in the moment.")
+                Text("Hearing your own voice can feel unfamiliar. Everyone sounds different to themselves.\n\nListening back once can help you notice patterns that are hard to catch while speaking.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                Button {
-                    onDismiss()
-                } label: {
-                    Text("Got it, let's listen!")
-                        .font(.headline)
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Capsule().fill(Color.white.opacity(0.94)))
+                GlassButton(
+                    title: "Got it, let's listen!",
+                    style: .primary,
+                    fullWidth: true
+                ) {
+                    Haptics.medium()
+                    onContinue()
                 }
-                .buttonStyle(GlassPressStyle())
+
+                Button("Not now") {
+                    Haptics.light()
+                    onCancel()
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
             }
             .padding(24)
             .background {
@@ -44,6 +52,15 @@ struct ListenBackEncouragementView: View {
                     }
             }
             .padding(32)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) {
+            Haptics.light()
+            onCancel()
+        }
+        .onAppear {
+            titleFocused = true
         }
     }
 }

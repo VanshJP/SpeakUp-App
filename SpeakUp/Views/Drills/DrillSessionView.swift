@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct DrillSessionView: View {
     var viewModel: DrillViewModel
@@ -68,12 +69,17 @@ struct DrillSessionView: View {
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {
+            Button("Close", role: .cancel) {
                 viewModel.cleanup()
                 dismiss()
             }
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
         } message: {
-            Text(viewModel.errorMessage ?? "")
+            Text("Check microphone and Speech Recognition access, then try again when you're ready.")
         }
     }
 

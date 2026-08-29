@@ -37,6 +37,9 @@ struct AnalyzingView: View {
     var existingFeedback: SessionFeedback? = nil
     var onFeedbackSubmitted: ((SessionFeedback) -> Void)? = nil
     var onFeedbackCompleted: (() -> Void)? = nil
+    /// Available when this view sits inside the full-screen recorder. Detail
+    /// navigation already has a Back button, so that call site leaves this nil.
+    var onSaveAndClose: (() -> Void)? = nil
     var analysisReady: Bool = false
 
     @State private var currentTipIndex = 0
@@ -82,7 +85,9 @@ struct AnalyzingView: View {
         if isFirstTimeModelDownload {
             return "One-time download, about 150 MB. Your recording is already saved, leave this screen and it will score itself when the download finishes."
         }
-        return isModelLoading ? "Loading the AI model for first-time use" : "Sit tight, we're crunching the numbers"
+        return isModelLoading
+            ? "Warming up the speech engine"
+            : "Your recording is safe. Scoring usually takes a moment."
     }
 
     private let stages = [
@@ -104,6 +109,22 @@ struct AnalyzingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let onSaveAndClose {
+                HStack {
+                    Spacer()
+                    Button("Save & close", systemImage: "xmark") {
+                        Haptics.light()
+                        onSaveAndClose()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Your recording stays in History and scoring continues")
+                }
+                .padding(.top, systemTopSafeAreaInset + 8)
+                .padding(.horizontal, 20)
+            }
+
             if shouldShowFeedback {
                 feedbackContent
                 feedbackBottomBar
@@ -132,7 +153,8 @@ struct AnalyzingView: View {
             statusSubtitle: statusSubtitle,
             stage: progressStage,
             currentTipIndex: currentTipIndex,
-            tipVisible: showTip
+            tipVisible: showTip,
+            hasExternalTopBar: onSaveAndClose != nil
         )
     }
 
@@ -152,7 +174,7 @@ struct AnalyzingView: View {
     private var feedbackContentStack: some View {
         VStack(spacing: 14) {
             Spacer()
-                .frame(height: systemTopSafeAreaInset + 8)
+                .frame(height: onSaveAndClose == nil ? systemTopSafeAreaInset + 8 : 8)
 
             WaveformOrb(
                 phase: waveformPhase,
@@ -289,7 +311,7 @@ struct AnalyzingView: View {
             .padding(.horizontal, 12)
             .transition(.opacity)
         } else {
-            Text("Tap a response for each question")
+            Text("Answer any you'd like, or skip to results")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -395,11 +417,11 @@ private struct ScaleInput: View {
     let onSelect: (Int) -> Void
 
     private let options: [(label: String, icon: String)] = [
-        ("Very Poor", "face.dashed"),
-        ("Poor", "face.smiling.inverse"),
+        ("Rough", "face.dashed"),
+        ("Shaky", "face.smiling.inverse"),
         ("Okay", "face.smiling"),
         ("Good", "hand.thumbsup"),
-        ("Excellent", "star.fill")
+        ("Great", "star.fill")
     ]
 
     var body: some View {
@@ -442,6 +464,10 @@ private struct ScaleInput: View {
                     }
                     .buttonStyle(.plain)
                     .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                    .accessibilityLabel("\(option.label), \(value) of 5")
+                    .accessibilityAddTraits(
+                        isSelected ? [.isButton, .isSelected] : .isButton
+                    )
                 }
             }
 
@@ -499,7 +525,7 @@ private struct YesNoInput: View {
             }
 
             HStack {
-                Text("Needs work")
+                Text("Not really")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -540,6 +566,10 @@ private struct YesNoInput: View {
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(
+            isSelected ? [.isButton, .isSelected] : .isButton
+        )
     }
 }
 
@@ -620,14 +650,14 @@ private struct MotivationalTipCard: View {
     let isVisible: Bool
 
     static let tips = [
-        (icon: "star.fill", text: "Great job showing up! Consistency is the key to confident speaking."),
-        (icon: "brain.head.profile.fill", text: "Every recording builds stronger neural pathways for fluent speech."),
-        (icon: "chart.line.uptrend.xyaxis", text: "Speakers who review their recordings improve 3x faster."),
-        (icon: "flame.fill", text: "You're building a habit that most people never start. Be proud."),
-        (icon: "trophy.fill", text: "The best speakers in the world still practice every day."),
-        (icon: "sparkles", text: "Your voice is unique. The goal isn't perfection -- it's progress."),
-        (icon: "bolt.fill", text: "Each session sharpens your clarity, pace, and confidence."),
-        (icon: "heart.fill", text: "Speaking gets easier the more you do it. You've already done the hard part.")
+        (icon: "checkmark.circle.fill", text: "Your recording is already saved. Scoring can take a moment."),
+        (icon: "timer", text: "Short sessions count. Consistency matters more than length."),
+        (icon: "headphones", text: "Listening back once can reveal patterns that are hard to hear live."),
+        (icon: "text.bubble", text: "While you wait: name your top filler. Next take, swap it for a pause."),
+        (icon: "speedometer", text: "Pace tip: breathe at sentence ends. That alone pulls many speakers onto target."),
+        (icon: "pause.circle", text: "A one-beat pause after a key point is a technique, not a stall."),
+        (icon: "list.bullet", text: "Structure tip: lead with the point, then the reason — PREP in two moves."),
+        (icon: "scope", text: "One adjustment per take beats chasing every score at once.")
     ]
 
     var body: some View {
@@ -675,6 +705,7 @@ private struct DetailSkeletonView: View {
     let stage: Int
     let currentTipIndex: Int
     let tipVisible: Bool
+    let hasExternalTopBar: Bool
 
     var body: some View {
         PageScrollView {
@@ -690,7 +721,7 @@ private struct DetailSkeletonView: View {
                         // the status pill under the notch / Dynamic Island.
                         // Pad the header by the system top safe area so it
                         // clears the status bar regardless of device.
-                        .padding(.top, systemTopSafeAreaInset + 8)
+                        .padding(.top, hasExternalTopBar ? 8 : systemTopSafeAreaInset + 8)
 
                     DetailContextStrip(recording: recording)
 

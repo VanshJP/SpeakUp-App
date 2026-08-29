@@ -37,7 +37,8 @@ struct ScoreHeroCard: View {
                 onShowWeights: onShowWeights
             )
         }
-        .accessibilityElement(children: .combine)
+        // The weights button is a real child action; `.combine` swallowed it.
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySummary)
     }
 

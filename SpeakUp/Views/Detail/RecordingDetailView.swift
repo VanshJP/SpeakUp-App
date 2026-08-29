@@ -8,9 +8,14 @@ struct RecordingDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let recordingId: String
+    /// True only when navigation came directly from the recording that just
+    /// finished. History browsing never generates a new coach note.
+    var allowsCoachMoments = false
     /// Re-runs the session that produced this recording. Owned by ContentView
     /// because the countdown + recording covers live at the app root.
     var onPracticeAgain: ((Prompt?) -> Void)? = nil
+    /// Opens confidence tools from any coach action that routes there.
+    var onShowConfidence: (() -> Void)? = nil
 
     @State private var recording: Recording?
     @State private var isLoading = true
@@ -86,6 +91,9 @@ struct RecordingDetailView: View {
     @State private var nextStepDrill: DrillMode?
     @State private var showingNextStepWarmUp = false
     @State private var showingNextStepReadAloud = false
+    @State private var coachMoments = CoachMomentService.shared
+    @State private var coachMomentEvaluated = false
+    @State private var isDetailActive = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -240,8 +248,21 @@ struct RecordingDetailView: View {
                 runReadySetupIfNeeded()
             }
         }
+        .onAppear {
+            isDetailActive = true
+            if recording != nil, !coachMomentEvaluated {
+                runReadySetupIfNeeded()
+            }
+        }
         .onDisappear {
+            isDetailActive = false
             audioService.stop()
+            if allowsCoachMoments, let moment = coachMoments.pendingDetail {
+                // Leaving before acting is not an explicit dismissal. Clear
+                // presentation state without spending the weekly moment.
+                coachMoments.abandon(moment)
+                coachMomentEvaluated = false
+            }
         }
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) {}
@@ -249,9 +270,9 @@ struct RecordingDetailView: View {
                 deleteRecording()
             }
         } message: {
-            Text("This action cannot be undone.")
+            Text("This permanently deletes this recording and its audio.")
         }
-        .alert("Playback Error", isPresented: Binding(
+        .alert("Couldn't Play Recording", isPresented: Binding(
             get: { playbackErrorMessage != nil },
             set: { if !$0 { playbackErrorMessage = nil } }
         )) {
@@ -283,10 +304,15 @@ struct RecordingDetailView: View {
         }
         .overlay {
             if showingListenBackEncouragement {
-                ListenBackEncouragementView {
-                    showingListenBackEncouragement = false
-                    proceedWithPlayback()
-                }
+                ListenBackEncouragementView(
+                    onContinue: {
+                        showingListenBackEncouragement = false
+                        proceedWithPlayback()
+                    },
+                    onCancel: {
+                        showingListenBackEncouragement = false
+                    }
+                )
                 .transition(.opacity)
             }
         }
@@ -309,7 +335,17 @@ struct RecordingDetailView: View {
                 if let analysis = coachAnalysis {
                     scoreHero(analysis)
                     takeComparisonSection(analysis)
-                    nextStepSection(analysis, recording: recording)
+                    if allowsCoachMoments, let moment = coachMoments.pendingDetail {
+                        CoachMomentCard(
+                            moment: moment,
+                            onAccept: { acceptCoachMoment(moment, recording: recording) },
+                            onDismiss: { coachMoments.dismiss(moment, context: modelContext) }
+                        )
+                    }
+                    if coachMoments.pendingDetail?.signal != .softLanding,
+                       coachMoments.pendingDetail?.signal != .firstAxisClear {
+                        nextStepSection(analysis, recording: recording)
+                    }
                     // Challenge CTA sits next to the score — burying it in
                     // Coaching was the moment the share loop went unseen.
                     shareCTASection(recording)
@@ -391,8 +427,26 @@ struct RecordingDetailView: View {
         Task {
             await populateWPMTimeSeriesIfNeeded()
             await loadPersonalAverageIfNeeded(excluding: recording.id)
+            evaluateCoachMomentIfNeeded(for: recording)
             await enhanceCoherenceIfNeeded()
         }
+    }
+
+    /// Soft landing / axis mark — once per fresh result.
+    private func evaluateCoachMomentIfNeeded(for recording: Recording) {
+        guard allowsCoachMoments,
+              isDetailActive,
+              !coachMomentEvaluated,
+              let analysis = coachAnalysis else {
+            return
+        }
+        coachMomentEvaluated = true
+        CoachMomentService.shared.evaluateAfterSession(
+            context: modelContext,
+            analysis: analysis,
+            scoredSessionCount: baselines.priorSessionCount + 1,
+            practicedToday: Calendar.current.isDateInToday(recording.date)
+        )
     }
 
     /// Loads the baselines the hero delta and the metric tiles read against,
@@ -488,7 +542,12 @@ struct RecordingDetailView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .primary) {
+                GlassButton(
+                    title: "Try scoring again",
+                    icon: "arrow.clockwise",
+                    style: .primary,
+                    fullWidth: true
+                ) {
                     Haptics.light()
                     enqueueProcessingIfNeeded(recording, force: true)
                 }
@@ -516,16 +575,21 @@ struct RecordingDetailView: View {
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 4) {
-                    Text(recording.lastProcessingError == nil ? "Analysis Unavailable" : "Analysis Failed")
+                    Text("Couldn't score this take")
                         .font(.headline)
                         .foregroundStyle(.white)
-                    Text(recording.lastProcessingError ?? "This recording hasn't been analyzed yet. You can still listen back, or try analyzing again.")
+                    Text("Your recording is safe. You can listen back now, or try scoring it again when you're ready.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
 
-                GlassButton(title: "Analyze Again", icon: "arrow.clockwise", style: .secondary) {
+                GlassButton(
+                    title: "Try scoring again",
+                    icon: "arrow.clockwise",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
                     Haptics.medium()
                     enqueueProcessingIfNeeded(recording, force: true)
                 }
@@ -665,6 +729,21 @@ struct RecordingDetailView: View {
         )
     }
 
+    // MARK: - Coach notes
+
+    private func acceptCoachMoment(_ moment: CoachMoment, recording: Recording) {
+        let action = moment.action
+        coachMoments.consume(moment, context: modelContext)
+        switch action {
+        case .openConfidence:
+            onShowConfidence?()
+        case .practiceAgain:
+            onPracticeAgain?(recording.prompt)
+        case .close:
+            break
+        }
+    }
+
     // MARK: - Stats Grid
 
     @ViewBuilder
@@ -714,7 +793,7 @@ struct RecordingDetailView: View {
     /// least useful number on the grid — this is the part worth reading.
     private func pauseStatus(for analysis: SpeechAnalysis) -> MetricRow.Status {
         guard analysis.pauseCount > 0 else { return .neutral("None") }
-        if analysis.hesitationPauseCount > analysis.strategicPauseCount { return .caution("Hesitant") }
+        if analysis.hesitationPauseCount > analysis.strategicPauseCount { return .caution("Uneven") }
         if analysis.strategicPauseCount > 0 { return .good("Strategic") }
         return .neutral("Even")
     }
@@ -727,7 +806,7 @@ struct RecordingDetailView: View {
     /// blends word count, duration, lexical variety, and run length, which is
     /// the question a raw word count actually raises.
     private func lengthStatus(for analysis: SpeechAnalysis) -> MetricRow.Status? {
-        guard analysis.totalWords > 0 else { return .bad("Silent") }
+        guard analysis.totalWords > 0 else { return .neutral("No speech") }
         guard let substance = analysis.enhancedMetrics?.substanceScore else { return nil }
         switch substance {
         case ..<30: return .caution("Brief")
@@ -747,7 +826,7 @@ struct RecordingDetailView: View {
         switch count {
         case 0...2: return .good("Clean")
         case 3...7: return .caution("A few")
-        default: return .bad("Many")
+        default: return .caution("Several")
         }
     }
 
@@ -877,6 +956,7 @@ struct RecordingDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Show speaker turns")
+                        .accessibilityValue(showSpeakerTurns ? "On" : "Off")
                     }
 
                     if let analysis = coachAnalysis, !analysis.fillerWords.isEmpty {
@@ -895,6 +975,7 @@ struct RecordingDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Highlight filler words")
+                        .accessibilityValue(showFillerHighlights ? "On" : "Off")
                     }
 
                     if let analysis = coachAnalysis, !analysis.vocabWordsUsed.isEmpty {
@@ -913,6 +994,7 @@ struct RecordingDetailView: View {
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Highlight vocabulary words")
+                        .accessibilityValue(showVocabHighlights ? "On" : "Off")
                     }
                 }
             }
@@ -1115,7 +1197,7 @@ struct RecordingDetailView: View {
     private func shareCTASection(_ recording: Recording) -> some View {
         let hasPrompt = recording.prompt != nil
         GlassCard(tint: AppColors.primary.opacity(0.1)) {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(hasPrompt ? "Challenge a friend" : "Share your score")
                         .font(.subheadline.weight(.medium))
@@ -1126,18 +1208,14 @@ struct RecordingDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Spacer(minLength: 0)
-
-                Button {
+                GlassButton(
+                    title: hasPrompt ? "Share challenge" : "Share score",
+                    icon: "square.and.arrow.up",
+                    style: .secondary,
+                    fullWidth: true
+                ) {
                     Haptics.light()
                     pendingShareRecording = recording
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("Share")
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(AppColors.primary)
                 }
                 .accessibilityLabel(hasPrompt ? "Challenge a friend" : "Share your score")
             }
@@ -1933,7 +2011,7 @@ struct RecordingDetailView: View {
                 try await audioService.play(url: url, startingAt: time)
                 playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
             } catch {
-                playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
+                playbackErrorMessage = "This recording couldn't play right now. Try again in a moment."
             }
         }
     }
@@ -1961,7 +2039,7 @@ struct RecordingDetailView: View {
                 try await audioService.play(url: url, startingAt: startTime)
                 playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
             } catch {
-                playbackErrorMessage = "Playback failed: \(error.localizedDescription)"
+                playbackErrorMessage = "This recording couldn't play right now. Try again in a moment."
             }
         }
     }

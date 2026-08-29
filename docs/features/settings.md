@@ -33,6 +33,7 @@ Hub that routes to focused settings surfaces (session, analysis, AI, prompts, we
 12. **No dead ends.** The hub's AI Features row names the action when nothing is active ("Set up on-device AI"), never "Not available" — the local model is always downloadable, so a state label that only reports the device is noise. Same rule inside `AIModelSettingsView`: the Apple Intelligence card renders only when `appleIntelligenceAvailable` (its badge is then always "Active"); when unavailable the Local AI Model card leads the page, because that is the one card with an action.
 
 13. **Every hub subtitle names an action, not a value.** "Choose take length, countdown, and goal", "Turn on a daily practice reminder", "Add vocab, dictation, and filler words" — never "1 min, 15 sec countdown" or "8 categories". A settings list of current values reads like a report; a list of actions reads like doors. The only state a row may show is the one that picks the verb (Reminders and Word Workout flip between "Turn on…" and "Change/Adjust…"). About is a quiet footer, not a card.
+14. **Reminder consent means exactly one daily reminder.** No automatic streak-at-risk, milestone, or lapsed-user notifications ride on the same permission. In-app coach notes handle return gently; achievements handle milestones while the app is open.
 
 ## Cross-links
 

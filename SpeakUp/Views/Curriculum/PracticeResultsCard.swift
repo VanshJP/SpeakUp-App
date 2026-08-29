@@ -1,12 +1,26 @@
 import SwiftUI
+import SwiftData
 
 struct PracticeResultsCard: View {
     let recording: Recording
     let activity: CurriculumActivity
 
+    @Query private var userSettings: [UserSettings]
     @State private var appeared = false
 
     private var analysis: SpeechAnalysis? { recording.analysis }
+
+    private var targetWPM: Int { userSettings.first.resolvedTargetWPM }
+
+    /// Same tip engine as Recording Detail — curriculum practice should not invent
+    /// a second coaching voice.
+    private var primaryTip: CoachingTip? {
+        guard let analysis else { return nil }
+        return CoachingTipService.generateTips(
+            from: analysis,
+            context: CoachingContext(targetWPM: targetWPM)
+        ).first
+    }
 
     var body: some View {
         GlassCard(tint: AppColors.glassTintPrimary) {
@@ -58,10 +72,27 @@ struct PracticeResultsCard: View {
                     Text("Overall Score")
                         .font(.subheadline.weight(.medium))
 
-                    Text(coachingMessage(for: analysis))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let tip = primaryTip {
+                        Text(tip.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppColors.primary)
+                        Text(tip.message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if !tip.teachingPoint.isEmpty {
+                            Text(tip.teachingPoint)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 2)
+                        }
+                    } else {
+                        Text("Bank another rep while scoring is still loading.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer()
@@ -75,7 +106,10 @@ struct PracticeResultsCard: View {
     }
 
     private func relevantMetrics(_ analysis: SpeechAnalysis) -> some View {
-        HStack(spacing: 0) {
+        let wpm = Int(analysis.wordsPerMinute.rounded())
+        let onPace = abs(wpm - targetWPM) <= 25
+
+        return HStack(spacing: 0) {
             metricPill(
                 icon: "text.bubble",
                 label: "Fillers",
@@ -88,8 +122,8 @@ struct PracticeResultsCard: View {
             metricPill(
                 icon: "speedometer",
                 label: "Pace",
-                value: "\(Int(analysis.wordsPerMinute))",
-                color: (130...170).contains(Int(analysis.wordsPerMinute)) ? AppColors.success : AppColors.warning
+                value: "\(wpm)",
+                color: onPace ? AppColors.success : AppColors.warning
             )
 
             Spacer()
@@ -153,25 +187,16 @@ struct PracticeResultsCard: View {
 
     // MARK: - Encouragement
 
+    /// Short status line only — the coaching tip below carries technique.
     private var practiceEncouragement: String {
-        guard let analysis else { return "Great job showing up!" }
-        let score = analysis.speechScore.overall
-        if score >= 80 { return "Incredible session!" }
-        if score >= 60 { return "Really solid work!" }
-        if score >= 40 { return "Every rep counts!" }
-        return "Showing up is half the battle!"
-    }
-
-    private func coachingMessage(for analysis: SpeechAnalysis) -> String {
-        let score = analysis.speechScore.overall
-        if score >= 80 {
-            return "Excellent work! You're nailing this."
-        } else if score >= 60 {
-            return "Solid practice session. Keep building on this."
-        } else if score >= 40 {
-            return "Good effort, each session gets you closer."
-        } else {
-            return "Great start! Awareness is the first step to improvement."
+        guard let analysis else { return "Recording saved" }
+        if let tip = primaryTip, tip.kind == .win || tip.kind == .focus {
+            return tip.kind == .win ? "Clean take" : "One focus for next rep"
         }
+        let score = analysis.speechScore.overall
+        if score >= 80 { return "Strong session" }
+        if score >= 60 { return "Solid rep" }
+        if score >= 40 { return "Useful data" }
+        return "First read complete"
     }
 }

@@ -83,6 +83,8 @@ be written in prose:
 8. **Effort and permissions only after value.** Calibration, the AI model
    download, and reminders stay out of the first run — they belong to
    `FirstRecordingSetupSheet`, which fires on Today *after* the first score.
+   Reminder consent means one daily nudge at the chosen time, never bundled
+   streak warnings or surprise re-engagement notifications.
    The layout tour (`AppTourView.swift`) follows the same rule and the same
    gate: it runs once, on Today, only after a recording exists. The two are
    strictly sequential — `TodayView.checkFirstRunSurfaces()` shows the sheet

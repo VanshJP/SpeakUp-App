@@ -32,6 +32,11 @@ struct RecordingView: View {
     var storyId: UUID? = nil
     /// `share` when this session is answering a friend-challenge link.
     var sessionSource: String? = nil
+    /// Pre-selects a structure overlay (curriculum PREP/STAR practice).
+    var initialFramework: SpeechFramework? = nil
+    /// Fires when the user leaves the analyzing stage without opening detail.
+    /// The parent can evaluate achievements without forcing navigation.
+    var onSavedAndClosed: ((Recording) -> Void)? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
 
@@ -65,6 +70,10 @@ struct RecordingView: View {
             viewModel.goalId = goalId
             viewModel.storyId = storyId
             viewModel.sessionSource = sessionSource
+            if selectedFramework == nil, let initialFramework {
+                selectedFramework = initialFramework
+            }
+            viewModel.frameworkUsed = selectedFramework
             if let settings = userSettings.first {
                 viewModel.fillerConfig = FillerWordConfig(
                     customFillers: Set(settings.customFillerWords),
@@ -79,6 +88,9 @@ struct RecordingView: View {
             if !viewModel.isRecording {
                 await viewModel.startRecording()
             }
+        }
+        .onChange(of: selectedFramework) { _, newValue in
+            viewModel.frameworkUsed = newValue
         }
         // Deliberate practice needs the instruction going in. Reading the focus
         // afterwards on the results screen is always one take too late, so it
@@ -110,6 +122,21 @@ struct RecordingView: View {
             }
         } message: {
             Text(viewModel.permissionAlertMessage)
+        }
+        .alert("That Take Didn't Save", isPresented: Binding(
+            get: { viewModel.error != nil },
+            set: { if !$0 { viewModel.error = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                viewModel.error = nil
+                onCancel()
+            }
+            Button("Try Again") {
+                viewModel.error = nil
+                Task { await viewModel.startRecording() }
+            }
+        } message: {
+            Text("You didn't do anything wrong. Try once more, or come back when you're ready.")
         }
     }
 
@@ -168,6 +195,11 @@ struct RecordingView: View {
                 onFeedbackCompleted: {
                     SessionFeedbackGateStore.markDismissed(recording.id)
                     finishAndNavigate(recording)
+                },
+                onSaveAndClose: {
+                    SessionFeedbackGateStore.markDismissed(recording.id)
+                    onSavedAndClosed?(recording)
+                    onCancel()
                 },
                 analysisReady: recording.analysis != nil
             )

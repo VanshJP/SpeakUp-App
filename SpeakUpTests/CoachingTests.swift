@@ -278,6 +278,19 @@ struct CoachingTipTests {
         #expect(tips.first { $0.dimension == .fillers }?.evidenceTime == 12)
     }
 
+    @Test func fillerTipTitleIsDirectNotShameful() {
+        // High filler load should name the habit, not moralize about "costing you."
+        let heavy = analysis(
+            filler: 30,
+            totalWords: 100,
+            fillerWords: [FillerWord(word: "um", count: 12, timestamps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])]
+        )
+        let tips = CoachingTipService.generateTips(from: heavy)
+        let filler = tips.first { $0.dimension == .fillers }
+        #expect(filler?.title == "Name the Crutch")
+        #expect(filler?.title.contains("Costing") != true)
+    }
+
     @Test func winTipsHaveNothingToPlay() {
         let strong = analysis(overall: 92, clarity: 92, pace: 90, filler: 95, pause: 90)
         let tips = CoachingTipService.generateTips(from: strong)
@@ -628,5 +641,18 @@ struct CoachingInsightSanitizerTests {
         #expect(
             CoachingInsightSanitizer.namingBareScores([original], subscores: namingSubscores) == [original]
         )
+    }
+}
+
+// MARK: - Framework hints
+
+struct SpeechFrameworkHintTests {
+    @Test func parsesCurriculumHints() {
+        #expect(SpeechFramework.fromCurriculumHint("PREP") == .prep)
+        #expect(SpeechFramework.fromCurriculumHint("star") == .star)
+        #expect(SpeechFramework.fromCurriculumHint("Problem-Solution") == .problemSolution)
+        #expect(SpeechFramework.fromCurriculumHint(nil) == nil)
+        #expect(SpeechFramework.fromCurriculumHint("  ") == nil)
+        #expect(SpeechFramework.fromCurriculumHint("AREA") == nil)
     }
 }

@@ -217,9 +217,9 @@ class CurriculumService {
         case "w2_l3_a2":
             return signals.hasOnPaceTake
         case "w3_l1_a2":
-            return signals.hasPrepFramework || signals.analyzedCount > 0
+            return signals.hasPrepFramework
         case "w3_l2_a2":
-            return signals.hasStarFramework || signals.analyzedCount > 0
+            return signals.hasStarFramework
         case "w3_l3_a2":
             return signals.hasDeliberatePauses
         case "w3_l4_a2":
@@ -305,7 +305,7 @@ nonisolated struct CurriculumSessionSignals {
             }
             if let analysis,
                analysis.totalWords >= 30,
-               (130...170).contains(Int(analysis.wordsPerMinute.rounded())) {
+               analysis.speechScore.subscores.pace >= 70 {
                 signals.hasOnPaceTake = true
             }
             if (analysis?.pauseCount ?? 0) >= 3 {
