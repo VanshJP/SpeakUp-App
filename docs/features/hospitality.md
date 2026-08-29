@@ -34,15 +34,15 @@ Care gestures (lapse / soft landing) never spend the weekly legend budget. Legen
 
 ## Invariants
 
-1. Pure judgement stays in `HospitalityEngine` — `nonisolated`, injectable `now`, no `ModelContext`. Service owns fetch + `pendingMoment`.
+1. Pure judgement stays in `HospitalityEngine` — `nonisolated`, injectable `now`, no `ModelContext`. Service owns fetch + pending slots.
 2. Additive `UserSettings` only. Empty week key / zero used / empty lists = never hosted.
 3. Delivered moment ids are capped (~40) so CloudKit rows do not grow forever.
 4. First-axis wins persist `CoachDimension.rawValue` on consume so the toast is once per dimension.
 5. One pending moment **per surface** (`pendingToday` / `pendingDetail` / `pendingOverlay`). Today eval must not clobber a detail soft-landing. Achievements overlay outranks hospitality overlay.
 6. `HospitalityEngine.propose(..., surface:)` filters by surface so Today care cannot starve an overlay legend on the same visit.
-6. No new Today home module — transient card like `FriendChallengeCard`, not a customizable block.
-7. Analytics: `milestone(type: hospitality_<signal>)` only — no transcript text.
-8. Life-context detection is keyword-narrow on purpose (`pitch deck` / `investor`, not bare `pitch`).
+7. No new Today home module — transient card like `FriendChallengeCard`, not a customizable block.
+8. Analytics: `milestone(type: hospitality_<signal>)` only — no transcript text.
+9. Life-context detection is keyword-narrow on purpose (`pitch deck` / `investor`, not bare `pitch`).
 
 ## Cross-links
 
