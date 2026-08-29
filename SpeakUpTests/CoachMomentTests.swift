@@ -68,8 +68,10 @@ struct CoachMomentSignalTests {
             surface: .today
         )
         #expect(moment?.signal == .returnFromLapse)
-        #expect(moment?.body.contains("day") == false)
+        // Absences are not narrated as a tally — "today's prompt" is fine.
         #expect(moment?.body.contains("8") == false)
+        #expect(moment?.body.localizedCaseInsensitiveContains("days") == false)
+        #expect(moment?.body.localizedCaseInsensitiveContains("been") == false)
     }
 
     @Test func streakMilestoneIsEverySeventhPracticedDay() {
