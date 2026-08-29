@@ -29,7 +29,7 @@ struct OnboardingWelcomeStep: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(titleOpacity)
 
-                Text("Speak for a minute a day. Big Talk listens, scores, and coaches, all on this iPhone.")
+                Text("Speak for a minute a day. Big Talk scores and coaches on this iPhone, only while you record.")
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)

@@ -235,7 +235,7 @@ nonisolated struct CoachPlan: Sendable {
         case .improving(let delta):
             base = "\(focus.title) is up \(delta) points across your last \(sessionCount) sessions, \(focusAverage)/100 and climbing."
         case .flat:
-            base = "\(focus.title) has sat at \(focusAverage)/100 for \(sessionCount) sessions. Time to change something."
+            base = "\(focus.title) has held at \(focusAverage)/100 for \(sessionCount) sessions. Try one small technique change next."
         case .slipping(let delta):
             base = "\(focus.title) has slipped \(delta) points lately, back to \(focusAverage)/100."
         case .holding:
@@ -243,7 +243,7 @@ nonisolated struct CoachPlan: Sendable {
         }
 
         if let namedHabit {
-            return base + " The repeat offender: \u{201C}\(namedHabit)\u{201D}."
+            return base + " Most common right now: \u{201C}\(namedHabit)\u{201D}."
         }
         return base
     }

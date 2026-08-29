@@ -20,7 +20,7 @@ struct ListenBackEncouragementView: View {
                     .font(.title3.weight(.bold))
                     .accessibilityFocused($titleFocused)
 
-                Text("Hearing your own voice feels weird, that's totally normal! Everyone sounds different to themselves.\n\nThis is actually a superpower for improvement. Listening back helps you notice patterns you'd never catch in the moment.")
+                Text("Hearing your own voice can feel unfamiliar. Everyone sounds different to themselves.\n\nListening back once can help you notice patterns that are hard to catch while speaking.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

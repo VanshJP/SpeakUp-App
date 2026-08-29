@@ -87,7 +87,7 @@ enum AppColors {
     /// given band identical everywhere a score is presented.
     static func scoreVerdict(for score: Int) -> String {
         switch score {
-        case 0..<40: return "Needs work"
+        case 0..<40: return "Building"
         case 40..<60: return "Developing"
         case 60..<80: return "Solid"
         case 80...100: return "Strong"

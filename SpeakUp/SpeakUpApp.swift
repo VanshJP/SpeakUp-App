@@ -157,10 +157,26 @@ struct SpeakUpApp: App {
             if newPhase == .active {
                 Task {
                     let notifications = NotificationService()
+                    notifications.removeLegacyPressureNotifications()
                     await notifications.clearBadge()
                     await notifications.checkPermission()
-                    // Re-arms the 3-day lapse timer on every foreground.
-                    await notifications.scheduleLapsedUserNudge()
+
+                    // Replacing the pending request updates installs that
+                    // still carry old pressure-based reminder copy.
+                    let context = sharedModelContainer.mainContext
+                    let descriptor = FetchDescriptor<UserSettings>()
+                    guard notifications.hasPermission,
+                          let settings = try? context.fetch(descriptor).first else {
+                        return
+                    }
+                    if settings.dailyReminderEnabled {
+                        await notifications.scheduleDailyReminder(
+                            hour: settings.dailyReminderHour,
+                            minute: settings.dailyReminderMinute
+                        )
+                    } else {
+                        await notifications.cancelDailyReminder()
+                    }
                 }
                 // Catches a purchase made on another device and a refund
                 // processed while the app was backgrounded.
@@ -263,12 +279,18 @@ struct SpeakUpApp: App {
 
         do {
             let existing = try context.fetch(descriptor)
-            let existingIds = Set(existing.map { $0.id })
+            let existingByID: [String: Achievement] = Dictionary(
+                existing.map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
             let allDefinitions = AchievementDefinition.allCases
 
-            // Seed any missing achievements (handles new cases added over time)
+            // Seed missing definitions and refresh display copy on older rows.
+            // Unlock state/date stay untouched.
             for def in allDefinitions {
-                if !existingIds.contains(def.rawValue) {
+                if let existing = existingByID[def.rawValue] {
+                    def.refreshDisplay(on: existing)
+                } else {
                     context.insert(def.toModel())
                 }
             }

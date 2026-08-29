@@ -162,9 +162,9 @@ private struct AchievementCard: View {
                             .foregroundStyle(.secondary)
                     } else {
                         HStack(spacing: 3) {
-                            Image(systemName: "lock.fill")
+                            Image(systemName: "circle.dashed")
                                 .font(.system(size: 8))
-                            Text("Locked")
+                            Text("Not yet")
                         }
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.quaternary)
@@ -193,7 +193,7 @@ private struct AchievementCard: View {
         if let date = achievement.unlockedDate {
             status = "Unlocked \(date.formatted(date: .abbreviated, time: .omitted))"
         } else {
-            status = "Locked"
+            status = "Not yet"
         }
         return "\(achievement.title). \(achievement.descriptionText). \(status)"
     }

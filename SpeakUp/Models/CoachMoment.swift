@@ -3,14 +3,12 @@ import Foundation
 // MARK: - Signal
 
 /// Practice facts that earn a rare coach note — never a form, never transcript
-/// mining. Scores, streaks, and history only.
+/// mining. Scores and dates only.
 nonisolated enum CoachMomentSignal: String, CaseIterable, Sendable, Identifiable {
     case returnFromLapse
-    case streakMilestone
     case firstAxisClear
     case practiceAnniversary
     case softLanding
-    case fillerBreakthrough
 
     var id: String { rawValue }
 
@@ -19,8 +17,7 @@ nonisolated enum CoachMomentSignal: String, CaseIterable, Sendable, Identifiable
     var isCelebration: Bool {
         switch self {
         case .returnFromLapse, .softLanding: return false
-        case .streakMilestone, .firstAxisClear, .practiceAnniversary,
-             .fillerBreakthrough: return true
+        case .firstAxisClear, .practiceAnniversary: return true
         }
     }
 
@@ -30,29 +27,17 @@ nonisolated enum CoachMomentSignal: String, CaseIterable, Sendable, Identifiable
         case .softLanding: return 100
         case .returnFromLapse: return 90
         case .practiceAnniversary: return 80
-        case .streakMilestone: return 70
         case .firstAxisClear: return 60
-        case .fillerBreakthrough: return 50
         }
     }
 }
 
-// MARK: - Gesture / action / surface
-
-nonisolated enum CoachMomentGesture: String, Sendable, CaseIterable {
-    case softReturn
-    case celebration
-    case axisToast
-    case anniversaryToast
-    case dignityRetry
-}
+// MARK: - Action / surface
 
 nonisolated enum CoachMomentAction: Sendable, Equatable {
     case openConfidence
-    case openWarmUp
-    case openDrill(String)
-    case openReadAloud
     case practiceAgain
+    case close
 }
 
 nonisolated enum CoachMomentSurface: String, Sendable {
@@ -70,7 +55,6 @@ nonisolated enum CoachMomentSurface: String, Sendable {
 nonisolated struct CoachMoment: Sendable, Identifiable, Equatable {
     let id: String
     let signal: CoachMomentSignal
-    let gesture: CoachMomentGesture
     let title: String
     let body: String
     let actionTitle: String
@@ -88,13 +72,17 @@ nonisolated struct CoachMoment: Sendable, Identifiable, Equatable {
 /// engine itself never touches a ModelContext. No transcript text.
 nonisolated struct CoachMomentSnapshot: Sendable {
     var now: Date = .now
-    var currentStreak: Int = 0
     var practicedToday: Bool = false
     /// Nil when the user has never completed a scored take.
     var daysSinceLastPractice: Int? = nil
+    /// Stable key for one absence episode. Welcome-back delivery is tied to
+    /// this date, not today's date, so it cannot nag every day while away.
+    var lastPracticeDate: Date? = nil
     var firstPracticeDate: Date? = nil
+    /// Includes the current result. Detail notes start on session two so the
+    /// first score gets room to be understood without another intervention.
+    var scoredSessionCount: Int = 0
     var latestOverall: Int? = nil
-    var latestFillerCount: Int? = nil
     var latestTotalWords: Int? = nil
     /// Dimensions that cleared mastery on *this* take and were never cleared
     /// before.
@@ -105,7 +93,7 @@ nonisolated struct CoachMomentSnapshot: Sendable {
 nonisolated struct CoachMomentBudget: Sendable, Equatable {
     var weekKey: String
     var celebrationsUsed: Int
-    /// Moment ids already delivered (capped when persisting).
+    /// Moment ids already delivered (day-keyed ids are capped when persisting).
     var deliveredIDs: [String]
 
     static let weeklyCelebrationCap = 1
@@ -181,11 +169,9 @@ nonisolated enum CoachMomentEngine {
             signals.append(.returnFromLapse)
         }
 
-        if snap.currentStreak >= 7, snap.currentStreak % 7 == 0, snap.practicedToday {
-            signals.append(.streakMilestone)
-        }
+        let hasBaseline = snap.scoredSessionCount >= 2
 
-        if !snap.newlyClearedDimensions.isEmpty {
+        if hasBaseline, !snap.newlyClearedDimensions.isEmpty {
             signals.append(.firstAxisClear)
         }
 
@@ -200,19 +186,13 @@ nonisolated enum CoachMomentEngine {
             }
         }
 
-        if let overall = snap.latestOverall,
+        if hasBaseline,
+           let overall = snap.latestOverall,
            let words = snap.latestTotalWords,
            words > 0,
            overall > 0,
            overall < softLandingOverallCeiling {
             signals.append(.softLanding)
-        }
-
-        if let fillers = snap.latestFillerCount,
-           let words = snap.latestTotalWords,
-           words >= 40,
-           fillers == 0 {
-            signals.append(.fillerBreakthrough)
         }
 
         return signals.sorted { $0.priority > $1.priority }
@@ -262,10 +242,10 @@ nonisolated enum CoachMomentEngine {
         switch signal {
         case .returnFromLapse:
             // No day-count — counting absences reads as surveillance.
+            guard let lastPracticeDate = snapshot.lastPracticeDate else { return nil }
             return CoachMoment(
-                id: "return-\(dayKey)",
+                id: "return-since-\(CoachMomentEngine.dayKey(for: lastPracticeDate, calendar: calendar))",
                 signal: .returnFromLapse,
-                gesture: .softReturn,
                 title: greet.map { "Welcome back, \($0)" } ?? "Welcome back",
                 body: "No catch-up quiz. A short calm reset, then today's prompt when you're ready.",
                 actionTitle: "Ease back in",
@@ -274,28 +254,13 @@ nonisolated enum CoachMomentEngine {
                 detailSlug: "lapse"
             )
 
-        case .streakMilestone:
-            let streak = snapshot.currentStreak
-            return CoachMoment(
-                id: "streak-\(streak)",
-                signal: .streakMilestone,
-                gesture: .celebration,
-                title: "Day \(streak)",
-                body: "Another week of showing up. That habit is the whole game.",
-                actionTitle: "Warm up",
-                action: .openWarmUp,
-                surface: .overlay,
-                detailSlug: "streak_\(streak)"
-            )
-
         case .firstAxisClear:
             guard let dimension = snapshot.newlyClearedDimensions.first else { return nil }
             return CoachMoment(
                 id: "axis-\(dimension.rawValue)",
                 signal: .firstAxisClear,
-                gesture: .axisToast,
-                title: "\(dimension.title) cleared",
-                body: "First time hitting the bar on \(dimension.title.lowercased()). One more rep while it is warm.",
+                title: "\(dimension.title) reached target",
+                body: "This take cleared the mark. One more rep while it is warm.",
                 actionTitle: "One more rep",
                 action: .practiceAgain,
                 surface: .detail,
@@ -312,13 +277,12 @@ nonisolated enum CoachMomentEngine {
             return CoachMoment(
                 id: "anniversary-\(days)",
                 signal: .practiceAnniversary,
-                gesture: .anniversaryToast,
                 title: days == 365 ? "One year of practice" : "\(days) days in",
                 body: greet.map {
-                    "\($0), you started quietly and kept going. That adds up."
-                } ?? "You started quietly and kept going. That adds up.",
-                actionTitle: "Practice today",
-                action: .practiceAgain,
+                    "\($0), every practice session added something. This milestone is yours."
+                } ?? "Every practice session added something. This milestone is yours.",
+                actionTitle: "Nice",
+                action: .close,
                 surface: .overlay,
                 detailSlug: "days_\(days)"
             )
@@ -327,27 +291,14 @@ nonisolated enum CoachMomentEngine {
             return CoachMoment(
                 id: "soft-\(dayKey)",
                 signal: .softLanding,
-                gesture: .dignityRetry,
-                title: "Rough take — still fine",
-                body: "Scores can wait. Try the same prompt once more when you're ready, no pressure.",
+                title: "One take, not a verdict",
+                body: "Want another go? Same prompt, no pressure.",
                 actionTitle: "Try again",
                 action: .practiceAgain,
                 surface: .detail,
                 detailSlug: "soft"
             )
 
-        case .fillerBreakthrough:
-            return CoachMoment(
-                id: "filler-zero-\(dayKey)",
-                signal: .fillerBreakthrough,
-                gesture: .celebration,
-                title: "Zero fillers",
-                body: "A full take without a crutch word. The silence you held instead is control.",
-                actionTitle: "Lock it in",
-                action: .openDrill("fillerElimination"),
-                surface: .detail,
-                detailSlug: "zero_filler"
-            )
         }
     }
 
@@ -368,9 +319,21 @@ nonisolated enum CoachMomentEngine {
     static func cappedDeliveredIDs(_ ids: [String], adding newID: String, limit: Int = 40) -> [String] {
         var next = ids.filter { $0 != newID }
         next.append(newID)
-        if next.count > limit {
-            next = Array(next.suffix(limit))
+
+        // Anniversary and axis ids are lifetime milestones. Return ids only
+        // need to outlive their absence episode, so keep the latest ten.
+        let permanentMilestones = next.filter { id in
+            id.hasPrefix("anniversary-")
+                || id.hasPrefix("axis-")
         }
-        return next
+        let returnEpisodes = next.filter { $0.hasPrefix("return-since-") }
+        let dayKeyed = next.filter { id in
+            !id.hasPrefix("anniversary-")
+                && !id.hasPrefix("axis-")
+                && !id.hasPrefix("return-since-")
+        }
+        return permanentMilestones
+            + Array(returnEpisodes.suffix(10))
+            + Array(dayKeyed.suffix(limit))
     }
 }

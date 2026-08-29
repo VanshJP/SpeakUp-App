@@ -20,7 +20,6 @@ final class ReviewRequestService {
     enum Trigger: String {
         case strongResult = "strong_result"
         case shareCompleted = "share_completed"
-        case achievementUnlocked = "achievement_unlocked"
     }
 
     /// One ask per launch, regardless of how many good things happen.

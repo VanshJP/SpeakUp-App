@@ -14,13 +14,8 @@ struct TodayView: View {
     // Arrival moment — fires once per calendar day, on the first open.
     @AppStorage("lastArrivalDay") private var lastArrivalDay = ""
     @State private var arrived = false
-    @State private var showArrivalConfetti = false
     @State private var challengeStore = SharedChallengeStore.shared
     @State private var coachMoments = CoachMomentService.shared
-    /// Sheets for coach-note CTAs that need a tool surface.
-    @State private var coachMomentDrill: DrillMode?
-    @State private var showingCoachMomentWarmUp = false
-    @State private var showingCoachMomentReadAloud = false
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
     // RecordingDetailView so both entry points land on the same tool.
@@ -150,18 +145,6 @@ struct TodayView: View {
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showingFocusReadAloud) {
-            ReadAloudSelectionView()
-                .presentationDetents([.large])
-        }
-        .sheet(item: $coachMomentDrill) { mode in
-            DrillSelectionView(initialMode: mode)
-                .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showingCoachMomentWarmUp) {
-            WarmUpListView()
-                .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showingCoachMomentReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
@@ -619,14 +602,10 @@ struct TodayView: View {
         switch action {
         case .openConfidence:
             onShowConfidence()
-        case .openWarmUp:
-            showingCoachMomentWarmUp = true
-        case .openDrill(let raw):
-            coachMomentDrill = DrillMode(rawValue: raw)
-        case .openReadAloud:
-            showingCoachMomentReadAloud = true
         case .practiceAgain:
             onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+        case .close:
+            break
         }
     }
 
@@ -680,7 +659,11 @@ struct TodayView: View {
                 if let line = arrivalLine {
                     Text(line)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(AppColors.warning)
+                        .foregroundStyle(
+                            viewModel.practicedToday
+                                ? AnyShapeStyle(AppColors.success)
+                                : AnyShapeStyle(.secondary)
+                        )
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             }
@@ -700,13 +683,6 @@ struct TodayView: View {
             .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
         }
         .padding(.top, 4)
-        .overlay {
-            if showArrivalConfetti {
-                ConfettiView()
-                    .frame(height: 400)
-                    .allowsHitTesting(false)
-            }
-        }
     }
 
     /// What the streak is actually worth right now. Never claims a day the
@@ -715,12 +691,13 @@ struct TodayView: View {
         let streak = viewModel.userStats.currentStreak
         guard arrived, streak >= 1 else { return nil }
         return viewModel.practicedToday
-            ? "Day \(streak) locked in"
-            : "Day \(streak), one session keeps it"
+            ? "Day \(streak) — nice work today"
+            : "Day \(streak) so far — practice when you're ready"
     }
 
-    /// Runs once per calendar day: pops the streak chip, fires a haptic, and
-    /// adds confetti on every seventh day so the milestone still feels rare.
+    /// Runs once per calendar day: pops the streak chip and fires one haptic.
+    /// Milestones already have achievement celebrations; duplicating confetti
+    /// here made the same practice feel like three separate events.
     private func playArrivalIfNeeded() {
         let today = Calendar.current.startOfDay(for: .now).ISO8601Format()
         guard lastArrivalDay != today else {
@@ -740,9 +717,6 @@ struct TodayView: View {
         }
         if streak >= 1 {
             Haptics.success()
-        }
-        if !reduceMotion, streak >= 7, streak % 7 == 0 {
-            showArrivalConfetti = true
         }
     }
 

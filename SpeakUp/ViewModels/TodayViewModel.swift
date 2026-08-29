@@ -102,14 +102,10 @@ class TodayViewModel {
         // Load active goals
         await loadActiveGoals(context: context)
 
-        // Schedule streak-at-risk notification if applicable
-        await scheduleStreakNotificationIfNeeded()
-
-        // Coach notes — welcome-back / streak overlay. Detail-surface notes are
+        // Coach notes — welcome-back / anniversary. Detail-surface notes are
         // owned by RecordingDetailView after a take.
         CoachMomentService.shared.evaluateToday(
             context: context,
-            stats: userStats,
             practicedToday: practicedToday,
             lastPracticeDate: lastPracticeDate
         )
@@ -336,28 +332,6 @@ class TodayViewModel {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    private func scheduleStreakNotificationIfNeeded() async {
-        let streak = userStats.currentStreak
-        guard streak >= 1 else { return }
-
-        // Check if user has already recorded today
-        guard let context = modelContext else { return }
-        let today = Calendar.current.startOfDay(for: Date())
-        let descriptor = FetchDescriptor<Recording>(
-            predicate: #Predicate { $0.date >= today }
-        )
-
-        let todayCount = (try? context.fetchCount(descriptor)) ?? 0
-        let notificationService = NotificationService()
-        await notificationService.checkPermission()
-
-        if todayCount == 0 {
-            await notificationService.scheduleStreakAtRiskNotification(currentStreak: streak)
-        } else {
-            notificationService.cancelStreakAtRiskNotification()
-        }
-    }
-    
     @MainActor
     private func loadTodaysPrompt(context: ModelContext) async {
         // If the user has rerolled the prompt this session, keep it

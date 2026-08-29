@@ -44,7 +44,7 @@ struct VocabChallengeResultCard: View {
                 }
 
                 if !evaluation.isComplete, !evaluation.missed.isEmpty {
-                    Text("Still to use: \(evaluation.missed.joined(separator: ", "))")
+                    Text("Optional words for next time: \(evaluation.missed.joined(separator: ", "))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

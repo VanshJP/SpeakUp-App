@@ -67,13 +67,13 @@ struct CoachMomentCard: View {
         switch moment.signal {
         case .softLanding, .returnFromLapse:
             return AppColors.info
-        case .streakMilestone, .fillerBreakthrough, .firstAxisClear, .practiceAnniversary:
+        case .firstAxisClear, .practiceAnniversary:
             return AppColors.success
         }
     }
 }
 
-/// Full-screen note for rare celebrations (streak blocks, anniversaries).
+/// Full-screen note for rare practice anniversaries.
 struct CoachMomentOverlay: View {
     let moment: CoachMoment
     let onAccept: () -> Void
@@ -98,7 +98,7 @@ struct CoachMomentOverlay: View {
                         .frame(height: 120)
                 }
 
-                Image(systemName: overlayIcon)
+                Image(systemName: "gift.fill")
                     .font(.system(size: 56))
                     .foregroundStyle(AppColors.primary)
                     .symbolEffect(.bounce, value: reduceMotion ? false : showContent)
@@ -167,14 +167,6 @@ struct CoachMomentOverlay: View {
         }
     }
 
-    private var overlayIcon: String {
-        switch moment.gesture {
-        case .anniversaryToast: return "gift.fill"
-        case .celebration: return "flame.fill"
-        case .axisToast: return "checkmark.seal.fill"
-        default: return "sparkles"
-        }
-    }
 }
 
 #Preview("Card") {
@@ -184,7 +176,6 @@ struct CoachMomentOverlay: View {
             moment: CoachMoment(
                 id: "preview",
                 signal: .returnFromLapse,
-                gesture: .softReturn,
                 title: "Welcome back",
                 body: "No catch-up quiz. A short calm reset, then today's prompt when you're ready.",
                 actionTitle: "Ease back in",

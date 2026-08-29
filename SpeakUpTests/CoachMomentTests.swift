@@ -11,24 +11,24 @@ private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
 private func snap(
     now: Date = t0,
-    streak: Int = 0,
     practicedToday: Bool = false,
     daysSince: Int? = nil,
+    lastPractice: Date? = t0,
     firstPractice: Date? = nil,
+    scoredSessions: Int = 2,
     overall: Int? = nil,
-    fillers: Int? = nil,
     words: Int? = nil,
     newlyCleared: [CoachDimension] = [],
     name: String = ""
 ) -> CoachMomentSnapshot {
     CoachMomentSnapshot(
         now: now,
-        currentStreak: streak,
         practicedToday: practicedToday,
         daysSinceLastPractice: daysSince,
+        lastPracticeDate: lastPractice,
         firstPracticeDate: firstPractice,
+        scoredSessionCount: scoredSessions,
         latestOverall: overall,
-        latestFillerCount: fillers,
         latestTotalWords: words,
         newlyClearedDimensions: newlyCleared,
         userName: name
@@ -74,24 +74,6 @@ struct CoachMomentSignalTests {
         #expect(moment?.body.localizedCaseInsensitiveContains("been") == false)
     }
 
-    @Test func streakMilestoneIsEverySeventhPracticedDay() {
-        #expect(
-            CoachMomentEngine.detectSignals(
-                snap(streak: 7, practicedToday: true)
-            ).contains(.streakMilestone)
-        )
-        #expect(
-            !CoachMomentEngine.detectSignals(
-                snap(streak: 8, practicedToday: true)
-            ).contains(.streakMilestone)
-        )
-        #expect(
-            !CoachMomentEngine.detectSignals(
-                snap(streak: 7, practicedToday: false)
-            ).contains(.streakMilestone)
-        )
-    }
-
     @Test func softLandingNeedsARealButRoughTake() {
         #expect(
             CoachMomentEngine.detectSignals(
@@ -110,17 +92,17 @@ struct CoachMomentSignalTests {
         )
     }
 
-    @Test func fillerBreakthroughNeedsEnoughWords() {
-        #expect(
-            CoachMomentEngine.detectSignals(
-                snap(fillers: 0, words: 40)
-            ).contains(.fillerBreakthrough)
+    @Test func firstScoredTakeGetsNoDetailCoachNote() {
+        let signals = CoachMomentEngine.detectSignals(
+            snap(
+                scoredSessions: 1,
+                overall: 30,
+                words: 80,
+                newlyCleared: [.clarity]
+            )
         )
-        #expect(
-            !CoachMomentEngine.detectSignals(
-                snap(fillers: 0, words: 10)
-            ).contains(.fillerBreakthrough)
-        )
+        #expect(!signals.contains(.softLanding))
+        #expect(!signals.contains(.firstAxisClear))
     }
 
     @Test func anniversaryHitsKnownMilestones() {
@@ -130,6 +112,12 @@ struct CoachMomentSignalTests {
                 snap(now: t0, firstPractice: first)
             ).contains(.practiceAnniversary)
         )
+        let moment = CoachMomentEngine.propose(
+            snapshot: snap(now: t0, firstPractice: first),
+            budget: emptyBudget(),
+            surface: .overlay
+        )
+        #expect(moment?.action == .close)
         let notYet = t0.addingTimeInterval(-29 * day)
         #expect(
             !CoachMomentEngine.detectSignals(
@@ -158,27 +146,19 @@ struct CoachMomentBudgetTests {
 
         let blocked = CoachMomentEngine.propose(
             snapshot: snap(
-                streak: 7,
-                practicedToday: true,
-                overall: 90,
-                fillers: 0,
-                words: 100
+                firstPractice: t0.addingTimeInterval(-30 * day)
             ),
             budget: spent
         )
-        #expect(blocked == nil || blocked?.isCelebration == false)
-        #expect(blocked?.signal != .streakMilestone)
-        #expect(blocked?.signal != .fillerBreakthrough)
+        #expect(blocked == nil)
     }
 
     @Test func softLandingBeatsOtherDetailCelebrationsOnPriority() {
         let moment = CoachMomentEngine.propose(
             snapshot: snap(
-                streak: 7,
-                practicedToday: true,
                 overall: 30,
-                fillers: 0,
-                words: 80
+                words: 80,
+                newlyCleared: [.clarity]
             ),
             budget: emptyBudget(),
             surface: .detail
@@ -190,14 +170,13 @@ struct CoachMomentBudgetTests {
     @Test func overlaySurfaceIgnoresTodayCare() {
         let moment = CoachMomentEngine.propose(
             snapshot: snap(
-                streak: 14,
-                practicedToday: true,
-                daysSince: 6
+                daysSince: 6,
+                firstPractice: t0.addingTimeInterval(-30 * day)
             ),
             budget: emptyBudget(),
             surface: .overlay
         )
-        #expect(moment?.signal == .streakMilestone)
+        #expect(moment?.signal == .practiceAnniversary)
         #expect(moment?.surface == .overlay)
     }
 
@@ -237,6 +216,34 @@ struct CoachMomentBudgetTests {
         #expect(CoachMomentEngine.propose(snapshot: snapshot, budget: budget) == nil)
     }
 
+    @Test func welcomeBackIsOncePerAbsenceEpisode() {
+        let lastPractice = t0.addingTimeInterval(-10 * day)
+        let firstDay = snap(
+            now: t0,
+            daysSince: 10,
+            lastPractice: lastPractice
+        )
+        guard let first = CoachMomentEngine.propose(
+            snapshot: firstDay,
+            budget: emptyBudget()
+        ) else {
+            Issue.record("expected a welcome-back note")
+            return
+        }
+
+        var delivered = emptyBudget(at: t0.addingTimeInterval(day))
+        delivered.deliveredIDs = [first.id]
+        let nextDay = snap(
+            now: t0.addingTimeInterval(day),
+            daysSince: 11,
+            lastPractice: lastPractice
+        )
+        #expect(
+            CoachMomentEngine.propose(snapshot: nextDay, budget: delivered) == nil
+        )
+        #expect(first.id.hasPrefix("return-since-"))
+    }
+
     @Test func weekRollResetsCelebrationCount() {
         let oldKey = CoachMomentEngine.weekKey(for: t0.addingTimeInterval(-14 * day))
         let stale = CoachMomentBudget(weekKey: oldKey, celebrationsUsed: 1, deliveredIDs: ["x"])
@@ -254,14 +261,45 @@ struct CoachMomentBudgetTests {
         #expect(!next.contains("id-0"))
     }
 
+    @Test func capPreservesMilestonesAndCurrentReturnEpisode() {
+        let ids = [
+            "anniversary-30",
+            "axis-clarity",
+            "return-since-2026-01-01"
+        ]
+            + (0..<50).map { "soft-\($0)" }
+        let next = CoachMomentEngine.cappedDeliveredIDs(
+            ids,
+            adding: "fresh",
+            limit: 40
+        )
+        #expect(next.contains("anniversary-30"))
+        #expect(next.contains("axis-clarity"))
+        #expect(next.contains("return-since-2026-01-01"))
+        #expect(next.count == 43)
+    }
+
+    @Test func oldReturnEpisodesAreBounded() {
+        let ids = (0..<12).map { "return-since-\($0)" }
+        let next = CoachMomentEngine.cappedDeliveredIDs(
+            ids,
+            adding: "fresh",
+            limit: 40
+        )
+        #expect(!next.contains("return-since-0"))
+        #expect(!next.contains("return-since-1"))
+        #expect(next.contains("return-since-11"))
+        #expect(next.count == 11)
+    }
+
     @Test func seeingACelebrationSpendsTheWeeklySlotEvenWhenDismissed() {
         let budget = emptyBudget()
         guard let celebration = CoachMomentEngine.propose(
-            snapshot: snap(streak: 7, practicedToday: true),
+            snapshot: snap(firstPractice: t0.addingTimeInterval(-30 * day)),
             budget: budget,
             surface: .overlay
         ) else {
-            Issue.record("expected a streak celebration")
+            Issue.record("expected an anniversary celebration")
             return
         }
 
@@ -271,7 +309,7 @@ struct CoachMomentBudgetTests {
         #expect(spent.deliveredIDs.contains(celebration.id))
 
         let second = CoachMomentEngine.propose(
-            snapshot: snap(fillers: 0, words: 80),
+            snapshot: snap(newlyCleared: [.clarity]),
             budget: spent,
             surface: .detail
         )
@@ -281,11 +319,11 @@ struct CoachMomentBudgetTests {
     @Test func recordingTheSameDeliveryTwiceDoesNotDoubleSpend() {
         let budget = emptyBudget()
         guard let celebration = CoachMomentEngine.propose(
-            snapshot: snap(streak: 7, practicedToday: true),
+            snapshot: snap(firstPractice: t0.addingTimeInterval(-30 * day)),
             budget: budget,
             surface: .overlay
         ) else {
-            Issue.record("expected a streak celebration")
+            Issue.record("expected an anniversary celebration")
             return
         }
 
@@ -299,6 +337,17 @@ struct CoachMomentBudgetTests {
 // MARK: - Axis clear
 
 struct CoachMomentAxisClearTests {
+    @Test func clearedAxisProposesOneFactualDetailNote() {
+        let moment = CoachMomentEngine.propose(
+            snapshot: snap(newlyCleared: [.clarity]),
+            budget: emptyBudget(),
+            surface: .detail
+        )
+        #expect(moment?.signal == .firstAxisClear)
+        #expect(moment?.title == "Clarity reached target")
+        #expect(moment?.body.localizedCaseInsensitiveContains("first") == false)
+    }
+
     @Test func newlyClearedIgnoresAlreadyMarkedDimensions() {
         let scores = SpeechSubscores(
             clarity: 90,

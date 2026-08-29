@@ -23,7 +23,6 @@ final class CoachMomentService {
     /// celebration when both apply; care should never be displaced by confetti.
     func evaluateToday(
         context: ModelContext,
-        stats: UserStats,
         practicedToday: Bool,
         lastPracticeDate: Date?
     ) {
@@ -35,7 +34,6 @@ final class CoachMomentService {
         let snapshot = Self.buildSnapshot(
             context: context,
             settings: settings,
-            stats: stats,
             practicedToday: practicedToday,
             lastPracticeDate: lastPracticeDate
         )
@@ -72,6 +70,7 @@ final class CoachMomentService {
     func evaluateAfterSession(
         context: ModelContext,
         analysis: SpeechAnalysis,
+        scoredSessionCount: Int,
         practicedToday: Bool = true
     ) {
         guard pendingOverlay == nil else { return }
@@ -84,14 +83,12 @@ final class CoachMomentService {
 
         let snapshot = CoachMomentSnapshot(
             now: .now,
-            // Streak celebrations are evaluated on Today, where the full
-            // stats snapshot already exists. Avoid a second history scan here.
-            currentStreak: 0,
             practicedToday: practicedToday,
             daysSinceLastPractice: 0,
+            lastPracticeDate: nil,
             firstPracticeDate: Self.firstPracticeDate(context: context),
+            scoredSessionCount: scoredSessionCount,
             latestOverall: analysis.speechScore.overall,
-            latestFillerCount: analysis.totalFillerCount,
             latestTotalWords: analysis.totalWords,
             newlyClearedDimensions: newlyCleared,
             userName: settings.userName
@@ -156,6 +153,12 @@ final class CoachMomentService {
         clear(moment)
     }
 
+    /// A view disappeared before the user acted. Clear presentation state,
+    /// but do not spend a celebration or mark a skill milestone as seen.
+    func abandon(_ moment: CoachMoment) {
+        clear(moment)
+    }
+
     private func markAxisClearedIfNeeded(
         for moment: CoachMoment,
         settings: UserSettings
@@ -187,7 +190,6 @@ final class CoachMomentService {
     private static func buildSnapshot(
         context: ModelContext,
         settings: UserSettings,
-        stats: UserStats,
         practicedToday: Bool,
         lastPracticeDate: Date?
     ) -> CoachMomentSnapshot {
@@ -203,9 +205,9 @@ final class CoachMomentService {
 
         return CoachMomentSnapshot(
             now: .now,
-            currentStreak: stats.currentStreak,
             practicedToday: practicedToday,
             daysSinceLastPractice: daysSince,
+            lastPracticeDate: lastPracticeDate,
             firstPracticeDate: firstPracticeDate(context: context),
             newlyClearedDimensions: [],
             userName: settings.userName

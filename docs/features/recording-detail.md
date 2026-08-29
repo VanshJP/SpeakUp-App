@@ -13,7 +13,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Playback | `PlaybackDrawer`, `RecordingDetailPlaybackViewModel` |
 | Transcript | `TranscriptViews`, `TranscriptExcerptCard`, `WPMChartView` |
 | Coaching / next | `CoachPlanService`, `CoachEvidenceService`, `CoachingTipService`, `CoachingPrompt`, `CoachingTipsView`, `NextStepCard`, `TakeComparisonCard`, `ListenBackEncouragementView` |
-| Coach note | `CoachMomentService.evaluateAfterSession` → `CoachMomentCard` above next step (axis win, filler breakthrough); a soft landing replaces the next-step card so retry is never duplicated. See [coach-moments.md](./coach-moments.md). |
+| Coach note | `CoachMomentService.evaluateAfterSession` → `CoachMomentCard` above next step (axis mark); a soft landing replaces the next-step card so retry is never duplicated. See [coach-moments.md](./coach-moments.md). |
 | Word workout result | `VocabChallengeResultCard` on the breakdown tab when today's spotlight words exist |
 | Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each occurrence a playable stamp, each habit carrying swap suggestions |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
@@ -30,6 +30,8 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 3. Deferred-by-allowance UI offers Try Again only — no unlock path exists during the beta, and `AllowanceGate` never defers while `BetaAccess.allFeaturesFree` is true.
 4. Processing: prefer `RecordingProcessingCoordinator` over ad-hoc parallel jobs.
 4a. Coach moments are fresh-result-only (`ContentView.freshResultRecordingId` → `RecordingDetailView.allowsCoachMoments`). Browsing an old History/Story recording never evaluates or shows a new note.
+4b. The full-screen post-recording analyzing state always offers **Save & close**. The saved recording remains in History and the coordinator keeps scoring in the background; a model download must never trap the user. `ContentView` waits for that existing job, then evaluates achievements silently — unlock state stays correct without replacing the user's chosen exit with an overlay.
+4c. Recovery copy protects the work: "Couldn't score this take" + "Your recording is safe." Raw backend errors never appear on the result screen, and playback failures never interpolate `localizedDescription`.
 5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
 6. Share score / progress cards via `SharePresenter` only (completed-share analytics). Score-card shares that include the prompt also attach a caption with a try-this-prompt URL (`SharedPromptLink`); do not invent a second activity sheet.
 7. Prompt text on a share card and in the share URL is opt-in. Scores-only shares must not put the prompt (or `beat`) on the link. Story sessions may show the title on the card but never encode story body into the URL.

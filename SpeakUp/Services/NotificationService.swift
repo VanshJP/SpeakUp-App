@@ -11,7 +11,7 @@ class NotificationService {
     
     func requestPermission() async -> Bool {
         do {
-            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+            let granted = try await center.requestAuthorization(options: [.alert, .sound])
             hasPermission = granted
             return granted
         } catch {
@@ -38,10 +38,9 @@ class NotificationService {
         
         // Create content
         let content = UNMutableNotificationContent()
-        content.title = "Time to Practice!"
+        content.title = "Ready for a short speaking rep?"
         content.body = getRandomReminderMessage()
         content.sound = .default
-        content.badge = 1
         
         // Create trigger
         var dateComponents = DateComponents()
@@ -68,96 +67,28 @@ class NotificationService {
         center.removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
     }
     
-    // MARK: - Achievement Notifications
-    
-    func sendStreakMilestoneNotification(days: Int) async {
-        guard hasPermission else { return }
-        
-        let content = UNMutableNotificationContent()
-        content.title = "Streak Milestone!"
-        content.body = "Amazing! You've practiced for \(days) days in a row!"
-        content.sound = .default
-        
-        let request = UNNotificationRequest(
-            identifier: "streak_\(days)",
-            content: content,
-            trigger: nil // Immediate
-        )
-        
-        try? await center.add(request)
-    }
-    
-    // MARK: - Streak At Risk
-
-    func scheduleStreakAtRiskNotification(currentStreak: Int) async {
-        // >= 1: a user who practiced yesterday for the first time is exactly
-        // the one worth nudging before the habit dies.
-        guard hasPermission, currentStreak >= 1 else { return }
-
-        // Cancel any existing streak-at-risk notification
-        center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
-
-        let content = UNMutableNotificationContent()
-        content.title = "Streak at Risk!"
-        content.body = "Your \(currentStreak)-day streak ends today! Record a session to keep it alive."
-        content.sound = .default
-        content.badge = 1
-
-        // Schedule at 8pm today
-        var dateComponents = DateComponents()
-        dateComponents.hour = 20
-        dateComponents.minute = 0
-
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
-        let request = UNNotificationRequest(
-            identifier: "streak_at_risk",
-            content: content,
-            trigger: trigger
-        )
-
-        try? await center.add(request)
-    }
-
-    func cancelStreakAtRiskNotification() {
-        center.removePendingNotificationRequests(withIdentifiers: ["streak_at_risk"])
-    }
-
-    // MARK: - Lapsed User Re-engagement
-
-    /// Rescheduled on every app foreground, so it only ever fires after the
-    /// user has actually been away for 3 full days.
-    func scheduleLapsedUserNudge() async {
-        guard hasPermission else { return }
-        center.removePendingNotificationRequests(withIdentifiers: ["lapsed_nudge"])
-
-        let content = UNMutableNotificationContent()
-        content.title = "Your speaking practice misses you"
-        content.body = "It's been a few days. One 60-second session gets you back on track."
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3 * 24 * 3600, repeats: false)
-        let request = UNNotificationRequest(identifier: "lapsed_nudge", content: content, trigger: trigger)
-        try? await center.add(request)
-    }
-
     // MARK: - Management
 
     func clearBadge() async {
         try? await center.setBadgeCount(0)
+    }
+
+    /// One-time-compatible cleanup for requests scheduled by older builds.
+    /// Daily reminder is the only notification contract now.
+    func removeLegacyPressureNotifications() {
+        center.removePendingNotificationRequests(
+            withIdentifiers: ["streak_at_risk", "lapsed_nudge"]
+        )
     }
     
     // MARK: - Helpers
     
     private func getRandomReminderMessage() -> String {
         let messages = [
-            "Your voice is your superpower. Let's practice!",
-            "A few minutes of practice makes a big difference.",
-            "Ready to level up your speaking skills?",
-            "Today's prompt is waiting for you!",
-            "Practice makes progress. Let's go!",
-            "Small steps, big results. Start practicing now.",
-            "Your future self will thank you for practicing today.",
-            "Speaking confidence is built one session at a time."
+            "Today's prompt is here when you want it.",
+            "A minute is enough. Skip today if you need to.",
+            "One short take, at your pace.",
+            "Practice is ready whenever you are."
         ]
         return messages.randomElement() ?? messages[0]
     }

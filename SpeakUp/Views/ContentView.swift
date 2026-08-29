@@ -254,6 +254,21 @@ struct ContentView: View {
                 goalId: recordingGoalId,
                 storyId: recordingStoryId,
                 sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
+                onSavedAndClosed: { recording in
+                    Task {
+                        // The user chose to leave the analyzing screen. Wait
+                        // for its existing coordinator job rather than missing
+                        // score-based unlocks or starting a second analysis.
+                        while RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
+                            try? await Task.sleep(for: .milliseconds(500))
+                            guard !Task.isCancelled else { return }
+                        }
+                        await achievementService.checkAchievements(context: modelContext)
+                        // Save & close means no replacement interruption. Keep
+                        // unlock state, but do not surface an overlay now.
+                        achievementService.clearNewlyUnlocked()
+                    }
+                },
                 onComplete: { recording in
                     pendingRecordingNavigation = recording.id.uuidString
                     freshResultRecordingId = recording.id.uuidString
@@ -332,14 +347,6 @@ struct ContentView: View {
             if let achievement = achievementService.newlyUnlocked {
                 AchievementUnlockedView(achievement: achievement) {
                     achievementService.clearNewlyUnlocked()
-                    // Celebration just landed — the one moment a rating ask is
-                    // welcome. The service decides whether to spend one.
-                    if ReviewRequestService.shared.requestIfEligible(
-                        .achievementUnlocked,
-                        settings: userSettings.first
-                    ) {
-                        try? modelContext.save()
-                    }
                 }
                 .zIndex(10)
             } else if let moment = coachMoments.pendingOverlay {
@@ -496,18 +503,14 @@ struct ContentView: View {
         switch action {
         case .openConfidence:
             showingConfidenceTools = true
-        case .openWarmUp:
-            showingWarmUps = true
-        case .openDrill(_):
-            showingDrills = true
-        case .openReadAloud:
-            showingReadAloud = true
         case .practiceAgain:
             recordingPrompt = nil
             recordingStoryId = nil
             recordingDuration = .sixty
             recordingChallenge = nil
             showingCountdown = true
+        case .close:
+            break
         }
     }
 

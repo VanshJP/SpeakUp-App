@@ -18,8 +18,8 @@ struct OnboardingBaselineBriefingStep: View {
 
     private var openerBeat: String {
         userName.isEmpty
-            ? "One recording, and I'll know your voice."
-            : "One recording, \(userName), and I'll know your voice."
+            ? "One short recording sets your starting line."
+            : "One short recording sets your starting line, \(userName)."
     }
 
     var body: some View {
@@ -41,7 +41,7 @@ struct OnboardingBaselineBriefingStep: View {
 
                     bubble(index: 1) {
                         VStack(alignment: .leading, spacing: 10) {
-                            beatText("I'll measure pace, clarity, fillers, and pauses.")
+                            beatText("We'll measure pace, clarity, fillers, and pauses, only from what you choose to record.")
                             FlowLayout(spacing: 6) {
                                 ForEach(["Pace", "Clarity", "Fillers", "Pauses"], id: \.self) { metric in
                                     StatusPill(text: metric, color: AppColors.primary, glyph: .dot)

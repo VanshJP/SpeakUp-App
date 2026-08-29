@@ -39,6 +39,7 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 - `RecordingBackdrop` is orthogonal to both and paints the **whole session** — prepare countdown (`CountdownOverlayView`), `RecordingView`, and `DrillSessionView`. `.base` resolves to `AppBackground(style: .recording)`, so the default look is unchanged. Do not paint any screen outside a session with it.
 - Deep-link `record` clears prior prompt/story/goal context.
 - Allowance is **not** consumed at capture time — only after successful analysis (`AllowanceGate.consume`).
+- Capture/save failures are never silent: `RecordingView` says the take did not save, explicitly removes blame, and offers Try Again or Cancel without exposing raw audio errors.
 
 ## Cross-links
 

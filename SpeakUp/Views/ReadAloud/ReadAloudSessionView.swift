@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReadAloudSessionView: View {
     @Bindable var viewModel: ReadAloudViewModel
@@ -91,19 +92,34 @@ struct ReadAloudSessionView: View {
             )
         }
         .alert(
-            "Error",
+            readAloudErrorNeedsSettings ? "Access Needed" : "Couldn't Start Read Aloud",
             isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )
         ) {
-            Button("OK") {
+            Button("Close", role: .cancel) {
                 viewModel.reset()
                 dismiss()
             }
+            if readAloudErrorNeedsSettings {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            }
         } message: {
-            Text(viewModel.errorMessage ?? "")
+            Text(
+                readAloudErrorNeedsSettings
+                    ? "Check microphone and Speech Recognition access, then try again when you're ready."
+                    : "Read Aloud couldn't start this time. Close this screen and try again when you're ready."
+            )
         }
+    }
+
+    private var readAloudErrorNeedsSettings: Bool {
+        viewModel.errorMessage?.localizedCaseInsensitiveContains("settings") == true
     }
 
     // MARK: - Top Bar

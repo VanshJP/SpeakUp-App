@@ -114,7 +114,11 @@ class AchievementService {
             context.delete(dup)
         }
         for def in AchievementDefinition.allCases {
-            if lookup[def.rawValue] == nil {
+            if let existing = lookup[def.rawValue] {
+                // Definitions own display copy. Keep older rows in sync when
+                // wording becomes clearer without touching unlock state.
+                def.refreshDisplay(on: existing)
+            } else {
                 let model = def.toModel()
                 context.insert(model)
                 lookup[def.rawValue] = model
@@ -151,13 +155,6 @@ class AchievementService {
             // Report the first newly unlocked one for celebration
             if newlyUnlocked == nil {
                 newlyUnlocked = achievement
-            }
-
-            // Fire notification for milestone streaks
-            if id.hasPrefix("streak_") {
-                Task {
-                    await NotificationService().sendStreakMilestoneNotification(days: streak)
-                }
             }
         }
 
