@@ -36,6 +36,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | Analytics / attribution / review | [analytics-review.md](./analytics-review.md) | `AnalyticsService`, `ReviewRequestService` | gotchas §7 | — |
 | Theme / glass / components | [ui-design-system.md](./ui-design-system.md) | `Theme/`, `Views/Components/` | gotchas §11 | `swiftui-expert-skill` |
 | Achievements / goals | [achievements-goals.md](./achievements-goals.md) | `Views/Achievements/`, `Views/Goals/` | — | — |
+| Unreasonable hospitality (95/5) | [hospitality.md](./hospitality.md) | `Models/Hospitality.swift`, `HospitalityService`, `Views/Hospitality/` | — | — |
 | App Store listing / launch | `/APP_STORE_LISTING.md`, `/RELEASE_CHECKLIST.md` | metadata | greenlight | `greenlight`, `apple-appstore-reviewer` |
 
 Vendor skill catalog: [`../../.agents/skills/README.md`](../../.agents/skills/README.md). Load **one** skill body per task. Prefer `swiftui-expert-skill` to write SwiftUI; `swiftui-pro` to review it — not both.

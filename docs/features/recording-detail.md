@@ -13,6 +13,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Playback | `PlaybackDrawer`, `RecordingDetailPlaybackViewModel` |
 | Transcript | `TranscriptViews`, `TranscriptExcerptCard`, `WPMChartView` |
 | Coaching / next | `CoachPlanService`, `CoachEvidenceService`, `CoachingTipService`, `CoachingPrompt`, `CoachingTipsView`, `NextStepCard`, `TakeComparisonCard`, `ListenBackEncouragementView` |
+| Hospitality | `HospitalityService.evaluateAfterSession` → `HospitalityMomentCard` above next step (soft landing, axis win, filler breakthrough). See [hospitality.md](./hospitality.md). |
 | Word workout result | `VocabChallengeResultCard` on the breakdown tab when today's spotlight words exist |
 | Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each occurrence a playable stamp, each habit carrying swap suggestions |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |

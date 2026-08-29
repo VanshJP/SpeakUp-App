@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var pendingRecordingNavigation: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
+    @State private var hospitality = HospitalityService.shared
     /// Owned here because the tour crosses tabs: it drives `selectedTab` and
     /// draws over the tab bar, neither of which a single tab's root can do.
     @State private var appTour = AppTourModel()
@@ -330,6 +331,19 @@ struct ContentView: View {
                     }
                 }
                 .zIndex(10)
+            } else if let moment = hospitality.pendingOverlay {
+                HospitalityMomentOverlay(
+                    moment: moment,
+                    onAccept: {
+                        let action = moment.action
+                        hospitality.consume(moment, context: modelContext)
+                        performHospitalityAction(action)
+                    },
+                    onDismiss: {
+                        hospitality.dismiss(moment, context: modelContext)
+                    }
+                )
+                .zIndex(10)
             }
         }
         .onAppear {
@@ -463,6 +477,29 @@ struct ContentView: View {
         AnalyticsService.shared.log(
             .onboardingStep("app_tour", action: completed ? "complete" : "skip")
         )
+    }
+
+    // MARK: - Hospitality
+
+    private func performHospitalityAction(_ action: HospitalityAction) {
+        switch action {
+        case .openConfidence:
+            showingConfidenceTools = true
+        case .openWarmUp:
+            showingWarmUps = true
+        case .openDrill:
+            showingDrills = true
+        case .openReadAloud:
+            showingReadAloud = true
+        case .practiceAgain:
+            recordingPrompt = nil
+            recordingStoryId = nil
+            recordingDuration = .sixty
+            recordingChallenge = nil
+            showingCountdown = true
+        case .dismissOnly:
+            break
+        }
     }
 
     // MARK: - Onboarding

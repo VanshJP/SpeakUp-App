@@ -16,6 +16,11 @@ struct TodayView: View {
     @State private var arrived = false
     @State private var showArrivalConfetti = false
     @State private var challengeStore = SharedChallengeStore.shared
+    @State private var hospitality = HospitalityService.shared
+    /// Detail-adjacent sheets for hospitality CTAs that need a tool surface.
+    @State private var hospitalityDrill: DrillMode?
+    @State private var showingHospitalityWarmUp = false
+    @State private var showingHospitalityReadAloud = false
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
     // RecordingDetailView so both entry points land on the same tool.
@@ -67,6 +72,14 @@ struct TodayView: View {
                             challenge: challenge,
                             onAccept: { acceptFriendChallenge(challenge) },
                             onDismiss: { challengeStore.dismiss() }
+                        )
+                    }
+
+                    if let moment = hospitality.pendingToday {
+                        HospitalityMomentCard(
+                            moment: moment,
+                            onAccept: { acceptHospitality(moment) },
+                            onDismiss: { dismissHospitality(moment) }
                         )
                     }
 
@@ -137,6 +150,18 @@ struct TodayView: View {
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showingFocusReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+        }
+        .sheet(item: $hospitalityDrill) { mode in
+            DrillSelectionView(initialMode: mode)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingHospitalityWarmUp) {
+            WarmUpListView()
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingHospitalityReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
@@ -577,6 +602,34 @@ struct TodayView: View {
         )
         let prompt = SharedPromptResolver.resolve(payload, in: modelContext)
         onStartRecording(prompt, viewModel.selectedDuration)
+    }
+
+    // MARK: - Hospitality
+
+    private func acceptHospitality(_ moment: HospitalityMoment) {
+        hospitality.consume(moment, context: modelContext)
+        performHospitalityAction(moment.action)
+    }
+
+    private func dismissHospitality(_ moment: HospitalityMoment) {
+        hospitality.dismiss(moment, context: modelContext)
+    }
+
+    private func performHospitalityAction(_ action: HospitalityAction) {
+        switch action {
+        case .openConfidence:
+            onShowConfidence()
+        case .openWarmUp:
+            showingHospitalityWarmUp = true
+        case .openDrill(let raw):
+            hospitalityDrill = DrillMode(rawValue: raw)
+        case .openReadAloud:
+            showingHospitalityReadAloud = true
+        case .practiceAgain:
+            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+        case .dismissOnly:
+            break
+        }
     }
 
     // MARK: - First Run Surfaces

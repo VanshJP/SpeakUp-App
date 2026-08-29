@@ -86,6 +86,11 @@ struct RecordingDetailView: View {
     @State private var nextStepDrill: DrillMode?
     @State private var showingNextStepWarmUp = false
     @State private var showingNextStepReadAloud = false
+    @State private var hospitality = HospitalityService.shared
+    @State private var hospitalityEvaluated = false
+    @State private var hospitalityDrill: DrillMode?
+    @State private var showingHospitalityWarmUp = false
+    @State private var showingHospitalityReadAloud = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -281,6 +286,18 @@ struct RecordingDetailView: View {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
+        .sheet(item: $hospitalityDrill) { mode in
+            DrillSelectionView(initialMode: mode)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingHospitalityWarmUp) {
+            WarmUpListView()
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingHospitalityReadAloud) {
+            ReadAloudSelectionView()
+                .presentationDetents([.large])
+        }
         .overlay {
             if showingListenBackEncouragement {
                 ListenBackEncouragementView {
@@ -309,6 +326,13 @@ struct RecordingDetailView: View {
                 if let analysis = coachAnalysis {
                     scoreHero(analysis)
                     takeComparisonSection(analysis)
+                    if let moment = hospitality.pendingDetail {
+                        HospitalityMomentCard(
+                            moment: moment,
+                            onAccept: { acceptHospitality(moment, recording: recording) },
+                            onDismiss: { hospitality.dismiss(moment, context: modelContext) }
+                        )
+                    }
                     nextStepSection(analysis, recording: recording)
                     // Challenge CTA sits next to the score — burying it in
                     // Coaching was the moment the share loop went unseen.
@@ -391,8 +415,22 @@ struct RecordingDetailView: View {
         Task {
             await populateWPMTimeSeriesIfNeeded()
             await loadPersonalAverageIfNeeded(excluding: recording.id)
+            evaluateHospitalityIfNeeded(for: recording)
             await enhanceCoherenceIfNeeded()
         }
+    }
+
+    /// Soft landing / first-axis win / filler breakthrough — once per open.
+    private func evaluateHospitalityIfNeeded(for recording: Recording) {
+        guard !hospitalityEvaluated, let analysis = coachAnalysis else { return }
+        hospitalityEvaluated = true
+        let transcript = recording.transcriptionText
+        HospitalityService.shared.evaluateAfterSession(
+            context: modelContext,
+            analysis: analysis,
+            transcript: transcript,
+            practicedToday: Calendar.current.isDateInToday(recording.date)
+        )
     }
 
     /// Loads the baselines the hero delta and the metric tiles read against,
@@ -663,6 +701,29 @@ struct RecordingDetailView: View {
             },
             onPracticeAgain: { onPracticeAgain?(recording.prompt) }
         )
+    }
+
+    // MARK: - Hospitality
+
+    private func acceptHospitality(_ moment: HospitalityMoment, recording: Recording) {
+        let action = moment.action
+        hospitality.consume(moment, context: modelContext)
+        switch action {
+        case .openConfidence:
+            // Confidence tools live at the app root; practice-again is the
+            // closest dignity-preserving action this screen owns.
+            onPracticeAgain?(recording.prompt)
+        case .openWarmUp:
+            showingHospitalityWarmUp = true
+        case .openDrill(let raw):
+            hospitalityDrill = DrillMode(rawValue: raw)
+        case .openReadAloud:
+            showingHospitalityReadAloud = true
+        case .practiceAgain:
+            onPracticeAgain?(recording.prompt)
+        case .dismissOnly:
+            break
+        }
     }
 
     // MARK: - Stats Grid

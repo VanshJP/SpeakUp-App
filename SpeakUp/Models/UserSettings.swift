@@ -113,6 +113,16 @@ final class UserSettings {
     // visible by `TodayHomeLayout.resolve`. Additive; see today-library.md.
     var todayHomeLayoutRaw: [String] = []
 
+    // Unreasonable hospitality (95/5) — weekly legend budget + delivery memory.
+    // Additive defaults: empty week key / zero used / empty lists mean "never
+    // hosted a legend yet". See docs/features/hospitality.md.
+    var hospitalityWeekKey: String = ""
+    var hospitalityLegendsUsedThisWeek: Int = 0
+    var hospitalityDeliveredIDs: [String] = []
+    /// `CoachDimension.rawValue`s that have cleared mastery at least once —
+    /// drives the first-axis-win ghost so it fires once per dimension.
+    var hospitalityClearedDimensionsRaw: [String] = []
+
     // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 
@@ -227,6 +237,22 @@ final class UserSettings {
     /// Resolved Today modules in display order. Empty storage → factory default.
     var todayHomeModules: [TodayHomeModule] {
         TodayHomeLayout.resolve(todayHomeLayoutRaw)
+    }
+
+    /// Weekly legend budget for unreasonable hospitality. Empty week key rolls
+    /// into a fresh week on first read after the calendar week changes.
+    var hospitalityBudget: HospitalityBudgetState {
+        HospitalityBudgetState(
+            weekKey: hospitalityWeekKey,
+            legendsUsed: hospitalityLegendsUsedThisWeek,
+            deliveredIDs: hospitalityDeliveredIDs
+        ).rolling(now: .now)
+    }
+
+    func apply(budget: HospitalityBudgetState) {
+        hospitalityWeekKey = budget.weekKey
+        hospitalityLegendsUsedThisWeek = budget.legendsUsed
+        hospitalityDeliveredIDs = budget.deliveredIDs
     }
 
     // MARK: - Pace Target Resolution
