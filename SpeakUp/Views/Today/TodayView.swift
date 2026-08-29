@@ -16,11 +16,11 @@ struct TodayView: View {
     @State private var arrived = false
     @State private var showArrivalConfetti = false
     @State private var challengeStore = SharedChallengeStore.shared
-    @State private var hospitality = HospitalityService.shared
-    /// Detail-adjacent sheets for hospitality CTAs that need a tool surface.
-    @State private var hospitalityDrill: DrillMode?
-    @State private var showingHospitalityWarmUp = false
-    @State private var showingHospitalityReadAloud = false
+    @State private var coachMoments = CoachMomentService.shared
+    /// Sheets for coach-note CTAs that need a tool surface.
+    @State private var coachMomentDrill: DrillMode?
+    @State private var showingCoachMomentWarmUp = false
+    @State private var showingCoachMomentReadAloud = false
 
     // Focus-card routing — mirrors the post-session NextStep sheets in
     // RecordingDetailView so both entry points land on the same tool.
@@ -75,11 +75,11 @@ struct TodayView: View {
                         )
                     }
 
-                    if let moment = hospitality.pendingToday {
-                        HospitalityMomentCard(
+                    if let moment = coachMoments.pendingToday {
+                        CoachMomentCard(
                             moment: moment,
-                            onAccept: { acceptHospitality(moment) },
-                            onDismiss: { dismissHospitality(moment) }
+                            onAccept: { acceptCoachMoment(moment) },
+                            onDismiss: { dismissCoachMoment(moment) }
                         )
                     }
 
@@ -153,15 +153,15 @@ struct TodayView: View {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
-        .sheet(item: $hospitalityDrill) { mode in
+        .sheet(item: $coachMomentDrill) { mode in
             DrillSelectionView(initialMode: mode)
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showingHospitalityWarmUp) {
+        .sheet(isPresented: $showingCoachMomentWarmUp) {
             WarmUpListView()
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showingHospitalityReadAloud) {
+        .sheet(isPresented: $showingCoachMomentReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
@@ -604,27 +604,27 @@ struct TodayView: View {
         onStartRecording(prompt, viewModel.selectedDuration)
     }
 
-    // MARK: - Hospitality
+    // MARK: - Coach notes
 
-    private func acceptHospitality(_ moment: HospitalityMoment) {
-        hospitality.consume(moment, context: modelContext)
-        performHospitalityAction(moment.action)
+    private func acceptCoachMoment(_ moment: CoachMoment) {
+        coachMoments.consume(moment, context: modelContext)
+        performCoachMomentAction(moment.action)
     }
 
-    private func dismissHospitality(_ moment: HospitalityMoment) {
-        hospitality.dismiss(moment, context: modelContext)
+    private func dismissCoachMoment(_ moment: CoachMoment) {
+        coachMoments.dismiss(moment, context: modelContext)
     }
 
-    private func performHospitalityAction(_ action: HospitalityAction) {
+    private func performCoachMomentAction(_ action: CoachMomentAction) {
         switch action {
         case .openConfidence:
             onShowConfidence()
         case .openWarmUp:
-            showingHospitalityWarmUp = true
+            showingCoachMomentWarmUp = true
         case .openDrill(let raw):
-            hospitalityDrill = DrillMode(rawValue: raw)
+            coachMomentDrill = DrillMode(rawValue: raw)
         case .openReadAloud:
-            showingHospitalityReadAloud = true
+            showingCoachMomentReadAloud = true
         case .practiceAgain:
             onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
         case .dismissOnly:

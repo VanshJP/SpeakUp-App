@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Inline hospitality card — Today and session-detail surfaces.
+/// Inline coach note — Today and session-detail surfaces.
 ///
 /// Same grammar as `FriendChallengeCard`: glass, one eyebrow, one body, one
-/// capsule CTA, optional dismiss. Not a second Start Speaking.
-struct HospitalityMomentCard: View {
-    let moment: HospitalityMoment
+/// capsule CTA, easy dismiss. Never competes with Start Speaking.
+struct CoachMomentCard: View {
+    let moment: CoachMoment
     let onAccept: () -> Void
     let onDismiss: () -> Void
 
@@ -13,7 +13,7 @@ struct HospitalityMomentCard: View {
         GlassCard(tint: tint, padding: 16, elevated: moment.surface == .today) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
-                    Text(eyebrow)
+                    Text("Coach note")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(tint)
                         .textCase(.uppercase)
@@ -30,7 +30,7 @@ struct HospitalityMomentCard: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
-                    .accessibilityLabel("Dismiss")
+                    .accessibilityLabel("Dismiss coach note")
                 }
 
                 Text(moment.title)
@@ -64,25 +64,19 @@ struct HospitalityMomentCard: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var eyebrow: String {
-        moment.isLegend ? "A little something" : "Looking out for you"
-    }
-
     private var tint: Color {
         switch moment.signal {
         case .softLanding, .returnFromLapse:
             return AppColors.info
         case .streakMilestone, .fillerBreakthrough, .firstAxisClear, .practiceAnniversary:
             return AppColors.success
-        case .lifeContextPrep:
-            return AppColors.primary
         }
     }
 }
 
-/// Full-screen overlay for rare legends (streak blocks, anniversaries).
-struct HospitalityMomentOverlay: View {
-    let moment: HospitalityMoment
+/// Full-screen note for rare celebrations (streak blocks, anniversaries).
+struct CoachMomentOverlay: View {
+    let moment: CoachMoment
     let onAccept: () -> Void
     let onDismiss: () -> Void
 
@@ -104,7 +98,7 @@ struct HospitalityMomentOverlay: View {
                     .symbolEffect(.bounce, value: showContent)
 
                 VStack(spacing: 8) {
-                    Text("Unreasonable hospitality")
+                    Text("Coach note")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(AppColors.primary)
                         .textCase(.uppercase)
@@ -165,7 +159,7 @@ struct HospitalityMomentOverlay: View {
     private var overlayIcon: String {
         switch moment.gesture {
         case .anniversaryToast: return "gift.fill"
-        case .victoryMontage: return "flame.fill"
+        case .celebration: return "flame.fill"
         case .axisToast: return "checkmark.seal.fill"
         default: return "sparkles"
         }
@@ -175,13 +169,13 @@ struct HospitalityMomentOverlay: View {
 #Preview("Card") {
     ZStack {
         AppBackground()
-        HospitalityMomentCard(
-            moment: HospitalityMoment(
+        CoachMomentCard(
+            moment: CoachMoment(
                 id: "preview",
                 signal: .returnFromLapse,
                 gesture: .softReturn,
                 title: "Welcome back",
-                body: "It's been 5 days. No lecture — a calm reset, then today's prompt.",
+                body: "No catch-up quiz. A short calm reset, then today's prompt when you're ready.",
                 actionTitle: "Ease back in",
                 action: .openConfidence,
                 surface: .today,

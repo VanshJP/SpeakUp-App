@@ -16,7 +16,7 @@ struct ContentView: View {
     @State private var pendingRecordingNavigation: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
-    @State private var hospitality = HospitalityService.shared
+    @State private var coachMoments = CoachMomentService.shared
     /// Owned here because the tour crosses tabs: it drives `selectedTab` and
     /// draws over the tab bar, neither of which a single tab's root can do.
     @State private var appTour = AppTourModel()
@@ -331,16 +331,16 @@ struct ContentView: View {
                     }
                 }
                 .zIndex(10)
-            } else if let moment = hospitality.pendingOverlay {
-                HospitalityMomentOverlay(
+            } else if let moment = coachMoments.pendingOverlay {
+                CoachMomentOverlay(
                     moment: moment,
                     onAccept: {
                         let action = moment.action
-                        hospitality.consume(moment, context: modelContext)
-                        performHospitalityAction(action)
+                        coachMoments.consume(moment, context: modelContext)
+                        performCoachMomentAction(action)
                     },
                     onDismiss: {
-                        hospitality.dismiss(moment, context: modelContext)
+                        coachMoments.dismiss(moment, context: modelContext)
                     }
                 )
                 .zIndex(10)
@@ -479,9 +479,9 @@ struct ContentView: View {
         )
     }
 
-    // MARK: - Hospitality
+    // MARK: - Coach notes
 
-    private func performHospitalityAction(_ action: HospitalityAction) {
+    private func performCoachMomentAction(_ action: CoachMomentAction) {
         switch action {
         case .openConfidence:
             showingConfidenceTools = true

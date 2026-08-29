@@ -2,33 +2,29 @@ import Foundation
 
 // MARK: - Signal
 
-/// Unstated needs the app can notice without a form — Guidara's "ghosts".
-///
-/// Detection is pure and on-device. These are facts about practice history and
-/// the latest take, not vibes inferred from a chat model.
-nonisolated enum HospitalitySignal: String, CaseIterable, Sendable, Identifiable {
+/// Practice facts that earn a rare coach note — never a form, never transcript
+/// mining. Scores, streaks, and history only.
+nonisolated enum CoachMomentSignal: String, CaseIterable, Sendable, Identifiable {
     case returnFromLapse
     case streakMilestone
     case firstAxisClear
     case practiceAnniversary
     case softLanding
     case fillerBreakthrough
-    case lifeContextPrep
 
     var id: String { rawValue }
 
-    /// Whether fulfilling this signal spends the weekly legend budget.
-    /// Soft return and dignity care are baseline hospitality (the 95%); legends
-    /// are the rare 5%.
-    var isLegend: Bool {
+    /// Celebrations spend the weekly rarity budget. Soft return and soft landing
+    /// are ordinary care and never do.
+    var isCelebration: Bool {
         switch self {
         case .returnFromLapse, .softLanding: return false
         case .streakMilestone, .firstAxisClear, .practiceAnniversary,
-             .fillerBreakthrough, .lifeContextPrep: return true
+             .fillerBreakthrough: return true
         }
     }
 
-    /// Higher wins when several ghosts fire at once.
+    /// Higher wins when several signals fire at once.
     var priority: Int {
         switch self {
         case .softLanding: return 100
@@ -37,78 +33,21 @@ nonisolated enum HospitalitySignal: String, CaseIterable, Sendable, Identifiable
         case .streakMilestone: return 70
         case .firstAxisClear: return 60
         case .fillerBreakthrough: return 50
-        case .lifeContextPrep: return 40
         }
-    }
-}
-
-// MARK: - Life context
-
-/// Lightweight transcript ghosts — keywords that hint at a real-world stake.
-nonisolated enum HospitalityLifeContext: String, Sendable, CaseIterable {
-    case interview
-    case presentation
-    case wedding
-    case standup
-    case pitch
-
-    var title: String {
-        switch self {
-        case .interview: return "Interview"
-        case .presentation: return "Presentation"
-        case .wedding: return "Toast"
-        case .standup: return "Stand-up"
-        case .pitch: return "Pitch"
-        }
-    }
-
-    var coachingLine: String {
-        switch self {
-        case .interview:
-            return "Lead with the answer in sentence one, then support it. Interviews reward clarity over warming up."
-        case .presentation:
-            return "One idea per breath. Land the point, pause two beats, then move — the room needs the gap more than you do."
-        case .wedding:
-            return "Pick one story and one feeling. A toast that tries to cover everything covers nothing."
-        case .standup:
-            return "Thirty seconds of signal: what shipped, what's blocked, what you need. Cut the throat-clearing."
-        case .pitch:
-            return "Problem, stakes, ask — in that order. The ask belongs in the last ten seconds, not buried mid-flow."
-        }
-    }
-
-    /// Case-insensitive token/phrase hits. Deliberately narrow so a casual
-    /// mention of "pitch" in sports talk does not invent a fundraising brief.
-    static func detect(in transcript: String) -> HospitalityLifeContext? {
-        let lower = transcript.lowercased()
-        let checks: [(HospitalityLifeContext, [String])] = [
-            (.interview, ["interview", "hiring manager", "job offer"]),
-            (.wedding, ["wedding", "maid of honor", "best man", "toast to"]),
-            (.standup, ["stand-up", "standup", "daily scrum", "scrum today"]),
-            (.pitch, ["pitch deck", "investor", "fundraising", "seed round"]),
-            (.presentation, ["presentation", "keynote", "all-hands", "slide deck"]),
-        ]
-        for (context, needles) in checks {
-            if needles.contains(where: { lower.contains($0) }) {
-                return context
-            }
-        }
-        return nil
     }
 }
 
 // MARK: - Gesture / action / surface
 
-nonisolated enum HospitalityGesture: String, Sendable, CaseIterable {
+nonisolated enum CoachMomentGesture: String, Sendable, CaseIterable {
     case softReturn
-    case victoryMontage
+    case celebration
     case axisToast
     case anniversaryToast
     case dignityRetry
-    case contextualBrief
 }
 
-nonisolated enum HospitalityAction: Sendable, Equatable {
+nonisolated enum CoachMomentAction: Sendable, Equatable {
     case openConfidence
     case openWarmUp
     case openDrill(String)
@@ -117,38 +56,38 @@ nonisolated enum HospitalityAction: Sendable, Equatable {
     case dismissOnly
 }
 
-nonisolated enum HospitalitySurface: String, Sendable {
+nonisolated enum CoachMomentSurface: String, Sendable {
     /// Inline card on Today (FriendChallenge-style).
     case today
     /// Inline card on the session results screen.
     case detail
-    /// Full-screen overlay celebration.
+    /// Full-screen celebration.
     case overlay
 }
 
 // MARK: - Moment
 
-/// One delivered hospitality gesture — copy + action + budget class.
-nonisolated struct HospitalityMoment: Sendable, Identifiable, Equatable {
+/// One coach note — short copy, one optional action, rarity class.
+nonisolated struct CoachMoment: Sendable, Identifiable, Equatable {
     let id: String
-    let signal: HospitalitySignal
-    let gesture: HospitalityGesture
+    let signal: CoachMomentSignal
+    let gesture: CoachMomentGesture
     let title: String
     let body: String
     let actionTitle: String
-    let action: HospitalityAction
-    let surface: HospitalitySurface
-    /// Optional dimension / life-context slug for analytics (bucketed).
+    let action: CoachMomentAction
+    let surface: CoachMomentSurface
+    /// Optional dimension slug for analytics (bucketed).
     let detailSlug: String?
 
-    var isLegend: Bool { signal.isLegend }
+    var isCelebration: Bool { signal.isCelebration }
 }
 
 // MARK: - Snapshot / budget
 
 /// Everything the engine needs. Built by the service from SwiftData; the
-/// engine itself never touches a ModelContext.
-nonisolated struct HospitalitySnapshot: Sendable {
+/// engine itself never touches a ModelContext. No transcript text.
+nonisolated struct CoachMomentSnapshot: Sendable {
     var now: Date = .now
     var currentStreak: Int = 0
     var practicedToday: Bool = false
@@ -158,41 +97,40 @@ nonisolated struct HospitalitySnapshot: Sendable {
     var latestOverall: Int? = nil
     var latestFillerCount: Int? = nil
     var latestTotalWords: Int? = nil
-    var latestTranscript: String? = nil
     /// Dimensions that cleared mastery on *this* take and were never cleared
-    /// before — the "first axis win" ghost.
+    /// before.
     var newlyClearedDimensions: [CoachDimension] = []
     var userName: String = ""
-    var lifeContext: HospitalityLifeContext? = nil
 }
 
-nonisolated struct HospitalityBudgetState: Sendable, Equatable {
+nonisolated struct CoachMomentBudget: Sendable, Equatable {
     var weekKey: String
-    var legendsUsed: Int
-    /// Moment ids already delivered (capped by the engine when persisting).
+    var celebrationsUsed: Int
+    /// Moment ids already delivered (capped when persisting).
     var deliveredIDs: [String]
 
-    static let weeklyLegendCap = 1
+    static let weeklyCelebrationCap = 1
 
-    var remainingLegends: Int {
-        max(0, Self.weeklyLegendCap - legendsUsed)
+    var remainingCelebrations: Int {
+        max(0, Self.weeklyCelebrationCap - celebrationsUsed)
     }
 
-    func rolling(now: Date, calendar: Calendar = .current) -> HospitalityBudgetState {
-        let key = HospitalityEngine.weekKey(for: now, calendar: calendar)
+    func rolling(now: Date, calendar: Calendar = .current) -> CoachMomentBudget {
+        let key = CoachMomentEngine.weekKey(for: now, calendar: calendar)
         if key == weekKey { return self }
-        return HospitalityBudgetState(weekKey: key, legendsUsed: 0, deliveredIDs: deliveredIDs)
+        return CoachMomentBudget(weekKey: key, celebrationsUsed: 0, deliveredIDs: deliveredIDs)
     }
 }
 
 // MARK: - Engine
 
-/// Pure 95/5 hospitality: detect ghosts, pick one gesture, respect the budget.
-nonisolated enum HospitalityEngine {
+/// Rare coach notes: detect a signal, pick one note, respect the weekly cap.
+nonisolated enum CoachMomentEngine {
 
-    /// Days away before a return is treated as a lapse worth hosting.
-    static let lapseThresholdDays = 3
-    /// Soft-landing overall ceiling — below this, protect dignity first.
+    /// Quiet days before a welcome-back note. Higher than a single missed day
+    /// so the card does not nag after a busy weekend.
+    static let lapseThresholdDays = 5
+    /// Soft-landing overall ceiling — below this, offer a gentle retry first.
     static let softLandingOverallCeiling = 45
     /// Anniversary milestones (days since first practice).
     static let anniversaryDays: [Int] = [30, 100, 365]
@@ -211,10 +149,10 @@ nonisolated enum HospitalityEngine {
     // MARK: Detect
 
     static func detectSignals(
-        _ snap: HospitalitySnapshot,
+        _ snap: CoachMomentSnapshot,
         calendar: Calendar = .current
-    ) -> [HospitalitySignal] {
-        var signals: [HospitalitySignal] = []
+    ) -> [CoachMomentSignal] {
+        var signals: [CoachMomentSignal] = []
 
         if let days = snap.daysSinceLastPractice,
            days >= lapseThresholdDays,
@@ -256,31 +194,26 @@ nonisolated enum HospitalityEngine {
             signals.append(.fillerBreakthrough)
         }
 
-        if snap.lifeContext != nil || HospitalityLifeContext.detect(in: snap.latestTranscript ?? "") != nil {
-            signals.append(.lifeContextPrep)
-        }
-
         return signals.sorted { $0.priority > $1.priority }
     }
 
     // MARK: Propose
 
-    /// Picks at most one moment. Legends require budget; care gestures do not.
-    /// When `surface` is set, only moments for that surface are considered —
-    /// so Today care cannot starve an overlay legend on the same visit.
+    /// Picks at most one note. Celebrations require budget; care notes do not.
+    /// When `surface` is set, only notes for that surface are considered.
     static func propose(
-        snapshot: HospitalitySnapshot,
-        budget: HospitalityBudgetState,
-        surface: HospitalitySurface? = nil,
+        snapshot: CoachMomentSnapshot,
+        budget: CoachMomentBudget,
+        surface: CoachMomentSurface? = nil,
         calendar: Calendar = .current
-    ) -> HospitalityMoment? {
+    ) -> CoachMoment? {
         let rolled = budget.rolling(now: snapshot.now, calendar: calendar)
         let signals = detectSignals(snapshot, calendar: calendar)
         let delivered = Set(rolled.deliveredIDs)
         let day = dayKey(for: snapshot.now, calendar: calendar)
 
         for signal in signals {
-            if signal.isLegend, rolled.remainingLegends <= 0 { continue }
+            if signal.isCelebration, rolled.remainingCelebrations <= 0 { continue }
             guard let moment = moment(
                 for: signal,
                 snapshot: snapshot,
@@ -296,37 +229,37 @@ nonisolated enum HospitalityEngine {
     // MARK: Moment builders
 
     private static func moment(
-        for signal: HospitalitySignal,
-        snapshot: HospitalitySnapshot,
+        for signal: CoachMomentSignal,
+        snapshot: CoachMomentSnapshot,
         dayKey: String
-    ) -> HospitalityMoment? {
+    ) -> CoachMoment? {
         let name = snapshot.userName.trimmingCharacters(in: .whitespacesAndNewlines)
         let greet = name.isEmpty ? nil : name
 
         switch signal {
         case .returnFromLapse:
-            let days = snapshot.daysSinceLastPractice ?? lapseThresholdDays
-            return HospitalityMoment(
+            // No day-count — counting absences reads as surveillance.
+            return CoachMoment(
                 id: "return-\(dayKey)",
                 signal: .returnFromLapse,
                 gesture: .softReturn,
                 title: greet.map { "Welcome back, \($0)" } ?? "Welcome back",
-                body: "It's been \(days) days. No lecture — a sixty-second calm reset, then today's prompt when you're ready.",
+                body: "No catch-up quiz. A short calm reset, then today's prompt when you're ready.",
                 actionTitle: "Ease back in",
                 action: .openConfidence,
                 surface: .today,
-                detailSlug: "lapse_\(min(days, 30))"
+                detailSlug: "lapse"
             )
 
         case .streakMilestone:
             let streak = snapshot.currentStreak
-            return HospitalityMoment(
+            return CoachMoment(
                 id: "streak-\(streak)",
                 signal: .streakMilestone,
-                gesture: .victoryMontage,
+                gesture: .celebration,
                 title: "Day \(streak)",
-                body: "Seven-day blocks are how voices change. You showed up again — that is the whole trick.",
-                actionTitle: "Keep the streak warm",
+                body: "Another week of showing up. That habit is the whole game.",
+                actionTitle: "Warm up",
                 action: .openWarmUp,
                 surface: .overlay,
                 detailSlug: "streak_\(streak)"
@@ -334,12 +267,12 @@ nonisolated enum HospitalityEngine {
 
         case .firstAxisClear:
             guard let dimension = snapshot.newlyClearedDimensions.first else { return nil }
-            return HospitalityMoment(
+            return CoachMoment(
                 id: "axis-\(dimension.rawValue)",
                 signal: .firstAxisClear,
                 gesture: .axisToast,
                 title: "\(dimension.title) cleared",
-                body: "First time hitting the bar on \(dimension.title.lowercased()). That habit is yours now — bank another rep while it is warm.",
+                body: "First time hitting the bar on \(dimension.title.lowercased()). One more rep while it is warm.",
                 actionTitle: "One more rep",
                 action: .practiceAgain,
                 surface: .detail,
@@ -353,14 +286,14 @@ nonisolated enum HospitalityEngine {
                 from: Calendar.current.startOfDay(for: first),
                 to: Calendar.current.startOfDay(for: snapshot.now)
             ).day ?? 0
-            return HospitalityMoment(
+            return CoachMoment(
                 id: "anniversary-\(days)",
                 signal: .practiceAnniversary,
                 gesture: .anniversaryToast,
                 title: days == 365 ? "One year of practice" : "\(days) days in",
                 body: greet.map {
-                    "\($0), you started this quietly and kept going. That is unreasonable hospitality to your future self."
-                } ?? "You started this quietly and kept going. That is unreasonable hospitality to your future self.",
+                    "\($0), you started quietly and kept going. That adds up."
+                } ?? "You started quietly and kept going. That adds up.",
                 actionTitle: "Practice today",
                 action: .practiceAgain,
                 surface: .overlay,
@@ -368,51 +301,29 @@ nonisolated enum HospitalityEngine {
             )
 
         case .softLanding:
-            return HospitalityMoment(
+            return CoachMoment(
                 id: "soft-\(dayKey)",
                 signal: .softLanding,
                 gesture: .dignityRetry,
-                title: "Rough take — still yours",
-                body: "Scores can wait. Trash the pressure, keep the dignity, and try the same prompt once more when you're ready.",
-                actionTitle: "Try again, gently",
+                title: "Rough take — still fine",
+                body: "Scores can wait. Try the same prompt once more when you're ready, no pressure.",
+                actionTitle: "Try again",
                 action: .practiceAgain,
                 surface: .detail,
                 detailSlug: "soft"
             )
 
         case .fillerBreakthrough:
-            return HospitalityMoment(
+            return CoachMoment(
                 id: "filler-zero-\(dayKey)",
                 signal: .fillerBreakthrough,
-                gesture: .victoryMontage,
+                gesture: .celebration,
                 title: "Zero fillers",
-                body: "A full take without a crutch word. That silence you held instead — that is control.",
+                body: "A full take without a crutch word. The silence you held instead is control.",
                 actionTitle: "Lock it in",
                 action: .openDrill("fillerElimination"),
                 surface: .detail,
                 detailSlug: "zero_filler"
-            )
-
-        case .lifeContextPrep:
-            let context = snapshot.lifeContext
-                ?? HospitalityLifeContext.detect(in: snapshot.latestTranscript ?? "")
-            guard let context else { return nil }
-            let action: HospitalityAction = {
-                switch context {
-                case .interview, .standup, .pitch: return .openDrill("impromptuSprint")
-                case .presentation, .wedding: return .openWarmUp
-                }
-            }()
-            return HospitalityMoment(
-                id: "life-\(context.rawValue)-\(dayKey)",
-                signal: .lifeContextPrep,
-                gesture: .contextualBrief,
-                title: "\(context.title) mode",
-                body: context.coachingLine,
-                actionTitle: "Train for it",
-                action: action,
-                surface: .today,
-                detailSlug: context.rawValue
             )
         }
     }

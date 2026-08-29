@@ -105,10 +105,9 @@ class TodayViewModel {
         // Schedule streak-at-risk notification if applicable
         await scheduleStreakNotificationIfNeeded()
 
-        // Unreasonable hospitality — ghosts for Today / overlay (lapse return,
-        // anniversary, life-context brief). Detail-surface moments are owned
-        // by RecordingDetailView after a take.
-        HospitalityService.shared.evaluateToday(
+        // Coach notes — welcome-back / streak overlay. Detail-surface notes are
+        // owned by RecordingDetailView after a take.
+        CoachMomentService.shared.evaluateToday(
             context: context,
             stats: userStats,
             practicedToday: practicedToday,

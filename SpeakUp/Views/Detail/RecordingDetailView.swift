@@ -86,11 +86,11 @@ struct RecordingDetailView: View {
     @State private var nextStepDrill: DrillMode?
     @State private var showingNextStepWarmUp = false
     @State private var showingNextStepReadAloud = false
-    @State private var hospitality = HospitalityService.shared
-    @State private var hospitalityEvaluated = false
-    @State private var hospitalityDrill: DrillMode?
-    @State private var showingHospitalityWarmUp = false
-    @State private var showingHospitalityReadAloud = false
+    @State private var coachMoments = CoachMomentService.shared
+    @State private var coachMomentEvaluated = false
+    @State private var coachMomentDrill: DrillMode?
+    @State private var showingCoachMomentWarmUp = false
+    @State private var showingCoachMomentReadAloud = false
 
     @Query private var userSettings: [UserSettings]
 
@@ -286,15 +286,15 @@ struct RecordingDetailView: View {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
-        .sheet(item: $hospitalityDrill) { mode in
+        .sheet(item: $coachMomentDrill) { mode in
             DrillSelectionView(initialMode: mode)
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showingHospitalityWarmUp) {
+        .sheet(isPresented: $showingCoachMomentWarmUp) {
             WarmUpListView()
                 .presentationDetents([.large])
         }
-        .sheet(isPresented: $showingHospitalityReadAloud) {
+        .sheet(isPresented: $showingCoachMomentReadAloud) {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
@@ -326,11 +326,11 @@ struct RecordingDetailView: View {
                 if let analysis = coachAnalysis {
                     scoreHero(analysis)
                     takeComparisonSection(analysis)
-                    if let moment = hospitality.pendingDetail {
-                        HospitalityMomentCard(
+                    if let moment = coachMoments.pendingDetail {
+                        CoachMomentCard(
                             moment: moment,
-                            onAccept: { acceptHospitality(moment, recording: recording) },
-                            onDismiss: { hospitality.dismiss(moment, context: modelContext) }
+                            onAccept: { acceptCoachMoment(moment, recording: recording) },
+                            onDismiss: { coachMoments.dismiss(moment, context: modelContext) }
                         )
                     }
                     nextStepSection(analysis, recording: recording)
@@ -415,20 +415,18 @@ struct RecordingDetailView: View {
         Task {
             await populateWPMTimeSeriesIfNeeded()
             await loadPersonalAverageIfNeeded(excluding: recording.id)
-            evaluateHospitalityIfNeeded(for: recording)
+            evaluateCoachMomentIfNeeded(for: recording)
             await enhanceCoherenceIfNeeded()
         }
     }
 
     /// Soft landing / first-axis win / filler breakthrough — once per open.
-    private func evaluateHospitalityIfNeeded(for recording: Recording) {
-        guard !hospitalityEvaluated, let analysis = coachAnalysis else { return }
-        hospitalityEvaluated = true
-        let transcript = recording.transcriptionText
-        HospitalityService.shared.evaluateAfterSession(
+    private func evaluateCoachMomentIfNeeded(for recording: Recording) {
+        guard !coachMomentEvaluated, let analysis = coachAnalysis else { return }
+        coachMomentEvaluated = true
+        CoachMomentService.shared.evaluateAfterSession(
             context: modelContext,
             analysis: analysis,
-            transcript: transcript,
             practicedToday: Calendar.current.isDateInToday(recording.date)
         )
     }
@@ -703,22 +701,20 @@ struct RecordingDetailView: View {
         )
     }
 
-    // MARK: - Hospitality
+    // MARK: - Coach notes
 
-    private func acceptHospitality(_ moment: HospitalityMoment, recording: Recording) {
+    private func acceptCoachMoment(_ moment: CoachMoment, recording: Recording) {
         let action = moment.action
-        hospitality.consume(moment, context: modelContext)
+        coachMoments.consume(moment, context: modelContext)
         switch action {
         case .openConfidence:
-            // Confidence tools live at the app root; practice-again is the
-            // closest dignity-preserving action this screen owns.
             onPracticeAgain?(recording.prompt)
         case .openWarmUp:
-            showingHospitalityWarmUp = true
+            showingCoachMomentWarmUp = true
         case .openDrill(let raw):
-            hospitalityDrill = DrillMode(rawValue: raw)
+            coachMomentDrill = DrillMode(rawValue: raw)
         case .openReadAloud:
-            showingHospitalityReadAloud = true
+            showingCoachMomentReadAloud = true
         case .practiceAgain:
             onPracticeAgain?(recording.prompt)
         case .dismissOnly:
