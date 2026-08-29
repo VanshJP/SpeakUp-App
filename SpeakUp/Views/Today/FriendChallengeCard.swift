@@ -46,21 +46,15 @@ struct FriendChallengeCard: View {
 
                     Spacer(minLength: 0)
 
-                    Button {
+                    GlassButton(
+                        title: "Accept",
+                        icon: "bolt.fill",
+                        style: .primary,
+                        size: .small
+                    ) {
                         Haptics.medium()
                         onAccept()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "bolt.fill")
-                            Text("Accept")
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background { Capsule().fill(Color.white.opacity(0.94)) }
                     }
-                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel("Accept friend challenge")
                 }
             }

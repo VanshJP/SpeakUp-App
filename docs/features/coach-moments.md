@@ -10,7 +10,7 @@ Rare, optional coach notes when practice history earns one — welcome-back afte
 |------|------|
 | Signals / budget engine | `SpeakUp/Models/CoachMoment.swift` |
 | Presentation + SwiftData I/O | `SpeakUp/Services/CoachMomentService.swift` |
-| Inline card + overlay | `SpeakUp/Views/CoachMoment/CoachMomentCard.swift` |
+| Inline card + overlay | `SpeakUp/Views/CoachMoment/CoachMomentCard.swift` — CTAs are `GlassButton.primary` |
 | Persistence | `UserSettings.coachMomentWeekKey` / `coachMomentCelebrationsUsedThisWeek` / `coachMomentDeliveredIDs` / `coachMomentClearedDimensionsRaw` |
 | Today eval | `TodayViewModel.loadData` → `CoachMomentService.evaluateToday` |
 | Today card | `TodayView` (FriendChallenge-style, above modules) |

@@ -45,18 +45,14 @@ struct CoachMomentCard: View {
 
                 HStack {
                     Spacer(minLength: 0)
-                    Button {
+                    GlassButton(
+                        title: moment.actionTitle,
+                        style: .primary,
+                        size: .small
+                    ) {
                         Haptics.medium()
                         onAccept()
-                    } label: {
-                        Text(moment.actionTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background { Capsule().fill(Color.white.opacity(0.94)) }
                     }
-                    .buttonStyle(GlassPressStyle())
                     .accessibilityLabel(moment.actionTitle)
                 }
             }
@@ -116,21 +112,14 @@ struct CoachMomentOverlay: View {
                         .padding(.horizontal, 8)
                 }
 
-                Button {
+                GlassButton(
+                    title: moment.actionTitle,
+                    style: .primary,
+                    fullWidth: true
+                ) {
                     Haptics.medium()
                     onAccept()
-                } label: {
-                    Text(moment.actionTitle)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(AppColors.primary)
-                        )
                 }
-                .buttonStyle(GlassPressStyle())
 
                 Button("Not now") {
                     Haptics.light()

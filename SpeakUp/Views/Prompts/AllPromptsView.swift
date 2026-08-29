@@ -349,12 +349,11 @@ extension AllPromptsView {
                     Spacer(minLength: 0)
 
                     // The one high-contrast element on this screen.
-                    Text("Spin")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background { Capsule().fill(Color.white.opacity(0.92)) }
+                    GlassButtonLabel(
+                        title: "Spin",
+                        style: .primary,
+                        size: .small
+                    )
                 }
             }
         }

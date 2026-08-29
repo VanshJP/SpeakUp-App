@@ -180,16 +180,12 @@ struct CurriculumView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Continue · \(Self.lessonMeta(lesson))")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background { Capsule().fill(Color.white.opacity(0.94)) }
+                    GlassButtonLabel(
+                        title: "Continue · \(Self.lessonMeta(lesson))",
+                        icon: "play.fill",
+                        style: .primary,
+                        fullWidth: true
+                    )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

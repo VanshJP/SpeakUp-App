@@ -1096,30 +1096,21 @@ struct SessionStartFooter: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Button {
+            GlassButton(
+                title: "Start Speaking",
+                icon: "mic.fill",
+                style: .primary,
+                size: .large,
+                fullWidth: true
+            ) {
+                Haptics.medium()
                 onStart()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Start Speaking")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                .background {
-                    Capsule()
-                        .fill(Color.white.opacity(0.94))
-                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
-                }
-                .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
             .accessibilityHint(startHint)
 
             if showFreeTalk {
                 Button {
+                    Haptics.light()
                     onFreeTalk()
                 } label: {
                     HStack(spacing: 6) {

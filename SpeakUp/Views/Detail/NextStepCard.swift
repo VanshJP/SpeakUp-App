@@ -136,21 +136,17 @@ struct NextStepCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
-                    Button {
+                    GlassButton(
+                        title: step.actionTitle,
+                        style: .primary,
+                        fullWidth: true
+                    ) {
                         Haptics.medium()
                         // Logged here rather than at each call site so every
                         // surface that shows this card reports the same event.
                         AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
                         onAction(step.action)
-                    } label: {
-                        Text(step.actionTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background { Capsule().fill(Color.white.opacity(0.94)) }
                     }
-                    .buttonStyle(GlassPressStyle())
 
                     if step.action != .practiceAgain {
                         Button {

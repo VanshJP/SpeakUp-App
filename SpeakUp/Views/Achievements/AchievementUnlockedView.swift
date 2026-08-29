@@ -39,20 +39,15 @@ struct AchievementUnlockedView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                Button {
+                GlassButton(
+                    title: "Awesome!",
+                    style: .primary,
+                    fullWidth: true
+                ) {
+                    Haptics.medium()
                     onDismiss()
-                } label: {
-                    Text("Awesome!")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(AppColors.primary)
-                        )
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 8)
             }
             .padding(32)
             .background {

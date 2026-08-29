@@ -22,17 +22,14 @@ struct ListenBackEncouragementView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                Button {
+                GlassButton(
+                    title: "Got it, let's listen!",
+                    style: .primary,
+                    fullWidth: true
+                ) {
+                    Haptics.medium()
                     onDismiss()
-                } label: {
-                    Text("Got it, let's listen!")
-                        .font(.headline)
-                        .foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.08))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Capsule().fill(Color.white.opacity(0.94)))
                 }
-                .buttonStyle(GlassPressStyle())
             }
             .padding(24)
             .background {
