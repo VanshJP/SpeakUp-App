@@ -38,6 +38,7 @@ nonisolated enum CrutchCategory: String, Sendable {
     case hedge
     case intensifier
     case vague
+    case structural
 
     var label: String {
         switch self {
@@ -45,6 +46,7 @@ nonisolated enum CrutchCategory: String, Sendable {
         case .hedge: return "Hedge"
         case .intensifier: return "Softener"
         case .vague: return "Vague"
+        case .structural: return "Repeated frame"
         }
     }
 }
@@ -211,6 +213,7 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
         case .hedge: return ["state it directly"]
         case .intensifier: return ["one stronger word", "cut it"]
         case .vague: return ["name the specifics"]
+        case .structural: return ["vary the opening", "name the list once"]
         }
     }
 
@@ -728,6 +731,18 @@ nonisolated enum LexiconInsightsEngine {
             }
         }
 
+        // Structural repetition frames — same detector as scoring, so chips and
+        // swap suggestions stay aligned with analysis.fillerWords.
+        let structuralHits = StructuralRepetitionDetector.detect(in: words)
+        for hit in structuralHits {
+            let frameLen = max(1, hit.word.split(separator: " ").count)
+            for stamp in hit.timestamps {
+                guard let startIdx = nearestTokenIndex(for: stamp, in: tokens) else { continue }
+                let endIdx = min(tokens.count, startIdx + frameLen)
+                note(hit.word, .structural, at: startIdx..<endIdx)
+            }
+        }
+
         return counts.map { word, count -> SessionWordHit in
             let category = categories[word] ?? .filler
 
@@ -756,6 +771,26 @@ nonisolated enum LexiconInsightsEngine {
             )
         }
         .sorted { ($0.count, $0.word) > ($1.count, $1.word) }
+    }
+
+    /// Closest token whose start is within 80 ms of `stamp`, else the first
+    /// token at-or-after the stamp. Structural hits stamp clause starts.
+    private static func nearestTokenIndex(for stamp: TimeInterval, in tokens: [SwapToken]) -> Int? {
+        guard !tokens.isEmpty else { return nil }
+        var bestIndex: Int?
+        var bestDelta = TimeInterval.greatestFiniteMagnitude
+        for (index, token) in tokens.enumerated() {
+            let delta = abs(token.start - stamp)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIndex = index
+            }
+            if token.start > stamp + 0.08 { break }
+        }
+        if let bestIndex, bestDelta <= 0.08 {
+            return bestIndex
+        }
+        return tokens.firstIndex(where: { $0.start >= stamp - 0.01 })
     }
 
     // MARK: - Readiness

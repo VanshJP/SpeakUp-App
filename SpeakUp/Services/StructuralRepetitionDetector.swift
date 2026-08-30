@@ -3,15 +3,13 @@ import Foundation
 /// Detects structural repetition (anaphora-as-tic): the same clause-opening
 /// frame repeated across consecutive or near-consecutive clauses.
 ///
-/// Distinct from filler-word detection (`um`, `like`, `you know`). Each clause
-/// can be grammatically fine and filler-free, yet the repeated opening still
-/// weakens delivery — e.g. "I'm going to get socks, I'm going to get tomatoes,
-/// I'm going to get eggs."
+/// Distinct from classic fillers (`um`, `like`). Each clause can be clean yet
+/// the repeated frame still weakens delivery — e.g. "I'm going to get socks,
+/// I'm going to get tomatoes, I'm going to get eggs."
 ///
-/// Output is `[FillerWord]` so hits reuse the existing filler feedback UI
-/// (word label = opening frame, count, playable timestamps). Callers must pass
-/// primary-speaker words only when diarization ran; interviewer/coach turns
-/// stay out of scoring via that filter.
+/// Emits `[FillerWord]` with `kind == .structural` so the existing filler UI
+/// path works. Callers must pass primary-speaker words only when diarization
+/// ran.
 nonisolated enum StructuralRepetitionDetector {
 
     // MARK: - Constants
@@ -26,9 +24,21 @@ nonisolated enum StructuralRepetitionDetector {
     /// parallelism; three starts looking like a tic.
     static let minRunLength = 3
 
-    /// Non-matching clauses allowed between matching ones in a run
-    /// ("near-consecutive"). Zero would require strict adjacency.
+    /// Non-matching clauses allowed between matching ones ("near-consecutive").
     static let maxInterveningClauses = 1
+
+    /// Gap that starts a new clause when Whisper omitted commas/periods.
+    /// Aligned with pause detection in `SpeechAnalysisPipeline.analyze`.
+    static let clausePauseThreshold: TimeInterval = 0.4
+
+    /// Openings that signal intentional list/rhetoric structure (curriculum
+    /// "First… Second… Third…"), not a tic — never flag these runs.
+    static let intentionalListOpeners: Set<String> = [
+        "first", "second", "third", "fourth", "fifth",
+        "finally", "lastly", "next", "then",
+        "one", "two", "three",
+        "primarily", "secondarily"
+    ]
 
     // MARK: - Public API
 
@@ -45,18 +55,19 @@ nonisolated enum StructuralRepetitionDetector {
 
         var aggregates: [String: (display: String, count: Int, timestamps: [TimeInterval])] = [:]
         for run in runs {
-            let key = run.normalizedKey
-            var entry = aggregates[key] ?? (display: run.displayLabel, count: 0, timestamps: [])
+            var entry = aggregates[run.normalizedKey]
+                ?? (display: run.displayLabel, count: 0, timestamps: [])
             entry.count += run.timestamps.count
             entry.timestamps.append(contentsOf: run.timestamps)
-            aggregates[key] = entry
+            aggregates[run.normalizedKey] = entry
         }
 
         return aggregates.map { _, value in
             FillerWord(
                 word: value.display,
                 count: value.count,
-                timestamps: value.timestamps.sorted()
+                timestamps: value.timestamps.sorted(),
+                kind: .structural
             )
         }
         .sorted { lhs, rhs in
@@ -69,40 +80,40 @@ nonisolated enum StructuralRepetitionDetector {
 
     private struct Clause {
         let words: [TranscriptionWord]
-        /// Normalized tokens (lowercase, punct stripped, contractions expanded).
         let normalizedTokens: [String]
         var startTime: TimeInterval { words.first?.start ?? 0 }
     }
 
-    /// Split on commas, sentence-final punctuation, and coordinating `and`.
-    /// Leading `and` / `but` / `or` after a split are dropped so they do not
-    /// poison the opening n-gram.
+    /// Split on punctuation, coordinating conjunctions, and pause gaps.
     private static func splitIntoClauses(_ words: [TranscriptionWord]) -> [Clause] {
         var clauses: [Clause] = []
         var current: [TranscriptionWord] = []
 
         func flush() {
             let trimmed = dropLeadingCoordinators(current)
-            guard !trimmed.isEmpty else {
-                current = []
-                return
-            }
+            current = []
+            guard !trimmed.isEmpty else { return }
+
             var tokens: [String] = []
             for word in trimmed {
                 tokens.append(contentsOf: normalizeWord(word.word))
             }
-            if tokens.count >= minOpeningNGram {
-                clauses.append(Clause(words: trimmed, normalizedTokens: tokens))
-            }
-            current = []
+            guard tokens.count >= minOpeningNGram else { return }
+            clauses.append(Clause(words: trimmed, normalizedTokens: tokens))
         }
 
         for word in words {
             let raw = word.word
             let stripped = stripTrailingPunctuation(raw).lowercased()
 
-            // Coordinating "and" starts a new clause (and is not part of it).
-            if stripped == "and", !current.isEmpty {
+            // Pause gap with no punctuation — Whisper often drops commas.
+            if let previous = current.last,
+               word.start - previous.end >= clausePauseThreshold {
+                flush()
+            }
+
+            // Coordinating conjunction starts a new clause (not part of it).
+            if isCoordinator(stripped), !current.isEmpty {
                 flush()
                 continue
             }
@@ -118,11 +129,15 @@ nonisolated enum StructuralRepetitionDetector {
         return clauses
     }
 
+    private static func isCoordinator(_ token: String) -> Bool {
+        token == "and" || token == "but" || token == "or"
+    }
+
     private static func dropLeadingCoordinators(_ words: [TranscriptionWord]) -> [TranscriptionWord] {
         var result = words
         while let first = result.first {
             let token = stripTrailingPunctuation(first.word).lowercased()
-            if token == "and" || token == "but" || token == "or" {
+            if isCoordinator(token) {
                 result.removeFirst()
             } else {
                 break
@@ -145,7 +160,7 @@ nonisolated enum StructuralRepetitionDetector {
     }
 
     private static func findRuns(in clauses: [Clause]) -> [Run] {
-        let openings: [String] = clauses.map { openingKey(for: $0) }
+        let openings = clauses.map { openingKey(for: $0) }
 
         var runs: [Run] = []
         var index = 0
@@ -157,13 +172,21 @@ nonisolated enum StructuralRepetitionDetector {
                 continue
             }
 
-            var matchIndices: [Int] = [index]
+            // Intentional list rhetoric — leave for craft, do not flag as tic.
+            if isIntentionalListOpening(seed) {
+                index += 1
+                continue
+            }
+
+            var matchIndices = [index]
             var cursor = index + 1
             var intervening = 0
 
             while cursor < clauses.count {
                 let candidate = openings[cursor]
-                if keysCompatible(seed, candidate) {
+                if !candidate.isEmpty,
+                   !isIntentionalListOpening(candidate),
+                   keysCompatible(seed, candidate) {
                     matchIndices.append(cursor)
                     intervening = 0
                     cursor += 1
@@ -182,8 +205,12 @@ nonisolated enum StructuralRepetitionDetector {
                     surface: clauses[matchIndices[0]].words
                 )
                 let stamps = matchIndices.map { clauses[$0].startTime }
-                runs.append(Run(normalizedKey: sharedKey, displayLabel: display, timestamps: stamps))
-                index = matchIndices.last! + 1
+                runs.append(Run(
+                    normalizedKey: sharedKey,
+                    displayLabel: display,
+                    timestamps: stamps
+                ))
+                index = (matchIndices.last ?? index) + 1
             } else {
                 index += 1
             }
@@ -192,18 +219,23 @@ nonisolated enum StructuralRepetitionDetector {
         return runs
     }
 
+    private static func isIntentionalListOpening(_ key: String) -> Bool {
+        guard let first = key.split(separator: " ").first.map(String.init) else { return false }
+        return intentionalListOpeners.contains(first)
+    }
+
     private static func openingKey(for clause: Clause) -> String {
         let n = min(maxOpeningNGram, clause.normalizedTokens.count)
         guard n >= minOpeningNGram else { return "" }
         return clause.normalizedTokens.prefix(n).joined(separator: " ")
     }
 
-    /// Two openings match when they share a prefix of at least `minOpeningNGram`.
     private static func keysCompatible(_ a: String, _ b: String) -> Bool {
         let aTokens = a.split(separator: " ").map(String.init)
         let bTokens = b.split(separator: " ").map(String.init)
-        let shared = min(aTokens.count, bTokens.count, maxOpeningNGram)
-        guard shared >= minOpeningNGram else { return false }
+        guard aTokens.count >= minOpeningNGram, bTokens.count >= minOpeningNGram else {
+            return false
+        }
         return Array(aTokens.prefix(minOpeningNGram)) == Array(bTokens.prefix(minOpeningNGram))
     }
 
@@ -214,7 +246,11 @@ nonisolated enum StructuralRepetitionDetector {
             let tokens = key.split(separator: " ").map(String.init)
             var next: [String] = []
             for (lhs, rhs) in zip(shared, tokens) {
-                if lhs == rhs { next.append(lhs) } else { break }
+                if lhs == rhs {
+                    next.append(lhs)
+                } else {
+                    break
+                }
             }
             shared = next
             if shared.count < minOpeningNGram { break }
@@ -236,10 +272,7 @@ nonisolated enum StructuralRepetitionDetector {
             expandedCount += normalizeWord(word.word).count
             if expandedCount >= needed { break }
         }
-        if !collected.isEmpty {
-            return collected.joined(separator: " ")
-        }
-        return normalizedKey
+        return collected.isEmpty ? normalizedKey : collected.joined(separator: " ")
     }
 
     // MARK: - Normalization

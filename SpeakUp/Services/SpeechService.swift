@@ -659,15 +659,19 @@ nonisolated enum SpeechAnalysisPipeline {
             return FillerWord(
                 word: entry.key,
                 count: value.count,
-                timestamps: value.timestamps
+                timestamps: value.timestamps,
+                kind: .filler
             )
         }
 
         // Structural repetition (anaphora-as-tic) — same FillerWord shape so
         // the existing filler chips/UI light up without a second render path.
+        // Honor trackFillerWords: off means no filler-shaped feedback at all.
         // Uses scoringWords (already primary-speaker filtered when diarization
         // applied), so interviewer/coach turns never contribute.
-        let structuralHits = StructuralRepetitionDetector.detect(in: scoringWords)
+        let structuralHits = trackFillerWords
+            ? StructuralRepetitionDetector.detect(in: scoringWords)
+            : []
         let mergedFillers = mergeFillerWords(unsortedFillerWords + structuralHits)
         let fillerWords: [FillerWord] = mergedFillers.sorted { lhs, rhs in
             // Dictionary iteration order is undefined. Count ties need a
@@ -857,18 +861,24 @@ nonisolated enum SpeechAnalysisPipeline {
     // MARK: - Content Density
 
     /// Collapse duplicate filler labels (classic fillers + structural frames)
-    /// into one row per word with combined counts and timestamps.
+    /// into one row per word+kind with combined counts and timestamps.
     private static func mergeFillerWords(_ items: [FillerWord]) -> [FillerWord] {
-        var aggregates: [String: (count: Int, timestamps: [TimeInterval])] = [:]
+        var aggregates: [String: (word: String, kind: FillerHitKind, count: Int, timestamps: [TimeInterval])] = [:]
         for item in items {
-            let key = item.word.lowercased()
-            var entry = aggregates[key] ?? (count: 0, timestamps: [])
+            let key = "\(item.kind.rawValue)\u{1f}\(item.word.lowercased())"
+            var entry = aggregates[key]
+                ?? (word: item.word.lowercased(), kind: item.kind, count: 0, timestamps: [])
             entry.count += item.count
             entry.timestamps.append(contentsOf: item.timestamps)
             aggregates[key] = entry
         }
-        return aggregates.map { key, value in
-            FillerWord(word: key, count: value.count, timestamps: value.timestamps.sorted())
+        return aggregates.map { _, value in
+            FillerWord(
+                word: value.word,
+                count: value.count,
+                timestamps: value.timestamps.sorted(),
+                kind: value.kind
+            )
         }
     }
 

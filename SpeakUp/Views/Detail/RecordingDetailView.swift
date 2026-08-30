@@ -859,22 +859,37 @@ struct RecordingDetailView: View {
     /// number was often wrong, and a wrong number reads as a broken app while
     /// a wrong seek just plays nearby audio.
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Filler Words Used", icon: "exclamationmark.bubble.fill")
+        let hasStructural = fillerWords.contains { $0.kind == .structural }
+        let title = hasStructural ? "Fillers & Repeated Frames" : "Filler Words Used"
+
+        return VStack(alignment: .leading, spacing: 12) {
+            GlassSectionHeader(title, icon: "exclamationmark.bubble.fill")
 
             GlassCard {
                 VStack(spacing: 14) {
                     ForEach(fillerWords.prefix(5)) { filler in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text(filler.word)
-                                    .font(.subheadline)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(filler.word)
+                                        .font(.subheadline)
+
+                                    if filler.kind == .structural {
+                                        Text("Repeated opening")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
 
                                 Spacer()
 
                                 Text("\(filler.count)×")
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(AppColors.warning)
+                                    .foregroundStyle(
+                                        filler.kind == .structural
+                                            ? AppColors.categoryPlum
+                                            : AppColors.warning
+                                    )
                             }
 
                             if !filler.timestamps.isEmpty {
@@ -887,10 +902,20 @@ struct RecordingDetailView: View {
                                         } label: {
                                             Image(systemName: "waveform")
                                                 .font(.caption2.weight(.semibold))
-                                                .foregroundStyle(AppColors.warning)
+                                                .foregroundStyle(
+                                                    filler.kind == .structural
+                                                        ? AppColors.categoryPlum
+                                                        : AppColors.warning
+                                                )
                                                 .padding(.horizontal, 10)
                                                 .padding(.vertical, 5)
-                                                .background(Capsule().fill(AppColors.warning.opacity(0.15)))
+                                                .background(
+                                                    Capsule().fill(
+                                                        (filler.kind == .structural
+                                                            ? AppColors.categoryPlum
+                                                            : AppColors.warning).opacity(0.15)
+                                                    )
+                                                )
                                         }
                                         .buttonStyle(.plain)
                                         .accessibilityLabel("Play \(filler.word), occurrence \(index + 1)")

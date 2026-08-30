@@ -8,7 +8,12 @@ import Foundation
 struct StructuralRepetitionTests {
 
     /// Evenly spaced words; trailing punctuation on a token marks a clause end.
-    private func words(_ tokens: [String], gap: TimeInterval = 0.15) -> [TranscriptionWord] {
+    /// Pass `gap` ≥ `clausePauseThreshold` to simulate punctuation-poor Whisper.
+    private func words(
+        _ tokens: [String],
+        gap: TimeInterval = 0.15,
+        isPrimary: Bool = true
+    ) -> [TranscriptionWord] {
         var cursor: TimeInterval = 0
         return tokens.map { token in
             let start = cursor
@@ -19,7 +24,7 @@ struct StructuralRepetitionTests {
                 start: start,
                 end: end,
                 isFiller: false,
-                isPrimarySpeaker: true
+                isPrimarySpeaker: isPrimary
             )
         }
     }
@@ -40,13 +45,12 @@ struct StructuralRepetitionTests {
         let hit = try #require(hits.first)
         #expect(hit.count == 3)
         #expect(hit.timestamps.count == 3)
-        // Surface form kept for the chip label (not the expanded "i am going").
+        #expect(hit.kind == .structural)
         #expect(hit.word.contains("going"))
         #expect(hit.word.contains("i'm") || hit.word.contains("i am"))
     }
 
     @Test func contractionAndExpandedFormStillMatch() {
-        // I'm / I am / I'm — same frame family after contraction expansion.
         let transcript = words([
             "I'm", "going", "to", "buy", "milk,",
             "I", "am", "going", "to", "buy", "bread,",
@@ -56,6 +60,7 @@ struct StructuralRepetitionTests {
         let hits = StructuralRepetitionDetector.detect(in: transcript)
         #expect(hits.count == 1)
         #expect(hits.first?.count == 3)
+        #expect(hits.first?.kind == .structural)
     }
 
     @Test func andBoundarySplitsClauses() {
@@ -70,10 +75,50 @@ struct StructuralRepetitionTests {
         #expect(hits.first?.count == 3)
     }
 
+    @Test func pauseGapsSplitWhenWhisperOmitsCommas() {
+        // No trailing punctuation — only a pause between clauses (Whisper often
+        // drops commas). Intra-clause word gaps stay under the threshold.
+        var cursor: TimeInterval = 0
+        func appendClause(_ tokens: [String], into result: inout [TranscriptionWord]) {
+            for token in tokens {
+                let start = cursor
+                let end = start + 0.25
+                result.append(TranscriptionWord(
+                    word: token, start: start, end: end,
+                    isFiller: false, isPrimarySpeaker: true
+                ))
+                cursor = end + 0.12
+            }
+            // Clause boundary pause (no comma on the last token).
+            cursor += StructuralRepetitionDetector.clausePauseThreshold
+        }
+
+        var transcript: [TranscriptionWord] = []
+        appendClause(["I'm", "going", "to", "get", "socks"], into: &transcript)
+        appendClause(["I'm", "going", "to", "get", "tomatoes"], into: &transcript)
+        appendClause(["I'm", "going", "to", "get", "eggs"], into: &transcript)
+
+        let hits = StructuralRepetitionDetector.detect(in: transcript)
+        #expect(hits.count == 1)
+        #expect(hits.first?.count == 3)
+    }
+
+    @Test func nearConsecutiveAllowsOneInterveningClause() {
+        let transcript = words([
+            "I'm", "going", "to", "finish", "this,",
+            "Meanwhile", "the", "clock", "keeps", "ticking,",
+            "I'm", "going", "to", "finish", "that,",
+            "I'm", "going", "to", "finish", "everything."
+        ])
+
+        let hits = StructuralRepetitionDetector.detect(in: transcript)
+        #expect(hits.count == 1)
+        #expect(hits.first?.count == 3)
+    }
+
     // MARK: - Negatives
 
     @Test func variedOpeningsDoNotFlag() {
-        // No shared opening frame — should stay quiet.
         let transcript = words([
             "Today", "I", "bought", "socks,",
             "Later", "we", "grabbed", "tomatoes,",
@@ -85,10 +130,21 @@ struct StructuralRepetitionTests {
     }
 
     @Test func twoRepeatsAreParallelismNotATic() {
-        // minRunLength is 3 — a pair should not flag.
         let transcript = words([
             "I'm", "going", "to", "get", "socks,",
             "I'm", "going", "to", "get", "tomatoes."
+        ])
+
+        let hits = StructuralRepetitionDetector.detect(in: transcript)
+        #expect(hits.isEmpty)
+    }
+
+    @Test func intentionalOrdinalListIsNotFlagged() {
+        // Curriculum-style First/Second/Third — craft, not a tic.
+        let transcript = words([
+            "First", "we", "need", "alignment,",
+            "Second", "we", "need", "budget,",
+            "Third", "we", "need", "timeline."
         ])
 
         let hits = StructuralRepetitionDetector.detect(in: transcript)
@@ -100,22 +156,35 @@ struct StructuralRepetitionTests {
     }
 
     @Test func nonPrimarySpeakerWordsIgnoredByCallerFilter() {
-        // Detector itself trusts the caller to pass primary-only words.
-        // Simulate that gate: interviewer turns never reach detect().
         let interviewer = words([
             "Can", "you", "tell", "me", "about,",
             "Can", "you", "tell", "me", "more,",
             "Can", "you", "tell", "me", "why."
-        ]).map {
-            TranscriptionWord(
-                word: $0.word,
-                start: $0.start,
-                end: $0.end,
-                isFiller: false,
-                isPrimarySpeaker: false
-            )
-        }
+        ], isPrimary: false)
         let primaryOnly = interviewer.filter(\.isPrimarySpeaker)
         #expect(StructuralRepetitionDetector.detect(in: primaryOnly).isEmpty)
+    }
+
+    @Test func fillerWordKindDecodesMissingAsFiller() throws {
+        // Old persisted analyses omit `kind` — must default to classic filler.
+        let data = Data(#"{"word":"um","count":2,"timestamps":[1.0,2.0]}"#.utf8)
+        let decoded = try JSONDecoder().decode(FillerWord.self, from: data)
+        #expect(decoded.kind == .filler)
+        #expect(decoded.word == "um")
+        #expect(decoded.count == 2)
+    }
+
+    @Test func sessionHitsSurfaceStructuralCategory() throws {
+        let transcript = words([
+            "I'm", "going", "to", "get", "socks,",
+            "I'm", "going", "to", "get", "tomatoes,",
+            "I'm", "going", "to", "get", "eggs."
+        ])
+        let hits = LexiconInsightsEngine.sessionHits(from: transcript)
+        let structural = hits.filter { $0.category == .structural }
+        #expect(!structural.isEmpty)
+        let hit = try #require(structural.first)
+        #expect(hit.count >= 3)
+        #expect(hit.occurrences.first?.options.isEmpty == false)
     }
 }
