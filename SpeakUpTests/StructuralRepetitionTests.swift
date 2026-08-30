@@ -26,7 +26,7 @@ struct StructuralRepetitionTests {
 
     // MARK: - Positive
 
-    @Test func sockTomatoEggFlagsStructuralFrame() {
+    @Test func sockTomatoEggFlagsStructuralFrame() throws {
         // "I'm going to get socks, I'm going to get tomatoes, I'm going to get eggs."
         let transcript = words([
             "I'm", "going", "to", "get", "socks,",
