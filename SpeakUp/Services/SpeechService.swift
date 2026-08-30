@@ -662,7 +662,14 @@ nonisolated enum SpeechAnalysisPipeline {
                 timestamps: value.timestamps
             )
         }
-        let fillerWords: [FillerWord] = unsortedFillerWords.sorted { lhs, rhs in
+
+        // Structural repetition (anaphora-as-tic) — same FillerWord shape so
+        // the existing filler chips/UI light up without a second render path.
+        // Uses scoringWords (already primary-speaker filtered when diarization
+        // applied), so interviewer/coach turns never contribute.
+        let structuralHits = StructuralRepetitionDetector.detect(in: scoringWords)
+        let mergedFillers = mergeFillerWords(unsortedFillerWords + structuralHits)
+        let fillerWords: [FillerWord] = mergedFillers.sorted { lhs, rhs in
             // Dictionary iteration order is undefined. Count ties need a
             // stable key or identical analyses can reorder rows between runs.
             if lhs.count != rhs.count {
@@ -848,6 +855,22 @@ nonisolated enum SpeechAnalysisPipeline {
     }
 
     // MARK: - Content Density
+
+    /// Collapse duplicate filler labels (classic fillers + structural frames)
+    /// into one row per word with combined counts and timestamps.
+    private static func mergeFillerWords(_ items: [FillerWord]) -> [FillerWord] {
+        var aggregates: [String: (count: Int, timestamps: [TimeInterval])] = [:]
+        for item in items {
+            let key = item.word.lowercased()
+            var entry = aggregates[key] ?? (count: 0, timestamps: [])
+            entry.count += item.count
+            entry.timestamps.append(contentsOf: item.timestamps)
+            aggregates[key] = entry
+        }
+        return aggregates.map { key, value in
+            FillerWord(word: key, count: value.count, timestamps: value.timestamps.sorted())
+        }
+    }
 
     private static func contentDensityScore(words: [TranscriptionWord]) -> Int {
         let nonFillerWords = words.filter { !$0.isFiller }

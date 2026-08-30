@@ -12,6 +12,7 @@ Scores are progressive and achievable. A beginner's natural 15–20 s answer lan
 - `SpeakUp/Services/SpeechScoringEngine.swift` — enhanced metrics, substance multiplier, gibberish gate, subscore helpers
 - `SpeakUp/Services/RecordingProcessingCoordinator.swift` — singleton job queue wrapping transcription + analysis + LLM pass
 - `SpeakUp/Services/FillerDetectionPipeline.swift` — shared pause-aware filler tagging
+- `SpeakUp/Services/StructuralRepetitionDetector.swift` — anaphora-as-tic → `FillerWord` hits
 - `SpeakUp/Services/WhisperService.swift`, `DictationService.swift` — transcription backends
 - `SpeakUp/Services/SpeechIsolationService.swift` — audio preprocessing (high-pass + noise gate)
 - `SpeakUp/Services/ConversationIsolationService.swift` — primary-speaker labeling
@@ -246,6 +247,15 @@ Shared across WhisperService, SpeechService, LiveTranscriptionService — remove
 - Pass 1: per-word context (`pauseBefore`, `pauseAfter`, `isStartOfSentence`) feeds `FillerWordList.isFillerWord(word, pauseBefore, pauseAfter, isStartOfSentence, config:)`. The context lets the filter distinguish "well" (filler after pause) from "well" (adverb mid-sentence).
 - Pass 2: multi-word phrase detection via `FillerWordList.isFillerPhrase(word[i], word[i+1])`. Both words are then marked `isFiller`.
 - Public API: `tagFillers(in:)`, `tagFillers(in:config:)`, plus `countFillers(words:timestamps:durations:)` overloads for legacy callers.
+
+### `StructuralRepetitionDetector` (anaphora-as-tic)
+Flags repeated clause-opening frames (structural repetition), not classic fillers. On-device only.
+
+- Constants: `minOpeningNGram = 3`, `maxOpeningNGram = 5`, `minRunLength = 3`, `maxInterveningClauses = 1`.
+- Clause split on commas, sentence-final `.?!;`, and coordinating `and` (leading coordinators stripped).
+- Opening match: normalized exact prefix (lowercase, punct stripped, common contractions expanded — `I'm` ↔ `I am`). No network / no audio off-device.
+- Input: primary-speaker `[TranscriptionWord]` (caller filters via existing diarization gate in `SpeechAnalysisPipeline.analyze`).
+- Output: `[FillerWord]` (label = opening frame, count, timestamps) merged into `SpeechAnalysis.fillerWords` so the filler chips UI needs no second render path. Counts toward `totalFillerCount` / filler ratio.
 
 ### `PitchAnalysisService` (F0 autocorrelation via vDSP)
 Zero dependencies beyond AVFoundation + Accelerate. Public API: `static func analyze(audioURL:) -> PitchMetrics?` and `static func pitchEnergyCorrelation(pitchContour:audioLevelSamples:) -> Int`.
