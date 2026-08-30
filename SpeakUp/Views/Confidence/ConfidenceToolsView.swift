@@ -6,9 +6,8 @@ struct ConfidenceToolsView: View {
     @State private var selectedCategory: ConfidenceCategory?
     @State private var showingExercise: ConfidenceExercise?
 
-    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools). See
-    /// `ToolPage`, which owns what that changes.
-    var isPushed: Bool = false
+    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
+    var presentation: ToolPresentation = .sheet
 
     private var exercises: [ConfidenceExercise] {
         guard let selectedCategory else { return DefaultConfidenceExercises.all }
@@ -21,7 +20,7 @@ struct ConfidenceToolsView: View {
     }
 
     var body: some View {
-        ToolPage(tool: .calm, isPushed: isPushed) {
+        ToolPage(tool: .calm, presentation: presentation) {
             ToolFilterBar {
                 FilterPill(
                     title: "All",

@@ -44,7 +44,7 @@ struct HistoryView: View {
             AppBackground()
 
             PageScrollView {
-                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
                     Section {
                         switch selectedSection {
                         case .recordings:
@@ -67,12 +67,12 @@ struct HistoryView: View {
                         pinnedSectionPicker
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
+                .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }
         .navigationTitle("History")
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if selectedSection == .recordings {
@@ -109,11 +109,15 @@ struct HistoryView: View {
 
     // The Progress tab shows the charts directly — the same experience the
     // old "Progress Charts" card used to navigate to. One VStack owns the
-    // page rhythm: every chapter (conclusion, trends, guidance, tools) sits
+    // page rhythm: every chapter (conclusion, trends, guidance, review) sits
     // 20pt apart. Word Bank usage renders inside the Language tab now, so the
-    // page ends at Practice Tools instead of an orphaned chip rail.
+    // page ends at Review instead of an orphaned chip rail.
+    //
+    // Review tiles (compare / listen back / goals / journal) stay here — they
+    // need history data. Library → Tools is prep (warm-up, drill, read aloud,
+    // calm); mixing the two catalogs muddies both.
     private var progressContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: AppLayout.chapterSpacing) {
             ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
             progressToolsSection
         }
@@ -123,7 +127,7 @@ struct HistoryView: View {
 
     private var progressToolsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("Practice Tools", icon: "ellipsis.circle")
+            GlassSectionHeader("Review", icon: "ellipsis.circle")
 
             LazyVGrid(
                 columns: [
@@ -134,12 +138,12 @@ struct HistoryView: View {
             ) {
                 if viewModel.summaries.count >= 2 {
                     NavigationLink { ComparisonView() } label: {
-                        ToolTileLabel(icon: "arrow.left.arrow.right", title: "Compare Sessions", tint: AppColors.categoryIndigo)
+                        ToolTileLabel(icon: "arrow.left.arrow.right", title: "Compare", tint: AppColors.categoryIndigo)
                     }
                     .buttonStyle(GlassPressStyle())
 
                     Button { onShowBeforeAfter() } label: {
-                        ToolTileLabel(icon: "headphones", title: "Listen to Progress", tint: AppColors.categoryPlum)
+                        ToolTileLabel(icon: "headphones", title: "Listen back", tint: AppColors.categoryPlum)
                     }
                     .buttonStyle(GlassPressStyle())
                 }
@@ -150,7 +154,7 @@ struct HistoryView: View {
                 .buttonStyle(GlassPressStyle())
 
                 Button { onShowJournalExport() } label: {
-                    ToolTileLabel(icon: "square.and.arrow.up", title: "Export Journal", tint: AppColors.categoryAmber)
+                    ToolTileLabel(icon: "square.and.arrow.up", title: "Journal", tint: AppColors.categoryAmber)
                 }
                 .buttonStyle(GlassPressStyle())
             }
@@ -326,22 +330,26 @@ struct FilterChip: View {
             .foregroundStyle(isSelected ? AnyShapeStyle(Color(red: 0.07, green: 0.07, blue: 0.08)) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background {
-                if isSelected {
-                    Capsule()
-                        .fill(Color.white.opacity(0.92))
-                } else {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule()
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                        }
-                }
-            }
-            .clipShape(Capsule())
+            .modifier(FilterChipChrome(isSelected: isSelected))
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Selected matches `SectionPicker` (solid white). Idle matches `FilterPill` (glass).
+private struct FilterChipChrome: ViewModifier {
+    let isSelected: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background { Capsule().fill(Color.white.opacity(0.92)) }
+                .clipShape(Capsule())
+        } else {
+            content
+                .glassEffect(.regular.interactive(), in: .capsule)
+        }
     }
 }
 

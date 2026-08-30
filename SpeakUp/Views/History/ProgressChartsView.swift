@@ -243,8 +243,7 @@ struct ProgressChartsContent: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background { Capsule().fill(.ultraThinMaterial) }
-            .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
         .accessibilityLabel("Time range")
     }
@@ -426,7 +425,7 @@ struct ProgressChartsView: View {
 
             PageScrollView {
                 ProgressChartsContent()
-                    .padding()
+                    .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }

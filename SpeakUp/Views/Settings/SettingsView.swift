@@ -11,15 +11,16 @@ struct SettingsView: View {
             AppBackground()
 
             PageScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: AppLayout.listSpacing) {
                     settingsMenuCard
                     aboutFooter
                 }
-                .padding()
+                .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }
         .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)

@@ -48,19 +48,11 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
         }
         .background {
             if framed {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(AppColors.surfaceLift)
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                    }
+                Color.clear
+                    .glassEffect(.regular, in: .rect(cornerRadius: 20))
             }
         }
-        .shadow(color: framed ? .black.opacity(0.25) : .clear, radius: framed ? 14 : 0, y: framed ? 7 : 0)
+        .shadow(color: framed ? .black.opacity(0.22) : .clear, radius: framed ? 14 : 0, y: framed ? 7 : 0)
     }
 
     private var row: some View {

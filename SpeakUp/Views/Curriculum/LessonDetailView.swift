@@ -2,12 +2,14 @@ import SwiftUI
 import SwiftData
 
 struct LessonDetailView: View {
-    let lesson: CurriculumLesson
     @Bindable var viewModel: CurriculumViewModel
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var userSettings: [UserSettings]
 
+    /// Mutable so "Next Lesson" can swap in place instead of dismissing back
+    /// to the Learning Path and forcing a scroll hunt.
+    @State private var lesson: CurriculumLesson
     @State private var currentStepIndex: Int = 0
     @State private var activeSheet: ActiveSheet?
     @State private var practiceResult: Recording?
@@ -15,6 +17,11 @@ struct LessonDetailView: View {
     @State private var confidenceExerciseOpened = false
     @State private var stepCompleteMessage: String?
     @State private var completedActivityIds: Set<String> = []
+
+    init(lesson: CurriculumLesson, viewModel: CurriculumViewModel) {
+        self.viewModel = viewModel
+        _lesson = State(initialValue: lesson)
+    }
 
     // MARK: - ActiveSheet
 
@@ -53,8 +60,7 @@ struct LessonDetailView: View {
                     lesson: lesson,
                     nextLesson: viewModel.nextLesson(after: lesson.id),
                     onNextLesson: {
-                        viewModel.advanceToNextLesson(context: modelContext)
-                        dismiss()
+                        advanceToNextLessonInPlace()
                     },
                     onBackToCurriculum: {
                         dismiss()
@@ -110,6 +116,30 @@ struct LessonDetailView: View {
         }
     }
 
+    /// Swap this detail onto the next lesson without popping the nav stack.
+    /// Dismiss only when the path is finished.
+    private func advanceToNextLessonInPlace() {
+        guard let next = viewModel.nextLesson(after: lesson.id) else {
+            viewModel.advanceToNextLesson(context: modelContext)
+            dismiss()
+            return
+        }
+        viewModel.advanceToNextLesson(context: modelContext)
+        withAnimation(AppMotion.slide) {
+            lesson = next
+            showingLessonCompletion = false
+            practiceResult = nil
+            confidenceExerciseOpened = false
+            activeSheet = nil
+            stepCompleteMessage = nil
+            currentStepIndex = viewModel.initialStepIndex(for: next)
+            completedActivityIds = Set(
+                next.activities.filter { viewModel.isActivityCompleted($0.id) }.map(\.id)
+            )
+        }
+        Haptics.medium()
+    }
+
     // MARK: - Step Complete Toast
 
     private func stepCompleteToast(_ message: String) -> some View {
@@ -125,11 +155,8 @@ struct LessonDetailView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-            }
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             .padding(.top, 8)
 
             Spacer()
@@ -589,9 +616,13 @@ struct LessonDetailView: View {
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.isActivityCompleted(currentActivity.id))
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentStepIndex)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppLayout.pageHorizontal)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
+            .background {
+                Color.clear
+                    .glassEffect(.regular)
+                    .ignoresSafeArea(edges: .bottom)
+            }
         }
     }
 

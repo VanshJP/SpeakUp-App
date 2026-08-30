@@ -4,9 +4,8 @@ struct ReadAloudSelectionView: View {
     @State private var viewModel = ReadAloudViewModel()
     @State private var showingSession = false
 
-    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools). See
-    /// `ToolPage`, which owns what that changes.
-    var isPushed: Bool = false
+    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
+    var presentation: ToolPresentation = .sheet
 
     /// Denominator for each row's arc, scoped to what the filters leave
     /// visible — within one set the relative lengths are what's worth reading.
@@ -15,7 +14,7 @@ struct ReadAloudSelectionView: View {
     }
 
     var body: some View {
-        ToolPage(tool: .readAloud, isPushed: isPushed) {
+        ToolPage(tool: .readAloud, presentation: presentation) {
             // Two axes, one grammar: both rows lead with All, so neither can
             // strand you in a filtered state with no way back.
             ToolFilterBar {

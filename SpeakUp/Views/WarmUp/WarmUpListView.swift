@@ -4,9 +4,8 @@ struct WarmUpListView: View {
     @State private var viewModel = WarmUpViewModel()
     @State private var showingExercise = false
 
-    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools). See
-    /// `ToolPage`, which owns what that changes.
-    var isPushed: Bool = false
+    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
+    var presentation: ToolPresentation = .sheet
 
     var sourceStory: Story?
 
@@ -18,7 +17,7 @@ struct WarmUpListView: View {
     }
 
     var body: some View {
-        ToolPage(tool: .warmUp, isPushed: isPushed) {
+        ToolPage(tool: .warmUp, presentation: presentation) {
             if let story = sourceStory {
                 SourceStoryBanner(
                     eyebrow: "Warming up for",

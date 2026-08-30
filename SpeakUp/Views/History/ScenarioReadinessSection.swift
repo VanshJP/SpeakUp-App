@@ -246,7 +246,7 @@ private struct ScenarioRow: View {
     @ViewBuilder
     private var holdingBackLine: some View {
         if let word = readiness.holdingBackWord, let count = readiness.holdingBackCount {
-            Text("\u{201C}\(word)\u{201D} costs you most here — \(count)\u{00D7} so far")
+            Text("\u{201C}\(word)\u{201D} costs you most here · \(count)\u{00D7} so far")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)

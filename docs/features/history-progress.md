@@ -50,11 +50,13 @@ State is consolidated at the body level: while loading → bare spinner;
 < 2 analyzed sessions → one `EmptyStateCard` ("Your Progress Starts Here" /
 "One Take In"). No scattered empty states firing at once.
 
-The tail after `ProgressChartsContent`: Practice Tools only — a 2×2 grid of
+The tail after `ProgressChartsContent`: **Review** only — a 2×2 grid of
 `ToolTileLabel` tiles (compare, listen back, goals, journal; compare/listen
-hidden until two summaries exist). Word Bank usage moved inside the Language
+hidden until two summaries exist). These stay on Progress because they need
+history data; Library → Tools is prep (warm-up / drill / read aloud / calm).
+Do not merge the catalogs. Word Bank usage moved inside the Language
 tab (`ProgressChartsContent.vocabWords` → `LanguageInsightsView`), so the
-page ends at tools instead of an orphaned chip rail.
+page ends at Review instead of an orphaned chip rail.
 
 ## Scenario readiness
 
@@ -85,7 +87,7 @@ readiness cards so "how ready am I" gets a concrete object.
   a `TickMeter` at the score's fraction (the same meter `ScoreHeroCard` uses,
   so "how far along" reads without comparing bare numbers), a meta line
   "band · N sessions · early read", and — when there is one — a full-width
-  line naming the habit costing the most ("'really' costs you most here —
+  line naming the habit costing the most ("'really' costs you most here ·
   1× so far"). That line used to share a truncating caption with the session
   count and got cut mid-word. Unpracticed core scenarios follow in the same
   list as dimmed rows ending in "Not yet" (previously a `plus.circle` that
