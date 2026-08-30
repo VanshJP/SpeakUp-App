@@ -7,24 +7,13 @@ struct GlassCardModifier: ViewModifier {
     var tint: Color? = nil
 
     func body(content: Content) -> some View {
+        let glass: Glass = {
+            if let tint { return .regular.tint(tint) }
+            return .regular
+        }()
         content
-            .background {
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(AppColors.surfaceLift)
-
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(tint ?? Color.clear)
-
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
+            .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
+            .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
     }
 }
 
@@ -34,12 +23,11 @@ extension View {
     func glassCard(cornerRadius: CGFloat = 20, tint: Color? = nil) -> some View {
         modifier(GlassCardModifier(cornerRadius: cornerRadius, tint: tint))
     }
-    
+
+    /// Material fallback when a non-card surface still wants a soft glass plate
+    /// (text fields, compact chips that are not `GlassCard`).
     func glassBackground(cornerRadius: CGFloat = 16) -> some View {
-        self.background {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-        }
+        self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
 }
 

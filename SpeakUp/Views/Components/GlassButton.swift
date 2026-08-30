@@ -14,6 +14,17 @@ struct GlassButtonLabel: View {
     var fullWidth: Bool = false
 
     var body: some View {
+        labelContent
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, size.horizontalPadding)
+            .padding(.vertical, size.verticalPadding)
+            .frame(maxWidth: fullWidth ? .infinity : nil)
+            .modifier(GlassButtonChrome(style: style))
+            .shadow(color: shadowColor, radius: shadowRadius, y: shadowYOffset)
+    }
+
+    @ViewBuilder
+    private var labelContent: some View {
         HStack(spacing: 8) {
             if isLoading {
                 ProgressView()
@@ -33,14 +44,6 @@ struct GlassButtonLabel: View {
                 }
             }
         }
-        .foregroundStyle(foregroundColor)
-        .padding(.horizontal, size.horizontalPadding)
-        .padding(.vertical, size.verticalPadding)
-        .frame(maxWidth: fullWidth ? .infinity : nil)
-        .background { backgroundView }
-        .clipShape(Capsule())
-        // Outside the clip so the primary elevation is actually visible.
-        .shadow(color: shadowColor, radius: shadowRadius, y: shadowYOffset)
     }
 
     private var foregroundColor: Color {
@@ -68,30 +71,37 @@ struct GlassButtonLabel: View {
     private var shadowYOffset: CGFloat {
         style == .primary ? 4 : 0
     }
+}
+
+/// Applies the capsule chrome after padding so Liquid Glass sits on the final
+/// shape. Primary stays an opaque white fill — the one loud CTA on a page.
+private struct GlassButtonChrome: ViewModifier {
+    let style: GlassButton.GlassButtonVariant
 
     @ViewBuilder
-    private var backgroundView: some View {
+    func body(content: Content) -> some View {
         switch style {
         case .primary:
-            Capsule()
-                .fill(Color.white.opacity(0.94))
-        case .secondary:
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
+            content
+                .background {
+                    Capsule().fill(Color.white.opacity(0.94))
                 }
+                .clipShape(Capsule())
+        case .secondary:
+            content
+                .glassEffect(.regular.interactive(), in: .capsule)
         case .outline:
-            Capsule()
-                .fill(.clear)
-                .overlay {
+            content
+                .background {
                     Capsule()
                         .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
                 }
         case .danger:
-            Capsule()
-                .fill(AppColors.error.opacity(0.9))
+            content
+                .background {
+                    Capsule().fill(AppColors.error.opacity(0.9))
+                }
+                .clipShape(Capsule())
         }
     }
 }

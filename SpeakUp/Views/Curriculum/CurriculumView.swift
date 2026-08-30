@@ -12,14 +12,10 @@ struct CurriculumView: View {
             AppBackground()
 
             PageScrollView {
-                // Same grammar as Today: where you stand, then the one thing
-                // to do next, then the browsable list. Previously two gradient
-                // hero cards stacked here and competed for the same attention.
+                // Continue first. Progress rides inside that card. The path
+                // list follows — no intro card and no second stats card fighting
+                // the one action that matters.
                 LazyVStack(spacing: 20) {
-                    learnIntro
-
-                    progressHeader
-
                     if let currentLesson = viewModel.currentLesson,
                        let currentPhase = viewModel.currentPhase {
                         continueCard(lesson: currentLesson, phase: currentPhase)
@@ -67,86 +63,10 @@ struct CurriculumView: View {
         }
     }
 
-    // MARK: - Intro
-
-    /// Separates Learn from Library Tools: this tab is a curriculum path, not
-    /// a menu of warm-ups and drills.
-    private var learnIntro: some View {
-        GlassCard(tint: AppColors.primary.opacity(0.06), padding: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    Image(systemName: PracticeToolKind.learn.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
-                    Text(PracticeToolKind.learn.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                }
-
-                Text(PracticeToolKind.learn.outcome)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Lessons unlock in order. Warm-ups, drills, and calm live under Library → Tools when you need a quick rep instead of a full lesson.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Progress Header
-
-    /// Stats card, not a hero. Same shape as the score hero on the detail
-    /// screen: one dominant numeral, a tick meter, supporting counts.
-    /// One row, not a card-sized dashboard.
-    ///
-    /// This used to be an eyebrow, a 46pt percentage, a lesson count, a week
-    /// chip, and a full-width meter stacked in 20pt padding — the tallest thing
-    /// on a screen whose actual content is the path below it. A small ring
-    /// carries the fraction and the numeral at once, so the whole header costs
-    /// one line.
-    private var progressHeader: some View {
-        GlassCard(padding: 14) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RingProgress(
-                        progress: viewModel.overallProgress,
-                        color: AppColors.primary,
-                        lineWidth: 4
-                    )
-                    Text("\(Int(viewModel.overallProgress * 100))")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: viewModel.overallProgress))
-                }
-                .frame(width: 40, height: 40)
-
-                Text("\(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white)
-
-                Spacer(minLength: 0)
-
-                if let week = viewModel.currentPhase?.week {
-                    Text("Week \(week)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Course progress: \(Int(viewModel.overallProgress * 100)) percent, \(viewModel.completedLessonsCount) of \(viewModel.totalLessonsCount) lessons complete")
-    }
-
     // MARK: - Continue Card
 
-    /// The single action on this screen, styled like every other primary CTA
-    /// in the app: light pill, ink text.
+    /// The single action on this screen. Progress is a quiet accessory in the
+    /// header row so the primary CTA is not buried under intro + stats cards.
     private func continueCard(lesson: CurriculumLesson, phase: CurriculumPhase) -> some View {
         NavigationLink {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
@@ -161,9 +81,10 @@ struct CurriculumView: View {
                             .textCase(.uppercase)
                             .tracking(0.6)
                         Spacer()
-                        Text("Week \(phase.week)")
+                        Text("\(viewModel.completedLessonsCount)/\(viewModel.totalLessonsCount) · Week \(phase.week)")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.tertiary)
+                            .monospacedDigit()
                     }
                     .foregroundStyle(.secondary)
 

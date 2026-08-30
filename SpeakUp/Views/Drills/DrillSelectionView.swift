@@ -8,9 +8,8 @@ struct DrillSelectionView: View {
     @State private var showingCountdown = false
     @State private var selectedDrillMode: DrillMode?
 
-    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools). See
-    /// `ToolPage`, which owns what that changes.
-    var isPushed: Bool = false
+    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
+    var presentation: ToolPresentation = .sheet
 
     var sourceStory: Story?
     /// Arms a specific drill on open — used when a session's weakest subscore
@@ -24,7 +23,7 @@ struct DrillSelectionView: View {
     }
 
     var body: some View {
-        ToolPage(tool: .drills, isPushed: isPushed) {
+        ToolPage(tool: .drills, presentation: presentation) {
             if let story = sourceStory {
                 SourceStoryBanner(
                     eyebrow: "Drilling from",

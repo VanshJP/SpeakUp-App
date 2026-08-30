@@ -33,13 +33,10 @@ struct FilterPill: View {
             .foregroundStyle(isSelected ? .white : .primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background {
-                if isSelected {
-                    Capsule().fill(color)
-                } else {
-                    Capsule().fill(.ultraThinMaterial)
-                }
-            }
+            .glassEffect(
+                isSelected ? .regular.tint(color).interactive() : .regular.interactive(),
+                in: .capsule
+            )
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

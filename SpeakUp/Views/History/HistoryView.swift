@@ -109,9 +109,13 @@ struct HistoryView: View {
 
     // The Progress tab shows the charts directly — the same experience the
     // old "Progress Charts" card used to navigate to. One VStack owns the
-    // page rhythm: every chapter (conclusion, trends, guidance, tools) sits
+    // page rhythm: every chapter (conclusion, trends, guidance, review) sits
     // 20pt apart. Word Bank usage renders inside the Language tab now, so the
-    // page ends at Practice Tools instead of an orphaned chip rail.
+    // page ends at Review instead of an orphaned chip rail.
+    //
+    // Review tiles (compare / listen back / goals / journal) stay here — they
+    // need history data. Library → Tools is prep (warm-up, drill, read aloud,
+    // calm); mixing the two catalogs muddies both.
     private var progressContent: some View {
         VStack(spacing: 20) {
             ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
@@ -123,7 +127,7 @@ struct HistoryView: View {
 
     private var progressToolsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("Practice Tools", icon: "ellipsis.circle")
+            GlassSectionHeader("Review", icon: "ellipsis.circle")
 
             LazyVGrid(
                 columns: [
@@ -134,12 +138,12 @@ struct HistoryView: View {
             ) {
                 if viewModel.summaries.count >= 2 {
                     NavigationLink { ComparisonView() } label: {
-                        ToolTileLabel(icon: "arrow.left.arrow.right", title: "Compare Sessions", tint: AppColors.categoryIndigo)
+                        ToolTileLabel(icon: "arrow.left.arrow.right", title: "Compare", tint: AppColors.categoryIndigo)
                     }
                     .buttonStyle(GlassPressStyle())
 
                     Button { onShowBeforeAfter() } label: {
-                        ToolTileLabel(icon: "headphones", title: "Listen to Progress", tint: AppColors.categoryPlum)
+                        ToolTileLabel(icon: "headphones", title: "Listen back", tint: AppColors.categoryPlum)
                     }
                     .buttonStyle(GlassPressStyle())
                 }
@@ -150,7 +154,7 @@ struct HistoryView: View {
                 .buttonStyle(GlassPressStyle())
 
                 Button { onShowJournalExport() } label: {
-                    ToolTileLabel(icon: "square.and.arrow.up", title: "Export Journal", tint: AppColors.categoryAmber)
+                    ToolTileLabel(icon: "square.and.arrow.up", title: "Journal", tint: AppColors.categoryAmber)
                 }
                 .buttonStyle(GlassPressStyle())
             }

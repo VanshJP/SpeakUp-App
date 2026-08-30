@@ -29,33 +29,25 @@ struct GlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .background {
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(AppColors.surfaceLift)
-
-                    // Tint overlay — felt, not seen
-                    if let tint {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(tint.opacity(0.08))
-                    }
-
-                    // Uniform hairline
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                }
-            }
+            .glassEffect(resolvedGlass, in: .rect(cornerRadius: cornerRadius))
             .overlay {
                 if let accentBorder {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(accentBorder.opacity(0.35), lineWidth: 1)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .shadow(color: .black.opacity(elevated ? 0.35 : 0.22), radius: elevated ? 18 : 10, y: elevated ? 9 : 5)
+            .shadow(
+                color: .black.opacity(elevated ? 0.35 : 0.18),
+                radius: elevated ? 18 : 10,
+                y: elevated ? 9 : 5
+            )
+    }
+
+    private var resolvedGlass: Glass {
+        if let tint {
+            return .regular.tint(tint)
+        }
+        return .regular
     }
 }
 
@@ -82,26 +74,11 @@ struct FeaturedGlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .background {
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: gradientColors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    // Uniform hairline
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                }
+            .glassEffect(.regular.tint(gradientColors.first ?? AppColors.primary), in: .rect(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .shadow(color: .black.opacity(0.3), radius: 18, y: 9)
     }
 }

@@ -51,7 +51,7 @@ struct TodayView: View {
             PageScrollView {
                 VStack(spacing: 20) {
 
-                    // 1. Header — date + streak chip + customize
+                    // 1. Header — date + streak chip (customize lives at the bottom)
                     topHeaderRow
                         .allowsHitTesting(!isEditingLayout)
 
@@ -88,6 +88,10 @@ struct TodayView: View {
                     if isEditingLayout {
                         hiddenTray
                         resetLayoutButton
+                        editHomepageButton(done: true)
+                    } else {
+                        // After the whole page — not chrome that fights the greeting.
+                        editHomepageButton(done: false)
                     }
                 }
                 .padding()
@@ -97,22 +101,6 @@ struct TodayView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Haptics.light()
-                    withAnimation(AppMotion.slide) { isEditingLayout.toggle() }
-                } label: {
-                    if isEditingLayout {
-                        Text("Done").fontWeight(.semibold)
-                    } else {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.body.weight(.semibold))
-                    }
-                }
-                .accessibilityLabel(isEditingLayout ? "Finish customizing Today" : "Customize Today")
-            }
-        }
         .refreshable {
             await viewModel.loadData()
         }
@@ -658,7 +646,7 @@ struct TodayView: View {
 
                 if let line = arrivalLine {
                     Text(line)
-                        .font(.subheadline.weight(.medium))
+                        .font(.caption)
                         .foregroundStyle(
                             viewModel.practicedToday
                                 ? AnyShapeStyle(AppColors.success)
@@ -691,8 +679,26 @@ struct TodayView: View {
         let streak = viewModel.userStats.currentStreak
         guard arrived, streak >= 1 else { return nil }
         return viewModel.practicedToday
-            ? "Day \(streak) — nice work today"
-            : "Day \(streak) so far — practice when you're ready"
+            ? "Day \(streak) · nice work"
+            : "Day \(streak) · ready when you are"
+    }
+
+    /// Bottom-of-page customize control. Lives under the modules so the
+    /// greeting and Start Speaking keep the first viewport; long-press on a
+    /// block still enters edit mode without scrolling.
+    private func editHomepageButton(done: Bool) -> some View {
+        GlassButton(
+            title: done ? "Done" : "Edit homepage",
+            icon: done ? "checkmark" : "slider.horizontal.3",
+            style: .secondary,
+            size: .medium,
+            fullWidth: true
+        ) {
+            Haptics.light()
+            withAnimation(AppMotion.slide) { isEditingLayout = !done }
+        }
+        .accessibilityLabel(done ? "Finish customizing Today" : "Customize Today")
+        .padding(.top, 4)
     }
 
     /// Runs once per calendar day: pops the streak chip and fires one haptic.
@@ -812,8 +818,8 @@ struct TodayView: View {
     /// Four doors, icon and name only. The tiles used to carry a two-line
     /// outcome apiece, which turned a 2x2 grid into a wall of small grey text;
     /// the one tool worth explaining is explained by the banner above it, and
-    /// the rest introduce themselves on arrival. No inline Edit control here —
-    /// this section is not what it edits, and Today's toolbar already owns it.
+    /// the rest introduce themselves on arrival. Customize lives at the foot of
+    /// the page (and on long-press), not as chrome above the greeting.
     private var prepToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader("Prep tools", icon: "wrench.and.screwdriver.fill")

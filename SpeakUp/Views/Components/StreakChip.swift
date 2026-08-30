@@ -24,19 +24,11 @@ struct StreakChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .fill(AppColors.surfaceLift)
-                }
-                .overlay {
-                    Capsule()
-                        .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                }
-                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-        }
+        .glassEffect(
+            isActive ? .regular.tint(AppColors.warning.opacity(0.35)).interactive() : .regular.interactive(),
+            in: .capsule
+        )
+        .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")
         .accessibilityAddTraits(.isButton)

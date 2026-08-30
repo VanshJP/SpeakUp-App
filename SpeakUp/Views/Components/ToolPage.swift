@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// How a practice-tool page is hosted.
+///
+/// - `sheet`: own `NavigationStack` + ✕ (Today tiles, focus card, next-steps).
+/// - `pushed`: caller-owned stack; system Back (legacy Library push).
+/// - `embedded`: in-place Library drill-down — no second nav title, no outcome
+///   chrome (the parent already named the tool), just filters + items.
+enum ToolPresentation: Equatable {
+    case sheet
+    case pushed
+    case embedded
+}
+
 /// Shared skeleton for the four practice-tool pages — Warm-Ups, Drills,
 /// Read Aloud, Calm.
 ///
@@ -13,20 +25,60 @@ struct ToolPage<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
 
     let tool: PracticeToolKind
-    /// Pushed onto a caller-owned `NavigationStack` (Library → Tools): no inner
-    /// stack, and the sheet-only ✕ gives way to the system back button.
-    var isPushed: Bool = false
+    var presentation: ToolPresentation = .sheet
     @ViewBuilder var content: Content
 
+    /// Convenience for older call sites that only knew "sheet vs push".
+    init(
+        tool: PracticeToolKind,
+        isPushed: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tool = tool
+        self.presentation = isPushed ? .pushed : .sheet
+        self.content = content()
+    }
+
+    init(
+        tool: PracticeToolKind,
+        presentation: ToolPresentation,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tool = tool
+        self.presentation = presentation
+        self.content = content()
+    }
+
     var body: some View {
-        if isPushed {
-            page
-        } else {
+        switch presentation {
+        case .sheet:
             NavigationStack { page }
+        case .pushed, .embedded:
+            page
         }
     }
 
     private var page: some View {
+        Group {
+            if presentation == .embedded {
+                embeddedBody
+            } else {
+                hostedBody
+            }
+        }
+    }
+
+    /// Library in-place: parent owns back + title. No second AppBackground —
+    /// PracticeHub already paints one, and nesting two navy canvases read as a
+    /// card popping over the tab.
+    private var embeddedBody: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var hostedBody: some View {
         ZStack {
             AppBackground()
 
@@ -51,7 +103,7 @@ struct ToolPage<Content: View>: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             // The ✕ is a sheet affordance; a pushed page closes with Back.
-            if !isPushed {
+            if presentation == .sheet {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -128,14 +180,7 @@ struct SourceStoryBanner: View {
             }
         }
         .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(tint.opacity(0.15))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(tint.opacity(0.35), lineWidth: 0.5)
-                }
-        }
+        .glassEffect(.regular.tint(tint.opacity(0.35)), in: .rect(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 }
