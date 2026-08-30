@@ -616,9 +616,13 @@ struct LessonDetailView: View {
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.isActivityCompleted(currentActivity.id))
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentStepIndex)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, AppLayout.pageHorizontal)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
+            .background {
+                Color.clear
+                    .glassEffect(.regular)
+                    .ignoresSafeArea(edges: .bottom)
+            }
         }
     }
 

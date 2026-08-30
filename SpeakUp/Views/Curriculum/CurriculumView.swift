@@ -15,7 +15,7 @@ struct CurriculumView: View {
                 // Continue first. Progress rides inside that card. The path
                 // list follows — no intro card and no second stats card fighting
                 // the one action that matters.
-                LazyVStack(spacing: 20) {
+                LazyVStack(spacing: AppLayout.chapterSpacing) {
                     if let currentLesson = viewModel.currentLesson,
                        let currentPhase = viewModel.currentPhase {
                         continueCard(lesson: currentLesson, phase: currentPhase)
@@ -25,12 +25,13 @@ struct CurriculumView: View {
                         phaseSection(phase)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .padding(.top, 4)
+                .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }
         .navigationTitle("Learning Path")
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

@@ -11,7 +11,7 @@ struct ComparisonView: View {
             AppBackground()
 
             PageScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: AppLayout.listSpacing) {
                     if viewModel.summaries.count >= 2 {
                         // Hero score summary
                         heroSummarySection
@@ -31,10 +31,11 @@ struct ComparisonView: View {
                         )
                     }
                 }
-                .padding()
+                .pageContentInsets()
             }
         }
         .navigationTitle("Compare")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if let card = viewModel.progressCard {
@@ -134,14 +135,7 @@ struct ComparisonView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .padding(.vertical, 10)
-                .background {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(.white.opacity(0.08), lineWidth: 0.5)
-                        }
-                }
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
             }
         }
     }

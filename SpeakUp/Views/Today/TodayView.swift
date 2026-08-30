@@ -49,7 +49,7 @@ struct TodayView: View {
             // over-wide child used to let this page pan sideways. No horizontal
             // paging, no TabView page style, no horizontal scroller.
             PageScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: AppLayout.chapterSpacing) {
 
                     // 1. Header — date + streak chip (customize lives at the bottom)
                     topHeaderRow
@@ -94,7 +94,8 @@ struct TodayView: View {
                         editHomepageButton(done: false)
                     }
                 }
-                .padding()
+                .padding(.top, 4)
+                .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }
@@ -259,13 +260,10 @@ struct TodayView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(AppColors.cardStroke, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                }
+                .strokeBorder(AppColors.cardStroke, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
         }
     }
 
@@ -358,14 +356,7 @@ struct TodayView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                    }
-            }
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
         }
         .buttonStyle(GlassPressStyle())
         .draggable(module.rawValue)
@@ -893,18 +884,7 @@ struct TodayView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(12)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(tool.color.opacity(0.08))
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(tool.color.opacity(0.3), lineWidth: 0.5)
-                    }
-            }
+            .glassEffect(.regular.tint(tool.color.opacity(0.25)).interactive(), in: .rect(cornerRadius: 14))
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel("Start with \(tool.title). \(tool.outcome)")
@@ -1130,10 +1110,7 @@ struct SmallIconButton: View {
         .font(.subheadline.weight(.medium))
         .foregroundStyle(.secondary)
         .frame(width: 32, height: 32)
-        .background {
-            Circle()
-                .fill(.ultraThinMaterial)
-        }
+        .glassEffect(.regular.interactive(), in: .circle)
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
         .buttonStyle(GlassPressStyle())
@@ -1173,10 +1150,7 @@ struct DurationPill: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-            }
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())

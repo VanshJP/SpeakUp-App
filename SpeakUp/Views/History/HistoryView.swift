@@ -44,7 +44,7 @@ struct HistoryView: View {
             AppBackground()
 
             PageScrollView {
-                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
                     Section {
                         switch selectedSection {
                         case .recordings:
@@ -67,12 +67,12 @@ struct HistoryView: View {
                         pinnedSectionPicker
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
+                .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }
         .navigationTitle("History")
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if selectedSection == .recordings {
@@ -117,7 +117,7 @@ struct HistoryView: View {
     // need history data. Library → Tools is prep (warm-up, drill, read aloud,
     // calm); mixing the two catalogs muddies both.
     private var progressContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: AppLayout.chapterSpacing) {
             ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
             progressToolsSection
         }
@@ -330,22 +330,26 @@ struct FilterChip: View {
             .foregroundStyle(isSelected ? AnyShapeStyle(Color(red: 0.07, green: 0.07, blue: 0.08)) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background {
-                if isSelected {
-                    Capsule()
-                        .fill(Color.white.opacity(0.92))
-                } else {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule()
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                        }
-                }
-            }
-            .clipShape(Capsule())
+            .modifier(FilterChipChrome(isSelected: isSelected))
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Selected matches `SectionPicker` (solid white). Idle matches `FilterPill` (glass).
+private struct FilterChipChrome: ViewModifier {
+    let isSelected: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background { Capsule().fill(Color.white.opacity(0.92)) }
+                .clipShape(Capsule())
+        } else {
+            content
+                .glassEffect(.regular.interactive(), in: .capsule)
+        }
     }
 }
 

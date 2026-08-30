@@ -12,6 +12,7 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 | Colors | `SpeakUp/Theme/AppColors.swift` |
 | Glass | `SpeakUp/Theme/GlassStyles.swift` — cards, buttons, modifiers |
 | Type / motion | `AppType.swift`, `AppMotion.swift` |
+| Page rhythm | `AppLayout.swift` — `pageHorizontal` (16), `chapterSpacing` (20), `listSpacing` (16), `.pageContentInsets()` |
 | Glass helpers | `SpeakUp/Extensions/View+Glass.swift`, `Haptics.swift` |
 | Components | `SpeakUp/Views/Components/` — `GlassCard`, `GlassButton`, `GlassButtonLabel`, `MetricTile`, `RingStatsView`, `FlowLayout`, `RichTextEditor`, `AppTourView`, `ToolTile`, … |
 | Header roles | Section = `GlassSectionHeader` (headline, page chapters). Card = `GlassCardTitle` (subheadline, chart/insight cards). Both take a trailing accessory closure. |
@@ -26,19 +27,21 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 6. Haptics via `Haptics.*` typed helpers.
 7. Tab bar: `.tint(.white)`, `.preferredColorScheme(.dark)`.
 8. Full-screen pages scroll with **`PageScrollView`**, not `ScrollView`. A plain vertical `ScrollView` pans sideways as soon as any child measures wider than the viewport; `PageScrollView` clamps content to the container width so overflow clips instead. Deliberate horizontal rails stay `ScrollView(.horizontal)`.
-9. Nothing in a page may demand more width than the screen. `.fixedSize()` on a row, a wide fixed `.frame(width:)`, or a pinned pill row are the usual causes — check at 375pt *and* at accessibility text sizes, and reach for `ViewThatFits` before pinning (see `ActivityStrip.header`).
-10. Controls keep a 44pt hit target even when their visible icon/chip is smaller. Selected controls expose `.isSelected`; modal overlays expose `.isModal` + Escape; Reduce Motion suppresses ambient/celebration motion.
-11. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA.
+9. **One page inset.** Root tabs use `.pageContentInsets()` (`AppLayout.pageHorizontal` = 16 + bottom 16). Do not hand-roll `.padding(.horizontal, 20)` on a tab — Learn used to, and the stack looked uneven. Chapter stacks use `AppLayout.chapterSpacing` (20); list hubs use `AppLayout.listSpacing` (16). Library / History / Learn / Settings use `.navigationBarTitleDisplayMode(.large)`; Today keeps a custom greeting with `.inline` empty title.
+10. Nothing in a page may demand more width than the screen. `.fixedSize()` on a row, a wide fixed `.frame(width:)`, or a pinned pill row are the usual causes — check at 375pt *and* at accessibility text sizes, and reach for `ViewThatFits` before pinning (see `ActivityStrip.header`).
+11. Controls keep a 44pt hit target even when their visible icon/chip is smaller. Selected controls expose `.isSelected`; modal overlays expose `.isModal` + Escape; Reduce Motion suppresses ambient/celebration motion.
+12. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`, duration/time-range capsules, icon chip buttons. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA. Selected section pills stay solid white (same as `SectionPicker`).
 
 ## New view checklist
 
-1. `PageScrollView` + `.appBackground`
+1. `PageScrollView` + `.appBackground` + `.pageContentInsets()` (root tabs)
 2. `GlassCard` content blocks
 3. `AppColors` only
 4. `GlassButton` for actions
 5. `GlassSectionHeader` for sections
 6. Haptics on interaction
 7. `// MARK:` when file grows past ~60 lines
+8. Match neighbor tab title mode (`.large` unless Today-style custom header)
 
 ## Cross-links
 

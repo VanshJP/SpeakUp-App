@@ -46,7 +46,7 @@ struct PracticeHubView: View {
             AppBackground()
 
             PageScrollView {
-                LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
                     Section {
                         // Each section owns a topBarTrailing toolbar item. A
                         // crossfade keeps the outgoing section alive for the
@@ -78,8 +78,7 @@ struct PracticeHubView: View {
                         pinnedSectionPicker
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
+                .pageContentInsets()
             }
             .scrollIndicators(.hidden)
 
