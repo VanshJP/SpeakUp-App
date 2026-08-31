@@ -137,6 +137,13 @@ nonisolated enum CoachingTipService {
             return (lhs.dimension?.rawValue ?? "") < (rhs.dimension?.rawValue ?? "")
         }
 
+        // Quotable structural-repetition beats a mid-band clarity/pace dip —
+        // the listener heard the triad; that is the coachable moment even when
+        // the structure subscore itself looks fine.
+        if let index = candidates.firstIndex(where: { $0.title == "Vary the Opening" }) {
+            candidates.insert(candidates.remove(at: index), at: 0)
+        }
+
         // The plan's focus leads regardless of what this single session did.
         // Chasing whichever dimension dipped today is how users end up with
         // nine half-trained habits instead of one fixed one.

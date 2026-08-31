@@ -380,8 +380,10 @@ struct CoachEvidenceTests {
     }
 
     @Test func structuralBurstDoesNotPolluteClassicFillerBurst() {
+        // Classic ums must sit inside the 15s burst window; structural stamps
+        // stay out of fillerBurst even when denser.
         let fillers = [
-            FillerWord(word: "um", count: 2, timestamps: [10, 80], kind: .filler),
+            FillerWord(word: "um", count: 3, timestamps: [10, 12, 14], kind: .filler),
             FillerWord(
                 word: "i'm going to get",
                 count: 3,
@@ -394,6 +396,7 @@ struct CoachEvidenceTests {
             words: nil
         )
         #expect(evidence.fillerBurst?.word == "um")
+        #expect(evidence.fillerBurst?.count == 3)
         #expect(evidence.structuralRepetition?.frame == "i'm going to get")
         #expect(evidence.structuralRepetition?.count == 3)
         #expect(evidence.structuralRepetition?.start == 20)
