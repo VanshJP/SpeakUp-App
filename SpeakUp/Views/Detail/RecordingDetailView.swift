@@ -23,6 +23,9 @@ struct RecordingDetailView: View {
     @State private var showFillerHighlights = true
     @State private var showVocabHighlights = true
     @State private var showSpeakerTurns = true
+    /// Word ids that belong to flagged structural openings — plum in the
+    /// transcript; playable on tap. Empty when no anaphora-as-tic was found.
+    @State private var structuralWordIDs: Set<UUID> = []
     @State private var waveformHeights: [CGFloat] = []
     @State private var selectedDetailTab: DetailTab = .breakdown
     @State private var isEditingTitle = false
@@ -488,7 +491,9 @@ struct RecordingDetailView: View {
             let words = recording.transcriptionWords
             sessionWords = words
             speakerTurnsCache = words.map(speakerTurns(from:)) ?? []
+            // Word swaps are hesitation/hedge habits — not structural frames.
             crutchHits = CrutchSwapsCard.hits(from: words)
+                .filter { $0.category != .structural }
         }
         guard coachAnalysis == nil, let analysis = recording.fullAnalysis else { return }
         coachAnalysis = analysis
@@ -496,6 +501,12 @@ struct RecordingDetailView: View {
             for: analysis,
             words: sessionWords
         )
+        if let words = sessionWords {
+            structuralWordIDs = StructuralRepetitionDetector.highlightedWordIDs(
+                in: words,
+                hits: analysis.fillerWords
+            )
+        }
         // Same pass, same once-only discipline: these lines feed the LLM
         // prompt's crutch-habit block, the card below renders the rest.
         coachCrutchLines = crutchHits
@@ -619,6 +630,7 @@ struct RecordingDetailView: View {
             sessionWords = nil
             speakerTurnsCache = []
             crutchHits = []
+            structuralWordIDs = []
             recording.isProcessing = true
             try? modelContext.save()
         }
@@ -859,37 +871,22 @@ struct RecordingDetailView: View {
     /// number was often wrong, and a wrong number reads as a broken app while
     /// a wrong seek just plays nearby audio.
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
-        let hasStructural = fillerWords.contains { $0.kind == .structural }
-        let title = hasStructural ? "Fillers & Repeated Frames" : "Filler Words Used"
-
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader(title, icon: "exclamationmark.bubble.fill")
+            GlassSectionHeader("Filler Words Used", icon: "exclamationmark.bubble.fill")
 
             GlassCard {
                 VStack(spacing: 14) {
                     ForEach(fillerWords.prefix(5)) { filler in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(filler.word)
-                                        .font(.subheadline)
-
-                                    if filler.kind == .structural {
-                                        Text("Repeated opening")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
+                                Text(filler.word)
+                                    .font(.subheadline)
 
                                 Spacer()
 
                                 Text("\(filler.count)×")
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(
-                                        filler.kind == .structural
-                                            ? AppColors.categoryPlum
-                                            : AppColors.warning
-                                    )
+                                    .foregroundStyle(AppColors.warning)
                             }
 
                             if !filler.timestamps.isEmpty {
@@ -902,20 +899,10 @@ struct RecordingDetailView: View {
                                         } label: {
                                             Image(systemName: "waveform")
                                                 .font(.caption2.weight(.semibold))
-                                                .foregroundStyle(
-                                                    filler.kind == .structural
-                                                        ? AppColors.categoryPlum
-                                                        : AppColors.warning
-                                                )
+                                                .foregroundStyle(AppColors.warning)
                                                 .padding(.horizontal, 10)
                                                 .padding(.vertical, 5)
-                                                .background(
-                                                    Capsule().fill(
-                                                        (filler.kind == .structural
-                                                            ? AppColors.categoryPlum
-                                                            : AppColors.warning).opacity(0.15)
-                                                    )
-                                                )
+                                                .background(Capsule().fill(AppColors.warning.opacity(0.15)))
                                         }
                                         .buttonStyle(.plain)
                                         .accessibilityLabel("Play \(filler.word), occurrence \(index + 1)")
@@ -984,7 +971,8 @@ struct RecordingDetailView: View {
                         .accessibilityValue(showSpeakerTurns ? "On" : "Off")
                     }
 
-                    if let analysis = coachAnalysis, !analysis.fillerWords.isEmpty {
+                    if let analysis = coachAnalysis,
+                       analysis.fillerWords.contains(where: { $0.kind == .filler }) {
                         Button {
                             showFillerHighlights.toggle()
                         } label: {
@@ -1032,6 +1020,25 @@ struct RecordingDetailView: View {
                         hasSpeakerSeparation: hasSpeakerSeparation
                     )
 
+                    if !structuralWordIDs.isEmpty {
+                        Divider()
+                            .padding(.vertical, 10)
+
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(AppColors.categoryPlum.opacity(0.35))
+                                .frame(width: 14, height: 14)
+
+                            Text("Repeated openings")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.categoryPlum)
+
+                            Text("Tap a highlighted phrase to hear it")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     if let analysis = coachAnalysis, !analysis.vocabWordsUsed.isEmpty {
                         Divider()
                             .padding(.vertical, 10)
@@ -1072,7 +1079,9 @@ struct RecordingDetailView: View {
                         SpeakerTurnTranscriptView(
                             turns: chunk,
                             showFillerHighlights: showFillerHighlights,
-                            showVocabHighlights: showVocabHighlights
+                            showVocabHighlights: showVocabHighlights,
+                            structuralWordIDs: structuralWordIDs,
+                            onPlayWord: { playFrom($0.start) }
                         )
                     }
                 } else {
@@ -1081,7 +1090,9 @@ struct RecordingDetailView: View {
                         HighlightedTranscriptView(
                             words: chunk,
                             showFillerHighlights: showFillerHighlights,
-                            showVocabHighlights: showVocabHighlights
+                            showVocabHighlights: showVocabHighlights,
+                            structuralWordIDs: structuralWordIDs,
+                            onPlayWord: { playFrom($0.start) }
                         )
                     }
                 }
@@ -1093,7 +1104,9 @@ struct RecordingDetailView: View {
                 showFillerHighlights: showFillerHighlights,
                 showVocabHighlights: showVocabHighlights,
                 showSpeakerTurns: showSpeakerTurns,
-                hasSpeakerSeparation: hasSpeakerSeparation
+                hasSpeakerSeparation: hasSpeakerSeparation,
+                structuralWordIDs: structuralWordIDs,
+                onPlayWord: { playFrom($0.start) }
             )
         }
     }
@@ -1318,12 +1331,16 @@ struct RecordingDetailView: View {
             transcriptSection(text)
         }
 
-        if let analysis = coachAnalysis, !analysis.fillerWords.isEmpty {
-            fillerWordsSection(analysis.fillerWords)
+        if let analysis = coachAnalysis {
+            let classicFillers = analysis.fillerWords.filter { $0.kind == .filler }
+            if !classicFillers.isEmpty {
+                fillerWordsSection(classicFillers)
+            }
         }
 
         // The swaps behind this take's crutch words. Fillers above show
         // what-and-where; here each habit gets what-to-say-instead.
+        // Structural frames stay out — tip + plum transcript highlight own them.
         if !crutchHits.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 GlassSectionHeader("Word Swaps", icon: "arrow.triangle.swap")

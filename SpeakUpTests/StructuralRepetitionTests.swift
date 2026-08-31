@@ -174,17 +174,28 @@ struct StructuralRepetitionTests {
         #expect(decoded.count == 2)
     }
 
-    @Test func sessionHitsSurfaceStructuralCategory() throws {
+    @Test func sessionHitsExcludeStructuralFrames() {
+        // Frames are coached via tip + transcript highlight, not word swaps.
         let transcript = words([
             "I'm", "going", "to", "get", "socks,",
             "I'm", "going", "to", "get", "tomatoes,",
             "I'm", "going", "to", "get", "eggs."
         ])
         let hits = LexiconInsightsEngine.sessionHits(from: transcript)
-        let structural = hits.filter { $0.category == .structural }
-        #expect(!structural.isEmpty)
-        let hit = try #require(structural.first)
-        #expect(hit.count >= 3)
-        #expect(hit.occurrences.first?.options.isEmpty == false)
+        #expect(hits.allSatisfy { $0.category != .structural })
+    }
+
+    @Test func highlightedWordIDsCoverOpeningFrames() {
+        let transcript = words([
+            "I'm", "going", "to", "get", "socks,",
+            "I'm", "going", "to", "get", "tomatoes,",
+            "I'm", "going", "to", "get", "eggs."
+        ])
+        let hits = StructuralRepetitionDetector.detect(in: transcript)
+        let ids = StructuralRepetitionDetector.highlightedWordIDs(in: transcript, hits: hits)
+        #expect(!ids.isEmpty)
+        // Three openings × four surface words ("i'm going to get") ≈ 12.
+        #expect(ids.count >= 9)
+        #expect(ids.count <= 15)
     }
 }

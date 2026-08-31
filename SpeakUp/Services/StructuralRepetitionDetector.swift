@@ -76,6 +76,51 @@ nonisolated enum StructuralRepetitionDetector {
         }
     }
 
+    /// Word IDs that make up flagged opening frames — for plum transcript
+    /// highlights. One span per occurrence timestamp (surface length of the
+    /// frame label), matched by start time like coach evidence.
+    static func highlightedWordIDs(
+        in words: [TranscriptionWord],
+        hits: [FillerWord]
+    ) -> Set<UUID> {
+        let structural = hits.filter {
+            $0.kind == .structural && $0.count >= minRunLength
+        }
+        guard !structural.isEmpty, !words.isEmpty else { return [] }
+
+        let sorted = words.sorted { $0.start < $1.start }
+        var ids = Set<UUID>()
+
+        for hit in structural {
+            let frameLen = max(minOpeningNGram, hit.word.split(separator: " ").count)
+            for stamp in hit.timestamps {
+                guard let startIdx = nearestWordIndex(for: stamp, in: sorted) else { continue }
+                let endIdx = min(sorted.count, startIdx + frameLen)
+                for index in startIdx..<endIdx {
+                    ids.insert(sorted[index].id)
+                }
+            }
+        }
+        return ids
+    }
+
+    private static func nearestWordIndex(for stamp: TimeInterval, in words: [TranscriptionWord]) -> Int? {
+        var bestIndex: Int?
+        var bestDelta = TimeInterval.greatestFiniteMagnitude
+        for (index, word) in words.enumerated() {
+            let delta = abs(word.start - stamp)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIndex = index
+            }
+            if word.start > stamp + 0.08 { break }
+        }
+        if let bestIndex, bestDelta <= 0.08 {
+            return bestIndex
+        }
+        return words.firstIndex(where: { $0.start >= stamp - 0.01 })
+    }
+
     // MARK: - Clause splitting
 
     private struct Clause {

@@ -12,20 +12,27 @@ struct TranscriptContentView: View {
     let showVocabHighlights: Bool
     let showSpeakerTurns: Bool
     let hasSpeakerSeparation: Bool
+    /// Opening-frame word ids from structural repetition (plum highlight).
+    var structuralWordIDs: Set<UUID> = []
+    var onPlayWord: ((TranscriptionWord) -> Void)? = nil
 
     var body: some View {
         if showSpeakerTurns && hasSpeakerSeparation {
             SpeakerTurnTranscriptView(
                 turns: turns,
                 showFillerHighlights: showFillerHighlights,
-                showVocabHighlights: showVocabHighlights
+                showVocabHighlights: showVocabHighlights,
+                structuralWordIDs: structuralWordIDs,
+                onPlayWord: onPlayWord
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         } else {
             HighlightedTranscriptView(
                 words: words,
                 showFillerHighlights: showFillerHighlights,
-                showVocabHighlights: showVocabHighlights
+                showVocabHighlights: showVocabHighlights,
+                structuralWordIDs: structuralWordIDs,
+                onPlayWord: onPlayWord
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
@@ -38,6 +45,8 @@ struct HighlightedTranscriptView: View {
     let words: [TranscriptionWord]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
+    var structuralWordIDs: Set<UUID> = []
+    var onPlayWord: ((TranscriptionWord) -> Void)? = nil
 
     var body: some View {
         FlowLayout(spacing: 4) {
@@ -45,7 +54,9 @@ struct HighlightedTranscriptView: View {
                 WordView(
                     word: word,
                     showFillerHighlight: showFillerHighlights && word.isFiller,
-                    showVocabHighlight: showVocabHighlights && word.isVocabWord
+                    showVocabHighlight: showVocabHighlights && word.isVocabWord,
+                    showStructuralHighlight: structuralWordIDs.contains(word.id),
+                    onPlay: onPlayWord.map { callback in { callback(word) } }
                 )
             }
         }
@@ -62,6 +73,8 @@ struct SpeakerTurnTranscriptView: View {
     let turns: [SpeakerTurn]
     let showFillerHighlights: Bool
     let showVocabHighlights: Bool
+    var structuralWordIDs: Set<UUID> = []
+    var onPlayWord: ((TranscriptionWord) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -80,7 +93,9 @@ struct SpeakerTurnTranscriptView: View {
                     HighlightedTranscriptView(
                         words: turn.words,
                         showFillerHighlights: showFillerHighlights,
-                        showVocabHighlights: showVocabHighlights
+                        showVocabHighlights: showVocabHighlights,
+                        structuralWordIDs: structuralWordIDs,
+                        onPlayWord: onPlayWord
                     )
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -98,13 +113,22 @@ struct WordView: View {
     let word: TranscriptionWord
     let showFillerHighlight: Bool
     let showVocabHighlight: Bool
+    var showStructuralHighlight: Bool = false
+    /// Only structural openings are tappable — whole-transcript tap was removed
+    /// because it felt like the recording playing itself while reading.
+    var onPlay: (() -> Void)? = nil
 
-    private var isHighlighted: Bool { showFillerHighlight || showVocabHighlight }
+    private var isHighlighted: Bool {
+        showFillerHighlight || showVocabHighlight || showStructuralHighlight
+    }
 
     /// Tuned tones, not `.orange`/`.green` — the system colors are pitched for
-    /// light UI and go muddy over the navy canvas.
+    /// light UI and go muddy over the navy canvas. Structural frames use plum
+    /// so they never read as hesitation fillers.
     private var highlightColor: Color {
-        showFillerHighlight ? AppColors.warning : AppColors.success
+        if showFillerHighlight { return AppColors.warning }
+        if showStructuralHighlight { return AppColors.categoryPlum }
+        return AppColors.success
     }
 
     private var foreground: Color {
@@ -112,13 +136,15 @@ struct WordView: View {
     }
 
     var body: some View {
-        // Plain prose — no tap gesture. Tapping the transcript used to start
-        // playback from the tapped word, which read as the recording playing
-        // itself whenever someone just wanted to read or select text.
-        // Playback starts only from explicit controls: the drawer's play
-        // button, the waveform scrubber, and the play-chips on fillers,
-        // swaps, and coach tips.
-        label
+        if showStructuralHighlight, let onPlay, word.start > 0, word.start.isFinite {
+            Button(action: onPlay) {
+                label
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play repeated opening, \(word.word)")
+        } else {
+            label
+        }
     }
 
     private var label: some View {

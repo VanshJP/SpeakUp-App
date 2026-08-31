@@ -258,7 +258,7 @@ Flags repeated clause-opening frames (structural repetition), not classic filler
 - Input: primary-speaker `[TranscriptionWord]` when diarization applied; gated by `trackFillerWords` in `SpeechAnalysisPipeline.analyze`.
 - Output: `[FillerWord]` with `kind == .structural` (label = opening frame, count, timestamps) merged into `SpeechAnalysis.fillerWords`. Counts toward `totalFillerCount` / filler ratio.
 - `TextAnalysisService` no longer rewards anaphora as craft and no longer double-taxes conciseness for repeated starts — the filler path owns that signal.
-- `LexiconInsightsEngine.sessionHits` also emits `.structural` crutch rows with swap suggestions.
+- `LexiconInsightsEngine.sessionHits` does **not** emit `.structural` rows — frames are tip + plum transcript highlights, not word swaps.
 
 ### `PitchAnalysisService` (F0 autocorrelation via vDSP)
 Zero dependencies beyond AVFoundation + Accelerate. Public API: `static func analyze(audioURL:) -> PitchMetrics?` and `static func pitchEnergyCorrelation(pitchContour:audioLevelSamples:) -> Int`.
