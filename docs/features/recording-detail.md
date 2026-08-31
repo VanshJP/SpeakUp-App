@@ -45,7 +45,7 @@ Four pure pieces feed one screen. All are `nonisolated` and take PODs, so all ar
 | Piece | Answers | Input |
 |-------|---------|-------|
 | `CoachPlanService` → `CoachPlan` | *What am I working on, and is it moving?* | rolling window of `SpeechAnalysis` + `ScoreWeights` |
-| `CoachEvidenceService` → `CoachEvidence` | *Which moment do I point at?* | this session's analysis + `transcriptionWords` |
+| `CoachEvidenceService` → `CoachEvidence` | *Which moment do I point at?* | this session's analysis + `transcriptionWords` (includes structural-repetition quote when present) |
 | `CoachingTipService` → `[CoachingTip]` | *What do I say about this session?* | analysis + `CoachingContext` |
 | `CoachingPrompt` | *What does the LLM get told?* | the same `CoachingContext` |
 

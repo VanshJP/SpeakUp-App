@@ -862,7 +862,7 @@ struct RecordingDetailView: View {
         let hasStructural = fillerWords.contains { $0.kind == .structural }
         let title = hasStructural ? "Fillers & Repeated Frames" : "Filler Words Used"
 
-        return VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader(title, icon: "exclamationmark.bubble.fill")
 
             GlassCard {
