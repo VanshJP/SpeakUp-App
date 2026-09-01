@@ -10,6 +10,7 @@ extension CrutchCategory {
         case .hedge: return AppColors.categoryIndigo
         case .intensifier: return AppColors.categoryCopper
         case .vague: return AppColors.categoryTeal
+        case .structural: return AppColors.categoryPlum
         }
     }
 }

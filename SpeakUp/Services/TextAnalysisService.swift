@@ -36,9 +36,10 @@ nonisolated enum TextAnalysisService {
         let craftScore = max(0, min(100, 35 + deviceBonus + transitionBonus + engagementBonus))
 
         let weakPhrasePenalty = min(35, weakPhraseCount * 4)
-        let repeatedStartPenalty = min(25, repeatedSentenceStartCount * 6)
+        // Repeated openings are owned by StructuralRepetitionDetector → filler
+        // path. Do not also tax conciseness here (double-penalty).
         let longSentencePenalty = min(15, countLongSentences(in: sentences) * 3)
-        let concisenessScore = max(0, min(100, 85 - weakPhrasePenalty - repeatedStartPenalty - longSentencePenalty))
+        let concisenessScore = max(0, min(100, 85 - weakPhrasePenalty - longSentencePenalty))
 
         let bridgeBonus = min(20, transitionVariety * 2)
         let questionBonus = min(25, rhetoricalQuestionCount * 8)
@@ -115,35 +116,16 @@ nonisolated enum TextAnalysisService {
     // MARK: - Rhetorical Devices
 
     private static func countRhetoricalDevices(text: String, words: [String]) -> Int {
-        detectTricolon(in: text) + detectAnaphora(in: text) + detectContrast(in: text)
+        // Anaphora intentionally omitted: in speech practice a repeated opening
+        // frame is a tic (StructuralRepetitionDetector → filler), not craft.
+        // Tricolon + contrast remain the positive rhetorical signals.
+        detectTricolon(in: text) + detectContrast(in: text)
     }
 
     private static func detectTricolon(in text: String) -> Int {
         let pattern = "\\b\\w+,\\s+\\w+,?\\s+and\\s+\\w+"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return 0 }
         return regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
-    }
-
-    private static func detectAnaphora(in text: String) -> Int {
-        let sentences = splitSentences(text)
-        guard sentences.count >= 3 else { return 0 }
-
-        var anaphoraCount = 0
-        var consecutiveMatches = 1
-
-        for i in 1..<sentences.count {
-            let prevStart = firstNWords(sentences[i - 1], n: 3)
-            let currStart = firstNWords(sentences[i], n: 3)
-
-            if !prevStart.isEmpty && prevStart == currStart {
-                consecutiveMatches += 1
-            } else {
-                if consecutiveMatches >= 3 { anaphoraCount += 1 }
-                consecutiveMatches = 1
-            }
-        }
-        if consecutiveMatches >= 3 { anaphoraCount += 1 }
-        return anaphoraCount
     }
 
     private static func detectContrast(in text: String) -> Int {

@@ -137,6 +137,13 @@ nonisolated enum CoachingTipService {
             return (lhs.dimension?.rawValue ?? "") < (rhs.dimension?.rawValue ?? "")
         }
 
+        // Quotable structural-repetition beats a mid-band clarity/pace dip —
+        // the listener heard the triad; that is the coachable moment even when
+        // the structure subscore itself looks fine.
+        if let index = candidates.firstIndex(where: { $0.title == "Vary the Opening" }) {
+            candidates.insert(candidates.remove(at: index), at: 0)
+        }
+
         // The plan's focus leads regardless of what this single session did.
         // Chasing whichever dimension dipped today is how users end up with
         // nine half-trained habits instead of one fixed one.
@@ -260,10 +267,17 @@ nonisolated enum CoachingTipService {
         let subscore = analysis.speechScore.subscores.fillerUsage
         guard subscore < CoachPlanService.masteryTarget else { return nil }
 
-        let percentage = analysis.fillerPercentage
-        let top = analysis.fillerWords.max(by: { $0.count < $1.count })
+        // Classic hesitation only — repeated frames get structureTip language
+        // and the structure practice route, not "cut your ums."
+        let classic = analysis.fillerWords.filter { $0.kind == .filler }
+        let percentage = classic.isEmpty
+            ? 0
+            : (analysis.totalWords > 0
+                ? Double(classic.reduce(0) { $0 + $1.count }) / Double(analysis.totalWords) * 100
+                : 0)
+        let top = classic.max(by: { $0.count < $1.count })
         let word = top?.word ?? "um"
-        let count = top?.count ?? analysis.totalFillerCount
+        let count = top?.count ?? 0
         guard count > 0 || percentage > 0 else { return nil }
 
         // The cluster is the coachable unit. Seven fillers spread over two
@@ -271,7 +285,7 @@ nonisolated enum CoachingTipService {
         // the listener noticed.
         var message: String
         if let burst = context.evidence.fillerBurst, burst.count >= 3 {
-            message = "\(burst.count) \"\(burst.word)\"s landed between \(CoachEvidence.stamp(burst.start)) and \(CoachEvidence.stamp(burst.end)), that stretch is where it was audible, not the \(analysis.totalFillerCount) across the whole take."
+            message = "\(burst.count) \"\(burst.word)\"s landed between \(CoachEvidence.stamp(burst.start)) and \(CoachEvidence.stamp(burst.end)), that stretch is where it was audible, not the \(count) across the whole take."
         } else if count > 0 {
             message = "\"\(word)\" \(count == 1 ? "once" : "\(count) times"), \(formatted(percentage))% of everything you said."
         } else {
@@ -435,6 +449,28 @@ nonisolated enum CoachingTipService {
     // MARK: - Structure
 
     private static func structureTip(analysis: SpeechAnalysis, context: CoachingContext) -> CoachingTip? {
+        // Repeated openings are a structure problem with a scrubbable moment —
+        // lead with them before generic shape advice, and route to Impromptu
+        // Sprint (list/shape practice), not Filler Elimination.
+        if let structural = context.evidence.structuralRepetition,
+           structural.count >= StructuralRepetitionDetector.minRunLength {
+            var message = "Same opening \"\(structural.frame)\" \(structural.count) times"
+            if !structural.example.isEmpty {
+                message += ": \"\(structural.example)\""
+            }
+            message += ". Vary the frame — name the list once, then the items."
+
+            return CoachingTip(
+                dimension: .structure,
+                icon: CoachDimension.structure.icon,
+                title: "Vary the Opening",
+                message: message,
+                teachingPoint: "List once, then items. Say the category in one sentence, then name each item without restarting the frame. \"I need socks, tomatoes, and eggs\" beats restarting \"I'm going to get…\" three times.",
+                suggestedPractice: CoachDimension.structure.practiceRoute,
+                evidenceTime: structural.start
+            )
+        }
+
         let subscore = analysis.speechScore.subscores.structure
         let substance = analysis.enhancedMetrics?.substanceScore
         // Structure is optional in the pipeline, but a thin answer is a
