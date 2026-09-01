@@ -61,6 +61,6 @@ Kinds: calming / visualization / progressive / affirmation. Sheet title is **Cal
 15. Pace-control drills score against `DrillViewModel.targetWPM` (from `UserSettings.resolvedTargetWPM`), not a fixed 130–170 band. Result copy names that target.
 16. Breathing circle scale is computed from accumulated phase time (`TimelineView`, paused when paused) — never `withAnimation`, which cannot be cancelled and desyncs from the clock.
 
-## Cross-links
+## Read-Aloud
 
-[today-library.md](./today-library.md) · [stories.md](./stories.md) · [read-aloud.md](./read-aloud.md) · [ui-design-system.md](./ui-design-system.md)
+Catalog passages plus **Practice anything** (type a word / sentence / paragraph, hear TTS, then score with the same alignment engine). See [read-aloud.md](./read-aloud.md).

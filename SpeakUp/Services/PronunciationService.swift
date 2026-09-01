@@ -12,13 +12,17 @@ class PronunciationService: NSObject {
         synthesizer.delegate = self
     }
 
+    /// Speak a word, sentence, or short paragraph for the user to model.
+    /// Longer text uses a slightly slower rate so each word stays clear.
     func speak(word: String) {
         stop()
         let cleaned = Self.stripPunctuation(word)
         guard !cleaned.isEmpty else { return }
 
         let utterance = AVSpeechUtterance(string: cleaned)
-        utterance.rate = 0.35
+        let tokenCount = cleaned.split(whereSeparator: { $0.isWhitespace }).count
+        // Slightly slower on multi-word text so each syllable stays modelable.
+        utterance.rate = tokenCount <= 3 ? 0.35 : 0.32
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         isSpeaking = true
         synthesizer.speak(utterance)
@@ -34,6 +38,8 @@ class PronunciationService: NSObject {
     static func canDefine(_ word: String) -> Bool {
         let cleaned = stripPunctuation(word)
         guard !cleaned.isEmpty else { return false }
+        // Dictionary lookup is for single tokens — not full sentences.
+        guard !cleaned.contains(where: { $0.isWhitespace }) else { return false }
         return UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: cleaned)
     }
 
