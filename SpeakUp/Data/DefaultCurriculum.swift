@@ -738,7 +738,7 @@ struct DefaultCurriculum {
                                 .keyTakeaway("Q&A is not a threat, it's an opportunity to demonstrate expertise and poise. With the CLEAR method, every question becomes a chance to shine."),
                             ])
                         ),
-                        .drill(id: "w8_l1_a2", title: "Rapid-fire Q&A drill", description: "Impromptu sprint simulating a Q&A environment. Get a random topic and answer as if it's a question from the audience. 30 seconds, no prep.", mode: "impromptuSprint"),
+                        .drill(id: "w8_l1_a2", title: "Rapid-fire Q&A drill", description: "Q&A sprint with CLEAR beats. Get a question and answer on the clock — clarify, answer, support, close.", mode: "qaSprint"),
                         .practice(id: "w8_l1_a3", title: "Q&A practice session", description: "Record a 60-second response to this question: \"What's the biggest challenge in your field right now, and how would you solve it?\" Use the CLEAR method.", duration: 60),
                     ]
                 ),

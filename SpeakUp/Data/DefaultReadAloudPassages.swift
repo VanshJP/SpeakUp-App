@@ -94,5 +94,43 @@ struct DefaultReadAloudPassages {
             difficulty: .hard,
             category: .tongueTwister
         ),
+
+        // MARK: - Minimal pairs (word hit, not phoneme claims)
+
+        ReadAloudPassage(
+            id: "pairs_ship_sheep",
+            title: "Ship / Sheep",
+            text: "Ship. Sheep. Ship. Sheep. I see a ship. I see a sheep. The ship left early. The sheep left early.",
+            difficulty: .easy,
+            category: .minimalPairs
+        ),
+        ReadAloudPassage(
+            id: "pairs_bat_bad",
+            title: "Bat / Bad",
+            text: "Bat. Bad. Bat. Bad. That bat is bad. A bad bat hung in the bag. Pat the bat. Pad the bag.",
+            difficulty: .easy,
+            category: .minimalPairs
+        ),
+        ReadAloudPassage(
+            id: "pairs_rice_lice",
+            title: "Rice / Lice",
+            text: "Rice. Lice. Rice. Lice. Light rice. Right lice. Collect the rice. Correct the list. Red rice. Led right.",
+            difficulty: .medium,
+            category: .minimalPairs
+        ),
+        ReadAloudPassage(
+            id: "pairs_thin_tin",
+            title: "Thin / Tin",
+            text: "Thin. Tin. Thin. Tin. A thin tin. Three thin tins. Think of tin. Tin is thin. Thank the team. Tank the theme.",
+            difficulty: .medium,
+            category: .minimalPairs
+        ),
+        ReadAloudPassage(
+            id: "pairs_vest_west",
+            title: "Vest / West",
+            text: "Vest. West. Vest. West. A very west vest. Vine wine. Very wary. Vest first. West first. Vote for the boat.",
+            difficulty: .hard,
+            category: .minimalPairs
+        ),
     ]
 }

@@ -11,6 +11,8 @@ struct ReadAloudSessionView: View {
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
     @State private var didAutoStartSession = false
+    /// Shadow mode: wait for Hear → Speak before starting the recognizer.
+    @State private var awaitingShadowStart = false
 
     /// Passage text is the one surface the reader must see to perform; it has
     /// to scale with their Dynamic Type setting like any other reading text.
@@ -58,10 +60,16 @@ struct ReadAloudSessionView: View {
             // spin up a ghost session on Done.
             guard !didAutoStartSession else { return }
             didAutoStartSession = true
-            await viewModel.startSession(passage: passage)
-            lastAutoScrolledWordIndex = 0
+            if viewModel.isShadowMode {
+                awaitingShadowStart = true
+                pronunciationService.speak(text: passage.text, rate: 0.42)
+            } else {
+                await viewModel.startSession(passage: passage)
+                lastAutoScrolledWordIndex = 0
+            }
         }
         .onDisappear {
+            pronunciationService.stop()
             if viewModel.sessionState == .listening {
                 viewModel.stopSession()
             }
@@ -310,37 +318,70 @@ struct ReadAloudSessionView: View {
 
     // MARK: - Bottom Controls
 
+
+    private var shadowControls: some View {
+        VStack(spacing: 10) {
+            Text("Shadow mode")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.7))
+            HStack(spacing: 12) {
+                GlassButton(title: pronunciationService.isSpeaking ? "Playing…" : "Hear again", style: .secondary, size: .medium) {
+                    pronunciationService.speak(text: passage.text, rate: 0.42)
+                }
+                .disabled(pronunciationService.isSpeaking)
+
+                GlassButton(title: "Start speaking", style: .primary, size: .medium) {
+                    pronunciationService.stop()
+                    awaitingShadowStart = false
+                    Task {
+                        await viewModel.startSession(passage: passage)
+                        lastAutoScrolledWordIndex = 0
+                    }
+                }
+                .disabled(pronunciationService.isSpeaking)
+            }
+        }
+        .padding(.bottom, 4)
+        .accessibilityElement(children: .contain)
+    }
+
     private var bottomControls: some View {
-        HStack(spacing: 20) {
-            // Mic indicator
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(viewModel.isListening ? AppColors.success : AppColors.scoreEmpty)
-                    .frame(width: 10, height: 10)
-                    .accessibilityHidden(true)
-                Text(viewModel.isListening ? "Listening..." : "Not listening")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 16) {
+            if awaitingShadowStart {
+                shadowControls
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Microphone \(viewModel.isListening ? "listening" : "not listening")")
 
-            Spacer()
+            HStack(spacing: 20) {
+                // Mic indicator
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(viewModel.isListening ? AppColors.success : AppColors.scoreEmpty)
+                        .frame(width: 10, height: 10)
+                        .accessibilityHidden(true)
+                    Text(viewModel.isListening ? "Listening..." : "Not listening")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Microphone \(viewModel.isListening ? "listening" : "not listening")")
 
-            GlassButton(
-                title: "Done",
-                icon: "stop.fill",
-                style: .primary,
-                size: .medium
-            ) {
-                Haptics.medium()
-                viewModel.stopSession()
+                Spacer()
+
+                GlassButton(
+                    title: "Done",
+                    icon: "stop.fill",
+                    style: .primary,
+                    size: .medium
+                ) {
+                    Haptics.medium()
+                    viewModel.stopSession()
+                }
+                // Disabled while the engine is still starting — a tap during the
+                // authorization await used to produce a ghost "0%" result and,
+                // worse, leave the engine starting underneath it.
+                .disabled(!viewModel.isListening || awaitingShadowStart)
+                .opacity(viewModel.isListening ? 1 : 0.5)
             }
-            // Disabled while the engine is still starting — a tap during the
-            // authorization await used to produce a ghost "0%" result and,
-            // worse, leave the engine starting underneath it.
-            .disabled(!viewModel.isListening)
-            .opacity(viewModel.isListening ? 1 : 0.5)
         }
     }
 }

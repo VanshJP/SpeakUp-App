@@ -13,12 +13,18 @@ class PronunciationService: NSObject {
     }
 
     func speak(word: String) {
-        stop()
-        let cleaned = Self.stripPunctuation(word)
-        guard !cleaned.isEmpty else { return }
+        speak(text: Self.stripPunctuation(word), rate: 0.35)
+    }
 
-        let utterance = AVSpeechUtterance(string: cleaned)
-        utterance.rate = 0.35
+    /// Speak a full phrase or passage (shadowing model). Keeps punctuation so
+    /// prosody has something to chew on; slower than system default.
+    func speak(text: String, rate: Float = 0.42) {
+        stop()
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let utterance = AVSpeechUtterance(string: trimmed)
+        utterance.rate = rate
         utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         isSpeaking = true
         synthesizer.speak(utterance)
