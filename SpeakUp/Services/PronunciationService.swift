@@ -12,8 +12,13 @@ class PronunciationService: NSObject {
         synthesizer.delegate = self
     }
 
+    /// Speak a word, sentence, or short paragraph for the user to model.
+    /// Longer text uses a slightly slower rate so each word stays clear.
     func speak(word: String) {
-        speak(text: Self.stripPunctuation(word), rate: 0.35)
+        let cleaned = Self.stripPunctuation(word)
+        let tokenCount = cleaned.split(whereSeparator: { $0.isWhitespace }).count
+        // Slightly slower on multi-word text so each syllable stays modelable.
+        speak(text: cleaned, rate: tokenCount <= 3 ? 0.35 : 0.32)
     }
 
     /// Speak a full phrase or passage (shadowing model). Keeps punctuation so
@@ -40,6 +45,8 @@ class PronunciationService: NSObject {
     static func canDefine(_ word: String) -> Bool {
         let cleaned = stripPunctuation(word)
         guard !cleaned.isEmpty else { return false }
+        // Dictionary lookup is for single tokens — not full sentences.
+        guard !cleaned.contains(where: { $0.isWhitespace }) else { return false }
         return UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: cleaned)
     }
 

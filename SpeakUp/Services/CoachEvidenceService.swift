@@ -11,8 +11,12 @@ import Foundation
 /// feedback they scroll past. Every field here is derived from data the
 /// pipeline already produces; nothing new is computed at analysis time.
 nonisolated struct CoachEvidence: Sendable {
-    /// The densest cluster of fillers: how many, and when.
+    /// The densest cluster of classic fillers: how many, and when.
     var fillerBurst: (count: Int, start: TimeInterval, end: TimeInterval, word: String)?
+    /// Repeated clause-opening frame (anaphora-as-tic) with a quotable stretch
+    /// the speaker can scrub to — e.g. frame "i'm going to get", example
+    /// "I'm going to get socks / …tomatoes / …eggs".
+    var structuralRepetition: (frame: String, count: Int, start: TimeInterval, example: String)?
     /// The speaker's actual first words — where hesitation is most audible and
     /// most fixable.
     var opening: String?
@@ -39,6 +43,14 @@ nonisolated struct CoachEvidence: Sendable {
         var lines: [String] = []
         if let burst = fillerBurst, burst.count >= 2 {
             lines.append("- \(burst.count) \"\(burst.word)\"s clustered between \(Self.stamp(burst.start)) and \(Self.stamp(burst.end)).")
+        }
+        if let structural = structuralRepetition, structural.count >= 3 {
+            var line = "- Repeated the opening \"\(structural.frame)\" \(structural.count) times"
+            if !structural.example.isEmpty {
+                line += ": \"\(structural.example)\""
+            }
+            line += "."
+            lines.append(line)
         }
         if let opening {
             lines.append("- Opened with: \"\(opening)\"\(openingIsHesitant ? " (starts on a filler)" : "").")
@@ -87,7 +99,9 @@ nonisolated enum CoachEvidenceService {
     ) -> CoachEvidence {
         var evidence = CoachEvidence()
 
-        evidence.fillerBurst = densestFillerBurst(in: analysis.fillerWords)
+        // Classic hesitation fillers only — structural frames have their own field.
+        let classicFillers = analysis.fillerWords.filter { $0.kind == .filler }
+        evidence.fillerBurst = densestFillerBurst(in: classicFillers)
 
         // Scoring already decided which words are the speaker's; coaching must
         // not quote a bystander's sentence back at them as their opening.
@@ -98,6 +112,11 @@ nonisolated enum CoachEvidenceService {
             evidence.closing = phrase(from: spoken.suffix(10))
             evidence.longestHesitation = longestHesitation(in: spoken)
         }
+
+        evidence.structuralRepetition = structuralRepetitionEvidence(
+            from: analysis.fillerWords,
+            words: spoken
+        )
 
         if let series = analysis.wpmTimeSeries, series.count >= 3 {
             // Segments with almost no words in them report wild WPM off a
@@ -125,9 +144,64 @@ nonisolated enum CoachEvidenceService {
         return evidence
     }
 
+    // MARK: - Structural repetition
+
+    /// Strongest repeated opening frame, with a scrubbable quote of the run.
+    private static func structuralRepetitionEvidence(
+        from fillers: [FillerWord],
+        words: [TranscriptionWord]
+    ) -> (frame: String, count: Int, start: TimeInterval, example: String)? {
+        guard let hit = fillers
+            .filter({ $0.kind == .structural && $0.count >= StructuralRepetitionDetector.minRunLength })
+            .max(by: { $0.count < $1.count })
+        else { return nil }
+
+        let stamps = hit.timestamps.sorted()
+        guard let start = stamps.first else { return nil }
+        let example = structuralExample(stamps: stamps, words: words)
+        return (hit.word, hit.count, start, example)
+    }
+
+    /// Up to three clause clips joined with " / " so the tip can quote the triad.
+    private static func structuralExample(
+        stamps: [TimeInterval],
+        words: [TranscriptionWord]
+    ) -> String {
+        guard !words.isEmpty else { return "" }
+        let clips = stamps.prefix(3).compactMap { stamp -> String? in
+            guard let startIdx = nearestWordIndex(for: stamp, in: words) else { return nil }
+            let endIdx = min(words.count, startIdx + 6)
+            let slice = words[startIdx..<endIdx]
+            let text = slice
+                .map { $0.word.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespaces)
+            return text.isEmpty ? nil : text
+        }
+        return clips.joined(separator: " / ")
+    }
+
+    private static func nearestWordIndex(for stamp: TimeInterval, in words: [TranscriptionWord]) -> Int? {
+        var bestIndex: Int?
+        var bestDelta = TimeInterval.greatestFiniteMagnitude
+        for (index, word) in words.enumerated() {
+            let delta = abs(word.start - stamp)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIndex = index
+            }
+            if word.start > stamp + 0.08 { break }
+        }
+        if let bestIndex, bestDelta <= 0.08 {
+            return bestIndex
+        }
+        return words.firstIndex(where: { $0.start >= stamp - 0.01 })
+    }
+
     // MARK: - Filler clustering
 
-    /// The tightest run of one filler word inside a sliding window.
+    /// The tightest run of one classic filler word inside a sliding window.
     ///
     /// A raw count says the user said "um" seven times in two minutes, which
     /// sounds fine. The cluster says four of them landed in twelve seconds,

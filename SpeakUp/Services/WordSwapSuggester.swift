@@ -317,6 +317,10 @@ nonisolated enum WordSwapSuggester {
             return hedgeCut()
         case .vague:
             return [option("name the specifics", cue: "say the exact thing")]
+        case .structural:
+            return [option("vary the opening", cue: "same frame three times reads as a tic"),
+                    option("name the list once, then the items"),
+                    option("lead with the conclusion")]
         }
     }
 

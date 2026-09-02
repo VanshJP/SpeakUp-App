@@ -659,10 +659,21 @@ nonisolated enum SpeechAnalysisPipeline {
             return FillerWord(
                 word: entry.key,
                 count: value.count,
-                timestamps: value.timestamps
+                timestamps: value.timestamps,
+                kind: .filler
             )
         }
-        let fillerWords: [FillerWord] = unsortedFillerWords.sorted { lhs, rhs in
+
+        // Structural repetition (anaphora-as-tic) — same FillerWord shape so
+        // the existing filler chips/UI light up without a second render path.
+        // Honor trackFillerWords: off means no filler-shaped feedback at all.
+        // Uses scoringWords (already primary-speaker filtered when diarization
+        // applied), so interviewer/coach turns never contribute.
+        let structuralHits = trackFillerWords
+            ? StructuralRepetitionDetector.detect(in: scoringWords)
+            : []
+        let mergedFillers = mergeFillerWords(unsortedFillerWords + structuralHits)
+        let fillerWords: [FillerWord] = mergedFillers.sorted { lhs, rhs in
             // Dictionary iteration order is undefined. Count ties need a
             // stable key or identical analyses can reorder rows between runs.
             if lhs.count != rhs.count {
@@ -848,6 +859,28 @@ nonisolated enum SpeechAnalysisPipeline {
     }
 
     // MARK: - Content Density
+
+    /// Collapse duplicate filler labels (classic fillers + structural frames)
+    /// into one row per word+kind with combined counts and timestamps.
+    private static func mergeFillerWords(_ items: [FillerWord]) -> [FillerWord] {
+        var aggregates: [String: (word: String, kind: FillerHitKind, count: Int, timestamps: [TimeInterval])] = [:]
+        for item in items {
+            let key = "\(item.kind.rawValue)\u{1f}\(item.word.lowercased())"
+            var entry = aggregates[key]
+                ?? (word: item.word.lowercased(), kind: item.kind, count: 0, timestamps: [])
+            entry.count += item.count
+            entry.timestamps.append(contentsOf: item.timestamps)
+            aggregates[key] = entry
+        }
+        return aggregates.map { _, value in
+            FillerWord(
+                word: value.word,
+                count: value.count,
+                timestamps: value.timestamps.sorted(),
+                kind: value.kind
+            )
+        }
+    }
 
     private static func contentDensityScore(words: [TranscriptionWord]) -> Int {
         let nonFillerWords = words.filter { !$0.isFiller }

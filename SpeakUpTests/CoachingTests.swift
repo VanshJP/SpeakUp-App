@@ -306,6 +306,60 @@ struct CoachingTipTests {
         )
         #expect(tips.contains { $0.message.contains("0:38") && $0.message.contains("0:52") })
     }
+
+    @Test func structuralTipUsesStructureCopyAndPracticeRoute() throws {
+        var evidence = CoachEvidence()
+        evidence.structuralRepetition = (
+            frame: "i'm going to get",
+            count: 3,
+            start: 4.0,
+            example: "I'm going to get socks / I'm going to get tomatoes / I'm going to get eggs"
+        )
+        let tips = CoachingTipService.generateTips(
+            from: analysis(
+                filler: 40,
+                structure: 90,
+                fillerWords: [
+                    FillerWord(
+                        word: "i'm going to get",
+                        count: 3,
+                        timestamps: [4, 8, 12],
+                        kind: .structural
+                    )
+                ]
+            ),
+            context: CoachingContext(evidence: evidence)
+        )
+        let tip = try #require(tips.first { $0.dimension == .structure })
+        #expect(tip.title == "Vary the Opening")
+        #expect(tip.message.contains("i'm going to get"))
+        #expect(tip.message.contains("socks"))
+        #expect(tip.suggestedPractice == CoachDimension.structure.practiceRoute)
+        #expect(tip.suggestedPractice != CoachDimension.fillers.practiceRoute)
+        #expect(tip.evidenceTime == 4.0)
+        // Must not also moralize structural frames as classic filler tips.
+        #expect(tips.first { $0.dimension == .fillers } == nil)
+    }
+
+    @Test func classicFillerTipIgnoresStructuralRows() throws {
+        let tips = CoachingTipService.generateTips(
+            from: analysis(
+                filler: 40,
+                fillerWords: [
+                    FillerWord(word: "um", count: 4, timestamps: [1, 2, 3, 4], kind: .filler),
+                    FillerWord(
+                        word: "i'm going to get",
+                        count: 3,
+                        timestamps: [10, 20, 30],
+                        kind: .structural
+                    )
+                ]
+            )
+        )
+        let filler = try #require(tips.first { $0.dimension == .fillers })
+        #expect(filler.message.contains("um"))
+        #expect(!filler.message.contains("i'm going to get"))
+    }
 }
 
 // MARK: - Evidence
@@ -323,6 +377,67 @@ struct CoachEvidenceTests {
         #expect(evidence.fillerBurst?.count == 4)
         #expect(evidence.fillerBurst?.start == 40)
         #expect(evidence.fillerBurst?.end == 52)
+    }
+
+    @Test func structuralBurstDoesNotPolluteClassicFillerBurst() {
+        // Classic ums must sit inside the 15s burst window; structural stamps
+        // stay out of fillerBurst even when denser.
+        let fillers = [
+            FillerWord(word: "um", count: 3, timestamps: [10, 12, 14], kind: .filler),
+            FillerWord(
+                word: "i'm going to get",
+                count: 3,
+                timestamps: [20, 25, 30],
+                kind: .structural
+            )
+        ]
+        let evidence = CoachEvidenceService.evidence(
+            for: analysis(fillerWords: fillers),
+            words: nil
+        )
+        #expect(evidence.fillerBurst?.word == "um")
+        #expect(evidence.fillerBurst?.count == 3)
+        #expect(evidence.structuralRepetition?.frame == "i'm going to get")
+        #expect(evidence.structuralRepetition?.count == 3)
+        #expect(evidence.structuralRepetition?.start == 20)
+    }
+
+    @Test func structuralEvidenceQuotesTheTriad() {
+        var cursor: TimeInterval = 0
+        var spoken: [TranscriptionWord] = []
+        func append(_ tokens: [String]) -> TimeInterval {
+            let stamp = cursor
+            for token in tokens {
+                let start = cursor
+                let end = start + 0.25
+                spoken.append(TranscriptionWord(
+                    word: token, start: start, end: end,
+                    isFiller: false, isPrimarySpeaker: true
+                ))
+                cursor = end + 0.1
+            }
+            cursor += 0.5
+            return stamp
+        }
+        let t0 = append(["I'm", "going", "to", "get", "socks,"])
+        let t1 = append(["I'm", "going", "to", "get", "tomatoes,"])
+        let t2 = append(["I'm", "going", "to", "get", "eggs."])
+
+        let fillers = [
+            FillerWord(
+                word: "i'm going to get",
+                count: 3,
+                timestamps: [t0, t1, t2],
+                kind: .structural
+            )
+        ]
+        let evidence = CoachEvidenceService.evidence(
+            for: analysis(fillerWords: fillers),
+            words: spoken
+        )
+        #expect(evidence.structuralRepetition?.example.contains("socks") == true)
+        #expect(evidence.structuralRepetition?.example.contains("/") == true)
+        #expect(evidence.promptLines.contains { $0.contains("i'm going to get") })
     }
 
     @Test func ignoresPausesAfterFullStops() {

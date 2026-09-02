@@ -66,6 +66,36 @@
             endingLineNumber = "414"
             landmarkName = "ContentView"
             landmarkType = "14">
+            <Locations>
+               <Location
+                  uuid = "FB57C357-E3F4-4019-9541-B2C2EAC8E546 - 38c822cbcb25c0d5"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for closure #1 () async -&gt; () in closure #1 (SpeakUp.OnboardingResult) -&gt; () in closure #20 () -&gt; SpeakUp.OnboardingView in SpeakUp.ContentView.body.getter : some"
+                  moduleName = "SpeakUp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/vanshpatel/SpeakUp/SpeakUp/Views/ContentView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "415"
+                  endingLineNumber = "415">
+               </Location>
+               <Location
+                  uuid = "FB57C357-E3F4-4019-9541-B2C2EAC8E546 - b5f82cfc02f05fd1"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(7) suspend resume partial function for closure #1 () async -&gt; () in closure #1 (SpeakUp.OnboardingResult) -&gt; () in closure #20 () -&gt; SpeakUp.OnboardingView in SpeakUp.ContentView.body.getter : some"
+                  moduleName = "SpeakUp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/vanshpatel/SpeakUp/SpeakUp/Views/ContentView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "415"
+                  endingLineNumber = "415">
+               </Location>
+            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

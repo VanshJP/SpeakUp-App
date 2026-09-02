@@ -3,9 +3,11 @@ import SwiftUI
 struct ReadAloudSelectionView: View {
     @State private var viewModel = ReadAloudViewModel()
     @State private var showingSession = false
-    @State private var showingComposer = false
     @State private var customText = ""
     @State private var shadowMode = false
+    @State private var pronunciationService = PronunciationService()
+    @State private var showingDictionary = false
+    @FocusState private var customFieldFocused: Bool
 
     /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
     var presentation: ToolPresentation = .sheet
@@ -16,41 +18,21 @@ struct ReadAloudSelectionView: View {
         Double(viewModel.passages.map(\.wordCount).max() ?? 0)
     }
 
+    private var trimmedCustomText: String {
+        customText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canPracticeCustom: Bool {
+        ReadAloudPassage.custom(from: customText) != nil
+    }
+
+    private var canDefineCustom: Bool {
+        PronunciationService.canDefine(trimmedCustomText)
+    }
+
     var body: some View {
         ToolPage(tool: .readAloud, presentation: presentation) {
-            // Practice anything — type a word, sentence, or paragraph.
-            Button {
-                Haptics.light()
-                showingComposer = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "pencil.line")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(AppColors.toolReadAloud)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(AppColors.toolReadAloud.opacity(0.15)))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Practice anything")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text("Type a word, sentence, or paragraph")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Practice anything")
-            .accessibilityHint("Opens a text field to practice your own words")
+            customPracticeCard
 
             Toggle(isOn: $shadowMode) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -96,7 +78,7 @@ struct ReadAloudSelectionView: View {
                     withAnimation(AppMotion.slide) { viewModel.selectedCategory = nil }
                 }
 
-                ForEach(ReadAloudCategory.allCases) { category in
+                ForEach(ReadAloudCategory.catalogCases) { category in
                     FilterPill(
                         title: category.displayName,
                         icon: category.icon,
@@ -147,6 +129,8 @@ struct ReadAloudSelectionView: View {
                         ) {
                             Haptics.medium()
                             viewModel.isShadowMode = shadowMode
+                            customFieldFocused = false
+                            pronunciationService.stop()
                             viewModel.selectedPassage = passage
                             showingSession = true
                         }
@@ -159,53 +143,119 @@ struct ReadAloudSelectionView: View {
                 ReadAloudSessionView(viewModel: viewModel, passage: passage)
             }
         }
-        .sheet(isPresented: $showingComposer) {
-            NavigationStack {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Type a word, sentence, or short paragraph to practice.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    TextEditor(text: $customText)
-                        .frame(minHeight: 140)
-                        .padding(12)
-                        .scrollContentBackground(.hidden)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        )
-                    Toggle(isOn: $shadowMode) {
-                        Text("Shadow mode")
-                    }
-                    .tint(AppColors.toolReadAloud)
-                    Spacer()
-                }
-                .padding()
-                .background(AppBackground(style: .subtle))
-                .navigationTitle("Practice anything")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showingComposer = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Start") {
-                            let trimmed = customText.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !trimmed.isEmpty else { return }
-                            Haptics.medium()
-                            viewModel.isShadowMode = shadowMode
-                            viewModel.selectedPassage = ReadAloudPassage.custom(text: trimmed)
-                            showingComposer = false
-                            showingSession = true
-                        }
-                        .disabled(customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .fontWeight(.semibold)
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
+        .sheet(isPresented: $showingDictionary) {
+            DictionaryView(term: trimmedCustomText)
+        }
+        .onDisappear {
+            pronunciationService.stop()
         }
     }
 
+    // MARK: - Custom practice
+
+    /// Type a word, sentence, or short paragraph — hear the model, look it up,
+    /// then run the same alignment scoring as a catalog passage.
+    private var customPracticeCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: "text.cursor")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.toolReadAloud)
+
+                    Text("Practice anything")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                Text("Type a word, sentence, or short paragraph. Hear it, then say it back.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextField(
+                    "e.g. entrepreneurial — or a full sentence",
+                    text: $customText,
+                    axis: .vertical
+                )
+                .lineLimit(2...6)
+                .textInputAutocapitalization(.sentences)
+                .autocorrectionDisabled(false)
+                .focused($customFieldFocused)
+                .padding(12)
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.06))
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        Haptics.light()
+                        customFieldFocused = false
+                        pronunciationService.speak(word: trimmedCustomText)
+                    } label: {
+                        Label(
+                            pronunciationService.isSpeaking ? "Playing" : "Hear it",
+                            systemImage: pronunciationService.isSpeaking
+                                ? "speaker.wave.3.fill"
+                                : "speaker.wave.2.fill"
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(canPracticeCustom ? AppColors.toolReadAloud : .secondary)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(AppColors.toolReadAloud.opacity(canPracticeCustom ? 0.15 : 0.06))
+                    }
+                    .disabled(!canPracticeCustom || pronunciationService.isSpeaking)
+                    .accessibilityLabel("Hear pronunciation")
+
+                    if canDefineCustom {
+                        Button {
+                            Haptics.light()
+                            pronunciationService.stop()
+                            showingDictionary = true
+                        } label: {
+                            Label("Define", systemImage: "book.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppColors.toolReadAloud)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppColors.toolReadAloud.opacity(0.15))
+                        }
+                        .accessibilityLabel("View dictionary definition")
+                    }
+                }
+
+                GlassButton(
+                    title: "Practice saying it",
+                    icon: "mic.fill",
+                    style: .primary,
+                    fullWidth: true
+                ) {
+                    startCustomPractice()
+                }
+                .disabled(!canPracticeCustom)
+                .opacity(canPracticeCustom ? 1 : 0.45)
+            }
+        }
+    }
+
+    private func startCustomPractice() {
+        guard let passage = ReadAloudPassage.custom(from: customText) else { return }
+        Haptics.medium()
+        customFieldFocused = false
+        pronunciationService.stop()
+        viewModel.isShadowMode = shadowMode
+        viewModel.selectedPassage = passage
+        showingSession = true
+    }
 }
 
 // MARK: - Cost

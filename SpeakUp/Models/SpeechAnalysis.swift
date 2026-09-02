@@ -52,16 +52,40 @@ nonisolated struct TranscriptionWord: Codable, Identifiable, Equatable {
     }
 }
 
+/// Distinguishes classic hesitation fillers from structural-repetition frames
+/// so one list UI can label them honestly without a second render path.
+nonisolated enum FillerHitKind: String, Codable, Sendable, Equatable {
+    case filler
+    case structural
+}
+
 nonisolated struct FillerWord: Codable, Identifiable, Sendable, Equatable {
     var id: UUID = UUID()
     let word: String
     var count: Int
     var timestamps: [TimeInterval]
-    
-    init(word: String, count: Int = 0, timestamps: [TimeInterval] = []) {
+    /// `.filler` for um/like; `.structural` for repeated opening frames.
+    var kind: FillerHitKind
+
+    init(
+        word: String,
+        count: Int = 0,
+        timestamps: [TimeInterval] = [],
+        kind: FillerHitKind = .filler
+    ) {
         self.word = word
         self.count = count
         self.timestamps = timestamps
+        self.kind = kind
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        word = try container.decode(String.self, forKey: .word)
+        count = try container.decode(Int.self, forKey: .count)
+        timestamps = try container.decodeIfPresent([TimeInterval].self, forKey: .timestamps) ?? []
+        kind = try container.decodeIfPresent(FillerHitKind.self, forKey: .kind) ?? .filler
     }
 }
 

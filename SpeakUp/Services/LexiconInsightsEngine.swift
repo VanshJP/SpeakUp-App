@@ -38,6 +38,7 @@ nonisolated enum CrutchCategory: String, Sendable {
     case hedge
     case intensifier
     case vague
+    case structural
 
     var label: String {
         switch self {
@@ -45,6 +46,7 @@ nonisolated enum CrutchCategory: String, Sendable {
         case .hedge: return "Hedge"
         case .intensifier: return "Softener"
         case .vague: return "Vague"
+        case .structural: return "Repeated frame"
         }
     }
 }
@@ -211,6 +213,7 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
         case .hedge: return ["state it directly"]
         case .intensifier: return ["one stronger word", "cut it"]
         case .vague: return ["name the specifics"]
+        case .structural: return ["vary the opening", "name the list once"]
         }
     }
 
@@ -727,6 +730,9 @@ nonisolated enum LexiconInsightsEngine {
                 note(text, .vague, at: offset..<offset + 1)
             }
         }
+
+        // Structural repetition frames are coached via tip + plum transcript
+        // highlights — not as word-swap rows (a frame is not a crutch word).
 
         return counts.map { word, count -> SessionWordHit in
             let category = categories[word] ?? .filler

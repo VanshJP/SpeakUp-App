@@ -15,7 +15,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Coaching / next | `CoachPlanService`, `CoachEvidenceService`, `CoachingTipService`, `CoachingPrompt`, `CoachingTipsView`, `NextStepCard`, `TakeComparisonCard`, `ListenBackEncouragementView` |
 | Coach note | `CoachMomentService.evaluateAfterSession` → `CoachMomentCard` above next step (axis mark); a soft landing replaces the next-step card so retry is never duplicated. See [coach-moments.md](./coach-moments.md). |
 | Word workout result | `VocabChallengeResultCard` on the breakdown tab when today's spotlight words exist |
-| Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each occurrence a playable stamp, each habit carrying swap suggestions |
+| Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each occurrence a playable stamp, each habit carrying swap suggestions. Structural repetition is **not** a swap row: tip + plum transcript highlight own that signal. |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
 | Share cards | `ShareCardSheet` (picker + preview), `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter`, `SharedPromptLink`, `SharedPromptResolver` |
 | Inbound challenge | `SharedChallengeStore`, `FriendChallengeCard` (Today), countdown chrome in `CountdownOverlayView` |
@@ -45,7 +45,7 @@ Four pure pieces feed one screen. All are `nonisolated` and take PODs, so all ar
 | Piece | Answers | Input |
 |-------|---------|-------|
 | `CoachPlanService` → `CoachPlan` | *What am I working on, and is it moving?* | rolling window of `SpeechAnalysis` + `ScoreWeights` |
-| `CoachEvidenceService` → `CoachEvidence` | *Which moment do I point at?* | this session's analysis + `transcriptionWords` |
+| `CoachEvidenceService` → `CoachEvidence` | *Which moment do I point at?* | this session's analysis + `transcriptionWords` (includes structural-repetition quote when present) |
 | `CoachingTipService` → `[CoachingTip]` | *What do I say about this session?* | analysis + `CoachingContext` |
 | `CoachingPrompt` | *What does the LLM get told?* | the same `CoachingContext` |
 

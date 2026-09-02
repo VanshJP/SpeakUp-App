@@ -12,6 +12,7 @@ Scores are progressive and achievable. A beginner's natural 15–20 s answer lan
 - `SpeakUp/Services/SpeechScoringEngine.swift` — enhanced metrics, substance multiplier, gibberish gate, subscore helpers
 - `SpeakUp/Services/RecordingProcessingCoordinator.swift` — singleton job queue wrapping transcription + analysis + LLM pass
 - `SpeakUp/Services/FillerDetectionPipeline.swift` — shared pause-aware filler tagging
+- `SpeakUp/Services/StructuralRepetitionDetector.swift` — anaphora-as-tic → `FillerWord` hits
 - `SpeakUp/Services/WhisperService.swift`, `DictationService.swift` — transcription backends
 - `SpeakUp/Services/SpeechIsolationService.swift` — audio preprocessing (high-pass + noise gate)
 - `SpeakUp/Services/ConversationIsolationService.swift` — primary-speaker labeling
@@ -247,6 +248,18 @@ Shared across WhisperService, SpeechService, LiveTranscriptionService — remove
 - Pass 2: multi-word phrase detection via `FillerWordList.isFillerPhrase(word[i], word[i+1])`. Both words are then marked `isFiller`.
 - Public API: `tagFillers(in:)`, `tagFillers(in:config:)`, plus `countFillers(words:timestamps:durations:)` overloads for legacy callers.
 
+### `StructuralRepetitionDetector` (anaphora-as-tic)
+Flags repeated clause-opening frames (structural repetition), not classic fillers. On-device only.
+
+- Constants: `minOpeningNGram = 3`, `maxOpeningNGram = 5`, `minRunLength = 3`, `maxInterveningClauses = 1`, `clausePauseThreshold = 0.4 s`.
+- Clause split on commas, sentence-final `.?!;`, coordinating `and`/`but`/`or`, **and pause gaps** (Whisper often omits commas).
+- Opening match: normalized exact prefix (lowercase, punct stripped, common contractions expanded — `I'm` ↔ `I am`).
+- Intentional-list allowlist: openings starting with `first`/`second`/`third`/… are never flagged (curriculum rhetoric, not a tic).
+- Input: primary-speaker `[TranscriptionWord]` when diarization applied; gated by `trackFillerWords` in `SpeechAnalysisPipeline.analyze`.
+- Output: `[FillerWord]` with `kind == .structural` (label = opening frame, count, timestamps) merged into `SpeechAnalysis.fillerWords`. Counts toward `totalFillerCount` / filler ratio.
+- `TextAnalysisService` no longer rewards anaphora as craft and no longer double-taxes conciseness for repeated starts — the filler path owns that signal.
+- `LexiconInsightsEngine.sessionHits` does **not** emit `.structural` rows — frames are tip + plum transcript highlights, not word swaps.
+
 ### `PitchAnalysisService` (F0 autocorrelation via vDSP)
 Zero dependencies beyond AVFoundation + Accelerate. Public API: `static func analyze(audioURL:) -> PitchMetrics?` and `static func pitchEnergyCorrelation(pitchContour:audioLevelSamples:) -> Int`.
 
@@ -282,14 +295,15 @@ craftScore     = 35 + min(30, rhetorical × 10)
                     + min(30, transitionVariety × 5)
                     + min(20, rhetoricalQ × 6) + min(12, callToAction × 4)
 concisenessScore = 85 − min(35, weakPhrase × 4)
-                       − min(25, repeatedStarts × 6)
                        − min(15, longSentences × 3)     // sentence ≥ 28 words
+                       // repeatedStarts counted for metrics but not penalized —
+                       // StructuralRepetitionDetector owns that via filler path
 engagementScore  = 35 + min(20, transitionVariety × 2)
                       + min(25, rhetoricalQ × 8)
                       + min(20, callToAction × 10)
 ```
 
-Fixed word lists: ~12 hedge words + hedge phrases, ~45 power words, 10 weak phrases, ~35 transitions, 8 call-to-action patterns. Rhetorical device detection looks for tricolon (`\b\w+,\s+\w+,?\s+and\s+\w+`), anaphora (≥3 consecutive sentences with same first 3 words), contrast (NOT/BUT, INSTEAD OF, RATHER THAN).
+Fixed word lists: ~12 hedge words + hedge phrases, ~45 power words, 10 weak phrases, ~35 transitions, 8 call-to-action patterns. Rhetorical device detection looks for tricolon (`\b\w+,\s+\w+,?\s+and\s+\w+`) and contrast (NOT/BUT, INSTEAD OF, RATHER THAN). Anaphora is **not** craft here — it is flagged as a structural tic by `StructuralRepetitionDetector`.
 
 ## Context-aware relevance (`PromptRelevanceService`)
 
@@ -412,8 +426,8 @@ Scoring answers *how did that go*; the coaching layer answers *what do I do abou
 
 - `CoachDimension` — one case per subscore, carrying its title, icon, named technique, drill route, and frozen `analyticsSlug`.
 - `CoachPlanService.plan(window:weights:)` — picks the **focus** from a rolling window as the largest weighted deficit, `(85 − windowMean) × userWeight`, and reports a newest-half-vs-oldest-half trend once ≥ 4 scored sessions exist. Pure; no persisted state, because averaging the window already makes the focus sticky.
-- `CoachEvidenceService.evidence(for:words:)` — the quotable moments: densest filler cluster, opening and closing lines, longest mid-thought hesitation, pace swing, crutch phrase, restart. Primary-speaker words only.
-- `CoachingTipService.generateTips(from:context:)` — ranks tips by weighted deficit, pins the plan's focus first, caps at 3, and keeps signal-quality caveats out of the coaching slots.
+- `CoachEvidenceService.evidence(for:words:)` — the quotable moments: densest classic-filler cluster, **structural-repetition triad** (frame + example quote + stamp), opening and closing lines, longest mid-thought hesitation, pace swing, crutch phrase, restart. Primary-speaker words only.
+- `CoachingTipService.generateTips(from:context:)` — ranks tips by weighted deficit, pins the plan's focus first, caps at 3, and keeps signal-quality caveats out of the coaching slots. Repeated openings get **structure** tip copy (“Vary the Opening”) and Impromptu Sprint — never Filler Elimination. Classic `um`/`like` tips ignore `FillerHitKind.structural` rows.
 - `CoachingPrompt` — the single system + user prompt for **both** LLM backends. Carries the focus (pinned to tip one), its trend, the user's `resolvedTargetWPM`, the evidence lines, the session's top crutch habits from the lexicon engine, a type-specific coaching angle (`sessionKind`), and the reliability caveats. Adds an anti-praise/anti-vagueness rule block, a worked example tip, and head-and-tail transcript excerpts. Per-backend differences: transcript budget (1600 chars Apple Intelligence, 600 local, 300 when the local profile runs a 512-token window) and `compact` mode, which drops the example/benchmarks blocks for small-context Gemma builds.
 - `CoachingInsightSanitizer` — pure post-processing for model output: bullet stripping, dedupe, cap at 3, filler-as-technique rejection, and the specificity gate (metric+number, or two-plus content-word overlap anywhere in the transcript). Lives beside the prompt so both are testable without a model (`CoachingTests.swift`); `LLMService` owns only the fallback decision.
 
