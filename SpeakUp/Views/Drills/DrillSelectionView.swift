@@ -58,8 +58,8 @@ struct DrillSelectionView: View {
                         // Impromptu picks its topic now so the prep countdown
                         // can show it — that window is the thinking time the
                         // format promises.
-                        if mode == .impromptuSprint {
-                            viewModel.prepareImpromptuTopic()
+                        if mode.preparesPromptUpFront {
+                            viewModel.preparePrompt(for: mode)
                         }
                         selectedDrillMode = mode
                         showingCountdown = true
@@ -80,7 +80,7 @@ struct DrillSelectionView: View {
                     look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
                     backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
                     prepTitle: mode.title,
-                    prepSubtitle: mode == .impromptuSprint ? viewModel.impromptuPrompt : mode.description,
+                    prepSubtitle: mode.preparesPromptUpFront ? viewModel.impromptuPrompt : mode.description,
                     onComplete: {
                         showingCountdown = false
                         viewModel.targetWPM = userSettings.first.resolvedTargetWPM

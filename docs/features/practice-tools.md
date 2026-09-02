@@ -31,7 +31,9 @@ Categories: breathing / tongue twisters / vocal / articulation.
 | VM | `DrillViewModel` |
 | Model | `DrillMode.swift` — `outcome` + duration `description`, `AppColors` identity tones |
 
-Modes: filler elimination / pace control / pause practice / impromptu sprint.
+Modes: filler elimination / pace control / pause practice / impromptu sprint (PREP cues) / vocal variety / emphasis / Q&A sprint.
+
+`CoachDimension.vocalVariety` → `vocalVariety` drill; `delivery` → `emphasis`. Impromptu and Q&A show timed structure beats (PREP / CLEAR-lite). Vocal Variety scores post-stop via `PitchAnalysisService` on the discarded take.
 
 ## Confidence (Calm)
 

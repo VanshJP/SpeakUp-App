@@ -4,6 +4,7 @@ struct ReadAloudSelectionView: View {
     @State private var viewModel = ReadAloudViewModel()
     @State private var showingSession = false
     @State private var customText = ""
+    @State private var shadowMode = false
     @State private var pronunciationService = PronunciationService()
     @State private var showingDictionary = false
     @FocusState private var customFieldFocused: Bool
@@ -32,6 +33,18 @@ struct ReadAloudSelectionView: View {
     var body: some View {
         ToolPage(tool: .readAloud, presentation: presentation) {
             customPracticeCard
+
+            Toggle(isOn: $shadowMode) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Shadow mode")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Hear the model line, then speak it back")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tint(AppColors.toolReadAloud)
+            .padding(.horizontal, 4)
 
             // Two axes, one grammar: both rows lead with All, so neither can
             // strand you in a filtered state with no way back.
@@ -115,6 +128,7 @@ struct ReadAloudSelectionView: View {
                             tag: "\(passage.difficulty.displayName) · \(passage.wordCount) words"
                         ) {
                             Haptics.medium()
+                            viewModel.isShadowMode = shadowMode
                             customFieldFocused = false
                             pronunciationService.stop()
                             viewModel.selectedPassage = passage
@@ -238,6 +252,7 @@ struct ReadAloudSelectionView: View {
         Haptics.medium()
         customFieldFocused = false
         pronunciationService.stop()
+        viewModel.isShadowMode = shadowMode
         viewModel.selectedPassage = passage
         showingSession = true
     }

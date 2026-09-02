@@ -148,7 +148,9 @@ struct DrillSessionView: View {
                     case .fillerElimination: fillerDisplay
                     case .paceControl:       paceDisplay
                     case .pausePractice:     pauseDisplay
-                    case .impromptuSprint:   impromptuDisplay
+                    case .impromptuSprint, .qaSprint: promptedDisplay
+                    case .vocalVariety:      vocalVarietyDisplay
+                    case .emphasis:          emphasisDisplay
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -264,8 +266,15 @@ struct DrillSessionView: View {
         }
     }
 
-    private var impromptuDisplay: some View {
+    private var promptedDisplay: some View {
         VStack(spacing: 12) {
+            if let beat = viewModel.structureBeat {
+                Text(beat.uppercased())
+                    .font(.caption.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppColors.categoryCopper)
+            }
+
             Text(viewModel.impromptuPrompt)
                 .font(.body.weight(.medium))
                 .foregroundStyle(.white)
@@ -299,5 +308,99 @@ struct DrillSessionView: View {
                 }
         )
         .animation(.easeOut(duration: 0.2), value: viewModel.liveFillerCount)
+    }
+
+    private var vocalVarietyDisplay: some View {
+        VStack(spacing: 12) {
+            Text(viewModel.impromptuPrompt)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Image(systemName: "waveform.path.ecg")
+                    .foregroundStyle(AppColors.categoryTeal)
+                Text(viewModel.isAnalyzingPitch ? "Scoring pitch…" : "Vary your pitch — glide low to high")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(.ultraThinMaterial))
+
+            if viewModel.liveEnergySwing > 0 {
+                Text(String(format: "Energy swing %.0f dB", viewModel.liveEnergySwing))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+                }
+        )
+    }
+
+    private var emphasisDisplay: some View {
+        VStack(spacing: 12) {
+            emphasisPromptText
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Image(systemName: "textformat.size")
+                    .foregroundStyle(AppColors.categorySage)
+                Text("Stress the highlighted word")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(.ultraThinMaterial))
+
+            if viewModel.liveEnergySwing > 0 {
+                Text(String(format: "Swing %.0f dB", viewModel.liveEnergySwing))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+                }
+        )
+    }
+
+    @ViewBuilder
+    private var emphasisPromptText: some View {
+        let prompt = viewModel.impromptuPrompt
+        let target = viewModel.emphasisTargetWord
+        if target.isEmpty || !prompt.contains(target) {
+            Text(prompt)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.white)
+        } else {
+            let parts = prompt.components(separatedBy: target)
+            (Text(parts.first ?? "")
+                .font(.body.weight(.medium))
+                .foregroundColor(.white)
+            + Text(target)
+                .font(.body.weight(.bold))
+                .foregroundColor(AppColors.categorySage)
+            + Text(parts.count > 1 ? parts[1] : "")
+                .font(.body.weight(.medium))
+                .foregroundColor(.white))
+        }
     }
 }

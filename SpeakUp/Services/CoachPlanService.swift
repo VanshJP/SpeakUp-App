@@ -100,8 +100,8 @@ nonisolated enum CoachDimension: String, CaseIterable, Sendable, Identifiable {
     /// nearest one produced advice that read as broken: a tip about widening
     /// your pitch range suggesting Pause Practice, a tip about articulation
     /// suggesting Pace Control. Articulation is mechanical and reading aloud
-    /// trains the mouth; a flat voice is a warm-up problem before it is a
-    /// practice problem.
+    /// trains the mouth; a flat voice belongs on Vocal Variety, and punchy
+    /// delivery belongs on Emphasis — both scored drills.
     ///
     /// One definition, used by both the tip rows and `NextStep` — they used to
     /// carry separate mappings and had already disagreed.
@@ -112,7 +112,8 @@ nonisolated enum CoachDimension: String, CaseIterable, Sendable, Identifiable {
         case .pauses: return .drill("pausePractice")
         case .structure, .vocabulary, .relevance: return .drill("impromptuSprint")
         case .clarity: return .readAloud
-        case .delivery, .vocalVariety: return .warmUp
+        case .delivery: return .drill("emphasis")
+        case .vocalVariety: return .drill("vocalVariety")
         }
     }
 

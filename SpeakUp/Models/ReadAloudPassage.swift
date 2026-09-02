@@ -93,6 +93,7 @@ enum ReadAloudCategory: String, CaseIterable, Identifiable {
     case literature
     case technical
     case tongueTwister
+    case minimalPairs
     /// Ephemeral user-typed practice — not shown in catalog filters.
     case custom
 
@@ -104,6 +105,7 @@ enum ReadAloudCategory: String, CaseIterable, Identifiable {
         case .literature: return "Literature"
         case .technical: return "Technical"
         case .tongueTwister: return "Tongue Twister"
+        case .minimalPairs: return "Minimal Pairs"
         case .custom: return "Yours"
         }
     }
@@ -114,6 +116,7 @@ enum ReadAloudCategory: String, CaseIterable, Identifiable {
         case .literature: return "book"
         case .technical: return "gearshape.2"
         case .tongueTwister: return "mouth"
+        case .minimalPairs: return "ear"
         case .custom: return "text.cursor"
         }
     }
@@ -123,3 +126,4 @@ enum ReadAloudCategory: String, CaseIterable, Identifiable {
         allCases.filter { $0 != .custom }
     }
 }
+

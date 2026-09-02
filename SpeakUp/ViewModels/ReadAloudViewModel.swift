@@ -52,6 +52,8 @@ class ReadAloudViewModel {
     var result: ReadAloudResult?
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
+    /// When true, the session plays a TTS model pass before listening.
+    var isShadowMode = false
     private(set) var filteredPassages: [ReadAloudPassage] = DefaultReadAloudPassages.all
 
     private var startTime: Date?
@@ -179,6 +181,7 @@ class ReadAloudViewModel {
         result = nil
         errorMessage = nil
         elapsedTime = 0
+        // Keep isShadowMode — user chose the mode for this sheet.
     }
 
     func retryPassage() async {

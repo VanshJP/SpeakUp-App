@@ -164,10 +164,10 @@ struct CoachPlanTests {
         }
     }
 
-    @Test func mechanicalDimensionsSkipTheDrills() {
+    @Test func scoredDimensionsLandOnMatchingTools() {
         #expect(CoachDimension.clarity.practiceRoute == .readAloud)
-        #expect(CoachDimension.vocalVariety.practiceRoute == .warmUp)
-        #expect(CoachDimension.delivery.practiceRoute == .warmUp)
+        #expect(CoachDimension.vocalVariety.practiceRoute == .drill("vocalVariety"))
+        #expect(CoachDimension.delivery.practiceRoute == .drill("emphasis"))
         #expect(CoachDimension.fillers.practiceRoute == .drill("fillerElimination"))
     }
 }
