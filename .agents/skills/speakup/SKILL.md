@@ -18,7 +18,7 @@ Kernel (NEVER, stance, map) is always in `/AGENTS.md`. This skill is the next la
 2. If the row names a contract (`SPEECH.md`, `ONBOARDING_VISION.md`), read it before editing.
 3. If the row names gotchas sections, open `/docs/AGENT_GOTCHAS.md` and read those sections only.
 4. Adding a setting / gate / SwiftData field / widget / test → `/docs/AGENT_PLAYBOOK.md` for that recipe.
-5. Load **at most one** vendor skill from `.agents/skills/README.md`.
+5. Load **at most one** vendor skill from `.agents/skills/README.md`. For UI polish across a11y/layout/type/color/copy, prefer `better-interface` over loading each `better-*` alone. Do not load both `swiftui-pro` and `swiftui-expert-skill`.
 6. Code is truth. If the doc disagrees, follow the code and patch the doc in the same PR.
 7. After edits: playbook → Verify (grep always). If `xcodebuild -version` works, run tests. If not, do not fake it — CI will.
 
@@ -58,6 +58,7 @@ Path + type search over whole-repo dumps.
 - Invent a second share sheet, a sixth tab, a third first-run coach, or a new StoreKit Environment key.
 - Load `ONBOARDING_REDESIGN.md` unless the task is onboarding research.
 - Load both `swiftui-pro` and `swiftui-expert-skill`.
+- Load `better-interface` together with both SwiftUI vendor skills — pick one polish path.
 - Grow `/AGENTS.md` with feature encyclopedias.
 
 ## After a behavior change

@@ -77,7 +77,7 @@ struct RingStatsView: View {
                         Spacer()
 
                         Text(bestScore > 0 ? "\(bestScore)" : "-")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.statValue)
                             .foregroundStyle(.white)
                             .contentTransition(.numericText(value: Double(bestScore)))
                     }

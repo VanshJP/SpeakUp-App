@@ -33,6 +33,8 @@ struct FilterPill: View {
             .foregroundStyle(isSelected ? .white : .primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .frame(minHeight: AppLayout.minHitTarget)
+            .contentShape(Capsule())
             .glassEffect(
                 isSelected ? .regular.tint(color).interactive() : .regular.interactive(),
                 in: .capsule

@@ -54,6 +54,8 @@ struct GlassSectionHeader<Accessory: View>: View {
             Text(title)
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
             Spacer()
             accessory
         }

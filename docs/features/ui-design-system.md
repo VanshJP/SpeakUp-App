@@ -12,7 +12,7 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 | Colors | `SpeakUp/Theme/AppColors.swift` |
 | Glass | `SpeakUp/Theme/GlassStyles.swift` — cards, buttons, modifiers |
 | Type / motion | `AppType.swift`, `AppMotion.swift` |
-| Page rhythm | `AppLayout.swift` — `pageHorizontal` (16), `chapterSpacing` (20), `listSpacing` (16), `.pageContentInsets()` |
+| Page rhythm | `AppLayout.swift` — `pageHorizontal` (16), `chapterSpacing` (20), `listSpacing` (16), `minHitTarget` (44), `.pageContentInsets()` |
 | Glass helpers | `SpeakUp/Extensions/View+Glass.swift`, `Haptics.swift` |
 | Components | `SpeakUp/Views/Components/` — `GlassCard`, `GlassButton`, `GlassButtonLabel`, `MetricTile`, `RingStatsView`, `FlowLayout`, `RichTextEditor`, `AppTourView`, `ToolTile`, … |
 | Header roles | Section = `GlassSectionHeader` (headline, page chapters). Card = `GlassCardTitle` (subheadline, chart/insight cards). Both take a trailing accessory closure. |
@@ -23,14 +23,16 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 2. Cards: `.glassCard` / `GlassCard` — iOS 26 `.glassEffect(.regular…)` (optional `.tint`) in a continuous rounded rect, then a quiet shadow. No opaque fills. Primary CTAs stay solid white (`GlassButton` `.primary`); secondary uses `.glassEffect(.regular.interactive(), in: .capsule)`.
 3. Colors only from `AppColors`. Score ramp (`scoreColor(for:)`) ≠ semantic success/warning.
 4. Buttons: `GlassButton` / `GlassButtonLabel` (styles: primary / secondary / outline / danger). `GlassButtonLabel` is the chrome alone — use it inside a `NavigationLink` label where nesting `Button` is illegal. Do not hand-roll white/`Color.white.opacity(0.94)` capsules for CTAs (primary style owns that fill).
-5. Motion: `AppMotion` or `.spring(response: 0.3)` / `.easeInOut(duration: 0.2)`. Respect Reduce Motion.
+5. Motion: `AppMotion` or `.spring(response: 0.3)` / `.easeInOut(duration: 0.2)`. Respect Reduce Motion. Press feedback is `GlassPressStyle` at scale `0.96` (no scale under Reduce Motion).
 6. Haptics via `Haptics.*` typed helpers.
 7. Tab bar: `.tint(.white)`, `.preferredColorScheme(.dark)`.
 8. Full-screen pages scroll with **`PageScrollView`**, not `ScrollView`. A plain vertical `ScrollView` pans sideways as soon as any child measures wider than the viewport; `PageScrollView` clamps content to the container width so overflow clips instead. Deliberate horizontal rails stay `ScrollView(.horizontal)`.
 9. **One page inset.** Root tabs use `.pageContentInsets()` (`AppLayout.pageHorizontal` = 16 + bottom 16). Do not hand-roll `.padding(.horizontal, 20)` on a tab — Learn used to, and the stack looked uneven. Chapter stacks use `AppLayout.chapterSpacing` (20); list hubs use `AppLayout.listSpacing` (16). Library / History / Learn / Settings use `.navigationBarTitleDisplayMode(.large)`; Today keeps a custom greeting with `.inline` empty title.
 10. Nothing in a page may demand more width than the screen. `.fixedSize()` on a row, a wide fixed `.frame(width:)`, or a pinned pill row are the usual causes — check at 375pt *and* at accessibility text sizes, and reach for `ViewThatFits` before pinning (see `ActivityStrip.header`).
-11. Controls keep a 44pt hit target even when their visible icon/chip is smaller. Selected controls expose `.isSelected`; modal overlays expose `.isModal` + Escape; Reduce Motion suppresses ambient/celebration motion.
+11. Controls keep a `AppLayout.minHitTarget` (44pt) hit target even when their visible icon/chip is smaller. Selected controls expose `.isSelected`; modal overlays expose `.isModal` + Escape; Reduce Motion suppresses ambient/celebration motion.
 12. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`, duration/time-range capsules, icon chip buttons. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA. Selected section pills stay solid white (same as `SectionPicker`).
+13. **Empty / CTA copy:** sentence case (`"No recordings yet"`, `"Start recording"`). Verb-first buttons. Errors say how to recover.
+14. **Numerals:** `Font.displayNumeral` / `.metricValue` / `.statValue` carry tabular figures — use them (or `.monospacedDigit()`) on any value that updates.
 
 ## New view checklist
 

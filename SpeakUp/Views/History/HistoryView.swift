@@ -236,7 +236,7 @@ struct HistoryView: View {
             if filteredSummaries.isEmpty {
                 EmptyStateCard(
                     icon: selectedFilter == .all ? "mic.slash" : "magnifyingglass",
-                    title: selectedFilter == .all ? "No Recordings Yet" : "No Matches",
+                    title: selectedFilter == .all ? "No recordings yet" : "No matches",
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
                         : "Try adjusting your filters or search terms."

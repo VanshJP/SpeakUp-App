@@ -9,7 +9,9 @@ struct GlassCard<Content: View>: View {
     var elevated: Bool
 
     init(
-        cornerRadius: CGFloat = 18,
+        // Default matches `glassCard()` / editing overlays (20). Nested inner
+        // surfaces should sit ~padding below this for concentric radii.
+        cornerRadius: CGFloat = 20,
         tint: Color? = nil,
         // Tightened from 16. Every card in the app inherits this, so it is the
         // single highest-leverage control over how large the app feels.
@@ -113,6 +115,7 @@ struct TickMeter: View {
 
 struct EmptyStateCard: View {
     let icon: String
+    /// Sentence case. Empty titles are headings, not buttons — keep them calm.
     let title: String
     let message: String
     var buttonTitle: String? = nil
@@ -193,9 +196,9 @@ struct EmptyStateInline: View {
             FeaturedGlassCard { Text("Featured card").foregroundStyle(.white) }
             EmptyStateCard(
                 icon: "mic.slash",
-                title: "No Recordings Yet",
+                title: "No recordings yet",
                 message: "Start your first practice session to see your progress here.",
-                buttonTitle: "Start Recording",
+                buttonTitle: "Start recording",
                 buttonAction: {}
             )
         }

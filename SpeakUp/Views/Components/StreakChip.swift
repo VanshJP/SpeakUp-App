@@ -14,7 +14,7 @@ struct StreakChip: View {
                 .foregroundStyle(isActive ? AppColors.warning : Color.white.opacity(0.35))
 
             Text("\(streak)")
-                .font(.subheadline.weight(.bold))
+                .font(.subheadline.weight(.bold).monospacedDigit())
                 .foregroundStyle(.white)
                 .contentTransition(.numericText(value: Double(streak)))
 
@@ -24,6 +24,8 @@ struct StreakChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
+        .frame(minHeight: AppLayout.minHitTarget)
+        .contentShape(Capsule())
         .glassEffect(
             isActive ? .regular.tint(AppColors.warning.opacity(0.35)).interactive() : .regular.interactive(),
             in: .capsule

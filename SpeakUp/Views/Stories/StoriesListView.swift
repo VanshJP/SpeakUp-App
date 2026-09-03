@@ -47,14 +47,14 @@ struct StoriesListView: View {
             if viewModel.stories.isEmpty {
                 EmptyStateCard(
                     icon: "note.text",
-                    title: "Your Stories",
+                    title: "Your stories",
                     message: "Write scripts, capture quick notes, and reflect on practice sessions. Tap + to start."
                 )
                 .padding(.top, 20)
             } else if viewModel.filteredStories.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
-                    title: "Nothing Here",
+                    title: "Nothing here",
                     message: "No stories match this filter. Try another folder or search."
                 )
                 .padding(.top, 20)

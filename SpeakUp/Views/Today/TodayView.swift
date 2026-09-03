@@ -214,6 +214,8 @@ struct TodayView: View {
                 .font(.system(size: 22))
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(.white, Color.black.opacity(0.6))
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Hide \(module.title)")

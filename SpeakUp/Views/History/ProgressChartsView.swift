@@ -130,7 +130,7 @@ struct ProgressChartsContent: View {
     private var earlyState: some View {
         EmptyStateCard(
             icon: "chart.line.uptrend.xyaxis",
-            title: points.isEmpty ? "Your Progress Starts Here" : "One Take In",
+            title: points.isEmpty ? "Your progress starts here" : "One take in",
             message: points.isEmpty
                 ? "Record your first session. After two takes Big Talk maps where you stand and which way you are moving."
                 : "One more recorded session and your trajectory, readiness map, and trend charts appear here."

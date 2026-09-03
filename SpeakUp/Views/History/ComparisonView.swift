@@ -26,7 +26,7 @@ struct ComparisonView: View {
                     } else {
                         EmptyStateCard(
                             icon: "chart.bar.xaxis",
-                            title: "Not Enough Data",
+                            title: "Not enough data",
                             message: "Record at least 2 sessions to compare your progress."
                         )
                     }

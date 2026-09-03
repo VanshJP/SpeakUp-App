@@ -18,5 +18,18 @@ Install / pin: `/skills-lock.json`. Layout: `/agent/README.md`.
 | `greenlight` | App Store preflight / rejection risk near ship. |
 | `apple-appstore-reviewer` | Reviewer-persona audit of code + metadata. Read-only first pass. |
 | `aso-appstore-screenshots` | App Store screenshot generation (compose.py → model enhance). |
+| `better-interface` | Full UI review across a11y, layout, writing, type, color, polish. Prefer over loading every `better-*` separately. |
+| `better-ui` | Press scale, surfaces, concentric radius, icon motion, hit feel. |
+| `better-typography` | Type scale, tabular nums, wrapping, truncation. |
+| `better-colors` | Palettes, semantic tokens, contrast (measure before claiming). |
+| `better-layout` | Grouping, alignment, progressive disclosure, adaptivity. |
+| `better-accessibility` | Focus, keyboard/VoiceOver names, hit targets, reduced motion. Pair with `ios-accessibility` for platform depth. |
+| `better-writing` | Product copy — empty states, errors, button verbs, sentence case. |
+| `interface-review` | Change-scoped review of a branch / PR / uncommitted diff. |
+| `break` | Stress-test one component across states (web-oriented; adapt carefully). |
+| `variant` | Explore alternate component variants before picking one. |
+| `explain-interface` | Reverse-engineer how a web interface was built. |
 
 Root `/AGENTS.md` is always loaded — do not paste it into a skill.
+
+Interface polish set (`better-*`, `interface-review`, `break`, `variant`, `explain-interface`) is vendored from [jakubkrehel/skills](https://github.com/jakubkrehel/skills). For SpeakUp UI work: load `speakup` first, then at most one of `better-interface` **or** `swiftui-expert-skill` / `swiftui-pro` (not both SwiftUI skills).

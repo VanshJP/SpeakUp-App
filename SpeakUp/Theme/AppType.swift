@@ -15,15 +15,18 @@ import SwiftUI
 extension Font {
 
     // MARK: - Numerals (fixed by design)
+    //
+    // Tabular figures on every changing value so timers, scores, and streak
+    // chips do not shift layout as digits update.
 
     /// The one hero numeral on a screen. Never two.
-    static let displayNumeral = Font.system(size: 68, weight: .bold, design: .rounded)
+    static let displayNumeral = Font.system(size: 68, weight: .bold, design: .rounded).monospacedDigit()
 
     /// Big number in a metric tile or gauge.
-    static let metricValue = Font.system(size: 21, weight: .bold, design: .rounded)
+    static let metricValue = Font.system(size: 21, weight: .bold, design: .rounded).monospacedDigit()
 
     /// Number inside a ring or a compact stat pair.
-    static let statValue = Font.system(size: 17, weight: .bold, design: .rounded)
+    static let statValue = Font.system(size: 17, weight: .bold, design: .rounded).monospacedDigit()
 
     // MARK: - Text (scales with Dynamic Type)
 
