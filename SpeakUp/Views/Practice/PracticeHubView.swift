@@ -86,8 +86,11 @@ struct PracticeHubView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
+        // Inline, not `.large`: a large title sits under an empty nav-bar row
+        // that only holds the trailing filter/sort control, so the page opens
+        // with a blank band above the title. Same axis as the toolbar item.
         .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: activeSearchText, prompt: searchPrompt)
         .onChange(of: storiesSearchText) { _, newValue in

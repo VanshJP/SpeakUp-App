@@ -71,8 +71,11 @@ struct HistoryView: View {
             }
             .scrollIndicators(.hidden)
         }
+        // Inline, not `.large`: History's trailing filter lives alone on the
+        // nav-bar row while a large title drops underneath, leaving a blank
+        // band at the top of the page. Keep title and control on one axis.
         .navigationTitle("History")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if selectedSection == .recordings {
