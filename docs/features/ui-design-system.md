@@ -37,9 +37,10 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
     tools, so they wear the same recipe — change one, change both. `StreakChip` is neutral glass with an amber flame:
     the streak is one number and does not need a billboard. Selected filter chips are the solid white pill
     (`FilterChip` / `FilterPill` / `SectionPicker`) on every tab; a chip's own color, if it has one, shows on the idle glyph.
-13. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`, duration/time-range capsules, icon chip buttons. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA. Selected section pills stay solid white (same as `SectionPicker`).
-14. **Empty / CTA copy:** sentence case (`"No recordings yet"`, `"Start recording"`). Verb-first buttons. Errors say how to recover.
-15. **Numerals:** `Font.displayNumeral` / `.metricValue` / `.statValue` carry tabular figures — use them (or `.monospacedDigit()`) on any value that updates.
+13. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`, duration/time-range capsules, icon chip buttons. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA. Selected section pills stay solid white (same as `SectionPicker`). Untinted surfaces take `AppColors.glassTintAccent` (soft white lift) so navy does not read as a muddy plate. Cards paint a top-edge rim light so the specular does not die when the card scrolls off the background orbs.
+14. **Never animate a glassEffect on/off.** Selection that swaps glass ↔ solid fill under `withAnimation` mid-fades into a dark clipped rectangle for a beat — `SelectedFilterChrome` hard-cuts with `.transaction { $0.animation = nil }`, and filter chips use `.buttonStyle(.plain)` (no press-scale on live glass). Hit targets expand *around* the capsule, never under the glass.
+15. **Empty / CTA copy:** sentence case (`"No recordings yet"`, `"Start recording"`). Verb-first buttons. Errors say how to recover.
+16. **Numerals:** `Font.displayNumeral` / `.metricValue` / `.statValue` carry tabular figures — use them (or `.monospacedDigit()`) on any value that updates.
 
 ## New view checklist
 

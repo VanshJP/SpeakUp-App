@@ -344,11 +344,13 @@ struct FilterChip: View {
             .foregroundStyle(isSelected ? AnyShapeStyle(Self.onLight) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .modifier(SelectedFilterChrome(isSelected: isSelected))
+            // Hit target expands around the capsule — see FilterPill.
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
-            .modifier(SelectedFilterChrome(isSelected: isSelected))
         }
-        .buttonStyle(GlassPressStyle())
+        // Plain: GlassPressStyle scales live glass into the dark clipped flash.
+        .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

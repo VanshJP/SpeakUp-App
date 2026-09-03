@@ -90,7 +90,10 @@ private struct GlassButtonChrome: ViewModifier {
                 .clipShape(Capsule())
         case .secondary:
             content
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .glassEffect(
+                    .regular.tint(AppColors.glassTintAccent).interactive(),
+                    in: .capsule
+                )
         case .outline:
             content
                 .background {

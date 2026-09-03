@@ -33,6 +33,26 @@ struct GlassCard<Content: View>: View {
             .padding(padding)
             .glassEffect(resolvedGlass, in: .rect(cornerRadius: cornerRadius))
             .overlay {
+                // Painted top rim. Liquid Glass's real specular tracks the
+                // backdrop orbs, so a card near the top of Today lights up
+                // and then goes flat as you scroll it onto dark navy. This
+                // stroke keeps the "light at the top" regardless of scroll.
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.03)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+                    .allowsHitTesting(false)
+            }
+            .overlay {
                 if let accentBorder {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(accentBorder.opacity(0.35), lineWidth: 1)
@@ -49,7 +69,7 @@ struct GlassCard<Content: View>: View {
         if let tint {
             return .regular.tint(tint)
         }
-        return .regular
+        return .regular.tint(AppColors.glassTintAccent)
     }
 }
 
@@ -77,6 +97,22 @@ struct FeaturedGlassCard<Content: View>: View {
         content
             .padding(padding)
             .glassEffect(.regular.tint(gradientColors.first ?? AppColors.primary), in: .rect(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.03)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+                    .allowsHitTesting(false)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(AppColors.cardStroke, lineWidth: 0.5)

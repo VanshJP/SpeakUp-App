@@ -33,7 +33,7 @@ struct StreakChip: View {
         .padding(.vertical, 7)
         .frame(minHeight: AppLayout.minHitTarget)
         .contentShape(Capsule())
-        .glassEffect(.regular.interactive(), in: .capsule)
+        .glassEffect(.regular.tint(AppColors.glassTintAccent).interactive(), in: .capsule)
         .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")

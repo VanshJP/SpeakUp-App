@@ -38,29 +38,46 @@ struct FilterPill: View {
             .foregroundStyle(isSelected ? AnyShapeStyle(Self.onLight) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .modifier(SelectedFilterChrome(isSelected: isSelected))
+            // Hit target expands *around* the capsule — putting minHeight under
+            // glass made a 44pt-tall plate that clipped mid-press.
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
-            .modifier(SelectedFilterChrome(isSelected: isSelected))
         }
-        .buttonStyle(GlassPressStyle())
+        // Plain, not GlassPressStyle: scaling a live glassEffect mid-tap is
+        // the half-second dark box that cuts the pill off.
+        .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
 /// Selected matches `SectionPicker` (solid white). Idle is quiet glass.
+///
+/// The chrome swap itself never animates. Call sites wrap selection in
+/// `withAnimation`, and Liquid Glass does not cross-fade — mid-spring the
+/// effect samples its backdrop wrong and renders as a dark rectangle that
+/// clips the label for a beat. Hard-cut the surface; let the list content
+/// spring underneath.
 struct SelectedFilterChrome: ViewModifier {
     let isSelected: Bool
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if isSelected {
-            content
-                .background { Capsule().fill(Color.white.opacity(0.92)) }
-                .clipShape(Capsule())
-        } else {
-            content
-                .glassEffect(.regular.interactive(), in: .capsule)
+        Group {
+            if isSelected {
+                content
+                    .background { Capsule().fill(Color.white.opacity(0.92)) }
+                    .clipShape(Capsule())
+            } else {
+                content
+                    // White lift so idle chips read as bright glass on navy,
+                    // not the darker plate the mid-fade flash used to show.
+                    .glassEffect(
+                        .regular.tint(AppColors.glassTintAccent).interactive(),
+                        in: .capsule
+                    )
+            }
         }
+        .transaction { $0.animation = nil }
     }
 }
 
