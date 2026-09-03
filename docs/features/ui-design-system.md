@@ -30,7 +30,14 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 9. **One page inset.** Root tabs use `.pageContentInsets()` (`AppLayout.pageHorizontal` = 16 + bottom 16). Do not hand-roll `.padding(.horizontal, 20)` on a tab — Learn used to, and the stack looked uneven. Chapter stacks use `AppLayout.chapterSpacing` (20); list hubs use `AppLayout.listSpacing` (16). Library / History / Learn / Settings use `.navigationBarTitleDisplayMode(.large)`; Today keeps a custom greeting with `.inline` empty title.
 10. Nothing in a page may demand more width than the screen. `.fixedSize()` on a row, a wide fixed `.frame(width:)`, or a pinned pill row are the usual causes — check at 375pt *and* at accessibility text sizes, and reach for `ViewThatFits` before pinning (see `ActivityStrip.header`).
 11. Controls keep a 44pt hit target even when their visible icon/chip is smaller. Selected controls expose `.isSelected`; modal overlays expose `.isModal` + Escape; Reduce Motion suppresses ambient/celebration motion.
-12. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`, duration/time-range capsules, icon chip buttons. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA. Selected section pills stay solid white (same as `SectionPicker`).
+12. **Tint is for identity, not emphasis.** A colored `glassEffect` tint stays at **0.06** (a whole card or tile) or
+    **0.10** (a featured/recommended row); anything above that turns a graphite page into a highlighter. Identity color
+    belongs to the *glyph* — an icon at full tint inside a `Circle().fill(tint.opacity(0.18))` chip. `ToolTileLabel`
+    (Today prep tools, History review grid) and `PracticeHubView.toolCategoryCard` (Library tools) are the same four
+    tools, so they wear the same recipe — change one, change both. `StreakChip` is neutral glass with an amber flame:
+    the streak is one number and does not need a billboard. Selected filter chips are the solid white pill
+    (`FilterChip` / `SectionPicker`) on every tab; a chip's own color, if it has one, shows on the idle glyph.
+13. **Liquid Glass surfaces (shared):** `GlassCard`, `SectionPicker` frame, `ToolTileLabel`, `FilterPill`, `StreakChip`, secondary `GlassButton`, `SourceStoryBanner`, duration/time-range capsules, icon chip buttons. Apply `.glassEffect` *after* padding/frame. Use `.interactive()` only on tappable chrome. Do not glass the white primary CTA. Selected section pills stay solid white (same as `SectionPicker`).
 
 ## New view checklist
 

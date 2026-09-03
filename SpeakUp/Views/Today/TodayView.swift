@@ -86,13 +86,16 @@ struct TodayView: View {
                     }
 
                     if isEditingLayout {
-                        hiddenTray
-                        resetLayoutButton
-                        editHomepageButton(done: true)
-                    } else {
-                        // After the whole page — not chrome that fights the greeting.
-                        editHomepageButton(done: false)
+                        // Same hard cut: the tray's chips are glass too.
+                        hiddenTray.transition(.identity)
+                        resetLayoutButton.transition(.identity)
                     }
+
+                    // One button, not two branches: Edit and Done used to be
+                    // separate views, so leaving edit mode cross-faded one glass
+                    // capsule into another and both went dark mid-fade. After
+                    // the whole page — not chrome that fights the greeting.
+                    editHomepageButton(done: isEditingLayout)
                 }
                 .padding(.top, 4)
                 .pageContentInsets()
@@ -102,6 +105,22 @@ struct TodayView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        // The only Done used to sit past every block, the hidden tray and the
+        // reset button, so leaving edit mode meant scrolling the whole page —
+        // and the long-press that got you in does nothing to get you out. Same
+        // place iOS puts it when the Home screen is jiggling.
+        .toolbar {
+            if isEditingLayout {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        Haptics.light()
+                        withAnimation(AppMotion.slide) { isEditingLayout = false }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityLabel("Finish customizing Today")
+                }
+            }
+        }
         .refreshable {
             await viewModel.loadData()
         }
@@ -141,67 +160,86 @@ struct TodayView: View {
 
     // MARK: - Layout Editing
 
+    /// The block's own content: the real module, or the dashed stand-in while
+    /// editing when it has nothing to draw yet.
+    ///
+    /// **Every path is `.transition(.identity)`, and it has to stay that way.**
+    /// Entering or leaving edit mode swaps this subtree's identity, so under
+    /// `withAnimation` SwiftUI cross-fades the swap. Glass does not cross-fade:
+    /// for the length of the spring a `glassEffect` card samples its backdrop
+    /// wrong and renders as a dark plate, and two `GlassCard` shadows stack on
+    /// top of each other — the block visibly turns into its own shadow for a
+    /// beat. A hard cut is correct here; the chrome around it still animates.
+    @ViewBuilder
+    private func moduleBody(_ module: TodayHomeModule) -> some View {
+        if isEditingLayout, !moduleHasContent(module) {
+            dormantModuleCard(module)
+                .transition(.identity)
+        } else {
+            homeModuleView(module)
+                .transition(.identity)
+        }
+    }
+
     /// A Today block, editable in place. Not a preview of the block — the block
     /// itself, frozen and wiggling, which is the whole point: you rearrange the
     /// page while looking at the page.
     @ViewBuilder
     private func editableModule(_ module: TodayHomeModule) -> some View {
         if isEditingLayout {
-            Group {
-                if moduleHasContent(module) {
-                    homeModuleView(module)
-                } else {
-                    dormantModuleCard(module)
+            moduleBody(module)
+                .allowsHitTesting(false)
+                .overlay {
+                    // Grab layer above the frozen block: gives the drag something
+                    // to catch, and swallows taps meant for the controls beneath.
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(.white.opacity(0.001))
                 }
-            }
-            .allowsHitTesting(false)
-            .overlay {
-                // Grab layer above the frozen block: gives the drag something
-                // to catch, and swallows taps meant for the controls beneath.
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.white.opacity(0.001))
-            }
-            .overlay(alignment: .topLeading) {
-                if !module.isPinned {
-                    removeBadge(module).offset(x: -8, y: -8)
+                .overlay(alignment: .topLeading) {
+                    if !module.isPinned {
+                        removeBadge(module).offset(x: -8, y: -8)
+                    }
                 }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(AppColors.primary, lineWidth: dropTarget == module ? 2 : 0)
-            }
-            .wiggle(active: !reduceMotion, phase: module.wigglePhase)
-            .draggable(module.rawValue)
-            .dropDestination(for: String.self) { items, _ in
-                guard let dragged = items.compactMap(TodayHomeModule.init(rawValue:)).first else { return false }
-                insertModule(dragged, before: module)
-                return true
-            } isTargeted: { targeted in
-                withAnimation(AppMotion.slide) {
-                    if targeted { dropTarget = module }
-                    else if dropTarget == module { dropTarget = nil }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(AppColors.primary, lineWidth: dropTarget == module ? 2 : 0)
                 }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(module.title)
-            .accessibilityActions {
-                // Drag is unreachable for assistive tech; same moves, spelled out.
-                Button("Move up") { shiftModule(module, by: -1) }
-                Button("Move down") { shiftModule(module, by: 1) }
-                if !module.isPinned {
-                    Button("Hide") { setModuleVisible(module, false) }
+                .wiggle(active: !reduceMotion, phase: module.wigglePhase)
+                .draggable(module.rawValue)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let dragged = items.compactMap(TodayHomeModule.init(rawValue:)).first else { return false }
+                    insertModule(dragged, before: module)
+                    return true
+                } isTargeted: { targeted in
+                    withAnimation(AppMotion.slide) {
+                        if targeted { dropTarget = module }
+                        else if dropTarget == module { dropTarget = nil }
+                    }
                 }
-            }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(module.title)
+                .accessibilityActions {
+                    // Drag is unreachable for assistive tech; same moves, spelled out.
+                    Button("Move up") { shiftModule(module, by: -1) }
+                    Button("Move down") { shiftModule(module, by: 1) }
+                    if !module.isPinned {
+                        Button("Hide") { setModuleVisible(module, false) }
+                    }
+                }
+                // The whole editing chain is what gets inserted and removed when
+                // edit mode flips, so the hard cut belongs here too.
+                .transition(.identity)
         } else {
-            homeModuleView(module)
+            moduleBody(module)
                 // The Home-screen gesture: hold the page to rearrange it.
                 // Simultaneous so it never eats a tap meant for a control.
                 .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                    LongPressGesture(minimumDuration: 0.9).onEnded { _ in
                         Haptics.medium()
                         withAnimation(AppMotion.slide) { isEditingLayout = true }
                     }
                 )
+                .transition(.identity)
         }
     }
 
@@ -388,14 +426,11 @@ struct TodayView: View {
         TodayHomeModule.allCases.filter { !homeModules.contains($0) && !$0.isPinned }
     }
 
-    /// The dragged block takes the target's slot, whether it came from
-    /// elsewhere in the stack or from the tray.
+    /// Drop resolution lives in `TodayHomeLayout.reorder` so it can be pinned
+    /// by a test — dropping a block below another used to silently do nothing.
     private func insertModule(_ dragged: TodayHomeModule, before target: TodayHomeModule) {
-        guard dragged != target else { return }
-        var list = homeModules
-        list.removeAll { $0 == dragged }
-        let index = list.firstIndex(of: target) ?? list.count
-        list.insert(dragged, at: index)
+        let list = TodayHomeLayout.reorder(homeModules, moving: dragged, onto: target)
+        guard list != homeModules else { return }
         Haptics.selection()
         withAnimation(AppMotion.slide) {
             dropTarget = nil
@@ -884,7 +919,7 @@ struct TodayView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(12)
-            .glassEffect(.regular.tint(tool.color.opacity(0.25)).interactive(), in: .rect(cornerRadius: 14))
+            .glassEffect(.regular.tint(tool.color.opacity(0.10)).interactive(), in: .rect(cornerRadius: 14))
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel("Start with \(tool.title). \(tool.outcome)")
@@ -1179,8 +1214,10 @@ struct DurationPill: View {
 private extension TodayHomeModule {
     /// Stable per-block offset so the stack doesn't wobble in lockstep — the
     /// Home screen's icons are each a little out of phase with their neighbours.
+    /// Scaled to the slower half-swing: a 0.035s spread that read as staggered
+    /// at 0.17s is near-lockstep at 0.45s.
     var wigglePhase: Double {
-        Double(TodayHomeModule.allCases.firstIndex(of: self) ?? 0) * 0.035
+        Double(TodayHomeModule.allCases.firstIndex(of: self) ?? 0) * 0.09
     }
 }
 
@@ -1192,9 +1229,16 @@ private extension View {
     }
 }
 
-/// Rocks between -0.4° and +0.4°. The rest angle has to be one end of the
-/// swing rather than zero, or `autoreverses` tilts the block one way only and
-/// the page looks like it is leaning instead of wiggling.
+/// Rocks between -0.3° and +0.3° on a 0.45s half-swing. The rest angle has to be
+/// one end of the swing rather than zero, or `autoreverses` tilts the block one
+/// way only and the page looks like it is leaning instead of wiggling.
+///
+/// Scale is everything here. A Home-screen icon is ~60pt wide, so ±0.5° at a
+/// 0.17s half-swing moves its corners a hair. The same numbers on a ~350pt card
+/// swing the corners several points several times a second, and six of them
+/// stacked read as the page shaking rather than the blocks being loose. Keep
+/// the amplitude and the rate low enough that the motion says "these are
+/// draggable" and nothing more — if it draws the eye, it is too much.
 private struct WiggleModifier: ViewModifier {
     let active: Bool
     let phase: Double
@@ -1203,10 +1247,10 @@ private struct WiggleModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .rotationEffect(.degrees(active ? (swung ? 0.4 : -0.4) : 0))
+            .rotationEffect(.degrees(active ? (swung ? 0.3 : -0.3) : 0))
             .animation(
                 active
-                    ? .easeInOut(duration: 0.17).repeatForever(autoreverses: true).delay(phase)
+                    ? .easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(phase)
                     : nil,
                 value: swung
             )

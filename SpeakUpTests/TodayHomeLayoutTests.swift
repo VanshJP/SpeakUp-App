@@ -44,6 +44,47 @@ struct TodayHomeLayoutTests {
         #expect(!TodayHomeModule.defaultVisible.contains(.learn))
         #expect(TodayHomeModule.session.isPinned)
     }
+
+    // Dropping a block *below* another used to silently do nothing: the drop
+    // always inserted at the target's index, so the last slot was unreachable.
+
+    @Test("Dragging a block down lands it after the target")
+    func reorderDownwards() {
+        let list: [TodayHomeModule] = [.rings, .focus, .session, .tools]
+        #expect(
+            TodayHomeLayout.reorder(list, moving: .rings, onto: .tools)
+                == [.focus, .session, .tools, .rings]
+        )
+        #expect(
+            TodayHomeLayout.reorder(list, moving: .rings, onto: .session)
+                == [.focus, .session, .rings, .tools]
+        )
+    }
+
+    @Test("Dragging a block up lands it before the target")
+    func reorderUpwards() {
+        let list: [TodayHomeModule] = [.rings, .focus, .session, .tools]
+        #expect(
+            TodayHomeLayout.reorder(list, moving: .tools, onto: .rings)
+                == [.tools, .rings, .focus, .session]
+        )
+    }
+
+    @Test("A block arriving from the hidden tray takes the target's slot")
+    func reorderFromTray() {
+        let list: [TodayHomeModule] = [.rings, .session, .tools]
+        #expect(
+            TodayHomeLayout.reorder(list, moving: .learn, onto: .session)
+                == [.rings, .learn, .session, .tools]
+        )
+    }
+
+    @Test("Dropping a block on itself changes nothing")
+    func reorderOntoSelf() {
+        let list: [TodayHomeModule] = [.rings, .session, .tools]
+        #expect(TodayHomeLayout.reorder(list, moving: .session, onto: .session) == list)
+    }
+
 }
 
 @Suite("Practice tool catalog")

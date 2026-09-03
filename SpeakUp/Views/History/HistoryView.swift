@@ -310,24 +310,38 @@ struct FilterChip: View {
     let icon: String
     let isSelected: Bool
     var count: Int? = nil
+    /// Identity color for chips that stand for a user-owned thing (a Story
+    /// folder). Idle chips wear it on the glyph; selected chips are the solid
+    /// white pill either way, so selection always reads the same.
+    var tint: Color? = nil
     let action: () -> Void
+
+    /// Ink on a selected (solid white) chip.
+    private static let onLight = Color(red: 0.07, green: 0.07, blue: 0.08)
+
+    private var iconStyle: AnyShapeStyle {
+        if isSelected { return AnyShapeStyle(Self.onLight) }
+        return tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.primary)
+    }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.caption2)
+                    .foregroundStyle(iconStyle)
 
                 Text(title)
                     .font(.caption.weight(.medium))
+                    .lineLimit(1)
 
                 if let count, count > 0 {
                     Text("\(count)")
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(isSelected ? Color(red: 0.07, green: 0.07, blue: 0.08).opacity(0.6) : Color.secondary)
+                        .foregroundStyle(isSelected ? Self.onLight.opacity(0.6) : Color.secondary)
                 }
             }
-            .foregroundStyle(isSelected ? AnyShapeStyle(Color(red: 0.07, green: 0.07, blue: 0.08)) : AnyShapeStyle(.primary))
+            .foregroundStyle(isSelected ? AnyShapeStyle(Self.onLight) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .modifier(FilterChipChrome(isSelected: isSelected))

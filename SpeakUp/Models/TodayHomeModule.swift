@@ -86,4 +86,26 @@ nonisolated enum TodayHomeLayout {
     static func encode(_ modules: [TodayHomeModule]) -> [String] {
         modules.map(\.rawValue)
     }
+
+    /// Where a dragged block lands when it is dropped on `target`.
+    ///
+    /// Direction matters, which the first version missed: it always inserted at
+    /// the target's index, so a block dragged *down* the page landed above the
+    /// block it was dropped on and nothing could ever be moved into the last
+    /// slot. Dropping below inserts after; dropping above — or arriving from
+    /// the hidden tray, where there is no origin — inserts before.
+    static func reorder(
+        _ list: [TodayHomeModule],
+        moving dragged: TodayHomeModule,
+        onto target: TodayHomeModule
+    ) -> [TodayHomeModule] {
+        guard dragged != target, let targetIndex = list.firstIndex(of: target) else { return list }
+
+        let draggedDownwards = list.firstIndex(of: dragged).map { $0 < targetIndex } ?? false
+        var result = list
+        result.removeAll { $0 == dragged }
+        let index = (result.firstIndex(of: target) ?? result.count) + (draggedDownwards ? 1 : 0)
+        result.insert(dragged, at: index)
+        return result
+    }
 }

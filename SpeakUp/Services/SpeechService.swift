@@ -553,7 +553,7 @@ class SpeechService {
     func computeWPMTimeSeries(
         words: [TranscriptionWord],
         actualDuration: TimeInterval,
-        windowSize: TimeInterval = 5.0
+        windowSize: TimeInterval = 15.0
     ) -> [WPMDataPoint] {
         SpeechAnalysisPipeline.computeWPMTimeSeries(
             words: words,
@@ -1401,69 +1401,52 @@ nonisolated enum SpeechAnalysisPipeline {
 
     // MARK: - WPM Time Series
 
+    /// Speaking rate over a **sliding 15-second window**, stepped a third of a
+    /// window so consecutive points overlap.
+    ///
+    /// Disjoint 5-second buckets measured articulation rate, not pace: any
+    /// bucket that happened to land inside one fluent run reported words/minute
+    /// as if the speaker never breathed. A take with 45% silence and a normal
+    /// 5 words/sec delivery — a gross rate of 170 WPM — peaked at 300 on the
+    /// chart, and the 3-point moving average could not save it because the
+    /// first and last buckets were never smoothed. Fifteen seconds always
+    /// contains breaths, so a window reads the rate the user actually spoke at
+    /// and the peaks stay near the headline average.
+    ///
+    /// The window shrinks on short takes (never more than a third of the clip,
+    /// floor 5s) so a 30-second session still gets a curve rather than a dot.
+    /// Overlapping windows are self-smoothing — the moving average is gone.
     static func computeWPMTimeSeries(
         words: [TranscriptionWord],
         actualDuration: TimeInterval,
-        windowSize: TimeInterval = 5.0
+        windowSize: TimeInterval = 15.0
     ) -> [WPMDataPoint] {
         guard !words.isEmpty, actualDuration > 0 else { return [] }
 
-        var dataPoints: [WPMDataPoint] = []
-        var bucketStart: TimeInterval = 0
+        let window = min(actualDuration, max(5.0, min(windowSize, actualDuration / 3)))
+        let step = window / 3
+        let lastStart = max(0, actualDuration - window)
 
-        while bucketStart < actualDuration {
-            let bucketEnd = min(bucketStart + windowSize, actualDuration)
-            let bucketDuration = bucketEnd - bucketStart
+        // Window starts, with the final one flush to the end of the take so the
+        // chart covers it. The half-step guard keeps that flush window from
+        // landing on top of the one before it.
+        var starts: [TimeInterval] = []
+        var cursor: TimeInterval = 0
+        while cursor < lastStart - step / 2 {
+            starts.append(cursor)
+            cursor += step
+        }
+        starts.append(lastStart)
 
-            // Merge very short trailing buckets into previous to avoid WPM spikes
-            if bucketDuration < 2.5 && !dataPoints.isEmpty {
-                let prevPoint = dataPoints.removeLast()
-                let additionalWords = words.filter { $0.start >= bucketStart && $0.start < bucketEnd }.count
-                let totalWords = prevPoint.wordCount + additionalWords
-                let combinedDuration = (bucketStart - (prevPoint.timestamp - windowSize / 2.0)) + bucketDuration
-                let wpm = combinedDuration > 0 ? Double(totalWords) / (combinedDuration / 60.0) : 0
-                let timestamp = prevPoint.timestamp - windowSize / 2.0 + combinedDuration / 2.0
-
-                dataPoints.append(WPMDataPoint(
-                    timestamp: timestamp,
-                    wpm: wpm,
-                    wordCount: totalWords
-                ))
-                break
-            }
-
-            // Count words whose start falls within this bucket
-            let wordCount = words.filter { $0.start >= bucketStart && $0.start < bucketEnd }.count
-
-            // Compute WPM for this bucket
-            let wpm = bucketDuration > 0 ? Double(wordCount) / (bucketDuration / 60.0) : 0
-
-            // Timestamp is the midpoint of the bucket
-            let timestamp = bucketStart + bucketDuration / 2.0
-
-            dataPoints.append(WPMDataPoint(
-                timestamp: timestamp,
-                wpm: wpm,
+        return starts.map { start in
+            let end = start + window
+            let wordCount = words.filter { $0.start >= start && $0.start < end }.count
+            return WPMDataPoint(
+                timestamp: start + window / 2,
+                wpm: Double(wordCount) / (window / 60.0),
                 wordCount: wordCount
-            ))
-
-            bucketStart += windowSize
+            )
         }
-
-        // Smooth with a 3-point moving average to reduce jaggedness
-        if dataPoints.count >= 3 {
-            var smoothed = dataPoints
-            for i in 1..<(dataPoints.count - 1) {
-                smoothed[i] = WPMDataPoint(
-                    timestamp: dataPoints[i].timestamp,
-                    wpm: (dataPoints[i-1].wpm + dataPoints[i].wpm + dataPoints[i+1].wpm) / 3.0,
-                    wordCount: dataPoints[i].wordCount
-                )
-            }
-            dataPoints = smoothed
-        }
-
-        return dataPoints
     }
 
 
