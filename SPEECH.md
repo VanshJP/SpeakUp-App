@@ -82,7 +82,7 @@ Order inside `analyze`:
 11. `calculateSubscores(...)` → `SpeechSubscores`.
 12. `calculateOverallScore(subscores:weights:)` — weighted average over normalized `ScoreWeights`.
 13. `SpeechScoringEngine.applySubstanceMultiplier(score:substanceScore:)` → `applyGibberishGate(score:gibberishConfidence:)`.
-14. `computeWPMTimeSeries(words:actualDuration:)`.
+14. `computeWPMTimeSeries(words:actualDuration:)` — **sliding 15s window**, stepped a third of a window, the last window flush to the end of the take. The window shrinks to a third of the clip (floor 5s) on short sessions. This is *pace*, not articulation rate: disjoint 5s buckets reported any window that landed inside one fluent run as if the speaker never breathed (a 170 WPM take peaked at 300 on the chart), and the old 3-point moving average never touched the first or last bucket. Overlapping windows are self-smoothing — do not add the average back. Pinned in `PaceSeriesTests`.
 15. Return fully-populated `SpeechAnalysis`.
 
 ## Hard gates and caps (applied in order)

@@ -28,6 +28,14 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 2. Warm-ups and drills accept `sourceStory` from Library send-to actions.
 3. Deep links: `speakup://story`, `speakup://story/new`.
 4. Tagging must skip cleanly when no LLM backend is available.
+5. **`StoryFolderBar` is `FilterChip`** — the same chip the Prompts tab filters with, so the two halves of the
+   Library look like one control. It used to be a bespoke capsule filled with the folder's own color when
+   selected (plus a white count bubble and a divider), which made the selected story chip the loudest thing on
+   the page and meant two tabs of the same screen filtered by two different-looking controls. Selection is the
+   solid white pill everywhere; a folder's `colorHex` shows on the idle glyph via `FilterChip.tint`. "+ Folder"
+   stays a dashed capsule because it is an action, not a filter. Do not fork the chip — change `FilterChip`
+   (`Views/History/HistoryView.swift`) / `SelectedFilterChrome` (`FilterPill.swift`) and both tabs move together.
+   Tool lists (`FilterPill` in Warm-Up / Read-Aloud / Calm) use the same selected-white / idle-glass chrome.
 
 ## Cross-links
 

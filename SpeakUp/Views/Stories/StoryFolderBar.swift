@@ -1,30 +1,26 @@
 import SwiftUI
 
+/// Stories' filter row — the same `FilterChip` the Prompts tab uses.
+///
+/// It used to be a bespoke chip: a saturated capsule filled with the folder's
+/// own color when selected, a white count bubble inside it, and a hairline
+/// divider splitting built-ins from folders. Two tabs of the same Library then
+/// filtered by two different-looking controls, and the selected story chip was
+/// the loudest thing on the page. Selection now reads the same everywhere —
+/// solid white pill — and the folder's color survives on the glyph, which is
+/// where identity belongs. Do not fork the chip again: change `FilterChip` and
+/// both tabs move together.
 struct StoryFolderBar: View {
     @Bindable var viewModel: StoriesViewModel
     var onCreateFolder: () -> Void
     var onEditFolder: (StoryFolder) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                chip(
-                    selection: .all,
-                    title: "All",
-                    symbol: "tray.full.fill",
-                    color: AppColors.primary
-                )
+                chip(selection: .all, title: "All", symbol: "tray.full.fill", color: nil)
 
-                chip(
-                    selection: .pinned,
-                    title: "Pinned",
-                    symbol: "pin.fill",
-                    color: AppColors.warning
-                )
-
-                if !viewModel.folders.isEmpty {
-                    divider
-                }
+                chip(selection: .pinned, title: "Pinned", symbol: "pin.fill", color: AppColors.warning)
 
                 ForEach(viewModel.folders) { folder in
                     chip(
@@ -52,59 +48,25 @@ struct StoryFolderBar: View {
                 newFolderChip
             }
         }
+        .scrollIndicators(.hidden)
     }
 
-    private var divider: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(width: 1, height: 20)
-    }
-
-    private func chip(selection: FolderSelection, title: String, symbol: String, color: Color) -> some View {
-        let isSelected = viewModel.folderSelection == selection
-        let count = viewModel.countForFolder(selection)
-
-        return Button {
+    private func chip(selection: FolderSelection, title: String, symbol: String, color: Color?) -> some View {
+        FilterChip(
+            title: title,
+            icon: symbol,
+            isSelected: viewModel.folderSelection == selection,
+            count: viewModel.countForFolder(selection),
+            tint: color
+        ) {
             Haptics.light()
-            withAnimation(.spring(response: 0.3)) {
+            withAnimation(.spring(duration: 0.3)) {
                 viewModel.setFolderSelection(selection)
             }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(isSelected ? color : .secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background {
-                            Capsule()
-                                .fill(isSelected ? Color.white.opacity(0.9) : Color.white.opacity(0.08))
-                        }
-                }
-            }
-            .foregroundStyle(isSelected ? .white : .secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background {
-                Capsule()
-                    .fill(isSelected ? color.opacity(0.75) : Color.white.opacity(0.04))
-                    .overlay {
-                        Capsule()
-                            .stroke(
-                                isSelected ? Color.white.opacity(0.15) : Color.white.opacity(0.08),
-                                lineWidth: 0.5
-                            )
-                    }
-            }
         }
-        .buttonStyle(.plain)
     }
 
+    /// An action, not a filter — dashed so it never reads as a fifth folder.
     private var newFolderChip: some View {
         Button {
             Haptics.medium()
@@ -112,21 +74,20 @@ struct StoryFolderBar: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                 Text("Folder")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.caption.weight(.medium))
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background {
                 Capsule()
-                    .strokeBorder(
-                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                    )
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     .foregroundStyle(.quaternary)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("New folder")
     }
 }

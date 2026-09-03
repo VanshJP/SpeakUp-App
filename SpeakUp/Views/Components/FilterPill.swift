@@ -4,18 +4,22 @@ import SwiftUI
 ///
 /// Promoted out of `ReadAloudSelectionView`, where it was private, after
 /// `WarmUpListView` and `ConfidenceToolsView` turned out to have re-typed it
-/// character for character — same 12/8 padding, same caption fonts, same
-/// solid-fill-when-selected treatment. Selection haptics come along for free,
-/// which the two inline copies never had.
+/// character for character. Selection haptics come along for free, which the
+/// two inline copies never had.
 ///
-/// This is the *filter* chip. For a non-interactive state or identity badge,
-/// use `StatusPill`.
+/// Selected is the same solid white pill `FilterChip` / `SectionPicker` use —
+/// a full-tint glass capsule was the louder dialect, and two filter systems
+/// on neighboring pages then disagreed. Identity color lives on the idle
+/// glyph. For a non-interactive state or identity badge, use `StatusPill`.
 struct FilterPill: View {
     let title: String
     var icon: String? = nil
     let isSelected: Bool
     var color: Color = AppColors.primary
     let action: () -> Void
+
+    /// Ink on a selected (solid white) chip. Same token as `FilterChip`.
+    private static let onLight = Color(red: 0.07, green: 0.07, blue: 0.08)
 
     var body: some View {
         Button {
@@ -26,22 +30,37 @@ struct FilterPill: View {
                 if let icon {
                     Image(systemName: icon)
                         .font(.caption2)
+                        .foregroundStyle(isSelected ? AnyShapeStyle(Self.onLight) : AnyShapeStyle(color))
                 }
                 Text(title)
                     .font(.caption.weight(.medium))
             }
-            .foregroundStyle(isSelected ? .white : .primary)
+            .foregroundStyle(isSelected ? AnyShapeStyle(Self.onLight) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
-            .glassEffect(
-                isSelected ? .regular.tint(color).interactive() : .regular.interactive(),
-                in: .capsule
-            )
+            .modifier(SelectedFilterChrome(isSelected: isSelected))
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// Selected matches `SectionPicker` (solid white). Idle is quiet glass.
+struct SelectedFilterChrome: ViewModifier {
+    let isSelected: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background { Capsule().fill(Color.white.opacity(0.92)) }
+                .clipShape(Capsule())
+        } else {
+            content
+                .glassEffect(.regular.interactive(), in: .capsule)
+        }
     }
 }
 
