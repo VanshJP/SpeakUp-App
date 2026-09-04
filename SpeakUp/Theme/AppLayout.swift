@@ -15,6 +15,10 @@ enum AppLayout {
 
     /// Gap for denser list hubs (Library, History recordings, Settings).
     static let listSpacing: CGFloat = 16
+
+    /// Minimum touch target. Visible chrome may be smaller; expand with
+    /// `.frame` + `.contentShape` so the hit box still meets this size.
+    static let minHitTarget: CGFloat = 44
 }
 
 extension View {

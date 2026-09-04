@@ -492,11 +492,11 @@ extension AllPromptsView {
     private var emptyState: some View {
         EmptyStateCard(
             icon: selectedFilter == .myPrompts ? "text.badge.plus" : "magnifyingglass",
-            title: selectedFilter == .myPrompts ? "No Custom Prompts Yet" : "No Prompts Found",
+            title: selectedFilter == .myPrompts ? "No custom prompts yet" : "No prompts found",
             message: selectedFilter == .myPrompts
                 ? "Create your first custom prompt to get started."
                 : "Try adjusting your search or filters.",
-            buttonTitle: selectedFilter == .myPrompts ? "Add Prompt" : nil,
+            buttonTitle: selectedFilter == .myPrompts ? "Add prompt" : nil,
             buttonAction: selectedFilter == .myPrompts ? { showingAddPrompt = true } : nil
         )
         .padding(.top, 40)

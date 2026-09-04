@@ -91,30 +91,33 @@ struct TodayView: View {
                         resetLayoutButton.transition(.identity)
                     }
 
-                    // One button, not two branches: Edit and Done used to be
-                    // separate views, so leaving edit mode cross-faded one glass
-                    // capsule into another and both went dark mid-fade. After
-                    // the whole page — not chrome that fights the greeting.
-                    editHomepageButton(done: isEditingLayout)
+                    // Edit lives in the scroll. Done does not — leaving edit
+                    // mode used to mean scrolling past every block, the hidden
+                    // tray and the reset button. The safe-area inset owns Done.
+                    if !isEditingLayout {
+                        editHomepageButton
+                    }
                 }
                 .padding(.top, 4)
                 .pageContentInsets()
             }
             .scrollIndicators(.hidden)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isEditingLayout {
+                doneEditingBar
+            }
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        // The only Done used to sit past every block, the hidden tray and the
-        // reset button, so leaving edit mode meant scrolling the whole page —
-        // and the long-press that got you in does nothing to get you out. Same
-        // place iOS puts it when the Home screen is jiggling.
+        // Same place iOS puts Done when the Home screen is jiggling. The
+        // pinned bar at the bottom is the easier target; this is the spare.
         .toolbar {
             if isEditingLayout {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        Haptics.light()
-                        withAnimation(AppMotion.slide) { isEditingLayout = false }
+                        finishEditingLayout()
                     }
                     .font(.subheadline.weight(.semibold))
                     .accessibilityLabel("Finish customizing Today")
@@ -197,7 +200,9 @@ struct TodayView: View {
                 }
                 .overlay(alignment: .topLeading) {
                     if !module.isPinned {
-                        removeBadge(module).offset(x: -8, y: -8)
+                        // Extra hit area hangs off the card, not over the
+                        // grab layer — a 44pt badge at -8,-8 ate the drag.
+                        removeBadge(module).offset(x: -16, y: -16)
                     }
                 }
                 .overlay {
@@ -211,7 +216,7 @@ struct TodayView: View {
                     insertModule(dragged, before: module)
                     return true
                 } isTargeted: { targeted in
-                    withAnimation(AppMotion.slide) {
+                    withAnimation(AppMotion.settle) {
                         if targeted { dropTarget = module }
                         else if dropTarget == module { dropTarget = nil }
                     }
@@ -236,7 +241,7 @@ struct TodayView: View {
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.9).onEnded { _ in
                         Haptics.medium()
-                        withAnimation(AppMotion.slide) { isEditingLayout = true }
+                        withAnimation(AppMotion.settle) { isEditingLayout = true }
                     }
                 )
                 .transition(.identity)
@@ -252,6 +257,8 @@ struct TodayView: View {
                 .font(.system(size: 22))
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(.white, Color.black.opacity(0.6))
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Hide \(module.title)")
@@ -361,7 +368,7 @@ struct TodayView: View {
             setModuleVisible(dragged, false)
             return true
         } isTargeted: { targeted in
-            withAnimation(AppMotion.slide) { trayTargeted = targeted }
+            withAnimation(AppMotion.settle) { trayTargeted = targeted }
         }
     }
 
@@ -404,7 +411,7 @@ struct TodayView: View {
     private var resetLayoutButton: some View {
         Button {
             Haptics.light()
-            withAnimation(AppMotion.slide) {
+            withAnimation(AppMotion.settle) {
                 // Empty raw is the "never customized" marker TodayHomeLayout
                 // resolves back to the factory default.
                 userSettings.first?.todayHomeLayoutRaw = []
@@ -432,7 +439,7 @@ struct TodayView: View {
         let list = TodayHomeLayout.reorder(homeModules, moving: dragged, onto: target)
         guard list != homeModules else { return }
         Haptics.selection()
-        withAnimation(AppMotion.slide) {
+        withAnimation(AppMotion.settle) {
             dropTarget = nil
             writeLayout(list)
         }
@@ -444,7 +451,7 @@ struct TodayView: View {
         let destination = index + delta
         guard list.indices.contains(destination) else { return }
         list.swapAt(index, destination)
-        withAnimation(AppMotion.slide) { writeLayout(list) }
+        withAnimation(AppMotion.settle) { writeLayout(list) }
     }
 
     private func setModuleVisible(_ module: TodayHomeModule, _ on: Bool) {
@@ -463,7 +470,7 @@ struct TodayView: View {
             guard !module.isPinned else { return }
             list.removeAll { $0 == module }
         }
-        withAnimation(AppMotion.slide) { writeLayout(list) }
+        withAnimation(AppMotion.settle) { writeLayout(list) }
     }
 
     private func writeLayout(_ list: [TodayHomeModule]) {
@@ -711,20 +718,47 @@ struct TodayView: View {
 
     /// Bottom-of-page customize control. Lives under the modules so the
     /// greeting and Start Speaking keep the first viewport; long-press on a
-    /// block still enters edit mode without scrolling.
-    private func editHomepageButton(done: Bool) -> some View {
+    /// block still enters edit mode without scrolling. Done is not here —
+    /// `doneEditingBar` pins it to the screen so leaving edit mode never
+    /// depends on scroll position.
+    private var editHomepageButton: some View {
         GlassButton(
-            title: done ? "Done" : "Edit homepage",
-            icon: done ? "checkmark" : "slider.horizontal.3",
+            title: "Edit homepage",
+            icon: "slider.horizontal.3",
             style: .secondary,
             size: .medium,
             fullWidth: true
         ) {
             Haptics.light()
-            withAnimation(AppMotion.slide) { isEditingLayout = !done }
+            withAnimation(AppMotion.settle) { isEditingLayout = true }
         }
-        .accessibilityLabel(done ? "Finish customizing Today" : "Customize Today")
+        .accessibilityLabel("Customize Today")
         .padding(.top, 4)
+    }
+
+    /// Always-on-screen exit, inset above the tab bar. Primary (solid white,
+    /// not glass) so it can fade in without the Liquid Glass cross-fade that
+    /// turns a capsule into its own shadow.
+    private var doneEditingBar: some View {
+        GlassButton(
+            title: "Done",
+            icon: "checkmark",
+            style: .primary,
+            size: .medium,
+            fullWidth: true
+        ) {
+            finishEditingLayout()
+        }
+        .accessibilityLabel("Finish customizing Today")
+        .padding(.horizontal, AppLayout.pageHorizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func finishEditingLayout() {
+        Haptics.light()
+        withAnimation(AppMotion.settle) { isEditingLayout = false }
     }
 
     /// Runs once per calendar day: pops the streak chip and fires one haptic.
@@ -1229,9 +1263,10 @@ private extension View {
     }
 }
 
-/// Rocks between -0.3° and +0.3° on a 0.45s half-swing. The rest angle has to be
-/// one end of the swing rather than zero, or `autoreverses` tilts the block one
-/// way only and the page looks like it is leaning instead of wiggling.
+/// Rocks ±0.3° on a 0.9s period. Driven by `TimelineView` so a drop or
+/// re-render cannot restart the swing — the old `@State` + `repeatForever`
+/// version jumped back to the start of the ease every time a block moved,
+/// which is what made edit mode feel like the page was shaking.
 ///
 /// Scale is everything here. A Home-screen icon is ~60pt wide, so ±0.5° at a
 /// 0.17s half-swing moves its corners a hair. The same numbers on a ~350pt card
@@ -1243,18 +1278,12 @@ private struct WiggleModifier: ViewModifier {
     let active: Bool
     let phase: Double
 
-    @State private var swung = false
-
     func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(active ? (swung ? 0.3 : -0.3) : 0))
-            .animation(
-                active
-                    ? .easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(phase)
-                    : nil,
-                value: swung
-            )
-            .onAppear { swung = active }
-            .onChange(of: active) { _, isActive in swung = isActive }
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: !active)) { context in
+            let period = 0.9
+            let t = context.date.timeIntervalSinceReferenceDate + phase
+            let angle = active ? 0.3 * sin(t * (2 * .pi / period)) : 0
+            content.rotationEffect(.degrees(angle))
+        }
     }
 }

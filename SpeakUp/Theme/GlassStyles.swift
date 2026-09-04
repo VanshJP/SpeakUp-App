@@ -9,10 +9,26 @@ struct GlassCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         let glass: Glass = {
             if let tint { return .regular.tint(tint) }
-            return .regular
+            return .regular.tint(AppColors.glassTintAccent)
         }()
         content
             .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.22),
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.02)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.75
+                    )
+                    .allowsHitTesting(false)
+            }
             .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
     }
 }
@@ -54,6 +70,8 @@ struct GlassSectionHeader<Accessory: View>: View {
             Text(title)
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
             Spacer()
             accessory
         }

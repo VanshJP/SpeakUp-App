@@ -71,8 +71,10 @@ struct HistoryView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .navigationTitle("History")
-        .navigationBarTitleDisplayMode(.large)
+        // No root title — the tab bar already says History, and the pinned
+        // SectionPicker names Recordings / Progress. Trailing filter stays.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if selectedSection == .recordings {
@@ -236,7 +238,7 @@ struct HistoryView: View {
             if filteredSummaries.isEmpty {
                 EmptyStateCard(
                     icon: selectedFilter == .all ? "mic.slash" : "magnifyingglass",
-                    title: selectedFilter == .all ? "No Recordings Yet" : "No Matches",
+                    title: selectedFilter == .all ? "No recordings yet" : "No matches",
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
                         : "Try adjusting your filters or search terms."
@@ -344,26 +346,14 @@ struct FilterChip: View {
             .foregroundStyle(isSelected ? AnyShapeStyle(Self.onLight) : AnyShapeStyle(.primary))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .modifier(FilterChipChrome(isSelected: isSelected))
+            .modifier(SelectedFilterChrome(isSelected: isSelected))
+            // Hit target expands around the capsule — see FilterPill.
+            .frame(minHeight: AppLayout.minHitTarget)
+            .contentShape(Capsule())
         }
+        // Plain: GlassPressStyle scales live glass into the dark clipped flash.
         .buttonStyle(.plain)
-    }
-}
-
-/// Selected matches `SectionPicker` (solid white). Idle matches `FilterPill` (glass).
-private struct FilterChipChrome: ViewModifier {
-    let isSelected: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isSelected {
-            content
-                .background { Capsule().fill(Color.white.opacity(0.92)) }
-                .clipShape(Capsule())
-        } else {
-            content
-                .glassEffect(.regular.interactive(), in: .capsule)
-        }
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

@@ -86,8 +86,11 @@ struct PracticeHubView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.large)
+        // No root title — the tab bar already says Library, and the pinned
+        // SectionPicker names the section. A nav title (large or inline) only
+        // stacked chrome above the picker; trailing filter/sort stay.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: activeSearchText, prompt: searchPrompt)
         .onChange(of: storiesSearchText) { _, newValue in

@@ -9,7 +9,9 @@ struct GlassCard<Content: View>: View {
     var elevated: Bool
 
     init(
-        cornerRadius: CGFloat = 18,
+        // Default matches `glassCard()` / editing overlays (20). Nested inner
+        // surfaces should sit ~padding below this for concentric radii.
+        cornerRadius: CGFloat = 20,
         tint: Color? = nil,
         // Tightened from 16. Every card in the app inherits this, so it is the
         // single highest-leverage control over how large the app feels.
@@ -31,6 +33,26 @@ struct GlassCard<Content: View>: View {
             .padding(padding)
             .glassEffect(resolvedGlass, in: .rect(cornerRadius: cornerRadius))
             .overlay {
+                // Painted top rim. Liquid Glass's real specular tracks the
+                // backdrop orbs, so a card near the top of Today lights up
+                // and then goes flat as you scroll it onto dark navy. This
+                // stroke keeps the "light at the top" regardless of scroll.
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.03)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+                    .allowsHitTesting(false)
+            }
+            .overlay {
                 if let accentBorder {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(accentBorder.opacity(0.35), lineWidth: 1)
@@ -47,7 +69,7 @@ struct GlassCard<Content: View>: View {
         if let tint {
             return .regular.tint(tint)
         }
-        return .regular
+        return .regular.tint(AppColors.glassTintAccent)
     }
 }
 
@@ -75,6 +97,22 @@ struct FeaturedGlassCard<Content: View>: View {
         content
             .padding(padding)
             .glassEffect(.regular.tint(gradientColors.first ?? AppColors.primary), in: .rect(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.03)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+                    .allowsHitTesting(false)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(AppColors.cardStroke, lineWidth: 0.5)
@@ -113,6 +151,7 @@ struct TickMeter: View {
 
 struct EmptyStateCard: View {
     let icon: String
+    /// Sentence case. Empty titles are headings, not buttons — keep them calm.
     let title: String
     let message: String
     var buttonTitle: String? = nil
@@ -193,9 +232,9 @@ struct EmptyStateInline: View {
             FeaturedGlassCard { Text("Featured card").foregroundStyle(.white) }
             EmptyStateCard(
                 icon: "mic.slash",
-                title: "No Recordings Yet",
+                title: "No recordings yet",
                 message: "Start your first practice session to see your progress here.",
-                buttonTitle: "Start Recording",
+                buttonTitle: "Start recording",
                 buttonAction: {}
             )
         }

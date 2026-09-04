@@ -21,7 +21,7 @@ struct StreakChip: View {
                 .foregroundStyle(isActive ? AppColors.warning : Color.white.opacity(0.35))
 
             Text("\(streak)")
-                .font(.subheadline.weight(.bold))
+                .font(.subheadline.weight(.bold).monospacedDigit())
                 .foregroundStyle(.white)
                 .contentTransition(.numericText(value: Double(streak)))
 
@@ -31,7 +31,9 @@ struct StreakChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .glassEffect(.regular.interactive(), in: .capsule)
+        .frame(minHeight: AppLayout.minHitTarget)
+        .contentShape(Capsule())
+        .glassEffect(.regular.tint(AppColors.glassTintAccent).interactive(), in: .capsule)
         .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")

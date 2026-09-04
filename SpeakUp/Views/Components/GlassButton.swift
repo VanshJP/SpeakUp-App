@@ -18,6 +18,7 @@ struct GlassButtonLabel: View {
             .foregroundStyle(foregroundColor)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
+            .frame(minHeight: AppLayout.minHitTarget)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .modifier(GlassButtonChrome(style: style))
             .shadow(color: shadowColor, radius: shadowRadius, y: shadowYOffset)
@@ -89,7 +90,10 @@ private struct GlassButtonChrome: ViewModifier {
                 .clipShape(Capsule())
         case .secondary:
             content
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .glassEffect(
+                    .regular.tint(AppColors.glassTintAccent).interactive(),
+                    in: .capsule
+                )
         case .outline:
             content
                 .background {
@@ -188,12 +192,18 @@ struct GlassButton: View {
 
 /// Shared pressed-state feedback for glass controls — a subtle scale + dim,
 /// spring-animated. Keeps taps feeling physical without any layout shift.
+///
+/// Press scale is exactly `0.96` (anything below ~0.95 feels exaggerated).
+/// Under Reduce Motion the scale is skipped so state still dims without a
+/// transform the user asked not to see.
 struct GlassPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1.0)
             .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(AppMotion.snap, value: configuration.isPressed)
+            .animation(reduceMotion ? nil : AppMotion.snap, value: configuration.isPressed)
     }
 }
 

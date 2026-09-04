@@ -226,7 +226,10 @@ enum AppColors {
     // MARK: - Glass Tints
 
     static let glassTintPrimary = primary.opacity(0.10)
-    static let glassTintAccent = Color.white.opacity(0.05)
+    /// Soft white lift for untinted Liquid Glass on the navy canvas. Without
+    /// it, `.regular` samples the dark base and reads as a muddy plate —
+    /// this is the brighter dark-glass look cards and idle chips share.
+    static let glassTintAccent = Color.white.opacity(0.08)
     static let glassTintSuccess = success.opacity(0.10)
 }
 

@@ -19,8 +19,11 @@ struct SettingsView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
+        // No root title — the tab bar already says Settings. A large title was
+        // the odd one out once Library / History / Learn dropped theirs; the
+        // "You" section header is the first label on the page.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)
