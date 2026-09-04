@@ -51,6 +51,7 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
 
 /// Renders an `AppCanvas`. Animated styles run at a low frame rate so the
 /// whole app does not pay recording-session backdrop cost on every tab.
+/// Timeline clocks pause when the scene is inactive or Reduce Motion is on.
 struct AppCanvasView: View {
     var canvas: AppCanvas = .classic
     var style: AppBackground.Style = .primary
@@ -58,9 +59,10 @@ struct AppCanvasView: View {
     var animated: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        let shouldAnimate = animated && !reduceMotion
+        let shouldAnimate = animated && !reduceMotion && scenePhase == .active
 
         Group {
             switch canvas {
@@ -69,11 +71,14 @@ struct AppCanvasView: View {
             case .midnight:
                 midnightCanvas
             case .mist, .aurora, .ember, .horizon, .prism, .depth:
-                TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: !shouldAnimate)) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 8.0, paused: !shouldAnimate)) { context in
                     let time = shouldAnimate
                         ? context.date.timeIntervalSinceReferenceDate
                         : 0
                     styledCanvas(time: time)
+                        // Flatten the orb / mesh / particle stack into one
+                        // layer so Liquid Glass cards sample a cheap backdrop.
+                        .drawingGroup(opaque: true)
                 }
             }
         }
@@ -267,6 +272,9 @@ private struct MistCanvas: View {
 
 // MARK: - Aurora (app-soft)
 
+/// Soft colour wash for the app canvas. Orb drift only — no MeshGradient.
+/// The recording Aurora still uses MeshGradient; this one stays cheap enough
+/// to sit behind every tab.
 private struct AppAuroraCanvas: View {
     let time: TimeInterval
 
@@ -274,33 +282,38 @@ private struct AppAuroraCanvas: View {
         ZStack {
             Color(red: 0.02, green: 0.04, blue: 0.07)
 
-            MeshGradient(
-                width: 3,
-                height: 3,
-                points: [
-                    SIMD2<Float>(0, 0),
-                    SIMD2<Float>(0.5 + Float(sin(time * 0.15)) * 0.05, 0),
-                    SIMD2<Float>(1, 0),
-                    SIMD2<Float>(0, 0.5),
-                    SIMD2<Float>(0.5, 0.5 + Float(cos(time * 0.12)) * 0.04),
-                    SIMD2<Float>(1, 0.5),
-                    SIMD2<Float>(0, 1),
-                    SIMD2<Float>(0.5, 1),
-                    SIMD2<Float>(1, 1)
-                ],
-                colors: [
-                    Color(red: 0.02, green: 0.08, blue: 0.12),
-                    AppColors.primary.opacity(0.55),
-                    Color(red: 0.08, green: 0.05, blue: 0.18),
-                    Color(red: 0.03, green: 0.12, blue: 0.14),
-                    AppColors.categoryBrandBright.opacity(0.7),
-                    Color(red: 0.12, green: 0.06, blue: 0.22),
-                    Color(red: 0.02, green: 0.04, blue: 0.09),
-                    Color(red: 0.05, green: 0.09, blue: 0.16),
-                    Color(red: 0.06, green: 0.03, blue: 0.12)
-                ]
+            auroraOrb(
+                color: AppColors.primary,
+                x: 0.72 + 0.05 * cos(time * 0.09),
+                y: 0.22 + 0.04 * sin(time * 0.11),
+                radius: 260
             )
-            .opacity(0.75)
+            auroraOrb(
+                color: Color(red: 0.45, green: 0.28, blue: 0.85),
+                x: 0.28 + 0.05 * sin(time * 0.08),
+                y: 0.48 + 0.05 * cos(time * 0.1),
+                radius: 280
+            )
+            auroraOrb(
+                color: AppColors.categoryBrandBright,
+                x: 0.55 + 0.04 * sin(time * 0.07),
+                y: 0.78 + 0.03 * cos(time * 0.12),
+                radius: 220
+            )
+        }
+    }
+
+    private func auroraOrb(color: Color, x: Double, y: Double, radius: CGFloat) -> some View {
+        GeometryReader { geo in
+            RadialGradient(
+                colors: [color.opacity(0.4), color.opacity(0.1), .clear],
+                center: .center,
+                startRadius: 6,
+                endRadius: radius
+            )
+            .frame(width: radius * 2, height: radius * 2)
+            .position(x: geo.size.width * x, y: geo.size.height * y)
+            .blendMode(.plusLighter)
         }
     }
 }
@@ -385,6 +398,7 @@ private struct AppHorizonCanvas: View {
 // MARK: - Prism (new)
 
 /// Soft diagonal light shards — graphic without competing with cards.
+/// Soft blur (not 28pt) keeps the wash cheap for an always-on canvas.
 private struct PrismCanvas: View {
     let time: TimeInterval
 
@@ -421,7 +435,7 @@ private struct PrismCanvas: View {
                     graphics.fill(path, with: .color(shard.2))
                 }
             }
-            .blur(radius: 28)
+            .blur(radius: 12)
         }
     }
 }

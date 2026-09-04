@@ -198,6 +198,10 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            // One shared canvas behind every tab. Root tabs used to each paint
+            // their own AppBackground — five TimelineViews for one visible page.
+            AppBackground()
+
             TabView(selection: $selectedTab) {
                 ForEach(AppTab.allCases) { tab in
                     Tab(tab.title, systemImage: tab == selectedTab ? tab.selectedIcon : tab.icon, value: tab) {

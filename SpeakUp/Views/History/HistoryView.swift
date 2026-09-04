@@ -41,7 +41,7 @@ struct HistoryView: View {
 
     var body: some View {
         ZStack {
-            AppBackground()
+            // Canvas comes from ContentView's shared AppBackground.
 
             PageScrollView {
                 LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {

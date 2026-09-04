@@ -43,7 +43,7 @@ struct TodayView: View {
 
     var body: some View {
         ZStack {
-            AppBackground()
+            // Canvas comes from ContentView's shared AppBackground.
 
             // Vertical only, and `PageScrollView` is what makes that true: an
             // over-wide child used to let this page pan sideways. No horizontal

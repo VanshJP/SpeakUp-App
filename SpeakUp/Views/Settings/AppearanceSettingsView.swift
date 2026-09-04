@@ -88,7 +88,7 @@ struct AppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader("Background", icon: "paintpalette.fill")
 
-            Text("The mood behind every tab. Recording has its own backdrop in Recording Look.")
+            Text("The mood behind every tab.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
