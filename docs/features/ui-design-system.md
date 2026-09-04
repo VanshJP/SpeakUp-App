@@ -27,7 +27,7 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 6. Haptics via `Haptics.*` typed helpers.
 7. Tab bar: `.tint(.white)`, `.preferredColorScheme(.dark)`.
 8. Full-screen pages scroll with **`PageScrollView`**, not `ScrollView`. A plain vertical `ScrollView` pans sideways as soon as any child measures wider than the viewport; `PageScrollView` clamps content to the container width so overflow clips instead. Deliberate horizontal rails stay `ScrollView(.horizontal)`.
-9. **One page inset.** Root tabs use `.pageContentInsets()` (`AppLayout.pageHorizontal` = 16 + bottom 16). Do not hand-roll `.padding(.horizontal, 20)` on a tab — Learn used to, and the stack looked uneven. Chapter stacks use `AppLayout.chapterSpacing` (20); list hubs use `AppLayout.listSpacing` (16). **Library and History use `.inline`** — both own a trailing toolbar control, and `.large` left that button alone on an empty nav-bar row with the title dropped underneath. Learn / Settings stay `.large` (no lonely trailing chrome). Today keeps a custom greeting with `.inline` empty title.
+9. **One page inset.** Root tabs use `.pageContentInsets()` (`AppLayout.pageHorizontal` = 16 + bottom 16). Do not hand-roll `.padding(.horizontal, 20)` on a tab — Learn used to, and the stack looked uneven. Chapter stacks use `AppLayout.chapterSpacing` (20); list hubs use `AppLayout.listSpacing` (16). **Root tabs carry no nav title** (`.navigationTitle("")` + `.inline`) — the tab bar already names the destination, and a large title left trailing chrome alone on an empty nav row with the name dropped underneath. Today’s greeting, Library/History’s `SectionPicker`, Learn’s continue card, and Settings’ “You” header are the first voice on each page. Nested pushes (lesson detail, a setting, a story) still take a real title.
 10. Nothing in a page may demand more width than the screen. `.fixedSize()` on a row, a wide fixed `.frame(width:)`, or a pinned pill row are the usual causes — check at 375pt *and* at accessibility text sizes, and reach for `ViewThatFits` before pinning (see `ActivityStrip.header`).
 11. Controls keep a `AppLayout.minHitTarget` (44pt) hit target even when their visible icon/chip is smaller. Selected controls expose `.isSelected`; modal overlays expose `.isModal` + Escape; Reduce Motion suppresses ambient/celebration motion.
 12. **Tint is for identity, not emphasis.** A colored `glassEffect` tint stays at **0.06** (a whole card or tile) or
@@ -51,7 +51,7 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 5. `GlassSectionHeader` for sections
 6. Haptics on interaction
 7. `// MARK:` when file grows past ~60 lines
-8. Match neighbor tab title mode (Library / History = `.inline`; Learn / Settings = `.large`; Today = custom)
+8. Root tabs: empty `.inline` nav title (tab bar names the place). Nested pushes: real title + `.inline` unless a sheet owns its own chrome.
 
 ## Cross-links
 

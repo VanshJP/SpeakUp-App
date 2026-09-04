@@ -30,8 +30,11 @@ struct CurriculumView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .navigationTitle("Learning Path")
-        .navigationBarTitleDisplayMode(.large)
+        // No root title — the tab bar already says Learn. "Learning Path" as a
+        // large title left the trophy alone on an empty nav row with the name
+        // dropped underneath. Continue card is the page's first voice.
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
