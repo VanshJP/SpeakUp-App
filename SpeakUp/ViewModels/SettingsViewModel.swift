@@ -63,6 +63,10 @@ class SettingsViewModel {
     var countdownLook: TimerLook = .ring
     var recordingBackdrop: RecordingBackdrop = .base
 
+    // Local state - App Appearance
+    var glassAppearance: GlassAppearance = .light
+    var appCanvas: AppCanvas = .classic
+
     // Local state - Sound Pack
     var soundPack: SoundPack = .soft
 
@@ -242,6 +246,9 @@ class SettingsViewModel {
         countdownLook = TimerLook(rawValue: settings.countdownLook) ?? .ring
         recordingBackdrop = RecordingBackdrop(rawValue: settings.countdownBackdrop) ?? .base
 
+        glassAppearance = GlassAppearance(rawValue: settings.glassAppearance) ?? .light
+        appCanvas = AppCanvas(rawValue: settings.appCanvas) ?? .classic
+
         // Sound pack
         soundPack = SoundPack(rawValue: settings.soundPack) ?? .soft
         ChirpPlayer.shared.pack = soundPack
@@ -328,6 +335,9 @@ class SettingsViewModel {
         settings.recordButtonStyle = recordButtonStyle.rawValue
         settings.countdownLook = countdownLook.rawValue
         settings.countdownBackdrop = recordingBackdrop.rawValue
+
+        settings.glassAppearance = glassAppearance.rawValue
+        settings.appCanvas = appCanvas.rawValue
 
         // Sound pack
         settings.soundPack = soundPack.rawValue
@@ -693,6 +703,8 @@ class SettingsViewModel {
         settings.recordButtonStyle = 0
         settings.countdownLook = 0
         settings.countdownBackdrop = 0
+        settings.glassAppearance = 0
+        settings.appCanvas = 0
         settings.soundPack = 0
         settings.shareCardTheme = 0
         ChirpPlayer.shared.pack = .soft

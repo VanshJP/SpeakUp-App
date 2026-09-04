@@ -2,11 +2,14 @@ import SwiftUI
 
 // MARK: - App Background
 
-/// A rich, layered gradient background that replaces plain black.
-/// Deep navy base with ambient teal, indigo, and cyan orbs creates
-/// a premium feel and makes glass-morphism cards pop.
+/// App-wide canvas. Reads `appCanvas` from the environment so Settings →
+/// Appearance can re-skin every tab without each screen owning a picker.
+/// Style (`.primary` / `.recording` / `.subtle`) still nudges Classic/Midnight
+/// washes; animated canvases ignore style and keep one mood.
 struct AppBackground: View {
     var style: Style = .primary
+
+    @Environment(\.appCanvas) private var canvas
 
     enum Style {
         case primary    // Default: deep navy with teal + indigo orbs
@@ -15,91 +18,7 @@ struct AppBackground: View {
     }
 
     var body: some View {
-        ZStack {
-            // 1. Deep dark base
-            Color(red: 0.035, green: 0.04, blue: 0.09)
-
-            // 2. Primary gradient wash
-            LinearGradient(
-                colors: gradientColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            // 3. Teal ambient orb  (top-right area)
-            RadialGradient(
-                colors: [tealOrbColor, .clear],
-                center: UnitPoint(x: 0.85, y: 0.08),
-                startRadius: 20,
-                endRadius: 280
-            )
-
-            // 4. Indigo ambient orb  (bottom-left area)
-            RadialGradient(
-                colors: [indigoOrbColor, .clear],
-                center: UnitPoint(x: 0.12, y: 0.88),
-                startRadius: 10,
-                endRadius: 240
-            )
-
-            // 5. Soft cyan glow  (center-ish)
-            RadialGradient(
-                colors: [cyanGlowColor, .clear],
-                center: UnitPoint(x: 0.5, y: 0.42),
-                startRadius: 10,
-                endRadius: 320
-            )
-        }
-        .ignoresSafeArea()
-    }
-
-    // MARK: - Style-dependent colors
-
-    private var gradientColors: [Color] {
-        switch style {
-        case .primary:
-            return [
-                Color(red: 0.05, green: 0.07, blue: 0.16),
-                Color(red: 0.03, green: 0.045, blue: 0.10),
-                Color(red: 0.035, green: 0.035, blue: 0.08),
-            ]
-        case .recording:
-            return [
-                Color(red: 0.02, green: 0.04, blue: 0.10),
-                Color(red: 0.01, green: 0.02, blue: 0.06),
-                Color(red: 0.02, green: 0.03, blue: 0.07),
-            ]
-        case .subtle:
-            return [
-                Color(red: 0.045, green: 0.06, blue: 0.14),
-                Color(red: 0.035, green: 0.05, blue: 0.11),
-                Color(red: 0.03, green: 0.04, blue: 0.09),
-            ]
-        }
-    }
-
-    private var tealOrbColor: Color {
-        switch style {
-        case .primary:   return Color.teal.opacity(0.12)
-        case .recording: return Color.teal.opacity(0.18)
-        case .subtle:    return Color.teal.opacity(0.10)
-        }
-    }
-
-    private var indigoOrbColor: Color {
-        switch style {
-        case .primary:   return Color.indigo.opacity(0.09)
-        case .recording: return Color.indigo.opacity(0.06)
-        case .subtle:    return Color.indigo.opacity(0.08)
-        }
-    }
-
-    private var cyanGlowColor: Color {
-        switch style {
-        case .primary:   return Color.cyan.opacity(0.04)
-        case .recording: return Color.cyan.opacity(0.06)
-        case .subtle:    return Color.cyan.opacity(0.03)
-        }
+        AppCanvasView(canvas: canvas, style: style)
     }
 }
 

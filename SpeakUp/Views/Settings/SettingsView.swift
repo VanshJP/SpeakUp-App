@@ -79,6 +79,15 @@ struct SettingsView: View {
             }
 
             settingsLink(
+                icon: "paintpalette.fill",
+                iconColor: AppColors.categoryPlum,
+                title: "Appearance",
+                subtitle: "Choose glass density and app background"
+            ) {
+                AppearanceSettingsView(viewModel: viewModel)
+            }
+
+            settingsLink(
                 icon: "waveform.circle",
                 iconColor: AppColors.categoryBrandBright,
                 title: "Recording Look",

@@ -115,9 +115,9 @@ struct HistoryView: View {
     // 20pt apart. Word Bank usage renders inside the Language tab now, so the
     // page ends at Review instead of an orphaned chip rail.
     //
-    // Review tiles (compare / listen back / goals / journal) stay here — they
-    // need history data. Library → Tools is prep (warm-up, drill, read aloud,
-    // calm); mixing the two catalogs muddies both.
+    // Review tiles also live on Library → Tools (denser `ToolCategoryCard`).
+    // History keeps the compact `ToolTileLabel` grid under the charts; both
+    // surfaces read `ReviewToolKind` so names and tints cannot drift.
     private var progressContent: some View {
         VStack(spacing: AppLayout.chapterSpacing) {
             ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
@@ -138,28 +138,46 @@ struct HistoryView: View {
                 ],
                 spacing: 10
             ) {
-                if viewModel.summaries.count >= 2 {
-                    NavigationLink { ComparisonView() } label: {
-                        ToolTileLabel(icon: "arrow.left.arrow.right", title: "Compare", tint: AppColors.categoryIndigo)
-                    }
-                    .buttonStyle(GlassPressStyle())
-
-                    Button { onShowBeforeAfter() } label: {
-                        ToolTileLabel(icon: "headphones", title: "Listen back", tint: AppColors.categoryPlum)
-                    }
-                    .buttonStyle(GlassPressStyle())
+                ForEach(ReviewToolKind.allCases) { tool in
+                    reviewToolButton(tool)
                 }
-
-                Button { onShowGoals() } label: {
-                    ToolTileLabel(icon: "target", title: "Goals", tint: AppColors.categorySage)
-                }
-                .buttonStyle(GlassPressStyle())
-
-                Button { onShowJournalExport() } label: {
-                    ToolTileLabel(icon: "square.and.arrow.up", title: "Journal", tint: AppColors.categoryAmber)
-                }
-                .buttonStyle(GlassPressStyle())
             }
+        }
+    }
+
+    @ViewBuilder
+    private func reviewToolButton(_ tool: ReviewToolKind) -> some View {
+        // Compare / Listen back need at least two sessions; Goals and Journal
+        // stay available so empty history still has a door into the feature.
+        switch tool {
+        case .compare:
+            if viewModel.summaries.count >= 2 {
+                NavigationLink { ComparisonView() } label: {
+                    ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
+                }
+                .buttonStyle(GlassPressStyle())
+                .accessibilityHint(tool.bestFor)
+            }
+        case .listenBack:
+            if viewModel.summaries.count >= 2 {
+                Button { onShowBeforeAfter() } label: {
+                    ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
+                }
+                .buttonStyle(GlassPressStyle())
+                .accessibilityHint(tool.bestFor)
+            }
+        case .goals:
+            Button { onShowGoals() } label: {
+                ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
+            }
+            .buttonStyle(GlassPressStyle())
+            .accessibilityHint(tool.bestFor)
+        case .journal:
+            Button { onShowJournalExport() } label: {
+                ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
+            }
+            .buttonStyle(GlassPressStyle())
+            .accessibilityHint(tool.bestFor)
         }
     }
 

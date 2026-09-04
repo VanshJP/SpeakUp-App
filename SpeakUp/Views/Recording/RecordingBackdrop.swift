@@ -37,9 +37,10 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
 /// Full-bleed session canvas. Driven from a single `TimelineView` so every
 /// style shares one clock. `animated: false` freezes a frame for thumbnails.
 ///
-/// Runs at 30 fps for the whole take, alongside the 60 fps waveform. If that
-/// ever shows up in energy traces, drop this to 15 fps while recording rather
-/// than freezing it — a still backdrop reads as a rendering bug.
+/// Runs at 20 fps for the whole take, alongside the 60 fps waveform. Dropped
+/// from 30 — recording already spends frame budget on the waveform ring, and
+/// the eye cannot tell 20 from 30 on these soft canvases. If energy traces
+/// still complain, freeze with `animated: false` rather than a still bug.
 struct RecordingBackdropView: View {
     var backdrop: RecordingBackdrop = .base
     var animated: Bool = true
@@ -52,9 +53,12 @@ struct RecordingBackdropView: View {
         Group {
             switch backdrop {
             case .base:
-                AppBackground(style: .recording)
+                // Base is always the classic recording wash — not the user's
+                // app-wide canvas. Recording Look owns session mood separately
+                // from Settings → Appearance.
+                AppCanvasView(canvas: .classic, style: .recording)
             default:
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)) { context in
                     let time = shouldAnimate
                         ? context.date.timeIntervalSinceReferenceDate
                         : 0

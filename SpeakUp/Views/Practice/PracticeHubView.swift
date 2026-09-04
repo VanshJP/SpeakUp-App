@@ -10,6 +10,8 @@ struct PracticeHubView: View {
     @State private var showingAddPrompt = false
     @State private var showingBatchAdd = false
     @State private var showingNewStory = false
+    /// Non-nil pushes Compare from Library → Tools → Review.
+    @State private var compareRoute: CompareRoute?
 
     // Practice tools — same grammar as Prompts: category grid → in-place
     // detail (filters + items). Today's quick tiles still present sheets.
@@ -37,6 +39,9 @@ struct PracticeHubView: View {
     var onStartStoryPractice: ((Story) -> Void)? = nil
     var onSendToWarmUp: ((Story) -> Void)? = nil
     var onSendToDrill: ((Story) -> Void)? = nil
+    var onShowBeforeAfter: (() -> Void)? = nil
+    var onShowJournalExport: (() -> Void)? = nil
+    var onShowGoals: (() -> Void)? = nil
     var storiesViewModel: StoriesViewModel
 
     // MARK: - Body
@@ -110,6 +115,9 @@ struct PracticeHubView: View {
                 onSendToDrill: onSendToDrill
             )
         }
+        .navigationDestination(item: $compareRoute) { _ in
+            ComparisonView()
+        }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()
         }
@@ -180,32 +188,42 @@ struct PracticeHubView: View {
         Group {
             if let selectedTool {
                 toolDetail(selectedTool)
+                    // Detail enters/exits from the trailing edge — same grammar
+                    // as a NavigationStack push. The old asymmetric pair used
+                    // opposite edges for removal, so forward looked like back.
                     .transition(.asymmetric(
-                        insertion: .push(from: .trailing),
-                        removal: .push(from: .leading)
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
                     ))
             } else {
                 toolsLanding
                     .transition(.asymmetric(
-                        insertion: .push(from: .leading),
-                        removal: .push(from: .trailing)
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
                     ))
             }
         }
     }
 
-    /// Category grid — same shape as Prompts: icon, name, one meta line.
+    /// Category grid — practice tools, then review tools. Same card recipe.
     private var toolsLanding: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
-        let visible = query.isEmpty
+        let visiblePractice = query.isEmpty
             ? toolsCatalog
             : toolsCatalog.filter {
                 $0.kind.title.localizedStandardContains(query)
                     || $0.kind.outcome.localizedStandardContains(query)
                     || $0.kind.bestFor.localizedStandardContains(query)
             }
+        let visibleReview = query.isEmpty
+            ? ReviewToolKind.allCases
+            : ReviewToolKind.allCases.filter {
+                $0.title.localizedStandardContains(query)
+                    || $0.outcome.localizedStandardContains(query)
+                    || $0.bestFor.localizedStandardContains(query)
+            }
 
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 20) {
             if query.isEmpty {
                 Text("Practice Tools")
                     .eyebrowStyle()
@@ -217,64 +235,84 @@ struct PracticeHubView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if visible.isEmpty {
+            if visiblePractice.isEmpty && visibleReview.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
                     title: "No tools match",
                     message: "Nothing here matches \"\(query)\". Try a different search."
                 )
             } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ],
-                    spacing: 12
-                ) {
-                    ForEach(visible) { tool in
-                        toolCategoryCard(tool)
+                if !visiblePractice.isEmpty {
+                    toolGrid(title: query.isEmpty ? nil : "Practice") {
+                        ForEach(visiblePractice) { tool in
+                            ToolCategoryCard(
+                                icon: tool.kind.icon,
+                                title: tool.kind.title,
+                                meta: meta(for: tool),
+                                tint: tool.kind.color,
+                                accessibilityDetail: tool.kind.outcome
+                            ) {
+                                withAnimation(AppMotion.settle) {
+                                    selectedTool = tool
+                                }
+                            }
+                            .accessibilityHint(tool.kind.bestFor)
+                        }
+                    }
+                }
+
+                if !visibleReview.isEmpty {
+                    toolGrid(title: "Review") {
+                        ForEach(visibleReview) { tool in
+                            ToolCategoryCard(
+                                icon: tool.icon,
+                                title: tool.title,
+                                meta: tool.meta,
+                                tint: tool.color,
+                                accessibilityDetail: tool.outcome
+                            ) {
+                                openReviewTool(tool)
+                            }
+                            .accessibilityHint(tool.bestFor)
+                        }
                     }
                 }
             }
         }
     }
 
-    private func toolCategoryCard(_ tool: LibraryTool) -> some View {
-        let kind = tool.kind
-        return Button {
-            Haptics.medium()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                selectedTool = tool
+    private func toolGrid<Content: View>(
+        title: String?,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let title {
+                GlassSectionHeader(title, icon: title == "Review" ? "ellipsis.circle" : "wrench.and.screwdriver")
             }
-        } label: {
-            GlassCard(cornerRadius: 16, tint: kind.color.opacity(0.06), padding: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: kind.icon)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(kind.color)
-                        .frame(width: 28, height: 28)
-                        .background {
-                            Circle().fill(kind.color.opacity(0.18))
-                        }
 
-                    Text(kind.title)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-
-                    Text(meta(for: tool))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12)
+                ],
+                spacing: 12
+            ) {
+                content()
             }
         }
-        .buttonStyle(GlassPressStyle())
-        .accessibilityLabel("\(kind.title). \(kind.outcome). \(meta(for: tool))")
-        .accessibilityHint(kind.bestFor)
+    }
+
+    private func openReviewTool(_ tool: ReviewToolKind) {
+        switch tool {
+        case .compare:
+            compareRoute = CompareRoute()
+        case .listenBack:
+            onShowBeforeAfter?()
+        case .goals:
+            onShowGoals?()
+        case .journal:
+            onShowJournalExport?()
+        }
     }
 
     @ViewBuilder
@@ -287,7 +325,7 @@ struct PracticeHubView: View {
                 size: .small
             ) {
                 Haptics.light()
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                withAnimation(AppMotion.settle) {
                     selectedTool = nil
                 }
             }
@@ -296,6 +334,11 @@ struct PracticeHubView: View {
             Text(tool.kind.title)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.white)
+
+            Text(tool.kind.outcome)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             switch tool {
             case .warmUps:
@@ -433,6 +476,11 @@ enum PracticeSection: String, CaseIterable, Identifiable {
         case .tools: return "wrench.and.screwdriver.fill"
         }
     }
+}
+
+/// Stable identity for the Compare push from Library → Tools.
+private struct CompareRoute: Hashable, Identifiable {
+    let id = UUID()
 }
 
 #Preview {
