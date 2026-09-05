@@ -12,6 +12,8 @@ import SwiftUI
 struct StreakChip: View {
     let streak: Int
 
+    @Environment(\.glassAppearance) private var glassAppearance
+
     private var isActive: Bool { streak >= 1 }
 
     var body: some View {
@@ -33,7 +35,7 @@ struct StreakChip: View {
         .padding(.vertical, 7)
         .frame(minHeight: AppLayout.minHitTarget)
         .contentShape(Capsule())
-        .glassEffect(.regular.tint(AppColors.glassTintAccent).interactive(), in: .capsule)
+        .glassEffect(.regular.tint(glassAppearance.glassTint).interactive(), in: .capsule)
         .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")

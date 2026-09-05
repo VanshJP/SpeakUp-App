@@ -62,6 +62,14 @@ struct ContentView: View {
         RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
     }
 
+    private var glassAppearance: GlassAppearance {
+        GlassAppearance(rawValue: userSettings.first?.glassAppearance ?? 0) ?? .light
+    }
+
+    private var appCanvas: AppCanvas {
+        AppCanvas(rawValue: userSettings.first?.appCanvas ?? 0) ?? .classic
+    }
+
     private var timerEndBehavior: TimerEndBehavior {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
@@ -126,6 +134,15 @@ struct ContentView: View {
                     onSendToDrill: { story in
                         drillStory = story
                     },
+                    onShowBeforeAfter: {
+                        showingBeforeAfter = true
+                    },
+                    onShowJournalExport: {
+                        showingJournalExport = true
+                    },
+                    onShowGoals: {
+                        showingGoals = true
+                    },
                     storiesViewModel: storiesViewModel
                 )
             }
@@ -181,6 +198,10 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            // One shared canvas behind every tab. Root tabs used to each paint
+            // their own AppBackground — five TimelineViews for one visible page.
+            AppBackground()
+
             TabView(selection: $selectedTab) {
                 ForEach(AppTab.allCases) { tab in
                     Tab(tab.title, systemImage: tab == selectedTab ? tab.selectedIcon : tab.icon, value: tab) {
@@ -220,6 +241,7 @@ struct ContentView: View {
                 )
                 .transition(.opacity.combined(with: .scale(scale: 1.05)))
                 .zIndex(1)
+                .allowsHitTesting(true)
             }
 
             // Above the tab bar on purpose: the tour points *at* the tabs, so
@@ -231,6 +253,8 @@ struct ContentView: View {
             }
         }
         .environment(\.appTour, appTour)
+        .environment(\.glassAppearance, glassAppearance)
+        .environment(\.appCanvas, appCanvas)
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .motion(AppMotion.settle, value: appTour.activeStep != nil)
         .onChange(of: appTour.activeStep) { _, step in

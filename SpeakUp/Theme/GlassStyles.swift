@@ -6,29 +6,16 @@ struct GlassCardModifier: ViewModifier {
     var cornerRadius: CGFloat = 20
     var tint: Color? = nil
 
+    @Environment(\.glassAppearance) private var glassAppearance
+
     func body(content: Content) -> some View {
         let glass: Glass = {
             if let tint { return .regular.tint(tint) }
-            return .regular.tint(AppColors.glassTintAccent)
+            return .regular.tint(glassAppearance.glassTint)
         }()
         content
             .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.22),
-                                Color.white.opacity(0.06),
-                                Color.white.opacity(0.02)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.75
-                    )
-                    .allowsHitTesting(false)
-            }
+            .glassRimStroke(cornerRadius: cornerRadius, appearance: glassAppearance)
             .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
     }
 }

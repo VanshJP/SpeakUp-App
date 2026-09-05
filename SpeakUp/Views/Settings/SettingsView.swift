@@ -5,60 +5,87 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LLMService.self) private var llmService
     @State private var viewModel = SettingsViewModel()
+    @FocusState private var nameFocused: Bool
 
     var body: some View {
-        ZStack {
-            AppBackground()
+        PageScrollView {
+            VStack(spacing: AppLayout.listSpacing) {
+                nameField
 
-            PageScrollView {
-                VStack(spacing: AppLayout.listSpacing) {
-                    settingsMenuCard
-                    aboutFooter
-                }
-                .pageContentInsets()
+                practiceSection
+                lookSection
+                accountSection
+
+                aboutFooter
             }
-            .scrollIndicators(.hidden)
+            .pageContentInsets()
         }
-        // No root title — the tab bar already says Settings. A large title was
-        // the odd one out once Library / History / Learn dropped theirs; the
-        // "You" section header is the first label on the page.
+        .scrollIndicators(.hidden)
+        // No root title — the tab bar already says Settings. The name field
+        // is a quiet identity line, not a section hero. Canvas comes from
+        // ContentView's shared AppBackground.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)
         }
+        .onDisappear {
+            nameFocused = false
+            Task { await viewModel.commitUserName() }
+        }
     }
 
-    // MARK: - Menu Card
+    // MARK: - Name (inline, not a page)
 
-    private var settingsMenuCard: some View {
+    /// One field, no "You" / Profile door. A whole section for a display name
+    /// made Settings open on the least-touched knob.
+    private var nameField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(
+                "",
+                text: $viewModel.userName,
+                prompt: Text("Your name").foregroundStyle(.white.opacity(0.35))
+            )
+            .font(.body.weight(.medium))
+            .foregroundStyle(.white)
+            .textInputAutocapitalization(.words)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .focused($nameFocused)
+            .onSubmit {
+                nameFocused = false
+                Task { await viewModel.commitUserName() }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(
+                                nameFocused ? AppColors.primary.opacity(0.45) : Color.white.opacity(0.08),
+                                lineWidth: nameFocused ? 1 : 0.5
+                            )
+                    }
+            }
+
+            Text("Used in greetings and the on-device dictation dictionary.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 4)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Your name")
+    }
+
+    // MARK: - Practice
+
+    private var practiceSection: some View {
         VStack(spacing: 12) {
-            GlassSectionHeader("You", icon: "person.crop.circle")
+            GlassSectionHeader("Practice", icon: "waveform")
 
-            settingsLink(
-                icon: "person.crop.circle",
-                iconColor: AppColors.primary,
-                title: "Profile",
-                subtitle: profileSubtitle
-            ) {
-                ProfileSettingsView(viewModel: viewModel)
-            }
-
-            settingsLink(
-                icon: "bell.fill",
-                iconColor: AppColors.categoryAmber,
-                title: "Reminders",
-                subtitle: viewModel.dailyReminderEnabled ? "Change your reminder time" : "Turn on a daily practice reminder"
-            ) {
-                ReminderSettingsView(viewModel: viewModel)
-            }
-
-            GlassSectionHeader("Practice & Scoring", icon: "waveform")
-                .padding(.top, 8)
-
-            // Session Defaults opens the group: everything here shapes a take,
-            // and the defaults are the first knob a new speaker needs.
             settingsLink(
                 icon: "slider.horizontal.3",
                 iconColor: AppColors.primary,
@@ -76,15 +103,6 @@ struct SettingsView: View {
                 subtitle: "Tune pace, fillers, and score weights"
             ) {
                 AnalysisSettingsView(viewModel: viewModel)
-            }
-
-            settingsLink(
-                icon: "waveform.circle",
-                iconColor: AppColors.categoryBrandBright,
-                title: "Recording Look",
-                subtitle: "Pick your backdrop, waveform, and timer"
-            ) {
-                RecordingLookView(viewModel: viewModel)
             }
 
             settingsLink(
@@ -122,9 +140,44 @@ struct SettingsView: View {
             ) {
                 FeedbackSettingsView(viewModel: viewModel)
             }
+        }
+    }
 
-            GlassSectionHeader("Intelligence & Data", icon: "cpu")
-                .padding(.top, 8)
+    // MARK: - Look
+
+    /// One door for cosmetics. Recording Look lives inside Appearance so the
+    /// hub does not ask the same question twice (app mood vs session mood).
+    private var lookSection: some View {
+        VStack(spacing: 12) {
+            GlassSectionHeader("Look", icon: "paintpalette.fill")
+                .padding(.top, 4)
+
+            settingsLink(
+                icon: "paintpalette.fill",
+                iconColor: AppColors.categoryPlum,
+                title: "Appearance",
+                subtitle: "Glass, background, and recording look"
+            ) {
+                AppearanceSettingsView(viewModel: viewModel)
+            }
+        }
+    }
+
+    // MARK: - Account
+
+    private var accountSection: some View {
+        VStack(spacing: 12) {
+            GlassSectionHeader("Account & Data", icon: "person.crop.circle")
+                .padding(.top, 4)
+
+            settingsLink(
+                icon: "bell.fill",
+                iconColor: AppColors.categoryAmber,
+                title: "Reminders",
+                subtitle: viewModel.dailyReminderEnabled ? "Change your reminder time" : "Turn on a daily practice reminder"
+            ) {
+                ReminderSettingsView(viewModel: viewModel)
+            }
 
             settingsLink(
                 icon: "cpu",
@@ -147,6 +200,8 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - About
 
     /// Demoted to a quiet footer row: version and legal links are read once,
     /// not configured, so About no longer earns a card inside a section.
@@ -217,7 +272,6 @@ struct SettingsView: View {
                             .tint(AppColors.primary)
                             .onChange(of: iCloudSyncEnabled) { _, newValue in
                                 ICloudStorageService.shared.isSyncEnabled = newValue
-                                // Also persist to SwiftData settings
                                 if let settings = viewModel.settings {
                                     settings.iCloudSyncEnabled = newValue
                                 }
@@ -261,13 +315,6 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
-    /// Hub subtitles name the action the page performs, never the current
-    /// value — every row reads as something you can do.
-    private var profileSubtitle: String {
-        let name = viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Set your name" : "Edit your name"
-    }
-
     private var aiModelSubtitle: String {
         switch llmService.activeBackend {
         case .appleIntelligence:
@@ -275,8 +322,6 @@ struct SettingsView: View {
         case .localLLM:
             return "Manage \(llmService.localLLM.modelDisplayName)"
         case .none:
-            // Nothing is active yet, but the local model is always
-            // downloadable — the row should name the action, not a dead end.
             return "Set up on-device AI"
         }
     }
@@ -405,9 +450,6 @@ struct AboutSettingsView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
-
-                    // Journal export lives in History → Progress → More,
-                    // next to the data it exports.
                 }
                 .padding()
             }

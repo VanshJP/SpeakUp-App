@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import SwiftData
 import WidgetKit
 import os
@@ -163,12 +164,18 @@ final class RecordingProcessingCoordinator {
 
                 let id = next.id
                 self.activeRecordingIDs.insert(id)
-                await self.process(
-                    recordingID: id,
-                    modelContext: modelContext,
-                    speechService: speechService,
-                    llmService: llmService
-                )
+                let deferredJob = Task { [weak self] in
+                    guard let self else { return }
+                    await self.process(
+                        recordingID: id,
+                        modelContext: modelContext,
+                        speechService: speechService,
+                        llmService: llmService
+                    )
+                }
+                self.activeTasks[id] = deferredJob
+                await deferredJob.value
+                self.activeTasks[id] = nil
                 self.activeRecordingIDs.remove(id)
 
                 // Re-fetch rather than reuse `next`: processing can take minutes
@@ -195,6 +202,23 @@ final class RecordingProcessingCoordinator {
         speechService: SpeechService,
         llmService: LLMService
     ) async {
+        // Keep the OS from suspending mid-analyze. Without this, a home-button
+        // during Whisper can freeze the stall watchdog's sleep, then look like
+        // a 60s decode hang on resume and abort into a truncated Apple path.
+        var backgroundTask = UIBackgroundTaskIdentifier.invalid
+        backgroundTask = UIApplication.shared.beginBackgroundTask(
+            withName: "SpeakUp.ProcessRecording"
+        ) {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+        }
+        defer {
+            if backgroundTask != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTask)
+                backgroundTask = .invalid
+            }
+        }
+
         let descriptor = FetchDescriptor<Recording>(
             predicate: #Predicate { $0.id == recordingID }
         )
@@ -575,7 +599,8 @@ final class RecordingProcessingCoordinator {
                 trackPauses: trackPauses,
                 scoreWeights: scoreWeights,
                 audioIsolationMetrics: resultSnapshot.audioIsolationMetrics,
-                speakerIsolationMetrics: resultSnapshot.speakerIsolationMetrics
+                speakerIsolationMetrics: resultSnapshot.speakerIsolationMetrics,
+                monoPCM: resultSnapshot.monoPCM
             )
             let markedWords = VocabMatcher.mark(resultSnapshot.words, vocabWords: vocabWords)
             return (analysis, markedWords)

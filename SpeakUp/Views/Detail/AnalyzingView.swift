@@ -32,6 +32,10 @@ final class SessionFeedbackGateStore {
 struct AnalyzingView: View {
     let recording: Recording
     let isModelLoading: Bool
+    /// True only while Whisper is actually downloading from Hub.
+    /// Distinct from `isModelLoading` so a failed first download does not keep
+    /// the "Downloading…" copy up through Apple Speech fallback.
+    var isDownloadingModel: Bool = false
     var feedbackEnabled: Bool = false
     var feedbackQuestions: [FeedbackQuestion] = []
     var existingFeedback: SessionFeedback? = nil
@@ -73,7 +77,7 @@ struct AnalyzingView: View {
     /// Showing the same spinner for both is what makes a slow first run read as
     /// a hang rather than a download.
     private var isFirstTimeModelDownload: Bool {
-        isModelLoading && !WhisperService.hasCompletedFirstLoad
+        isDownloadingModel && !WhisperService.hasCompletedFirstLoad
     }
 
     private var statusTitle: String {

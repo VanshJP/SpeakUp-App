@@ -37,28 +37,34 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
 /// Full-bleed session canvas. Driven from a single `TimelineView` so every
 /// style shares one clock. `animated: false` freezes a frame for thumbnails.
 ///
-/// Runs at 30 fps for the whole take, alongside the 60 fps waveform. If that
-/// ever shows up in energy traces, drop this to 15 fps while recording rather
-/// than freezing it — a still backdrop reads as a rendering bug.
+/// Runs at 15 fps for the whole take, alongside the 60 fps waveform. Pauses
+/// when the scene is inactive. Dropped from 30 → 20 → 15 — the eye cannot tell
+/// on these soft canvases, and recording already spends frame budget on the
+/// waveform ring. Thumbnails freeze with `animated: false`.
 struct RecordingBackdropView: View {
     var backdrop: RecordingBackdrop = .base
     var animated: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        let shouldAnimate = animated && !reduceMotion
+        let shouldAnimate = animated && !reduceMotion && scenePhase == .active
 
         Group {
             switch backdrop {
             case .base:
-                AppBackground(style: .recording)
+                // Base is always the classic recording wash — not the user's
+                // app-wide canvas. Recording Look owns session mood separately
+                // from Settings → Appearance.
+                AppCanvasView(canvas: .classic, style: .recording, animated: false)
             default:
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: !shouldAnimate)) { context in
                     let time = shouldAnimate
                         ? context.date.timeIntervalSinceReferenceDate
                         : 0
                     canvas(time: time)
+                        .drawingGroup(opaque: true)
                         .overlay { readabilityVignette }
                 }
             }
@@ -179,7 +185,7 @@ private struct AuroraCanvas: View {
 private struct HyperspaceCanvas: View {
     let time: TimeInterval
 
-    private let starCount = 110
+    private let starCount = 70
 
     var body: some View {
         Canvas { graphics, size in

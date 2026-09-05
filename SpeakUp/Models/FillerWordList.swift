@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Filler Word Config
 
 /// User-customizable filler word configuration.
-struct FillerWordConfig: Sendable {
+nonisolated struct FillerWordConfig: Sendable {
     let customFillers: Set<String>        // user-added always-detected fillers
     let customContextFillers: Set<String> // user-added context-dependent fillers (pauseBefore && pauseAfter)
     let removedDefaults: Set<String>      // default fillers the user disabled

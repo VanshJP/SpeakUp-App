@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Combine
 
 struct CountdownOverlayView: View {
     let prompt: Prompt?
@@ -33,7 +32,7 @@ struct CountdownOverlayView: View {
     private var displayNumber: Int {
         switch countdownStyle {
         case .countDown:
-            return totalSeconds - elapsedSeconds
+            return max(0, totalSeconds - elapsedSeconds)
         case .countUp:
             return elapsedSeconds
         }
@@ -41,7 +40,7 @@ struct CountdownOverlayView: View {
 
     /// Remaining seconds until completion (used for haptic timing).
     private var remainingSeconds: Int {
-        totalSeconds - elapsedSeconds
+        max(0, totalSeconds - elapsedSeconds)
     }
 
     init(
@@ -71,8 +70,6 @@ struct CountdownOverlayView: View {
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
-
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -139,7 +136,7 @@ struct CountdownOverlayView: View {
                         size: .medium,
                         fullWidth: true
                     ) {
-                        onCancel()
+                        cancelCountdown()
                     }
 
                     GlassButton(
@@ -157,8 +154,35 @@ struct CountdownOverlayView: View {
             }
             .padding(.top, 50)
         }
-        .onReceive(timer) { _ in
-            guard !hasCompleted else { return }
+        // Full-screen covers and root overlays must own the hit surface —
+        // without this, a parent scroll / LazyVStack can eat the first few
+        // taps while layout settles (Cancel felt dead until ~7 on a 10s clock).
+        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .task {
+            // `.task` cancels on disappear, so Cancel cannot race a stray tick
+            // the way the old `Timer.publish` View-`let` could.
+            await runCountdown()
+        }
+        .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
+        .onAppear {
+            if selectedGoalId == nil, let firstGoal = activeGoals.first {
+                selectedGoalId = firstGoal.id
+            }
+        }
+    }
+
+    // MARK: - Countdown loop
+
+    @MainActor
+    private func runCountdown() async {
+        // One cancellable loop instead of `Timer.publish` as a View `let` —
+        // that publisher was recreated on every body refresh and raced Cancel.
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, !hasCompleted else { return }
+
             if elapsedSeconds < totalSeconds {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     elapsedSeconds += 1
@@ -170,22 +194,29 @@ struct CountdownOverlayView: View {
                     Haptics.light()
                 }
             } else {
-                hasCompleted = true
-                Haptics.success()
-                onComplete()
-            }
-        }
-        .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
-        .onAppear {
-            if selectedGoalId == nil, let firstGoal = activeGoals.first {
-                selectedGoalId = firstGoal.id
+                finishCountdown()
+                return
             }
         }
     }
 
     // MARK: - Actions
 
+    private func cancelCountdown() {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        Haptics.light()
+        onCancel()
+    }
+
     private func skipCountdown() {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        Haptics.success()
+        onComplete()
+    }
+
+    private func finishCountdown() {
         guard !hasCompleted else { return }
         hasCompleted = true
         Haptics.success()
@@ -263,8 +294,9 @@ struct CountdownOverlayView: View {
     }
 
     // MARK: - Helpers
-    
+
     private var progress: Double {
+        guard totalSeconds > 0 else { return 0 }
         switch countdownStyle {
         case .countDown:
             return Double(remainingSeconds) / Double(totalSeconds)
@@ -283,4 +315,3 @@ struct CountdownOverlayView: View {
         onCancel: {}
     )
 }
-
