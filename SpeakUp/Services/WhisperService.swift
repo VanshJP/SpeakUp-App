@@ -98,22 +98,30 @@ class WhisperService {
         guard whisperKit == nil || !isModelLoaded else { return }
 
         let isFirstLoad = !Self.hasCompletedFirstLoad
+        let variantName = "openai_whisper-\(modelVariant)"
 
         do {
             modelLoadProgress = 0.1
             errorMessage = nil
 
-            // Configure WhisperKit
-            let config = WhisperKitConfig(
-                model: "openai_whisper-\(modelVariant)",
-                verbose: false,
-                logLevel: .none,
-                prewarm: true,
-                load: true,
-                download: true
-            )
+            // Prefer a fully local load whenever the Core ML bundle is already
+            // on disk. WhisperKitConfig(download: true) hits Hugging Face
+            // *before* it looks at the cache — on spotty Wi‑Fi that hangs
+            // processing even though the model never needed the network.
+            // Once cached, transcription must work in airplane mode.
+            let config = Self.makeConfig(variantName: variantName)
 
-            whisperKit = try await WhisperKit(config)
+            if config.download {
+                // First install (or a wiped cache) still needs the network.
+                // Cap the wait so a flaky connection fails into Apple Speech
+                // instead of spinning the analyzing screen forever.
+                whisperKit = try await Self.loadWhisperKitWithDownloadTimeout(
+                    config: config,
+                    seconds: 45
+                )
+            } else {
+                whisperKit = try await WhisperKit(config)
+            }
 
             modelLoadProgress = 1.0
             isModelLoaded = true
@@ -127,18 +135,107 @@ class WhisperService {
                 }
             }
         } catch {
-            errorMessage = "Failed to load Whisper model: \(error.localizedDescription)"
+            let timedOut: Bool = {
+                if case WhisperServiceError.modelDownloadTimedOut = error { return true }
+                return false
+            }()
+            errorMessage = timedOut
+                ? WhisperServiceError.modelDownloadTimedOut.errorDescription
+                : "Failed to load Whisper model: \(error.localizedDescription)"
             isModelLoaded = false
             modelLoadProgress = 0
+            whisperKit = nil
 
             if isFirstLoad {
                 await MainActor.run {
                     AnalyticsService.shared.log(
-                        .modelDownload(tier: modelVariant, result: "failed")
+                        .modelDownload(tier: modelVariant, result: timedOut ? "timeout" : "failed")
                     )
                 }
             }
         }
+    }
+
+    // MARK: - Offline-first config
+
+    /// Documents/huggingface — same default HubApi uses, so a prior download
+    /// lands where we look for it on the next launch.
+    private static var hubDownloadBase: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("huggingface", isDirectory: true)
+    }
+
+    /// Folder WhisperKit wrote during a previous `download: true` load.
+    private static func cachedModelFolder(variantName: String) -> URL? {
+        let folder = hubDownloadBase
+            .appendingPathComponent("models", isDirectory: true)
+            .appendingPathComponent("argmaxinc", isDirectory: true)
+            .appendingPathComponent("whisperkit-coreml", isDirectory: true)
+            .appendingPathComponent(variantName, isDirectory: true)
+
+        let encoderCandidates = ["AudioEncoder.mlmodelc", "AudioEncoder.mlpackage"]
+        let hasEncoder = encoderCandidates.contains {
+            FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
+        }
+        return hasEncoder ? folder : nil
+    }
+
+    private static func makeConfig(variantName: String) -> WhisperKitConfig {
+        if let localFolder = cachedModelFolder(variantName: variantName) {
+            // Point at the on-disk bundle and refuse Hub contact. Tokenizer
+            // also resolves under hubDownloadBase once the first download
+            // finished — pass it so loadTokenizer skips the network too.
+            return WhisperKitConfig(
+                modelFolder: localFolder.path,
+                tokenizerFolder: hubDownloadBase,
+                verbose: false,
+                logLevel: .none,
+                prewarm: true,
+                load: true,
+                download: false
+            )
+        }
+
+        return WhisperKitConfig(
+            model: variantName,
+            downloadBase: hubDownloadBase,
+            verbose: false,
+            logLevel: .none,
+            prewarm: true,
+            load: true,
+            download: true
+        )
+    }
+
+    /// Races Hub download against a wall-clock deadline. Local loads skip this.
+    ///
+    /// `WhisperKit` / `WhisperKitConfig` are not Sendable, so the result is
+    /// stashed in an unchecked box instead of crossing the task-group as `T`.
+    private static func loadWhisperKitWithDownloadTimeout(
+        config: WhisperKitConfig,
+        seconds: TimeInterval
+    ) async throws -> WhisperKit {
+        final class Box: @unchecked Sendable {
+            var value: WhisperKit?
+        }
+        let box = Box()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                box.value = try await WhisperKit(config)
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw WhisperServiceError.modelDownloadTimedOut
+            }
+            // First child to finish wins: success empties the group via
+            // cancelAll; timeout / download error throws out.
+            try await group.next()
+            group.cancelAll()
+        }
+        guard let kit = box.value else {
+            throw WhisperServiceError.modelDownloadTimedOut
+        }
+        return kit
     }
 
     // MARK: - Transcription
@@ -481,6 +578,7 @@ nonisolated private final class AsyncSemaphore: @unchecked Sendable {
 
 enum WhisperServiceError: LocalizedError {
     case modelNotLoaded
+    case modelDownloadTimedOut
     case noSpeechTranscriptionResult
     case transcriptionFailed(Error)
     case transcriptionTimedOut
@@ -488,7 +586,9 @@ enum WhisperServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelNotLoaded:
-            return "Whisper model is not loaded. Please wait for the model to download."
+            return "Speech model isn't ready yet."
+        case .modelDownloadTimedOut:
+            return "Speech model download timed out. Check your connection, or try again later — on-device recognition can still finish the take."
         case .noSpeechTranscriptionResult:
             return "No transcription result was produced."
         case .transcriptionFailed(let error):

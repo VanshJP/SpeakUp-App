@@ -175,6 +175,8 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 **`requiresOnDeviceRecognition` must be `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple. `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
 
+**WhisperKit `download: true` is not offline-safe after the first install.** Config init asks Hugging Face for the file list *before* it opens the local cache, so flaky Wi‑Fi freezes "Analyzing…" even when `openai_whisper-base` is already under `Documents/huggingface/`. After the first successful download, load with `modelFolder` pointing at that cache and `download: false` (set `tokenizerFolder` to the Hub base so the tokenizer stays local too). Time-box first-time downloads so a dead connection fails into on-device Apple Speech instead of hanging.
+
 ---
 
 ## 10. Onboarding & first-run order

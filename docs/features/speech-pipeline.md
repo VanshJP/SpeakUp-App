@@ -42,6 +42,7 @@ This doc only lists wiring and agent gotchas.
 - Never `#Predicate` on `Recording.analysis` — ObjC crash inside CoreData SQL gen; proxy via `transcriptionText != nil` (`analyzedRecordingCount`).
 - Re-fetch `Recording` by id after long transcription before mutating (user may have deleted it).
 - Whisper first load is slow — check service state before assuming failure.
+- WhisperKit must load **offline-first** once the Core ML bundle is on disk. `WhisperKitConfig(download: true)` contacts Hugging Face *before* checking the local cache, so spotty Wi‑Fi hangs analyzing even when the model is already downloaded. Resolve `Documents/huggingface/models/argmaxinc/whisperkit-coreml/<variant>` and pass `modelFolder` + `download: false` (plus `tokenizerFolder` at the Hub base). Cap first-time downloads (~45s) so a flaky network fails into on-device Apple Speech instead of spinning forever.
 - Every `SFSpeech*RecognitionRequest` in the app sets `requiresOnDeviceRecognition = true` unconditionally. On-device is a product claim (`APP_STORE_LISTING.md` §3), so an unavailable recognizer must fail rather than fall back to Apple's servers. Never make it conditional on `supportsOnDeviceRecognition` — that flag reads false while assets install.
 - Lowering `DecodingOptions.noSpeechThreshold` makes WhisperKit drop *more* audio, one whole 30 s window at a time, with no error.
 - Score philosophy: progressive (short casual ≈ 50–65; solid minute ≈ 75–90; only empty/gibberish ≪ 20).
