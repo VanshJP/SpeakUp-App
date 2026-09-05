@@ -132,6 +132,13 @@ class SpeechService {
     /// diagnostic — `localizedDescription` stays the stable user-facing string.
     private static let fallbackCausesKey = "SpeechService.fallbackCauses"
 
+    /// True when Whisper already burned its Hub download budget. Reload would
+    /// just hit the network again — callers should fall through to Apple Speech.
+    private static func isModelDownloadTimeout(_ error: Error) -> Bool {
+        if case WhisperServiceError.modelDownloadTimedOut = error { return true }
+        return false
+    }
+
     /// One link of the fallback chain: backend tag + error domain#code,
     /// matching the codes-only diagnostics pattern LLMService uses. Message
     /// text stays out so the userInfo string carries no user content.
