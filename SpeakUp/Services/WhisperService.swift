@@ -12,6 +12,12 @@ class WhisperService {
     // State
     var isTranscribing = false
     var isModelLoaded = false
+    /// True while `loadModel` is in flight (local load or Hub download).
+    private(set) var isLoadingModel = false
+    /// True only while a Hub download is in flight — not a local cache load.
+    /// Analyzing UI uses this so a failed first download does not keep saying
+    /// "Downloading…" through the Apple Speech fallback.
+    private(set) var isDownloadingModel = false
     var modelLoadProgress: Double = 0
     var transcriptionProgress: Double = 0
     var errorMessage: String?
@@ -100,6 +106,12 @@ class WhisperService {
         let isFirstLoad = !Self.hasCompletedFirstLoad
         let variantName = "openai_whisper-\(modelVariant)"
 
+        isLoadingModel = true
+        defer {
+            isLoadingModel = false
+            isDownloadingModel = false
+        }
+
         do {
             modelLoadProgress = 0.1
             errorMessage = nil
@@ -115,6 +127,7 @@ class WhisperService {
                 // First install (or a wiped cache) still needs the network.
                 // Cap the wait so a flaky connection fails into Apple Speech
                 // instead of spinning the analyzing screen forever.
+                isDownloadingModel = true
                 whisperKit = try await Self.loadWhisperKitWithDownloadTimeout(
                     config: config,
                     seconds: 45
@@ -173,11 +186,18 @@ class WhisperService {
             .appendingPathComponent("whisperkit-coreml", isDirectory: true)
             .appendingPathComponent(variantName, isDirectory: true)
 
+        // Require encoder + decoder. An interrupted Hub download can leave
+        // AudioEncoder alone on disk — treating that as offline-ready would
+        // permanently skip re-download and fail every load with download:false.
         let encoderCandidates = ["AudioEncoder.mlmodelc", "AudioEncoder.mlpackage"]
+        let decoderCandidates = ["TextDecoder.mlmodelc", "TextDecoder.mlpackage"]
         let hasEncoder = encoderCandidates.contains {
             FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
         }
-        return hasEncoder ? folder : nil
+        let hasDecoder = decoderCandidates.contains {
+            FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
+        }
+        return (hasEncoder && hasDecoder) ? folder : nil
     }
 
     private static func makeConfig(variantName: String) -> WhisperKitConfig {

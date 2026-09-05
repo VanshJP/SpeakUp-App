@@ -13,6 +13,8 @@ class SpeechService {
     var hasPermission = false
     var transcriptionProgress: Double = 0
     var isModelLoaded: Bool { whisperService.isModelLoaded }
+    var isLoadingModel: Bool { whisperService.isLoadingModel }
+    var isDownloadingModel: Bool { whisperService.isDownloadingModel }
 
     /// Which leg of the fallback chain produced the last transcript. Reported
     /// as a coarse analytics dimension so a rise in Apple Speech fallbacks (a
@@ -82,6 +84,7 @@ class SpeechService {
         let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         var causes: [String] = []
 
+        var skipModelReload = false
         do {
             let primary = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
             let text = trim(primary.text)
@@ -91,23 +94,28 @@ class SpeechService {
             causes.append("whisper: empty transcript")
         } catch {
             causes.append(Self.chainCause(backend: "whisper", error))
-            // Retry below (model reload + fallback)
+            // Hub timeout already spent the budget — don't pay another 45s.
+            if Self.isModelDownloadTimeout(error) {
+                skipModelReload = true
+            }
         }
 
-        // Retry once with a fresh model in case WhisperKit got into a bad state.
-        await whisperService.unloadModel()
-        await whisperService.loadModel(modelVariant: "base")
+        if !skipModelReload {
+            // Retry once with a fresh model in case WhisperKit got into a bad state.
+            await whisperService.unloadModel()
+            await whisperService.loadModel(modelVariant: "base")
 
-        do {
-            let retry = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
-            let text = trim(retry.text)
-            if !text.isEmpty {
-                return text
+            do {
+                let retry = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
+                let text = trim(retry.text)
+                if !text.isEmpty {
+                    return text
+                }
+                causes.append("whisper_reload: empty transcript")
+            } catch {
+                causes.append(Self.chainCause(backend: "whisper_reload", error))
+                // Fall through to Apple Speech fallback.
             }
-            causes.append("whisper_reload: empty transcript")
-        } catch {
-            causes.append(Self.chainCause(backend: "whisper_reload", error))
-            // Fall through to Apple Speech fallback.
         }
 
         let fallback = try await transcribeWithAppleSpeech(audioURL: audioURL)
@@ -164,6 +172,12 @@ class SpeechService {
             }
         }
 
+        // Cheap gate: missing/zero-byte files must not enter Whisper → reload → Apple.
+        let fileSize = (try? audioURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
+        if fileSize == 0 || !FileManager.default.fileExists(atPath: audioURL.path) {
+            throw noSpeechError(causes: ["audio: missing or empty file"])
+        }
+
         let preparation = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 // Decode only what isolation preprocess needs here; speaker
@@ -200,7 +214,9 @@ class SpeechService {
         let postProcessed: SpeechTranscriptionResult = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let wordsAfterFillerRetagging: [TranscriptionWord]
-                if fillerConfig.customFillers.isEmpty && fillerConfig.removedDefaults.isEmpty {
+                if fillerConfig.customFillers.isEmpty
+                    && fillerConfig.customContextFillers.isEmpty
+                    && fillerConfig.removedDefaults.isEmpty {
                     wordsAfterFillerRetagging = result.words
                 } else {
                     let rawTimings = result.words.map { w in
@@ -212,13 +228,16 @@ class SpeechService {
                 var finalWords = wordsAfterFillerRetagging
                 // Speaker acoustics from the raw capture — isolation preprocess can
                 // flatten energy/F0 and mis-label the primary speaker.
-                // Reuses the PCM decoded once at the top of `transcribe`; no
-                // decode happens when `labelPrimarySpeaker` gates out short takes.
+                // Decode once here and share with pitch analysis via the result;
+                // short takes that gate out of speaker labeling still pay one decode
+                // (cheaper than the old isolation + speaker + pitch triple).
+                let sharedPCM = MonoPCM.decode(url: audioURL)
                 let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
                     words: finalWords,
                     audioURL: audioURL,
                     totalDuration: result.duration,
-                    persistentProfile: voiceProfile
+                    persistentProfile: voiceProfile,
+                    monoPCM: sharedPCM
                 )
                 finalWords = speakerLabeled.0
                 let speakerIsolationMetrics = speakerLabeled.1
@@ -242,7 +261,8 @@ class SpeechService {
                     duration: result.duration,
                     audioIsolationMetrics: isolationResult?.metrics,
                     speakerIsolationMetrics: speakerIsolationMetrics,
-                    voiceProfileUpdate: voiceProfileUpdate
+                    voiceProfileUpdate: voiceProfileUpdate,
+                    monoPCM: sharedPCM
                 ))
             }
         }
@@ -265,6 +285,7 @@ class SpeechService {
             !trim(result.text).isEmpty || !result.words.isEmpty
         }
         var causes: [String] = []
+        var skipModelReload = false
 
         do {
             let primary = try await whisperService.transcribe(
@@ -278,7 +299,11 @@ class SpeechService {
             causes.append("whisper: empty result")
         } catch {
             causes.append(Self.chainCause(backend: "whisper", error))
-            // Retry path below.
+            // A Hub timeout already burned ~45s — reloading would just hit Hub
+            // again. Skip straight to Apple Speech after the optional raw retry.
+            if Self.isModelDownloadTimeout(error) {
+                skipModelReload = true
+            }
         }
 
         // Isolation may have over-suppressed speech — try the raw capture before
@@ -296,27 +321,31 @@ class SpeechService {
                 causes.append("whisper_raw: empty result")
             } catch {
                 causes.append(Self.chainCause(backend: "whisper_raw", error))
-                // Continue to model reload.
+                if Self.isModelDownloadTimeout(error) {
+                    skipModelReload = true
+                }
             }
         }
 
-        await whisperService.unloadModel()
-        await whisperService.loadModel(modelVariant: "base")
+        if !skipModelReload {
+            await whisperService.unloadModel()
+            await whisperService.loadModel(modelVariant: "base")
 
-        let reloadURL = preferredURL != originalURL ? originalURL : preferredURL
-        do {
-            let retry = try await whisperService.transcribe(
-                audioURL: reloadURL,
-                preferredTerms: preferredTerms
-            )
-            if isUsable(retry) {
-                lastTranscriptionBackend = "whisper_reload"
-                return retry
+            let reloadURL = preferredURL != originalURL ? originalURL : preferredURL
+            do {
+                let retry = try await whisperService.transcribe(
+                    audioURL: reloadURL,
+                    preferredTerms: preferredTerms
+                )
+                if isUsable(retry) {
+                    lastTranscriptionBackend = "whisper_reload"
+                    return retry
+                }
+                causes.append("whisper_reload: empty result")
+            } catch {
+                causes.append(Self.chainCause(backend: "whisper_reload", error))
+                // Fall through to Apple Speech.
             }
-            causes.append("whisper_reload: empty result")
-        } catch {
-            causes.append(Self.chainCause(backend: "whisper_reload", error))
-            // Fall through to Apple Speech.
         }
 
         // Prefer the original file for Apple Speech — it never saw the
@@ -597,7 +626,8 @@ nonisolated enum SpeechAnalysisPipeline {
         trackPauses: Bool = true,
         scoreWeights: ScoreWeights = .defaults,
         audioIsolationMetrics: AudioIsolationMetrics? = nil,
-        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil
+        speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
+        monoPCM: MonoPCM? = nil
     ) -> SpeechAnalysis {
         // Sort words by start time to ensure accurate pause detection
         // Whisper/Apple Speech results are usually sorted but segments can sometimes overlap or be out of order
@@ -712,10 +742,11 @@ nonisolated enum SpeechAnalysisPipeline {
         let vocabComplexity = !scoringWords.isEmpty ? analyzeVocabComplexity(words: scoringWords) : nil
         let sentenceAnalysis = !scoringWords.isEmpty ? analyzeSentenceStructure(words: scoringWords) : nil
 
-        // Advanced analyses — decode the take for pitch scoring.
-        let pitchMetrics: PitchMetrics? = audioURL.flatMap {
+        // Advanced analyses — reuse post-Whisper PCM when the caller has it
+        // (gotcha §16); otherwise decode once here for pitch.
+        let pitchMetrics: PitchMetrics? = (monoPCM ?? audioURL.flatMap {
             MonoPCM.decode(url: $0)
-        }.flatMap { PitchAnalysisService.analyze(monoPCM: $0) }
+        }).flatMap { PitchAnalysisService.analyze(monoPCM: $0) }
         let rateVariation = analyzeRateVariation(words: scoringWords, actualDuration: scoringDuration)
         let emphasisMetrics = analyzeEmphasis(
             words: scoringWords,
@@ -1915,6 +1946,8 @@ nonisolated struct SpeechTranscriptionResult {
     let audioIsolationMetrics: AudioIsolationMetrics?
     let speakerIsolationMetrics: SpeakerIsolationMetrics?
     let voiceProfileUpdate: VoiceProfileUpdate?
+    /// Ephemeral PCM shared with pitch analysis — never persisted.
+    let monoPCM: MonoPCM?
 
     init(
         text: String,
@@ -1922,7 +1955,8 @@ nonisolated struct SpeechTranscriptionResult {
         duration: TimeInterval,
         audioIsolationMetrics: AudioIsolationMetrics? = nil,
         speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
-        voiceProfileUpdate: VoiceProfileUpdate? = nil
+        voiceProfileUpdate: VoiceProfileUpdate? = nil,
+        monoPCM: MonoPCM? = nil
     ) {
         self.text = text
         self.words = words
@@ -1930,6 +1964,7 @@ nonisolated struct SpeechTranscriptionResult {
         self.audioIsolationMetrics = audioIsolationMetrics
         self.speakerIsolationMetrics = speakerIsolationMetrics
         self.voiceProfileUpdate = voiceProfileUpdate
+        self.monoPCM = monoPCM
     }
 }
 

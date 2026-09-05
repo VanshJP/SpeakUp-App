@@ -176,6 +176,7 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 **`requiresOnDeviceRecognition` must be `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple. `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
 
 **WhisperKit `download: true` is not offline-safe after the first install.** Config init asks Hugging Face for the file list *before* it opens the local cache, so flaky Wi‑Fi freezes "Analyzing…" even when `openai_whisper-base` is already under `Documents/huggingface/`. After the first successful download, load with `modelFolder` pointing at that cache and `download: false` (set `tokenizerFolder` to the Hub base so the tokenizer stays local too). Time-box first-time downloads so a dead connection fails into on-device Apple Speech instead of hanging.
+Require both `AudioEncoder` and `TextDecoder` before treating the cache as offline-ready. After a download timeout, skip the Whisper reload leg (it would re-hit Hub) and fall through to Apple Speech. Analyzing UI must key "Downloading…" off an in-flight download flag, not `!isModelLoaded`.
 
 ---
 
@@ -220,6 +221,7 @@ An `@Observable` type's dictionary-typed stored property initialized with `[]` t
 ## 16. Audio consumers take `MonoPCM`, not `AVAudioFile`
 
 Pre-refactor, one analysis whole-file-decoded the PCM three times (isolation preprocess, speaker labeling, pitch), materializing ~115 MB per 10-minute take each time. Now every consumer takes a `MonoPCM` value and decodes via `MonoPCM.decode(url:)` only where its gating requires samples — short takes that gate out of speaker labeling decode nothing. Do not reintroduce direct `AVAudioFile` reads in scoring consumers.
+Pass the post-Whisper buffer into speaker labeling and pitch via `SpeechTranscriptionResult.monoPCM` — do not re-decode the file for each consumer. Isolation may decode separately before Whisper; do not keep that buffer alive across inference.
 
 ---
 

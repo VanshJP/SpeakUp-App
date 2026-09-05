@@ -43,6 +43,10 @@ This doc only lists wiring and agent gotchas.
 - Re-fetch `Recording` by id after long transcription before mutating (user may have deleted it).
 - Whisper first load is slow — check service state before assuming failure.
 - WhisperKit must load **offline-first** once the Core ML bundle is on disk. `WhisperKitConfig(download: true)` contacts Hugging Face *before* checking the local cache, so spotty Wi‑Fi hangs analyzing even when the model is already downloaded. Resolve `Documents/huggingface/models/argmaxinc/whisperkit-coreml/<variant>` and pass `modelFolder` + `download: false` (plus `tokenizerFolder` at the Hub base). Cap first-time downloads (~45s) so a flaky network fails into on-device Apple Speech instead of spinning forever.
+- Treat a Hub cache as complete only when **AudioEncoder and TextDecoder** are both present. An interrupted download leaving just the encoder must not set `download: false` or the app permanently skips re-download.
+- After `modelDownloadTimedOut`, skip the Whisper reload leg — it would burn another Hub wait — and go straight to on-device Apple Speech.
+- Decode `MonoPCM` once after Whisper for speaker labeling + pitch (gotcha §16). Isolation may still decode before Whisper; do not hold that buffer across inference.
+- Analyzing UI must key the "Downloading…" copy off `isDownloadingModel`, not `!isModelLoaded`, or a failed first download keeps the download copy up through Apple Speech fallback.
 - Every `SFSpeech*RecognitionRequest` in the app sets `requiresOnDeviceRecognition = true` unconditionally. On-device is a product claim (`APP_STORE_LISTING.md` §3), so an unavailable recognizer must fail rather than fall back to Apple's servers. Never make it conditional on `supportsOnDeviceRecognition` — that flag reads false while assets install.
 - Lowering `DecodingOptions.noSpeechThreshold` makes WhisperKit drop *more* audio, one whole 30 s window at a time, with no error.
 - Score philosophy: progressive (short casual ≈ 50–65; solid minute ≈ 75–90; only empty/gibberish ≪ 20).
