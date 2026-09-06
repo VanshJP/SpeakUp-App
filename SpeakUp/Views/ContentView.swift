@@ -80,7 +80,7 @@ struct ContentView: View {
     private func tabContent(for tab: AppTab) -> some View {
         NavigationStack {
             tabRoot(for: tab)
-                .background { AppBackground(animated: tab == selectedTab) }
+                .background { AppBackground() }
         }
     }
 

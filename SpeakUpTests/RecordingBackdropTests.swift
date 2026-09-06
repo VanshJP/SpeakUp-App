@@ -11,6 +11,10 @@ struct RecordingBackdropTests {
         #expect(RecordingBackdrop.nebula.rawValue == 3)
         #expect(RecordingBackdrop.ember.rawValue == 4)
         #expect(RecordingBackdrop.void.rawValue == 5)
+        #expect(RecordingBackdrop.tide.rawValue == 6)
+        #expect(RecordingBackdrop.dusk.rawValue == 7)
+        #expect(RecordingBackdrop.signal.rawValue == 8)
+        #expect(RecordingBackdrop.noir.rawValue == 9)
     }
 
     @Test func unknownRawValueFallsBackToBase() {
@@ -35,21 +39,25 @@ struct RecordingBackdropTests {
     @Test func sharedNamesResolveToTheSameLook() {
         #expect(RecordingBackdrop.aurora.look == AppCanvas.aurora.look)
         #expect(RecordingBackdrop.ember.look == AppCanvas.ember.look)
+        #expect(RecordingBackdrop.tide.look == AppCanvas.tide.look)
+        #expect(RecordingBackdrop.dusk.look == AppCanvas.dusk.look)
+        #expect(RecordingBackdrop.signal.look == AppCanvas.signal.look)
+        #expect(RecordingBackdrop.noir.look == AppCanvas.noir.look)
     }
 
     @Test func sharedNamesShareTheirDescription() {
         #expect(RecordingBackdrop.aurora.subtitle == AppCanvas.aurora.subtitle)
         #expect(RecordingBackdrop.ember.subtitle == AppCanvas.ember.subtitle)
+        #expect(RecordingBackdrop.tide.subtitle == AppCanvas.tide.subtitle)
     }
 
-    @Test func baseIsClassicAndNeverAnimates() {
+    @Test func baseIsClassic() {
         #expect(RecordingBackdrop.base.look == .classic)
-        #expect(!RecordingBackdrop.base.look.isAnimated)
     }
 
-    @Test func everyOtherBackdropAnimates() {
-        for backdrop in RecordingBackdrop.allCases where backdrop != .base {
-            #expect(backdrop.look.isAnimated, "\(backdrop.displayName) should move")
+    @Test func everyLookIsAStill() {
+        for look in CanvasLook.allCases {
+            #expect(!look.isAnimated, "\(look) should be a still")
         }
     }
 

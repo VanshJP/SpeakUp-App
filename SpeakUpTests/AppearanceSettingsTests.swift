@@ -15,6 +15,10 @@ struct AppearanceSettingsTests {
         #expect(AppCanvas.horizon.rawValue == 5)
         #expect(AppCanvas.prism.rawValue == 6)
         #expect(AppCanvas.depth.rawValue == 7)
+        #expect(AppCanvas.tide.rawValue == 8)
+        #expect(AppCanvas.dusk.rawValue == 9)
+        #expect(AppCanvas.signal.rawValue == 10)
+        #expect(AppCanvas.noir.rawValue == 11)
     }
 
     @Test func appCanvasFallsBackToClassic() {
