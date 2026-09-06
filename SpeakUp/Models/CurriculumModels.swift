@@ -13,8 +13,6 @@ struct CurriculumActivity: Identifiable, Codable {
     let type: CurriculumActivityType
     let title: String
     let description: String
-    var targetMetric: String?
-    var targetValue: Int?
     var drillMode: String?
     var exerciseId: String?
     var content: LessonContent?

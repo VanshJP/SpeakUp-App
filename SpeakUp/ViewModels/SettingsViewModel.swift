@@ -1,9 +1,11 @@
 import Foundation
+import os.log
 import SwiftUI
 import SwiftData
 
 @MainActor @Observable
 class SettingsViewModel {
+    private let logger = Logger.app("Settings")
     var settings: UserSettings?
     var isLoading = true
     var showingResetConfirmation = false
@@ -193,7 +195,7 @@ class SettingsViewModel {
                 syncLocalState()
             }
         } catch {
-            print("Error loading settings: \(error)")
+            logger.error("Error loading settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     
@@ -384,7 +386,7 @@ class SettingsViewModel {
                 await cancelReminderNotification()
             }
         } catch {
-            print("Error saving settings: \(error)")
+            logger.error("Error saving settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     
@@ -746,7 +748,7 @@ class SettingsViewModel {
             try context.save()
             syncLocalState()
         } catch {
-            print("Error resetting settings: \(error)")
+            logger.error("Error resetting settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -810,7 +812,7 @@ class SettingsViewModel {
             // rows never touched it.
             AnalyticsService.shared.reset()
         } catch {
-            print("Error clearing data: \(error)")
+            logger.error("Error clearing data: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 

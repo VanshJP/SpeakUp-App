@@ -24,8 +24,4 @@ nonisolated enum SupportLinks {
     static var feedbackMailto: URL? {
         URL(string: "mailto:\(feedbackEmail)")
     }
-
-    static var hasAnyWebDestination: Bool {
-        support != nil || privacyPolicy != nil || terms != nil
-    }
 }

@@ -6,7 +6,7 @@ import os
 
 @Observable
 class SpeechService {
-    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "Speech")
+    private let logger = Logger.app("Speech")
 
     // State
     var isTranscribing = false

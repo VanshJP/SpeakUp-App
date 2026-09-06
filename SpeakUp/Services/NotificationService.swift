@@ -1,8 +1,10 @@
 import Foundation
+import os.log
 import UserNotifications
 
 @Observable
 class NotificationService {
+    private let logger = Logger.app("Notifications")
     var hasPermission = false
 
     private let center = UNUserNotificationCenter.current()
@@ -15,7 +17,7 @@ class NotificationService {
             hasPermission = granted
             return granted
         } catch {
-            print("Notification permission error: \(error)")
+            logger.error("Notification permission error: \(error.localizedDescription, privacy: .private(mask: .hash))")
             return false
         }
     }
@@ -59,7 +61,7 @@ class NotificationService {
         do {
             try await center.add(request)
         } catch {
-            print("Failed to schedule notification: \(error)")
+            logger.error("Failed to schedule notification: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     

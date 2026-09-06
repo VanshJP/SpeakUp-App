@@ -5,15 +5,12 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LLMService.self) private var llmService
     @State private var viewModel = SettingsViewModel()
-    @FocusState private var nameFocused: Bool
 
     var body: some View {
         PageScrollView {
             VStack(spacing: AppLayout.listSpacing) {
-                nameField
-
                 practiceSection
-                lookSection
+                appearanceSection
                 accountSection
 
                 aboutFooter
@@ -21,63 +18,15 @@ struct SettingsView: View {
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // No root title — the tab bar already says Settings. The name field
-        // is a quiet identity line, not a section hero. Canvas comes from
-        // ContentView's shared AppBackground.
-        .navigationTitle("")
+        // The tab bar names the tab; the nav row names the page you are on.
+        // Inline (never large) so the title costs no height the trailing
+        // filter / trophy button was not already reserving.
+        .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)
         }
-        .onDisappear {
-            nameFocused = false
-            Task { await viewModel.commitUserName() }
-        }
-    }
-
-    // MARK: - Name (inline, not a page)
-
-    /// One field, no "You" / Profile door. A whole section for a display name
-    /// made Settings open on the least-touched knob.
-    private var nameField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField(
-                "",
-                text: $viewModel.userName,
-                prompt: Text("Your name").foregroundStyle(.white.opacity(0.35))
-            )
-            .font(.body.weight(.medium))
-            .foregroundStyle(.white)
-            .textInputAutocapitalization(.words)
-            .autocorrectionDisabled()
-            .submitLabel(.done)
-            .focused($nameFocused)
-            .onSubmit {
-                nameFocused = false
-                Task { await viewModel.commitUserName() }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(
-                                nameFocused ? AppColors.primary.opacity(0.45) : Color.white.opacity(0.08),
-                                lineWidth: nameFocused ? 1 : 0.5
-                            )
-                    }
-            }
-
-            Text("Used in greetings and the on-device dictation dictionary.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 4)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Your name")
     }
 
     // MARK: - Practice
@@ -116,7 +65,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "list.bullet.rectangle",
-                iconColor: AppColors.categorySage,
+                iconColor: AppColors.categoryTeal,
                 title: "Word Lists",
                 subtitle: "Add vocab, dictation, and filler words"
             ) {
@@ -143,24 +92,74 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Look
+    // MARK: - Appearance
 
-    /// One door for cosmetics. Recording Look lives inside Appearance so the
-    /// hub does not ask the same question twice (app mood vs session mood).
-    private var lookSection: some View {
+    /// Two sibling rows, not one door into another door. Recording Look used to
+    /// sit three pushes deep (Look → Appearance → Session look), behind two
+    /// generic words, which is the wrong depth for the settings people actually
+    /// browse for fun. A section header also has to earn itself: one row under
+    /// "Look" was a label with nothing to label.
+    private var appearanceSection: some View {
         VStack(spacing: 12) {
-            GlassSectionHeader("Look", icon: "paintpalette.fill")
+            GlassSectionHeader("Appearance", icon: "paintpalette.fill")
                 .padding(.top, 4)
 
             settingsLink(
                 icon: "paintpalette.fill",
-                iconColor: AppColors.categoryPlum,
-                title: "Appearance",
-                subtitle: "Glass, background, and recording look"
+                iconColor: AppColors.categoryIndigo,
+                title: "App Look",
+                subtitle: appLookSubtitle,
+                accessory: {
+                    lookSwatch {
+                        AppCanvasView(canvas: viewModel.appCanvas, style: .primary, animated: false)
+                    }
+                }
             ) {
                 AppearanceSettingsView(viewModel: viewModel)
             }
+
+            settingsLink(
+                icon: "waveform.circle.fill",
+                iconColor: AppColors.categoryBrandBright,
+                title: "Recording Look",
+                subtitle: recordingLookSubtitle,
+                accessory: {
+                    lookSwatch {
+                        RecordingBackdropView(backdrop: viewModel.recordingBackdrop, animated: false)
+                    }
+                }
+            ) {
+                RecordingLookView(viewModel: viewModel)
+            }
         }
+    }
+
+    /// A cosmetic row's value *is* its affordance — a swatch answers "what is it
+    /// set to?" without opening the page, which no verb-shaped subtitle can.
+    ///
+    /// Canvases and backdrops are sized for a full screen: their orbs, stars and
+    /// shards are laid out against ~320pt, so drawn straight into a 52pt box
+    /// every option renders as the same flat rectangle. Lay out big, draw
+    /// scaled, clamp — the same trick `RecordingLookView`'s tiles use.
+    private func lookSwatch<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .frame(width: 320, height: 210)
+            .scaleEffect(0.2)
+            .frame(width: 52, height: 34)
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(AppColors.cardStroke, lineWidth: 1)
+            }
+            .allowsHitTesting(false)
+    }
+
+    private var appLookSubtitle: String {
+        "\(viewModel.appCanvas.displayName) · \(viewModel.glassAppearance.displayName) glass"
+    }
+
+    private var recordingLookSubtitle: String {
+        "\(viewModel.recordingBackdrop.displayName) · \(viewModel.waveformStyle.displayName)"
     }
 
     // MARK: - Account
@@ -169,6 +168,15 @@ struct SettingsView: View {
         VStack(spacing: 12) {
             GlassSectionHeader("Account & Data", icon: "person.crop.circle")
                 .padding(.top, 4)
+
+            settingsLink(
+                icon: "person.crop.circle",
+                iconColor: AppColors.primary,
+                title: "Profile",
+                subtitle: profileSubtitle
+            ) {
+                ProfileSettingsView(viewModel: viewModel)
+            }
 
             settingsLink(
                 icon: "bell.fill",
@@ -181,7 +189,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "cpu",
-                iconColor: AppColors.categoryIndigo,
+                iconColor: AppColors.info,
                 title: "AI Features",
                 subtitle: aiModelSubtitle
             ) {
@@ -241,17 +249,16 @@ struct SettingsView: View {
     @State private var showingSyncRestartAlert = false
 
     private var iCloudSyncRow: some View {
-        GlassCard(tint: AppColors.info.opacity(0.06), padding: 14) {
+        // Untinted like every link beside it — the tint made the one row you
+        // cannot open the loudest card in the section.
+        GlassCard(padding: 14) {
             VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(AppColors.info.opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "icloud.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.info)
-                    }
+                HStack(spacing: 14) {
+                    Image(systemName: "icloud.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.categoryBrandBright)
+                        .frame(width: 32, height: 32)
+                        .background { Circle().fill(AppColors.categoryBrandBright.opacity(0.15)) }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("iCloud Sync")
@@ -315,6 +322,13 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
+    /// Hub subtitles name the action the row performs, never the value.
+    private var profileSubtitle: String {
+        viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Set your name"
+            : "Edit your name"
+    }
+
     private var aiModelSubtitle: String {
         switch llmService.activeBackend {
         case .appleIntelligence:
@@ -326,11 +340,16 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsLink<Destination: View>(
+    /// Icon chip, not a bare glyph: `iCloudSyncRow` and `ToolCategoryCard`
+    /// already draw tinted circles, so a loose symbol made the hub the one
+    /// surface speaking a different dialect — and a column of identical grey
+    /// glyphs is read line by line instead of scanned by color.
+    private func settingsLink<Destination: View, Accessory: View>(
         icon: String,
         iconColor: Color,
         title: String,
         subtitle: String?,
+        @ViewBuilder accessory: () -> Accessory = { EmptyView() },
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
         NavigationLink {
@@ -339,9 +358,10 @@ struct SettingsView: View {
             GlassCard(padding: 14) {
                 HStack(spacing: 14) {
                     Image(systemName: icon)
-                        .font(.body)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(iconColor)
-                        .frame(width: 28)
+                        .frame(width: 32, height: 32)
+                        .background { Circle().fill(iconColor.opacity(0.15)) }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
@@ -360,7 +380,9 @@ struct SettingsView: View {
                         }
                     }
 
-                    Spacer()
+                    Spacer(minLength: 8)
+
+                    accessory()
 
                     Image(systemName: "chevron.right")
                         .font(.caption2)

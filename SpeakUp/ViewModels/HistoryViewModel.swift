@@ -32,7 +32,7 @@ nonisolated struct VocabCount: Hashable, Sendable {
 
 @MainActor @Observable
 class HistoryViewModel {
-    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "History")
+    private let logger = Logger.app("History")
     var summaries: [RecordingSummary] = []
     var isLoading = true
 
@@ -138,7 +138,7 @@ class HistoryViewModel {
 
     // MARK: - Mutations
 
-    private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "History")
+    private static let logger = Logger.app("History")
 
     func deleteRecording(id: UUID) async {
         guard let context = modelContext else { return }
@@ -194,7 +194,7 @@ class HistoryViewModel {
         do {
             try context.save()
         } catch {
-            print("Error toggling favorite: \(error)")
+            logger.error("Error toggling favorite: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
 
         if let idx = summaries.firstIndex(where: { $0.id == id }) {

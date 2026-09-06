@@ -243,7 +243,7 @@ struct ReadAloudSessionView: View {
                 Text(word)
                     .font(.system(size: passageFontSize, weight: wordWeight(for: index), design: .default))
                     .foregroundStyle(wordColor(for: index, state: state))
-                    .underline(isProcessedHighlight(state))
+                    .underline(state.needsAttention)
                     .padding(.vertical, 2)
                     .padding(.horizontal, 2)
                     .background {
@@ -253,7 +253,7 @@ struct ReadAloudSessionView: View {
                         }
                     }
                     .onTapGesture {
-                        guard isProcessed(state) else { return }
+                        guard state.isSettled else { return }
                         Haptics.light()
                         selectedWord = WordDetail(word: word, index: index, state: state)
                     }
@@ -296,19 +296,7 @@ struct ReadAloudSessionView: View {
         }
     }
 
-    private func isProcessed(_ state: WordMatchState) -> Bool {
-        switch state {
-        case .matched, .mismatched, .skipped: return true
-        case .upcoming, .current: return false
-        }
-    }
 
-    private func isProcessedHighlight(_ state: WordMatchState) -> Bool {
-        switch state {
-        case .mismatched, .skipped: return true
-        default: return false
-        }
-    }
 
     private var accuracyColor: Color {
         // Accuracy is a score, so it rides the score ramp rather than the

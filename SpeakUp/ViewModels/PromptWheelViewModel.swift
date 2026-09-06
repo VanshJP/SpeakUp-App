@@ -1,10 +1,12 @@
 import Foundation
+import os.log
 import SwiftUI
 import SwiftData
 import UIKit
 
 @Observable
 class PromptWheelViewModel {
+    private let logger = Logger.app("PromptWheel")
     var categories: [String] = []
     var prompts: [Prompt] = []
     var selectedPrompt: Prompt?
@@ -39,7 +41,7 @@ class PromptWheelViewModel {
             prompts = allPrompts.filter { enabledCategoryNames.contains($0.category) }
             categories = Array(Set(prompts.map { $0.category })).sorted()
         } catch {
-            print("Error loading prompts: \(error)")
+            logger.error("Error loading prompts: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     

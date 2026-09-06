@@ -5,7 +5,7 @@ import os
 @main
 struct SpeakUpApp: App {
     // Property-initializer context (ModelContainer) runs before any instance exists.
-    nonisolated private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "AppLifecycle")
+    nonisolated private static let logger = Logger.app("AppLifecycle")
 
     // Shared services – injected via .environment() so views don't recreate them
     @State private var speechService = SpeechService()

@@ -169,7 +169,7 @@ nonisolated enum CoachEvidenceService {
     ) -> String {
         guard !words.isEmpty else { return "" }
         let clips = stamps.prefix(3).compactMap { stamp -> String? in
-            guard let startIdx = nearestWordIndex(for: stamp, in: words) else { return nil }
+            guard let startIdx = words.nearestIndex(to: stamp) else { return nil }
             let endIdx = min(words.count, startIdx + 6)
             let slice = words[startIdx..<endIdx]
             let text = slice
@@ -182,22 +182,6 @@ nonisolated enum CoachEvidenceService {
         return clips.joined(separator: " / ")
     }
 
-    private static func nearestWordIndex(for stamp: TimeInterval, in words: [TranscriptionWord]) -> Int? {
-        var bestIndex: Int?
-        var bestDelta = TimeInterval.greatestFiniteMagnitude
-        for (index, word) in words.enumerated() {
-            let delta = abs(word.start - stamp)
-            if delta < bestDelta {
-                bestDelta = delta
-                bestIndex = index
-            }
-            if word.start > stamp + 0.08 { break }
-        }
-        if let bestIndex, bestDelta <= 0.08 {
-            return bestIndex
-        }
-        return words.firstIndex(where: { $0.start >= stamp - 0.01 })
-    }
 
     // MARK: - Filler clustering
 

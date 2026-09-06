@@ -56,10 +56,6 @@ nonisolated struct VocabChallengeStore: @unchecked Sendable {
         }
     }
 
-    func clearSkips(on dayStamp: String) {
-        defaults.removeObject(forKey: skipKey(dayStamp))
-    }
-
     private func skipKey(_ dayStamp: String) -> String {
         skipPrefix + dayStamp
     }

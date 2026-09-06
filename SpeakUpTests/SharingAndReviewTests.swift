@@ -7,7 +7,7 @@ import Foundation
 // three review prompts.
 
 private let day: TimeInterval = 24 * 60 * 60
-private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
+nonisolated private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
 @MainActor
 struct ReviewEligibilityTests {

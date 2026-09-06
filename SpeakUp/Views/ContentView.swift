@@ -74,134 +74,130 @@ struct ContentView: View {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
     
-    @ViewBuilder
+    /// One NavigationStack per tab, and the canvas is painted *inside* it.
+    /// A background behind the TabView is invisible: SwiftUI hosts navigation
+    /// content in an opaque system-background view, so the tabs read black.
     private func tabContent(for tab: AppTab) -> some View {
+        NavigationStack {
+            tabRoot(for: tab)
+                .background { AppBackground(animated: tab == selectedTab) }
+        }
+    }
+
+    @ViewBuilder
+    private func tabRoot(for tab: AppTab) -> some View {
         switch tab {
         case .today:
-            NavigationStack {
-                TodayView(
-                    onStartRecording: { prompt, duration in
+            TodayView(
+                onStartRecording: { prompt, duration in
+                    recordingPrompt = prompt
+                    recordingStoryId = nil
+                    recordingDuration = duration
+                    adoptChallengeIfMatching(prompt)
+                    showingCountdown = true
+                },
+                onShowReadAloud: {
+                    showingReadAloud = true
+                },
+                onShowWarmUps: {
+                    showingWarmUps = true
+                },
+                onShowDrills: {
+                    showingDrills = true
+                },
+                onShowConfidence: {
+                    showingConfidenceTools = true
+                },
+                onShowCurriculum: {
+                    selectedTab = .learn
+                },
+                onStartStoryPractice: { story, duration in
+                    recordingPrompt = nil
+                    recordingStoryId = story.id
+                    recordingDuration = duration
+                    recordingChallenge = nil
+                    showingCountdown = true
+                }
+            )
+        case .library:
+            PracticeHubView(
+                onSelectPrompt: { prompt in
+                    recordingPrompt = prompt
+                    recordingStoryId = nil
+                    recordingDuration = .sixty
+                    adoptChallengeIfMatching(prompt)
+                    showingCountdown = true
+                },
+                onStartStoryPractice: { story in
+                    recordingPrompt = nil
+                    recordingStoryId = story.id
+                    recordingDuration = .sixty
+                    recordingChallenge = nil
+                    showingCountdown = true
+                },
+                onSendToWarmUp: { story in
+                    warmUpStory = story
+                },
+                onSendToDrill: { story in
+                    drillStory = story
+                },
+                onShowBeforeAfter: {
+                    showingBeforeAfter = true
+                },
+                onShowJournalExport: {
+                    showingJournalExport = true
+                },
+                onShowGoals: {
+                    showingGoals = true
+                },
+                storiesViewModel: storiesViewModel
+            )
+        case .history:
+            HistoryView(
+                onSelectRecording: { recordingId in
+                    selectedRecordingId = recordingId
+                },
+                onShowBeforeAfter: {
+                    showingBeforeAfter = true
+                },
+                onShowJournalExport: {
+                    showingJournalExport = true
+                },
+                onShowGoals: {
+                    showingGoals = true
+                }
+            )
+            .navigationDestination(item: $selectedRecordingId) { recordingId in
+                RecordingDetailView(
+                    recordingId: recordingId,
+                    allowsCoachMoments: freshResultRecordingId == recordingId,
+                    onPracticeAgain: { prompt in
                         recordingPrompt = prompt
                         recordingStoryId = nil
-                        recordingDuration = duration
-                        adoptChallengeIfMatching(prompt)
+                        recordingDuration = .sixty
+                        recordingChallenge = nil
                         showingCountdown = true
-                    },
-                    onShowReadAloud: {
-                        showingReadAloud = true
-                    },
-                    onShowWarmUps: {
-                        showingWarmUps = true
-                    },
-                    onShowDrills: {
-                        showingDrills = true
                     },
                     onShowConfidence: {
                         showingConfidenceTools = true
-                    },
-                    onShowCurriculum: {
-                        selectedTab = .learn
-                    },
-                    onStartStoryPractice: { story, duration in
-                        recordingPrompt = nil
-                        recordingStoryId = story.id
-                        recordingDuration = duration
-                        recordingChallenge = nil
-                        showingCountdown = true
                     }
                 )
-            }
-        case .library:
-            NavigationStack {
-                PracticeHubView(
-                    onSelectPrompt: { prompt in
-                        recordingPrompt = prompt
-                        recordingStoryId = nil
-                        recordingDuration = .sixty
-                        adoptChallengeIfMatching(prompt)
-                        showingCountdown = true
-                    },
-                    onStartStoryPractice: { story in
-                        recordingPrompt = nil
-                        recordingStoryId = story.id
-                        recordingDuration = .sixty
-                        recordingChallenge = nil
-                        showingCountdown = true
-                    },
-                    onSendToWarmUp: { story in
-                        warmUpStory = story
-                    },
-                    onSendToDrill: { story in
-                        drillStory = story
-                    },
-                    onShowBeforeAfter: {
-                        showingBeforeAfter = true
-                    },
-                    onShowJournalExport: {
-                        showingJournalExport = true
-                    },
-                    onShowGoals: {
-                        showingGoals = true
-                    },
-                    storiesViewModel: storiesViewModel
-                )
-            }
-        case .history:
-            NavigationStack {
-                HistoryView(
-                    onSelectRecording: { recordingId in
-                        selectedRecordingId = recordingId
-                    },
-                    onShowBeforeAfter: {
-                        showingBeforeAfter = true
-                    },
-                    onShowJournalExport: {
-                        showingJournalExport = true
-                    },
-                    onShowGoals: {
-                        showingGoals = true
+                .onDisappear {
+                    if freshResultRecordingId == recordingId {
+                        freshResultRecordingId = nil
                     }
-                )
-                .navigationDestination(item: $selectedRecordingId) { recordingId in
-                    RecordingDetailView(
-                        recordingId: recordingId,
-                        allowsCoachMoments: freshResultRecordingId == recordingId,
-                        onPracticeAgain: { prompt in
-                            recordingPrompt = prompt
-                            recordingStoryId = nil
-                            recordingDuration = .sixty
-                            recordingChallenge = nil
-                            showingCountdown = true
-                        },
-                        onShowConfidence: {
-                            showingConfidenceTools = true
-                        }
-                    )
-                    .onDisappear {
-                        if freshResultRecordingId == recordingId {
-                            freshResultRecordingId = nil
-                        }
-                        selectedRecordingId = nil
-                    }
+                    selectedRecordingId = nil
                 }
             }
         case .learn:
-            NavigationStack {
-                CurriculumView()
-            }
+            CurriculumView()
         case .settings:
-            NavigationStack {
-                SettingsView()
-            }
+            SettingsView()
         }
     }
     
     var body: some View {
         ZStack {
-            // One shared canvas behind every tab. Root tabs used to each paint
-            // their own AppBackground — five TimelineViews for one visible page.
-            AppBackground()
-
             TabView(selection: $selectedTab) {
                 ForEach(AppTab.allCases) { tab in
                     Tab(tab.title, systemImage: tab == selectedTab ? tab.selectedIcon : tab.icon, value: tab) {

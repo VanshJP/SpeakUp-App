@@ -15,8 +15,8 @@ struct GlassCardModifier: ViewModifier {
         }()
         content
             .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
-            .glassRimStroke(cornerRadius: cornerRadius, appearance: glassAppearance)
-            .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
+            // Matches `GlassCard`'s unelevated shadow — same name, same plate.
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
     }
 }
 

@@ -21,7 +21,6 @@ struct ToolTileLabel: View {
     let title: String
     var tint: Color = AppColors.primary
 
-    @Environment(\.glassAppearance) private var glassAppearance
 
     var body: some View {
         VStack(spacing: 8) {
@@ -40,7 +39,6 @@ struct ToolTileLabel: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .glassEffect(.regular.tint(tint.opacity(0.06)), in: .rect(cornerRadius: 14))
-        .glassRimStroke(cornerRadius: 14, appearance: glassAppearance)
         .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
     }
 }

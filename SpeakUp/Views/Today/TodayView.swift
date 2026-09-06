@@ -42,88 +42,73 @@ struct TodayView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Canvas comes from ContentView's shared AppBackground.
+        // Vertical only, and `PageScrollView` is what makes that true: an
+        // over-wide child used to let this page pan sideways. No horizontal
+        // paging, no TabView page style, no horizontal scroller.
+        PageScrollView {
+            VStack(spacing: AppLayout.chapterSpacing) {
 
-            // Vertical only, and `PageScrollView` is what makes that true: an
-            // over-wide child used to let this page pan sideways. No horizontal
-            // paging, no TabView page style, no horizontal scroller.
-            PageScrollView {
-                VStack(spacing: AppLayout.chapterSpacing) {
+                // 1. Header — date + streak chip (customize lives at the bottom)
+                topHeaderRow
+                    .allowsHitTesting(!isEditingLayout)
 
-                    // 1. Header — date + streak chip (customize lives at the bottom)
-                    topHeaderRow
-                        .allowsHitTesting(!isEditingLayout)
-
-                    if isEditingLayout {
-                        Text("Drag a block to move it. Tap ⊖ to hide one.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if let challenge = challengeStore.pending {
-                        FriendChallengeCard(
-                            challenge: challenge,
-                            onAccept: { acceptFriendChallenge(challenge) },
-                            onDismiss: { challengeStore.dismiss() }
-                        )
-                    }
-
-                    if let moment = coachMoments.pendingToday {
-                        CoachMomentCard(
-                            moment: moment,
-                            onAccept: { acceptCoachMoment(moment) },
-                            onDismiss: { dismissCoachMoment(moment) }
-                        )
-                    }
-
-                    // Modular home — Bevel-style. Order and visibility come from
-                    // `UserSettings.todayHomeLayoutRaw`; session is always forced on.
-                    // Editing happens right here: same blocks, wiggling in place.
-                    ForEach(homeModules) { module in
-                        editableModule(module)
-                    }
-
-                    if isEditingLayout {
-                        // Same hard cut: the tray's chips are glass too.
-                        hiddenTray.transition(.identity)
-                        resetLayoutButton.transition(.identity)
-                    }
-
-                    // Edit lives in the scroll. Done does not — leaving edit
-                    // mode used to mean scrolling past every block, the hidden
-                    // tray and the reset button. The safe-area inset owns Done.
-                    if !isEditingLayout {
-                        editHomepageButton
-                    }
+                if isEditingLayout {
+                    Text("Drag a block to move it. Tap ⊖ to hide one.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.top, 4)
-                .pageContentInsets()
+
+                if let challenge = challengeStore.pending {
+                    FriendChallengeCard(
+                        challenge: challenge,
+                        onAccept: { acceptFriendChallenge(challenge) },
+                        onDismiss: { challengeStore.dismiss() }
+                    )
+                }
+
+                if let moment = coachMoments.pendingToday {
+                    CoachMomentCard(
+                        moment: moment,
+                        onAccept: { acceptCoachMoment(moment) },
+                        onDismiss: { dismissCoachMoment(moment) }
+                    )
+                }
+
+                // Modular home — Bevel-style. Order and visibility come from
+                // `UserSettings.todayHomeLayoutRaw`; session is always forced on.
+                // Editing happens right here: same blocks, wiggling in place.
+                ForEach(homeModules) { module in
+                    editableModule(module)
+                }
+
+                if isEditingLayout {
+                    // Same hard cut: the tray's chips are glass too.
+                    hiddenTray.transition(.identity)
+                    resetLayoutButton.transition(.identity)
+                }
+
+                // Edit lives in the scroll. Done does not — leaving edit
+                // mode used to mean scrolling past every block, the hidden
+                // tray and the reset button. The safe-area inset owns Done.
+                if !isEditingLayout {
+                    editHomepageButton
+                }
             }
-            .scrollIndicators(.hidden)
+            .padding(.top, 8)
+            .pageContentInsets()
         }
+        .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isEditingLayout {
                 doneEditingBar
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        // Same place iOS puts Done when the Home screen is jiggling. The
-        // pinned bar at the bottom is the easier target; this is the spare.
-        .toolbar {
-            if isEditingLayout {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        finishEditingLayout()
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .accessibilityLabel("Finish customizing Today")
-                }
-            }
-        }
+        // No nav bar at all: it held nothing but a spare Done, and 44pt of
+        // empty chrome pushed the greeting down on the one screen that opens
+        // every session. `topHeaderRow` is this page's header; `doneEditingBar`
+        // is its Done.
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
         }

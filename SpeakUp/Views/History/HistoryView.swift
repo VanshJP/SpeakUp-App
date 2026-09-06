@@ -40,40 +40,37 @@ struct HistoryView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            // Canvas comes from ContentView's shared AppBackground.
-
-            PageScrollView {
-                LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
-                    Section {
-                        switch selectedSection {
-                        case .recordings:
-                            // The strip earns its place back by being
-                            // switchable — showing up and doing well are
-                            // different questions, and one grid answers both.
-                            // Suppressed while searching or filtering, where
-                            // the list is the answer and the grid is noise.
-                            if searchText.isEmpty, selectedFilter == .all, !viewModel.summaries.isEmpty {
-                                ActivityStrip(summaries: viewModel.summaries)
-                            }
-
-                            recordingsSection
-                                .transition(.opacity)
-                        case .progress:
-                            progressContent
-                                .transition(.opacity)
+        PageScrollView {
+            LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    switch selectedSection {
+                    case .recordings:
+                        // The strip earns its place back by being
+                        // switchable — showing up and doing well are
+                        // different questions, and one grid answers both.
+                        // Suppressed while searching or filtering, where
+                        // the list is the answer and the grid is noise.
+                        if searchText.isEmpty, selectedFilter == .all, !viewModel.summaries.isEmpty {
+                            ActivityStrip(summaries: viewModel.summaries)
                         }
-                    } header: {
-                        pinnedSectionPicker
+
+                        recordingsSection
+                            .transition(.opacity)
+                    case .progress:
+                        progressContent
+                            .transition(.opacity)
                     }
+                } header: {
+                    pinnedSectionPicker
                 }
-                .pageContentInsets()
             }
-            .scrollIndicators(.hidden)
+            .pageContentInsets()
         }
-        // No root title — the tab bar already says History, and the pinned
-        // SectionPicker names Recordings / Progress. Trailing filter stays.
-        .navigationTitle("")
+        .scrollIndicators(.hidden)
+        // The tab bar names the tab; the nav row names the page you are on.
+        // Inline (never large) so the title costs no height the trailing
+        // filter / trophy button was not already reserving.
+        .navigationTitle("History")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {

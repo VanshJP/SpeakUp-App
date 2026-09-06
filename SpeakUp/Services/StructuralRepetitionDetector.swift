@@ -94,7 +94,7 @@ nonisolated enum StructuralRepetitionDetector {
         for hit in structural {
             let frameLen = max(minOpeningNGram, hit.word.split(separator: " ").count)
             for stamp in hit.timestamps {
-                guard let startIdx = nearestWordIndex(for: stamp, in: sorted) else { continue }
+                guard let startIdx = sorted.nearestIndex(to: stamp) else { continue }
                 let endIdx = min(sorted.count, startIdx + frameLen)
                 for index in startIdx..<endIdx {
                     ids.insert(sorted[index].id)
@@ -104,22 +104,6 @@ nonisolated enum StructuralRepetitionDetector {
         return ids
     }
 
-    private static func nearestWordIndex(for stamp: TimeInterval, in words: [TranscriptionWord]) -> Int? {
-        var bestIndex: Int?
-        var bestDelta = TimeInterval.greatestFiniteMagnitude
-        for (index, word) in words.enumerated() {
-            let delta = abs(word.start - stamp)
-            if delta < bestDelta {
-                bestDelta = delta
-                bestIndex = index
-            }
-            if word.start > stamp + 0.08 { break }
-        }
-        if let bestIndex, bestDelta <= 0.08 {
-            return bestIndex
-        }
-        return words.firstIndex(where: { $0.start >= stamp - 0.01 })
-    }
 
     // MARK: - Clause splitting
 

@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 import SwiftUI
 import AVFoundation
 import Speech
@@ -118,6 +119,7 @@ struct OnboardingResult {
 @Observable
 @MainActor
 final class OnboardingViewModel {
+    private let logger = Logger.app("Onboarding")
     // State machine
     var currentStep: OnboardingStep = .welcome
 
@@ -443,7 +445,7 @@ final class OnboardingViewModel {
         do {
             _ = try await audioService.startRecording()
         } catch {
-            print("Onboarding mic test failed to start: \(error)")
+            logger.error("Onboarding mic test failed to start: \(error.localizedDescription, privacy: .private(mask: .hash))")
             return
         }
         startLevelMonitor(forBaselineTake: false)
@@ -602,7 +604,7 @@ final class OnboardingViewModel {
             reminderEnabled = granted ? reminderEnabled : false
             if granted { Haptics.success() }
         } catch {
-            print("Notification permission error: \(error)")
+            logger.error("Notification permission error: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 

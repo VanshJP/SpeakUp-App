@@ -521,7 +521,7 @@ struct RecordingDetailView: View {
     /// history, not an absolute threshold.
     private func considerReviewPromptForStrongResult() {
         guard !isFirstAnalyzedSession,
-              case .ready(let recording) = detailScreenState,
+              case .ready = detailScreenState,
               let score = coachAnalysis?.speechScore.overall else { return }
 
         let beatPersonalBest = baselines.best.map { score > $0 } ?? false

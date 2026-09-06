@@ -29,7 +29,7 @@ protocol AnalyticsSink: AnyObject {
 final class AnalyticsService {
     static let shared = AnalyticsService()
 
-    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "Analytics")
+    private let logger = Logger.app("Analytics")
     private var sink: AnalyticsSink
 
     /// Mirrors the most recent events so the diagnostics screen can render

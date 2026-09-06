@@ -6,7 +6,7 @@ import os
 
 @Observable
 class TodayViewModel {
-    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "Today")
+    private let logger = Logger.app("Today")
 
     var todaysPrompt: Prompt?
     var userStats: UserStats = UserStats()

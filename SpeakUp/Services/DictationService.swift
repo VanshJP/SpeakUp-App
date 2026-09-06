@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 import Speech
 import AVFoundation
 import os
@@ -8,6 +9,7 @@ import os
 @Observable
 @MainActor
 class DictationService {
+    private let logger = Logger.app("Dictation")
     var isListening = false
     var recognizedWords: [String] = []
     var lastAddedIndex = 0
@@ -76,7 +78,7 @@ class DictationService {
             try session.setCategory(.record, mode: .measurement)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            print("DictationService: audio session setup failed: \(error)")
+            logger.error("DictationService: audio session setup failed: \(error.localizedDescription, privacy: .private(mask: .hash))")
             errorMessage = "Couldn't start the microphone."
             return
         }
@@ -98,7 +100,7 @@ class DictationService {
             recordingFormat = inputNode.outputFormat(forBus: 0)
         }
         guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
-            print("DictationService: invalid input format \(recordingFormat)")
+            logger.error("DictationService: invalid input format \(String(describing: recordingFormat), privacy: .public)")
             errorMessage = "Couldn't start the microphone."
             cleanup()
             return
@@ -128,7 +130,7 @@ class DictationService {
             engine.prepare()
             try engine.start()
         } catch {
-            print("DictationService: audio engine failed to start: \(error)")
+            logger.error("DictationService: audio engine failed to start: \(error.localizedDescription, privacy: .private(mask: .hash))")
             errorMessage = "Couldn't start the microphone."
             cleanup()
             return

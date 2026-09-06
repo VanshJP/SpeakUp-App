@@ -156,10 +156,10 @@ struct ReadAloudResultView: View {
                         Text(word)
                             .font(.system(size: reviewFontSize))
                             .foregroundStyle(reviewWordColor(for: index))
-                            .underline(isWordTappable(state) && isWordHighlighted(state))
+                            .underline(state.isSettled && state.needsAttention)
                             .padding(.vertical, 1)
                             .onTapGesture {
-                                guard isWordTappable(state) else { return }
+                                guard state.isSettled else { return }
                                 Haptics.light()
                                 selectedWord = WordDetail(word: word, index: index, state: state)
                             }
@@ -185,19 +185,7 @@ struct ReadAloudResultView: View {
         }
     }
 
-    private func isWordTappable(_ state: WordMatchState) -> Bool {
-        switch state {
-        case .matched, .mismatched, .skipped: return true
-        case .upcoming, .current: return false
-        }
-    }
 
-    private func isWordHighlighted(_ state: WordMatchState) -> Bool {
-        switch state {
-        case .mismatched, .skipped: return true
-        default: return false
-        }
-    }
 
     private func reviewWordColor(for index: Int) -> Color {
         guard index < result.wordStates.count else { return .white.opacity(0.4) }

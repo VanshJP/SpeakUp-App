@@ -11,7 +11,7 @@ struct CurriculumView: View {
         PageScrollView {
             // Continue first. Progress rides inside that card. The path
             // list follows — no intro card and no second stats card fighting
-            // the one action that matters. Canvas comes from ContentView.
+            // the one action that matters.
             LazyVStack(spacing: AppLayout.chapterSpacing) {
                 if let currentLesson = viewModel.currentLesson,
                    let currentPhase = viewModel.currentPhase {
@@ -26,10 +26,10 @@ struct CurriculumView: View {
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // No root title — the tab bar already says Learn. "Learning Path" as a
-        // large title left the trophy alone on an empty nav row with the name
-        // dropped underneath. Continue card is the page's first voice.
-        .navigationTitle("")
+        // The tab bar names the tab; the nav row names the page you are on.
+        // Inline (never large) so the title costs no height the trailing
+        // filter / trophy button was not already reserving.
+        .navigationTitle("Learn")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {

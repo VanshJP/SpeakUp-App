@@ -36,19 +36,15 @@ enum GlassAppearance: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Soft white lift for `.regular.tint(...)` on untinted surfaces.
-    var glassTint: Color {
-        switch self {
-        case .light: return Color.white.opacity(0.08)
-        case .dark: return Color.white.opacity(0.02)
-        }
-    }
+    /// Soft white lift for `.regular.tint(...)` on untinted surfaces. The only
+    /// knob this setting has left now that cards draw no rim of their own.
+    var glassTint: Color { Color.white.opacity(tintLift) }
 
-    /// Top-edge rim gradient stops (top → mid → bottom opacity).
-    var rimOpacities: (CGFloat, CGFloat, CGFloat) {
+    /// How much the plate lifts off the canvas. Dark lifts less so cards sink.
+    var tintLift: Double {
         switch self {
-        case .light: return (0.28, 0.08, 0.03)
-        case .dark: return (0.12, 0.04, 0.015)
+        case .light: return 0.08
+        case .dark: return 0.02
         }
     }
 }
@@ -72,30 +68,5 @@ extension EnvironmentValues {
     var appCanvas: AppCanvas {
         get { self[AppCanvasKey.self] }
         set { self[AppCanvasKey.self] = newValue }
-    }
-}
-
-// MARK: - Glass rim helper
-
-extension View {
-    /// Shared top-edge rim light that respects the user's glass appearance.
-    func glassRimStroke(cornerRadius: CGFloat, appearance: GlassAppearance) -> some View {
-        let rim = appearance.rimOpacities
-        return self.overlay {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(rim.0),
-                            Color.white.opacity(rim.1),
-                            Color.white.opacity(rim.2)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.8
-                )
-                .allowsHitTesting(false)
-        }
     }
 }

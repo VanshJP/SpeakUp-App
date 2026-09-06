@@ -598,12 +598,33 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
     var totalFillerCount: Int {
         fillerWords.reduce(0) { $0 + $1.count }
     }
-    
-    var fillerPercentage: Double {
-        guard totalWords > 0 else { return 0 }
-        return (Double(totalFillerCount) / Double(totalWords)) * 100
-    }
 
+}
+
+// MARK: - Timestamp lookup
+
+extension Array where Element == TranscriptionWord {
+    /// Index of the word spoken closest to `stamp`. Prefers an exact-ish hit
+    /// (within 80ms) and otherwise takes the first word at or after the stamp,
+    /// so a coarse timestamp still lands on real speech rather than nothing.
+    /// Assumes the array is sorted by `start`, which is how transcription
+    /// emits it.
+    nonisolated func nearestIndex(to stamp: TimeInterval) -> Int? {
+        var bestIndex: Int?
+        var bestDelta = TimeInterval.greatestFiniteMagnitude
+        for (index, word) in enumerated() {
+            let delta = abs(word.start - stamp)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIndex = index
+            }
+            if word.start > stamp + 0.08 { break }
+        }
+        if let bestIndex, bestDelta <= 0.08 {
+            return bestIndex
+        }
+        return firstIndex(where: { $0.start >= stamp - 0.01 })
+    }
 }
 
 // MARK: - Speech Score

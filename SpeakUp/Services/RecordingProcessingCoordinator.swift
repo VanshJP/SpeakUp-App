@@ -63,7 +63,7 @@ nonisolated enum ProcessingPolicy {
 final class RecordingProcessingCoordinator {
     static let shared = RecordingProcessingCoordinator()
 
-    private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "RecordingProcessing")
+    private let logger = Logger.app("RecordingProcessing")
     private var activeRecordingIDs: Set<UUID> = []
     /// Handles for the per-recording jobs, so cancellation actually stops the
     /// work instead of only striking it from the dedupe set.

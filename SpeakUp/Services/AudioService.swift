@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 import AVFoundation
 import Observation
 import QuartzCore
@@ -6,6 +7,7 @@ import UIKit
 
 @Observable
 class AudioService: NSObject {
+    private let logger = Logger.app("Audio")
     // Recording
     private var audioRecorder: AVAudioRecorder?
     private var recordingSession: AVAudioSession?
@@ -75,7 +77,7 @@ class AudioService: NSObject {
             hasPermission = await AVAudioApplication.requestRecordPermission()
             return hasPermission
         } catch {
-            print("Failed to set up audio session: \(error)")
+            logger.error("Failed to set up audio session: \(error.localizedDescription, privacy: .private(mask: .hash))")
             return false
         }
     }
@@ -463,7 +465,7 @@ class AudioService: NSObject {
 extension AudioService: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         if !flag {
-            print("Recording finished unsuccessfully")
+            logger.error("Recording finished unsuccessfully")
         }
         recordingCompletion?(flag)
         recordingCompletion = nil
@@ -471,7 +473,7 @@ extension AudioService: AVAudioRecorderDelegate {
 
     func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
         if let error {
-            print("Recording encode error: \(error)")
+            logger.error("Recording encode error: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
         recordingCompletion?(false)
         recordingCompletion = nil
@@ -492,7 +494,7 @@ extension AudioService: AVAudioPlayerDelegate {
     
     func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         if let error {
-            print("Playback decode error: \(error)")
+            logger.error("Playback decode error: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 }

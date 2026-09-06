@@ -26,24 +26,6 @@ nonisolated enum VocabChallengeService {
         return (parts.year ?? 0) * 366 + (parts.month ?? 0) * 31 + (parts.day ?? 0)
     }
 
-    /// Words to fold into transcript vocab detection so introduced spotlight
-    /// terms highlight even before the user adds them to the bank.
-    static func detectionWords(
-        preferences: VocabChallengePreferences,
-        now: Date = Date(),
-        store: VocabChallengeStore = .standard,
-        generated: GeneratedVocabStore = .standard,
-        usedCounts: [String: Int] = [:]
-    ) -> [String] {
-        todaysChallenge(
-            preferences: preferences,
-            usedCounts: usedCounts,
-            now: now,
-            store: store,
-            generated: generated
-        )?.words.map(\.text) ?? []
-    }
-
     static func todaysChallenge(
         preferences: VocabChallengePreferences,
         usedCounts: [String: Int] = [:],

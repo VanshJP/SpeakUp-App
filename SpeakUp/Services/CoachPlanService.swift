@@ -195,13 +195,6 @@ nonisolated struct CoachPlan: Sendable {
         case slipping(delta: Int)
         /// Sitting at or above the mastery bar across the window.
         case holding
-
-        var isPositive: Bool {
-            switch self {
-            case .improving, .holding: return true
-            case .new, .flat, .slipping: return false
-            }
-        }
     }
 
     /// The one dimension to work on now.

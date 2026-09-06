@@ -8,6 +8,8 @@ import SwiftUI
 /// washes; animated canvases ignore style and keep one mood.
 struct AppBackground: View {
     var style: Style = .primary
+    /// Off-screen tabs pass `false` so only the visible canvas runs a clock.
+    var animated: Bool = true
 
     @Environment(\.appCanvas) private var canvas
 
@@ -18,7 +20,7 @@ struct AppBackground: View {
     }
 
     var body: some View {
-        AppCanvasView(canvas: canvas, style: style)
+        AppCanvasView(canvas: canvas, style: style, animated: animated)
     }
 }
 

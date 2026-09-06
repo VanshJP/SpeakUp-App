@@ -34,7 +34,6 @@ struct GlassCard<Content: View>: View {
         content
             .padding(padding)
             .glassEffect(resolvedGlass, in: .rect(cornerRadius: cornerRadius))
-            .glassRimStroke(cornerRadius: cornerRadius, appearance: glassAppearance)
             .overlay {
                 if let accentBorder {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -64,8 +63,6 @@ struct FeaturedGlassCard<Content: View>: View {
     var cornerRadius: CGFloat
     var padding: CGFloat
 
-    @Environment(\.glassAppearance) private var glassAppearance
-
     init(
         gradientColors: [Color] = [AppColors.primary.opacity(0.10), Color.white.opacity(0.02)],
         cornerRadius: CGFloat = 20,
@@ -82,11 +79,6 @@ struct FeaturedGlassCard<Content: View>: View {
         content
             .padding(padding)
             .glassEffect(.regular.tint(gradientColors.first ?? AppColors.primary), in: .rect(cornerRadius: cornerRadius))
-            .glassRimStroke(cornerRadius: cornerRadius, appearance: glassAppearance)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(AppColors.cardStroke, lineWidth: 0.5)
-            }
             .shadow(color: .black.opacity(0.3), radius: 18, y: 9)
     }
 }

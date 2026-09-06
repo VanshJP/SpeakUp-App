@@ -11,6 +11,52 @@ struct CoherenceResult: Sendable {
     let reason: String
 }
 
+extension CoherenceResult {
+    /// Parses the `SCORE:` / `TOPIC_FOCUS:` / `LOGICAL_FLOW:` / `REASON:` block
+    /// both backends ask the model for.
+    ///
+    /// Never fails: a model that ignores the format and answers with prose
+    /// still scores, because the first 0...100 integer anywhere in the output
+    /// wins. A chatty local model should cost the user its reasoning, not its
+    /// coherence read. Apple Intelligence and the local LLM used to carry
+    /// identical private copies of this, fallback included.
+    init(parsing output: String) {
+        var score: Int?
+        var topicFocus = ""
+        var logicalFlow = ""
+        var reason = ""
+
+        for line in output.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let upper = trimmed.uppercased()
+            if upper.hasPrefix("SCORE:") {
+                let value = trimmed.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                score = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
+            } else if upper.hasPrefix("TOPIC_FOCUS:") {
+                topicFocus = String(trimmed.dropFirst(12).trimmingCharacters(in: .whitespaces))
+            } else if upper.hasPrefix("LOGICAL_FLOW:") {
+                logicalFlow = String(trimmed.dropFirst(13).trimmingCharacters(in: .whitespaces))
+            } else if upper.hasPrefix("REASON:") {
+                reason = String(trimmed.dropFirst(7).trimmingCharacters(in: .whitespaces))
+            }
+        }
+
+        if let score {
+            self.init(score: max(0, min(100, score)),
+                      topicFocus: topicFocus,
+                      logicalFlow: logicalFlow,
+                      reason: reason)
+            return
+        }
+
+        let loose = output
+            .components(separatedBy: CharacterSet.decimalDigits.inverted)
+            .compactMap(Int.init)
+            .first(where: { (0...100).contains($0) })
+        self.init(score: loose ?? 50, topicFocus: "", logicalFlow: "", reason: "")
+    }
+}
+
 enum LLMBackend: Equatable, Sendable {
     case appleIntelligence
     case localLLM
@@ -36,7 +82,7 @@ final class LLMService {
     private(set) var lastFailure: LLMPassFailure?
 
     /// Touched from the off-main memory-pressure handler, hence nonisolated.
-    nonisolated private let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LLMService")
+    nonisolated private let logger = Logger.app("LLMService")
 
     /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
@@ -425,14 +471,7 @@ final class LLMService {
             return nil
         }
 
-        if let result = Self.parseCoherenceResult(output) {
-            return result
-        }
-
-        // Fallback: extract just a number
-        let numbers = output.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap { Int($0) }
-        let score = numbers.first(where: { $0 >= 0 && $0 <= 100 }) ?? 50
-        return CoherenceResult(score: score, topicFocus: "", logicalFlow: "", reason: "")
+        return CoherenceResult(parsing: output)
     }
 
     private func evaluateTranscriptQualityWithAppleIntelligence(transcript: String) async -> (structure: Int, vocabulary: Int)? {
@@ -555,35 +594,6 @@ final class LLMService {
 
     // MARK: - Parsing
 
-    private static func parseCoherenceResult(_ output: String) -> CoherenceResult? {
-        let lines = output.components(separatedBy: "\n")
-        var score: Int?
-        var topicFocus = ""
-        var logicalFlow = ""
-        var reason = ""
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.uppercased().hasPrefix("SCORE:") {
-                let value = trimmed.dropFirst(6).trimmingCharacters(in: .whitespaces)
-                score = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
-            } else if trimmed.uppercased().hasPrefix("TOPIC_FOCUS:") {
-                topicFocus = String(trimmed.dropFirst(12).trimmingCharacters(in: .whitespaces))
-            } else if trimmed.uppercased().hasPrefix("LOGICAL_FLOW:") {
-                logicalFlow = String(trimmed.dropFirst(13).trimmingCharacters(in: .whitespaces))
-            } else if trimmed.uppercased().hasPrefix("REASON:") {
-                reason = String(trimmed.dropFirst(7).trimmingCharacters(in: .whitespaces))
-            }
-        }
-
-        guard let s = score else { return nil }
-        return CoherenceResult(
-            score: max(0, min(100, s)),
-            topicFocus: topicFocus,
-            logicalFlow: logicalFlow,
-            reason: reason
-        )
-    }
 
     private func sanitizeCoachingInsight(
         _ raw: String,

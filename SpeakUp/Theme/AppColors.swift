@@ -179,7 +179,6 @@ enum AppColors {
     static let toolDrill = categoryAmber
     static let toolReadAloud = categoryBrandBright
     static let toolCalm = categoryPlum
-    static let toolWheel = categoryIndigo
 
     // MARK: - Subscore Identity Tones
     //

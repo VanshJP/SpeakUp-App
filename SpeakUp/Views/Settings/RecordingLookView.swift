@@ -46,9 +46,10 @@ struct RecordingLookView: View {
                     ) { backdrop in
                         viewModel.recordingBackdrop = backdrop
                     } thumbnail: { backdrop in
+                        // No frame/scale hack: the backdrop normalises its
+                        // composition against the view's diagonal, so a 76pt
+                        // tile is a true miniature of the session screen.
                         RecordingBackdropView(backdrop: backdrop, animated: false)
-                            .frame(width: 320, height: 320)
-                            .scaleEffect(0.25)
                     }
 
                     group(

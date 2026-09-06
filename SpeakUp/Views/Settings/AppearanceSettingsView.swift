@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Settings → Appearance: glass density + app canvas. Recording Look stays the
-/// session-only picker (backdrop / waveform / button / timer); this page owns
-/// everything that paints behind the tabs.
+/// Settings → App Look: glass density + app canvas. This page owns everything
+/// that paints behind the tabs. Recording Look (backdrop / waveform / button /
+/// timer) is its **sibling** on the hub, not a door at the bottom of this page —
+/// a cosmetic setting three pushes deep is a hidden setting.
 struct AppearanceSettingsView: View {
     @Bindable var viewModel: SettingsViewModel
 
@@ -14,12 +15,11 @@ struct AppearanceSettingsView: View {
                 VStack(spacing: AppLayout.chapterSpacing) {
                     glassSection
                     canvasSection
-                    recordingLookLink
                 }
                 .pageContentInsets()
             }
         }
-        .navigationTitle("Appearance")
+        .navigationTitle("App Look")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .environment(\.glassAppearance, viewModel.glassAppearance)
@@ -144,47 +144,6 @@ struct AppearanceSettingsView: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel("\(canvas.displayName). \(canvas.subtitle)")
     }
-
-    // MARK: - Recording Look door
-
-    private var recordingLookLink: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("Session look", icon: "waveform.circle")
-
-            NavigationLink {
-                RecordingLookView(viewModel: viewModel)
-            } label: {
-                GlassCard(padding: 14) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "waveform.badge.magnifyingglass")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(AppColors.categoryBrandBright)
-                            .frame(width: 32, height: 32)
-                            .background {
-                                Circle().fill(AppColors.categoryBrandBright.opacity(0.18))
-                            }
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Recording Look")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                            Text("Backdrop, waveform, record button, and timer for takes")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-            .buttonStyle(GlassPressStyle())
-        }
-    }
 }
 
 /// Selected = solid white (same as filter chips). Idle previews that glass density.
@@ -202,7 +161,6 @@ private struct AppearanceGlassPreviewChrome: ViewModifier {
                         .regular.tint(appearance.glassTint),
                         in: .rect(cornerRadius: 16)
                     )
-                    .glassRimStroke(cornerRadius: 16, appearance: appearance)
             }
         }
         .transaction { $0.animation = nil }

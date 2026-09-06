@@ -38,8 +38,8 @@ struct AppearanceSettingsTests {
     }
 
     @Test func darkGlassIsQuieterThanLight() {
-        // Opacity is the lift amount — dark must lift less so plates sink.
-        #expect(GlassAppearance.dark.rimOpacities.0 < GlassAppearance.light.rimOpacities.0)
+        // The tint lift is the only knob now — dark must lift less so plates sink.
+        #expect(GlassAppearance.dark.tintLift < GlassAppearance.light.tintLift)
     }
 
     @Test func reviewToolCatalogIsComplete() {

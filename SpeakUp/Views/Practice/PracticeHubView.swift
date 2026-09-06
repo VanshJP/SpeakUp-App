@@ -48,8 +48,6 @@ struct PracticeHubView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // Canvas comes from ContentView's shared AppBackground.
-
             PageScrollView {
                 LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
                     Section {
@@ -91,10 +89,10 @@ struct PracticeHubView: View {
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        // No root title — the tab bar already says Library, and the pinned
-        // SectionPicker names the section. A nav title (large or inline) only
-        // stacked chrome above the picker; trailing filter/sort stay.
-        .navigationTitle("")
+        // The tab bar names the tab; the nav row names the page you are on.
+        // Inline (never large) so the title costs no height the trailing
+        // filter / trophy button was not already reserving.
+        .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .searchable(text: activeSearchText, prompt: searchPrompt)
@@ -223,18 +221,10 @@ struct PracticeHubView: View {
                     || $0.bestFor.localizedStandardContains(query)
             }
 
+        // No eyebrow, no intro paragraph: the two grid headers already say
+        // Practice and Review, and a sentence of preamble is a row of scroll
+        // between the user and the tool they came for.
         return VStack(alignment: .leading, spacing: 20) {
-            if query.isEmpty {
-                Text("Practice Tools")
-                    .eyebrowStyle()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text("Warm up, drill, read aloud, or settle nerves before a take.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             if visiblePractice.isEmpty && visibleReview.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
@@ -243,7 +233,7 @@ struct PracticeHubView: View {
                 )
             } else {
                 if !visiblePractice.isEmpty {
-                    toolGrid(title: query.isEmpty ? nil : "Practice") {
+                    toolGrid(title: "Practice") {
                         ForEach(visiblePractice) { tool in
                             ToolCategoryCard(
                                 icon: tool.kind.icon,
@@ -282,13 +272,11 @@ struct PracticeHubView: View {
     }
 
     private func toolGrid<Content: View>(
-        title: String?,
+        title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let title {
-                GlassSectionHeader(title, icon: title == "Review" ? "ellipsis.circle" : "wrench.and.screwdriver")
-            }
+            GlassSectionHeader(title, icon: title == "Review" ? "ellipsis.circle" : "wrench.and.screwdriver")
 
             LazyVGrid(
                 columns: [

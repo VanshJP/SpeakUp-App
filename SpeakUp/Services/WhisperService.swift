@@ -54,7 +54,7 @@ class WhisperService {
     /// timestamp overshoots by minutes; left alone it drags the reported duration past
     /// the end of the file and hands every consumer of word timings — playback
     /// highlighting, pause detection, per-word acoustics — a window of silence.
-    private static let maxWordDuration: TimeInterval = 3.0
+    nonisolated private static let maxWordDuration: TimeInterval = 3.0
 
     /// Longest gap between decoded tokens before the decoder counts as hung.
     ///
@@ -235,7 +235,7 @@ class WhisperService {
         config: WhisperKitConfig,
         seconds: TimeInterval
     ) async throws -> WhisperKit {
-        final class Box: @unchecked Sendable {
+        nonisolated final class Box: @unchecked Sendable {
             var value: WhisperKit?
         }
         let box = Box()

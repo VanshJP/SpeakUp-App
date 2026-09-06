@@ -210,7 +210,7 @@ final class LocalLLMService {
     // MARK: - Private
 
     // Sendable — reachable from the MainActor service and the off-main orphan sweep alike.
-    nonisolated private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LocalLLM")
+    nonisolated private static let logger = Logger.app("LocalLLM")
     nonisolated private let engine = LLMInferenceEngine()
     @ObservationIgnored private var activeURLSessionTask: URLSessionDownloadTask?
     private var unloadTimer: Timer?
@@ -610,14 +610,7 @@ final class LocalLLMService {
             return nil
         }
 
-        if let result = Self.parseCoherenceResult(output) {
-            return result
-        }
-
-        // Fallback: extract just a number
-        let numbers = output.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap { Int($0) }
-        let score = numbers.first(where: { $0 >= 0 && $0 <= 100 }) ?? 50
-        return CoherenceResult(score: score, topicFocus: "", logicalFlow: "", reason: "")
+        return CoherenceResult(parsing: output)
     }
 
     // MARK: - Coaching Insights
@@ -730,35 +723,6 @@ final class LocalLLMService {
 
     // MARK: - Parsing Helpers
 
-    private static func parseCoherenceResult(_ output: String) -> CoherenceResult? {
-        let lines = output.components(separatedBy: "\n")
-        var score: Int?
-        var topicFocus = ""
-        var logicalFlow = ""
-        var reason = ""
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.uppercased().hasPrefix("SCORE:") {
-                let value = trimmed.dropFirst(6).trimmingCharacters(in: .whitespaces)
-                score = Int(value.components(separatedBy: CharacterSet.decimalDigits.inverted).first ?? "")
-            } else if trimmed.uppercased().hasPrefix("TOPIC_FOCUS:") {
-                topicFocus = String(trimmed.dropFirst(12).trimmingCharacters(in: .whitespaces))
-            } else if trimmed.uppercased().hasPrefix("LOGICAL_FLOW:") {
-                logicalFlow = String(trimmed.dropFirst(13).trimmingCharacters(in: .whitespaces))
-            } else if trimmed.uppercased().hasPrefix("REASON:") {
-                reason = String(trimmed.dropFirst(7).trimmingCharacters(in: .whitespaces))
-            }
-        }
-
-        guard let s = score else { return nil }
-        return CoherenceResult(
-            score: max(0, min(100, s)),
-            topicFocus: topicFocus,
-            logicalFlow: logicalFlow,
-            reason: reason
-        )
-    }
 
     // MARK: - Download with Progress
 
@@ -884,7 +848,7 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
 nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     // Same category as the service logger — one stream for both layers.
-    nonisolated private static let logger = Logger(subsystem: "com.vansh.SpeakUpMore", category: "LocalLLM")
+    nonisolated private static let logger = Logger.app("LocalLLM")
 
     private var model: OpaquePointer?                       // llama_model *
     private var ctx: OpaquePointer?                         // llama_context *
