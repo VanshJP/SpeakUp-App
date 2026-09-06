@@ -46,6 +46,11 @@ struct AppearanceSettingsTests {
         #expect(GlassAppearance.dark.tintLift < GlassAppearance.light.tintLift)
     }
 
+    @Test func glassPickerCaptionsStayOneLine() {
+        #expect(GlassAppearance.light.previewCaption == "Brighter plates")
+        #expect(GlassAppearance.dark.previewCaption == "Deeper plates")
+    }
+
     @Test func reviewToolCatalogIsComplete() {
         #expect(ReviewToolKind.allCases.map(\.title) == [
             "Compare", "Listen back", "Goals", "Journal"

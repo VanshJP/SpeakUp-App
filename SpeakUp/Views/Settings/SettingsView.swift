@@ -125,7 +125,11 @@ struct SettingsView: View {
                 subtitle: recordingLookSubtitle,
                 accessory: {
                     lookSwatch {
-                        RecordingBackdropView(backdrop: viewModel.recordingBackdrop, animated: false)
+                        RecordingBackdropView(
+                            backdrop: viewModel.recordingBackdrop,
+                            animated: false,
+                            fillsSafeArea: false
+                        )
                     }
                 }
             ) {

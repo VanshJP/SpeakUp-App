@@ -73,14 +73,23 @@ struct RecordingBackdropView: View {
     var backdrop: RecordingBackdrop = .base
     /// Unused — every look is a still. Kept so thumbnail call sites do not churn.
     var animated: Bool = true
+    /// Full-screen session / countdown. Picker tiles pass `false` so the
+    /// canvas stays inside the 76pt box instead of expanding under neighbors.
+    var fillsSafeArea: Bool = true
 
     var body: some View {
-        CanvasLookView(
+        let canvas = CanvasLookView(
             look: backdrop.look,
             mood: .session,
             tone: .recording
         )
         .overlay { readability }
+
+        if fillsSafeArea {
+            canvas.ignoresSafeArea()
+        } else {
+            canvas
+        }
     }
 
     /// Keeps white countdown type readable on a busy canvas. Base is already
@@ -89,7 +98,7 @@ struct RecordingBackdropView: View {
     @ViewBuilder
     private var readability: some View {
         if backdrop != .base {
-            LinearGradient(
+            let wash = LinearGradient(
                 stops: [
                     .init(color: .black.opacity(0.40), location: 0),
                     .init(color: .black.opacity(0.06), location: 0.42),
@@ -99,8 +108,13 @@ struct RecordingBackdropView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .ignoresSafeArea()
             .allowsHitTesting(false)
+
+            if fillsSafeArea {
+                wash.ignoresSafeArea()
+            } else {
+                wash
+            }
         }
     }
 }

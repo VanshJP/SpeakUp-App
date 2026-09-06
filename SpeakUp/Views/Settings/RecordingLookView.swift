@@ -49,7 +49,7 @@ struct RecordingLookView: View {
                         // No frame/scale hack: the backdrop normalises its
                         // composition against the view's diagonal, so a 76pt
                         // tile is a true miniature of the session screen.
-                        RecordingBackdropView(backdrop: backdrop, animated: false)
+                        RecordingBackdropView(backdrop: backdrop, animated: false, fillsSafeArea: false)
                     }
 
                     group(
@@ -160,7 +160,7 @@ struct RecordingLookView: View {
     /// without switching modes.
     private var hero: some View {
         ZStack {
-            RecordingBackdropView(backdrop: viewModel.recordingBackdrop)
+            RecordingBackdropView(backdrop: viewModel.recordingBackdrop, fillsSafeArea: false)
 
             VStack(spacing: 18) {
                 heroPiece("Timer") {
@@ -270,6 +270,12 @@ struct RecordingLookView: View {
                                 thumbnail(option)
                                     .frame(width: 76, height: 76)
                                     .allowsHitTesting(false)
+
+                                // Canvas looks opt out of hit testing; this
+                                // overlay is what makes the picture itself the
+                                // control, not just the caption under it.
+                                Color.clear
+                                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             }
                             .frame(width: 76, height: 76)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))

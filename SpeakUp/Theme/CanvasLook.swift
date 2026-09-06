@@ -42,7 +42,7 @@ nonisolated enum CanvasLook: CaseIterable, Hashable, Sendable {
         case .classic: return "Deep navy with soft teal light"
         case .midnight: return "Near-black field, quieter glow"
         case .mist: return "Cool fog banks across graphite"
-        case .aurora: return "Teal-to-violet curtains over stars"
+        case .aurora: return "Polar curtains of teal and violet light"
         case .ember: return "Warm copper well with sparks"
         case .horizon: return "Stars above a lit horizon"
         case .prism: return "Angled light beams across navy"
@@ -217,72 +217,89 @@ private func paintMidnight(_ g: inout GraphicsContext, _ f: CanvasFrame, _ tone:
 /// weather across graphite rather than orbs.
 private func paintMist(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
-        Color(red: 0.048, green: 0.058, blue: 0.086),
-        Color(red: 0.030, green: 0.038, blue: 0.062),
-        Color(red: 0.020, green: 0.026, blue: 0.044)
+        Color(red: 0.042, green: 0.054, blue: 0.082),
+        Color(red: 0.028, green: 0.036, blue: 0.058),
+        Color(red: 0.016, green: 0.022, blue: 0.038)
     ])
 
     g.blendMode = .plusLighter
+    canvasStars(&g, count: f.count(18), f, brightness: 0.22)
     let banks: [(x: Double, y: Double, span: Double, strength: Double, angle: Double, color: Color)] = [
-        (0.28, 0.22, 0.48, 0.26, -8, Color(red: 0.42, green: 0.60, blue: 0.72)),
-        (0.72, 0.44, 0.56, 0.22, 4, Color(red: 0.26, green: 0.44, blue: 0.62)),
-        (0.40, 0.70, 0.50, 0.24, -2, AppColors.primary),
-        (0.78, 0.88, 0.40, 0.18, 10, Color(red: 0.52, green: 0.62, blue: 0.78))
+        (0.18, 0.18, 0.52, 0.22, -10, Color(red: 0.50, green: 0.66, blue: 0.78)),
+        (0.62, 0.28, 0.58, 0.20, 8, Color(red: 0.32, green: 0.50, blue: 0.68)),
+        (0.38, 0.52, 0.64, 0.24, -4, AppColors.primary),
+        (0.82, 0.66, 0.48, 0.18, 14, Color(red: 0.42, green: 0.58, blue: 0.76)),
+        (0.28, 0.86, 0.50, 0.20, -6, canvasMint)
     ]
     for bank in banks {
         canvasGlow(&g, bank.color,
                    at: f.at(bank.x, bank.y),
                    radius: f.d * bank.span,
                    intensity: f.gain(bank.strength),
-                   stretch: 2.8,
+                   stretch: 2.9,
                    angle: .degrees(bank.angle))
     }
     g.blendMode = .normal
 
-    canvasVignette(&g, f.size, strength: 0.34)
+    canvasVignette(&g, f.size, strength: 0.36)
 }
 
 // MARK: Aurora
 
-/// Folded curtains over a star field. Each ribbon carries two harmonics so it
-/// folds instead of reading as one rigid rope, and a lit leading edge — that
-/// rim is what makes it read as sky.
+/// Polar sky: a dark wash, a glowing oval on the horizon, then vertical
+/// shafts of light leaning a few degrees off true — the photograph, not a
+/// cartoon sine ribbon with a hard rim.
 private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
-        Color(red: 0.016, green: 0.046, blue: 0.084),
-        Color(red: 0.012, green: 0.028, blue: 0.062),
-        Color(red: 0.028, green: 0.018, blue: 0.052)
+        Color(red: 0.010, green: 0.028, blue: 0.062),
+        Color(red: 0.008, green: 0.018, blue: 0.044),
+        Color(red: 0.018, green: 0.012, blue: 0.040)
     ])
 
     g.blendMode = .plusLighter
-    canvasStars(&g, count: f.count(54), f, heightFraction: 0.52, brightness: 0.6)
+    canvasStars(&g, count: f.count(70), f, heightFraction: 0.78, brightness: 0.72)
 
-    canvasGlow(&g, AppColors.primary, at: f.at(0.26, 0.26),
-               radius: f.d * 0.52, intensity: f.gain(0.24), stretch: 1.5)
-    canvasGlow(&g, canvasViolet, at: f.at(0.80, 0.56),
-               radius: f.d * 0.48, intensity: f.gain(0.22), stretch: 1.4)
-    canvasGlow(&g, AppColors.categoryBrandBright, at: f.at(0.5, 0.94),
-               radius: f.d * 0.42, intensity: f.gain(0.14), stretch: 2.2)
+    // Horizon oval — the glow the shafts are born from.
+    canvasGlow(&g, auroraGreen, at: f.at(0.48, 0.62),
+               radius: f.d * 0.58, intensity: f.gain(0.22), stretch: 2.4)
+    canvasGlow(&g, canvasViolet, at: f.at(0.68, 0.58),
+               radius: f.d * 0.46, intensity: f.gain(0.18), stretch: 2.0, angle: .degrees(8))
+    canvasGlow(&g, AppColors.primary, at: f.at(0.32, 0.60),
+               radius: f.d * 0.42, intensity: f.gain(0.16), stretch: 2.1, angle: .degrees(-10))
+    canvasGlow(&g, auroraMagenta, at: f.at(0.58, 0.70),
+               radius: f.d * 0.28, intensity: f.gain(0.12), stretch: 1.8)
 
-    let curtains: [(top: Double, height: Double, phase: Double,
-                    frequency: Double, amplitude: Double, head: Color, tail: Color, strength: Double)] = [
-        (0.20, 0.44, 0.4, 1.2, 0.055, AppColors.categoryBrandBright, AppColors.primary, 0.44),
-        (0.33, 0.40, 2.3, 1.7, 0.044, canvasViolet, canvasDeepViolet, 0.38),
-        (0.48, 0.34, 4.1, 0.9, 0.036, canvasMint, AppColors.primary, 0.30),
-        (0.62, 0.28, 5.8, 1.4, 0.026, AppColors.primary, canvasDeepTeal, 0.24)
+    // Wide soft curtains behind the shafts so the field is a sheet, not a
+    // row of isolated beams.
+    canvasGlow(&g, auroraGreen, at: f.at(0.40, 0.42),
+               radius: f.d * 0.40, intensity: f.gain(0.14), stretch: 3.2, angle: .degrees(78))
+    canvasGlow(&g, canvasViolet, at: f.at(0.62, 0.38),
+               radius: f.d * 0.36, intensity: f.gain(0.12), stretch: 3.0, angle: .degrees(102))
+
+    let shafts: [(x: Double, y: Double, lean: Double, length: Double, width: Double, strength: Double, color: Color)] = [
+        (0.16, 0.46, -14, 0.62, 5.4, 0.22, auroraGreen),
+        (0.24, 0.40, -8, 0.70, 6.2, 0.28, canvasMint),
+        (0.32, 0.44, -4, 0.58, 5.0, 0.20, AppColors.categoryBrandBright),
+        (0.42, 0.36, 3, 0.76, 6.8, 0.34, auroraGreen),
+        (0.50, 0.40, 6, 0.64, 5.6, 0.24, canvasViolet),
+        (0.58, 0.34, 10, 0.80, 7.0, 0.32, auroraMagenta),
+        (0.68, 0.42, 7, 0.66, 5.8, 0.26, AppColors.primary),
+        (0.78, 0.38, 14, 0.72, 6.4, 0.30, canvasMint),
+        (0.86, 0.48, 18, 0.52, 4.8, 0.18, canvasViolet)
     ]
-    // Ambient drops the two quietest ribbons rather than dimming all four —
-    // fewer, cleaner folds behind body text.
-    let visible = f.mood == .session ? curtains : Array(curtains.prefix(2))
-    for c in visible {
-        canvasCurtain(&g, f.size, top: c.top, height: c.height,
-                      phase: c.phase,
-                      frequency: c.frequency, amplitude: c.amplitude,
-                      head: c.head, tail: c.tail, intensity: f.gain(c.strength))
+    let visible = f.mood == .session ? shafts : Array(shafts.enumerated().compactMap { $0.offset % 2 == 0 ? $0.element : nil })
+    for shaft in visible {
+        canvasAuroraShaft(&g, f, shaft)
+        // Hot core at the base of the brighter columns.
+        if shaft.strength > 0.26 {
+            canvasGlow(&g, Color.white.opacity(0.9),
+                       at: f.at(shaft.x, min(shaft.y + 0.22, 0.72)),
+                       radius: f.d * 0.045, intensity: f.gain(0.22))
+        }
     }
     g.blendMode = .normal
 
-    canvasVignette(&g, f.size, strength: 0.35)
+    canvasVignette(&g, f.size, strength: 0.38, center: UnitPoint(x: 0.5, y: 0.42))
 }
 
 // MARK: Ember
@@ -321,12 +338,14 @@ private func paintHorizon(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let y = f.size.height * 0.72
 
     canvasWash(&g, f.size, [
-        Color(red: 0.014, green: 0.018, blue: 0.042),
-        Color(red: 0.020, green: 0.030, blue: 0.058),
+        Color(red: 0.012, green: 0.022, blue: 0.052),
+        Color(red: 0.022, green: 0.038, blue: 0.072),
         Color(red: 0.008, green: 0.012, blue: 0.026)
     ])
 
     g.blendMode = .plusLighter
+    canvasGlow(&g, canvasQuietBlue, at: f.at(0.50, 0.22),
+               radius: f.d * 0.42, intensity: f.gain(0.12), stretch: 1.8)
     canvasStars(&g, count: f.count(46), f, heightFraction: 0.68, brightness: 0.85)
     canvasHorizonLine(&g, f, y: y, bloom: 0.34, spread: 0.44)
     g.blendMode = .normal
@@ -372,19 +391,24 @@ private func paintPrism(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
     g.blendMode = .plusLighter
     let beams: [(x: Double, y: Double, angle: Double, strength: Double, span: Double, color: Color)] = [
-        (0.18, 0.18, -58, 0.32, 0.32, AppColors.categoryBrandBright),
-        (0.44, 0.36, -52, 0.26, 0.30, canvasViolet),
-        (0.68, 0.24, -64, 0.24, 0.28, AppColors.primary),
-        (0.88, 0.62, -50, 0.22, 0.26, Color(red: 0.30, green: 0.52, blue: 0.86)),
-        (0.30, 0.72, -46, 0.16, 0.22, canvasMint)
+        (0.16, 0.16, -58, 0.34, 0.34, AppColors.categoryBrandBright),
+        (0.40, 0.32, -52, 0.28, 0.32, canvasViolet),
+        (0.62, 0.20, -64, 0.26, 0.30, AppColors.primary),
+        (0.84, 0.48, -48, 0.24, 0.28, Color(red: 0.30, green: 0.52, blue: 0.86)),
+        (0.28, 0.68, -44, 0.18, 0.24, canvasMint),
+        (0.72, 0.78, -56, 0.16, 0.22, auroraGreen)
     ]
     for beam in beams {
         canvasGlow(&g, beam.color,
                    at: f.at(beam.x, beam.y),
                    radius: f.d * beam.span,
                    intensity: f.gain(beam.strength),
-                   stretch: 3.6,
+                   stretch: 3.8,
                    angle: .degrees(beam.angle))
+        canvasGlow(&g, Color.white,
+                   at: f.at(beam.x, beam.y),
+                   radius: f.d * 0.05,
+                   intensity: f.gain(beam.strength * 0.45))
     }
     g.blendMode = .normal
 
@@ -405,24 +429,17 @@ private func paintDepth(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     ])
 
     g.blendMode = .plusLighter
-    canvasGlow(&g, AppColors.primary, at: center, radius: f.d * 0.34, intensity: f.gain(0.28))
+    canvasGlow(&g, AppColors.primary, at: center, radius: f.d * 0.38, intensity: f.gain(0.30))
+    canvasGlow(&g, canvasMint, at: center, radius: f.d * 0.14, intensity: f.gain(0.18))
     canvasGlow(&g, canvasQuietBlue, at: f.at(0.5, 0.86),
                radius: f.d * 0.40, intensity: f.gain(0.14), stretch: 1.6)
 
-    for ring in 0..<6 {
-        let r = f.d * (0.10 + Double(ring) * 0.10)
-        let fade = 1 - Double(ring) / 6.5
-        g.stroke(
-            Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
-            with: .radialGradient(
-                Gradient(colors: [
-                    AppColors.categoryBrandBright.opacity(0.32 * fade),
-                    Color.white.opacity(0.10 * fade)
-                ]),
-                center: center, startRadius: r * 0.6, endRadius: r * 1.2
-            ),
-            lineWidth: 1.2
-        )
+    // Nested wells, not 1pt ellipse strokes — those read as a target graphic.
+    for ring in 0..<5 {
+        let span = 0.16 + Double(ring) * 0.11
+        let fade = 1 - Double(ring) / 5.4
+        canvasGlow(&g, AppColors.categoryBrandBright, at: center,
+                   radius: f.d * span, intensity: f.gain(0.10 * fade), stretch: 1.05)
     }
     g.blendMode = .normal
 
@@ -558,35 +575,15 @@ private func paintTide(_ g: inout GraphicsContext, _ f: CanvasFrame) {
                    at: f.at(0.5, band.y),
                    radius: f.d * band.span,
                    intensity: f.gain(band.strength),
-                   stretch: 3.2,
+                   stretch: 3.4,
                    angle: .degrees(-2))
     }
 
-    // Soft crest lines — still, like foam caught mid-form.
-    for (i, crest) in [0.52, 0.66, 0.80].enumerated() {
-        let y = f.size.height * crest
-        var line = Path()
-        let steps = 18
-        for s in 0...steps {
-            let t = Double(s) / Double(steps)
-            let wave = sin(t * .pi * 2 + Double(i) * 1.1) * f.size.height * 0.012
-            let point = CGPoint(x: CGFloat(t) * f.size.width, y: y + wave)
-            if s == 0 { line.move(to: point) } else { line.addLine(to: point) }
-        }
-        g.stroke(
-            line,
-            with: .linearGradient(
-                Gradient(colors: [
-                    .clear,
-                    canvasMint.opacity(f.gain(0.22 - Double(i) * 0.04)),
-                    .clear
-                ]),
-                startPoint: CGPoint(x: 0, y: y),
-                endPoint: CGPoint(x: f.size.width, y: y)
-            ),
-            style: StrokeStyle(lineWidth: 1.2, lineCap: .round)
-        )
-    }
+    // Foam is a brighter strip on the upper bands, not a stroked sine.
+    canvasGlow(&g, canvasMint, at: f.at(0.42, 0.62),
+               radius: f.d * 0.22, intensity: f.gain(0.16), stretch: 3.6)
+    canvasGlow(&g, Color.white, at: f.at(0.58, 0.78),
+               radius: f.d * 0.14, intensity: f.gain(0.10), stretch: 3.8)
     g.blendMode = .normal
 
     canvasVignette(&g, f.size, strength: 0.36, center: UnitPoint(x: 0.5, y: 0.62))
@@ -605,18 +602,20 @@ private func paintDusk(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
     g.blendMode = .plusLighter
     canvasGlow(&g, Color(red: 1.0, green: 0.55, blue: 0.28), at: f.at(0.18, 0.12),
-               radius: f.d * 0.50, intensity: f.gain(0.36), stretch: 1.35, angle: .degrees(-20))
+               radius: f.d * 0.54, intensity: f.gain(0.40), stretch: 1.4, angle: .degrees(-20))
+    canvasGlow(&g, Color(red: 1.0, green: 0.72, blue: 0.38), at: f.at(0.28, 0.18),
+               radius: f.d * 0.22, intensity: f.gain(0.26))
     canvasGlow(&g, Color(red: 0.95, green: 0.32, blue: 0.38), at: f.at(0.42, 0.28),
-               radius: f.d * 0.38, intensity: f.gain(0.22), stretch: 1.5, angle: .degrees(12))
+               radius: f.d * 0.40, intensity: f.gain(0.24), stretch: 1.5, angle: .degrees(12))
     canvasGlow(&g, AppColors.primary, at: f.at(0.78, 0.78),
-               radius: f.d * 0.52, intensity: f.gain(0.30), stretch: 1.4)
+               radius: f.d * 0.54, intensity: f.gain(0.32), stretch: 1.4)
     canvasGlow(&g, canvasMint, at: f.at(0.55, 0.92),
-               radius: f.d * 0.36, intensity: f.gain(0.16), stretch: 2.0)
+               radius: f.d * 0.38, intensity: f.gain(0.18), stretch: 2.0)
 
     let seamY = f.size.height * 0.48
-    canvasGlow(&g, Color(red: 1.0, green: 0.72, blue: 0.42),
+    canvasGlow(&g, Color(red: 1.0, green: 0.78, blue: 0.48),
                at: CGPoint(x: f.size.width * 0.35, y: seamY),
-               radius: f.d * 0.28, intensity: f.gain(0.20), stretch: 2.6)
+               radius: f.d * 0.32, intensity: f.gain(0.24), stretch: 2.8)
     g.blendMode = .normal
 
     canvasVignette(&g, f.size, strength: 0.38, center: UnitPoint(x: 0.4, y: 0.4))
@@ -635,7 +634,9 @@ private func paintSignal(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
     g.blendMode = .plusLighter
     canvasGlow(&g, AppColors.primary, at: f.at(0.5, 0.48),
-               radius: f.d * 0.42, intensity: f.gain(0.18))
+               radius: f.d * 0.46, intensity: f.gain(0.16))
+    canvasGlow(&g, canvasQuietBlue, at: f.at(0.22, 0.28),
+               radius: f.d * 0.28, intensity: f.gain(0.10), stretch: 1.4)
 
     let ribbons: [(y: Double, amp: Double, freq: Double, phase: Double, strength: Double, color: Color)] = [
         (0.28, 0.04, 1.4, 0.2, 0.34, AppColors.categoryBrandBright),
@@ -673,9 +674,11 @@ private func paintNoir(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
     g.blendMode = .plusLighter
     canvasGlow(&g, AppColors.primary, at: f.at(0.62, 0.28),
-               radius: f.d * 0.55, intensity: f.gain(0.22), stretch: 3.8, angle: .degrees(-38))
+               radius: f.d * 0.58, intensity: f.gain(0.24), stretch: 4.0, angle: .degrees(-38))
     canvasGlow(&g, AppColors.categoryBrandBright, at: f.at(0.58, 0.30),
-               radius: f.d * 0.18, intensity: f.gain(0.28), stretch: 4.2, angle: .degrees(-38))
+               radius: f.d * 0.20, intensity: f.gain(0.32), stretch: 4.4, angle: .degrees(-38))
+    canvasGlow(&g, Color.white, at: f.at(0.56, 0.31),
+               radius: f.d * 0.05, intensity: f.gain(0.18), stretch: 3.6, angle: .degrees(-38))
     canvasGlow(&g, canvasQuietBlue, at: f.at(0.18, 0.82),
                radius: f.d * 0.32, intensity: f.gain(0.08), stretch: 1.3)
     canvasStars(&g, count: f.count(18), f, brightness: 0.28)
@@ -731,7 +734,8 @@ private func canvasGround(_ g: inout GraphicsContext, _ f: CanvasFrame, y: CGFlo
     )
 }
 
-/// Soft sine ribbon used by Signal. One stroke, bright core fading to clear.
+/// Soft sine ribbon used by Signal. One fat glow-stroke, no white hairline —
+/// that inner stroke made it look like a chart overlay.
 private func canvasWaveRibbon(
     _ g: inout GraphicsContext,
     _ f: CanvasFrame,
@@ -744,7 +748,7 @@ private func canvasWaveRibbon(
 ) {
     let midY = f.size.height * y
     let amp = f.size.height * amplitude
-    let steps = 28
+    let steps = 36
 
     var path = Path()
     for s in 0...steps {
@@ -760,19 +764,15 @@ private func canvasWaveRibbon(
         with: .linearGradient(
             Gradient(colors: [
                 .clear,
+                color.opacity(intensity * 0.45),
                 color.opacity(intensity),
-                color.opacity(intensity * 0.85),
+                color.opacity(intensity * 0.45),
                 .clear
             ]),
             startPoint: CGPoint(x: 0, y: midY),
             endPoint: CGPoint(x: f.size.width, y: midY)
         ),
-        style: StrokeStyle(lineWidth: f.unit * 2.4, lineCap: .round, lineJoin: .round)
-    )
-    g.stroke(
-        path,
-        with: .color(Color.white.opacity(intensity * 0.35)),
-        style: StrokeStyle(lineWidth: f.unit * 0.9, lineCap: .round, lineJoin: .round)
+        style: StrokeStyle(lineWidth: f.unit * 5.5, lineCap: .round, lineJoin: .round)
     )
 }
 
@@ -782,11 +782,12 @@ private func canvasWaveRibbon(
 // Anything with a semantic meaning still comes from `AppColors`.
 
 private let canvasViolet = Color(red: 0.46, green: 0.28, blue: 0.90)
-private let canvasDeepViolet = Color(red: 0.24, green: 0.18, blue: 0.62)
 private let canvasMint = Color(red: 0.30, green: 0.92, blue: 0.78)
 private let canvasDeepTeal = Color(red: 0.08, green: 0.26, blue: 0.40)
 /// Quiet navy-blue counterweight for Classic / Midnight — deliberately not purple.
 private let canvasQuietBlue = Color(red: 0.20, green: 0.28, blue: 0.52)
+private let auroraGreen = Color(red: 0.38, green: 0.96, blue: 0.62)
+private let auroraMagenta = Color(red: 0.78, green: 0.34, blue: 0.94)
 
 // MARK: - Primitives
 //
@@ -899,56 +900,21 @@ private func canvasSparks(
     }
 }
 
-/// Aurora ribbon: a sine top edge with two harmonics, a body gradient falling
-/// to nothing, and a bright rim on the leading edge.
-private func canvasCurtain(
+/// Vertical aurora column. Rotate a wide glow onto its side so the shaft is
+/// soft on every edge — no polygon, no rim stroke.
+private func canvasAuroraShaft(
     _ g: inout GraphicsContext,
-    _ size: CGSize,
-    top: Double,
-    height: Double,
-    phase: Double,
-    frequency: Double,
-    amplitude: Double,
-    head: Color,
-    tail: Color,
-    intensity: Double
+    _ f: CanvasFrame,
+    _ shaft: (x: Double, y: Double, lean: Double, length: Double, width: Double, strength: Double, color: Color)
 ) {
-    let steps = 26
-    let topY = size.height * top
-    let drop = size.height * height
-    let amp = size.height * amplitude
-
-    var edge: [CGPoint] = []
-    edge.reserveCapacity(steps + 1)
-    for i in 0...steps {
-        let t = Double(i) / Double(steps)
-        let y = topY
-            + CGFloat(sin(t * frequency * 2 * .pi + phase)) * amp
-            + CGFloat(sin(t * frequency * 0.55 * 2 * .pi - phase * 0.7)) * amp * 0.45
-        edge.append(CGPoint(x: CGFloat(t) * size.width, y: y))
-    }
-
-    var body = Path()
-    body.move(to: edge[0])
-    for point in edge.dropFirst() { body.addLine(to: point) }
-    for point in edge.reversed() { body.addLine(to: CGPoint(x: point.x, y: point.y + drop)) }
-    body.closeSubpath()
-
-    g.fill(body, with: .linearGradient(
-        Gradient(stops: [
-            .init(color: head.opacity(intensity), location: 0),
-            .init(color: tail.opacity(intensity * 0.5), location: 0.42),
-            .init(color: .clear, location: 1)
-        ]),
-        startPoint: CGPoint(x: size.width / 2, y: topY - amp),
-        endPoint: CGPoint(x: size.width / 2, y: topY + drop)
-    ))
-
-    var rim = Path()
-    rim.move(to: edge[0])
-    for point in edge.dropFirst() { rim.addLine(to: point) }
-    g.stroke(rim, with: .color(head.opacity(min(intensity * 2.2, 0.9))),
-             style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+    canvasGlow(
+        &g, shaft.color,
+        at: f.at(shaft.x, shaft.y),
+        radius: f.d * shaft.length * 0.48,
+        intensity: f.gain(shaft.strength),
+        stretch: shaft.width,
+        angle: .degrees(90 + shaft.lean)
+    )
 }
 
 /// Darkens the edges so glass cards keep their contrast wherever they scroll.

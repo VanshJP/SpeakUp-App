@@ -21,6 +21,7 @@ struct AppBackground: View {
 
     var body: some View {
         AppCanvasView(canvas: canvas, style: style)
+            .ignoresSafeArea()
     }
 }
 

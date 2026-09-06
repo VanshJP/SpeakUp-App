@@ -99,7 +99,6 @@ struct CanvasLookView: View {
         Canvas(opaque: true) { graphics, size in
             look.paint(into: &graphics, size: size, mood: mood, tone: tone)
         }
-        .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
