@@ -15,6 +15,10 @@ struct AppearanceSettingsTests {
         #expect(AppCanvas.horizon.rawValue == 5)
         #expect(AppCanvas.prism.rawValue == 6)
         #expect(AppCanvas.depth.rawValue == 7)
+        #expect(AppCanvas.tide.rawValue == 8)
+        #expect(AppCanvas.dusk.rawValue == 9)
+        #expect(AppCanvas.signal.rawValue == 10)
+        #expect(AppCanvas.noir.rawValue == 11)
     }
 
     @Test func appCanvasFallsBackToClassic() {
@@ -40,6 +44,11 @@ struct AppearanceSettingsTests {
     @Test func darkGlassIsQuieterThanLight() {
         // The tint lift is the only knob now — dark must lift less so plates sink.
         #expect(GlassAppearance.dark.tintLift < GlassAppearance.light.tintLift)
+    }
+
+    @Test func glassPickerCaptionsStayOneLine() {
+        #expect(GlassAppearance.light.previewCaption == "Brighter plates")
+        #expect(GlassAppearance.dark.previewCaption == "Deeper plates")
     }
 
     @Test func reviewToolCatalogIsComplete() {

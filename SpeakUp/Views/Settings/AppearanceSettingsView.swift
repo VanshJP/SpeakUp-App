@@ -32,7 +32,7 @@ struct AppearanceSettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader("Glass", icon: "rectangle.on.rectangle")
 
-            Text("How translucent cards and chips sit on the canvas.")
+            Text("How translucent cards sit on the canvas.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -44,6 +44,9 @@ struct AppearanceSettingsView: View {
         }
     }
 
+    /// Each option is a miniature page: the current canvas, a sample plate
+    /// using that glass, then the name. Selected is a ring — never a solid
+    /// white fill that hides the thing you are choosing.
     private func glassOption(_ appearance: GlassAppearance) -> some View {
         let selected = viewModel.glassAppearance == appearance
         return Button {
@@ -52,34 +55,68 @@ struct AppearanceSettingsView: View {
             Task { await viewModel.saveSettings() }
         } label: {
             VStack(spacing: 10) {
-                Image(systemName: appearance.icon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(selected ? Color(red: 0.07, green: 0.07, blue: 0.08) : .white)
+                glassPreview(for: appearance)
 
-                Text(appearance.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(selected ? Color(red: 0.07, green: 0.07, blue: 0.08) : .white)
-
-                Text(appearance.subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(selected ? Color(red: 0.07, green: 0.07, blue: 0.08).opacity(0.7) : .secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .padding(.horizontal, 10)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.94))
+                VStack(spacing: 2) {
+                    Text(appearance.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(appearance.previewCaption)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
-            .modifier(AppearanceGlassPreviewChrome(isSelected: selected, appearance: appearance))
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .glassEffect(.regular.tint(appearance.glassTint), in: .rect(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        selected ? Color.white.opacity(0.92) : Color.white.opacity(0.14),
+                        lineWidth: selected ? 2 : 1
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .transaction { $0.animation = nil }
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel("\(appearance.displayName) glass. \(appearance.subtitle)")
+    }
+
+    private func glassPreview(for appearance: GlassAppearance) -> some View {
+        ZStack(alignment: .bottom) {
+            AppCanvasView(canvas: viewModel.appCanvas, style: .primary)
+                .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Capsule()
+                    .fill(Color.white.opacity(appearance.tintLift * 4.5 + 0.18))
+                    .frame(width: 44, height: 5)
+                Capsule()
+                    .fill(Color.white.opacity(appearance.tintLift * 3.0 + 0.10))
+                    .frame(width: 68, height: 5)
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(Color.white.opacity(appearance.tintLift * 1.8))
+            }
+            .glassEffect(
+                .regular.tint(appearance.glassTint),
+                in: .rect(cornerRadius: 11)
+            )
+            .padding(10)
+        }
+        .frame(height: 92)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            Color.clear
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .transaction { $0.animation = nil }
     }
 
     // MARK: - Canvas
@@ -115,55 +152,49 @@ struct AppearanceSettingsView: View {
             Task { await viewModel.saveSettings() }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    AppCanvasView(canvas: canvas, style: .primary, animated: false)
-                        .frame(height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                    if selected {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.9), lineWidth: 2)
-                    }
-                }
+                canvasPreview(canvas, selected: selected)
 
                 Text(canvas.displayName)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
 
                 Text(canvas.subtitle)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .frame(height: 32, alignment: .top)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(cornerRadius: 16, tint: selected ? AppColors.primary.opacity(0.10) : nil)
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityLabel("\(canvas.displayName). \(canvas.subtitle)")
     }
-}
 
-/// Selected = solid white (same as filter chips). Idle previews that glass density.
-private struct AppearanceGlassPreviewChrome: ViewModifier {
-    let isSelected: Bool
-    let appearance: GlassAppearance
+    /// The swatch is the control. `CanvasLookView` opts out of hit testing so
+    /// it cannot steal scroll from a live background; a clear overlay on top
+    /// of the clip catches the tap for this button.
+    private func canvasPreview(_ canvas: AppCanvas, selected: Bool) -> some View {
+        ZStack {
+            AppCanvasView(canvas: canvas, style: .primary)
+                .allowsHitTesting(false)
 
-    func body(content: Content) -> some View {
-        Group {
-            if isSelected {
-                content.clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            } else {
-                content
-                    .glassEffect(
-                        .regular.tint(appearance.glassTint),
-                        in: .rect(cornerRadius: 16)
-                    )
+            Color.clear
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if selected {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 2)
             }
         }
-        .transaction { $0.animation = nil }
+        .frame(maxWidth: .infinity)
+        .frame(height: 96)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

@@ -29,6 +29,15 @@ enum GlassAppearance: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// One-line caption under the Light / Dark preview. The long `subtitle`
+    /// is the accessibility string; this is what the picker shows.
+    var previewCaption: String {
+        switch self {
+        case .light: return "Brighter plates"
+        case .dark: return "Deeper plates"
+        }
+    }
+
     var icon: String {
         switch self {
         case .light: return "sun.max.fill"

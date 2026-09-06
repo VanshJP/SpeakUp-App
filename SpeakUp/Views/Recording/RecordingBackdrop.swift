@@ -21,6 +21,10 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
     case nebula = 3
     case ember = 4
     case void = 5
+    case tide = 6
+    case dusk = 7
+    case signal = 8
+    case noir = 9
 
     var id: Int { rawValue }
 
@@ -32,6 +36,10 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
         case .nebula: return "Nebula"
         case .ember: return "Ember"
         case .void: return "Void"
+        case .tide: return "Tide"
+        case .dusk: return "Dusk"
+        case .signal: return "Signal"
+        case .noir: return "Noir"
         }
     }
 
@@ -46,6 +54,10 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
         case .nebula: return .nebula
         case .ember: return .ember
         case .void: return .void
+        case .tide: return .tide
+        case .dusk: return .dusk
+        case .signal: return .signal
+        case .noir: return .noir
         }
     }
 
@@ -54,22 +66,30 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
 
 // MARK: - View
 
-/// Full-bleed session canvas. `animated: false` freezes a frame for
-/// thumbnails — and because every look normalises against the view's diagonal,
-/// the 76pt picker tile, the preview card and the live session all show the
-/// same composition at different scales.
+/// Full-bleed session canvas. Every look is a still — because every look
+/// normalises against the view's diagonal, the 76pt picker tile, the preview
+/// card and the live session all show the same composition at different scales.
 struct RecordingBackdropView: View {
     var backdrop: RecordingBackdrop = .base
+    /// Unused — every look is a still. Kept so thumbnail call sites do not churn.
     var animated: Bool = true
+    /// Full-screen session / countdown. Picker tiles pass `false` so the
+    /// canvas stays inside the 76pt box instead of expanding under neighbors.
+    var fillsSafeArea: Bool = true
 
     var body: some View {
-        CanvasLookView(
+        let canvas = CanvasLookView(
             look: backdrop.look,
             mood: .session,
-            tone: .recording,
-            animated: animated
+            tone: .recording
         )
         .overlay { readability }
+
+        if fillsSafeArea {
+            canvas.ignoresSafeArea()
+        } else {
+            canvas
+        }
     }
 
     /// Keeps white countdown type readable on a busy canvas. Base is already
@@ -78,7 +98,7 @@ struct RecordingBackdropView: View {
     @ViewBuilder
     private var readability: some View {
         if backdrop != .base {
-            LinearGradient(
+            let wash = LinearGradient(
                 stops: [
                     .init(color: .black.opacity(0.40), location: 0),
                     .init(color: .black.opacity(0.06), location: 0.42),
@@ -88,8 +108,13 @@ struct RecordingBackdropView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .ignoresSafeArea()
             .allowsHitTesting(false)
+
+            if fillsSafeArea {
+                wash.ignoresSafeArea()
+            } else {
+                wash
+            }
         }
     }
 }

@@ -19,6 +19,10 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
     case horizon = 5
     case prism = 6
     case depth = 7
+    case tide = 8
+    case dusk = 9
+    case signal = 10
+    case noir = 11
 
     var id: Int { rawValue }
 
@@ -32,6 +36,10 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
         case .horizon: return "Horizon"
         case .prism: return "Prism"
         case .depth: return "Depth"
+        case .tide: return "Tide"
+        case .dusk: return "Dusk"
+        case .signal: return "Signal"
+        case .noir: return "Noir"
         }
     }
 
@@ -46,6 +54,10 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
         case .horizon: return .horizon
         case .prism: return .prism
         case .depth: return .depth
+        case .tide: return .tide
+        case .dusk: return .dusk
+        case .signal: return .signal
+        case .noir: return .noir
         }
     }
 
@@ -62,44 +74,31 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
 struct AppCanvasView: View {
     var canvas: AppCanvas = .classic
     var style: AppBackground.Style = .primary
-    /// When false, freezes the canvas for thumbnails and Reduce Motion.
+    /// Kept for call-site compatibility. All canvases are stills now.
     var animated: Bool = true
 
     var body: some View {
-        CanvasLookView(look: canvas.look, mood: .ambient, tone: style, animated: animated)
+        CanvasLookView(look: canvas.look, mood: .ambient, tone: style)
     }
 }
 
 // MARK: - Look View
 
-/// The one view that runs a canvas clock. Both menus render through it, so the
-/// pause rules, the frame budget and the freeze-for-thumbnails behaviour are
-/// written once.
+/// The one view that paints a canvas. Both menus render through it, so the
+/// still-frame budget and freeze-for-thumbnails behaviour are written once.
+/// No `TimelineView` — motion behind tabs burned frames and restarted on
+/// every switch.
 struct CanvasLookView: View {
     let look: CanvasLook
     let mood: CanvasMood
     var tone: AppBackground.Style = .primary
+    /// Unused — every look is a still. Kept so thumbnail call sites do not churn.
     var animated: Bool = true
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-
     var body: some View {
-        let shouldAnimate = animated
-            && look.isAnimated
-            && !reduceMotion
-            && scenePhase == .active
-
-        TimelineView(.animation(minimumInterval: mood.frameInterval, paused: !shouldAnimate)) { context in
-            // Absolute time, not time-since-appear: two backgrounds stacked by
-            // a push stay in lockstep instead of one restarting from zero.
-            let time = shouldAnimate ? context.date.timeIntervalSinceReferenceDate : 0
-
-            Canvas(opaque: true) { graphics, size in
-                look.paint(into: &graphics, size: size, mood: mood, tone: tone, time: time)
-            }
+        Canvas(opaque: true) { graphics, size in
+            look.paint(into: &graphics, size: size, mood: mood, tone: tone)
         }
-        .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
