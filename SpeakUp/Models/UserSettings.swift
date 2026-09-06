@@ -44,6 +44,11 @@ final class UserSettings {
     var soundPack: Int = 0          // SoundPack (ChirpPlayer.swift)
     var shareCardTheme: Int = 0     // ScoreCardTheme (ScoreCardRenderer.swift)
 
+    // App appearance — additive. Light glass + Classic canvas match the
+    // post-brighten default; Dark glass restores the deeper pre-brighten look.
+    var glassAppearance: Int = 0    // GlassAppearance
+    var appCanvas: Int = 0          // AppCanvas
+
     // Word Bank
     var vocabWords: [String] = []
     var dictationBiasWords: [String] = []

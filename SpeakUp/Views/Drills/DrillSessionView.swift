@@ -392,15 +392,16 @@ struct DrillSessionView: View {
                 .foregroundStyle(.white)
         } else {
             let parts = prompt.components(separatedBy: target)
-            (Text(parts.first ?? "")
+            let head = Text(parts.first ?? "")
                 .font(.body.weight(.medium))
                 .foregroundColor(.white)
-            + Text(target)
+            let emphasis = Text(target)
                 .font(.body.weight(.bold))
                 .foregroundColor(AppColors.categorySage)
-            + Text(parts.count > 1 ? parts[1] : "")
+            let tail = Text(parts.count > 1 ? parts[1] : "")
                 .font(.body.weight(.medium))
-                .foregroundColor(.white))
+                .foregroundColor(.white)
+            Text("\(head)\(emphasis)\(tail)")
         }
     }
 }

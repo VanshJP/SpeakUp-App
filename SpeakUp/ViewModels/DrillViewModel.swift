@@ -189,12 +189,6 @@ class DrillViewModel {
         }
     }
 
-    /// Picks the impromptu topic up front so the prep countdown can show it —
-    /// the countdown is exactly when prep matters.
-    func prepareImpromptuTopic() {
-        preparePrompt(for: .impromptuSprint)
-    }
-
     func preparePrompt(for mode: DrillMode) {
         switch mode {
         case .impromptuSprint:

@@ -45,11 +45,6 @@ nonisolated struct VocabChallengePreferences: Sendable, Equatable {
         return min(2, max(0, speakerLevelRaw))
     }
 
-    /// Whether the user pinned a tier instead of following the speaker level.
-    var forcesIntroLevel: Bool {
-        (1...3).contains(levelOverrideRaw)
-    }
-
     /// Cache key for the day's pick. Word lists stay out so adding a bank word
     /// mid-day does not reshuffle the workout already on screen.
     var fingerprint: String {
@@ -84,8 +79,6 @@ nonisolated struct DailyVocabChallenge: Sendable, Equatable {
     var words: [VocabChallengeWord]
     var usedKeys: Set<String>
     var isCompleted: Bool
-
-    var usedCount: Int { usedKeys.count }
 
     func isUsed(_ word: VocabChallengeWord) -> Bool {
         usedKeys.contains(word.text.lowercased())

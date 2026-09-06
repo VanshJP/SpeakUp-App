@@ -105,7 +105,8 @@ struct CrutchSwapsCard: View {
                 .foregroundStyle(.secondary)
 
             fragment.enumerated().reduce(Text("")) { accumulated, item in
-                accumulated + styledFragmentSpan(item.element, tint: tint, trailingSpace: item.offset < fragment.count - 1)
+                let span = styledFragmentSpan(item.element, tint: tint, trailingSpace: item.offset < fragment.count - 1)
+                return Text("\(accumulated)\(span)")
             }
         }
     }

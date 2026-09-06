@@ -154,7 +154,8 @@ struct RecordingDetailView: View {
             case .processing(let recording):
                 AnalyzingView(
                     recording: recording,
-                    isModelLoading: !speechService.isModelLoaded,
+                    isModelLoading: speechService.isLoadingModel,
+                    isDownloadingModel: speechService.isDownloadingModel,
                     feedbackEnabled: feedbackEnabled,
                     feedbackQuestions: feedbackQuestionsForAnalyzing,
                     existingFeedback: recording.sessionFeedback,
@@ -520,7 +521,7 @@ struct RecordingDetailView: View {
     /// history, not an absolute threshold.
     private func considerReviewPromptForStrongResult() {
         guard !isFirstAnalyzedSession,
-              case .ready(let recording) = detailScreenState,
+              case .ready = detailScreenState,
               let score = coachAnalysis?.speechScore.overall else { return }
 
         let beatPersonalBest = baselines.best.map { score > $0 } ?? false
@@ -631,6 +632,11 @@ struct RecordingDetailView: View {
             speakerTurnsCache = []
             crutchHits = []
             structuralWordIDs = []
+        }
+        // Mark processing at enqueue time — not only on force-retry — so a
+        // reopen of an unscored take cannot flash "Couldn't score" while the
+        // coordinator job has not yet flipped the flag.
+        if !recording.isProcessing {
             recording.isProcessing = true
             try? modelContext.save()
         }

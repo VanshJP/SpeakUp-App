@@ -62,7 +62,7 @@ struct WarmUpListView: View {
     /// to the single matching group.
     @ViewBuilder
     private var exerciseContent: some View {
-        if let selected = viewModel.selectedCategory {
+        if viewModel.selectedCategory != nil {
             if viewModel.exercises.isEmpty {
                 EmptyStateCard(
                     icon: "wind",

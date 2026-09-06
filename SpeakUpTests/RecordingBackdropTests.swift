@@ -25,4 +25,44 @@ struct RecordingBackdropTests {
             #expect(!name.isEmpty)
         }
     }
+
+    // MARK: - Catalogue linkage
+    //
+    // Both menus paint through the one `CanvasLook` catalogue. These pin the
+    // link: a look renamed on one screen and not the other is the exact drift
+    // the shared catalogue exists to prevent.
+
+    @Test func sharedNamesResolveToTheSameLook() {
+        #expect(RecordingBackdrop.aurora.look == AppCanvas.aurora.look)
+        #expect(RecordingBackdrop.ember.look == AppCanvas.ember.look)
+    }
+
+    @Test func sharedNamesShareTheirDescription() {
+        #expect(RecordingBackdrop.aurora.subtitle == AppCanvas.aurora.subtitle)
+        #expect(RecordingBackdrop.ember.subtitle == AppCanvas.ember.subtitle)
+    }
+
+    @Test func baseIsClassicAndNeverAnimates() {
+        #expect(RecordingBackdrop.base.look == .classic)
+        #expect(!RecordingBackdrop.base.look.isAnimated)
+    }
+
+    @Test func everyOtherBackdropAnimates() {
+        for backdrop in RecordingBackdrop.allCases where backdrop != .base {
+            #expect(backdrop.look.isAnimated, "\(backdrop.displayName) should move")
+        }
+    }
+
+    @Test func everyMenuEntryMapsToItsOwnLook() {
+        let looks = RecordingBackdrop.allCases.filter { $0 != .base }.map(\.look)
+        #expect(Set(looks).count == looks.count)
+        let appLooks = AppCanvas.allCases.map(\.look)
+        #expect(Set(appLooks).count == appLooks.count)
+    }
+
+    @Test func everyLookHasASummary() {
+        for look in CanvasLook.allCases {
+            #expect(!look.summary.isEmpty)
+        }
+    }
 }

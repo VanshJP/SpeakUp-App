@@ -135,3 +135,11 @@ If that destination is missing, pick the first available iPhone (see CI). If `xc
 
 1. Render → `SharePresenter.present` only ([gotchas §7](./AGENT_GOTCHAS.md)).
 2. Review asks: `ReviewRequestService` + `ReviewEligibility` — never atop paywall; only after first result; respect version / 60-day rules ([features/analytics-review.md](./features/analytics-review.md)).
+
+---
+
+## Log something
+
+1. `private let logger = Logger.app("Category")` on the type — `Logger.app` (`SpeakUp/Extensions/AppLog.swift`) owns the subsystem string, so a bundle-id change is one edit.
+2. **Never `print`** in `SpeakUp/` or `SpeakUpWidget/`. It runs in release, pays for its interpolation whether or not anyone is watching, and cannot be filtered by category in Console.
+3. Errors: `logger.error("What failed: \(error.localizedDescription, privacy: .private(mask: .hash))")`. Non-PII diagnostics can take `privacy: .public`; transcripts, prompts and user text never do.

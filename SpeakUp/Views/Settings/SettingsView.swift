@@ -7,22 +7,21 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
 
     var body: some View {
-        ZStack {
-            AppBackground()
+        PageScrollView {
+            VStack(spacing: AppLayout.listSpacing) {
+                practiceSection
+                appearanceSection
+                accountSection
 
-            PageScrollView {
-                VStack(spacing: AppLayout.listSpacing) {
-                    settingsMenuCard
-                    aboutFooter
-                }
-                .pageContentInsets()
+                aboutFooter
             }
-            .scrollIndicators(.hidden)
+            .pageContentInsets()
         }
-        // No root title — the tab bar already says Settings. A large title was
-        // the odd one out once Library / History / Learn dropped theirs; the
-        // "You" section header is the first label on the page.
-        .navigationTitle("")
+        .scrollIndicators(.hidden)
+        // The tab bar names the tab; the nav row names the page you are on.
+        // Inline (never large) so the title costs no height the trailing
+        // filter / trophy button was not already reserving.
+        .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
@@ -30,35 +29,12 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Menu Card
+    // MARK: - Practice
 
-    private var settingsMenuCard: some View {
+    private var practiceSection: some View {
         VStack(spacing: 12) {
-            GlassSectionHeader("You", icon: "person.crop.circle")
+            GlassSectionHeader("Practice", icon: "waveform")
 
-            settingsLink(
-                icon: "person.crop.circle",
-                iconColor: AppColors.primary,
-                title: "Profile",
-                subtitle: profileSubtitle
-            ) {
-                ProfileSettingsView(viewModel: viewModel)
-            }
-
-            settingsLink(
-                icon: "bell.fill",
-                iconColor: AppColors.categoryAmber,
-                title: "Reminders",
-                subtitle: viewModel.dailyReminderEnabled ? "Change your reminder time" : "Turn on a daily practice reminder"
-            ) {
-                ReminderSettingsView(viewModel: viewModel)
-            }
-
-            GlassSectionHeader("Practice & Scoring", icon: "waveform")
-                .padding(.top, 8)
-
-            // Session Defaults opens the group: everything here shapes a take,
-            // and the defaults are the first knob a new speaker needs.
             settingsLink(
                 icon: "slider.horizontal.3",
                 iconColor: AppColors.primary,
@@ -79,15 +55,6 @@ struct SettingsView: View {
             }
 
             settingsLink(
-                icon: "waveform.circle",
-                iconColor: AppColors.categoryBrandBright,
-                title: "Recording Look",
-                subtitle: "Pick your backdrop, waveform, and timer"
-            ) {
-                RecordingLookView(viewModel: viewModel)
-            }
-
-            settingsLink(
                 icon: "character.book.closed",
                 iconColor: AppColors.categorySage,
                 title: "Word Workout",
@@ -98,7 +65,7 @@ struct SettingsView: View {
 
             settingsLink(
                 icon: "list.bullet.rectangle",
-                iconColor: AppColors.categorySage,
+                iconColor: AppColors.categoryTeal,
                 title: "Word Lists",
                 subtitle: "Add vocab, dictation, and filler words"
             ) {
@@ -122,13 +89,107 @@ struct SettingsView: View {
             ) {
                 FeedbackSettingsView(viewModel: viewModel)
             }
+        }
+    }
 
-            GlassSectionHeader("Intelligence & Data", icon: "cpu")
-                .padding(.top, 8)
+    // MARK: - Appearance
+
+    /// Two sibling rows, not one door into another door. Recording Look used to
+    /// sit three pushes deep (Look → Appearance → Session look), behind two
+    /// generic words, which is the wrong depth for the settings people actually
+    /// browse for fun. A section header also has to earn itself: one row under
+    /// "Look" was a label with nothing to label.
+    private var appearanceSection: some View {
+        VStack(spacing: 12) {
+            GlassSectionHeader("Appearance", icon: "paintpalette.fill")
+                .padding(.top, 4)
+
+            settingsLink(
+                icon: "paintpalette.fill",
+                iconColor: AppColors.categoryIndigo,
+                title: "App Look",
+                subtitle: appLookSubtitle,
+                accessory: {
+                    lookSwatch {
+                        AppCanvasView(canvas: viewModel.appCanvas, style: .primary, animated: false)
+                    }
+                }
+            ) {
+                AppearanceSettingsView(viewModel: viewModel)
+            }
+
+            settingsLink(
+                icon: "waveform.circle.fill",
+                iconColor: AppColors.categoryBrandBright,
+                title: "Recording Look",
+                subtitle: recordingLookSubtitle,
+                accessory: {
+                    lookSwatch {
+                        RecordingBackdropView(backdrop: viewModel.recordingBackdrop, animated: false)
+                    }
+                }
+            ) {
+                RecordingLookView(viewModel: viewModel)
+            }
+        }
+    }
+
+    /// A cosmetic row's value *is* its affordance — a swatch answers "what is it
+    /// set to?" without opening the page, which no verb-shaped subtitle can.
+    ///
+    /// Canvases and backdrops are sized for a full screen: their orbs, stars and
+    /// shards are laid out against ~320pt, so drawn straight into a 52pt box
+    /// every option renders as the same flat rectangle. Lay out big, draw
+    /// scaled, clamp — the same trick `RecordingLookView`'s tiles use.
+    private func lookSwatch<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .frame(width: 320, height: 210)
+            .scaleEffect(0.2)
+            .frame(width: 52, height: 34)
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(AppColors.cardStroke, lineWidth: 1)
+            }
+            .allowsHitTesting(false)
+    }
+
+    private var appLookSubtitle: String {
+        "\(viewModel.appCanvas.displayName) · \(viewModel.glassAppearance.displayName) glass"
+    }
+
+    private var recordingLookSubtitle: String {
+        "\(viewModel.recordingBackdrop.displayName) · \(viewModel.waveformStyle.displayName)"
+    }
+
+    // MARK: - Account
+
+    private var accountSection: some View {
+        VStack(spacing: 12) {
+            GlassSectionHeader("Account & Data", icon: "person.crop.circle")
+                .padding(.top, 4)
+
+            settingsLink(
+                icon: "person.crop.circle",
+                iconColor: AppColors.primary,
+                title: "Profile",
+                subtitle: profileSubtitle
+            ) {
+                ProfileSettingsView(viewModel: viewModel)
+            }
+
+            settingsLink(
+                icon: "bell.fill",
+                iconColor: AppColors.categoryAmber,
+                title: "Reminders",
+                subtitle: viewModel.dailyReminderEnabled ? "Change your reminder time" : "Turn on a daily practice reminder"
+            ) {
+                ReminderSettingsView(viewModel: viewModel)
+            }
 
             settingsLink(
                 icon: "cpu",
-                iconColor: AppColors.categoryIndigo,
+                iconColor: AppColors.info,
                 title: "AI Features",
                 subtitle: aiModelSubtitle
             ) {
@@ -147,6 +208,8 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - About
 
     /// Demoted to a quiet footer row: version and legal links are read once,
     /// not configured, so About no longer earns a card inside a section.
@@ -186,17 +249,16 @@ struct SettingsView: View {
     @State private var showingSyncRestartAlert = false
 
     private var iCloudSyncRow: some View {
-        GlassCard(tint: AppColors.info.opacity(0.06), padding: 14) {
+        // Untinted like every link beside it — the tint made the one row you
+        // cannot open the loudest card in the section.
+        GlassCard(padding: 14) {
             VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(AppColors.info.opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "icloud.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.info)
-                    }
+                HStack(spacing: 14) {
+                    Image(systemName: "icloud.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.categoryBrandBright)
+                        .frame(width: 32, height: 32)
+                        .background { Circle().fill(AppColors.categoryBrandBright.opacity(0.15)) }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("iCloud Sync")
@@ -217,7 +279,6 @@ struct SettingsView: View {
                             .tint(AppColors.primary)
                             .onChange(of: iCloudSyncEnabled) { _, newValue in
                                 ICloudStorageService.shared.isSyncEnabled = newValue
-                                // Also persist to SwiftData settings
                                 if let settings = viewModel.settings {
                                     settings.iCloudSyncEnabled = newValue
                                 }
@@ -261,11 +322,11 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
-    /// Hub subtitles name the action the page performs, never the current
-    /// value — every row reads as something you can do.
+    /// Hub subtitles name the action the row performs, never the value.
     private var profileSubtitle: String {
-        let name = viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Set your name" : "Edit your name"
+        viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Set your name"
+            : "Edit your name"
     }
 
     private var aiModelSubtitle: String {
@@ -275,17 +336,20 @@ struct SettingsView: View {
         case .localLLM:
             return "Manage \(llmService.localLLM.modelDisplayName)"
         case .none:
-            // Nothing is active yet, but the local model is always
-            // downloadable — the row should name the action, not a dead end.
             return "Set up on-device AI"
         }
     }
 
-    private func settingsLink<Destination: View>(
+    /// Icon chip, not a bare glyph: `iCloudSyncRow` and `ToolCategoryCard`
+    /// already draw tinted circles, so a loose symbol made the hub the one
+    /// surface speaking a different dialect — and a column of identical grey
+    /// glyphs is read line by line instead of scanned by color.
+    private func settingsLink<Destination: View, Accessory: View>(
         icon: String,
         iconColor: Color,
         title: String,
         subtitle: String?,
+        @ViewBuilder accessory: () -> Accessory = { EmptyView() },
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
         NavigationLink {
@@ -294,9 +358,10 @@ struct SettingsView: View {
             GlassCard(padding: 14) {
                 HStack(spacing: 14) {
                     Image(systemName: icon)
-                        .font(.body)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(iconColor)
-                        .frame(width: 28)
+                        .frame(width: 32, height: 32)
+                        .background { Circle().fill(iconColor.opacity(0.15)) }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
@@ -315,7 +380,9 @@ struct SettingsView: View {
                         }
                     }
 
-                    Spacer()
+                    Spacer(minLength: 8)
+
+                    accessory()
 
                     Image(systemName: "chevron.right")
                         .font(.caption2)
@@ -405,9 +472,6 @@ struct AboutSettingsView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
-
-                    // Journal export lives in History → Progress → More,
-                    // next to the data it exports.
                 }
                 .padding()
             }

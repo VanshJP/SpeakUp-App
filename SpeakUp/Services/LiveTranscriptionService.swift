@@ -1,10 +1,12 @@
 import Foundation
+import os.log
 import Speech
 import AVFoundation
 import os
 
 @Observable
 class LiveTranscriptionService {
+    private let logger = Logger.app("LiveTranscription")
     var liveFillerCount = 0
     var liveWordCount = 0
     var isActive = false
@@ -115,7 +117,7 @@ class LiveTranscriptionService {
             format = inputNode.outputFormat(forBus: 0)
         }
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            print("LiveTranscription: invalid input format \(format), skipping live fillers")
+            logger.error("LiveTranscription: invalid input format \(String(describing: format), privacy: .public), skipping live fillers")
             stopInternal()
             return
         }
@@ -129,7 +131,7 @@ class LiveTranscriptionService {
             engine.prepare()
             try engine.start()
         } catch {
-            print("LiveTranscription: audio engine failed to start: \(error)")
+            logger.error("LiveTranscription: audio engine failed to start: \(error.localizedDescription, privacy: .private(mask: .hash))")
             stopInternal()
             return
         }
@@ -188,7 +190,7 @@ class LiveTranscriptionService {
             format = inputNode.outputFormat(forBus: 0)
         }
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            print("LiveTranscription: invalid input format \(format), skipping tap")
+            logger.error("LiveTranscription: invalid input format \(String(describing: format), privacy: .public), skipping tap")
             return false
         }
 

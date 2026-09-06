@@ -8,32 +8,28 @@ struct CurriculumView: View {
     @State private var showingLockedInfo = false
 
     var body: some View {
-        ZStack {
-            AppBackground()
-
-            PageScrollView {
-                // Continue first. Progress rides inside that card. The path
-                // list follows — no intro card and no second stats card fighting
-                // the one action that matters.
-                LazyVStack(spacing: AppLayout.chapterSpacing) {
-                    if let currentLesson = viewModel.currentLesson,
-                       let currentPhase = viewModel.currentPhase {
-                        continueCard(lesson: currentLesson, phase: currentPhase)
-                    }
-
-                    ForEach(viewModel.phases) { phase in
-                        phaseSection(phase)
-                    }
+        PageScrollView {
+            // Continue first. Progress rides inside that card. The path
+            // list follows — no intro card and no second stats card fighting
+            // the one action that matters.
+            LazyVStack(spacing: AppLayout.chapterSpacing) {
+                if let currentLesson = viewModel.currentLesson,
+                   let currentPhase = viewModel.currentPhase {
+                    continueCard(lesson: currentLesson, phase: currentPhase)
                 }
-                .padding(.top, 4)
-                .pageContentInsets()
+
+                ForEach(viewModel.phases) { phase in
+                    phaseSection(phase)
+                }
             }
-            .scrollIndicators(.hidden)
+            .padding(.top, 4)
+            .pageContentInsets()
         }
-        // No root title — the tab bar already says Learn. "Learning Path" as a
-        // large title left the trophy alone on an empty nav row with the name
-        // dropped underneath. Continue card is the page's first voice.
-        .navigationTitle("")
+        .scrollIndicators(.hidden)
+        // The tab bar names the tab; the nav row names the page you are on.
+        // Inline (never large) so the title costs no height the trailing
+        // filter / trophy button was not already reserving.
+        .navigationTitle("Learn")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {

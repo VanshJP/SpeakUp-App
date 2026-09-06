@@ -179,7 +179,6 @@ enum AppColors {
     static let toolDrill = categoryAmber
     static let toolReadAloud = categoryBrandBright
     static let toolCalm = categoryPlum
-    static let toolWheel = categoryIndigo
 
     // MARK: - Subscore Identity Tones
     //
@@ -226,10 +225,11 @@ enum AppColors {
     // MARK: - Glass Tints
 
     static let glassTintPrimary = primary.opacity(0.10)
-    /// Soft white lift for untinted Liquid Glass on the navy canvas. Without
-    /// it, `.regular` samples the dark base and reads as a muddy plate —
-    /// this is the brighter dark-glass look cards and idle chips share.
-    static let glassTintAccent = Color.white.opacity(0.08)
+    /// Soft white lift for untinted Liquid Glass on the navy canvas. Prefer
+    /// `@Environment(\.glassAppearance).glassTint` in live UI so Settings →
+    /// Appearance can switch Light/Dark; this constant is the Light default
+    /// for previews and call sites that cannot read the environment.
+    static let glassTintAccent = GlassAppearance.light.glassTint
     static let glassTintSuccess = success.opacity(0.10)
 }
 

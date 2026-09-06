@@ -17,6 +17,7 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
     var framed: Bool = true
 
     @Namespace private var pickerNamespace
+    @Environment(\.glassAppearance) private var glassAppearance
 
     init(
         sections: [Section],
@@ -49,7 +50,10 @@ struct SectionPicker<Section: Hashable & Identifiable>: View {
         .background {
             if framed {
                 Color.clear
-                    .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                    .glassEffect(
+                        .regular.tint(glassAppearance.glassTint),
+                        in: .rect(cornerRadius: 20)
+                    )
             }
         }
         .shadow(color: framed ? .black.opacity(0.22) : .clear, radius: framed ? 14 : 0, y: framed ? 7 : 0)

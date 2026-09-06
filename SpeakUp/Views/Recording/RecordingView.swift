@@ -184,7 +184,8 @@ struct RecordingView: View {
 
             AnalyzingView(
                 recording: recording,
-                isModelLoading: !speechService.isModelLoaded,
+                isModelLoading: speechService.isLoadingModel,
+                isDownloadingModel: speechService.isDownloadingModel,
                 feedbackEnabled: feedbackEnabled,
                 feedbackQuestions: feedbackQuestions,
                 existingFeedback: recording.sessionFeedback,

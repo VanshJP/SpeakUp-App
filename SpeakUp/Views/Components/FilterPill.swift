@@ -61,6 +61,8 @@ struct FilterPill: View {
 struct SelectedFilterChrome: ViewModifier {
     let isSelected: Bool
 
+    @Environment(\.glassAppearance) private var glassAppearance
+
     func body(content: Content) -> some View {
         Group {
             if isSelected {
@@ -71,8 +73,9 @@ struct SelectedFilterChrome: ViewModifier {
                 content
                     // White lift so idle chips read as bright glass on navy,
                     // not the darker plate the mid-fade flash used to show.
+                    // Density follows Settings → Appearance → Glass.
                     .glassEffect(
-                        .regular.tint(AppColors.glassTintAccent).interactive(),
+                        .regular.tint(glassAppearance.glassTint).interactive(),
                         in: .capsule
                     )
             }

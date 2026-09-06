@@ -32,12 +32,15 @@ enum ConversationIsolationService {
         words: [TranscriptionWord],
         audioURL: URL,
         totalDuration: TimeInterval,
-        persistentProfile: VoiceProfile? = nil
+        persistentProfile: VoiceProfile? = nil,
+        monoPCM: MonoPCM? = nil
     ) -> ([TranscriptionWord], SpeakerIsolationMetrics?, VoiceProfileUpdate?) {
         guard words.count >= 12, totalDuration >= 8 else {
             return (words, nil, nil)
         }
-        guard let mono = MonoPCM.decode(url: audioURL) else {
+        // Prefer a caller-supplied buffer so speaker labeling and pitch can
+        // share one decode after Whisper returns.
+        guard let mono = monoPCM ?? MonoPCM.decode(url: audioURL) else {
             return (words, nil, nil)
         }
 

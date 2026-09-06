@@ -4,8 +4,8 @@ import SwiftData
 struct DrillSelectionView: View {
     @Query private var userSettings: [UserSettings]
     @State private var viewModel = DrillViewModel()
+    @State private var showingDrillFlow = false
     @State private var showingSession = false
-    @State private var showingCountdown = false
     @State private var selectedDrillMode: DrillMode?
 
     /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
@@ -62,44 +62,57 @@ struct DrillSelectionView: View {
                             viewModel.preparePrompt(for: mode)
                         }
                         selectedDrillMode = mode
-                        showingCountdown = true
+                        showingSession = false
+                        showingDrillFlow = true
                     }
                 }
             }
         }
-        .fullScreenCover(isPresented: $showingSession) {
-            DrillSessionView(viewModel: viewModel)
+        // One full-screen cover owns countdown → session. An overlay on the
+        // Library tools list clipped the dial into a card-shaped box, then a
+        // second cover jumped to the session — two surfaces for one flow.
+        .fullScreenCover(isPresented: $showingDrillFlow, onDismiss: {
+            showingSession = false
+            selectedDrillMode = nil
+        }) {
+            drillFlowCover
         }
-        .overlay {
-            if showingCountdown, let mode = selectedDrillMode {
-                CountdownOverlayView(
-                    prompt: nil,
-                    duration: .thirty,
-                    countdownDuration: userSettings.first?.countdownDuration ?? 15,
-                    countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
-                    look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
-                    backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
-                    prepTitle: mode.title,
-                    prepSubtitle: mode.preparesPromptUpFront ? viewModel.impromptuPrompt : mode.description,
-                    onComplete: {
-                        showingCountdown = false
-                        viewModel.targetWPM = userSettings.first.resolvedTargetWPM
-                        viewModel.startDrill(mode: mode)
-                        showingSession = true
-                    },
-                    onCancel: {
-                        showingCountdown = false
-                        selectedDrillMode = nil
-                    }
-                )
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .task {
             guard let initialMode else { return }
             selectedDrillMode = initialMode
-            showingCountdown = true
+            showingSession = false
+            showingDrillFlow = true
+        }
+    }
+
+    @ViewBuilder
+    private var drillFlowCover: some View {
+        if showingSession {
+            DrillSessionView(viewModel: viewModel)
+        } else if let mode = selectedDrillMode {
+            CountdownOverlayView(
+                prompt: nil,
+                duration: .thirty,
+                countdownDuration: userSettings.first?.countdownDuration ?? 15,
+                countdownStyle: CountdownStyle(rawValue: userSettings.first?.countdownStyle ?? 0) ?? .countDown,
+                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
+                backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
+                prepTitle: mode.title,
+                prepSubtitle: mode.preparesPromptUpFront ? viewModel.impromptuPrompt : mode.description,
+                onComplete: {
+                    viewModel.targetWPM = userSettings.first.resolvedTargetWPM
+                    viewModel.startDrill(mode: mode)
+                    withAnimation(AppMotion.settle) {
+                        showingSession = true
+                    }
+                },
+                onCancel: {
+                    showingDrillFlow = false
+                    selectedDrillMode = nil
+                }
+            )
+        } else {
+            Color.clear.onAppear { showingDrillFlow = false }
         }
     }
 }

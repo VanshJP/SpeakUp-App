@@ -1,9 +1,11 @@
 import Foundation
+import os.log
 import SwiftUI
 import SwiftData
 
 @MainActor @Observable
 class SettingsViewModel {
+    private let logger = Logger.app("Settings")
     var settings: UserSettings?
     var isLoading = true
     var showingResetConfirmation = false
@@ -62,6 +64,10 @@ class SettingsViewModel {
     var recordButtonStyle: RecordButtonStyle = .classic
     var countdownLook: TimerLook = .ring
     var recordingBackdrop: RecordingBackdrop = .base
+
+    // Local state - App Appearance
+    var glassAppearance: GlassAppearance = .light
+    var appCanvas: AppCanvas = .classic
 
     // Local state - Sound Pack
     var soundPack: SoundPack = .soft
@@ -189,7 +195,7 @@ class SettingsViewModel {
                 syncLocalState()
             }
         } catch {
-            print("Error loading settings: \(error)")
+            logger.error("Error loading settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     
@@ -241,6 +247,9 @@ class SettingsViewModel {
         recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
         countdownLook = TimerLook(rawValue: settings.countdownLook) ?? .ring
         recordingBackdrop = RecordingBackdrop(rawValue: settings.countdownBackdrop) ?? .base
+
+        glassAppearance = GlassAppearance(rawValue: settings.glassAppearance) ?? .light
+        appCanvas = AppCanvas(rawValue: settings.appCanvas) ?? .classic
 
         // Sound pack
         soundPack = SoundPack(rawValue: settings.soundPack) ?? .soft
@@ -329,6 +338,9 @@ class SettingsViewModel {
         settings.countdownLook = countdownLook.rawValue
         settings.countdownBackdrop = recordingBackdrop.rawValue
 
+        settings.glassAppearance = glassAppearance.rawValue
+        settings.appCanvas = appCanvas.rawValue
+
         // Sound pack
         settings.soundPack = soundPack.rawValue
         ChirpPlayer.shared.pack = soundPack
@@ -374,7 +386,7 @@ class SettingsViewModel {
                 await cancelReminderNotification()
             }
         } catch {
-            print("Error saving settings: \(error)")
+            logger.error("Error saving settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
     
@@ -693,6 +705,8 @@ class SettingsViewModel {
         settings.recordButtonStyle = 0
         settings.countdownLook = 0
         settings.countdownBackdrop = 0
+        settings.glassAppearance = 0
+        settings.appCanvas = 0
         settings.soundPack = 0
         settings.shareCardTheme = 0
         ChirpPlayer.shared.pack = .soft
@@ -734,7 +748,7 @@ class SettingsViewModel {
             try context.save()
             syncLocalState()
         } catch {
-            print("Error resetting settings: \(error)")
+            logger.error("Error resetting settings: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -798,7 +812,7 @@ class SettingsViewModel {
             // rows never touched it.
             AnalyticsService.shared.reset()
         } catch {
-            print("Error clearing data: \(error)")
+            logger.error("Error clearing data: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 

@@ -95,35 +95,6 @@ struct OnboardingPage<Content: View, Footer: View>: View {
 /// Deliberately not a container that indexes its own children. The pages that
 /// need this interleave cards, headers, and grid items, and a container would
 /// have to flatten all of that to count. Tagging each row is the smaller thing.
-private struct OnboardingRevealModifier: ViewModifier {
-    let index: Int
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var shown = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 10)
-            .onAppear {
-                guard !reduceMotion else {
-                    shown = true
-                    return
-                }
-                withAnimation(.easeOut(duration: 0.35).delay(0.06 + Double(index) * 0.07)) {
-                    shown = true
-                }
-            }
-    }
-}
-
-extension View {
-    /// Position in the page's reading order, starting at 0.
-    func onboardingReveal(_ index: Int) -> some View {
-        modifier(OnboardingRevealModifier(index: index))
-    }
-}
-
 // MARK: - Glyph
 
 /// Tinted rounded-square icon. Same treatment the settings surfaces use for

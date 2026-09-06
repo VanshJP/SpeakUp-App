@@ -1,9 +1,11 @@
 import Foundation
+import os.log
 
 /// Manages iCloud ubiquity container for audio file storage and sync.
 /// Falls back to local Documents directory when iCloud is unavailable.
 @Observable
 final class ICloudStorageService {
+    private let logger = Logger.app("iCloudStorage")
     static let shared = ICloudStorageService()
 
     private let containerIdentifier = "iCloud.cam.vanshpatel.SpeakUp"
@@ -148,7 +150,7 @@ final class ICloudStorageService {
             try fm.setUbiquitous(true, itemAt: localURL, destinationURL: destination)
             return destination
         } catch {
-            print("Failed to promote \(localURL.lastPathComponent) to iCloud: \(error)")
+            logger.error("Failed to promote \(localURL.lastPathComponent) to iCloud: \(error.localizedDescription, privacy: .private(mask: .hash))")
             return localURL
         }
     }
@@ -172,7 +174,7 @@ final class ICloudStorageService {
             do {
                 try fm.setUbiquitous(true, itemAt: localFile, destinationURL: iCloudFile)
             } catch {
-                print("Failed to move \(file) to iCloud: \(error)")
+                logger.error("Failed to move \(file) to iCloud: \(error.localizedDescription, privacy: .private(mask: .hash))")
             }
         }
     }

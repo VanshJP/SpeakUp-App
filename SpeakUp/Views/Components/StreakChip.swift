@@ -12,6 +12,8 @@ import SwiftUI
 struct StreakChip: View {
     let streak: Int
 
+    @Environment(\.glassAppearance) private var glassAppearance
+
     private var isActive: Bool { streak >= 1 }
 
     var body: some View {
@@ -31,9 +33,11 @@ struct StreakChip: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
+        .glassEffect(.regular.tint(glassAppearance.glassTint).interactive(), in: .capsule)
+        // Hit target expands *around* the capsule — same order as `FilterPill`.
+        // Under the glass it stretched the visible pill to 44pt instead.
         .frame(minHeight: AppLayout.minHitTarget)
         .contentShape(Capsule())
-        .glassEffect(.regular.tint(AppColors.glassTintAccent).interactive(), in: .capsule)
         .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(streak) day streak")

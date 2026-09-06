@@ -188,11 +188,10 @@ struct LanguageInsightsView: View {
                 // pill saying "cut it" is indistinguishable from a pill saying
                 // "significant". As a sentence, the quoted entries are the
                 // wording to borrow and the unquoted ones are the move to make.
-                (
-                    Text("Try instead  ").foregroundStyle(.tertiary)
-                        + Text(usage.swapsPreview.joined(separator: "  ·  "))
-                        .foregroundStyle(AppColors.primary)
-                )
+                let lead = Text("Try instead  ").foregroundStyle(.tertiary)
+                let swaps = Text(usage.swapsPreview.joined(separator: "  ·  "))
+                    .foregroundStyle(AppColors.primary)
+                Text("\(lead)\(swaps)")
                 .font(.caption)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)

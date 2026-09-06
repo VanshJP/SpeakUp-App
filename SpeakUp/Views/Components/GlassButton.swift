@@ -79,6 +79,8 @@ struct GlassButtonLabel: View {
 private struct GlassButtonChrome: ViewModifier {
     let style: GlassButton.GlassButtonVariant
 
+    @Environment(\.glassAppearance) private var glassAppearance
+
     @ViewBuilder
     func body(content: Content) -> some View {
         switch style {
@@ -91,7 +93,7 @@ private struct GlassButtonChrome: ViewModifier {
         case .secondary:
             content
                 .glassEffect(
-                    .regular.tint(AppColors.glassTintAccent).interactive(),
+                    .regular.tint(glassAppearance.glassTint).interactive(),
                     in: .capsule
                 )
         case .outline:

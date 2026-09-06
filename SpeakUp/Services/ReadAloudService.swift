@@ -11,6 +11,23 @@ enum WordMatchState: Equatable {
     case matched
     case mismatched(spoken: String)
     case skipped
+
+    /// The reader is past this word, however it went. Drives whether a word is
+    /// tappable and whether it still animates.
+    var isSettled: Bool {
+        switch self {
+        case .matched, .mismatched, .skipped: return true
+        case .upcoming, .current: return false
+        }
+    }
+
+    /// Settled but not clean — the states worth colouring in a transcript.
+    var needsAttention: Bool {
+        switch self {
+        case .mismatched, .skipped: return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - Read Aloud Error

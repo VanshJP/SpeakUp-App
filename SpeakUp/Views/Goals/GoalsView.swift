@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 import SwiftData
 
 struct GoalsView: View {
@@ -337,6 +338,7 @@ struct CompletedGoalRow: View {
 
 @Observable
 class GoalsViewModel {
+    private let logger = Logger.app("Goals")
     var activeGoals: [UserGoal] = []
     var completedGoals: [UserGoal] = []
 
@@ -370,7 +372,7 @@ class GoalsViewModel {
             activeGoals = try context.fetch(activeDescriptor)
             completedGoals = try context.fetch(completedDescriptor)
         } catch {
-            print("Error loading goals: \(error)")
+            logger.error("Error loading goals: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -395,7 +397,7 @@ class GoalsViewModel {
             Haptics.success()
             await loadGoals()
         } catch {
-            print("Error creating goal: \(error)")
+            logger.error("Error creating goal: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
@@ -410,7 +412,7 @@ class GoalsViewModel {
             Haptics.success()
             await loadGoals()
         } catch {
-            print("Error deleting goal: \(error)")
+            logger.error("Error deleting goal: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 }

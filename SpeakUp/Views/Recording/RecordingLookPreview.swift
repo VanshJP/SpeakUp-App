@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 /// Full-screen try-on for the Recording Look picker. It plays one session in
@@ -21,8 +20,6 @@ struct RecordingLookPreview: View {
     @State private var elapsedSeconds = 0
     @State private var isRecording = false
     @State private var isPulsing = false
-
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     /// Sitting through a real 15 s countdown to look at a dial is a waste. Five
     /// seconds reads the style, and a tap skips ahead like the real screen's
@@ -69,11 +66,16 @@ struct RecordingLookPreview: View {
             .padding(.top, 56)
         }
         .animation(AppMotion.settle, value: isRecording)
-        .onReceive(timer) { _ in
+        .task(id: isRecording) {
             guard !isRecording else { return }
-            elapsedSeconds += 1
-            if elapsedSeconds >= totalSeconds {
-                startRecordingPhase()
+            while !Task.isCancelled && !isRecording {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, !isRecording else { return }
+                elapsedSeconds += 1
+                if elapsedSeconds >= totalSeconds {
+                    startRecordingPhase()
+                    return
+                }
             }
         }
         .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
