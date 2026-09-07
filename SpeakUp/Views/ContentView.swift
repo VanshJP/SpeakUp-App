@@ -165,6 +165,9 @@ struct ContentView: View {
                 },
                 onShowGoals: {
                     showingGoals = true
+                },
+                onStartPractice: {
+                    selectedTab = .today
                 }
             )
             .navigationDestination(item: $selectedRecordingId) { recordingId in
@@ -568,6 +571,9 @@ struct ContentView: View {
             startRecording(from: url)
 
         case "story":
+            // Same first-run / in-session guards as record — never cover
+            // onboarding or a live take with the story editor.
+            guard !showOnboarding, !showingRecording, !showingCountdown else { return }
             selectedTab = .library
             if url.pathComponents.contains("new") {
                 showingStoryEditor = true
@@ -582,6 +588,10 @@ struct ContentView: View {
     /// chrome is only applied when `source=share` so a Daily Prompt widget tap
     /// does not look like a dare.
     private func startRecording(from url: URL) {
+        // Never interrupt a live take or stack a second countdown. Queueing is
+        // future work; dropping the link is safer than mid-session overwrite.
+        guard !showingRecording, !showingCountdown else { return }
+
         recordingPrompt = nil
         recordingStoryId = nil
         recordingGoalId = nil

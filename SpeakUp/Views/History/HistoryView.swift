@@ -15,6 +15,8 @@ struct HistoryView: View {
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
     var onShowGoals: () -> Void = {}
+    /// Empty-state CTA — typically switches to Today so the user can start a take.
+    var onStartPractice: () -> Void = {}
 
     // MARK: - Filtered Summaries
 
@@ -256,7 +258,9 @@ struct HistoryView: View {
                     title: selectedFilter == .all ? "No recordings yet" : "No matches",
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
-                        : "Try adjusting your filters or search terms."
+                        : "Try adjusting your filters or search terms.",
+                    buttonTitle: selectedFilter == .all ? "Start Speaking" : nil,
+                    buttonAction: selectedFilter == .all ? onStartPractice : nil
                 )
             } else {
                 LazyVStack(spacing: 12) {

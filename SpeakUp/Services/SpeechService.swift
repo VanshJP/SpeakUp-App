@@ -257,7 +257,7 @@ class SpeechService {
                 // from a voice profile built from the first 12 seconds. `analyze`
                 // still applies the primary-speaker gate for scoring, and the detail
                 // view renders the labels as speaker turns.
-                let outputText = self.transcriptText(
+                let outputText = SpeechService.joinTranscript(
                     from: finalWords,
                     fallback: result.text
                 )
@@ -476,7 +476,9 @@ class SpeechService {
         )
     }
     
-    private func transcriptText(from words: [TranscriptionWord], fallback: String) -> String {
+    /// Join timed words into transcript text. `nonisolated` so the GCD
+    /// post-process path does not hop MainActor just to concatenate strings.
+    nonisolated private static func joinTranscript(from words: [TranscriptionWord], fallback: String) -> String {
         let resolved = words
             .map(\.word)
             .joined(separator: " ")

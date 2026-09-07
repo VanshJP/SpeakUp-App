@@ -27,6 +27,10 @@ enum SharePresenter {
     ) -> Bool {
         guard let root = rootViewController else { return false }
 
+        // Refuse if a sheet is already up — rapid double-tap used to throw
+        // "already presenting" and the share never appeared.
+        if root.presentedViewController != nil { return false }
+
         var items: [Any] = [image]
         if let message, !message.isEmpty {
             items.append(message)
@@ -58,6 +62,7 @@ enum SharePresenter {
     /// attached.
     static func present(url: URL) {
         guard let root = rootViewController else { return }
+        if root.presentedViewController != nil { return }
 
         let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
 

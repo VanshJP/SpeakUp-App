@@ -37,7 +37,8 @@ Full-screen practice take: countdown → record with live fillers / waveform / f
 - Top bar = status (`FillerCounterOverlay`, `MicLevelPill`), bottom = controls (record button, hint, coaching cue). The live filler count is status and lived above the record button until it kept shoving it down; don't move controls up or status down.
 - Mic activity comes from `AudioService.isHearingInput` — a decaying peak, not `audioLevel > -40`. The raw comparison flips on every gap between words. Both the recording and drill screens read the service property; the decay/floor knobs live in `AudioService`.
 - `RecordingBackdrop` is orthogonal to both and paints the **whole session** — prepare countdown (`CountdownOverlayView`), `RecordingView`, and `DrillSessionView`. `.base` resolves to `AppBackground(style: .recording)`, so the default look is unchanged. Do not paint any screen outside a session with it.
-- Deep-link `record` clears prior prompt/story/goal context.
+- Deep-link `record` clears prior prompt/story/goal context. Mid-session / onboarding links are ignored (`showingRecording` / `showingCountdown` / `showOnboarding`) — same guards on `story/new`.
+- Session Feedback defaults **off** (`sessionFeedbackEnabled`). When on, the recorder still skips the questionnaire for the first analyzed session so activation (baseline → score reveal) is never blocked.
 - Allowance is **not** consumed at capture time — only after successful analysis (`AllowanceGate.consume`).
 - Capture/save failures are never silent: `RecordingView` says the take did not save, explicitly removes blame, and offers Try Again or Cancel without exposing raw audio errors.
 

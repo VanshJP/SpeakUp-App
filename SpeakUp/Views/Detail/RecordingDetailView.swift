@@ -1906,9 +1906,9 @@ struct RecordingDetailView: View {
         let durationSnapshot = recording.actualDuration
         let wpmData = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
-                // computeWPMTimeSeries never touches the Whisper model; a
-                // throwaway instance avoids hopping the MainActor service.
-                let data = SpeechService().computeWPMTimeSeries(
+                // Pure pipeline static — never construct `SpeechService` off the
+                // main actor (its init would spin up Whisper under MainActor default).
+                let data = SpeechAnalysisPipeline.computeWPMTimeSeries(
                     words: words,
                     actualDuration: durationSnapshot
                 )

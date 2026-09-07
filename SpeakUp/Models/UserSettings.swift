@@ -74,7 +74,10 @@ final class UserSettings {
     var listenBackCount: Int = 0
 
     // Session Feedback
-    var sessionFeedbackEnabled: Bool = true
+    /// Ask after each session before showing the score. Defaults off so the
+    /// first scored take is never blocked by a questionnaire (activation moment).
+    /// Users who want the self-check can enable it in Session Defaults.
+    var sessionFeedbackEnabled: Bool = false
     var customFeedbackQuestions: [FeedbackQuestion] = []
 
     // Filler Word Customization

@@ -174,7 +174,20 @@ struct RecordingView: View {
     }
 
     private var feedbackGateActive: Bool {
-        feedbackEnabled && !feedbackQuestions.isEmpty
+        // Same activation rule as Recording Detail: never put a questionnaire
+        // in front of the first scored take.
+        feedbackEnabled && !feedbackQuestions.isEmpty && !isFirstAnalyzedSession
+    }
+
+    /// True when no prior take has a transcript yet — this session is the
+    /// activation moment. Counted on `transcriptionText` (never `#Predicate` on
+    /// the analysis blob).
+    private var isFirstAnalyzedSession: Bool {
+        let descriptor = FetchDescriptor<Recording>(
+            predicate: #Predicate { $0.transcriptionText != nil }
+        )
+        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+        return count == 0
     }
 
     @ViewBuilder

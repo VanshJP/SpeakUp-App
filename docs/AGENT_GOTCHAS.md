@@ -8,7 +8,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 
 | Symptom / intent | § |
 |------------------|---|
-| Background type / test / `Task.detached` won't compile or deadlocks | 1 |
+| Background type / test / `Task.detached` won't compile or deadlocks; isolation DSP on MainActor | 1 |
 | Crash inside CoreData SQL, `#Predicate`, `analysis != nil` | 2 |
 | Advanced analysis metrics nil after reopen; stale mirror | 2b |
 | History/charts hitch; decode in `body` | 3 |
@@ -62,6 +62,8 @@ Breaks: pure scoring / monetization / link parsing from tests or background queu
 | UI ViewModel / UI service | `@MainActor` (often already implied) |
 
 Proven fix: commit `d40543a`. Prefer explicit `EnvironmentKey` over `@Entry` (see `AppTourKey` in `AppTourView.swift`).
+
+Also mark pure audio DSP used from GCD / detached workers: `SpeechIsolationService`, `ConversationIsolationService`, `VoiceProfile`, `VoiceProfileUpdate`. Calling MainActor-isolated isolation from `DispatchQueue.global` inside `SpeechService.transcribe` either hitches UI or fails isolation checking. Never construct `SpeechService()` off-main just to reach `SpeechAnalysisPipeline` statics.
 
 ---
 
