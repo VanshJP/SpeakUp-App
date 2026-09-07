@@ -97,8 +97,11 @@ final class ICloudStorageService {
     // MARK: - File Resolution
 
     /// Resolves a filename to a full URL, checking iCloud first, then local Documents.
-    /// Returns nil if the file doesn't exist in either location.
+    /// Returns nil if the file doesn't exist in either location, or if `filename`
+    /// is not a single safe basename (`MediaPath.sanitizedFilename`).
     func resolveFile(named filename: String) -> URL? {
+        guard let filename = MediaPath.sanitizedFilename(filename) else { return nil }
+
         // Check iCloud container first
         if let ubiquityURL = ubiquityContainerURL {
             let iCloudPath = ubiquityURL

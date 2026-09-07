@@ -86,9 +86,13 @@ class HistoryViewModel {
             for r in recordings {
                 if r.isDeleted { continue }
 
-                let score = r.analysis?.speechScore.overall
-                let wpm = r.analysis?.wordsPerMinute
-                let fillerCount = r.analysis?.totalFillerCount
+                // Bind once: each `r.analysis` access re-decodes the Codable blob.
+                // Prefer the denormalized `overallScore` projection when present
+                // (legacy rows stay nil — fall back to the blob; see gotchas §18).
+                let analysis = r.analysis
+                let score = r.overallScore ?? analysis?.speechScore.overall
+                let wpm = analysis?.wordsPerMinute
+                let fillerCount = analysis?.totalFillerCount
 
                 let promptText = r.prompt?.text ?? ""
                 let category = r.prompt?.category ?? ""
@@ -121,7 +125,7 @@ class HistoryViewModel {
                     )
                 )
 
-                if let usage = r.analysis?.vocabWordsUsed {
+                if let usage = analysis?.vocabWordsUsed {
                     for item in usage {
                         vocabCounts[item.word, default: 0] += item.count
                     }

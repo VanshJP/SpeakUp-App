@@ -39,7 +39,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 5. Auto-paywall before first result without `userInitiated: true`.
 6. New paid feature via scattered `isLifetime` instead of `FreeTierPolicy`.
 7. Recreate StoreKit / coordinator singletons.
-8. Absolute media paths; skip `resolvedAudioURL`.
+8. Absolute media paths; skip `resolvedAudioURL`; unsanitized `../` filenames.
 9. Edit only one of the two `WidgetDataProvider`s.
 10. Change onboarding without `ONBOARDING_VISION.md`.
 11. Lower `noSpeechThreshold` "to catch more speech" — it deletes 30 s windows.
@@ -116,6 +116,8 @@ Decode analysis **only** on the background context while building the POD. Prefe
 Absolute Documents paths break after container moves, reinstall, or iCloud migration.
 
 Resolve existence **once** into `@State` — never `FileManager.fileExists` inside `body`.
+
+Basename only: `ICloudStorageService.resolveFile(named:)` and `Recording.resolveStoredURL` run every name through `MediaPath.sanitizedFilename`. A tampered relative path with `../` must not walk out of Documents / the iCloud container. Legacy absolute URLs are honored only when `MediaPath.isUnderAllowedMediaRoot` says they sit under Documents or the ubiquity container — otherwise fall back to the basename. Pin behaviour in `SpeakUpTests/MediaPathTests`.
 
 ---
 
@@ -233,7 +235,9 @@ Every shipped install wrote its store under an *unversioned* schema; the contain
 
 ## 18. Legacy rows carry nil denormalized projections until first touch
 
-`Recording.promptId` / `overallScore` are additive columns: rows written before they existed read nil forever unless something writes them. Consumers must fall back to the source of truth (`recording.prompt?.id`, `fullAnalysis`) rather than treating nil as unknown-and-skip — nil means *legacy*, not *missing*. The AllPrompts progress scan backfills `promptId` opportunistically; do the same for any new projection column before shipping a scalar-only reader.
+`Recording.promptId` / `overallScore` are additive columns: rows written before they existed read nil forever unless something writes them. Consumers must fall back to the source of truth (`recording.prompt?.id`, `analysis` / `fullAnalysis`) rather than treating nil as unknown-and-skip — nil means *legacy*, not *missing*. The AllPrompts progress scan backfills `promptId` opportunistically; do the same for any new projection column before shipping a scalar-only reader.
+
+Score aggregations (Today heavy load, History summaries, practice charts) should read `overallScore ?? analysis?.speechScore.overall` and bind `let analysis = recording.analysis` once per row — each property access re-decodes the Codable blob.
 
 ---
 

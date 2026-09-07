@@ -181,22 +181,34 @@ final class Recording {
         return url
     }
 
-    /// Resolves a stored URL: if it's already absolute and the file exists, returns it as-is.
-    /// If relative (just a filename), checks iCloud container first, then local Documents.
+    /// Resolves a stored URL: if it's already absolute and the file exists under an
+    /// allowed media root, returns it as-is. If relative (just a filename), checks
+    /// iCloud container first, then local Documents. Path components with `../`
+    /// or separators are rejected — see `MediaPath`.
     private static func resolveStoredURL(_ stored: URL?) -> URL? {
         guard let stored else { return nil }
 
         let filename: String
 
         if stored.path.hasPrefix("/") {
-            // Legacy absolute path — check if file still exists at original location
-            if FileManager.default.fileExists(atPath: stored.path) {
+            // Legacy absolute path — only honor it inside Documents / iCloud.
+            if FileManager.default.fileExists(atPath: stored.path),
+               MediaPath.isUnderAllowedMediaRoot(
+                stored,
+                ubiquityContainer: ICloudStorageService.shared.ubiquityContainerURL
+               ) {
                 return stored
             }
-            // File moved — extract filename and try resolving
-            filename = stored.lastPathComponent
+            // File moved or outside the media root — extract basename and retry.
+            guard let safe = MediaPath.sanitizedFilename(stored.lastPathComponent) else {
+                return nil
+            }
+            filename = safe
         } else {
-            filename = stored.path
+            guard let safe = MediaPath.sanitizedFilename(stored.path) else {
+                return nil
+            }
+            filename = safe
         }
 
         // Resolve via iCloud service (checks iCloud container, then local Documents)

@@ -7,20 +7,12 @@ struct PracticeResultsCard: View {
 
     @Query private var userSettings: [UserSettings]
     @State private var appeared = false
-
-    private var analysis: SpeechAnalysis? { recording.analysis }
+    /// Resolved once — `recording.analysis` re-decodes the Codable blob on
+    /// every access, and `primaryTip` / encouragement both read it from body.
+    @State private var analysis: SpeechAnalysis?
+    @State private var primaryTip: CoachingTip?
 
     private var targetWPM: Int { userSettings.first.resolvedTargetWPM }
-
-    /// Same tip engine as Recording Detail — curriculum practice should not invent
-    /// a second coaching voice.
-    private var primaryTip: CoachingTip? {
-        guard let analysis else { return nil }
-        return CoachingTipService.generateTips(
-            from: analysis,
-            context: CoachingContext(targetWPM: targetWPM)
-        ).first
-    }
 
     var body: some View {
         GlassCard(tint: AppColors.glassTintPrimary) {
@@ -54,10 +46,29 @@ struct PracticeResultsCard: View {
             }
         }
         .onAppear {
+            resolveAnalysisIfNeeded()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                 appeared = true
             }
         }
+        .onChange(of: recording.overallScore) { _, _ in
+            // Analysis may land after the card appears; refresh the cache.
+            analysis = nil
+            primaryTip = nil
+            resolveAnalysisIfNeeded()
+        }
+    }
+
+    private func resolveAnalysisIfNeeded() {
+        guard analysis == nil else { return }
+        guard let decoded = recording.analysis else { return }
+        analysis = decoded
+        // Same tip engine as Recording Detail — curriculum practice should not
+        // invent a second coaching voice.
+        primaryTip = CoachingTipService.generateTips(
+            from: decoded,
+            context: CoachingContext(targetWPM: targetWPM)
+        ).first
     }
 
     // MARK: - Results Content
