@@ -29,14 +29,17 @@ struct AllPromptsView: View {
     @State private var showingPromptWheel = false
 
     let onSelectPrompt: ((Prompt) -> Void)?
-    private let searchText: String
+    /// Owned by the hub (one search string per Library section), edited here:
+    /// this section draws its own search row so the filter menu can ride on it
+    /// instead of colliding with the chip row it used to sit at the end of.
+    @Binding private var searchText: String
 
     init(
         onSelectPrompt: ((Prompt) -> Void)? = nil,
-        searchText: String = ""
+        searchText: Binding<String>
     ) {
         self.onSelectPrompt = onSelectPrompt
-        self.searchText = searchText
+        self._searchText = searchText
     }
 }
 
@@ -85,9 +88,16 @@ extension AllPromptsView {
 
         return screenDecorations(
             VStack(spacing: 16) {
+                // Search first, with the filter menu on its trailing end — the
+                // same row shape History uses. It sat at the end of the chip
+                // row until the chips scrolled underneath it.
+                InlineSearchField(text: $searchText, prompt: "Search prompts…") {
+                    filterMenu(prompts)
+                }
+
                 if selectedCategory == nil {
                     VStack(spacing: 16) {
-                        filterRow(prompts)
+                        filterChips
                         landingContent(prompts)
                     }
                     .transition(.asymmetric(
@@ -174,9 +184,9 @@ extension AllPromptsView {
     }
     // MARK: - Filter / Import Menu
 
-    /// Lives at the trailing end of the chip row, not in a navigation bar —
-    /// Library has no nav bar to hang it from, and the control that narrows
-    /// the list reads better sitting on the row that already narrows it.
+    /// Lives on the trailing end of this section's search row, not in a
+    /// navigation bar — Library has no nav bar to hang it from, and the two
+    /// ways of narrowing the list belong together.
     private func filterMenu(_ prompts: [Prompt]) -> some View {
         Menu {
             Section("Export & Import") {
@@ -228,13 +238,6 @@ extension AllPromptsView {
     }
 
     // MARK: - Filter Chips
-
-    private func filterRow(_ prompts: [Prompt]) -> some View {
-        HStack(spacing: 8) {
-            filterChips
-            filterMenu(prompts)
-        }
-    }
 
     private var filterChips: some View {
         ScrollView(.horizontal) {
@@ -441,7 +444,6 @@ extension AllPromptsView {
             backToCategoriesButton
             countLabel(prompts)
             Spacer(minLength: 0)
-            filterMenu(prompts)
         }
         activeFiltersRow
         promptResults(prompts)
@@ -809,7 +811,7 @@ extension PromptCategory {
 #Preview {
     NavigationStack {
         PageScrollView {
-            AllPromptsView()
+            AllPromptsView(searchText: .constant(""))
                 .padding(.horizontal)
         }
         .appBackground(.primary)

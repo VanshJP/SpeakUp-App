@@ -6,6 +6,10 @@ struct StoriesListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var viewModel: StoriesViewModel
     @Binding var selectedStory: Story?
+    /// Owned by the hub (one search string per Library section), edited here:
+    /// this section draws its own search row so the sort menu can ride on it
+    /// instead of colliding with the folder chips it used to sit at the end of.
+    @Binding var searchText: String
     @State private var showingDeleteAlert = false
     @State private var storyToDelete: Story?
     @State private var folderEditorPresentation: FolderEditorPresentation?
@@ -18,12 +22,14 @@ struct StoriesListView: View {
     init(
         viewModel: StoriesViewModel,
         selectedStory: Binding<Story?>,
+        searchText: Binding<String>,
         onStartPractice: ((Story) -> Void)? = nil,
         onSendToWarmUp: ((Story) -> Void)? = nil,
         onSendToDrill: ((Story) -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self._selectedStory = selectedStory
+        self._searchText = searchText
         self.onStartPractice = onStartPractice
         self.onSendToWarmUp = onSendToWarmUp
         self.onSendToDrill = onSendToDrill
@@ -31,25 +37,25 @@ struct StoriesListView: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            // Search first, with the sort menu on its trailing end — the same
+            // row shape History uses. Sort sat at the end of the folder bar
+            // until the folder chips scrolled underneath it.
+            InlineSearchField(text: $searchText, prompt: "Search stories…") {
+                sortMenu
+            }
+
             // No stats strip — folder counts and tag counts were inventory
             // numbers nobody acts on. The folder bar and the list already say
             // how much is here.
-            // Sort sits at the end of the folder bar rather than in a
-            // navigation bar: Library has none, and the control that reorders
-            // the list belongs on the row that already filters it.
-            HStack(spacing: 8) {
-                StoryFolderBar(
-                    viewModel: viewModel,
-                    onCreateFolder: {
-                        folderEditorPresentation = .create
-                    },
-                    onEditFolder: { folder in
-                        folderEditorPresentation = .edit(folder)
-                    }
-                )
-
-                sortMenu
-            }
+            StoryFolderBar(
+                viewModel: viewModel,
+                onCreateFolder: {
+                    folderEditorPresentation = .create
+                },
+                onEditFolder: { folder in
+                    folderEditorPresentation = .edit(folder)
+                }
+            )
 
             if viewModel.stories.isEmpty {
                 EmptyStateCard(

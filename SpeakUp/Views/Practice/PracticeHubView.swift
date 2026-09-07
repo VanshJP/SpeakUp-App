@@ -50,14 +50,6 @@ struct PracticeHubView: View {
         ZStack(alignment: .bottomTrailing) {
             PageScrollView {
                 LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
-                    // Search scrolls away with the content, the picker pins.
-                    // Each section's own filter / sort control sits inside that
-                    // section, next to the chips it acts on, instead of in a
-                    // nav bar this page no longer has.
-                    InlineSearchField(text: activeSearchText, prompt: searchPrompt) {
-                        EmptyView()
-                    }
-
                     Section {
                         // Sections swap instantly rather than crossfading: a
                         // crossfade keeps the outgoing section alive for the
@@ -67,13 +59,14 @@ struct PracticeHubView: View {
                         case .prompts:
                             AllPromptsView(
                                 onSelectPrompt: onSelectPrompt,
-                                searchText: promptsSearchText
+                                searchText: $promptsSearchText
                             )
                             .transition(.identity)
                         case .stories:
                             StoriesListView(
                                 viewModel: storiesViewModel,
                                 selectedStory: $selectedStory,
+                                searchText: $storiesSearchText,
                                 onStartPractice: onStartStoryPractice,
                                 onSendToWarmUp: onSendToWarmUp,
                                 onSendToDrill: onSendToDrill
@@ -104,6 +97,9 @@ struct PracticeHubView: View {
         // No nav bar. It carried the word "Library" above a tab button
         // labelled Library, and `.searchable` hung off it — together ~100pt of
         // permanent chrome above a picker, a chip row, and only then a prompt.
+        // The picker is the only pinned row now; search belongs to whichever
+        // section you are in, so each section draws its own row and hangs its
+        // filter or sort menu off the end of it.
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: storiesSearchText) { _, newValue in
             storiesViewModel.setSearch(newValue)
@@ -215,6 +211,10 @@ struct PracticeHubView: View {
     }
 
     /// Category grid — practice tools, then review tools. Same card recipe.
+    ///
+    /// Search is per-section on this page, so each section draws its own row
+    /// (see `AllPromptsView` / `StoriesListView`). Tools has no filter or sort
+    /// of its own, so this row is the field alone.
     private var toolsLanding: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visiblePractice = query.isEmpty
@@ -236,6 +236,10 @@ struct PracticeHubView: View {
         // Practice and Review, and a sentence of preamble is a row of scroll
         // between the user and the tool they came for.
         return VStack(alignment: .leading, spacing: 20) {
+            InlineSearchField(text: $toolsSearchText, prompt: "Search tools…") {
+                EmptyView()
+            }
+
             if visiblePractice.isEmpty && visibleReview.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
@@ -404,24 +408,6 @@ struct PracticeHubView: View {
                 Circle()
                     .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
             }
-    }
-
-    // MARK: - Search Routing
-
-    private var activeSearchText: Binding<String> {
-        switch selectedSection {
-        case .prompts: return $promptsSearchText
-        case .stories: return $storiesSearchText
-        case .tools: return $toolsSearchText
-        }
-    }
-
-    private var searchPrompt: String {
-        switch selectedSection {
-        case .prompts: return "Search prompts…"
-        case .stories: return "Search stories…"
-        case .tools: return "Search tools…"
-        }
     }
 
     // MARK: - Helpers

@@ -45,18 +45,19 @@ struct HistoryView: View {
     var body: some View {
         PageScrollView {
             LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
-                // Search scrolls away with the content, the picker pins. The
-                // nav bar it replaces was permanent and said "History" above a
-                // tab button already labelled History.
-                if selectedSection == .recordings {
-                    InlineSearchField(text: $searchText, prompt: "Search recordings…") {
-                        filterMenu
-                    }
-                }
-
                 Section {
                     switch selectedSection {
                     case .recordings:
+                        // Search belongs to the section, not the page — the
+                        // Progress tab has nothing to search — so it lives
+                        // here with the filter menu on its trailing end, and
+                        // only the picker pins. The nav bar this replaced was
+                        // permanent and said "History" above a tab button
+                        // already labelled History.
+                        InlineSearchField(text: $searchText, prompt: "Search recordings…") {
+                            filterMenu
+                        }
+
                         // The strip earns its place back by being
                         // switchable — showing up and doing well are
                         // different questions, and one grid answers both.
@@ -86,7 +87,8 @@ struct HistoryView: View {
         // No nav bar. The tab bar already names the tab, so the row held one
         // redundant word plus a filter button, and `.searchable` hung another
         // 50pt off it — ~100pt of permanent chrome before the first recording.
-        // `InlineSearchField` and the pinned picker are this page's header now.
+        // The pinned picker plus each section's own `InlineSearchField` are
+        // this page's header now.
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
