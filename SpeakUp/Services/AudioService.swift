@@ -11,6 +11,9 @@ class AudioService: NSObject {
     // Recording
     private var audioRecorder: AVAudioRecorder?
     private var recordingSession: AVAudioSession?
+    /// Set synchronously at the top of `startRecording` so a second caller
+    /// cannot pass the idle guard while the first awaits permission.
+    private var isStartingRecording = false
     var isRecording = false
     var recordingURL: URL?
     var recordingDuration: TimeInterval = 0
@@ -115,12 +118,50 @@ class AudioService: NSObject {
     
     // MARK: - Recording
     
+    /// True while `stopRecording` is waiting on the recorder delegate.
+    /// Callers must not `cancelRecording` / `cleanup` in this window — that
+    /// resumes the stop continuation as failure and deletes the m4a.
+    var isFinalizingRecording: Bool { recordingCompletion != nil }
+
     func startRecording() async throws -> URL {
+        // Never start while a stop is finalizing — `recordingURL` still points
+        // at the dying file and must not be returned to a new caller.
+        guard recordingCompletion == nil else {
+            throw AudioServiceError.recordingFailed(NSError(
+                domain: "AudioService",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "Recording is still finalizing"]
+            ))
+        }
+        // Re-entrancy: reserve before any await so a second tap cannot spawn
+        // two AVAudioRecorders on one session.
+        guard !isRecording, !isStartingRecording, audioRecorder == nil else {
+            if isRecording, let recordingURL {
+                return recordingURL
+            }
+            throw AudioServiceError.recordingFailed(NSError(
+                domain: "AudioService",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Recording already in progress"]
+            ))
+        }
+        isStartingRecording = true
+        defer { isStartingRecording = false }
+
         if !hasPermission {
             let granted = await requestPermission()
             guard granted else {
                 throw AudioServiceError.noPermission
             }
+        }
+
+        // Re-check after the permission await — another start/stop may have won.
+        guard recordingCompletion == nil, !isRecording, audioRecorder == nil else {
+            throw AudioServiceError.recordingFailed(NSError(
+                domain: "AudioService",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Recording already in progress"]
+            ))
         }
         
         // Always capture to local Documents. iCloud promotion happens after stop.
@@ -139,6 +180,7 @@ class AudioService: NSObject {
 
             let started = audioRecorder?.record() ?? false
             guard started else {
+                audioRecorder = nil
                 throw AudioServiceError.recordingFailed(NSError(domain: "AudioService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to start recording"]))
             }
 
@@ -160,6 +202,9 @@ class AudioService: NSObject {
 
             return audioFilename
         } catch {
+            audioRecorder = nil
+            isRecording = false
+            recordingURL = nil
             throw AudioServiceError.recordingFailed(error)
         }
     }
@@ -215,12 +260,9 @@ class AudioService: NSObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // A pending stopRecording() continuation is parked on this closure.
-        // Dropping it leaked the continuation and hung that caller forever —
-        // resolve it as cancelled instead. Nilling afterwards means the
-        // delegate's callback for recorder.stop() below cannot double-resume.
-        recordingCompletion?(false)
-        recordingCompletion = nil
+        // Never abort an in-flight stop — that resumes the continuation false
+        // and deletes the file the stop path is trying to promote.
+        guard recordingCompletion == nil else { return }
 
         audioRecorder?.stop()
         audioRecorder = nil
@@ -456,6 +498,8 @@ class AudioService: NSObject {
     
     func cleanup() {
         stop()
+        // Leave an in-flight finalize alone — cancel would delete the take.
+        guard !isFinalizingRecording else { return }
         cancelRecording()
     }
 }

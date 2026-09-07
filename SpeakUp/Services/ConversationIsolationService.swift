@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Voice Profile Types
 
-struct VoiceProfile {
+nonisolated struct VoiceProfile: Sendable {
     let f0Hz: Double
     let energyDb: Double
     let sampleCount: Int
@@ -18,7 +18,7 @@ struct VoiceProfile {
     }
 }
 
-struct VoiceProfileUpdate {
+nonisolated struct VoiceProfileUpdate: Sendable {
     let sessionF0Hz: Double
     let sessionEnergyDb: Double
     let separationConfidence: Int
@@ -27,7 +27,10 @@ struct VoiceProfileUpdate {
 /// Heuristic single-speaker isolation for conversational recordings.
 /// Uses per-word acoustic similarity (pitch + energy) to the user's
 /// early-session voice profile and tags likely non-user words.
-enum ConversationIsolationService {
+///
+/// Pure acoustics — called from `SpeechService` GCD workers, so it must stay
+/// `nonisolated` under MainActor default isolation.
+nonisolated enum ConversationIsolationService {
     static func labelPrimarySpeaker(
         words: [TranscriptionWord],
         audioURL: URL,

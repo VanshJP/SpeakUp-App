@@ -97,15 +97,19 @@ final class ICloudStorageService {
     // MARK: - File Resolution
 
     /// Resolves a filename to a full URL, checking iCloud first, then local Documents.
-    /// Returns nil if the file doesn't exist in either location.
+    /// Returns nil if the file doesn't exist in either location, or if `filename`
+    /// is not a single safe basename (`MediaPath.sanitizedFilename`).
     func resolveFile(named filename: String) -> URL? {
+        guard let filename = MediaPath.sanitizedFilename(filename) else { return nil }
+
         // Check iCloud container first
         if let ubiquityURL = ubiquityContainerURL {
             let iCloudPath = ubiquityURL
                 .appendingPathComponent("Documents")
                 .appendingPathComponent(recordingsSubdirectory)
                 .appendingPathComponent(filename)
-            if FileManager.default.fileExists(atPath: iCloudPath.path) {
+            if FileManager.default.fileExists(atPath: iCloudPath.path),
+               MediaPath.isUnderAllowedMediaRoot(iCloudPath, ubiquityContainer: ubiquityURL) {
                 return iCloudPath
             }
 
@@ -113,7 +117,8 @@ final class ICloudStorageService {
             let iCloudPlaceholder = iCloudPath
                 .deletingLastPathComponent()
                 .appendingPathComponent(".\(filename).icloud")
-            if FileManager.default.fileExists(atPath: iCloudPlaceholder.path) {
+            if FileManager.default.fileExists(atPath: iCloudPlaceholder.path),
+               MediaPath.isUnderAllowedMediaRoot(iCloudPath, ubiquityContainer: ubiquityURL) {
                 // Trigger download and return the expected final path
                 try? FileManager.default.startDownloadingUbiquitousItem(at: iCloudPath)
                 return iCloudPath
@@ -122,7 +127,8 @@ final class ICloudStorageService {
 
         // Fall back to local Documents
         let localPath = Self.localDocumentsDirectory.appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: localPath.path) {
+        if FileManager.default.fileExists(atPath: localPath.path),
+           MediaPath.isUnderAllowedMediaRoot(localPath) {
             return localPath
         }
 

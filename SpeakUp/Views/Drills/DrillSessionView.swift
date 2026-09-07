@@ -88,6 +88,9 @@ struct DrillSessionView: View {
     private var topBar: some View {
         HStack {
             Button {
+                if viewModel.isAnalyzingPitch {
+                    return
+                }
                 if viewModel.isActive {
                     Haptics.warning()
                     showingExitConfirm = true
@@ -102,13 +105,15 @@ struct DrillSessionView: View {
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(.ultraThinMaterial))
             }
-            .accessibilityLabel("End drill")
+            .disabled(viewModel.isAnalyzingPitch)
+            .accessibilityLabel(viewModel.isAnalyzingPitch ? "Scoring pitch" : "End drill")
             .confirmationDialog(
                 "End this drill?",
                 isPresented: $showingExitConfirm,
                 titleVisibility: .visible
             ) {
                 Button("End Drill", role: .destructive) {
+                    guard !viewModel.isAnalyzingPitch else { return }
                     viewModel.cleanup()
                     dismiss()
                 }

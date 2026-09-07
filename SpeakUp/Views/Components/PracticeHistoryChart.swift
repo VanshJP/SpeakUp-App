@@ -102,11 +102,12 @@ nonisolated struct PracticeRecordingSummary: Identifiable {
 
     static func from(recordings: [Recording]) -> [PracticeRecordingSummary] {
         recordings.map { recording in
+            // Bind once — each `analysis` access re-decodes the Codable blob.
             let analysis = recording.analysis
             return PracticeRecordingSummary(
                 id: recording.id,
                 date: recording.date,
-                score: analysis?.speechScore.overall,
+                score: recording.overallScore ?? analysis?.speechScore.overall,
                 wpm: analysis?.wordsPerMinute ?? 0,
                 fillerCount: analysis?.totalFillerCount ?? 0,
                 duration: recording.actualDuration

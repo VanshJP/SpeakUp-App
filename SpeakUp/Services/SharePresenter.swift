@@ -27,6 +27,10 @@ enum SharePresenter {
     ) -> Bool {
         guard let root = rootViewController else { return false }
 
+        // Refuse if a sheet is already up — or if the top controller *is* the
+        // share sheet (its presentedViewController is nil while active).
+        guard canPresent(from: root) else { return false }
+
         var items: [Any] = [image]
         if let message, !message.isEmpty {
             items.append(message)
@@ -58,6 +62,7 @@ enum SharePresenter {
     /// attached.
     static func present(url: URL) {
         guard let root = rootViewController else { return }
+        guard canPresent(from: root) else { return }
 
         let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
 
@@ -68,6 +73,14 @@ enum SharePresenter {
         }
 
         root.present(activity, animated: true)
+    }
+
+    /// True when nothing is already presenting and the top controller is not
+    /// itself an in-flight activity sheet.
+    private static func canPresent(from root: UIViewController) -> Bool {
+        if root is UIActivityViewController { return false }
+        if root.presentedViewController != nil { return false }
+        return true
     }
 
     /// The *topmost* presented controller, not the window root. Callers now

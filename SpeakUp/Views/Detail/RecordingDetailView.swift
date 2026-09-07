@@ -46,6 +46,9 @@ struct RecordingDetailView: View {
     @State private var playbackViewModel = RecordingDetailPlaybackViewModel()
     @State private var coherenceEnhanceInFlight = false
     @State private var playableMediaAvailable = false
+    /// Coalesced post-load work (WPM / baselines / LLM). Cancelled on disappear
+    /// so a deleted row is never written from a zombie Task.
+    @State private var readySetupTask: Task<Void, Never>?
     /// Set while the share sheet is up, choosing which card leaves the app.
     @State private var pendingShareRecording: Recording?
     /// The first score has to be the first thing the user sees. A questionnaire
@@ -260,6 +263,7 @@ struct RecordingDetailView: View {
         }
         .onDisappear {
             isDetailActive = false
+            readySetupTask?.cancel()
             audioService.stop()
             if allowsCoachMoments, let moment = coachMoments.pendingDetail {
                 // Leaving before acting is not an explicit dismissal. Clear
@@ -428,11 +432,15 @@ struct RecordingDetailView: View {
         // that already carries it; then the plan loads first on purpose: an
         // insight generated before it resolves is the context-free one this
         // whole path exists to replace.
-        Task {
-            await populateWPMTimeSeriesIfNeeded()
-            await loadPersonalAverageIfNeeded(excluding: recording.id)
+        readySetupTask?.cancel()
+        let recordingID = recording.id
+        readySetupTask = Task {
+            await populateWPMTimeSeriesIfNeeded(recordingID: recordingID)
+            guard !Task.isCancelled else { return }
+            await loadPersonalAverageIfNeeded(excluding: recordingID)
+            guard !Task.isCancelled else { return }
             evaluateCoachMomentIfNeeded(for: recording)
-            await enhanceCoherenceIfNeeded()
+            await enhanceCoherenceIfNeeded(recordingID: recordingID)
         }
     }
 
@@ -1896,8 +1904,9 @@ struct RecordingDetailView: View {
     /// Reads and writes through `fullAnalysis`/`setAnalysis`: the series is an
     /// advanced metric the lossy SwiftData copy drops, so patching that copy
     /// (the old approach) lost the series again on the next analysis rewrite.
-    private func populateWPMTimeSeriesIfNeeded() async {
+    private func populateWPMTimeSeriesIfNeeded(recordingID: UUID) async {
         guard let recording,
+              recording.id == recordingID,
               var analysis = recording.fullAnalysis,
               analysis.wpmTimeSeries == nil,
               let words = sessionWords,
@@ -1906,9 +1915,9 @@ struct RecordingDetailView: View {
         let durationSnapshot = recording.actualDuration
         let wpmData = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
-                // computeWPMTimeSeries never touches the Whisper model; a
-                // throwaway instance avoids hopping the MainActor service.
-                let data = SpeechService().computeWPMTimeSeries(
+                // Pure pipeline static — never construct `SpeechService` off the
+                // main actor (its init would spin up Whisper under MainActor default).
+                let data = SpeechAnalysisPipeline.computeWPMTimeSeries(
                     words: words,
                     actualDuration: durationSnapshot
                 )
@@ -1917,16 +1926,22 @@ struct RecordingDetailView: View {
         }
         guard !Task.isCancelled else { return }
 
+        // Re-fetch — the row may have been deleted while we computed.
+        var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == recordingID })
+        descriptor.fetchLimit = 1
+        guard let persisted = (try? modelContext.fetch(descriptor))?.first else { return }
+
         analysis.wpmTimeSeries = wpmData
-        recording.setAnalysis(analysis)
+        persisted.setAnalysis(analysis)
         try? modelContext.save()
 
         // Keep the render-side cache on the persisted truth, or this visit's
         // pace chart waits for a reopen to appear.
         coachAnalysis = analysis
+        self.recording = persisted
     }
 
-    private func enhanceCoherenceIfNeeded() async {
+    private func enhanceCoherenceIfNeeded(recordingID: UUID) async {
         // Single writer: runReadySetupIfNeeded can fire from multiple triggers
         // (.task, isProcessing change, feedback completion). Two concurrent LLM
         // passes would both write recording.analysis and jump the visible score.
@@ -1938,6 +1953,7 @@ struct RecordingDetailView: View {
         // writing back the lossy copy would overwrite the mirror with a version
         // that has every advanced metric stripped out of it.
         guard case .ready(let recording) = detailScreenState,
+              recording.id == recordingID,
               var analysis = recording.fullAnalysis else { return }
 
         let transcript = resolvedTranscript(for: recording)
@@ -1986,15 +2002,20 @@ struct RecordingDetailView: View {
         // Guard against view dismissal during async inference
         guard !Task.isCancelled else { return }
 
-        recording.setAnalysis(analysis)
+        var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == recordingID })
+        descriptor.fetchLimit = 1
+        guard let persisted = (try? modelContext.fetch(descriptor))?.first else { return }
+
+        persisted.setAnalysis(analysis)
         // Tips read this copy; leaving it stale would show the pre-LLM
         // relevance score next to a hero that has already moved.
         coachAnalysis = analysis
-        if let storyId = recording.storyId {
+        self.recording = persisted
+        if let storyId = persisted.storyId {
             let enhancedScore = analysis.speechScore.overall
-            var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
-            descriptor.fetchLimit = 1
-            if let story = (try? modelContext.fetch(descriptor))?.first,
+            var storyDescriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
+            storyDescriptor.fetchLimit = 1
+            if let story = (try? modelContext.fetch(storyDescriptor))?.first,
                enhancedScore > story.bestScore {
                 story.bestScore = enhancedScore
                 story.updatedAt = Date()

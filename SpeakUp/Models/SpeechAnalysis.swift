@@ -359,7 +359,7 @@ nonisolated struct TextQualityMetrics: Codable, Equatable {
 
 // MARK: - Audio / Speaker Isolation Metrics
 
-nonisolated struct AudioIsolationMetrics: Codable, Equatable {
+nonisolated struct AudioIsolationMetrics: Codable, Equatable, Sendable {
     var estimatedInputSNRDb: Double
     var estimatedOutputSNRDb: Double
     var suppressionDeltaDb: Double
@@ -381,7 +381,7 @@ nonisolated struct AudioIsolationMetrics: Codable, Equatable {
     }
 }
 
-nonisolated struct SpeakerIsolationMetrics: Codable, Equatable {
+nonisolated struct SpeakerIsolationMetrics: Codable, Equatable, Sendable {
     var primarySpeakerWordRatio: Double // 0.0 - 1.0
     var filteredOutWordCount: Int
     var speakerSwitchCount: Int

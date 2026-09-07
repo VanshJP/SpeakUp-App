@@ -134,13 +134,14 @@ class TodayViewModel {
                 ? Set(recordings.compactMap { $0.prompt?.id })
                 : []
 
-            // Stats
+            // Stats — prefer denormalized `overallScore` so score-only passes
+            // skip Codable blob decode when the projection is populated.
             let totalRecordings = recordings.count
             let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
             let recordingDates = recordings.map(\.date)
             let currentStreak = Date.calculateStreak(from: recordingDates)
 
-            let scoresWithAnalysis = recordings.compactMap { $0.analysis?.speechScore.overall }
+            let scoresWithAnalysis = recordings.compactMap { Self.projectedOverallScore(for: $0) }
             let averageScore: Double = scoresWithAnalysis.isEmpty
                 ? 0
                 : Double(scoresWithAnalysis.reduce(0, +)) / Double(scoresWithAnalysis.count)
@@ -149,7 +150,7 @@ class TodayViewModel {
             let sevenDaysAgo = Date().adding(days: -7)
             let recentRecordings = recordings.filter { $0.date >= sevenDaysAgo }
             let scoreHistory = recentRecordings.compactMap { rec -> ScoreHistoryEntry? in
-                guard let score = rec.analysis?.speechScore.overall else { return nil }
+                guard let score = Self.projectedOverallScore(for: rec) else { return nil }
                 return ScoreHistoryEntry(date: rec.date, score: score)
             }
 
@@ -160,8 +161,8 @@ class TodayViewModel {
                 let mid = sorted.count / 2
                 let firstHalf = Array(sorted.prefix(mid))
                 let secondHalf = Array(sorted.suffix(from: mid))
-                let firstSum = firstHalf.compactMap { $0.analysis?.speechScore.overall }.reduce(0, +)
-                let secondSum = secondHalf.compactMap { $0.analysis?.speechScore.overall }.reduce(0, +)
+                let firstSum = firstHalf.compactMap { Self.projectedOverallScore(for: $0) }.reduce(0, +)
+                let secondSum = secondHalf.compactMap { Self.projectedOverallScore(for: $0) }.reduce(0, +)
                 guard firstSum > 0 else { return 0 }
                 let firstAvg = Double(firstSum) / Double(max(firstHalf.count, 1))
                 let secondAvg = Double(secondSum) / Double(max(secondHalf.count, 1))
@@ -193,7 +194,9 @@ class TodayViewModel {
             var todayTranscripts: [String] = []
             var todayVocabUsages: [VocabWordUsage] = []
             for recording in recordings {
-                if let usage = recording.analysis?.vocabWordsUsed {
+                // Bind once — each `analysis` access re-decodes the blob.
+                let analysis = recording.analysis
+                if let usage = analysis?.vocabWordsUsed {
                     for item in usage where item.count > 0 {
                         let key = item.word.lowercased()
                         vocabUsedCounts[key, default: 0] += item.count
@@ -219,8 +222,9 @@ class TodayViewModel {
             recentSessions.reserveCapacity(20)
             for recording in recordings.prefix(20) {
                 guard let text = recording.transcriptionText, !text.isEmpty else { continue }
+                let analysis = recording.analysis
                 var fillerCounts: [String: Int] = [:]
-                if let fillerWords = recording.analysis?.fillerWords {
+                if let fillerWords = analysis?.fillerWords {
                     for filler in fillerWords where filler.count > 0 {
                         fillerCounts[filler.word.lowercased(), default: 0] += filler.count
                     }
@@ -229,7 +233,7 @@ class TodayViewModel {
                     date: recording.date,
                     transcript: text,
                     fillerCounts: fillerCounts,
-                    overallScore: recording.analysis?.speechScore.overall,
+                    overallScore: recording.overallScore ?? analysis?.speechScore.overall,
                     category: recording.storyId != nil ? "Story" : recording.prompt?.category
                 ))
                 if recentSessions.count >= 15 { break }
@@ -271,6 +275,12 @@ class TodayViewModel {
                 lastPracticeDate: recordings.first?.date
             )
         }.value
+    }
+
+    /// Prefer the denormalized projection; fall back to the Codable blob for
+    /// legacy rows written before `overallScore` existed (gotchas §18).
+    nonisolated private static func projectedOverallScore(for recording: Recording) -> Int? {
+        recording.overallScore ?? recording.analysis?.speechScore.overall
     }
 
     private func updateWidgetData() {

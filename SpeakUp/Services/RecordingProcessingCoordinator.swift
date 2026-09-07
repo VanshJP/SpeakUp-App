@@ -393,6 +393,13 @@ final class RecordingProcessingCoordinator {
             // while transcription/analysis ran (potentially minutes). Writing to a deleted
             // SwiftData object traps.
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+            // `analyzeTranscript` is non-throwing; cancel during that await does
+            // not raise CancellationError — check before charging / persisting.
+            if Task.isCancelled {
+                persisted.isProcessing = false
+                save(modelContext, context: "clearing processing flag after cancellation \(recordingID.uuidString)")
+                return
+            }
             if let text = computed.2 {
                 persisted.transcriptionText = text
             }
@@ -435,6 +442,12 @@ final class RecordingProcessingCoordinator {
             WidgetDataProvider.updateLastPracticeDate(persisted.date)
             WidgetDataProvider.resetTodayFingerprint()
             WidgetCenter.shared.reloadAllTimelines()
+        } catch is CancellationError {
+            // Delete / dismiss cancelled the job — not a user-visible failure.
+            guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+            persisted.isProcessing = false
+            // Leave any prior error alone; never stamp a cancellation string.
+            save(modelContext, context: "clearing processing flag after cancellation \(recordingID.uuidString)")
         } catch {
             logger.error("Recording processing failed for \(recordingID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .private(mask: .hash))")
             AnalyticsService.shared.log(.analysisFailed(reason: Self.failureCategory(for: error)))
@@ -481,6 +494,7 @@ final class RecordingProcessingCoordinator {
 
     /// Coarse reason only — an error string can contain a file path.
     private static func failureCategory(for error: Error) -> String {
+        if error is CancellationError { return "cancelled" }
         let text = error.localizedDescription.lowercased()
         if text.contains("timed out") || text.contains("timeout") { return "timeout" }
         if text.contains("model") { return "model" }

@@ -43,6 +43,10 @@ class DictationService {
     /// recognizer reports back is not mistaken for a real failure.
     private var isStopping = false
 
+    /// Bumped on every `start` / `stop` so a cancelled session's recognition
+    /// callback cannot `cleanup()` the replacement session.
+    private var sessionGeneration = 0
+
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
@@ -50,11 +54,21 @@ class DictationService {
     // MARK: - Public API
 
     func start() async {
+        // Idempotent: a second tap before `isListening` flips used to install
+        // another tap on a live engine (audio-thread fault class).
+        if isListening || audioEngine != nil {
+            stop()
+        }
+
+        sessionGeneration += 1
+        let generation = sessionGeneration
+
         let authorized = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
             }
         }
+        guard generation == sessionGeneration else { return }
         guard authorized else {
             errorMessage = "Speech recognition permission is off. Turn it on in Settings."
             return
@@ -136,12 +150,18 @@ class DictationService {
             return
         }
 
+        guard generation == sessionGeneration else {
+            cleanup()
+            return
+        }
+
         isListening = true
 
         // Poll the level storage on the main thread for UI updates
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
+                guard self.sessionGeneration == generation else { return }
                 self.audioLevel = storage.get()
             }
         }
@@ -151,12 +171,14 @@ class DictationService {
 
             if let result {
                 Task { @MainActor in
+                    guard self.sessionGeneration == generation else { return }
                     self.processResult(result)
                 }
             }
 
             if error != nil || (result?.isFinal ?? false) {
                 Task { @MainActor in
+                    guard self.sessionGeneration == generation else { return }
                     // `stop()` cancels the task, which reports an error too —
                     // only an unrequested failure is worth telling the user
                     // about. On-device recognition is required, so a device
@@ -173,6 +195,7 @@ class DictationService {
     }
 
     func stop() {
+        sessionGeneration += 1
         isStopping = true
         requestBox.withLock { $0?.endAudio() }
         cleanup()

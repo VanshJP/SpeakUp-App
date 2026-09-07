@@ -4,6 +4,7 @@ import Charts
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AudioService.self) private var audioService
     @State private var viewModel = HistoryViewModel()
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText = ""
@@ -15,6 +16,8 @@ struct HistoryView: View {
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
     var onShowGoals: () -> Void = {}
+    /// Empty-state CTA — typically switches to Today so the user can start a take.
+    var onStartPractice: () -> Void = {}
 
     // MARK: - Filtered Summaries
 
@@ -90,6 +93,9 @@ struct HistoryView: View {
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 if let summary = summaryToDelete {
+                    // Stop playback first — unlinking media under AVAudioPlayer
+                    // leaves a stuck isPlaying / decode error.
+                    audioService.stop()
                     Task {
                         await viewModel.deleteRecording(id: summary.id)
                     }
@@ -256,7 +262,9 @@ struct HistoryView: View {
                     title: selectedFilter == .all ? "No recordings yet" : "No matches",
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
-                        : "Try adjusting your filters or search terms."
+                        : "Try adjusting your filters or search terms.",
+                    buttonTitle: selectedFilter == .all && searchText.isEmpty ? "Start Speaking" : nil,
+                    buttonAction: selectedFilter == .all && searchText.isEmpty ? onStartPractice : nil
                 )
             } else {
                 LazyVStack(spacing: 12) {

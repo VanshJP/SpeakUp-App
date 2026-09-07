@@ -60,7 +60,7 @@ enum AppTourStep: Int, CaseIterable {
         case .stats:
             return "Streak up top, rings for sessions and scores. Tap the rings for full charts."
         case .tools:
-            return "Warm-ups open the voice, drills fix one weakness, calm settles nerves, and the wheel surprises you with a prompt. Customize which blocks show on Today anytime."
+            return "Warm-ups open the voice, drills fix one weakness, and calm settles nerves. Spin the Wheel lives under Library → Prompts. Customize which blocks show on Today anytime."
         case .library:
             return "Prompts and Stories are what you speak. Tools are how you prep — warm-ups, drills, read-aloud, calm."
         case .history:

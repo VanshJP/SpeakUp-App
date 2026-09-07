@@ -257,7 +257,7 @@ class SpeechService {
                 // from a voice profile built from the first 12 seconds. `analyze`
                 // still applies the primary-speaker gate for scoring, and the detail
                 // view renders the labels as speaker turns.
-                let outputText = self.transcriptText(
+                let outputText = SpeechService.joinTranscript(
                     from: finalWords,
                     fallback: result.text
                 )
@@ -476,7 +476,9 @@ class SpeechService {
         )
     }
     
-    private func transcriptText(from words: [TranscriptionWord], fallback: String) -> String {
+    /// Join timed words into transcript text. `nonisolated` so the GCD
+    /// post-process path does not hop MainActor just to concatenate strings.
+    nonisolated private static func joinTranscript(from words: [TranscriptionWord], fallback: String) -> String {
         let resolved = words
             .map(\.word)
             .joined(separator: " ")
@@ -580,22 +582,6 @@ class SpeechService {
             maxDelta: overallMaxDelta
         )
         analysis.llmEnhancedAt = Date()
-    }
-
-    // MARK: - WPM Time Series
-
-    /// Implementation lives in `SpeechAnalysisPipeline`; this wrapper stays
-    /// because the detail view builds playback charts off a bare service.
-    func computeWPMTimeSeries(
-        words: [TranscriptionWord],
-        actualDuration: TimeInterval,
-        windowSize: TimeInterval = 15.0
-    ) -> [WPMDataPoint] {
-        SpeechAnalysisPipeline.computeWPMTimeSeries(
-            words: words,
-            actualDuration: actualDuration,
-            windowSize: windowSize
-        )
     }
 
     // MARK: - LLM Score Stabilization
@@ -863,7 +849,10 @@ nonisolated enum SpeechAnalysisPipeline {
         let clarity = Double(subscores.clarity)
 
         // Compute WPM time series
-        let wpmTimeSeries = computeWPMTimeSeries(words: scoringWords, actualDuration: wpmDuration)
+        let wpmTimeSeries = SpeechAnalysisPipeline.computeWPMTimeSeries(
+            words: scoringWords,
+            actualDuration: wpmDuration
+        )
 
         return SpeechAnalysis(
             fillerWords: fillerWords,

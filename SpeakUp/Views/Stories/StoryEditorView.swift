@@ -156,7 +156,10 @@ struct StoryEditorView: View {
         .onDisappear {
             autoSaveTask?.cancel()
             dictationTask?.cancel()
-            if audioService.isRecording { audioService.cancelRecording() }
+            // Never cancel while stop is finalizing — that deletes the take.
+            if audioService.isRecording, !audioService.isFinalizingRecording {
+                audioService.cancelRecording()
+            }
             if isTranscribing { isTranscribing = false }
             finalSave()
         }

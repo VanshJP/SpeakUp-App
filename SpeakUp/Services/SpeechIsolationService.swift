@@ -4,8 +4,10 @@ import AVFoundation
 /// Speech-focused audio enhancement prior to ASR.
 /// Applies a light high-pass filter and adaptive noise gate to reduce
 /// stationary background noise while preserving near-field speech.
-enum SpeechIsolationService {
-    struct Result {
+/// Pure DSP — runs off the main actor inside `SpeechService.transcribe`'s
+/// GCD workers. Must stay `nonisolated` under MainActor default isolation.
+nonisolated enum SpeechIsolationService {
+    nonisolated struct Result: Sendable {
         let processedAudioURL: URL
         let metrics: AudioIsolationMetrics
     }
