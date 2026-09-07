@@ -584,22 +584,6 @@ class SpeechService {
         analysis.llmEnhancedAt = Date()
     }
 
-    // MARK: - WPM Time Series
-
-    /// Implementation lives in `SpeechAnalysisPipeline`; this wrapper stays
-    /// because the detail view builds playback charts off a bare service.
-    func computeWPMTimeSeries(
-        words: [TranscriptionWord],
-        actualDuration: TimeInterval,
-        windowSize: TimeInterval = 15.0
-    ) -> [WPMDataPoint] {
-        SpeechAnalysisPipeline.computeWPMTimeSeries(
-            words: words,
-            actualDuration: actualDuration,
-            windowSize: windowSize
-        )
-    }
-
     // MARK: - LLM Score Stabilization
 
     private func stabilizedLLMScore(baseline: Int, candidate: Int, maxDelta: Int) -> Int {
@@ -865,7 +849,10 @@ nonisolated enum SpeechAnalysisPipeline {
         let clarity = Double(subscores.clarity)
 
         // Compute WPM time series
-        let wpmTimeSeries = computeWPMTimeSeries(words: scoringWords, actualDuration: wpmDuration)
+        let wpmTimeSeries = SpeechAnalysisPipeline.computeWPMTimeSeries(
+            words: scoringWords,
+            actualDuration: wpmDuration
+        )
 
         return SpeechAnalysis(
             fillerWords: fillerWords,

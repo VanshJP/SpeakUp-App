@@ -530,8 +530,6 @@ class DrillViewModel {
         timer = nil
         stopAudioLevelMonitoring()
         liveTranscriptionService.stop()
-        // Respect in-flight stop finalize (pitch analysis) — AudioService.cleanup
-        // already no-ops cancel while finalizing.
         audioService.cleanup()
         // Fresh topic on the next selection; a kept topic would let "Try
         // Again" leak across different drill entries.
@@ -539,10 +537,6 @@ class DrillViewModel {
         emphasisTargetWord = ""
         levelSamples = []
         liveEnergySwing = 0
-        // Don't clear isAnalyzingPitch here if finishWithPitchAnalysis is still
-        // running — the dismiss gate needs it. The defer in that path clears it.
-        if !audioService.isFinalizingRecording {
-            isAnalyzingPitch = false
-        }
+        isAnalyzingPitch = false
     }
 }

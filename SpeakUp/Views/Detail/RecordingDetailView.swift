@@ -264,7 +264,6 @@ struct RecordingDetailView: View {
         .onDisappear {
             isDetailActive = false
             readySetupTask?.cancel()
-            readySetupTask = nil
             audioService.stop()
             if allowsCoachMoments, let moment = coachMoments.pendingDetail {
                 // Leaving before acting is not an explicit dismissal. Clear

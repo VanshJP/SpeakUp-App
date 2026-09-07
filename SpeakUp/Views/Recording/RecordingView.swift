@@ -220,7 +220,7 @@ struct RecordingView: View {
                     onSavedAndClosed?(recording)
                     onCancel()
                 },
-                analysisReady: recording.analysis != nil
+                analysisReady: recording.overallScore != nil || recording.transcriptionText != nil
             )
         }
         // When feedback is off: auto-navigate once processing completes.

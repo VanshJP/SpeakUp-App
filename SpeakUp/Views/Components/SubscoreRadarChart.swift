@@ -41,7 +41,10 @@ struct SubscoreRadarChart: View {
 
     @State private var drawProgress: CGFloat
     @State private var selectedAxis: Axis?
-    @State private var isAnimatingIn = false
+    /// Blocks re-entrant `animateIn` from overlapping transactions; also used
+    /// so a second `onAppear` (tab/scroll recreation) does not replay the
+    /// count-up bounce every time the chart is shown.
+    @State private var hasPlayedIntro = false
 
     /// Room reserved outside the annulus for the orbiting labels. Tightened
     /// from 52 — the labels were parked far enough out that the donut shrank
@@ -85,9 +88,24 @@ struct SubscoreRadarChart: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .aspectRatio(1, contentMode: .fit)
-        .onAppear { if animate { animateIn() } }
+        .onAppear {
+            guard animate else { return }
+            // One intro per chart identity — reopening detail must not bounce
+            // the center score from 0 every time.
+            guard !hasPlayedIntro else {
+                drawProgress = 1
+                return
+            }
+            hasPlayedIntro = true
+            animateIn()
+        }
         .onChange(of: animate) { _, newValue in
             if newValue {
+                guard !hasPlayedIntro else {
+                    drawProgress = 1
+                    return
+                }
+                hasPlayedIntro = true
                 animateIn()
             } else {
                 var resetTx = Transaction()
@@ -330,8 +348,6 @@ struct SubscoreRadarChart: View {
     }
 
     private func animateIn() {
-        guard !isAnimatingIn else { return }
-        isAnimatingIn = true
         // Reset must run outside any inherited animation transaction (e.g.
         // RecordingDetailView wraps `animate = true` in a 0.8s easeOut), or
         // the reset itself animates 1→0 and races the draw-in 0→1.
@@ -342,10 +358,6 @@ struct SubscoreRadarChart: View {
         }
         withAnimation(AppMotion.reveal) {
             drawProgress = 1
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(950))
-            isAnimatingIn = false
         }
     }
 }

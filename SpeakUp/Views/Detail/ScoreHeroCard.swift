@@ -32,7 +32,7 @@ struct ScoreHeroCard: View {
                 personalAverage: personalAverage,
                 showsWeightsButton: true,
                 showsPersonalContext: true,
-                animate: true,
+                animate: false,
                 interactive: true,
                 onShowWeights: onShowWeights
             )
