@@ -6,7 +6,9 @@ extension RecordingViewModel {
     // MARK: - Recording Control
 
     func startRecording() async {
-        guard !isRecording else { return }
+        // Block while a stop is still finalizing — VM clears `isRecording`
+        // before the service await returns.
+        guard !isRecording, !isProcessing, !audioService.isFinalizingRecording else { return }
         do {
             recordingURL = try await audioService.startRecording()
 
@@ -30,6 +32,7 @@ extension RecordingViewModel {
             }
         } catch {
             self.error = error
+            isRecording = false
         }
     }
 
@@ -44,6 +47,8 @@ extension RecordingViewModel {
         liveTranscriptionService.stop()
         coachingService.reset()
 
+        // `isProcessing` blocks a new start until finalize finishes — clearing
+        // `isRecording` alone used to let a double-tap start timers with no recorder.
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
         isProcessing = true

@@ -11,6 +11,9 @@ class AudioService: NSObject {
     // Recording
     private var audioRecorder: AVAudioRecorder?
     private var recordingSession: AVAudioSession?
+    /// Set synchronously at the top of `startRecording` so a second caller
+    /// cannot pass the idle guard while the first awaits permission.
+    private var isStartingRecording = false
     var isRecording = false
     var recordingURL: URL?
     var recordingDuration: TimeInterval = 0
@@ -121,22 +124,44 @@ class AudioService: NSObject {
     var isFinalizingRecording: Bool { recordingCompletion != nil }
 
     func startRecording() async throws -> URL {
-        // Re-entrancy: a second tap before `isRecording` flips used to spawn
+        // Never start while a stop is finalizing — `recordingURL` still points
+        // at the dying file and must not be returned to a new caller.
+        guard recordingCompletion == nil else {
+            throw AudioServiceError.recordingFailed(NSError(
+                domain: "AudioService",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "Recording is still finalizing"]
+            ))
+        }
+        // Re-entrancy: reserve before any await so a second tap cannot spawn
         // two AVAudioRecorders on one session.
-        guard !isRecording, recordingCompletion == nil, audioRecorder == nil else {
-            if let recordingURL { return recordingURL }
+        guard !isRecording, !isStartingRecording, audioRecorder == nil else {
+            if isRecording, let recordingURL {
+                return recordingURL
+            }
             throw AudioServiceError.recordingFailed(NSError(
                 domain: "AudioService",
                 code: -2,
                 userInfo: [NSLocalizedDescriptionKey: "Recording already in progress"]
             ))
         }
+        isStartingRecording = true
+        defer { isStartingRecording = false }
 
         if !hasPermission {
             let granted = await requestPermission()
             guard granted else {
                 throw AudioServiceError.noPermission
             }
+        }
+
+        // Re-check after the permission await — another start/stop may have won.
+        guard recordingCompletion == nil, !isRecording, audioRecorder == nil else {
+            throw AudioServiceError.recordingFailed(NSError(
+                domain: "AudioService",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Recording already in progress"]
+            ))
         }
         
         // Always capture to local Documents. iCloud promotion happens after stop.
@@ -155,6 +180,7 @@ class AudioService: NSObject {
 
             let started = audioRecorder?.record() ?? false
             guard started else {
+                audioRecorder = nil
                 throw AudioServiceError.recordingFailed(NSError(domain: "AudioService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to start recording"]))
             }
 
@@ -176,6 +202,9 @@ class AudioService: NSObject {
 
             return audioFilename
         } catch {
+            audioRecorder = nil
+            isRecording = false
+            recordingURL = nil
             throw AudioServiceError.recordingFailed(error)
         }
     }
