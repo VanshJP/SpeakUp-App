@@ -28,6 +28,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | Legacy store + `SchemaV1`: verify before release; CloudKit-strip fallback | 17 |
 | New projection column reads nil on legacy rows | 18 |
 | CloudKit push warning / cfprefsd "detaching" console noise | 19 |
+| A root tab's toolbar item renders nowhere; a pushed page loses Back | 20 |
 
 ## Punch list
 
@@ -46,6 +47,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 12. Make `requiresOnDeviceRecognition` conditional — audio leaves the device.
 13. `installTap` / `removeTap` on a running `AVAudioEngine` — audio-thread segfault, no app frames.
 14. Plain `ScrollView` for a full-screen page — use `PageScrollView`.
+15. A `topBarTrailing` toolbar item on a root tab (or on any view inside one) — root tabs have no navigation bar.
 
 ---
 
@@ -248,3 +250,16 @@ Score aggregations (Today heavy load, History summaries, practice charts) should
 **`BUG IN CLIENT OF CLOUDKIT: … 'remote-notification' background mode`** — real misconfiguration when the sync toggle is on: CloudKit push needs `UIBackgroundModes = [remote-notification]` in the app's Info.plist. It lives in `SpeakUp/Info.plist`; if it ever disappears, subscriptions stop delivering and widgets/notifications silently degrade.
 
 **`CFPrefsPlistSource … kCFPreferencesAnyUser with a container … detaching from cfprefsd`** — fired by touching an App Group suite from a process that does not hold the entitlement (Xcode Previews, some test hosts). Harmless to the shipping app, but don't chase it with re-runs. Both `WidgetDataProvider`s guard on `FileManager.containerURL(forSecurityApplicationGroupIdentifier:) != nil` before touching the suite and return nil otherwise — keep that guard; never "fix" it by falling back to `.standard`, which would write widget data into a domain the widget can never read.
+
+---
+
+## 20. Root tabs have no navigation bar
+
+All five root tabs hide it (`.toolbar(.hidden, for: .navigationBar)`): the bar's only content was the tab's own name, repeated from the tab button under it, and `.searchable` hung ~50pt more off it.
+
+Two consequences, both silent:
+
+- **A `topBarTrailing` `ToolbarItem` declared anywhere inside a root tab renders nowhere.** There is no bar to put it in, and nothing warns. `AllPromptsView` and `StoriesListView` both used to declare one from inside Library. Put the control in the page instead, wearing `.headerIconChrome()` — next to the chips or list it acts on.
+- **A page pushed from a bar-less root should say `.restoresNavigationBar()`.** SwiftUI resolves toolbar visibility per view in the stack, so a push gets its bar back on its own — but a detail page silently missing its Back button is an expensive thing to be wrong about, so the pushes from these four roots declare it.
+
+Search on a root tab is `InlineSearchField` in the page's own scroll content, not `.searchable`; it also needs `.scrollDismissesKeyboard(.interactively)`, which `.searchable` used to supply. Full rules: [features/ui-design-system.md](./features/ui-design-system.md) §9.

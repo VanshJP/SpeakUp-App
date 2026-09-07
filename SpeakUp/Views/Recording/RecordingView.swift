@@ -57,7 +57,10 @@ struct RecordingView: View {
                 recordingContent
             }
         }
-        .ignoresSafeArea()
+        // No blanket `.ignoresSafeArea()`. Every backdrop this screen can wear
+        // bleeds on its own (`RecordingBackdropView`, `AppBackground`), and
+        // consuming the insets here is what pushed the prompt card under the
+        // status bar and left the controls guessing with a hard-coded 50pt.
         .animation(AppMotion.settle, value: completedRecording?.id)
         .animation(AppMotion.settle, value: revealRecording?.id)
         .task {
@@ -151,14 +154,18 @@ struct RecordingView: View {
         ZStack {
             audioBackground
 
+            // Three slots, no spacers: status on top, dial in the middle
+            // taking whatever is left, controls along the bottom. The old
+            // `Spacer() / dial / Spacer()` parked a fixed 200pt dial in a
+            // ~380pt gap and left the ~90pt on either side of it empty, on the
+            // one screen that has nothing else to show.
             VStack(spacing: 0) {
                 topBar
-                Spacer()
-                centerContent
-                Spacer()
+                sessionStage
                 bottomControls
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
     }
 
@@ -387,13 +394,14 @@ struct RecordingView: View {
                 sessionOptionsMenu
             }
 
-            if let focusPlan, !focusPlan.isGraduating {
-                focusIntentPill(focusPlan)
-            }
-
-            // Compact prompt card at top (during recording)
+            // The focus rides on the prompt card's meta line rather than in a
+            // pill of its own: two stacked capsules saying "Personal Growth"
+            // and "Vocal variety" were two rows of chrome for one sentence of
+            // context. Without a card it still needs somewhere to live.
             if let prompt, viewModel.isRecording {
                 compactPromptCard(prompt)
+            } else if let focusPlan, !focusPlan.isGraduating {
+                focusIntentPill(focusPlan)
             }
 
             if showingVocabStrip, !overlayWords.isEmpty {
@@ -405,11 +413,11 @@ struct RecordingView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .padding(.top, 50)
         .animation(AppMotion.settle, value: showingVocabStrip)
     }
 
-    /// The one thing to hold in mind during this take.
+    /// The one thing to hold in mind during this take, for sessions with no
+    /// prompt card to carry it (story practice, free takes).
     ///
     /// Names the technique before the countdown ends, then drops to just the
     /// area once recording starts — mid-take is the wrong moment to hand
@@ -504,27 +512,60 @@ struct RecordingView: View {
         overlayTitle = "Your Words"
     }
 
+    /// The prompt, mid-take. Two lines of `.subheadline` used to truncate the
+    /// back half of anything longer than a sentence while a third of the screen
+    /// below it sat empty; the space the dial slot doesn't need is better spent
+    /// on the question being answered.
     private func compactPromptCard(_ prompt: Prompt) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(prompt.category)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.6))
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Text(prompt.category)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+
+                if let focusPlan, !focusPlan.isGraduating {
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.3))
+
+                    Label(focusPlan.focus.title, systemImage: "scope")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(AppColors.primary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
 
             Text(prompt.text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(2)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(cornerRadius: 14)
-        .padding(.horizontal, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(promptCardAccessibilityLabel(prompt))
     }
 
-    // MARK: - Center Content
+    private func promptCardAccessibilityLabel(_ prompt: Prompt) -> String {
+        var parts = ["\(prompt.category). \(prompt.text)"]
+        if let focusPlan, !focusPlan.isGraduating {
+            parts.append("This take's focus: \(focusPlan.focus.title)")
+        }
+        return parts.joined(separator: ". ")
+    }
 
-    private var centerContent: some View {
-        VStack(spacing: 24) {
+    // MARK: - Session Stage
+
+    /// The dial, in a slot that owns everything the top bar and the controls
+    /// didn't take. The countdown draws the identical slot at the identical
+    /// size, so starting a take moves nothing but the prompt card.
+    private var sessionStage: some View {
+        SessionDialSlot(spacing: 24) { diameter in
             // Framework overlay
             if let framework = selectedFramework, viewModel.isRecording {
                 FrameworkOverlayView(
@@ -544,7 +585,8 @@ struct RecordingView: View {
                 timerLabel: viewModel.timerLabel,
                 // Same dial the countdown just drew — the look is picked once
                 // in Settings and has to survive the hand-off to recording.
-                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
+                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
+                diameter: diameter
             )
         }
     }
@@ -629,7 +671,10 @@ struct RecordingView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .animation(.easeInOut(duration: 0.2), value: isRecording)
         }
-        .padding(.bottom, 40)
+        // The safe area already holds the controls clear of the home
+        // indicator; the old 40pt on top of it was a second guess at the
+        // same gap.
+        .padding(.bottom, 8)
     }
 
     private func handleRecordingCompletion(_ recording: Recording) {
@@ -818,9 +863,11 @@ struct CircularWaveformView: View {
 ///
 /// This used to read Speaking / Silent off the instantaneous level, so it
 /// strobed between every two words: a label that changes four times a sentence
-/// is read as broken, not informative. `AudioService.isHearingInput` holds a
-/// decaying peak, so this only changes when something is actually wrong, and
-/// the words only appear when there is something to say.
+/// is read as broken, not informative. `AudioService.isHearingInput` starts a
+/// take green, drops to the warning only if the first few seconds bring in
+/// nothing at all, and latches green for good the moment the mic is proven to
+/// work — so this changes at most twice a take, and the words only appear when
+/// there is something to say.
 ///
 /// Not private: the drill screen shows the same indicator, driven by the same
 /// service state.

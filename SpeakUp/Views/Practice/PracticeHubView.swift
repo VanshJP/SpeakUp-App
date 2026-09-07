@@ -50,11 +50,19 @@ struct PracticeHubView: View {
         ZStack(alignment: .bottomTrailing) {
             PageScrollView {
                 LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
+                    // Search scrolls away with the content, the picker pins.
+                    // Each section's own filter / sort control sits inside that
+                    // section, next to the chips it acts on, instead of in a
+                    // nav bar this page no longer has.
+                    InlineSearchField(text: activeSearchText, prompt: searchPrompt) {
+                        EmptyView()
+                    }
+
                     Section {
-                        // Each section owns a topBarTrailing toolbar item. A
+                        // Sections swap instantly rather than crossfading: a
                         // crossfade keeps the outgoing section alive for the
-                        // animation, so two filter buttons render at once —
-                        // swap instantly instead. The picker pill still slides.
+                        // animation, so two filter controls would render at
+                        // once. The picker pill still slides.
                         switch selectedSection {
                         case .prompts:
                             AllPromptsView(
@@ -81,21 +89,22 @@ struct PracticeHubView: View {
                         pinnedSectionPicker
                     }
                 }
+                .padding(.top, 4)
                 .pageContentInsets()
             }
             .scrollIndicators(.hidden)
+            // `.searchable` used to hand this over for free; an inline field
+            // has to say it, or the keyboard sits over half the results.
+            .scrollDismissesKeyboard(.interactively)
 
             floatingActionButton
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        // The tab bar names the tab; the nav row names the page you are on.
-        // Inline (never large) so the title costs no height the trailing
-        // filter / trophy button was not already reserving.
-        .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: activeSearchText, prompt: searchPrompt)
+        // No nav bar. It carried the word "Library" above a tab button
+        // labelled Library, and `.searchable` hung off it — together ~100pt of
+        // permanent chrome above a picker, a chip row, and only then a prompt.
+        .toolbar(.hidden, for: .navigationBar)
         .onChange(of: storiesSearchText) { _, newValue in
             storiesViewModel.setSearch(newValue)
         }
@@ -112,9 +121,11 @@ struct PracticeHubView: View {
                 onSendToWarmUp: onSendToWarmUp,
                 onSendToDrill: onSendToDrill
             )
+            .restoresNavigationBar()
         }
         .navigationDestination(item: $compareRoute) { _ in
             ComparisonView()
+                .restoresNavigationBar()
         }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()
@@ -423,9 +434,11 @@ struct PracticeHubView: View {
     // MARK: - Pinned Section Picker
 
     private var pinnedSectionPicker: some View {
-        sectionPicker
-            .padding(.top, 4)
-            .padding(.bottom, 10)
+        PinnedPageHeader {
+            sectionPicker
+        } accessory: {
+            EmptyView()
+        }
     }
 
     // MARK: - Section Picker

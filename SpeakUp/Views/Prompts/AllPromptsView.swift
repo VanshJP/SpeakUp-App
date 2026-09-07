@@ -87,7 +87,7 @@ extension AllPromptsView {
             VStack(spacing: 16) {
                 if selectedCategory == nil {
                     VStack(spacing: 16) {
-                        filterChips
+                        filterRow(prompts)
                         landingContent(prompts)
                     }
                     .transition(.asymmetric(
@@ -101,25 +101,19 @@ extension AllPromptsView {
                             removal: .push(from: .leading)
                         ))
                 }
-            },
-            prompts: prompts
+            }
         )
     }
 
     /// Sheet/importer/alert tail, kept out of `body` so each builder
     /// expression stays inside the compiler's type-check budget.
-    private func screenDecorations(_ base: some View, prompts: [Prompt]) -> some View {
+    private func screenDecorations(_ base: some View) -> some View {
         base
             .task {
                 await loadAnsweredPromptIDs()
             }
             .onChange(of: allPrompts.count) { _, _ in
                 Task { await loadAnsweredPromptIDs() }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    toolbarFilterMenu(prompts)
-                }
             }
             .sheet(isPresented: $showingAddPrompt) {
                 AddPromptView()
@@ -178,9 +172,12 @@ extension AllPromptsView {
                 }
             }
     }
-    // MARK: - Toolbar Menus
+    // MARK: - Filter / Import Menu
 
-    private func toolbarFilterMenu(_ prompts: [Prompt]) -> some View {
+    /// Lives at the trailing end of the chip row, not in a navigation bar —
+    /// Library has no nav bar to hang it from, and the control that narrows
+    /// the list reads better sitting on the row that already narrows it.
+    private func filterMenu(_ prompts: [Prompt]) -> some View {
         Menu {
             Section("Export & Import") {
                 Button {
@@ -223,12 +220,21 @@ extension AllPromptsView {
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.body.weight(.semibold))
+                .foregroundStyle(hasActiveFilters ? AppColors.primary : Color.white.opacity(0.75))
                 .symbolVariant(hasActiveFilters ? .fill : .none)
+                .headerIconChrome()
         }
+        .accessibilityLabel("Filter and import prompts")
     }
 
     // MARK: - Filter Chips
+
+    private func filterRow(_ prompts: [Prompt]) -> some View {
+        HStack(spacing: 8) {
+            filterChips
+            filterMenu(prompts)
+        }
+    }
 
     private var filterChips: some View {
         ScrollView(.horizontal) {
@@ -435,6 +441,7 @@ extension AllPromptsView {
             backToCategoriesButton
             countLabel(prompts)
             Spacer(minLength: 0)
+            filterMenu(prompts)
         }
         activeFiltersRow
         promptResults(prompts)

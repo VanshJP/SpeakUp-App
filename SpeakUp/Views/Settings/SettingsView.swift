@@ -15,15 +15,14 @@ struct SettingsView: View {
 
                 aboutFooter
             }
+            .padding(.top, 8)
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // The tab bar names the tab; the nav row names the page you are on.
-        // Inline (never large) so the title costs no height the trailing
-        // filter / trophy button was not already reserving.
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        // No nav bar, same as every other root tab: the row held the word
+        // "Settings" above a tab button labelled Settings and nothing else.
+        // Pushed detail pages still have their own title and Back.
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)
         }
@@ -220,6 +219,7 @@ struct SettingsView: View {
     private var aboutFooter: some View {
         NavigationLink {
             AboutSettingsView()
+                .restoresNavigationBar()
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "info.circle")
@@ -358,6 +358,7 @@ struct SettingsView: View {
     ) -> some View {
         NavigationLink {
             destination()
+                .restoresNavigationBar()
         } label: {
             GlassCard(padding: 14) {
                 HStack(spacing: 14) {

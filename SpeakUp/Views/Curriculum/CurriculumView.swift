@@ -13,6 +13,8 @@ struct CurriculumView: View {
             // list follows — no intro card and no second stats card fighting
             // the one action that matters.
             LazyVStack(spacing: AppLayout.chapterSpacing) {
+                awardsRow
+
                 if let currentLesson = viewModel.currentLesson,
                    let currentPhase = viewModel.currentPhase {
                     continueCard(lesson: currentLesson, phase: currentPhase)
@@ -26,27 +28,10 @@ struct CurriculumView: View {
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // The tab bar names the tab; the nav row names the page you are on.
-        // Inline (never large) so the title costs no height the trailing
-        // filter / trophy button was not already reserving.
-        .navigationTitle("Learn")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Haptics.light()
-                    showingAwards = true
-                } label: {
-                    // Gold and filled: awards are the one celebratory affordance
-                    // in the chrome, so it reads as a prize rather than a setting.
-                    Image(systemName: "trophy.fill")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(AppColors.scoreGood)
-                }
-                .accessibilityLabel("Achievements")
-            }
-        }
+        // No nav bar, same as every other root tab: it said "Learn" above a tab
+        // button labelled Learn and reserved 44pt permanently for one button.
+        // `awardsRow` carries that button and scrolls away with the content.
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingAwards) {
             NavigationStack {
                 AchievementGalleryView()
@@ -63,6 +48,29 @@ struct CurriculumView: View {
         }
     }
 
+    // MARK: - Awards Row
+
+    /// The one piece of chrome this page needs, on its own row instead of in a
+    /// navigation bar. Nothing else belongs beside it: the Continue card below
+    /// is the page's single action.
+    private var awardsRow: some View {
+        HStack {
+            Spacer(minLength: 0)
+
+            Button {
+                Haptics.light()
+                showingAwards = true
+            } label: {
+                // Gold and filled: awards are the one celebratory affordance
+                // in the chrome, so it reads as a prize rather than a setting.
+                Image(systemName: "trophy.fill")
+                    .foregroundStyle(AppColors.scoreGood)
+                    .headerIconChrome()
+            }
+            .accessibilityLabel("Achievements")
+        }
+    }
+
     // MARK: - Continue Card
 
     /// The single action on this screen. Progress is a quiet accessory in the
@@ -70,6 +78,7 @@ struct CurriculumView: View {
     private func continueCard(lesson: CurriculumLesson, phase: CurriculumPhase) -> some View {
         NavigationLink {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
+                .restoresNavigationBar()
         } label: {
             GlassCard(padding: 18, elevated: true) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -138,6 +147,7 @@ struct CurriculumView: View {
                     if isAccessible {
                         NavigationLink {
                             LessonDetailView(lesson: lesson, viewModel: viewModel)
+                                .restoresNavigationBar()
                         } label: {
                             lessonPathRow(lesson, at: index, in: phase, isLocked: false)
                         }

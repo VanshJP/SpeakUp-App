@@ -34,15 +34,22 @@ struct StoriesListView: View {
             // No stats strip — folder counts and tag counts were inventory
             // numbers nobody acts on. The folder bar and the list already say
             // how much is here.
-            StoryFolderBar(
-                viewModel: viewModel,
-                onCreateFolder: {
-                    folderEditorPresentation = .create
-                },
-                onEditFolder: { folder in
-                    folderEditorPresentation = .edit(folder)
-                }
-            )
+            // Sort sits at the end of the folder bar rather than in a
+            // navigation bar: Library has none, and the control that reorders
+            // the list belongs on the row that already filters it.
+            HStack(spacing: 8) {
+                StoryFolderBar(
+                    viewModel: viewModel,
+                    onCreateFolder: {
+                        folderEditorPresentation = .create
+                    },
+                    onEditFolder: { folder in
+                        folderEditorPresentation = .edit(folder)
+                    }
+                )
+
+                sortMenu
+            }
 
             if viewModel.stories.isEmpty {
                 EmptyStateCard(
@@ -60,11 +67,6 @@ struct StoriesListView: View {
                 .padding(.top, 20)
             } else {
                 storyList
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                toolbarSortMenu
             }
         }
         .sheet(item: $folderEditorPresentation) { presentation in
@@ -235,9 +237,9 @@ struct StoriesListView: View {
         }
     }
 
-    // MARK: - Toolbar
+    // MARK: - Sort Menu
 
-    private var toolbarSortMenu: some View {
+    private var sortMenu: some View {
         Menu {
             Section("Sort") {
                 ForEach(StorySortOrder.allCases) { order in
@@ -265,8 +267,11 @@ struct StoriesListView: View {
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.body.weight(.semibold))
+                .foregroundStyle(viewModel.hasActiveFilters ? AppColors.primary : Color.white.opacity(0.75))
+                .symbolVariant(viewModel.hasActiveFilters ? .fill : .none)
+                .headerIconChrome()
         }
+        .accessibilityLabel("Sort and filter stories")
     }
 
 }

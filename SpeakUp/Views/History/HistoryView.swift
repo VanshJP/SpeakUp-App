@@ -45,6 +45,15 @@ struct HistoryView: View {
     var body: some View {
         PageScrollView {
             LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
+                // Search scrolls away with the content, the picker pins. The
+                // nav bar it replaces was permanent and said "History" above a
+                // tab button already labelled History.
+                if selectedSection == .recordings {
+                    InlineSearchField(text: $searchText, prompt: "Search recordings…") {
+                        filterMenu
+                    }
+                }
+
                 Section {
                     switch selectedSection {
                     case .recordings:
@@ -67,23 +76,18 @@ struct HistoryView: View {
                     pinnedSectionPicker
                 }
             }
+            .padding(.top, 4)
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // The tab bar names the tab; the nav row names the page you are on.
-        // Inline (never large) so the title costs no height the trailing
-        // filter / trophy button was not already reserving.
-        .navigationTitle("History")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            if selectedSection == .recordings {
-                ToolbarItem(placement: .topBarTrailing) {
-                    filterMenu
-                }
-            }
-        }
-        .searchable(text: $searchText, prompt: "Search recordings...")
+        // `.searchable` used to hand this over for free; an inline field has
+        // to say it, or the keyboard sits over half the results.
+        .scrollDismissesKeyboard(.interactively)
+        // No nav bar. The tab bar already names the tab, so the row held one
+        // redundant word plus a filter button, and `.searchable` hung another
+        // 50pt off it — ~100pt of permanent chrome before the first recording.
+        // `InlineSearchField` and the pinned picker are this page's header now.
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
         }
@@ -155,7 +159,7 @@ struct HistoryView: View {
         switch tool {
         case .compare:
             if viewModel.summaries.count >= 2 {
-                NavigationLink { ComparisonView() } label: {
+                NavigationLink { ComparisonView().restoresNavigationBar() } label: {
                     ToolTileLabel(icon: tool.icon, title: tool.title, tint: tool.color)
                 }
                 .buttonStyle(GlassPressStyle())
@@ -187,9 +191,11 @@ struct HistoryView: View {
     // MARK: - Pinned Section Picker
 
     private var pinnedSectionPicker: some View {
-        sectionPicker
-            .padding(.top, 4)
-            .padding(.bottom, 10)
+        PinnedPageHeader {
+            sectionPicker
+        } accessory: {
+            EmptyView()
+        }
     }
 
     // MARK: - Section Picker
@@ -205,8 +211,9 @@ struct HistoryView: View {
 
     // MARK: - Filter Menu
 
-    /// Filters live in the toolbar, not in a chip row above the list — three
-    /// options don't justify a scrolling row between you and your sessions.
+    /// Filters ride on the search row, not in a chip row above the list —
+    /// three options don't justify a scrolling row between you and your
+    /// sessions, and they belong next to the other way of narrowing the list.
     private var filterMenu: some View {
         Menu {
             ForEach(HistoryFilter.allCases) { filter in
@@ -224,8 +231,9 @@ struct HistoryView: View {
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.body.weight(.semibold))
+                .foregroundStyle(selectedFilter == .all ? Color.white.opacity(0.75) : AppColors.primary)
                 .symbolVariant(selectedFilter == .all ? .none : .fill)
+                .headerIconChrome()
         }
         .accessibilityLabel("Filter sessions")
     }

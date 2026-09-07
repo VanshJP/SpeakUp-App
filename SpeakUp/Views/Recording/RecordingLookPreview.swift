@@ -32,23 +32,20 @@ struct RecordingLookPreview: View {
 
             VStack(spacing: 0) {
                 previewBadge
-                    .padding(.top, 56)
 
-                Spacer()
-
+                // Same three-slot shape as the real session screens, so the
+                // try-on shows the dial at the size it will actually be.
                 if isRecording {
                     recordingPhase
                 } else {
                     countdownPhase
                 }
 
-                Spacer()
-
                 controls
             }
             .padding(.horizontal, 20)
+            .padding(.vertical, 8)
         }
-        .ignoresSafeArea()
         // The record button is the exit this screen is teaching, but it is the
         // bottom of a fixed-height stack — at accessibility text sizes on a
         // small phone it can run off the edge, and a full-screen cover has no
@@ -63,7 +60,7 @@ struct RecordingLookPreview: View {
             }
             .accessibilityLabel("Close preview")
             .padding(.leading, 20)
-            .padding(.top, 56)
+            .padding(.top, 8)
         }
         .animation(AppMotion.settle, value: isRecording)
         .task(id: isRecording) {
@@ -84,14 +81,14 @@ struct RecordingLookPreview: View {
     // MARK: - Phases
 
     private var countdownPhase: some View {
-        VStack(spacing: 20) {
+        SessionDialSlot(spacing: 20) { diameter in
             TimerDial(
                 look: countdownLook,
                 progress: progress,
                 text: "\(displayNumber)",
                 caption: "sec",
                 isPulsing: isPulsing,
-                diameter: 200
+                diameter: diameter
             )
 
             phaseLabel("Getting ready")
@@ -99,7 +96,7 @@ struct RecordingLookPreview: View {
     }
 
     private var recordingPhase: some View {
-        VStack(spacing: 20) {
+        SessionDialSlot(spacing: 20) { diameter in
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let elapsed = Int(context.date.timeIntervalSinceReferenceDate.rounded(.down)) % 60
                 let remaining = TimeInterval(60 - elapsed)
@@ -109,7 +106,8 @@ struct RecordingLookPreview: View {
                     color: AppColors.recording,
                     isRecording: true,
                     timerLabel: "remaining",
-                    look: countdownLook
+                    look: countdownLook,
+                    diameter: diameter
                 )
             }
 
@@ -154,7 +152,7 @@ struct RecordingLookPreview: View {
                         .fill(.ultraThinMaterial)
                 }
         }
-        .padding(.bottom, 50)
+        .padding(.bottom, 8)
         .accessibilityElement(children: .contain)
     }
 

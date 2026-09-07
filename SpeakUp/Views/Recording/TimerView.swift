@@ -8,9 +8,10 @@ import SwiftUI
 /// clock fell back to a plain ring nobody chose. Both screens render through
 /// this now, so the look the user picks is the look they record with.
 ///
-/// Geometry is expressed against a 150pt dial and scaled by `diameter`, so the
-/// countdown (150) and the recording clock (200) are the same drawing at two
-/// sizes rather than two drawings.
+/// Geometry is expressed against a 150pt dial and scaled by `diameter`, so a
+/// settings thumbnail and a full-screen session clock are the same drawing at
+/// two sizes rather than two drawings. Session screens get their `diameter`
+/// from `SessionDialSlot`, never from a literal.
 struct TimerDial: View {
     let look: TimerLook
     let progress: Double
@@ -152,6 +153,58 @@ struct TimerDial: View {
     }
 }
 
+// MARK: - Session Dial Slot
+
+/// Sizing rules for the dial in the middle of a session screen.
+///
+/// The number is derived from the space the slot actually has, never written
+/// down at a call site: a fixed dial is either lost in the middle of a modern
+/// phone or shoving the record button off the bottom of a small one, and the
+/// countdown and the recording screen have to agree on it either way.
+nonisolated enum SessionDial {
+    /// Below this the reading stops being glanceable — but never at the cost
+    /// of overflowing a slot that is genuinely smaller (see `diameter`).
+    static let minDiameter: CGFloat = 170
+    /// Above this the `.minimal` look's 64pt-per-150 numerals get silly.
+    static let maxDiameter: CGFloat = 260
+    /// Share of the slot's short side the dial takes, leaving the rest as
+    /// breathing room above and below.
+    static let slotFill: CGFloat = 0.8
+
+    static func diameter(fitting size: CGSize) -> CGFloat {
+        let side = min(size.width, size.height)
+        guard side > 0 else { return minDiameter }
+        // The floor is itself clamped to the slot, so a squeezed slot (large
+        // accessibility text, a small phone) shrinks the dial instead of
+        // pushing the controls under the home indicator.
+        return min(max(side * slotFill, min(side, minDiameter)), maxDiameter)
+    }
+}
+
+/// The middle of a session screen: the dial, plus anything stacked with it,
+/// sized to whatever the top and bottom slots left over.
+///
+/// This replaced `Spacer() / dial / Spacer()` around a hard-coded 200pt dial.
+/// On a 6.3" phone that arrangement parked the dial in a ~380pt gap and left
+/// the ~90pt on either side of it empty, on the one screen that has nothing
+/// else to show. The slot claims that space and spends it on the dial instead,
+/// and gives it back when the top and bottom grow.
+struct SessionDialSlot<Content: View>: View {
+    var spacing: CGFloat = 18
+    /// Receives the resolved diameter — pass it straight to `TimerDial` /
+    /// `TimerView` rather than picking a number.
+    @ViewBuilder var content: (CGFloat) -> Content
+
+    var body: some View {
+        GeometryReader { geo in
+            VStack(spacing: spacing) {
+                content(SessionDial.diameter(fitting: geo.size))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
 /// The recording clock: a `TimerDial` fed a formatted mm:ss reading.
 struct TimerView: View {
     let remainingTime: TimeInterval
@@ -161,6 +214,9 @@ struct TimerView: View {
     var isOvertime: Bool = false
     var timerLabel: String = "remaining"
     var look: TimerLook = .ring
+    /// Comes from `SessionDialSlot`. The default is the old fixed size, kept
+    /// for previews and thumbnails that have no slot to measure.
+    var diameter: CGFloat = 200
 
     var body: some View {
         TimerDial(
@@ -170,7 +226,7 @@ struct TimerView: View {
             caption: isRecording ? timerLabel : "ready",
             accent: color,
             textColor: isOvertime ? color : .white,
-            diameter: 200,
+            diameter: diameter,
             // 10 Hz timer upstream. Plain linear, not `.motion`: this is a
             // clock reading, not decoration, so it keeps interpolating under
             // Reduce Motion.
