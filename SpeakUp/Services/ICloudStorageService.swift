@@ -108,7 +108,8 @@ final class ICloudStorageService {
                 .appendingPathComponent("Documents")
                 .appendingPathComponent(recordingsSubdirectory)
                 .appendingPathComponent(filename)
-            if FileManager.default.fileExists(atPath: iCloudPath.path) {
+            if FileManager.default.fileExists(atPath: iCloudPath.path),
+               MediaPath.isUnderAllowedMediaRoot(iCloudPath, ubiquityContainer: ubiquityURL) {
                 return iCloudPath
             }
 
@@ -116,7 +117,8 @@ final class ICloudStorageService {
             let iCloudPlaceholder = iCloudPath
                 .deletingLastPathComponent()
                 .appendingPathComponent(".\(filename).icloud")
-            if FileManager.default.fileExists(atPath: iCloudPlaceholder.path) {
+            if FileManager.default.fileExists(atPath: iCloudPlaceholder.path),
+               MediaPath.isUnderAllowedMediaRoot(iCloudPath, ubiquityContainer: ubiquityURL) {
                 // Trigger download and return the expected final path
                 try? FileManager.default.startDownloadingUbiquitousItem(at: iCloudPath)
                 return iCloudPath
@@ -125,7 +127,8 @@ final class ICloudStorageService {
 
         // Fall back to local Documents
         let localPath = Self.localDocumentsDirectory.appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: localPath.path) {
+        if FileManager.default.fileExists(atPath: localPath.path),
+           MediaPath.isUnderAllowedMediaRoot(localPath) {
             return localPath
         }
 

@@ -263,8 +263,8 @@ struct HistoryView: View {
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
                         : "Try adjusting your filters or search terms.",
-                    buttonTitle: selectedFilter == .all ? "Start Speaking" : nil,
-                    buttonAction: selectedFilter == .all ? onStartPractice : nil
+                    buttonTitle: selectedFilter == .all && searchText.isEmpty ? "Start Speaking" : nil,
+                    buttonAction: selectedFilter == .all && searchText.isEmpty ? onStartPractice : nil
                 )
             } else {
                 LazyVStack(spacing: 12) {

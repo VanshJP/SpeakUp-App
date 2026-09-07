@@ -79,7 +79,7 @@ class SettingsViewModel {
     var chirpSoundEnabled: Bool = true
 
     // Local state - Session Feedback
-    var sessionFeedbackEnabled: Bool = true
+    var sessionFeedbackEnabled: Bool = false
     var customFeedbackQuestions: [FeedbackQuestion] = []
     var showingAddFeedbackQuestion: Bool = false
     var newFeedbackQuestionText: String = ""
@@ -723,7 +723,7 @@ class SettingsViewModel {
         settings.customContextFillerWords = []
         settings.removedDefaultFillers = []
         settings.chirpSoundEnabled = true
-        settings.sessionFeedbackEnabled = true
+        settings.sessionFeedbackEnabled = false
         settings.customFeedbackQuestions = []
 
         // Voice Profile

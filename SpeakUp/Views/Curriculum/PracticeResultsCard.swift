@@ -57,16 +57,24 @@ struct PracticeResultsCard: View {
             primaryTip = nil
             resolveAnalysisIfNeeded()
         }
+        .onChange(of: targetWPM) { _, _ in
+            refreshPrimaryTip()
+        }
     }
 
     private func resolveAnalysisIfNeeded() {
         guard analysis == nil else { return }
         guard let decoded = recording.analysis else { return }
         analysis = decoded
+        refreshPrimaryTip()
+    }
+
+    private func refreshPrimaryTip() {
+        guard let analysis else { return }
         // Same tip engine as Recording Detail — curriculum practice should not
         // invent a second coaching voice.
         primaryTip = CoachingTipService.generateTips(
-            from: decoded,
+            from: analysis,
             context: CoachingContext(targetWPM: targetWPM)
         ).first
     }

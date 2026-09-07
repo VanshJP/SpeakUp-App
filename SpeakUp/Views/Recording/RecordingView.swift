@@ -180,16 +180,22 @@ struct RecordingView: View {
 
     private var feedbackGateActive: Bool {
         // Same activation rule as Recording Detail: never put a questionnaire
-        // in front of the first scored take.
-        feedbackEnabled && !feedbackQuestions.isEmpty && !isFirstAnalyzedSession
+        // in front of the first scored take. Exclude the active recording so
+        // its own transcriptionText landing mid-gate cannot flip the bypass off.
+        guard let id = completedRecording?.id else {
+            return feedbackEnabled && !feedbackQuestions.isEmpty
+        }
+        return feedbackEnabled && !feedbackQuestions.isEmpty && !isFirstAnalyzedSession(excluding: id)
     }
 
-    /// True when no prior take has a transcript yet — this session is the
+    /// True when no *prior* take has a transcript yet — this session is the
     /// activation moment. Counted on `transcriptionText` (never `#Predicate` on
     /// the analysis blob).
-    private var isFirstAnalyzedSession: Bool {
+    private func isFirstAnalyzedSession(excluding recordingID: UUID) -> Bool {
         let descriptor = FetchDescriptor<Recording>(
-            predicate: #Predicate { $0.transcriptionText != nil }
+            predicate: #Predicate {
+                $0.transcriptionText != nil && $0.id != recordingID
+            }
         )
         let count = (try? modelContext.fetchCount(descriptor)) ?? 0
         return count == 0

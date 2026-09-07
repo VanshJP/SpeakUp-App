@@ -588,9 +588,10 @@ struct ContentView: View {
     /// chrome is only applied when `source=share` so a Daily Prompt widget tap
     /// does not look like a dare.
     private func startRecording(from url: URL) {
-        // Never interrupt a live take or stack a second countdown. Queueing is
-        // future work; dropping the link is safer than mid-session overwrite.
-        guard !showingRecording, !showingCountdown else { return }
+        // Never interrupt onboarding, a live take, or a second countdown.
+        // Queueing is future work; dropping the link is safer than mid-session
+        // overwrite — and must happen before SharedChallengeStore is touched.
+        guard !showOnboarding, !showingRecording, !showingCountdown else { return }
 
         recordingPrompt = nil
         recordingStoryId = nil
@@ -615,8 +616,6 @@ struct ContentView: View {
             }
         }
 
-        // Never cover onboarding with a countdown. The challenge waits on Today.
-        if showOnboarding { return }
         showingCountdown = true
     }
 

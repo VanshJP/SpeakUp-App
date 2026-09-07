@@ -22,20 +22,23 @@ nonisolated enum MediaPath {
         return base
     }
 
-    /// True when `url` sits under local Documents or the app's iCloud container.
-    /// Used to keep legacy absolute media URLs from pointing at arbitrary
-    /// sandbox files (Preferences, other app data) after a tampered restore.
+    /// True when `url` (after symlink resolution) sits under local Documents or
+    /// the app's iCloud container. Used to keep legacy absolute media URLs —
+    /// and in-root symlinks — from pointing at arbitrary sandbox files.
     static func isUnderAllowedMediaRoot(_ url: URL, ubiquityContainer: URL? = nil) -> Bool {
-        let standardized = url.standardizedFileURL.path
+        let standardized = url.resolvingSymlinksInPath().standardizedFileURL.path
         // Resolved here rather than via `ICloudStorageService.localDocumentsDirectory`
         // so this pure helper stays `nonisolated` under MainActor default isolation.
         let documents = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .resolvingSymlinksInPath()
             .standardizedFileURL.path
         if standardized == documents || standardized.hasPrefix(documents + "/") {
             return true
         }
-        if let ubiquity = ubiquityContainer?.standardizedFileURL.path,
+        if let ubiquity = ubiquityContainer?
+            .resolvingSymlinksInPath()
+            .standardizedFileURL.path,
            standardized == ubiquity || standardized.hasPrefix(ubiquity + "/") {
             return true
         }

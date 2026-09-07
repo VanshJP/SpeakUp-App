@@ -47,4 +47,33 @@ struct MediaPathTests {
             ubiquityContainer: cloud
         ))
     }
+
+    @Test func rejectsSymlinkThatEscapesDocuments() throws {
+        let fm = FileManager.default
+        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let link = docs.appendingPathComponent("speakup-symlink-escape-\(UUID().uuidString)")
+        let target = URL(fileURLWithPath: "/tmp/speakup-outside-\(UUID().uuidString).m4a")
+        defer {
+            try? fm.removeItem(at: link)
+            try? fm.removeItem(at: target)
+        }
+        fm.createFile(atPath: target.path, contents: Data("x".utf8))
+        try fm.createSymbolicLink(at: link, withDestinationURL: target)
+        #expect(!MediaPath.isUnderAllowedMediaRoot(link))
+    }
+
+    @Test func rejectsSymlinkThatEscapesUbiquityContainer() throws {
+        let fm = FileManager.default
+        let cloud = fm.temporaryDirectory.appendingPathComponent("speakup-fake-cloud-\(UUID().uuidString)")
+        try fm.createDirectory(at: cloud, withIntermediateDirectories: true)
+        let link = cloud.appendingPathComponent("escape.m4a")
+        let target = URL(fileURLWithPath: "/tmp/speakup-outside-\(UUID().uuidString).m4a")
+        defer {
+            try? fm.removeItem(at: cloud)
+            try? fm.removeItem(at: target)
+        }
+        fm.createFile(atPath: target.path, contents: Data("x".utf8))
+        try fm.createSymbolicLink(at: link, withDestinationURL: target)
+        #expect(!MediaPath.isUnderAllowedMediaRoot(link, ubiquityContainer: cloud))
+    }
 }

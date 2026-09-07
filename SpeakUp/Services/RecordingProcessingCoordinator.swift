@@ -393,6 +393,13 @@ final class RecordingProcessingCoordinator {
             // while transcription/analysis ran (potentially minutes). Writing to a deleted
             // SwiftData object traps.
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+            // `analyzeTranscript` is non-throwing; cancel during that await does
+            // not raise CancellationError — check before charging / persisting.
+            if Task.isCancelled {
+                persisted.isProcessing = false
+                save(modelContext, context: "clearing processing flag after cancellation \(recordingID.uuidString)")
+                return
+            }
             if let text = computed.2 {
                 persisted.transcriptionText = text
             }
