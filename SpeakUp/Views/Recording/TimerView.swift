@@ -159,11 +159,9 @@ struct TimerDial: View {
 ///
 /// The number is derived from the space the slot actually has, never written
 /// down at a call site: a fixed dial is either lost in the middle of a modern
-/// phone or shoving the record button off the bottom of a small one, and the
-/// countdown and the recording screen have to agree on it either way.
+/// phone or shoving the record button off the bottom of a small one.
 nonisolated enum SessionDial {
-    /// Below this the reading stops being glanceable — but never at the cost
-    /// of overflowing a slot that is genuinely smaller (see `diameter`).
+    /// Below this the reading stops being glanceable.
     static let minDiameter: CGFloat = 170
     /// Above this the `.minimal` look's 64pt-per-150 numerals get silly.
     static let maxDiameter: CGFloat = 260
@@ -171,24 +169,46 @@ nonisolated enum SessionDial {
     /// breathing room above and below.
     static let slotFill: CGFloat = 0.8
 
+    /// The rungs `SessionDialSlot` tries, largest first. The target is only a
+    /// target: the slot also holds whatever the caller stacked with the dial
+    /// (a framework cue, a drill metric, a phase label) and those have to fit
+    /// too. The last rung is the fallback when nothing fits, so it is small
+    /// enough to survive a squeezed slot rather than derived from the target.
+    static func ladder(from target: CGFloat) -> (CGFloat, CGFloat, CGFloat, CGFloat) {
+        (target, target * 0.85, target * 0.7, 110)
+    }
+
+    /// Target diameter for a slot of this size. Never larger than the slot
+    /// itself, so a squeezed slot (large accessibility text, a small phone)
+    /// shrinks the dial instead of pushing the controls under the home
+    /// indicator.
     static func diameter(fitting size: CGSize) -> CGFloat {
         let side = min(size.width, size.height)
         guard side > 0 else { return minDiameter }
-        // The floor is itself clamped to the slot, so a squeezed slot (large
-        // accessibility text, a small phone) shrinks the dial instead of
-        // pushing the controls under the home indicator.
-        return min(max(side * slotFill, min(side, minDiameter)), maxDiameter)
+        return min(max(side * slotFill, minDiameter), maxDiameter, side)
     }
 }
 
 /// The middle of a session screen: the dial, plus anything stacked with it,
 /// sized to whatever the top and bottom slots left over.
 ///
-/// This replaced `Spacer() / dial / Spacer()` around a hard-coded 200pt dial.
-/// On a 6.3" phone that arrangement parked the dial in a ~380pt gap and left
-/// the ~90pt on either side of it empty, on the one screen that has nothing
-/// else to show. The slot claims that space and spends it on the dial instead,
-/// and gives it back when the top and bottom grow.
+/// This replaced `Spacer() / dial / Spacer()` around a hard-coded 200pt dial,
+/// which on a waveform-less recording screen parked the dial in a ~400pt gap
+/// and left ~90pt empty on either side of it. The slot claims that space and
+/// spends it on the dial instead, and gives it back when the top and bottom
+/// grow.
+///
+/// Two things the first version of this got wrong, both fixed here:
+///
+/// - **The dial is not the only thing in the slot.** A framework cue, a drill
+///   metric and a phase label share it, and `GeometryReader` does not clip, so
+///   a diameter sized from the slot alone pushed its own siblings out over the
+///   record button on a small phone. `ViewThatFits` picks the largest rung
+///   that fits what the caller actually put in.
+/// - **The slot's height must not move during a take.** It is
+///   `container − topBar − bottomControls`, so anything that grows those
+///   resizes the dial mid-sentence. That is why the coaching cue is an overlay
+///   on `bottomControls` rather than a row inside it — see `RecordingView`.
 struct SessionDialSlot<Content: View>: View {
     var spacing: CGFloat = 18
     /// Receives the resolved diameter — pass it straight to `TimerDial` /
@@ -197,10 +217,23 @@ struct SessionDialSlot<Content: View>: View {
 
     var body: some View {
         GeometryReader { geo in
-            VStack(spacing: spacing) {
-                content(SessionDial.diameter(fitting: geo.size))
+            let rungs = SessionDial.ladder(from: SessionDial.diameter(fitting: geo.size))
+
+            // Fixed arity, not a ForEach: `ViewThatFits` measures its subviews
+            // individually and a ForEach would read as one.
+            ViewThatFits(in: .vertical) {
+                stack(rungs.0)
+                stack(rungs.1)
+                stack(rungs.2)
+                stack(rungs.3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func stack(_ diameter: CGFloat) -> some View {
+        VStack(spacing: spacing) {
+            content(diameter)
         }
     }
 }

@@ -156,9 +156,10 @@ struct RecordingView: View {
 
             // Three slots, no spacers: status on top, dial in the middle
             // taking whatever is left, controls along the bottom. The old
-            // `Spacer() / dial / Spacer()` parked a fixed 200pt dial in a
-            // ~380pt gap and left the ~90pt on either side of it empty, on the
-            // one screen that has nothing else to show.
+            // `Spacer() / dial / Spacer()` sized the dial without reference to
+            // the room it had — worst with `WaveformStyle.off`, where the
+            // controls collapse to 80pt and a fixed 200pt dial sat in a ~400pt
+            // gap with ~90pt empty on either side of it.
             VStack(spacing: 0) {
                 topBar
                 sessionStage
@@ -562,8 +563,17 @@ struct RecordingView: View {
     // MARK: - Session Stage
 
     /// The dial, in a slot that owns everything the top bar and the controls
-    /// didn't take. The countdown draws the identical slot at the identical
-    /// size, so starting a take moves nothing but the prompt card.
+    /// didn't take.
+    ///
+    /// The countdown draws the same slot in the same place, so the dial never
+    /// moves across the hand-off — but the two screens do not have the same
+    /// room, so it can change size. The countdown spends its bottom on two
+    /// buttons; recording spends it on a record button wrapped in up to 220pt
+    /// of waveform. With a waveform style on, the take's dial lands smaller
+    /// than the countdown's; with `WaveformStyle.off` they match at the cap.
+    /// Nothing about it moves *within* a take: everything feeding the slot's
+    /// height is fixed once recording starts (the coaching cue is an overlay
+    /// for exactly this reason).
     private var sessionStage: some View {
         SessionDialSlot(spacing: 24) { diameter in
             // Framework overlay
@@ -632,13 +642,6 @@ struct RecordingView: View {
         let level = viewModel.audioLevel
 
         return VStack(spacing: 24) {
-            // Coaching cue
-            if let cue, isRecording {
-                coachingCueView(cue)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .id(cue.message)
-            }
-
             RecordButtonWaveformStack(
                 audioLevel: level,
                 waveformStyle: WaveformStyle(rawValue: userSettings.first?.waveformStyle ?? 0) ?? .rings,
@@ -670,6 +673,23 @@ struct RecordingView: View {
                 .id(isRecording)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .animation(.easeInOut(duration: 0.2), value: isRecording)
+        }
+        // The coaching cue floats above the controls instead of being a row
+        // inside them. As a row it pushed ~58pt into this column the moment it
+        // fired: that shoved the record button down mid-take, and because the
+        // dial slot is only ever "what the top bar and these controls left
+        // over", it resized the timer mid-sentence too. An overlay costs no
+        // height, so the cue can come and go without moving anything.
+        //
+        // It lands in the slack under the dial — the slot centres its content,
+        // so the space directly above the controls is empty.
+        .overlay(alignment: .top) {
+            if let cue, isRecording {
+                coachingCueView(cue)
+                    .offset(y: -18)
+                    .transition(.opacity)
+                    .id(cue.message)
+            }
         }
         // The safe area already holds the controls clear of the home
         // indicator; the old 40pt on top of it was a second guess at the
