@@ -43,7 +43,10 @@ struct RecordingLookPreview: View {
 
                 controls
             }
-            .padding(.horizontal, 20)
+            // 16, matching the real session screens: the dial target comes
+            // from the slot's width, so a different page inset here would
+            // preview a dial the user never records with.
+            .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
         // The record button is the exit this screen is teaching, but it is the

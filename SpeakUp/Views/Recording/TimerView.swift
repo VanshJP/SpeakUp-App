@@ -165,9 +165,8 @@ nonisolated enum SessionDial {
     static let minDiameter: CGFloat = 170
     /// Above this the `.minimal` look's 64pt-per-150 numerals get silly.
     static let maxDiameter: CGFloat = 260
-    /// Share of the slot's short side the dial takes, leaving the rest as
-    /// breathing room above and below.
-    static let slotFill: CGFloat = 0.8
+    /// Share of the slot's **width** the dial takes.
+    static let widthFill: CGFloat = 0.66
 
     /// The rungs `SessionDialSlot` tries, largest first. The target is only a
     /// target: the slot also holds whatever the caller stacked with the dial
@@ -178,14 +177,24 @@ nonisolated enum SessionDial {
         (target, target * 0.85, target * 0.7, 110)
     }
 
-    /// Target diameter for a slot of this size. Never larger than the slot
-    /// itself, so a squeezed slot (large accessibility text, a small phone)
-    /// shrinks the dial instead of pushing the controls under the home
-    /// indicator.
-    static func diameter(fitting size: CGSize) -> CGFloat {
-        let side = min(size.width, size.height)
-        guard side > 0 else { return minDiameter }
-        return min(max(side * slotFill, minDiameter), maxDiameter, side)
+    /// Target diameter for a slot of this width.
+    ///
+    /// Width, not `min(width, height)`. Height was the first version's
+    /// mistake. The countdown's slot is ~460pt tall; the recording screen's is
+    /// ~260pt, because its bottom carries a record button wrapped in up to
+    /// 220pt of waveform (`.rings` is the default). A height-derived dial
+    /// therefore came out at the 260 cap on the countdown and ~206 on the very
+    /// next screen — a resize at exactly the hand-off the shared slot exists
+    /// to smooth.
+    ///
+    /// Width is the one input the two screens share: both slots are the
+    /// container minus the same 16pt page inset, and neither can change while
+    /// a session is running. Height still has a say, but only ever to shrink —
+    /// that is `SessionDialSlot`'s ladder, and it fires only when a screen
+    /// genuinely cannot show the shared size.
+    static func diameter(fittingWidth width: CGFloat) -> CGFloat {
+        guard width > 0 else { return minDiameter }
+        return min(max(width * widthFill, minDiameter), maxDiameter)
     }
 }
 
@@ -198,17 +207,24 @@ nonisolated enum SessionDial {
 /// spends it on the dial instead, and gives it back when the top and bottom
 /// grow.
 ///
-/// Two things the first version of this got wrong, both fixed here:
+/// Three things the first version of this got wrong, all fixed here:
 ///
+/// - **Height is not a shared input.** Sizing from `min(width, height)` gave
+///   the countdown the 260 cap and the recording screen ~206, because their
+///   bottoms cost wildly different amounts — a resize at the one hand-off this
+///   slot exists to smooth. The target now comes from the slot's width, which
+///   both screens share exactly. See `SessionDial.diameter(fittingWidth:)`.
 /// - **The dial is not the only thing in the slot.** A framework cue, a drill
 ///   metric and a phase label share it, and `GeometryReader` does not clip, so
-///   a diameter sized from the slot alone pushed its own siblings out over the
-///   record button on a small phone. `ViewThatFits` picks the largest rung
-///   that fits what the caller actually put in.
+///   a diameter that ignored them pushed them out over the record button on a
+///   small phone. `ViewThatFits` picks the largest rung that fits what the
+///   caller actually put in — which is also how height gets its say, since a
+///   slot too short for the shared size simply steps down a rung.
 /// - **The slot's height must not move during a take.** It is
-///   `container − topBar − bottomControls`, so anything that grows those
-///   resizes the dial mid-sentence. That is why the coaching cue is an overlay
-///   on `bottomControls` rather than a row inside it — see `RecordingView`.
+///   `container − topBar − bottomControls`, so anything that grows those can
+///   step the dial down a rung mid-sentence. That is why the coaching cue is
+///   an overlay on `bottomControls` rather than a row inside it — see
+///   `RecordingView`.
 struct SessionDialSlot<Content: View>: View {
     var spacing: CGFloat = 18
     /// Receives the resolved diameter — pass it straight to `TimerDial` /
@@ -217,7 +233,7 @@ struct SessionDialSlot<Content: View>: View {
 
     var body: some View {
         GeometryReader { geo in
-            let rungs = SessionDial.ladder(from: SessionDial.diameter(fitting: geo.size))
+            let rungs = SessionDial.ladder(from: SessionDial.diameter(fittingWidth: geo.size.width))
 
             // Fixed arity, not a ForEach: `ViewThatFits` measures its subviews
             // individually and a ForEach would read as one.

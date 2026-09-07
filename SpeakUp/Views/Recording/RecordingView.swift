@@ -565,15 +565,15 @@ struct RecordingView: View {
     /// The dial, in a slot that owns everything the top bar and the controls
     /// didn't take.
     ///
-    /// The countdown draws the same slot in the same place, so the dial never
-    /// moves across the hand-off — but the two screens do not have the same
-    /// room, so it can change size. The countdown spends its bottom on two
-    /// buttons; recording spends it on a record button wrapped in up to 220pt
-    /// of waveform. With a waveform style on, the take's dial lands smaller
-    /// than the countdown's; with `WaveformStyle.off` they match at the cap.
-    /// Nothing about it moves *within* a take: everything feeding the slot's
-    /// height is fixed once recording starts (the coaching cue is an overlay
-    /// for exactly this reason).
+    /// The countdown draws the same slot in the same place at the same size:
+    /// the target comes from the slot's width, which both screens share, so
+    /// the hand-off moves nothing but the prompt card shrinking. The two
+    /// screens' *heights* differ a lot — this one's bottom carries a record
+    /// button inside up to 220pt of waveform — but height only ever steps the
+    /// dial down a rung, and only when a screen genuinely cannot show the
+    /// shared size. Nothing moves it within a take either: everything feeding
+    /// the slot's height is fixed once recording starts, which is why the
+    /// coaching cue is an overlay rather than a row.
     private var sessionStage: some View {
         SessionDialSlot(spacing: 24) { diameter in
             // Framework overlay

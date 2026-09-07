@@ -77,11 +77,10 @@ struct CountdownOverlayView: View {
 
             // Laid out against the recording screen, slot for slot: prompt
             // where the compact prompt card will be, dial in a `SessionDialSlot`
-            // exactly like the clock's, actions along the bottom. The dial
-            // therefore keeps its position across the hand-off; its size can
-            // still change, because this screen's bottom is two buttons and
-            // the recording screen's is a record button inside a waveform
-            // (see `RecordingView.sessionStage`).
+            // exactly like the clock's, actions along the bottom. Same 16pt
+            // page inset as the recording screen, which is load-bearing — the
+            // dial's size comes from its slot's width, and that is what makes
+            // the two screens draw the same dial (see `SessionDial`).
             VStack(spacing: 16) {
                 if let prompt {
                     prominentPromptCard(prompt)
