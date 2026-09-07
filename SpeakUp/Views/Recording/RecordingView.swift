@@ -19,7 +19,10 @@ struct RecordingView: View {
     /// Set once analysis lands, to hold the score reveal on screen before the
     /// detail page. Nil when there is nothing worth revealing.
     @State private var revealRecording: Recording?
+    /// Snapshot for the reveal — never read `recording.analysis` from body.
+    @State private var revealAnalysis: SpeechAnalysis?
     @State private var revealBaselines = PersonalAverage.Baselines()
+    @State private var revealTask: Task<Void, Never>?
     /// What the speaker is meant to be working on this take. Loaded separately
     /// from the configure task so resolving it can never delay the countdown.
     @State private var focusPlan: CoachPlan?
@@ -106,6 +109,8 @@ struct RecordingView: View {
             ).plan
         }
         .onDisappear {
+            revealTask?.cancel()
+            revealTask = nil
             viewModel.cleanup()
         }
         .onChange(of: viewModel.autoSavedRecording) { _, recording in
@@ -251,17 +256,17 @@ struct RecordingView: View {
     @ViewBuilder
     private func scoreReveal(for recording: Recording) -> some View {
         ScoreRevealView(
-            score: recording.analysis?.speechScore.overall ?? 0,
+            score: revealAnalysis?.speechScore.overall ?? recording.overallScore ?? 0,
             baselines: revealBaselines,
-            weakestAxisLabel: weakestAxisLabel(for: recording),
+            weakestAxisLabel: weakestAxisLabel(from: revealAnalysis),
             onDismiss: { navigate(to: recording) }
         )
     }
 
     /// Only the building band names a lever, so this is nil above 60 — the
     /// reveal shows the delta there instead.
-    private func weakestAxisLabel(for recording: Recording) -> String? {
-        guard let analysis = recording.analysis,
+    private func weakestAxisLabel(from analysis: SpeechAnalysis?) -> String? {
+        guard let analysis,
               analysis.speechScore.overall < 60 else { return nil }
 
         let axes = SubscoreRadarChart.Axis.from(
@@ -277,21 +282,27 @@ struct RecordingView: View {
     private func finishAndNavigate(_ recording: Recording) {
         guard !hasNavigated, revealRecording == nil else { return }
 
-        guard recording.analysis?.speechScore.overall != nil else {
+        // Snapshot once — body must not re-decode the Codable blob.
+        let analysis = recording.analysis
+        guard analysis?.speechScore.overall != nil || recording.overallScore != nil else {
             navigate(to: recording)
             return
         }
+        revealAnalysis = analysis
 
         let container = modelContext.container
         let id = recording.id
-        Task {
+        revealTask?.cancel()
+        revealTask = Task {
             // Resolve the baseline *before* the reveal appears. The context
             // line reads it about a second in, and letting it pop mid-animation
             // is exactly the jitter this screen exists to avoid.
-            revealBaselines = await PersonalAverage.all(
+            let baselines = await PersonalAverage.all(
                 excluding: id,
                 container: container
             )
+            guard !Task.isCancelled else { return }
+            revealBaselines = baselines
             withAnimation(AppMotion.settle) { revealRecording = recording }
         }
     }

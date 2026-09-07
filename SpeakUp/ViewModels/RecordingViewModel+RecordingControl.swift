@@ -6,6 +6,7 @@ extension RecordingViewModel {
     // MARK: - Recording Control
 
     func startRecording() async {
+        guard !isRecording else { return }
         do {
             recordingURL = try await audioService.startRecording()
 

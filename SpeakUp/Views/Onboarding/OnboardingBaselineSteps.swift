@@ -585,6 +585,9 @@ private struct OnboardingBaselineResultView: View {
 
     @State private var shownStages = 0
     @State private var retryToken = 0
+    /// Set when processing ends without an analysis (cancel / orphan) so the
+    /// wait loop does not spin forever.
+    @State private var abandonedWithoutScore = false
 
     private static let stages = [
         "Transcribing your words",
@@ -594,9 +597,10 @@ private struct OnboardingBaselineResultView: View {
     ]
 
     private var failed: Bool {
-        recording.lastProcessingError != nil
-            && recording.analysis == nil
-            && !recording.isProcessing
+        guard recording.analysis == nil, !recording.isProcessing else { return false }
+        return abandonedWithoutScore
+            || recording.lastProcessingError != nil
+            || recording.analysisBlockedByAllowance
     }
 
     var body: some View {
@@ -634,10 +638,16 @@ private struct OnboardingBaselineResultView: View {
     /// stage labels are rhythm, not per-stage telemetry — the gate is real.
     private func runStages() async {
         shownStages = 0
+        abandonedWithoutScore = false
         while shownStages < Self.stages.count {
             if shownStages == Self.stages.count - 1 {
                 while recording.analysis == nil {
                     if failed { return }
+                    // Cancel / defer / orphan: processing stopped with no score.
+                    if !recording.isProcessing {
+                        abandonedWithoutScore = true
+                        return
+                    }
                     try? await Task.sleep(for: .milliseconds(250))
                 }
             } else {

@@ -4,6 +4,7 @@ import Charts
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AudioService.self) private var audioService
     @State private var viewModel = HistoryViewModel()
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText = ""
@@ -92,6 +93,9 @@ struct HistoryView: View {
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 if let summary = summaryToDelete {
+                    // Stop playback first — unlinking media under AVAudioPlayer
+                    // leaves a stuck isPlaying / decode error.
+                    audioService.stop()
                     Task {
                         await viewModel.deleteRecording(id: summary.id)
                     }

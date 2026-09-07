@@ -50,6 +50,12 @@ class DictationService {
     // MARK: - Public API
 
     func start() async {
+        // Idempotent: a second tap before `isListening` flips used to install
+        // another tap on a live engine (audio-thread fault class).
+        if isListening || audioEngine != nil {
+            stop()
+        }
+
         let authorized = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
