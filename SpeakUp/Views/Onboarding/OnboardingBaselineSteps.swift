@@ -62,8 +62,6 @@ struct OnboardingBaselineBriefingStep: View {
                 .padding(.bottom, 24)
             }
             .scrollBounceBehavior(.basedOnSize)
-            // The whole page is a fast-forward. A tap mid-cascade means "I'm
-            // reading faster than you're talking", never "I missed it".
             .contentShape(Rectangle())
             .onTapGesture { revealedBeats = 4 }
 
@@ -77,8 +75,6 @@ struct OnboardingBaselineBriefingStep: View {
         }
         .motion(AppMotion.settle, value: revealedBeats)
         .task {
-            // Opacity-hidden bubbles are invisible to VoiceOver too, so the
-            // cascade collapses whenever pacing is theirs, not ours.
             guard !reduceMotion, !voiceOverEnabled else {
                 revealedBeats = 4
                 return
@@ -377,9 +373,6 @@ struct OnboardingBaselineStep: View {
         case .countdown: return "Here we go."
         case .saving: return "Saving your take…"
         case .recording:
-            // A baseline take is 30 seconds minimum — the stop button unlocks
-            // at the same moment the "Enough for a baseline" tick flips, so
-            // the floor and the goal are one number. Start over stays available.
             return viewModel.baselineElapsed >= 30
                 ? "Tap to stop whenever you're done."
                 : "Keep going. You can stop at 30 seconds."
@@ -503,9 +496,6 @@ private struct BaselineRecordControl: View {
                     .pulsingGlow(color: AppColors.recording, isActive: true)
 
             case .countdown:
-                // The count runs inside the button's own footprint: nothing
-                // moves, nothing is covered, and the prompt stays readable
-                // right up to the first word.
                 buttonShell {
                     Text("\(viewModel.baselineCountdownValue)")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -551,8 +541,6 @@ private struct BaselineWaveformRing: View {
     let viewModel: OnboardingViewModel
 
     var body: some View {
-        // `CircularWaveformView` expects raw dBFS; `micLevel` is already
-        // normalised 0–1, so map it back onto the −60…0 range it normalises.
         CircularWaveformView(audioLevel: viewModel.micLevel * 60 - 60)
     }
 }
@@ -608,16 +596,9 @@ private struct OnboardingBaselineResultView: View {
             if failed {
                 errorState
             } else if let analysis = recording.analysis, shownStages >= Self.stages.count {
-                // The zero-score gate means silence or gibberish. A first-time
-                // user never sees that as a number — they get coached back
-                // into a retake instead.
                 if analysis.speechScore.overall == 0 {
                     couldNotHearState
                 } else {
-                    // One forward action, and it lands on the breakdown. The
-                    // reveal is a headline; the detail view is where a first
-                    // score becomes information, so offering "home" instead
-                    // was offering people the version with nothing in it.
                     OnboardingBaselineRevealView(
                         analysis: analysis,
                         userName: userName,
@@ -913,8 +894,6 @@ private struct OnboardingBaselineRevealView: View {
         withAnimation(AppMotion.reveal.delay(0.2)) {
             ringProgress = target
         }
-        // Ascending ticks while the ring sweeps — the score arrives as an
-        // event, not a label.
         Task {
             for _ in 0..<5 {
                 try? await Task.sleep(for: .milliseconds(180))

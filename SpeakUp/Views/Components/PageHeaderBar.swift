@@ -1,11 +1,6 @@
 import SwiftUI
 
 // MARK: - Root Tab Chrome
-//
-// No root tab has a navigation bar. It held nothing but the tab's own name —
-// "History" rendered directly above a tab button labelled History — and cost
-// 44pt of permanent height on every screen, with `.searchable` stacking
-// another ~50pt under it. This file is what replaced it.
 
 extension View {
     /// Chrome for an icon control in a root tab's inline header — the hit
@@ -71,8 +66,6 @@ struct InlineSearchField<Accessory: View>: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                // The placeholder is the only label this field has on screen,
-                // and a placeholder disappears the moment you type.
                 .accessibilityLabel(prompt)
 
                 if !text.isEmpty {
@@ -96,8 +89,6 @@ struct InlineSearchField<Accessory: View>: View {
             .padding(.trailing, text.isEmpty ? 14 : 2)
             .frame(height: AppLayout.minHitTarget)
             .glassBackground(cornerRadius: AppLayout.minHitTarget / 2)
-            // Tapping anywhere on the plate starts typing, not just the 1pt
-            // caret line the bare TextField would offer.
             .contentShape(Rectangle())
             .onTapGesture { isFocused = true }
 

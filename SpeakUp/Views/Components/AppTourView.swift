@@ -177,10 +177,6 @@ struct AppTourOverlay: View {
                         .padding(bubblePadding(for: spotlight, in: proxy))
                 }
             }
-            // The reader, not the dim layer, is what escapes the safe area.
-            // Insetting only the fill would leave the cutout computed in one
-            // coordinate space and drawn in another, sliding the highlight off
-            // the element by the top inset.
             .ignoresSafeArea()
             .motion(AppMotion.settle, value: step)
             .accessibilityElement(children: .contain)

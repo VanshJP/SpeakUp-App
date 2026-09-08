@@ -72,17 +72,12 @@ struct ReadAloudResultView: View {
                         )
                     }
 
-                    // Pace closes the loop the passage card opened — it
-                    // promised ≈150 wpm, so the result reports what actually
-                    // happened. Hidden on very short takes where WPM is noise.
                     if let paceLabel {
                         Text(paceLabel)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
-                    // Degraded-session notice: recognition died mid-read or
-                    // nothing was heard. Says so instead of standing as 0%.
                     if let notice = result.notice {
                         GlassCard(tint: AppColors.warning.opacity(0.08), padding: 14) {
                             HStack(spacing: 10) {
@@ -131,8 +126,6 @@ struct ReadAloudResultView: View {
             Label("Word Review", systemImage: "doc.text.magnifyingglass")
                 .font(.headline)
 
-            // Legend and hint come first — a reader needs the color key
-            // before they scan the wall of words, not after.
             HStack(spacing: 16) {
                 legendItem(color: AppColors.success, label: "Matched")
                 legendItem(color: AppColors.error, label: "Mismatched")

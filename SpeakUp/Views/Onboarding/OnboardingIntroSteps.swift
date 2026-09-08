@@ -44,9 +44,6 @@ struct OnboardingWelcomeStep: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 16) {
-                // Three pills fit one row at default type and on the narrowest
-                // phone, but not at accessibility sizes, so fall back to two rows
-                // rather than letting them clip.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         onDevicePill
@@ -140,8 +137,6 @@ struct OnboardingNameStep: View {
             )
         }
         .task {
-            // Wait for the page crossfade to settle before raising the
-            // keyboard, otherwise the focus animation collides with it.
             try? await Task.sleep(for: .milliseconds(420))
             focused = true
         }
@@ -261,8 +256,6 @@ struct OnboardingLevelStep: View {
                 payoffLine(payoff(for: level))
             }
         } footer: {
-            // Explicit Continue, same as the goal step. Single-choice or not,
-            // one flow should not have two different ideas of what a tap does.
             OnboardingCTA(
                 title: selected == nil ? "Pick one" : "Continue",
                 icon: selected == nil ? nil : "arrow.right",

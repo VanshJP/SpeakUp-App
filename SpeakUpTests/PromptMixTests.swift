@@ -2,10 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// The prompt mix decides what a user meets on Today every morning. Getting it
-// wrong is either invisible (goals do nothing) or loud (the pool collapses to
-// one category, or empties entirely), so the weighting and every fallback are
-// pinned here.
 
 struct PromptMixWeightTests {
     private let allCategories = Set(PromptCategory.allCases.map(\.rawValue))
@@ -30,8 +26,6 @@ struct PromptMixWeightTests {
     @Test func nonGoalCategoriesStayReachable() {
         let mix = PromptMix(goals: [.interviews], enabledCategoryNames: allCategories)
 
-        // Bias, not filter: an unfavored-but-enabled category must never be
-        // weighted to zero, or the "full pool stays available" promise breaks.
         for category in PromptCategory.allCases where !OnboardingGoal.interviews.promptCategories.contains(category) {
             #expect(mix.weight(forCategory: category.rawValue) > 0)
         }
@@ -48,8 +42,6 @@ struct PromptMixWeightTests {
     }
 
     @Test func emptyGateMeansNoGate() {
-        // An empty stored category list is "nothing recorded yet", not "user
-        // disabled everything" — treating it as the latter empties Today.
         let mix = PromptMix(goals: [.meetings], enabledCategoryNames: [])
 
         #expect(mix.weight(forCategory: PromptCategory.communicationSkills.rawValue) == PromptMix.favoredWeight)
@@ -65,8 +57,6 @@ struct PromptMixWeightTests {
     }
 
     @Test func unknownCategoryIsNeutral() {
-        // User-created prompts carry free-form categories; they should still be
-        // drawable rather than silently weighted out.
         let mix = PromptMix(goals: [.interviews], enabledCategoryNames: allCategories)
 
         #expect(mix.weight(forCategory: "My Own Category") == PromptMix.neutralWeight)
@@ -87,8 +77,6 @@ struct PromptMixSelectionTests {
     }
 
     @Test func fullyGatedPoolReturnsNil() {
-        // The caller needs to know the pool was gated out so it can widen the
-        // search, rather than being handed a prompt the user disabled.
         let enabled = allCategories.subtracting([PromptCategory.quickFire.rawValue])
         let mix = PromptMix(goals: [], enabledCategoryNames: enabled)
         let candidates = [Item(name: "a", category: PromptCategory.quickFire.rawValue)]
@@ -119,9 +107,6 @@ struct PromptMixSelectionTests {
             }
         }
 
-        // 3 favored of 12 categories at 3x weight ≈ 9/18 of draws. Asserting a
-        // band rather than an exact count so weight tuning doesn't break the
-        // test, but a regression to unweighted (3/12 = 25%) still fails.
         let share = Double(favoredHits) / 600
         #expect(share > 0.4)
         #expect(share < 0.6)
@@ -180,8 +165,6 @@ struct PromptMixAdaptationTests {
     }
 
     @Test func adaptationSteersTheDailyPick() {
-        // The point of the feature: with interview prep measurably weak, a
-        // seed sweep must surface it more often than the unadapted mix does.
         let weakCategory = PromptCategory.interviewPrep.rawValue
         let candidates = PromptCategory.allCases.map { Item(name: $0.rawValue, category: $0.rawValue) }
         let adapted = baseMix.adapted(weakRatesByCategory: [weakCategory: (sessions: 6, weakRate: 12.0)])
@@ -219,8 +202,6 @@ struct DefaultPromptsMixTests {
     }
 
     @Test func mixNeverBreaksTheDifficultyRamp() {
-        // Goals steer category only. A beginner's daily prompt must still come
-        // from the difficulty bucket the speaker level chose.
         let mix = PromptMix(
             goals: [.interviews],
             enabledCategoryNames: Set(PromptCategory.allCases.map(\.rawValue))
@@ -232,8 +213,6 @@ struct DefaultPromptsMixTests {
     }
 
     @Test func everyGoalMapsToRealCategoriesWithPrompts() {
-        // A typo in the goal → category map would silently de-weight a whole
-        // goal, so assert each mapped category actually has prompts behind it.
         let categoriesInUse = Set(DefaultPrompts.all.map(\.category))
 
         for goal in OnboardingGoal.allCases {
@@ -245,8 +224,6 @@ struct DefaultPromptsMixTests {
     }
 
     @Test func disabledFavoredCategoryStillYieldsAPrompt() {
-        // Worst case: the user disabled every category their goal favors. They
-        // must still get a prompt rather than an empty Today card.
         let favored = Set(OnboardingGoal.interviews.promptCategories.map(\.rawValue))
         let enabled = Set(PromptCategory.allCases.map(\.rawValue)).subtracting(favored)
         let mix = PromptMix(goals: [.interviews], enabledCategoryNames: enabled)

@@ -45,8 +45,6 @@ struct TodayHomeLayoutTests {
         #expect(TodayHomeModule.session.isPinned)
     }
 
-    // Dropping a block *below* another used to silently do nothing: the drop
-    // always inserted at the target's index, so the last slot was unreachable.
 
     @Test("Dragging a block down lands it after the target")
     func reorderDownwards() {
@@ -104,8 +102,6 @@ struct PracticeToolKindTests {
         #expect(PracticeToolKind.todayStripDefaults.contains(.warmUp))
         #expect(PracticeToolKind.todayStripDefaults.contains(.drills))
         #expect(PracticeToolKind.todayStripDefaults.contains(.calm))
-        // Read Aloud took the Wheel's slot: the Wheel lives in Library →
-        // Prompts, where you pick what to say, not in the prep strip.
         #expect(PracticeToolKind.todayStripDefaults.contains(.readAloud))
         #expect(!PracticeToolKind.todayStripDefaults.contains(.learn))
     }

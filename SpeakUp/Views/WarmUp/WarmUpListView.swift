@@ -25,8 +25,6 @@ struct WarmUpListView: View {
                 )
             }
 
-            // All first, so the page opens showing the whole map rather than
-            // one slice of it.
             ToolFilterBar {
                 FilterPill(
                     title: "All",

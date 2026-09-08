@@ -313,8 +313,6 @@ struct WordBankView: View {
                 dictationPreview(tint: AppColors.primary)
             }
 
-            // Word chips — above the explainer so the list, not the settings,
-            // is what the tab is about.
             vocabWordsSection
 
             HStack(spacing: 8) {
@@ -771,11 +769,6 @@ struct VocabChallengeSettingsCard: View {
                         }
                     }
 
-                    // ponytail: the bank, your dictionary terms and spaced review
-                    // are always in play. They were four more switches on the very
-                    // page that manages the words, and no answer but "on" made the
-                    // workout better. Whether the app teaches you words you have
-                    // never tracked is the one real choice left.
                     Toggle(isOn: $viewModel.vocabChallengeIntroduceNew) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Teach new words")
@@ -790,15 +783,10 @@ struct VocabChallengeSettingsCard: View {
                         viewModel.saveVocabChallengeSettings()
                     }
 
-                    // Only meaningful while fresh words exist: the tier shapes
-                    // what gets taught, so it hides when teaching is off — below
-                    // the toggle, so flipping it never moves rows under the finger.
                     if viewModel.vocabChallengeIntroduceNew {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Word level")
                                 .font(.subheadline)
-                            // Four labels will not fit beside a title, so unlike
-                            // "Words per day" the pills get their own row.
                             HStack(spacing: 6) {
                                 ForEach(vocabLevelChoices, id: \.rawValue) { choice in
                                     CardPill(

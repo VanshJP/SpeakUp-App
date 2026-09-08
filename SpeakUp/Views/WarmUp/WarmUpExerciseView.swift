@@ -18,8 +18,6 @@ struct WarmUpExerciseView: View {
                 // Close button
                 HStack {
                     Button {
-                        // Parity with the drill runner: an active session asks
-                        // before it discards your progress.
                         if viewModel.isRunning {
                             Haptics.warning()
                             showingExitConfirm = true
@@ -85,9 +83,6 @@ struct WarmUpExerciseView: View {
                 .font(.headline)
                 .foregroundStyle(.white.opacity(0.6))
 
-            // Where you are in the exercise — the breathing circle carries
-            // this visually, but a 12-step articulation drill had no position
-            // affordance at all until this counter existed.
             VStack(spacing: 6) {
                 Text("Step \(viewModel.currentStepIndex + 1) of \(viewModel.currentExercise?.steps.count ?? 0)")
                     .font(.caption.weight(.medium))

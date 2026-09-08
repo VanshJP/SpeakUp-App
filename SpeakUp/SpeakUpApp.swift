@@ -30,8 +30,6 @@ struct SpeakUpApp: App {
         )
 
         do {
-            // Lightweight migrations (new models, optional fields, defaults) are automatic;
-            // heavy changes go through `SpeakUpMigrationPlan` stages.
             return try ModelContainer(
                 for: schema,
                 migrationPlan: SpeakUpMigrationPlan.self,
@@ -85,8 +83,6 @@ struct SpeakUpApp: App {
                 .environment(audioService)
                 .environment(llmService)
                 .task {
-                    // Assigned before any await so the LLM load below can
-                    // always free Whisper's RAM before claiming its own.
                     llmService.localLLM.preloadCleanupHandler = { [weak speechService] in
                         await speechService?.unloadWhisperModel()
                     }
@@ -94,13 +90,8 @@ struct SpeakUpApp: App {
                     // Settings must exist before anything else reads them
                     await ensureSettingsExist()
 
-                    // App killed mid-analysis leaves isProcessing stranded true;
-                    // clear it so History rows don't spin forever.
                     await resetStaleProcessingFlags()
 
-                    // Upgrade path: an install that already has recordings never
-                    // hits the first-analysis start, so it gets its 14 days on
-                    // first launch of this build. Same idempotent method.
                     startTrialForExistingInstallIfNeeded()
 
                     // Seed remaining data concurrently — all independent of each other
@@ -111,13 +102,9 @@ struct SpeakUpApp: App {
                     _ = await (p, a, c, f)
 
                     #if DEBUG
-                    // Runs after prompt/curriculum seeding so the seeded history
-                    // sits alongside a fully populated library.
                     ScreenshotSeeder.seedIfRequested(context: sharedModelContainer.mainContext)
                     #endif
 
-                    // Legacy URL migration is one-shot and runs fully off the main
-                    // actor so a populated Recording store never delays first frame.
                     let container = sharedModelContainer
                     Task.detached(priority: .background) {
                         await Self.migrateRecordingURLsIfNeeded(container: container)
@@ -130,13 +117,8 @@ struct SpeakUpApp: App {
                         }
                     }
 
-                    // StoreKit listener first, product load second — a purchase
-                    // that completes during startup must never be dropped.
                     PurchaseService.shared.start()
 
-                    // Logged once per install, after a grace period so a launch
-                    // that arrived through a campaign link has had its source
-                    // captured by `onOpenURL` before the event is written.
                     Task {
                         try? await Task.sleep(for: .seconds(2))
                         AttributionStore.shared.logFirstOpenIfNeeded()
@@ -161,8 +143,6 @@ struct SpeakUpApp: App {
                     await notifications.clearBadge()
                     await notifications.checkPermission()
 
-                    // Replacing the pending request updates installs that
-                    // still carry old pressure-based reminder copy.
                     let context = sharedModelContainer.mainContext
                     let descriptor = FetchDescriptor<UserSettings>()
                     guard notifications.hasPermission,
@@ -178,13 +158,8 @@ struct SpeakUpApp: App {
                         await notifications.cancelDailyReminder()
                     }
                 }
-                // Catches a purchase made on another device and a refund
-                // processed while the app was backgrounded.
                 Task {
                     await PurchaseService.shared.refreshEntitlement()
-                    // Entitlement is settled — score anything the free
-                    // allowance held back, whether it was unblocked by the
-                    // purchase or by the monthly cycle rolling over.
                     RecordingProcessingCoordinator.shared.resumeDeferredRecordings(
                         modelContext: sharedModelContainer.mainContext,
                         speechService: speechService,
@@ -285,8 +260,6 @@ struct SpeakUpApp: App {
             )
             let allDefinitions = AchievementDefinition.allCases
 
-            // Seed missing definitions and refresh display copy on older rows.
-            // Unlock state/date stay untouched.
             for def in allDefinitions {
                 if let existing = existingByID[def.rawValue] {
                     def.refreshDisplay(on: existing)
@@ -315,8 +288,6 @@ struct SpeakUpApp: App {
             } else if let settings = existingSettings.first {
                 // Keep startup sync preference in lock-step with persisted settings.
                 ICloudStorageService.shared.isSyncEnabled = settings.iCloudSyncEnabled
-                // Audio cue preferences otherwise only land when the Settings
-                // tab is opened, so a relaunch would silently revert them.
                 ChirpPlayer.shared.isEnabled = settings.chirpSoundEnabled
                 ChirpPlayer.shared.pack = SoundPack(rawValue: settings.soundPack) ?? .soft
             }

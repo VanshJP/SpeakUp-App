@@ -114,8 +114,6 @@ enum ScreenshotSeeder {
     // MARK: - Analysis
 
     private static func analysis(score: Int, wpm: Double, text: String) -> SpeechAnalysis {
-        // Sub-scores are spread around the overall rather than set equal to it,
-        // so the radar reads as a real profile with a weak axis to coach.
         func near(_ delta: Int) -> Int { min(97, max(35, score + delta)) }
 
         return SpeechAnalysis(

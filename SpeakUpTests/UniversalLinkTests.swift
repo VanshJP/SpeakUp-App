@@ -2,10 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Campaign links are the one input the app cannot fix after the fact: once a
-// newsletter has gone out with a URL in it, the app has to route that exact
-// string forever. These cover the shapes a link can arrive in and the one
-// thing that must never be dropped on the way through — the campaign query.
 
 private let domain = "bigtalk.app"
 

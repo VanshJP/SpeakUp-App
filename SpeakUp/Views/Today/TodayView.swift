@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+/// Today tab. Modules via `TodayHomeModule`; widget reloads fingerprint-gated in `TodayViewModel`.
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LLMService.self) private var llmService
@@ -17,8 +18,6 @@ struct TodayView: View {
     @State private var challengeStore = SharedChallengeStore.shared
     @State private var coachMoments = CoachMomentService.shared
 
-    // Focus-card routing — mirrors the post-session NextStep sheets in
-    // RecordingDetailView so both entry points land on the same tool.
     @State private var focusDrill: DrillMode?
     @State private var showingFocusWarmUp = false
     @State private var showingFocusReadAloud = false
@@ -42,9 +41,6 @@ struct TodayView: View {
     }
 
     var body: some View {
-        // Vertical only, and `PageScrollView` is what makes that true: an
-        // over-wide child used to let this page pan sideways. No horizontal
-        // paging, no TabView page style, no horizontal scroller.
         PageScrollView {
             VStack(spacing: AppLayout.chapterSpacing) {
 
@@ -75,9 +71,6 @@ struct TodayView: View {
                     )
                 }
 
-                // Modular home — Bevel-style. Order and visibility come from
-                // `UserSettings.todayHomeLayoutRaw`; session is always forced on.
-                // Editing happens right here: same blocks, wiggling in place.
                 ForEach(homeModules) { module in
                     editableModule(module)
                 }
@@ -88,9 +81,6 @@ struct TodayView: View {
                     resetLayoutButton.transition(.identity)
                 }
 
-                // Edit lives in the scroll. Done does not — leaving edit
-                // mode used to mean scrolling past every block, the hidden
-                // tray and the reset button. The safe-area inset owns Done.
                 if !isEditingLayout {
                     editHomepageButton
                 }
@@ -104,10 +94,6 @@ struct TodayView: View {
                 doneEditingBar
             }
         }
-        // No nav bar at all: it held nothing but a spare Done, and 44pt of
-        // empty chrome pushed the greeting down on the one screen that opens
-        // every session. `topHeaderRow` is this page's header; `doneEditingBar`
-        // is its Done.
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
@@ -118,12 +104,8 @@ struct TodayView: View {
         .task {
             playArrivalIfNeeded()
             await checkFirstRunSurfaces()
-            // Fire-and-forget: tops up the fresh-word pool while the user is
-            // looking at Today, so tomorrow's workout has novel words ready.
             viewModel.warmVocabFreshWords(llmService: llmService)
         }
-        // The streak is only known once the load finishes, so the moment waits
-        // for it rather than celebrating a zero.
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading { playArrivalIfNeeded() }
         }
@@ -178,15 +160,11 @@ struct TodayView: View {
             moduleBody(module)
                 .allowsHitTesting(false)
                 .overlay {
-                    // Grab layer above the frozen block: gives the drag something
-                    // to catch, and swallows taps meant for the controls beneath.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(.white.opacity(0.001))
                 }
                 .overlay(alignment: .topLeading) {
                     if !module.isPinned {
-                        // Extra hit area hangs off the card, not over the
-                        // grab layer — a 44pt badge at -8,-8 ate the drag.
                         removeBadge(module).offset(x: -16, y: -16)
                     }
                 }
@@ -216,13 +194,9 @@ struct TodayView: View {
                         Button("Hide") { setModuleVisible(module, false) }
                     }
                 }
-                // The whole editing chain is what gets inserted and removed when
-                // edit mode flips, so the hard cut belongs here too.
                 .transition(.identity)
         } else {
             moduleBody(module)
-                // The Home-screen gesture: hold the page to rearrange it.
-                // Simultaneous so it never eats a tap meant for a control.
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.9).onEnded { _ in
                         Haptics.medium()
@@ -397,8 +371,6 @@ struct TodayView: View {
         Button {
             Haptics.light()
             withAnimation(AppMotion.settle) {
-                // Empty raw is the "never customized" marker TodayHomeLayout
-                // resolves back to the factory default.
                 userSettings.first?.todayHomeLayoutRaw = []
                 try? modelContext.save()
             }
@@ -475,8 +447,6 @@ struct TodayView: View {
         case .weeklyRecap:
             weeklyRecapSection
         case .focus:
-            // What to do about the rings. Sits above the prompt so the focus
-            // is an instruction for the take, not a post-session report.
             focusSection
         case .session:
             sessionModule
@@ -680,8 +650,6 @@ struct TodayView: View {
                 StreakDetailView()
             } label: {
                 StreakChip(streak: viewModel.userStats.currentStreak)
-                    // The chip is the reward, so it is what moves: one spring
-                    // pop on the day's first open, nothing on later ones.
                     .scaleEffect(arrived ? 1 : 0.6)
                     .opacity(arrived ? 1 : 0)
             }
@@ -1023,8 +991,6 @@ struct InteractivePromptCard: View {
     var body: some View {
         GlassCard(padding: 14, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
-                // Everything *about* the take on one line, so the space under
-                // the text belongs to the words alone.
                 HStack(spacing: 6) {
                     HStack(spacing: 5) {
                         Image(systemName: categoryIcon)
@@ -1034,8 +1000,6 @@ struct InteractivePromptCard: View {
                             .textCase(.uppercase)
                             .tracking(0.6)
                             .lineLimit(1)
-                            // Shrinks before it truncates; "Current Events &
-                            // Opinions" is the one that needs the headroom.
                             .minimumScaleFactor(0.8)
                     }
                     .foregroundStyle(categoryColor)
@@ -1048,10 +1012,6 @@ struct InteractivePromptCard: View {
 
                     DurationPill(selectedDuration: $selectedDuration)
 
-                    // Reroll belongs beside the thing it rerolls; in a footer
-                    // it cost a whole 44pt row. The negative gutter trims the
-                    // layout box back to the header's height and edge, while
-                    // the tap target itself stays 44pt.
                     SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
                         .padding(.trailing, -6)
                         .padding(.vertical, -6)
@@ -1067,13 +1027,9 @@ struct InteractivePromptCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .redacted(reason: redaction)
 
-                // Carries its own divider, so a day with no word workout ends
-                // the brief at the prompt text.
                 words
                     .redacted(reason: redaction)
 
-                // The action lives with the brief it starts; loading state
-                // never redacts it into looking broken.
                 footer
                     .padding(.top, 4)
             }
@@ -1134,8 +1090,6 @@ struct SessionStartFooter: View {
                         Text("Talk without a prompt")
                             .font(.system(size: 15, weight: .semibold))
                     }
-                    // 0.8 white on glass reads as a control only because it
-                    // sits beside the capsule; alone it would be a caption.
                     .foregroundStyle(.white.opacity(0.8))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())

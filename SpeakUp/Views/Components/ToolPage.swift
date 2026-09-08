@@ -84,8 +84,6 @@ struct ToolPage<Content: View>: View {
 
             PageScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // The only header: the nav bar already names the page, so
-                    // this says what the tool gets you and gets out of the way.
                     Text(tool.outcome)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

@@ -2,9 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// The coordinator's allowance decisions run minutes apart from its IO, so the
-// rules get pinned here as pure values: nothing fetches, saves, or clocks.
-// These are the monetization invariants, not implementation details.
 
 private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
@@ -43,8 +40,6 @@ struct ProcessingReservationTests {
         let result = reservation(.exhausted(resetsOn: t0))
 
         #expect(result.shouldDefer)
-        // A parked recording holds no slot — remaining == 0 is non-nil, so
-        // reserving off it would leak capacity to future callers' budgets.
         #expect(!result.holdsReservation)
     }
 
@@ -65,8 +60,6 @@ struct ProcessingReservationTests {
     }
 }
 
-// The charge is the reservation released through `PracticeAllowance.consume`
-// after the analysis persisted. These walk that path with pure state only.
 
 @MainActor
 struct ProcessingChargePathTests {
@@ -86,16 +79,12 @@ struct ProcessingChargePathTests {
         #expect(first.holdsReservation)
         reserved += 1
 
-        // A concurrent recording during the ~90s transcription window sees
-        // every countable slot taken and parks instead of double-spending.
         let second = ProcessingPolicy.reservation(
             for: PracticeAllowance.decision(state: state, isEntitled: false, trial: .expired, policy: policy, now: t0),
             reservedAnalyses: reserved
         )
         #expect(second.shouldDefer)
 
-        // The success path: consume persists the charge, processing returns,
-        // and the reservation releases with the cycle now exhausted.
         state = PracticeAllowance.consume(state: state, isEntitled: false, trial: .expired, policy: policy, now: t0)
         reserved -= 1
         #expect(reserved == 0)
@@ -116,15 +105,11 @@ struct ProcessingChargePathTests {
         let result = ProcessingPolicy.reservation(for: decision, reservedAnalyses: 1)
         #expect(result.holdsReservation)
 
-        // Failure path releases without calling consume: the same decision,
-        // replayed with nothing reserved, analyzes again at the same counter.
         let released = ProcessingPolicy.reservation(for: decision, reservedAnalyses: 0)
         #expect(!released.shouldDefer)
     }
 }
 
-// One resume pass: oldest first, bounded, stopped by a recording that is still
-// deferred after its turn but not by one the user deleted meanwhile.
 
 @MainActor
 struct ResumePassTests {
@@ -135,8 +120,6 @@ struct ResumePassTests {
     }
 
     @Test func picksFirstNonActiveCandidate() {
-        // Linear scan over the caller-supplied window — oldest-first ordering
-        // lives in the fetch sort, not here.
         #expect(ProcessingPolicy.nextResumeIndex(in: Array(ids.prefix(3)), skippingActive: []) == 0)
         #expect(ProcessingPolicy.nextResumeIndex(in: Array(ids.prefix(3)), skippingActive: [ids[0]]) == 1)
         #expect(ProcessingPolicy.nextResumeIndex(in: Array(ids.prefix(3)), skippingActive: [ids[0], ids[1]]) == 2)
@@ -152,9 +135,6 @@ struct ResumePassTests {
     }
 
     @Test func stillDeferredStopsButDeletedMovesOn() {
-        // Full truth table: only a recording that still exists AND is still
-        // flagged stops the pass. Deleted-but-still-flagged cannot happen,
-        // and if it ever did, the pass must keep clearing the backlog.
         #expect(ProcessingPolicy.stopsResumePass(doesRecordingExist: true, stillBlockedByAllowance: true))
         #expect(!ProcessingPolicy.stopsResumePass(doesRecordingExist: false, stillBlockedByAllowance: false))
         #expect(!ProcessingPolicy.stopsResumePass(doesRecordingExist: false, stillBlockedByAllowance: true))

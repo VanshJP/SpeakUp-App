@@ -33,8 +33,6 @@ struct RecordingLookPreview: View {
             VStack(spacing: 0) {
                 previewBadge
 
-                // Same three-slot shape as the real session screens, so the
-                // try-on shows the dial at the size it will actually be.
                 if isRecording {
                     recordingPhase
                 } else {
@@ -43,16 +41,9 @@ struct RecordingLookPreview: View {
 
                 controls
             }
-            // 16, matching the real session screens: the dial target comes
-            // from the slot's width, so a different page inset here would
-            // preview a dial the user never records with.
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        // The record button is the exit this screen is teaching, but it is the
-        // bottom of a fixed-height stack — at accessibility text sizes on a
-        // small phone it can run off the edge, and a full-screen cover has no
-        // swipe-dismiss. This is the guaranteed way out.
         .overlay(alignment: .topLeading) {
             Button(action: exitPreview) {
                 Image(systemName: "xmark")

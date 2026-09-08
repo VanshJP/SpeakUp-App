@@ -59,8 +59,6 @@ struct RecordButton: View {
                     )
                 )
                 .frame(width: buttonSize, height: buttonSize)
-                // The glow is the whole point of this one — it reads as lit
-                // rather than printed on the dark recording canvas.
                 .shadow(color: AppColors.recording.opacity(0.55), radius: 20)
 
         case .minimal:

@@ -102,8 +102,6 @@ struct ProgressChartsContent: View {
                     // Conclusion — where am I and which way am I moving.
                     heroBand
 
-                    // Evidence — trends first. The user comes here for the
-                    // charts; guidance waits until the data has been seen.
                     trendsSection
 
                     // Guidance — which situation needs work.
@@ -145,11 +143,6 @@ struct ProgressChartsContent: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Chart picker + time range. Six short labels render as one
-            // equal-width segment row whenever they fit — every destination
-            // visible, nothing hiding behind an unmarked scroll. At
-            // accessibility sizes it drops to a scrolling rail instead of
-            // truncating.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     SectionPicker(
@@ -293,8 +286,6 @@ struct ProgressChartsContent: View {
                 }
             }
 
-            // Both engines run inside the same background pass — no second
-            // fetch, no transcripts retained past this closure.
             let profile = LexiconInsightsEngine.profile(from: sessions)
             let scenarios = ScenarioReadinessEngine.readiness(from: sessions)
             return (pts, latest, profile, scenarios)
@@ -337,8 +328,6 @@ struct ProgressChartsContent: View {
                     .animation(AppMotion.reveal.delay(0.1), value: heroRingShown)
                     .onAppear { heroRingShown = true }
 
-                    // Eyebrow rides beside the ring instead of above it — the
-                    // header line was pure height.
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Where You Stand")
                             .eyebrowStyle()
@@ -405,8 +394,6 @@ struct ProgressChartsContent: View {
             .background { Capsule().fill(momentum.tint.opacity(0.13)) }
             .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
 
-            // Steady means the delta is within ±3 — printing "+1 pts lately"
-            // beside a pill that says nothing changed is noise, not evidence.
             if momentum != .steady, trajectory.delta != 0 {
                 Text("\(trajectory.delta > 0 ? "+" : "")\(trajectory.delta) pts")
                     .font(.caption2.weight(.semibold))
@@ -632,9 +619,6 @@ struct ScoreProgressChart: View {
                         .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else if !model.points.isEmpty {
-                        // Leading / centre / trailing across the plot area, so
-                        // the three readings sit under the chart they summarise
-                        // rather than running out under the axis labels.
                         HStack(spacing: 16) {
                             StatPair(value: "\(model.points.last?.score ?? 0)", label: "Latest", valueColor: AppColors.scoreColor(for: model.points.last?.score ?? 0), alignment: .leading)
                             Spacer(minLength: 0)

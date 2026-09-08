@@ -73,8 +73,6 @@ struct VocabLexiconTests {
     }
 
     @Test func everyTierHasDeepReserve() {
-        // A thin tier cycles fast and the workout starts repeating itself;
-        // each tier needs months of runway at three words a day.
         for level in 0...2 {
             let tier = DefaultVocabLexicon.entries.filter { $0.level == level }
             #expect(tier.count >= 100, "Tier \(level) too thin: \(tier.count)")

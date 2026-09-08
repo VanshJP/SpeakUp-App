@@ -10,12 +10,6 @@ enum AppColors {
     static let accent = Color(red: 0.392, green: 0.455, blue: 0.545) // #64748B
     
     // MARK: - Semantic Colors
-    //
-    // Hand-picked tones, still not system colors, but pitched bright. The deep
-    // navy canvas swallows anything under ~70% saturation, so state has to
-    // carry real chroma to register at pill and arrow size. These sit one
-    // register above the category identity tones below on purpose: state
-    // should out-read identity, never blend into it.
 
     /// Vivid emerald. Positive state, completion, on-target metrics.
     /// Matches `scoreHigh` so a passing score and a success pill agree.
@@ -40,18 +34,6 @@ enum AppColors {
     static let recording = Color(red: 0.851, green: 0.294, blue: 0.271) // #D94B45
 
     // MARK: - Score Colors
-    //
-    // The ramp is the loudest thing in the app and should be. A score is a
-    // verdict, and a verdict the eye has to squint at is a failed verdict —
-    // muted bands made every band look the same at ring and chip size. Four
-    // vivid steps that read as a traffic light on first glance: coral →
-    // orange → gold → emerald.
-    //
-    // Still hand-picked, not `Color.red` / `.orange` / `.yellow` / `.green`.
-    // The system hues are tuned for light UI and drift muddy over the navy
-    // canvas. In particular `scoreGood` is a warm gold, not pure yellow —
-    // pure yellow is the one hue that cannot hold contrast under white text
-    // on a dark surface, and 60–79 is the band most often labelled.
 
     /// 0–39. Vivid coral red.
     static let scoreLow = Color(red: 0.961, green: 0.329, blue: 0.290) // #F5544A
@@ -169,11 +151,6 @@ enum AppColors {
     static let categoryCopper = Color(red: 0.749, green: 0.471, blue: 0.400) // #BF7866
 
     // MARK: - Practice Tool Tones
-    //
-    // Identity tone per practice tool, defined once because the Today
-    // quick-action strip and the Library tools list render the same concepts
-    // and had drifted to different hues. All drawn from the muted jewel set
-    // above — a row of four saturated system colors read as a toy.
 
     static let toolWarmUp = categorySage
     static let toolDrill = categoryAmber
@@ -181,10 +158,6 @@ enum AppColors {
     static let toolCalm = categoryPlum
 
     // MARK: - Subscore Identity Tones
-    //
-    // Used where subscores need to be told apart as *categories* (weight
-    // editor, legends) rather than judged as values. Judgement is
-    // `scoreColor(for:)`; these never encode good or bad.
     static let subscoreTones: [Color] = [
         categoryTeal,
         categoryIndigo,
@@ -206,8 +179,6 @@ enum AppColors {
 
     static func contributionColor(intensity: Double) -> Color {
         if intensity == 0 {
-            // Matches the meter track rather than a gray wash, so empty days
-            // recede into the canvas instead of reading as their own tone.
             return Color.white.opacity(0.06)
         }
         return success.opacity(0.28 + (intensity * 0.62))

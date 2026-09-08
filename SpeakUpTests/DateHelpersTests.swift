@@ -2,13 +2,8 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Streak arithmetic sits on the retention-critical path (notifications,
-// widgets, achievements) — every edge below has a user-visible consequence.
 
 struct StreakCalculationTests {
-    // calculateStreak reads Date() internally (no injectable now), so fully
-    // absolute fixtures are impossible. Pin one start-of-day anchor and derive
-    // every fixture in whole days — nothing can straddle a midnight/DST edge.
     private static let today = Calendar.current.startOfDay(for: Date())
 
     private func daysAgo(_ days: Int) -> Date {

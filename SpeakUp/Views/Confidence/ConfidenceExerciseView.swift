@@ -69,13 +69,9 @@ struct ConfidenceExerciseView: View {
                 }
                 .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
-                // Re-identifying on the step index is what makes the swap
-                // animate — a bare Text replacement snaps.
                 .id(currentStepIndex)
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
-            // One element: "Step 2 of 6" then the text, instead of a symbol
-            // name announcement followed by an orphaned counter.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
             .accessibilityValue(exercise.step(safelyAt: currentStepIndex))
@@ -141,9 +137,6 @@ struct ConfidenceExerciseView: View {
                                 ChirpPlayer.shared.play(.tick)
                             } else {
                                 isComplete = true
-                                // Finishing used to sound identical to every
-                                // step press — the "you did it" moment gets
-                                // its own release breath and success haptic.
                                 ChirpPlayer.shared.play(.exhale)
                                 Haptics.success()
                             }

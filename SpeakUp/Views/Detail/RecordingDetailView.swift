@@ -186,16 +186,6 @@ struct RecordingDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
-            // The ToolbarSpacer is what stops these two icons drifting as the
-            // page scrolls. Adjacent items in one placement share a single glass
-            // capsule, and the system re-insets that capsule when the scroll-edge
-            // effect fades in and out — with two children inside, the re-inset
-            // redistributes them and both icons move. Splitting the old HStack
-            // into two ToolbarItems changed nothing, because the grouping is
-            // automatic; only a spacer breaks it. One item per capsule is the
-            // arrangement every other screen here already has, and none of them
-            // drift. Fixed sizing, not flexible: this is a divider, not a shove
-            // to opposite ends of the bar.
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     if case .ready(let recording) = detailScreenState {
@@ -249,8 +239,6 @@ struct RecordingDetailView: View {
             runReadySetupIfNeeded()
         }
         .onChange(of: recording?.isProcessing) { _, isProcessing in
-            // Analysis landed while this view was showing AnalyzingView —
-            // run the ready-state setup that .task skipped at appear time.
             if isProcessing == false {
                 runReadySetupIfNeeded()
             }
@@ -266,8 +254,6 @@ struct RecordingDetailView: View {
             readySetupTask?.cancel()
             audioService.stop()
             if allowsCoachMoments, let moment = coachMoments.pendingDetail {
-                // Leaving before acting is not an explicit dismissal. Clear
-                // presentation state without spending the weekly moment.
                 coachMoments.abandon(moment)
                 coachMomentEvaluated = false
             }
@@ -330,11 +316,6 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func readyContent(_ recording: Recording) -> some View {
         PageScrollView {
-            // Three blocks, then tabs. Context → score → what to do about it.
-            // Every metric surface (radar, stat tiles, pace chart, goal) moved
-            // under Breakdown: they are evidence for the score, and stacking
-            // them above the tabs gave the page a six-card preamble that
-            // buried the one number the user came here to read.
             VStack(spacing: 20) {
                 contextStrip(recording)
 
@@ -354,8 +335,6 @@ struct RecordingDetailView: View {
                        coachMoments.pendingDetail?.signal != .firstAxisClear {
                         nextStepSection(analysis, recording: recording)
                     }
-                    // Challenge CTA sits next to the score — burying it in
-                    // Coaching was the moment the share loop went unseen.
                     shareCTASection(recording)
 
                     detailTabPicker
@@ -374,15 +353,8 @@ struct RecordingDetailView: View {
                     // Held back by the free allowance, not broken.
                     analysisDeferredCard(recording)
                 } else if recording.overallScore != nil {
-                    // Analysis landed but the one-time resolve in
-                    // `runReadySetupIfNeeded` hasn't run yet this tick (the
-                    // onChange fires after this body pass). Render nothing for
-                    // the frame rather than claim failure.
                     EmptyView()
                 } else {
-                    // Analysis never landed (transcription failed or was
-                    // interrupted) — say so and offer a way out instead of
-                    // leaving a silent dead-end. A transcript may still exist.
                     analysisUnavailableCard(recording)
                     transcriptTabContent(recording)
                 }
@@ -415,23 +387,14 @@ struct RecordingDetailView: View {
         // Everything behind a blob decode lands first, synchronously: every
         // step below reads it, and `body` reads nothing but these caches.
         resolveSessionDataIfNeeded(for: recording)
-        // A review prompt is allowed from here on: the user has seen a
-        // complete result, which is what earns the right to ask.
         if coachAnalysis != nil {
             ReviewRequestService.shared.markFirstResultSeen()
         }
-        // Resolved once here instead of in body — hasPlayableMedia hits the
-        // filesystem (iCloud/local existence checks) on every call.
         playableMediaAvailable = hasPlayableMedia(recording)
         resolveVocabWorkoutIfNeeded(for: recording)
         prepareDetailAssets(for: recording)
         configurePlaybackState(for: recording)
 
-        // Post-analysis, in the background — don't block the detail view. The
-        // WPM series writes first so the coherence pass re-reads an analysis
-        // that already carries it; then the plan loads first on purpose: an
-        // insight generated before it resolves is the context-free one this
-        // whole path exists to replace.
         readySetupTask?.cancel()
         let recordingID = recording.id
         readySetupTask = Task {
@@ -467,8 +430,6 @@ struct RecordingDetailView: View {
     private func loadPersonalAverageIfNeeded(excluding currentID: UUID) async {
         guard baselines.score == nil, coachPlan == nil else { return }
         let container = modelContext.container
-        // Ranked against the user's own weights, so the focus reflects what
-        // actually moves *their* score, not the shipped defaults.
         let weights = ScoreWeights(from: userSettings.first)
 
         let subject = recording.flatMap(PersonalAverage.repeatSubject(of:))
@@ -516,8 +477,6 @@ struct RecordingDetailView: View {
                 hits: analysis.fillerWords
             )
         }
-        // Same pass, same once-only discipline: these lines feed the LLM
-        // prompt's crutch-habit block, the card below renders the rest.
         coachCrutchLines = crutchHits
             .prefix(2)
             .map { "\"\($0.word)\" x\($0.count)" }
@@ -542,8 +501,6 @@ struct RecordingDetailView: View {
     /// plainly, because "analysis failed" for a held-back recording reads as a bug.
     @ViewBuilder
     private func analysisDeferredCard(_ recording: Recording) -> some View {
-        // Read through the existing query rather than fetching: a fetch here
-        // would re-run on every body evaluation of this screen.
         let decision = AllowanceGate.decision(settings: userSettings.first)
 
         GlassCard(tint: AppColors.glassTintPrimary) {
@@ -634,16 +591,11 @@ struct RecordingDetailView: View {
         // Cached copy: `recording.analysis` decodes the blob on every call.
         guard coachAnalysis == nil else { return }
         if force {
-            // A retry lands a fresh analysis; drop transcript-derived caches
-            // so `resolveSessionDataIfNeeded` rebuilds them from the new words.
             sessionWords = nil
             speakerTurnsCache = []
             crutchHits = []
             structuralWordIDs = []
         }
-        // Mark processing at enqueue time — not only on force-retry — so a
-        // reopen of an unscored take cannot flash "Couldn't score" while the
-        // coordinator job has not yet flipped the flag.
         if !recording.isProcessing {
             recording.isProcessing = true
             try? modelContext.save()
@@ -774,10 +726,6 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func statsGrid(_ analysis: SpeechAnalysis) -> some View {
-        // One stat sheet, not four boxes. The 2×2 tile grid stacked label,
-        // value, baseline, and pill vertically in each cell, which left the
-        // right half of every tile empty and made the section twice as tall as
-        // the numbers warranted.
         MetricRowGroup {
             MetricRow(
                 icon: "speedometer",
@@ -905,8 +853,6 @@ struct RecordingDetailView: View {
 
                             if !filler.timestamps.isEmpty {
                                 FlowLayout(spacing: 6) {
-                                    // Capped: past a dozen chips this stops
-                                    // being a list of moments and becomes wallpaper.
                                     ForEach(Array(filler.timestamps.sorted().prefix(12).enumerated()), id: \.offset) { index, stamp in
                                         Button {
                                             playFrom(stamp)
@@ -953,8 +899,6 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func transcriptSectionWithHighlights(_ words: [TranscriptionWord]) -> some View {
-        // Cached turns, not `speakerTurns(from:)`: rebuilding per redraw
-        // re-ran filter/sort/merge to lay out the same sentences.
         let turns = speakerTurnsCache
         let hasSpeakerSeparation = hasSeparatedSpeakers(in: turns)
 
@@ -1206,9 +1150,6 @@ struct RecordingDetailView: View {
             rawTurns.append((isPrimary: currentSpeaker, words: currentWords))
         }
 
-        // Merge micro-turns: if a turn has only 1-2 words, absorb it into the adjacent turn
-        // with the most words. This prevents single noise-burst words from creating a
-        // spurious speaker-turn bubble in the UI.
         var merged: [(isPrimary: Bool, words: [TranscriptionWord])] = []
         for (_, turn) in rawTurns.enumerated() {
             if turn.words.count <= 2 && !merged.isEmpty {
@@ -1233,12 +1174,6 @@ struct RecordingDetailView: View {
         let otherWordCount = turns
             .filter { !$0.isPrimarySpeaker }
             .reduce(0) { $0 + $1.words.count }
-        // Lowered otherWordCount threshold from 4 to 3:
-        // In a short conversation (e.g. a Q&A), the other speaker may only contribute
-        // a brief question or acknowledgement. Requiring 4 words was hiding the speaker
-        // turn UI for legitimate two-speaker recordings.
-        // Also require at least 2 distinct turns (not just 2 total words) to avoid
-        // showing the UI for a single isolated noise burst.
         let otherTurnCount = turns.filter { !$0.isPrimarySpeaker }.count
         return primaryWordCount >= 8 && otherWordCount >= 3 && otherTurnCount >= 1
     }
@@ -1288,8 +1223,6 @@ struct RecordingDetailView: View {
 
         vocabWorkoutSection
 
-        // Attaches the filler count above to the words that produced it.
-        // Renders nothing on a clean take.
         if let words = sessionWords, !words.isEmpty {
             TranscriptExcerptCard(words: words) {
                 withAnimation(AppMotion.slide) { selectedDetailTab = .transcript }
@@ -1352,9 +1285,6 @@ struct RecordingDetailView: View {
             }
         }
 
-        // The swaps behind this take's crutch words. Fillers above show
-        // what-and-where; here each habit gets what-to-say-instead.
-        // Structural frames stay out — tip + plum transcript highlight own them.
         if !crutchHits.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 GlassSectionHeader("Word Swaps", icon: "arrow.triangle.swap")
@@ -1389,8 +1319,6 @@ struct RecordingDetailView: View {
 
         CoachingTipsView(
             plan: showsFocusCard ? coachPlan : nil,
-            // `coachAnalysis` where it has resolved: the advanced metrics half
-            // the tips are written against only survive on that copy.
             tips: CoachingTipService.generateTips(from: coachAnalysis ?? analysis, context: coachingContext),
             onPractice: { route in
                 switch route {
@@ -1515,8 +1443,6 @@ struct RecordingDetailView: View {
 
                 GlassButton(title: "Answer Quick Questions", icon: "pencil.line", style: .primary, fullWidth: true) {
                     Haptics.medium()
-                    // Reopen the feedback gate — detailScreenState flips back to
-                    // .processing and AnalyzingView shows the questionnaire.
                     if case .ready(let recording) = detailScreenState {
                         SessionFeedbackGateStore.reopen(recording.id)
                     }
@@ -1935,23 +1861,15 @@ struct RecordingDetailView: View {
         persisted.setAnalysis(analysis)
         try? modelContext.save()
 
-        // Keep the render-side cache on the persisted truth, or this visit's
-        // pace chart waits for a reopen to appear.
         coachAnalysis = analysis
         self.recording = persisted
     }
 
     private func enhanceCoherenceIfNeeded(recordingID: UUID) async {
-        // Single writer: runReadySetupIfNeeded can fire from multiple triggers
-        // (.task, isProcessing change, feedback completion). Two concurrent LLM
-        // passes would both write recording.analysis and jump the visible score.
         guard !coherenceEnhanceInFlight else { return }
         coherenceEnhanceInFlight = true
         defer { coherenceEnhanceInFlight = false }
 
-        // `fullAnalysis`, not `analysis`: this writes the result back, and
-        // writing back the lossy copy would overwrite the mirror with a version
-        // that has every advanced metric stripped out of it.
         guard case .ready(let recording) = detailScreenState,
               recording.id == recordingID,
               var analysis = recording.fullAnalysis else { return }
@@ -1959,13 +1877,8 @@ struct RecordingDetailView: View {
         let transcript = resolvedTranscript(for: recording)
         guard !transcript.isEmpty else { return }
 
-        // Skip if LLM has already enhanced this analysis. Re-running blends
-        // non-deterministic LLM output back into the persisted score and drifts
-        // the overall by ±1-2 points across opens.
         if analysis.llmEnhancedAt != nil { return }
 
-        // If local model is downloaded but not loaded, start loading in background
-        // and skip enhancement for this session to avoid blocking the view.
         if !llmService.isAvailable && llmService.localLLM.isModelDownloaded {
             Task(priority: .background) {
                 await llmService.loadLocalModelIfNeeded()
@@ -1977,8 +1890,6 @@ struct RecordingDetailView: View {
 
         let weights = ScoreWeights(from: userSettings.first)
 
-        // Story-linked recordings score against the script, matching the base
-        // analysis in RecordingProcessingCoordinator — story wins over prompt.
         let effectivePrompt: String? = {
             if let storyId = recording.storyId {
                 var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
@@ -2007,8 +1918,6 @@ struct RecordingDetailView: View {
         guard let persisted = (try? modelContext.fetch(descriptor))?.first else { return }
 
         persisted.setAnalysis(analysis)
-        // Tips read this copy; leaving it stale would show the pre-LLM
-        // relevance score next to a hero that has already moved.
         coachAnalysis = analysis
         self.recording = persisted
         if let storyId = persisted.storyId {
@@ -2023,8 +1932,6 @@ struct RecordingDetailView: View {
         }
         try? modelContext.save()
 
-        // Auto-generate coaching insight so it's ready on the coaching tab.
-        // Regenerate each time analysis is enhanced to avoid stale advice.
         guard !Task.isCancelled else { return }
         llmInsight = await llmService.generateCoachingInsight(
             from: analysis,
@@ -2067,8 +1974,6 @@ struct RecordingDetailView: View {
             return
         }
 
-        // First-time listen-back gets its encouragement sheet first; the
-        // timestamp waits in `pendingPlaybackTime` rather than being dropped.
         if let settings = userSettings.first, settings.listenBackCount == 0 {
             pendingPlaybackTime = time
             showingListenBackEncouragement = true

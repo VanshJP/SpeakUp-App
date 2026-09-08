@@ -88,9 +88,6 @@ extension AllPromptsView {
 
         return screenDecorations(
             VStack(spacing: 16) {
-                // Search first, with the filter menu on its trailing end — the
-                // same row shape History uses. It sat at the end of the chip
-                // row until the chips scrolled underneath it.
                 InlineSearchField(text: $searchText, prompt: "Search prompts…") {
                     filterMenu(prompts)
                 }
@@ -317,8 +314,6 @@ extension AllPromptsView {
     private func landingContent(_ prompts: [Prompt]) -> some View {
         spinTheWheelCard
 
-        // A non-"All" chip is a request to see prompts, not categories —
-        // otherwise the chips do nothing on this screen.
         if selectedFilter == .all {
             categoriesSection
         } else {
@@ -421,9 +416,6 @@ extension AllPromptsView {
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Progress is the data — the only place color earns its keep.
-                    // Tick count is high enough that ticks stay taller than
-                    // they are wide, otherwise they read as a row of dots.
                     TickMeter(
                         fraction: total > 0 ? Double(done) / Double(total) : 0,
                         color: color,
@@ -520,10 +512,6 @@ extension AllPromptsView {
             let recordings = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
             let prompts = (try? context.fetch(FetchDescriptor<Prompt>())) ?? []
 
-            // Denormalized promptId keeps the common path off relationship
-            // traversal. Rows written before the column existed carry nil, so
-            // fall back to the relationship — and write the backfill through
-            // this context so the fast path converges.
             let categoryByPromptID = Dictionary(
                 prompts.map { ($0.id, $0.category) },
                 uniquingKeysWith: { first, _ in first }
@@ -709,8 +697,6 @@ struct PromptRow: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            // Category identity as a full-height rail, not a badge — one
-            // colored element instead of three competing chips.
             .padding(.leading, 10)
             .overlay(alignment: .leading) {
                 Capsule()

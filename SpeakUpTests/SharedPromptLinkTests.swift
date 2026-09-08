@@ -116,8 +116,6 @@ struct SharedPromptLinkTests {
     }
 
     @Test func campaignParametersOnAShareLinkAreIgnoredNotDropped() {
-        // Routing still owns source/campaign for attribution; the payload
-        // only needs to recognise that this is a share.
         let url = URL(string: "https://bigtalk.app/record?prompt=prof-1&source=share&campaign=launch")!
         let parsed = SharedPromptLink.payload(from: url)
         #expect(parsed?.isShareChallenge == true)

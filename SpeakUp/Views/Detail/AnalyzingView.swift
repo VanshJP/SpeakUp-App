@@ -10,8 +10,6 @@ import SwiftUI
 @MainActor
 @Observable
 final class SessionFeedbackGateStore {
-    // Observable so views reading isDismissed() re-render when the gate reopens
-    // (the reflection card's "Answer Quick Questions" path).
     static let shared = SessionFeedbackGateStore()
     private var dismissedIds: Set<UUID> = []
     private init() {}
@@ -58,9 +56,6 @@ struct AnalyzingView: View {
     @State private var feedbackSubmitted = false
     @State private var pendingAutoSubmit: Task<Void, Never>?
 
-    // Debounce window before auto-submit fires. Matches the selection spring
-    // (~0.3 s response) so the user sees their tap register before the view
-    // transitions to results.
     private static let autoSubmitDelay: Duration = .milliseconds(350)
 
     private var shouldShowFeedback: Bool {
@@ -101,8 +96,6 @@ struct AnalyzingView: View {
         "Scoring your delivery..."
     ]
 
-    // Parent RecordingView uses .ignoresSafeArea(); go through UIKit to get
-    // the true system inset so feedback content clears the Dynamic Island.
     private var systemTopSafeAreaInset: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
@@ -385,11 +378,6 @@ struct AnalyzingView: View {
     }
 
     // MARK: - Animations (task-based, auto-cancelled on disappear)
-    //
-    // The waveform and pulse loops moved to `.ambientLoop` — they never used
-    // the async context for anything (a `repeatForever` animation lives on the
-    // view, not the task, so cancellation never reached them) and they now go
-    // still under Reduce Motion.
 
     private func cycleTips() async {
         while !Task.isCancelled {
@@ -693,14 +681,6 @@ private struct MotivationalTipCard: View {
 }
 
 // MARK: - Detail Skeleton View
-//
-// Post-recording loading state. Mirrors `RecordingDetailView.readyContent`
-// block for block — context strip, hero score card, next step, tab picker,
-// metric rows — so nothing jumps when the score lands. Same 20pt stack spacing
-// and 16pt page padding as the real screen, same card paddings, and the header
-// is literally the same view: everything it shows (prompt, category, date,
-// duration) is known before analysis starts, so it renders for real instead of
-// as a grey bar. Only the parts that need the analysis are placeholders.
 
 private struct DetailSkeletonView: View {
     let recording: Recording
@@ -713,18 +693,10 @@ private struct DetailSkeletonView: View {
 
     var body: some View {
         PageScrollView {
-            // Single ShimmerHost drives one animation for every skeleton
-            // primitive in this view via the shimmerPhase environment value.
             ShimmerHost {
                 // 20pt, matching RecordingDetailView.readyContent.
                 VStack(spacing: 20) {
                     statusHeader
-                        // The parent RecordingView ZStack uses .ignoresSafeArea()
-                        // so the recording UI can paint edge-to-edge. When the
-                        // skeleton takes over, that inherited modifier pushes
-                        // the status pill under the notch / Dynamic Island.
-                        // Pad the header by the system top safe area so it
-                        // clears the status bar regardless of device.
                         .padding(.top, hasExternalTopBar ? 8 : systemTopSafeAreaInset + 8)
 
                     DetailContextStrip(recording: recording)
@@ -793,9 +765,6 @@ private struct DetailSkeletonView: View {
     }
 
     // MARK: - Skeleton Sections
-    //
-    // Each mirrors the card it will be replaced by: same GlassCard padding,
-    // same element order, same heights.
 
     /// `ScoreHeroCard` — eyebrow row, subscore donut, verdict line.
     private var heroScoreSkeleton: some View {

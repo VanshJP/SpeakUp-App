@@ -31,10 +31,6 @@ struct RecordingBackdropTests {
     }
 
     // MARK: - Catalogue linkage
-    //
-    // Both menus paint through the one `CanvasLook` catalogue. These pin the
-    // link: a look renamed on one screen and not the other is the exact drift
-    // the shared catalogue exists to prevent.
 
     @Test func sharedNamesResolveToTheSameLook() {
         #expect(RecordingBackdrop.aurora.look == AppCanvas.aurora.look)

@@ -183,11 +183,6 @@ struct LanguageInsightsView: View {
             .accessibilityLabel("\(usage.word), \(categoryLabel(usage.category)), \(usage.count) times, \(directionLabel(usage.direction)).")
 
             if !usage.swapsPreview.isEmpty {
-                // Advice, not vocabulary. As capsules these sat one card above
-                // the Word Mix chips and read as "more words you said" — and a
-                // pill saying "cut it" is indistinguishable from a pill saying
-                // "significant". As a sentence, the quoted entries are the
-                // wording to borrow and the unquoted ones are the move to make.
                 let lead = Text("Try instead  ").foregroundStyle(.tertiary)
                 let swaps = Text(usage.swapsPreview.joined(separator: "  ·  "))
                     .foregroundStyle(AppColors.primary)
@@ -407,10 +402,6 @@ struct LanguageInsightsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 GlassCardTitle("Coach Notes", icon: "lightbulb.fill")
 
-                // Says only what `makeSuggestions` actually does: it fires a
-                // fixed set of rules against the numbers on this page and
-                // keeps the first four. It does NOT rank by impact, and the
-                // list can include positive notes — so no "N things to fix".
                 Text("What your numbers on this page add up to. At most four at a time.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

@@ -19,8 +19,6 @@ struct OnboardingMicStep: View {
         ) {
             GlassCard(tint: hasPermission ? AppColors.glassTintPrimary : nil, padding: 16) {
                 VStack(spacing: 14) {
-                    // Isolated so the 16 Hz meter only redraws the bars, not
-                    // this card, its copy, or the page's footer button.
                     LiveMicWaveform(viewModel: viewModel, isLive: hasPermission)
                         .frame(height: 104)
                         .opacity(hasPermission ? 1 : 0.3)
@@ -53,8 +51,6 @@ struct OnboardingMicStep: View {
                 )
             }
         }
-        // Granting permission rewrites the title, subtitle, card tint and CTA
-        // at once. Without this the whole page snaps between two layouts.
         .motion(AppMotion.settle, value: hasPermission)
     }
 
@@ -167,9 +163,6 @@ struct OnboardingCalibrationStep: View {
                 }
             }
 
-            // One line each. These were full sentences that each wrapped to
-            // two lines, so three bullets read as a six-line paragraph with
-            // icons in it rather than three separate facts.
             GlassCard(padding: 14) {
                 VStack(alignment: .leading, spacing: 12) {
                     OnboardingBullet(
@@ -488,9 +481,6 @@ struct OnboardingReminderStep: View {
                 }
 
                 GlassCard(padding: 4) {
-                    // The wheel needs ~200pt to render its three rolling rows
-                    // without clipping; a shorter frame also shadows the centre
-                    // row's hit region so taps land off-target.
                     DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
@@ -527,7 +517,3 @@ struct OnboardingReminderStep: View {
     }
 }
 
-// The ready-step recap that used to live here is gone with the baseline
-// moving inside onboarding: the flow no longer needs a receipt or a
-// start-recording decision — the reveal in `OnboardingBaselineSteps` is the
-// terminal screen.

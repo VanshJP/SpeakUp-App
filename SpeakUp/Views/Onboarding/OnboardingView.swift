@@ -24,9 +24,6 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack {
-            // The canvas darkens for the live take, exactly like the app's own
-            // recorder — the baseline should feel like the recording screen the
-            // user will meet again tomorrow, not a page that happens to record.
             AppBackground(style: isTakeLive ? .recording : .subtle)
                 .ignoresSafeArea()
                 .motion(AppMotion.settle, value: isTakeLive)
@@ -39,12 +36,6 @@ struct OnboardingView: View {
                 ZStack {
                     stepContent
                         .id(viewModel.currentStep)
-                        // The arriving page rises as it fades in; the outgoing
-                        // one only fades. Deliberately direction-agnostic: a
-                        // horizontal push would need the removal transition to
-                        // know which way it is leaving, and SwiftUI resolves a
-                        // removed view's transition from the state it was
-                        // created with, so Back would exit the wrong way.
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .offset(y: 14)),
                             removal: .opacity
@@ -66,15 +57,10 @@ struct OnboardingView: View {
             Task { await viewModel.checkNotificationPermission() }
         }
         .onChange(of: viewModel.currentStep) { oldStep, newStep in
-            // Dismiss the keyboard on every transition. The name step
-            // re-acquires focus after the crossfade settles.
             UIApplication.shared.sendAction(
                 #selector(UIResponder.resignFirstResponder),
                 to: nil, from: nil, for: nil
             )
-            // Centralised mic-test lifecycle so leaving via Back/Skip/Continue
-            // always tears down the recording. The calibration step that
-            // follows drives its own session and cannot share the device.
             if oldStep == .mic, newStep != .mic {
                 viewModel.stopMicTest()
             }
@@ -83,9 +69,6 @@ struct OnboardingView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            // The mic test holds a live recording. Leaving it running while the
-            // app is backgrounded keeps the system recording indicator lit and
-            // burns battery for a meter nobody can see.
             if viewModel.currentStep == .mic {
                 if phase == .active {
                     Task { await viewModel.resumeMicTestIfPermitted() }
@@ -93,12 +76,6 @@ struct OnboardingView: View {
                     viewModel.stopMicTest()
                 }
             }
-            // A baseline take interrupted by backgrounding (call, app switch)
-            // is discarded rather than resumed — a take with a hole in it
-            // would poison the one recording everything gets compared to.
-            // `.saving` is deliberately excluded: the audio is already stopped
-            // and the row is moments from existing, so discarding there would
-            // throw away a finished take.
             if viewModel.currentStep == .baseline,
                phase != .active,
                viewModel.baselinePhase == .countdown || viewModel.baselinePhase == .recording {
@@ -146,14 +123,6 @@ struct OnboardingView: View {
                 Color.clear.frame(width: Self.topBarGutter, height: 34)
             }
 
-            // Ticks read as discrete steps rather than a loading bar: one
-            // tick per page, using the app's shared meter primitive. Hidden on
-            // hero steps: the cover should read as a cover, and the baseline
-            // is the event the ticks build toward, not another tick.
-            //
-            // Decorative to VoiceOver on purpose: every non-hero page already
-            // announces "Step N of 4" as the first line of its header, so
-            // labelling the meter too would read the position twice.
             TickMeter(
                 fraction: viewModel.stepProgress,
                 color: AppColors.primary,
@@ -163,8 +132,6 @@ struct OnboardingView: View {
             .opacity(viewModel.currentStep.isHero ? 0 : 1)
             .motion(AppMotion.settle, value: viewModel.stepProgress)
 
-            // Skip makes no sense on the cover or the terminal step, and would
-            // duplicate the footer action on steps that decline explicitly.
             if !viewModel.currentStep.isHero, !viewModel.currentStep.providesOwnSkip {
                 Button("Skip") {
                     viewModel.skip()
@@ -214,10 +181,6 @@ struct OnboardingView: View {
             )
 
         case .mic:
-            // Takes the view model rather than a `level:` snapshot on purpose.
-            // Reading `micLevel` here would re-evaluate this whole body (top
-            // bar, tick meter, every page) 16 times a second while the meter
-            // runs. The step keeps that read inside its own waveform subview.
             OnboardingMicStep(
                 counter: viewModel.stepCounterLabel,
                 viewModel: viewModel,

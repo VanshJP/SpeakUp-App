@@ -10,14 +10,10 @@ struct DrillSessionView: View {
 
     var body: some View {
         ZStack {
-            // Carries the backdrop over from the drill countdown instead of
-            // swapping it out the moment the drill starts.
             RecordingBackdropView(
                 backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
             )
 
-            // Same three slots as the recording screen — the drill countdown
-            // hands off to this, so the dial has to land where it left.
             VStack(spacing: 0) {
                 topBar
 

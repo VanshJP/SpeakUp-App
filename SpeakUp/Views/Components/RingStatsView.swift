@@ -29,9 +29,6 @@ struct RingStatsView: View {
     }
 
     var body: some View {
-        // Shared card chrome, not a hand-rolled twin: the background used to
-        // duplicate `GlassCard` at radius 24 while every neighbor sat at 18,
-        // which is exactly the shape drift that makes a page read as islands.
         GlassCard(padding: 20) {
             VStack(spacing: 18) {
                 // Three standalone gauges — value inside, label beneath.

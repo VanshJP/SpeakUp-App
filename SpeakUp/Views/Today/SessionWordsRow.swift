@@ -30,8 +30,6 @@ struct SessionWordsRow: View {
                     .frame(height: 1)
                     .accessibilityHidden(true)
 
-                // `USE` is the label these chips spent their whole life
-                // without — two bare words explain nothing on their own.
                 FlowLayout(spacing: 6) {
                     Text("USE")
                         .font(.system(size: 10, weight: .semibold))
@@ -45,8 +43,6 @@ struct SessionWordsRow: View {
                     }
                 }
             }
-            // A `Rectangle` has no ideal width, so the `VStack` would otherwise
-            // size to the chips and the rule would stop short of the card edge.
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -78,8 +74,6 @@ struct SessionWordsRow: View {
             }
         } label: {
             HStack(spacing: 5) {
-                // New words earn the one dot of colour in this row — it is the
-                // only state a chip has that the user cannot infer from reading.
                 if isNew, !used {
                     Circle()
                         .fill(AppColors.categorySage)

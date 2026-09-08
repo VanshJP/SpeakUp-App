@@ -39,10 +39,6 @@ struct NextStep {
                 area: plan.focus.title,
                 areaSlug: plan.focus.analyticsSlug,
                 score: plan.focus.subscore(in: subscores) ?? plan.focusAverage,
-                // The technique, not `plan.headline`: the focus card on the
-                // coaching tab already carries the where-you-are line, and
-                // both are on screen once the user scrolls. This card is the
-                // action, so it says what to do.
                 coaching: plan.focus.technique.how,
                 actionTitle: route.title,
                 action: route.action
@@ -142,8 +138,6 @@ struct NextStepCard: View {
                         fullWidth: true
                     ) {
                         Haptics.medium()
-                        // Logged here rather than at each call site so every
-                        // surface that shows this card reports the same event.
                         AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
                         onAction(step.action)
                     }

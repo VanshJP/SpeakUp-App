@@ -2,10 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// The coaching layer is pure functions over PODs, so all of it is testable
-// without a container. What is worth testing is the judgement: does the focus
-// stay put, does the ranking follow impact rather than declaration order, and
-// does the advanced-metric round-trip actually survive.
 
 // MARK: - Helpers
 
@@ -59,15 +55,11 @@ struct CoachPlanTests {
     }
 
     @Test func zeroScoredSessionsAreIgnored() {
-        // A zero overall is the zero-word gate firing — a dead microphone, not
-        // a weakness. Coaching off those invents problems the user never had.
         let dead = analysis(overall: 0, clarity: 0, pace: 0, filler: 0, pause: 0)
         #expect(CoachPlanService.plan(window: [dead, dead]) == nil)
     }
 
     @Test func focusIsTheLargestWeightedDeficitNotTheLowestScore() {
-        // Relevance is lower, but it carries 0.06 of the score while clarity
-        // carries 0.18 — clarity is the bigger lever and must win.
         let session = analysis(clarity: 55, pace: 90, filler: 90, pause: 90, relevance: 50)
         let plan = CoachPlanService.plan(window: Array(repeating: session, count: 5))
         #expect(plan?.focus == .clarity)
@@ -123,8 +115,6 @@ struct CoachPlanTests {
     }
 
     @Test func failedCapturesDoNotRedirectThePlan() {
-        // Today used to run its own focus logic that averaged these in, so a
-        // single silent recording could redirect the whole practice plan.
         let real = analysis(clarity: 80, pace: 80, filler: 55, pause: 80)
         let dead = analysis(overall: 0, clarity: 0, pace: 0, filler: 0, pause: 0)
         let plan = CoachPlanService.plan(window: [dead, real, real, real, real])
@@ -133,8 +123,6 @@ struct CoachPlanTests {
     }
 
     @Test func userWeightsChangeTheFocus() {
-        // Same session, different weights: whichever dimension the user says
-        // matters is the one they get sent after.
         let session = analysis(clarity: 60, pace: 60, filler: 90, pause: 90)
         var paceHeavy = ScoreWeights.defaults
         paceHeavy.pace = 0.9
@@ -152,9 +140,6 @@ struct CoachPlanTests {
     }
 
     @Test func everyDimensionRoutesSomewhereReal() {
-        // A wrong suggestion is worse than none: routing vocal variety at
-        // Pause Practice put "Try Pause Practice" under a tip about widening
-        // your pitch range, which reads as the app being broken.
         for dimension in CoachDimension.allCases {
             guard case .drill(let raw) = dimension.practiceRoute else { continue }
             #expect(
@@ -197,8 +182,6 @@ struct CoachingTipTests {
     }
 
     @Test func signalWarningsNeverDisplaceCoaching() {
-        // The old ordering evaluated these first, so a noisy room could spend
-        // two of three slots on microphone advice while a 20 went unmentioned.
         var noisy = analysis(
             overall: 30, clarity: 20, pace: 20, filler: 20, pause: 20,
             vocalVariety: 20, delivery: 20
@@ -212,9 +195,6 @@ struct CoachingTipTests {
     }
 
     @Test func paceAdviceFollowsTheUsersTargetNotAFixedBand() {
-        // 175 WPM is "too fast" against a 150 target and correct against 180.
-        // The old copy hardcoded 130-170 and contradicted the score whenever
-        // auto-calibration moved the target.
         let fast = analysis(pace: 60, wpm: 175)
         let againstDefault = CoachingTipService.generateTips(
             from: fast,
@@ -242,8 +222,6 @@ struct CoachingTipTests {
     }
 
     @Test func focusStillAppearsOnASessionWhereItWentWell() {
-        // Otherwise the thread the user is following silently disappears on a
-        // good day and they lose track of what they were working on.
         let session = analysis(clarity: 95, pace: 40, filler: 40, pause: 40)
         let plan = CoachPlanService.plan(window: Array(repeating: analysis(clarity: 40), count: 5))
         let tips = CoachingTipService.generateTips(
@@ -254,9 +232,6 @@ struct CoachingTipTests {
     }
 
     @Test func tipsCarryAHearableMomentWhenOneExists() {
-        // A tip the user can play is worth several they can only read. If this
-        // is nil the "Hear it" pill disappears and the coaching goes back to
-        // being a number they have no memory of.
         var evidence = CoachEvidence()
         evidence.fillerBurst = (count: 4, start: 38, end: 52, word: "um")
         evidence.longestHesitation = (at: 71, seconds: 2.4)
@@ -270,8 +245,6 @@ struct CoachingTipTests {
     }
 
     @Test func fillerTipFallsBackToTheFirstOccurrence() {
-        // No cluster, but the timestamps still exist — the tip should still be
-        // playable rather than silently losing the affordance.
         let tips = CoachingTipService.generateTips(
             from: analysis(filler: 40, fillerWords: [FillerWord(word: "uh", count: 2, timestamps: [12, 90])])
         )
@@ -367,8 +340,6 @@ struct CoachingTipTests {
 @MainActor
 struct CoachEvidenceTests {
     @Test func findsTheDensestBurstNotTheWholeCount() {
-        // Seven "um"s over two minutes sounds fine; four inside twelve seconds
-        // is what the listener actually noticed.
         let fillers = [FillerWord(word: "um", count: 7, timestamps: [2, 40, 44, 48, 52, 95, 110])]
         let evidence = CoachEvidenceService.evidence(
             for: analysis(fillerWords: fillers),
@@ -380,8 +351,6 @@ struct CoachEvidenceTests {
     }
 
     @Test func structuralBurstDoesNotPolluteClassicFillerBurst() {
-        // Classic ums must sit inside the 15s burst window; structural stamps
-        // stay out of fillerBurst even when denser.
         let fillers = [
             FillerWord(word: "um", count: 3, timestamps: [10, 12, 14], kind: .filler),
             FillerWord(
@@ -441,8 +410,6 @@ struct CoachEvidenceTests {
     }
 
     @Test func ignoresPausesAfterFullStops() {
-        // A pause after a sentence is craft; the same gap mid-clause is the
-        // speaker searching for a word. Only the second is coachable.
         let words = [
             TranscriptionWord(word: "done.", start: 0, end: 1),
             TranscriptionWord(word: "next", start: 5, end: 5.5),
@@ -491,8 +458,6 @@ struct AnalysisMirrorTests {
     }
 
     @Test func mirrorKeepsWhatSwiftDataDrops() {
-        // The whole point: `analysis` comes back from the store without these,
-        // which is most of what the coaching layer reasons about.
         guard let data = rich().encodedMirror(),
               let restored = SpeechAnalysis.decodedMirror(data) else {
             Issue.record("mirror did not round-trip")
@@ -613,21 +578,11 @@ struct CoachingPromptTests {
     }
 
     @Test func scoreRuleCarriesMetricNamesInBothModes() {
-        // The bare-score ban has to survive compact mode — the E4B local
-        // profile is exactly the backend most likely to drop the label.
         let full = CoachingPrompt.system(context: CoachingContext())
         let compact = CoachingPrompt.system(context: CoachingContext(), compact: true)
 
-        // Compact only declines to append the benchmarks tail, so it is a
-        // strict prefix of full. Asserting the shape means a reworded rule
-        // can't fail this test while the rule is still there — the previous
-        // version pinned a hand-copied sentence and broke on an edit that
-        // changed nothing about the behaviour.
         #expect(full.hasPrefix(compact))
 
-        // The ban itself, and the names that make it enforceable. Short
-        // fragment on purpose: if "bare number" stops appearing, the rule
-        // really has changed and this SHOULD fail.
         #expect(compact.contains("bare number"))
         #expect(compact.contains(CoachingPrompt.dimensionNameList))
         for title in CoachDimension.allCases.map(\.title) {
@@ -672,8 +627,6 @@ struct CoachingInsightSanitizerTests {
             transcript: "irrelevant"
         ))
 
-        // A quote from deep in the answer must pass; the old check scanned
-        // only the first 24 tokens and discarded exactly these.
         let lateQuote = String(repeating: "wandering setup material ", count: 40) + "revenue doubled"
         #expect(CoachingInsightSanitizer.isSpecificEnough(
             ["Your close said revenue doubled, lead with it next time"],
@@ -722,8 +675,6 @@ struct CoachingInsightSanitizerTests {
     }
 
     @Test func overallIsNeverRelabelledAsASubscore() {
-        // clarity also scores 71 — the look-back must still protect a score
-        // the model explicitly called the overall.
         let original = "Overall you scored 71/100."
         #expect(
             CoachingInsightSanitizer.namingBareScores([original], subscores: namingSubscores) == [original]
@@ -731,8 +682,6 @@ struct CoachingInsightSanitizerTests {
     }
 
     @Test func unmatchedNumbersStayAsWritten() {
-        // Nothing in this session scored 58; inventing a label would be worse
-        // than the bare number.
         let original = "You scored 58/100 on this take."
         #expect(
             CoachingInsightSanitizer.namingBareScores([original], subscores: namingSubscores) == [original]
@@ -750,8 +699,6 @@ struct CoachingInsightSanitizerTests {
     }
 
     @Test func hintInsideLookBackProtectsTheLaterScore() {
-        // Both scores sit close enough to a named metric that relabelling
-        // could only guess wrong; the safety net leaves them alone.
         let original = "Clarity came in at 71/100 while vocal variety sat 44/100 low."
         #expect(
             CoachingInsightSanitizer.namingBareScores([original], subscores: namingSubscores) == [original]

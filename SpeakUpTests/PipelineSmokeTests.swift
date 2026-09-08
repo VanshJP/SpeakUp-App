@@ -2,11 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// End-to-end pins for SpeechAnalysisPipeline.analyze: a realistic transcription
-// must come out with every subscore finite and bounded, a plausible WPM, and
-// identical scoring across repeated calls. Exact lexical expectations are
-// gated on NLPCapability (fresh simulators ship no NLP models); bounds hold
-// everywhere.
 
 @MainActor
 struct PipelineSmokeTests {
@@ -87,17 +82,12 @@ struct PipelineSmokeTests {
                 #expect(m.isDefinitelyGibberish == (m.gibberishConfidence >= 4.0 / 6.0))
             }
         }
-        // Coherence rides NLEmbedding, which can be missing even where the
-        // tagger works — so only its bounds are pinned, never its presence.
         if let relevance = result.promptRelevanceScore {
             #expect(relevance >= 0 && relevance <= 100)
         }
     }
 
     @Test func analyzeIsDeterministicAcrossCalls() {
-        // Not whole-struct Equatable: FillerWord/WPMDataPoint mint a fresh
-        // UUID per call inside analyze, so identity noise would mask real
-        // drift. Every deterministic field is compared instead.
         let input = realisticTranscription()
         let first = SpeechAnalysisPipeline.analyze(transcription: input, actualDuration: input.duration)
         let second = SpeechAnalysisPipeline.analyze(transcription: input, actualDuration: input.duration)
@@ -126,8 +116,6 @@ struct PipelineSmokeTests {
     }
 
     @Test func emptyWordsReturnNonCrashingDefaults() {
-        // Characterization of the zero-score gate, not a designed product
-        // decision: no speech → all zeros, no trap.
         let result = SpeechAnalysisPipeline.analyze(
             transcription: SpeechTranscriptionResult(text: "", words: [], duration: 12),
             actualDuration: 12
@@ -141,9 +129,6 @@ struct PipelineSmokeTests {
     }
 
     @Test func allFillerInputCollapsesThroughTheZeroGate() {
-        // Characterization: every word flagged filler leaves zero non-fillers,
-        // so the zero-score gate fires — WPM included — instead of scoring a
-        // transcript that is 100% filler.
         let words = (0..<10).map { i in
             TranscriptionWord(word: "um", start: Double(i), end: Double(i) + 0.5,
                               confidence: 0.9, isFiller: true)

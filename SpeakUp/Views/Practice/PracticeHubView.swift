@@ -13,8 +13,6 @@ struct PracticeHubView: View {
     /// Non-nil pushes Compare from Library → Tools → Review.
     @State private var compareRoute: CompareRoute?
 
-    // Practice tools — same grammar as Prompts: category grid → in-place
-    // detail (filters + items). Today's quick tiles still present sheets.
     private enum LibraryTool: String, Identifiable, CaseIterable {
         case warmUps
         case drills
@@ -51,10 +49,6 @@ struct PracticeHubView: View {
             PageScrollView {
                 LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
                     Section {
-                        // Sections swap instantly rather than crossfading: a
-                        // crossfade keeps the outgoing section alive for the
-                        // animation, so two filter controls would render at
-                        // once. The picker pill still slides.
                         switch selectedSection {
                         case .prompts:
                             AllPromptsView(
@@ -86,27 +80,17 @@ struct PracticeHubView: View {
                 .pageContentInsets()
             }
             .scrollIndicators(.hidden)
-            // `.searchable` used to hand this over for free; an inline field
-            // has to say it, or the keyboard sits over half the results.
             .scrollDismissesKeyboard(.interactively)
 
             floatingActionButton
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        // No nav bar. It carried the word "Library" above a tab button
-        // labelled Library, and `.searchable` hung off it — together ~100pt of
-        // permanent chrome above a picker, a chip row, and only then a prompt.
-        // The picker is the only pinned row now; search belongs to whichever
-        // section you are in, so each section draws its own row and hangs its
-        // filter or sort menu off the end of it.
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: storiesSearchText) { _, newValue in
             storiesViewModel.setSearch(newValue)
         }
         .onChange(of: selectedSection) { _, _ in
-            // Leaving Tools drops the in-place drill-down so returning lands
-            // on the category grid, matching Prompts' category reset feel.
             selectedTool = nil
         }
         .navigationDestination(item: $selectedStory) { story in
@@ -193,9 +177,6 @@ struct PracticeHubView: View {
         Group {
             if let selectedTool {
                 toolDetail(selectedTool)
-                    // Detail enters/exits from the trailing edge — same grammar
-                    // as a NavigationStack push. The old asymmetric pair used
-                    // opposite edges for removal, so forward looked like back.
                     .transition(.asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .trailing).combined(with: .opacity)
@@ -232,9 +213,6 @@ struct PracticeHubView: View {
                     || $0.bestFor.localizedStandardContains(query)
             }
 
-        // No eyebrow, no intro paragraph: the two grid headers already say
-        // Practice and Review, and a sentence of preamble is a row of scroll
-        // between the user and the tool they came for.
         return VStack(alignment: .leading, spacing: 20) {
             InlineSearchField(text: $toolsSearchText, prompt: "Search tools…") {
                 EmptyView()

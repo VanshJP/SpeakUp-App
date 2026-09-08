@@ -35,8 +35,6 @@ struct LiveTranscriptionAccountingProbe {
         guard segments.count > watermark else { return watermark }
         let added = Array(segments[watermark...])
 
-        // Contiguous timings, no pauses — matches the service feeding raw
-        // segment timing straight into the shared pipeline.
         let timings = added.enumerated().map { index, word in
             RawWordTiming(word: word,
                           start: Double(index) * 0.4,
@@ -59,8 +57,6 @@ struct LiveTranscriptionAccountingProbe {
         #expect(watermark == 5)
         #expect(counts == ["um": 1, "uh": 1])
 
-        // A later partial re-sends all five plus three new ones; only the
-        // additions may move the tallies.
         watermark = advanceWatermark(counts: &counts, watermark: watermark,
                                      segments: ["um", "today", "went", "uh", "great",
                                                 "and", "um", "again"])
@@ -90,10 +86,6 @@ struct LiveTranscriptionAccountingProbe {
     }
 
     @Test func restartAccumulatesDisjointRequestsAdditively() {
-        // Request 1 ends at an auto-finalized pause; the restart resets the
-        // watermark but KEEPS the tallies. Request 2 covers new audio only.
-        // Hesitation sounds only: lexical fillers need sentence context this
-        // synthetic timing layout cannot provide.
         var counts: [String: Int] = [:]
         _ = advanceWatermark(counts: &counts, watermark: 0,
                              segments: ["um", "today", "uh"])
@@ -101,17 +93,10 @@ struct LiveTranscriptionAccountingProbe {
         _ = advanceWatermark(counts: &counts, watermark: 0,  // attachRecognition reset point
                              segments: ["um", "again", "uh"])
 
-        // True session total: each hesitation said in both windows sums to 2.
-        // The old max-merge reported max(1, 1) = 1 — the reason additive won.
         #expect(counts == ["um": 2, "uh": 2])
     }
 
     @Test func startResetsCountsAndWatermarkTogether() {
-        // start() clears liveFillerWordCounts AND lastProcessedSegmentCount
-        // as one pair. The invariant that matters: no state combination
-        // survives where a fresh session inherits stale tallies while its
-        // watermark starts from zero — that pairing is what keeps accounting
-        // coherent across sessions.
         var counts: [String: Int] = ["um": 4, "like": 2]
         var watermark = 3
 

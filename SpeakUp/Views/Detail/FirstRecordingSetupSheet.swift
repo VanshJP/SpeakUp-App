@@ -57,9 +57,6 @@ struct FirstRecordingSetupSheet: View {
                 .scrollIndicators(.hidden)
                 .safeAreaInset(edge: .bottom) { footer }
             }
-            // No title and no toolbar Done: the header card names the screen,
-            // and the one way forward is the pinned button, which is also the
-            // only control on screen that isn't already saved.
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -207,9 +204,6 @@ struct FirstRecordingSetupSheet: View {
         VStack(spacing: 10) {
             GlassSectionHeader("Make it yours", icon: "sparkles")
 
-            // Card padding drops to 4 so each row owns its own hit area and can
-            // reach the card's edges — a 44pt row inset by card padding reads as
-            // a cramped label rather than a control.
             GlassCard(padding: 4) {
                 VStack(spacing: 0) {
                     reminderRow

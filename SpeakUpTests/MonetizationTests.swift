@@ -43,8 +43,6 @@ struct FreeTierPolicyTests {
     }
 }
 
-// The clock the whole offer hangs on. It starts at the first score, so an
-// unstarted trial is a full trial, and it must end at exactly 14 days.
 @MainActor
 struct PracticeTrialTests {
     @Test func anUnstartedClockIsNotRunning() {
@@ -72,8 +70,6 @@ struct PracticeTrialTests {
     }
 }
 
-// A comparison price is a claim about money, and the only one in the app that
-// StoreKit cannot supply. These pin the conditions under which it may be shown.
 @MainActor
 struct FoundingComparisonPriceTests {
     private let future = t0.addingTimeInterval(30 * day)
@@ -101,9 +97,6 @@ struct FoundingComparisonPriceTests {
     }
 }
 
-// The limit has to be legible before it is spent, not only after. These pin the
-// copy that says so, including the plural that reads wrong exactly once — at
-// one remaining, which is the moment it matters most.
 @MainActor
 struct AllowanceDisclosureTests {
     @Test func anEntitledUserIsToldNothing() {
@@ -150,8 +143,6 @@ struct AllowanceDisclosureTests {
 
 @MainActor
 struct PracticeAllowanceTests {
-    // Every free user in these tests is past the 14 days unless the test is
-    // about the trial itself; that is where the counting starts.
     private func decide(
         _ state: AllowanceState,
         trial: TrialState = .expired,
@@ -210,8 +201,6 @@ struct PracticeAllowanceTests {
             state = spend(state, trial: .active(endsOn: endsOn), at: now)
         }
 
-        // Twenty scored analyses inside the trial leave the cycle untouched, so
-        // the month after expiry still opens at three.
         #expect(state == AllowanceState())
     }
 
@@ -309,8 +298,6 @@ struct AnalyticsPrivacyTests {
         #expect(share.dimensions["recipient"] == nil)
         #expect(share.dimensions["transcript"] == nil)
 
-        // Feedback questions can be written by the user, so the event carries
-        // the shape of the answer and nothing that was typed.
         let feedback = AnalyticsEvent.sessionFeedback(sentiment: "positive")
         #expect(feedback.dimensions == ["sentiment": "positive"])
     }

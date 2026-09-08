@@ -47,8 +47,6 @@ struct DailyPromptWidgetView: View {
         var components = URLComponents()
         components.scheme = "speakup"
         components.host = "record"
-        // Empty id → no queryItems, matching `SharedPromptLink.customSchemeURL`
-        // (whose parser drops empty values anyway).
         if !entry.promptId.isEmpty {
             components.queryItems = [URLQueryItem(name: "prompt", value: entry.promptId)]
         }

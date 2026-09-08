@@ -37,16 +37,10 @@ struct StoriesListView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // Search first, with the sort menu on its trailing end — the same
-            // row shape History uses. Sort sat at the end of the folder bar
-            // until the folder chips scrolled underneath it.
             InlineSearchField(text: $searchText, prompt: "Search stories…") {
                 sortMenu
             }
 
-            // No stats strip — folder counts and tag counts were inventory
-            // numbers nobody acts on. The folder bar and the list already say
-            // how much is here.
             StoryFolderBar(
                 viewModel: viewModel,
                 onCreateFolder: {

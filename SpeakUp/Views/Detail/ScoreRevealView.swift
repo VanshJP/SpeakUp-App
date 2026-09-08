@@ -132,9 +132,6 @@ struct ScoreRevealView: View {
                 .multilineTextAlignment(.center)
                 .opacity(showContext ? 1 : 0)
 
-            // Lands after the delta, so the reveal builds rather than dumping
-            // every fact at once. Rare by construction — it only ever shows on
-            // an actual new high.
             if let personalBestLabel {
                 StatusPill(
                     text: personalBestLabel,
@@ -154,8 +151,6 @@ struct ScoreRevealView: View {
     private var contextLine: String {
         switch band {
         case .building:
-            // Name the lever rather than the shortfall — the detail screen's
-            // next-step card picks this same thread up.
             if let weakestAxisLabel {
                 return "Next lever: \(weakestAxisLabel)"
             }
@@ -189,8 +184,6 @@ struct ScoreRevealView: View {
             showContext = true
             showBest = true
             showHint = true
-            // Reduce Motion removes movement, not feedback — the band still
-            // gets its own haptic.
             bandHaptic()
             try? await Task.sleep(for: .seconds(2.4))
             onDismiss()
@@ -223,8 +216,6 @@ struct ScoreRevealView: View {
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.4)) { showHint = true }
 
-        // Long enough to land, short enough that it never feels like a gate.
-        // A new high earns a beat more.
         try? await Task.sleep(for: .milliseconds(personalBestLabel != nil ? 1900 : 1400))
         guard !Task.isCancelled else { return }
         onDismiss()

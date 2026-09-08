@@ -191,8 +191,6 @@ struct ScoreHeroBody: View {
     @ViewBuilder
     private var deltaLabel: some View {
         if let delta {
-            // A delta inside ±2 is noise, not progress — calling it out would
-            // manufacture a trend from run-to-run variance.
             if abs(delta) <= 2 {
                 Text("On par with your average")
                     .font(.caption)

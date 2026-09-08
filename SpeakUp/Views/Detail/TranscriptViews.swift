@@ -1,8 +1,5 @@
 import SwiftUI
 
-// Extracted from RecordingDetailView. `SpeakerTurn` and its views were
-// file-private; they are internal now so the detail view can still build
-// turns while the rendering lives here.
 
 
 struct TranscriptContentView: View {

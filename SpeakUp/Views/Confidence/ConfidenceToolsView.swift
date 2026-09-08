@@ -115,9 +115,6 @@ struct ConfidenceToolsView: View {
                 longest: longestExerciseMinutes
             ),
             durationLabel: "\(exercise.durationMinutes)m",
-            // Cost before commit: minutes in the dial, and how many steps that
-            // buys in the chip — a 10-step ladder and a 4-step reset read very
-            // differently, and both never fit in the dial's 8pt label.
             tag: "\(exercise.steps.count) steps"
         ) {
             Haptics.medium()

@@ -24,9 +24,6 @@ struct CoachFocusCard: View {
     private var showsCTA: Bool { onPractice != nil || onPracticeAgain != nil }
 
     var body: some View {
-        // Never `elevated`: Start Speaking in the prompt card owns the white
-        // primary. This card's CTA is GlassButton.secondary — same family,
-        // quieter volume.
         GlassCard(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
                 header
@@ -95,9 +92,6 @@ struct CoachFocusCard: View {
 
     @ViewBuilder
     private var actionButton: some View {
-        // GlassButton.secondary — same capsule language as Start Speaking /
-        // GlassButton.primary, just the quieter variant so Today still has one
-        // white hero in the prompt card.
         if plan.isGraduating, let onPracticeAgain {
             GlassButton(
                 title: "Practice Again",

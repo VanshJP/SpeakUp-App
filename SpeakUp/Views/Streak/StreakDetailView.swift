@@ -5,9 +5,6 @@ struct StreakDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var achievements: [Achievement]
 
-    // Only dates are needed here. Fetched once on a background context so
-    // opening the streak sheet never hydrates every Recording on the main
-    // thread just to compute day math.
     @State private var recordingDates: [Date] = []
 
     private var streakAchievements: [Achievement] {
@@ -123,8 +120,6 @@ struct StreakDetailView: View {
                     .tracking(4)
                     .foregroundStyle(.white.opacity(isLit ? 0.7 : 0.45))
 
-                // Best is the only other number worth a pixel here, and it is
-                // a footnote to the current one — not its own card.
                 if longestStreak > currentStreak {
                     Text("Best \(longestStreak) days")
                         .font(.caption.weight(.medium))

@@ -19,9 +19,6 @@ struct SettingsView: View {
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // No nav bar, same as every other root tab: the row held the word
-        // "Settings" above a tab button labelled Settings and nothing else.
-        // Pushed detail pages still have their own title and Back.
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             viewModel.configure(with: modelContext)
@@ -253,8 +250,6 @@ struct SettingsView: View {
     @State private var showingSyncRestartAlert = false
 
     private var iCloudSyncRow: some View {
-        // Untinted like every link beside it — the tint made the one row you
-        // cannot open the loudest card in the section.
         GlassCard(padding: 14) {
             VStack(spacing: 12) {
                 HStack(spacing: 14) {

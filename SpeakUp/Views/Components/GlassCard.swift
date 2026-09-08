@@ -11,12 +11,8 @@ struct GlassCard<Content: View>: View {
     @Environment(\.glassAppearance) private var glassAppearance
 
     init(
-        // Default matches `glassCard()` / editing overlays (20). Nested inner
-        // surfaces should sit ~padding below this for concentric radii.
         cornerRadius: CGFloat = 20,
         tint: Color? = nil,
-        // Tightened from 16. Every card in the app inherits this, so it is the
-        // single highest-leverage control over how large the app feels.
         padding: CGFloat = 13,
         accentBorder: Color? = nil,
         elevated: Bool = false,

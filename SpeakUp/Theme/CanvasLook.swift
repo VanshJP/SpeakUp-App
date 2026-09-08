@@ -269,8 +269,6 @@ private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasGlow(&g, auroraMagenta, at: f.at(0.58, 0.70),
                radius: f.d * 0.28, intensity: f.gain(0.12), stretch: 1.8)
 
-    // Wide soft curtains behind the shafts so the field is a sheet, not a
-    // row of isolated beams.
     canvasGlow(&g, auroraGreen, at: f.at(0.40, 0.42),
                radius: f.d * 0.40, intensity: f.gain(0.14), stretch: 3.2, angle: .degrees(78))
     canvasGlow(&g, canvasViolet, at: f.at(0.62, 0.38),
@@ -688,10 +686,6 @@ private func paintNoir(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 }
 
 // MARK: - Shared marks
-//
-// Horizon and Void differ in sky and star density, not in how the line is
-// built — one function, so the two can never drift apart the way the old
-// `AppHorizonCanvas` and `VoidCanvas` did.
 
 /// Lit horizon: a bloom sitting on the line, an off-centre hotspot, and a
 /// one-point stroke. Expects an additive blend mode.
@@ -777,9 +771,6 @@ private func canvasWaveRibbon(
 }
 
 // MARK: - Shared tones
-//
-// Named once so two looks reaching for "the violet" get the same violet.
-// Anything with a semantic meaning still comes from `AppColors`.
 
 private let canvasViolet = Color(red: 0.46, green: 0.28, blue: 0.90)
 private let canvasMint = Color(red: 0.30, green: 0.92, blue: 0.78)
@@ -790,12 +781,6 @@ private let auroraGreen = Color(red: 0.38, green: 0.96, blue: 0.62)
 private let auroraMagenta = Color(red: 0.78, green: 0.34, blue: 0.94)
 
 // MARK: - Primitives
-//
-// Every painter above draws through these, so a background is ONE `Canvas`
-// pass. No `GeometryReader` per orb, no `.blendMode` / `.blur` view modifier
-// (each forces an offscreen compositing group), no `.drawingGroup`. Setting
-// `blendMode` on a `GraphicsContext`, and transforming a *copy* of it, are
-// state changes — they cost nothing and allocate nothing.
 
 /// Full-bleed linear wash. The base layer of every look.
 private func canvasWash(
@@ -858,8 +843,6 @@ private func canvasStars(
     seed: Double = 0
 ) {
     for i in 0..<count {
-        // Fixed "phase" from the hash so a still field has varied brightness
-        // without a clock.
         let twinkle = 0.42 + 0.58 * canvasHash(i, 3 + seed)
         let alpha = brightness * (0.16 + 0.62 * canvasHash(i, 5 + seed)) * twinkle
         guard alpha > 0.012 else { continue }

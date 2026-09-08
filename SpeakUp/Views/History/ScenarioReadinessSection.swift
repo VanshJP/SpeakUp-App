@@ -210,9 +210,6 @@ private struct ScenarioRow: View {
                         .contentTransition(.numericText())
                 }
 
-                // Level as a meter — the same one the session score hero uses.
-                // Two bare numbers in a stack made the reader do the
-                // arithmetic; a filled bar answers "how far along" at a glance.
                 if let score = readiness.score {
                     TickMeter(fraction: Double(score) / 100, color: scoreColor, tickCount: 28)
                         .frame(height: 5)
@@ -301,9 +298,6 @@ private struct ScenarioInvitationRow: View {
 
             Spacer(minLength: 8)
 
-            // ponytail: states the fact instead of a "+" that led nowhere.
-            // Make it a real shortcut when the section can reach the practice
-            // hub with a scenario filter.
             Text("Not yet")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)

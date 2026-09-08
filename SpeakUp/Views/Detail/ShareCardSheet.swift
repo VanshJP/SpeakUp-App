@@ -168,10 +168,6 @@ struct ShareCardSheet: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    // The card is dark on a dark canvas, so the standard
-                    // `cardStroke` hairline vanishes. A brighter rim lit from
-                    // the top, a deep drop shadow, and a faint ambient glow are
-                    // what separate the preview from the sheet behind it.
                     .overlay {
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .strokeBorder(
@@ -220,9 +216,6 @@ struct ShareCardSheet: View {
                         select(option)
                     } label: {
                         VStack(spacing: 6) {
-                            // Drawn at card scale then shrunk, so the swatch
-                            // shows the real gradient rather than one corner
-                            // of it — the orbs are sized in absolute points.
                             option.background
                                 .frame(width: 400, height: 400)
                                 .scaleEffect(0.13)
@@ -414,8 +407,6 @@ struct ShareCardSheet: View {
             ))
             promptText = prompt.text
         } else {
-            // The story title is on the card, but a friend cannot open someone
-            // else's story. Send them into a fresh session instead.
             url = SharedPromptLink.shareURL(
                 for: SharedPromptPayload(source: SharedPromptLink.shareSource)
             )

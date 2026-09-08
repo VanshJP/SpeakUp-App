@@ -18,17 +18,12 @@ struct ActivityStrip: View {
     private static let spacing: CGFloat = 3
 
     var body: some View {
-        // Built once per render and passed down — reading a computed
-        // `buckets` inside the cell loop would rebuild the dictionary for
-        // every one of the 119 cells.
         let buckets = Self.buckets(from: summaries)
 
         GlassCard(padding: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 header
 
-                // Cells are flexible squares so the grid always spans the full
-                // card width — no scrolling, no dead space on either side.
                 HStack(alignment: .top, spacing: Self.spacing) {
                     ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
                         VStack(spacing: Self.spacing) {
@@ -93,8 +88,6 @@ struct ActivityStrip: View {
 
             Spacer(minLength: 8)
 
-            // Fixed-size so the caption is the side that truncates on narrow
-            // screens rather than the legend collapsing.
             HStack(spacing: 3) {
                 Text(metric.legendLow)
                     .font(.system(size: 9))

@@ -1,9 +1,3 @@
-//
-//  SpeakUpWidgetBundle.swift
-//  SpeakUpWidget
-//
-//  Created by Vansh Patel on 3/11/26.
-//
 
 import WidgetKit
 import SwiftUI

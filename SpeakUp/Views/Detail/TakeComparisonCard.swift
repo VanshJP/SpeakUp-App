@@ -83,8 +83,6 @@ struct TakeComparisonCard: View {
     /// Names what the repeat proved. A delta with no reading attached is just
     /// two numbers next to each other.
     private var verdict: String {
-        // ±3 on a 0-100 score is inside session noise. Calling that an
-        // improvement would teach the user to trust a number that is lying.
         if delta >= 8 {
             return "Clear improvement on the second run at this. Whatever you changed, that was it."
         } else if delta >= 3 {

@@ -2,9 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Two rules that are easy to get quietly wrong and expensive when you do: what
-// a share card is allowed to say, and when the app may spend one of the year's
-// three review prompts.
 
 private let day: TimeInterval = 24 * 60 * 60
 nonisolated private let t0 = Date(timeIntervalSince1970: 1_750_000_000)

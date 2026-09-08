@@ -38,8 +38,6 @@ struct StoryPromptCard: View {
 
                     DurationPill(selectedDuration: $selectedDuration)
 
-                    // Negative gutter trims the 44pt tap frame back to the
-                    // header's height and edge; the target itself stays 44pt.
                     SmallIconButton(icon: "arrow.clockwise", label: "Different story", action: onRefresh)
                         .padding(.trailing, -6)
                         .padding(.vertical, -6)
@@ -61,8 +59,6 @@ struct StoryPromptCard: View {
 
                 words
 
-                // Same footer as the prompt card — one hero action on the page,
-                // owned by whichever brief renders.
                 footer
                     .padding(.top, 4)
             }

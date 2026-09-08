@@ -39,13 +39,9 @@ struct FilterPill: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .modifier(SelectedFilterChrome(isSelected: isSelected))
-            // Hit target expands *around* the capsule — putting minHeight under
-            // glass made a 44pt-tall plate that clipped mid-press.
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
         }
-        // Plain, not GlassPressStyle: scaling a live glassEffect mid-tap is
-        // the half-second dark box that cuts the pill off.
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
@@ -71,9 +67,6 @@ struct SelectedFilterChrome: ViewModifier {
                     .clipShape(Capsule())
             } else {
                 content
-                    // White lift so idle chips read as bright glass on navy,
-                    // not the darker plate the mid-fade flash used to show.
-                    // Density follows Settings → Appearance → Glass.
                     .glassEffect(
                         .regular.tint(glassAppearance.glassTint).interactive(),
                         in: .capsule

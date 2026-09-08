@@ -14,8 +14,6 @@ struct CoachingTipsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let plan {
-                // No CTA here: `NextStepCard` above already owns the action on
-                // this screen, and each tip row carries its own.
                 CoachFocusCard(plan: plan)
             }
 
@@ -98,12 +96,6 @@ private struct CoachingTipRow: View {
                 )
                 .accessibilityHint(hasTeachingPoint ? "Shows the teaching point" : "")
 
-                // Always visible, never behind the chevron. The message names
-                // a timestamp the user has no memory of; if the way to hear it
-                // is hidden one tap away, most of them never find out what the
-                // number sounded like, which is the entire point of having it.
-                // Outside the expand button — a button inside a button label
-                // does not reliably receive its own taps.
                 if let time = tip.evidenceTime, let onPlayFrom {
                     Button {
                         onPlayFrom(time)
@@ -122,13 +114,7 @@ private struct CoachingTipRow: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 8)
-                    // Card edge, not the text indent. Everything below the
-                    // header row — this pill, the teaching point, the drill
-                    // pill — shares one left margin; indenting only this one
-                    // left it floating between two alignments.
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // No clock time in the label either: evidence stamps drift,
-                    // so the pill promises the moment, never a position in it.
                     .accessibilityLabel("Hear the moment this tip points at")
                 }
 

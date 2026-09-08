@@ -49,9 +49,6 @@ struct MetricExplainerSheet: View {
         return GlassCard(tint: AppColors.glassTintPrimary) {
             VStack(spacing: 16) {
                 ZStack {
-                    // Solid, not the score gradient: every other ring in the
-                    // app reads its band as one flat color, and a lone gradient
-                    // here made the same value look like a different metric.
                     RingProgress(
                         progress: Double(axis.value) / 100,
                         color: color,

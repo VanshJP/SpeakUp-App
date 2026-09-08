@@ -3,14 +3,7 @@ import Foundation
 import NaturalLanguage
 @testable import SpeakUp
 
-// Characterization tests for the untested SpeechScoringEngine core.
-// These pin CURRENT behavior — bands and orderings, not desired values.
 
-// NLTagger(.lexicalClass) support varies by runtime state: fully provisioned,
-// partially provisioned (function words only — observed on a freshly-erased
-// sim mid-download), or absent. Strict lexical pins assume FULL support, so
-// the probe measures the recognized ratio on real prose with the engine's own
-// tag set; anything less runs bounds/threshold-invariant assertions only.
 enum NLPCapability {
     static let fullLexicalSupport: Bool = {
         let text = "Daily practice built my speaking confidence steadily. Ambitious projects taught careful planning last year. Clear delivery helps nervous speakers succeed everywhere today."
@@ -66,8 +59,6 @@ struct GibberishDetectionCharacterizationTests {
             #expect(result.confidence == 0)
             #expect(result.reason == nil)
         } else {
-            // Partial or missing NLP assets: recognition ratios land anywhere,
-            // so pin the engine's threshold invariant instead of a shape.
             #expect(result.isDefinitelyGibberish == (result.confidence >= 4.0 / 6.0))
         }
     }
@@ -94,10 +85,6 @@ struct GibberishDetectionCharacterizationTests {
     }
 
     @Test func whitespaceOnlyTextIsSuspiciousButNotDefinite() {
-        // Whitespace slips past the empty guard; only the unique-content
-        // check runs (+2 → 2/6). On runtimes without full NLP assets the
-        // tokenizer still yields a token for the whitespace region, so the
-        // lexical check can add +2 more.
         let result = SpeechScoringEngine.detectGibberish(words: makeWords(["hello"]), scoringText: "   ")
         if NLPCapability.fullLexicalSupport {
             #expect(!result.isDefinitelyGibberish)
@@ -346,8 +333,6 @@ struct ContentWordDensityTests {
     @Test func longerDurationLowersDensityForSameText() {
         let perMinute = SpeechScoringEngine.computeContentWordDensity(text: richText, duration: 60)
         let perTenMinutes = SpeechScoringEngine.computeContentWordDensity(text: richText, duration: 600)
-        // Same text → same detected count → density is inversely proportional
-        // to duration. Holds for any tagging capability, including zero.
         #expect(perTenMinutes <= perMinute)
         if NLPCapability.fullLexicalSupport {
             #expect(perTenMinutes > 0)

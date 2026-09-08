@@ -33,11 +33,6 @@ struct DrillSelectionView: View {
                 )
             }
 
-            // Rows, not a 2x2 of fixed-height tiles. Four tiles each stacking
-            // an icon, a title, an outcome, a live-feedback label and a
-            // duration — two of them tinted — was five things competing inside
-            // 176pt. The row says the same in one scan line, and matches the
-            // other three tool pages.
             LazyVStack(spacing: 12) {
                 ForEach(DrillMode.allCases) { mode in
                     PracticeItemRow(
@@ -50,14 +45,9 @@ struct DrillSelectionView: View {
                             longest: longestDrillSeconds
                         ),
                         durationLabel: "\(mode.defaultDurationSeconds)s",
-                        // What the session shows while it runs — the concrete
-                        // promise that makes the format legible.
                         tag: mode.liveFeedback
                     ) {
                         Haptics.medium()
-                        // Impromptu picks its topic now so the prep countdown
-                        // can show it — that window is the thinking time the
-                        // format promises.
                         if mode.preparesPromptUpFront {
                             viewModel.preparePrompt(for: mode)
                         }
@@ -68,9 +58,6 @@ struct DrillSelectionView: View {
                 }
             }
         }
-        // One full-screen cover owns countdown → session. An overlay on the
-        // Library tools list clipped the dial into a card-shaped box, then a
-        // second cover jumped to the session — two surfaces for one flow.
         .fullScreenCover(isPresented: $showingDrillFlow, onDismiss: {
             showingSession = false
             selectedDrillMode = nil

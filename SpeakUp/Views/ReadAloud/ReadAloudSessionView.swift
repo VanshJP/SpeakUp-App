@@ -55,9 +55,6 @@ struct ReadAloudSessionView: View {
         }
         .ignoresSafeArea()
         .task {
-            // .task re-fires when the result fullScreenCover dismisses — without
-            // this guard it would double-start the audio engine on Retry and
-            // spin up a ghost session on Done.
             guard !didAutoStartSession else { return }
             didAutoStartSession = true
             if viewModel.isShadowMode {
@@ -364,9 +361,6 @@ struct ReadAloudSessionView: View {
                     Haptics.medium()
                     viewModel.stopSession()
                 }
-                // Disabled while the engine is still starting — a tap during the
-                // authorization await used to produce a ghost "0%" result and,
-                // worse, leave the engine starting underneath it.
                 .disabled(!viewModel.isListening || awaitingShadowStart)
                 .opacity(viewModel.isListening ? 1 : 0.5)
             }

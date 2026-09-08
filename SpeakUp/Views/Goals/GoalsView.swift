@@ -19,10 +19,6 @@ struct GoalsView: View {
                         if !viewModel.activeGoals.isEmpty || !viewModel.completedGoals.isEmpty {
                             summaryCard
                         } else {
-                            // Previously this screen just hid the summary and
-                            // dropped straight into the template grid with no
-                            // framing — a silent omission rather than a
-                            // designed first-run state.
                             EmptyStateCard(
                                 icon: "target",
                                 title: "No goals yet",

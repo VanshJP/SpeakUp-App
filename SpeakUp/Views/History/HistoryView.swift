@@ -48,21 +48,10 @@ struct HistoryView: View {
                 Section {
                     switch selectedSection {
                     case .recordings:
-                        // Search belongs to the section, not the page — the
-                        // Progress tab has nothing to search — so it lives
-                        // here with the filter menu on its trailing end, and
-                        // only the picker pins. The nav bar this replaced was
-                        // permanent and said "History" above a tab button
-                        // already labelled History.
                         InlineSearchField(text: $searchText, prompt: "Search recordings…") {
                             filterMenu
                         }
 
-                        // The strip earns its place back by being
-                        // switchable — showing up and doing well are
-                        // different questions, and one grid answers both.
-                        // Suppressed while searching or filtering, where
-                        // the list is the answer and the grid is noise.
                         if searchText.isEmpty, selectedFilter == .all, !viewModel.summaries.isEmpty {
                             ActivityStrip(summaries: viewModel.summaries)
                         }
@@ -81,14 +70,7 @@ struct HistoryView: View {
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // `.searchable` used to hand this over for free; an inline field has
-        // to say it, or the keyboard sits over half the results.
         .scrollDismissesKeyboard(.interactively)
-        // No nav bar. The tab bar already names the tab, so the row held one
-        // redundant word plus a filter button, and `.searchable` hung another
-        // 50pt off it — ~100pt of permanent chrome before the first recording.
-        // The pinned picker plus each section's own `InlineSearchField` are
-        // this page's header now.
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
@@ -99,8 +81,6 @@ struct HistoryView: View {
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 if let summary = summaryToDelete {
-                    // Stop playback first — unlinking media under AVAudioPlayer
-                    // leaves a stuck isPlaying / decode error.
                     audioService.stop()
                     Task {
                         await viewModel.deleteRecording(id: summary.id)
@@ -118,15 +98,6 @@ struct HistoryView: View {
 
     // MARK: - Progress Content
 
-    // The Progress tab shows the charts directly — the same experience the
-    // old "Progress Charts" card used to navigate to. One VStack owns the
-    // page rhythm: every chapter (conclusion, trends, guidance, review) sits
-    // 20pt apart. Word Bank usage renders inside the Language tab now, so the
-    // page ends at Review instead of an orphaned chip rail.
-    //
-    // Review tiles also live on Library → Tools (denser `ToolCategoryCard`).
-    // History keeps the compact `ToolTileLabel` grid under the charts; both
-    // surfaces read `ReviewToolKind` so names and tints cannot drift.
     private var progressContent: some View {
         VStack(spacing: AppLayout.chapterSpacing) {
             ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
@@ -156,8 +127,6 @@ struct HistoryView: View {
 
     @ViewBuilder
     private func reviewToolButton(_ tool: ReviewToolKind) -> some View {
-        // Compare / Listen back need at least two sessions; Goals and Journal
-        // stay available so empty history still has a door into the feature.
         switch tool {
         case .compare:
             if viewModel.summaries.count >= 2 {
@@ -244,8 +213,6 @@ struct HistoryView: View {
 
     private var recordingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Only speak up when a filter is narrowing the list — the tab is
-            // already called History, so "Sessions · 42 total" said nothing.
             if selectedFilter != .all && !filteredSummaries.isEmpty {
                 HStack(spacing: 6) {
                     Text("\(filteredSummaries.count) \(selectedFilter.title.lowercased())")

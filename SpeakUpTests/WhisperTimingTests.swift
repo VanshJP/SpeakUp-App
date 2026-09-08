@@ -2,10 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Whisper occasionally emits a word whose end timestamp overshoots by minutes.
-// Normalization used to carry that overshoot forward, collapsing every later
-// word into a sliver at the wrong offset — a transcript whose second half no
-// longer matched the audio.
 
 @MainActor
 struct WhisperTimingTests {

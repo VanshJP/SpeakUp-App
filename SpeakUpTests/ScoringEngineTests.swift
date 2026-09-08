@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Pure, deterministic scoring math — the substance multiplier, gibberish gate,
-// and MATTR are the gates every score passes through, so they get the tests.
 
 @MainActor
 struct SubstanceMultiplierTests {

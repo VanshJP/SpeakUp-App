@@ -1,9 +1,5 @@
 import SwiftUI
 
-// Extracted from RecordingDetailView, which had grown to 2302 lines by
-// carrying results presentation, drag physics, transcript rendering, and
-// markdown parsing in one file. These types were already independent —
-// only their `private` scope tied them to that file.
 
 // MARK: - Playback Drawer Container
 
@@ -14,14 +10,8 @@ struct PlaybackDrawerContainer: View {
     let onTogglePlayback: () -> Void
     let onSeek: (Double) -> Void
 
-    // Playback ticks (30 fps display link) are observed here — not in
-    // RecordingDetailView — so only this drawer re-evaluates during playback,
-    // not the whole detail scroll content.
     @Environment(AudioService.self) private var audioService
 
-    // Collapsed by default: the collapsed row already shows the waveform and a
-    // play button, which is the whole job most of the time, at a third of the
-    // height the transport controls cost.
     @State private var drawerState: PlaybackDrawerState = .collapsed
     @State private var dragOffset: CGFloat = 0
 
@@ -36,20 +26,12 @@ struct PlaybackDrawerContainer: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
-                // Grabber — widens and brightens when the drawer is already at
-                // its maximum (expanded) height so the user reads the affordance
-                // as "pull down to collapse" instead of "pull up for more".
-                // Wrapped in a Button so VoiceOver users can toggle the drawer
-                // without needing the drag gesture.
                 Button {
                     Haptics.selection()
                     withAnimation(drawerSpring) {
                         drawerState = drawerState == .expanded ? .collapsed : .expanded
                     }
                 } label: {
-                    // Single chevron rotated in-place so the affordance flips
-                    // smoothly in sync with the drawer's spring, instead of
-                    // cross-fading between two separate SF Symbols.
                     Image(systemName: "chevron.compact.up")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(drawerState == .expanded ? 0.55 : 0.35))
@@ -92,22 +74,12 @@ struct PlaybackDrawerContainer: View {
         .animation(drawerSpring, value: drawerState)
         .offset(y: dragOffset)
         .simultaneousGesture(
-            // minimumDistance 3 keeps the grabber button tappable while still
-            // picking up finger travel almost immediately — prevents the
-            // "drag starts 10pt in" lag the old 10pt gate produced.
             DragGesture(minimumDistance: 3)
                 .onChanged { value in
                     let translation = value.translation.height
-                    // Direction filter: ignore drags that are mostly horizontal
-                    // so the gesture does not fight sibling scroll/list views.
                     guard abs(translation) > abs(value.translation.width) else { return }
                     switch drawerState {
                     case .expanded:
-                        // Top is the natural floor in this state: strictly
-                        // clamp upward (negative) pulls to 0 — the drawer
-                        // never peeks above its maximum height. Downward
-                        // travel tracks the finger 1:1 until `rubberBandLimit`,
-                        // then resistance climbs so the drawer feels tethered.
                         if translation <= 0 {
                             dragOffset = 0
                         } else {
@@ -118,9 +90,6 @@ struct PlaybackDrawerContainer: View {
                             )
                         }
                     case .collapsed:
-                        // Inverse: upward is "open", downward is already past
-                        // the floor of the collapsed state so rubber-band it
-                        // firmly to signal the boundary.
                         if translation >= 0 {
                             dragOffset = Self.rubberBanded(
                                 translation,
@@ -141,13 +110,6 @@ struct PlaybackDrawerContainer: View {
                     let velocity = value.velocity.height     // points/sec, iOS 17+
                     let previousState = drawerState
 
-                    // Snap decision blends distance and velocity:
-                    //   — a short swipe with a strong flick still commits,
-                    //   — a long slow drag also commits,
-                    //   — everything else returns to its origin.
-                    // Using the same spring as the state `.animation(_:value:)`
-                    // so the offset release and the state change unwind as
-                    // one motion, with no visible seam at the hand-off.
                     withAnimation(drawerSpring) {
                         switch drawerState {
                         case .expanded:
@@ -162,8 +124,6 @@ struct PlaybackDrawerContainer: View {
                         dragOffset = 0
                     }
 
-                    // Physical confirmation only when the drawer actually
-                    // commits to a new state — no haptic on return-to-origin.
                     if drawerState != previousState {
                         Haptics.light()
                     }
@@ -198,10 +158,6 @@ struct PlaybackDrawerContainer: View {
             let barCount = max(1, Int(geometry.size.width / totalBarWidth))
             let width = geometry.size.width
 
-            // Progress quantized to whole bars: the bar row's inputs
-            // only change when a new bar fills, so the ~100 bar views
-            // re-diff once per bar instead of on every 30 fps
-            // display-link tick.
             ScrubberBars(
                 barCount: barCount,
                 playedBars: min(barCount, Int((playbackViewModel.playbackProgress * Double(barCount)).rounded(.up))),

@@ -147,8 +147,6 @@ struct SubscoreRadarChart: View {
         let progress = drawProgress
         let selectedID = selectedAxis?.id
 
-        // Hoist per-axis trig to one O(axes) pass per body re-evaluation
-        // instead of recomputing inside the Canvas closure on every frame.
         let table: [WedgeGeometry] = axes.enumerated().map { index, axis in
             let mid = -.pi / 2 + step * Double(index)
             let start = Angle(radians: mid - step / 2 + angularGap / 2)
@@ -170,8 +168,6 @@ struct SubscoreRadarChart: View {
                 let outer = outerRadius + bump
                 let fullSpan = outer - innerRadius
 
-                // 1. Track — the wedge's full extent, so an empty axis still
-                //    reads as a slot rather than as missing geometry.
                 context.fill(
                     AnnularWedge.makePath(
                         center: center,
@@ -183,9 +179,6 @@ struct SubscoreRadarChart: View {
                     with: .color(Color.white.opacity(isSelected ? 0.09 : 0.05))
                 )
 
-                // 2. Fill — one continuous wedge whose outer edge lands at the
-                //    value. Opacity rises with the value too, so a strong axis
-                //    reads brighter as well as longer.
                 let filledSpan = fullSpan * wedge.fraction * progress
                 guard filledSpan > 0.5 else { continue }
 
@@ -202,9 +195,6 @@ struct SubscoreRadarChart: View {
                 )
             }
 
-            // 3. Scale grid — thin concentric separators across the whole
-            //    annulus, drawn last so they read as graph paper over the fill
-            //    instead of chunking it into buckets.
             for ring in 1..<gridRings {
                 let r = innerRadius + (outerRadius - innerRadius) * CGFloat(ring) / CGFloat(gridRings)
                 let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
@@ -275,9 +265,6 @@ struct SubscoreRadarChart: View {
         let isWeakest = emphasizedAxisIDs.weakest != nil && axis.id == emphasizedAxisIDs.weakest
         let hasEmphasis = emphasizedAxisIDs.strongest != nil || emphasizedAxisIDs.weakest != nil
 
-        // The value is neutral unless this axis is one of the two callouts.
-        // Score-coloring all eight numbers put the rainbow back in the text
-        // after it had been taken out of the wedges.
         let valueTint: Color = {
             if isStrongest { return AppColors.success }
             if isWeakest { return AppColors.warning }
@@ -305,21 +292,15 @@ struct SubscoreRadarChart: View {
                     .lineLimit(1)
             }
         }
-        // The two callouts stay at full strength and everything else recedes,
-        // which is what lets the marker read without a legend.
         .opacity(hasEmphasis && !isStrongest && !isWeakest ? 0.55 : 1)
         .fixedSize()
     }
 
     private var centerScore: some View {
         let color = AppColors.scoreColor(for: overallScore)
-        // Clamp + round so the count-up lands exactly on `overallScore`
-        // instead of one below (e.g. Int(66 * 0.9994) == 65 truncates).
         let clamped = min(1.0, max(0.0, drawProgress))
         let displayed = Int((Double(overallScore) * Double(clamped)).rounded())
         return VStack(spacing: 0) {
-            // Now the card's only score numeral, so it carries the weight the
-            // 68pt one above it used to.
             Text("\(displayed)")
                 .font(.system(size: 46, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(color)
@@ -348,9 +329,6 @@ struct SubscoreRadarChart: View {
     }
 
     private func animateIn() {
-        // Reset must run outside any inherited animation transaction (e.g.
-        // RecordingDetailView wraps `animate = true` in a 0.8s easeOut), or
-        // the reset itself animates 1→0 and races the draw-in 0→1.
         var resetTx = Transaction()
         resetTx.disablesAnimations = true
         withTransaction(resetTx) {
@@ -392,9 +370,6 @@ struct AnnularWedge: Shape {
         var path = Path()
         guard outerRadius > innerRadius else { return path }
 
-        // Thin rings: skip corner rounding to avoid degenerate quad-curves
-        // and roughly halve path-build cost. Fires when the chart is small
-        // or during the first frames of the draw-in animation.
         let ringThickness = outerRadius - innerRadius
         if ringThickness < 6 {
             var simple = Path()

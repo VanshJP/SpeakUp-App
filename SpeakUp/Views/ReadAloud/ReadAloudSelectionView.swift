@@ -46,8 +46,6 @@ struct ReadAloudSelectionView: View {
             .tint(AppColors.toolReadAloud)
             .padding(.horizontal, 4)
 
-            // Two axes, one grammar: both rows lead with All, so neither can
-            // strand you in a filtered state with no way back.
             ToolFilterBar {
                 FilterPill(
                     title: "All",
@@ -115,8 +113,6 @@ struct ReadAloudSelectionView: View {
                     ForEach(viewModel.passages) { passage in
                         PracticeItemRow(
                             title: passage.title,
-                            // The passage itself is the subtitle: you pick one
-                            // by reading a line of it, not by its name.
                             subtitle: passage.text,
                             icon: passage.category.icon,
                             tint: AppColors.difficultyColor(passage.difficulty),

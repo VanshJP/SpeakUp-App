@@ -110,8 +110,6 @@ nonisolated enum PersonalAverage {
         excluding currentID: UUID,
         in recordings: [Recording]
     ) -> PreviousTake? {
-        // `Prompt.id` is a String and defaults to empty, so an empty subject is
-        // not an identity — matching on it would pair up unrelated sessions.
         guard let subject, !subject.isEmpty else { return nil }
 
         let sameSubject = recordings.filter {
@@ -161,8 +159,6 @@ nonisolated enum PersonalAverage {
             var descriptor = FetchDescriptor<Recording>(
                 sortBy: [SortDescriptor(\.date, order: .reverse)]
             )
-            // One extra row so excluding the current session still leaves a
-            // full window; the repeat scan wants a longer tail than that.
             descriptor.fetchLimit = max(window + 1, repeatSubject == nil ? window + 1 : repeatScanLimit)
 
             guard let recent = try? context.fetch(descriptor) else { return Snapshot() }
@@ -188,15 +184,8 @@ nonisolated enum PersonalAverage {
                 .filter { $0.id != currentID }
                 .prefix(window)
                 .compactMap(\.analysis)
-                // A session that scored 0 hit the zero-word gate — a silent or
-                // failed capture, not a measurement of how the user speaks.
-                // Averaging those in produced baselines like "vs 5 avg" for
-                // pace and deltas like "62 above your average", which read as
-                // broken rather than encouraging.
                 .filter { $0.speechScore.overall > 0 }
 
-            // No prior session to compare against still leaves a plan — the
-            // focus is worth showing from the very first recording.
             guard !analyses.isEmpty else {
                 return Snapshot(
                     plan: plan,

@@ -76,8 +76,6 @@ struct StructuralRepetitionTests {
     }
 
     @Test func pauseGapsSplitWhenWhisperOmitsCommas() {
-        // No trailing punctuation — only a pause between clauses (Whisper often
-        // drops commas). Intra-clause word gaps stay under the threshold.
         var cursor: TimeInterval = 0
         func appendClause(_ tokens: [String], into result: inout [TranscriptionWord]) {
             for token in tokens {

@@ -3,10 +3,6 @@ import Foundation
 @preconcurrency import AVFoundation
 @testable import SpeakUp
 
-// MonoPCM.decode feeds pitch scoring, isolation preprocessing, and speaker
-// labeling — a wrong frame count or sample rate silently skews every
-// downstream acoustic number. Files are synthesized per test in a temporary
-// directory so the decoder sees real containers, not mocks.
 
 nonisolated struct MonoPCMDecodeTests {
     private func makeDirectory() throws -> URL {
@@ -56,8 +52,6 @@ nonisolated struct MonoPCMDecodeTests {
     }
 
     @Test func stereoDownmixProducesFiniteSamplesAtFullFrameCount() throws {
-        // Pitch analysis assumes mono; the converter path must hand it one
-        // finite sample per source frame at the same rate.
         let dir = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("stereo.caf")
@@ -82,8 +76,6 @@ nonisolated struct MonoPCMDecodeTests {
         let dir = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("garbage.wav")
-        // Fixed junk prefix keeps this deterministic; random tail covers
-        // container-parser edge paths without ever forming a RIFF header.
         var garbage = Data("this is not audio data".utf8)
         garbage.append(contentsOf: (0..<512).map { _ in UInt8.random(in: 0...255) })
         try garbage.write(to: url)
