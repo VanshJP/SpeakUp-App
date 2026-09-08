@@ -19,22 +19,11 @@ enum TrendChart {
     static let plotHeight: CGFloat = 210
 }
 
-/// The full charts experience — trajectory hero, scenario readiness, then
-/// chart-type picker, time range, and the selected chart. No background /
-/// scroll / nav of its own so it can be embedded (History Progress tab) or
-/// wrapped (`ProgressChartsView`).
-///
-/// Page order follows conclusion → evidence → reference: the hero band answers
-/// "where am I and which way am I moving", scenario readiness answers "which
-/// situation needs work", and metric charts remain reference material below.
 struct ProgressChartsContent: View {
     @Environment(\.modelContext) private var modelContext
 
-    /// Saved Word Bank usage, rendered inside the Language tab. Optional so
-    /// the standalone wrapper (`ProgressChartsView`) needs no plumbing.
     var vocabWords: [VocabCount] = []
 
-    // Sorted date-descending, analyzed recordings only.
     @State private var points: [ChartRecordingPoint] = []
     @State private var latestSubscores: SpeechSubscores?
     @State private var scenarioCards: [ScenarioReadiness] = []
@@ -102,8 +91,6 @@ struct ProgressChartsContent: View {
                     // Conclusion — where am I and which way am I moving.
                     heroBand
 
-                    // Evidence — trends first. The user comes here for the
-                    // charts; guidance waits until the data has been seen.
                     trendsSection
 
                     // Guidance — which situation needs work.
@@ -124,9 +111,6 @@ struct ProgressChartsContent: View {
             .padding(.vertical, 56)
     }
 
-    /// One calm card replaces the formerly scattered empty states — the hero
-    /// hiding, the readiness quiet-state, and a bare chart well all firing at
-    /// once read as three broken things instead of one early page.
     private var earlyState: some View {
         EmptyStateCard(
             icon: "chart.line.uptrend.xyaxis",
@@ -145,11 +129,6 @@ struct ProgressChartsContent: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Chart picker + time range. Six short labels render as one
-            // equal-width segment row whenever they fit — every destination
-            // visible, nothing hiding behind an unmarked scroll. At
-            // accessibility sizes it drops to a scrolling rail instead of
-            // truncating.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     SectionPicker(
@@ -178,7 +157,6 @@ struct ProgressChartsContent: View {
                 }
             }
 
-            // Chart content
             if selectedTab == .words {
                 LanguageInsightsView(profile: lexiconProfile, vocabWords: vocabWords)
             } else if filteredPoints.isEmpty {
@@ -209,9 +187,6 @@ struct ProgressChartsContent: View {
         }
     }
 
-    /// The range menu holds its slot on every tab — hidden and inert where a
-    /// range doesn't apply, so switching to Skills or Language doesn't reflow
-    /// the row.
     private var timeRangeSlot: some View {
         timeRangeMenu
             .fixedSize()
@@ -293,8 +268,6 @@ struct ProgressChartsContent: View {
                 }
             }
 
-            // Both engines run inside the same background pass — no second
-            // fetch, no transcripts retained past this closure.
             let profile = LexiconInsightsEngine.profile(from: sessions)
             let scenarios = ScenarioReadinessEngine.readiness(from: sessions)
             return (pts, latest, profile, scenarios)
@@ -309,9 +282,6 @@ struct ProgressChartsContent: View {
 
     // MARK: - Hero Band
 
-    /// The page's conclusion in two rows: ring + eyebrow + momentum pill on
-    /// one line, cadence on the next. Everything that used its own line —
-    /// the header, "of 100", the delta — now rides beside something else.
     private var heroBand: some View {
         let trajectory = TrajectorySummary.summarize(points.reversed().map(\.score))
         let weekStart = Date().startOfWeek
@@ -337,8 +307,6 @@ struct ProgressChartsContent: View {
                     .animation(AppMotion.reveal.delay(0.1), value: heroRingShown)
                     .onAppear { heroRingShown = true }
 
-                    // Eyebrow rides beside the ring instead of above it — the
-                    // header line was pure height.
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Where You Stand")
                             .eyebrowStyle()
@@ -364,8 +332,6 @@ struct ProgressChartsContent: View {
         }
     }
 
-    /// Value and label on ONE baseline — half the height of the former
-    /// stacked pair, same information.
     private func heroCadence(_ value: String, label: String, color: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text(value)
@@ -405,8 +371,6 @@ struct ProgressChartsContent: View {
             .background { Capsule().fill(momentum.tint.opacity(0.13)) }
             .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
 
-            // Steady means the delta is within ±3 — printing "+1 pts lately"
-            // beside a pill that says nothing changed is noise, not evidence.
             if momentum != .steady, trajectory.delta != 0 {
                 Text("\(trajectory.delta > 0 ? "+" : "")\(trajectory.delta) pts")
                     .font(.caption2.weight(.semibold))
@@ -508,7 +472,6 @@ struct ScoreProgressChart: View {
 
                 if model.points.count >= 2 {
                     Chart {
-                        // Area under curve
                         ForEach(model.points) { point in
                             AreaMark(
                                 x: .value("Date", point.date),
@@ -524,7 +487,6 @@ struct ScoreProgressChart: View {
                             .interpolationMethod(.catmullRom)
                         }
 
-                        // Data line
                         ForEach(model.points) { point in
                             LineMark(
                                 x: .value("Date", point.date),
@@ -535,7 +497,6 @@ struct ScoreProgressChart: View {
                             .interpolationMethod(.catmullRom)
                         }
 
-                        // Smoothed trend line
                         ForEach(model.trend) { point in
                             LineMark(
                                 x: .value("Date", point.date),
@@ -547,7 +508,6 @@ struct ScoreProgressChart: View {
                             .interpolationMethod(.catmullRom)
                         }
 
-                        // Data points with score-based coloring
                         ForEach(model.points) { point in
                             PointMark(
                                 x: .value("Date", point.date),
@@ -561,7 +521,6 @@ struct ScoreProgressChart: View {
                             .symbolSize(selectedPointID == point.id ? 60 : 24)
                         }
 
-                        // Selected point annotation
                         if let idx = selectedIndex, idx < model.points.count {
                             RuleMark(x: .value("Selected", model.points[idx].date))
                                 .foregroundStyle(.white.opacity(0.2))
@@ -599,7 +558,6 @@ struct ScoreProgressChart: View {
                         "Overall score over time, \(model.points.count) sessions, latest \(model.points.last?.score ?? 0), best \(model.bestScore)."
                     )
 
-                    // Selected point detail or summary stats
                     if let idx = selectedIndex, idx < model.points.count {
                         let point = model.points[idx]
                         HStack(spacing: 16) {
@@ -632,9 +590,6 @@ struct ScoreProgressChart: View {
                         .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else if !model.points.isEmpty {
-                        // Leading / centre / trailing across the plot area, so
-                        // the three readings sit under the chart they summarise
-                        // rather than running out under the axis labels.
                         HStack(spacing: 16) {
                             StatPair(value: "\(model.points.last?.score ?? 0)", label: "Latest", valueColor: AppColors.scoreColor(for: model.points.last?.score ?? 0), alignment: .leading)
                             Spacer(minLength: 0)
@@ -658,9 +613,6 @@ struct ScoreProgressChart: View {
 
 // MARK: - Weekly Bucket
 
-/// One ISO-week aggregate for the weekly bar charts. The week start doubles
-/// as stable chart identity, replacing enumerated-offset IDs that thrashed on
-/// scrub redraws.
 nonisolated struct WeeklyBucket: Identifiable {
     let id: Date
     let avgFillers: Double
@@ -702,7 +654,6 @@ struct FillerTrendChart: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 GlassCardTitle("Filler Words per Session", icon: "exclamationmark.bubble.fill") {
-                    // Trend indicator (lower is better for fillers)
                     if weeklyData.count >= 2 {
                         HStack(spacing: 4) {
                             Image(systemName: overallTrend < -1 ? "arrow.down.right" : overallTrend > 1 ? "arrow.up.right" : "arrow.right")
@@ -749,7 +700,6 @@ struct FillerTrendChart: View {
                         "Average filler words per session by week, \(weeklyData.count) weeks, latest \(String(format: "%.1f", weeklyData.last?.avgFillers ?? 0))."
                     )
 
-                    // Selected week detail
                     if let idx = selectedIndex, idx < weeklyData.count {
                         let week = weeklyData[idx]
                         HStack(spacing: 12) {
@@ -775,7 +725,6 @@ struct FillerTrendChart: View {
                         .padding(.horizontal, 4)
                         .transition(.opacity)
                     } else {
-                        // Legend
                         HStack(spacing: 12) {
                             fillerLegendItem(color: AppColors.success, label: "0-5")
                             fillerLegendItem(color: AppColors.warning, label: "5-10")
@@ -810,8 +759,6 @@ struct PaceTrendChart: View {
     @Query private var userSettings: [UserSettings]
     @State private var selectedIndex: Int?
 
-    /// Sorted, WPM-valid points and point-derived stats built once per
-    /// `points` change so scrub frames re-run none of it in body.
     nonisolated private struct PlotModel {
         let points: [PlotPoint]
         let yDomain: ClosedRange<Double>
@@ -847,7 +794,6 @@ struct PaceTrendChart: View {
         Double(userSettings.first.resolvedTargetWPM)
     }
 
-    /// Optimal speaking range (140-160 WPM)
     private var optimalRange: ClosedRange<Double> {
         (targetWPM - 10)...(targetWPM + 10)
     }
@@ -874,14 +820,12 @@ struct PaceTrendChart: View {
 
                 if model.points.count >= 2 {
                     Chart {
-                        // Optimal range band
                         RectangleMark(
                             yStart: .value("Low", optimalRange.lowerBound),
                             yEnd: .value("High", optimalRange.upperBound)
                         )
                         .foregroundStyle(AppColors.primary.opacity(0.08))
 
-                        // Target line
                         RuleMark(y: .value("Target", targetWPM))
                             .foregroundStyle(AppColors.primary.opacity(0.4))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
@@ -891,7 +835,6 @@ struct PaceTrendChart: View {
                                     .foregroundStyle(AppColors.primary.opacity(0.6))
                             }
 
-                        // Line
                         ForEach(model.points) { point in
                             LineMark(
                                 x: .value("Date", point.date),
@@ -902,7 +845,6 @@ struct PaceTrendChart: View {
                             .interpolationMethod(.catmullRom)
                         }
 
-                        // Points colored by whether they're in the optimal range
                         ForEach(model.points) { point in
                             PointMark(
                                 x: .value("Date", point.date),
@@ -916,7 +858,6 @@ struct PaceTrendChart: View {
                             .symbolSize(selectedPointID == point.id ? 60 : 24)
                         }
 
-                        // Selected indicator
                         if let idx = selectedIndex, idx < model.points.count {
                             RuleMark(x: .value("Selected", model.points[idx].date))
                                 .foregroundStyle(.white.opacity(0.2))
@@ -999,11 +940,6 @@ struct PaceTrendChart: View {
 
 // MARK: - Skill Breakdown Card
 
-/// The Skills tab: one sunburst over the latest take's subscores on a shared
-/// 0–100 scale — the same component as the session detail hero, so "my skill
-/// shape" reads identically in both places. Strongest and weakest axes are
-/// marked on the labels themselves; tapping a wedge or label opens its
-/// explainer.
 struct SkillBreakdownCard: View {
     let subscores: SpeechSubscores?
     let overallScore: Int
@@ -1042,8 +978,6 @@ struct SkillBreakdownCard: View {
 
 // MARK: - Session Frequency Chart
 
-/// One ISO-week session count for the frequency chart — no filler stats to
-/// fabricate, unlike `WeeklyBucket`.
 nonisolated private struct WeeklyFrequencyBucket: Identifiable {
     let id: Date
     let sessionCount: Int

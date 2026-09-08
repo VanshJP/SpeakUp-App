@@ -4,9 +4,6 @@ import UIKit
 
 // MARK: - Baseline Briefing
 
-/// The coach sits down. Four conversational beats answer why we're recording,
-/// what gets measured, why there's no script, and what the rules are — before
-/// the mic is anywhere near live. Bubbles cascade in; a tap fast-forwards.
 struct OnboardingBaselineBriefingStep: View {
     let userName: String
     let onContinue: () -> Void
@@ -62,8 +59,6 @@ struct OnboardingBaselineBriefingStep: View {
                 .padding(.bottom, 24)
             }
             .scrollBounceBehavior(.basedOnSize)
-            // The whole page is a fast-forward. A tap mid-cascade means "I'm
-            // reading faster than you're talking", never "I missed it".
             .contentShape(Rectangle())
             .onTapGesture { revealedBeats = 4 }
 
@@ -77,8 +72,6 @@ struct OnboardingBaselineBriefingStep: View {
         }
         .motion(AppMotion.settle, value: revealedBeats)
         .task {
-            // Opacity-hidden bubbles are invisible to VoiceOver too, so the
-            // cascade collapses whenever pacing is theirs, not ours.
             guard !reduceMotion, !voiceOverEnabled else {
                 revealedBeats = 4
                 return
@@ -114,10 +107,6 @@ struct OnboardingBaselineBriefingStep: View {
 
 // MARK: - Baseline Step
 
-/// The terminal step: guided take → analysis → reveal, all inside onboarding.
-/// The prompt is pinned for the entire take, the user presses record, the
-/// countdown plays inside the button, and both escape hatches (restart, swap
-/// prompt) sit at arm's length.
 struct OnboardingBaselineStep: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SpeechService.self) private var speechService
@@ -130,9 +119,6 @@ struct OnboardingBaselineStep: View {
     @State private var savedRecording: Recording?
     @State private var promptIndex = 0
 
-    /// Prompts everyone can answer, phrased to produce natural free speech —
-    /// better baseline data than read speech, and content the reveal can talk
-    /// back to. Starters are teleprompter crutches, not inputs.
     private static let prompts: [(text: String, starters: [String])] = [
         ("Introduce yourself. What do you do, and what kind of speaking do you want to improve?",
          ["\u{201C}My name is…\u{201D}", "\u{201C}I spend my days…\u{201D}", "\u{201C}I want to sound…\u{201D}"]),
@@ -236,9 +222,6 @@ struct OnboardingBaselineStep: View {
         }
     }
 
-    /// Deliberately uncarded. The app's recorder puts the clock straight on the
-    /// canvas above the waveform ring, and a glass box around the numbers was
-    /// the loudest tell that this was an onboarding mock-up of that screen.
     private var recordingReadout: some View {
         VStack(spacing: 10) {
             ElapsedClock(viewModel: viewModel)
@@ -280,8 +263,6 @@ struct OnboardingBaselineStep: View {
         .motion(AppMotion.settle, value: encouragement(for: viewModel.baselineElapsed))
     }
 
-    /// One-liners in the coach's voice, timed to the moments nerves spike:
-    /// just after starting, mid-take, once the minimum is banked, and long.
     private func encouragement(for seconds: Int) -> String? {
         switch seconds {
         case ..<8: return nil
@@ -377,9 +358,6 @@ struct OnboardingBaselineStep: View {
         case .countdown: return "Here we go."
         case .saving: return "Saving your take…"
         case .recording:
-            // A baseline take is 30 seconds minimum — the stop button unlocks
-            // at the same moment the "Enough for a baseline" tick flips, so
-            // the floor and the goal are one number. Start over stays available.
             return viewModel.baselineElapsed >= 30
                 ? "Tap to stop whenever you're done."
                 : "Keep going. You can stop at 30 seconds."
@@ -503,9 +481,6 @@ private struct BaselineRecordControl: View {
                     .pulsingGlow(color: AppColors.recording, isActive: true)
 
             case .countdown:
-                // The count runs inside the button's own footprint: nothing
-                // moves, nothing is covered, and the prompt stays readable
-                // right up to the first word.
                 buttonShell {
                     Text("\(viewModel.baselineCountdownValue)")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -532,8 +507,6 @@ private struct BaselineRecordControl: View {
         .motion(AppMotion.settle, value: phase)
     }
 
-    /// Same 80pt glass disc `RecordButton` draws, for the two states that show
-    /// something other than a record dot inside it.
     private func buttonShell(@ViewBuilder content: () -> some View) -> some View {
         ZStack {
             Circle()
@@ -545,14 +518,10 @@ private struct BaselineRecordControl: View {
     }
 }
 
-/// The only view reading the 16 Hz meter, so its updates stop here instead of
-/// invalidating the whole recorder page (perf-patterns §3).
 private struct BaselineWaveformRing: View {
     let viewModel: OnboardingViewModel
 
     var body: some View {
-        // `CircularWaveformView` expects raw dBFS; `micLevel` is already
-        // normalised 0–1, so map it back onto the −60…0 range it normalises.
         CircularWaveformView(audioLevel: viewModel.micLevel * 60 - 60)
     }
 }
@@ -585,8 +554,6 @@ private struct OnboardingBaselineResultView: View {
 
     @State private var shownStages = 0
     @State private var retryToken = 0
-    /// Set when processing ends without an analysis (cancel / orphan) so the
-    /// wait loop does not spin forever.
     @State private var abandonedWithoutScore = false
 
     private static let stages = [
@@ -608,16 +575,9 @@ private struct OnboardingBaselineResultView: View {
             if failed {
                 errorState
             } else if let analysis = recording.analysis, shownStages >= Self.stages.count {
-                // The zero-score gate means silence or gibberish. A first-time
-                // user never sees that as a number — they get coached back
-                // into a retake instead.
                 if analysis.speechScore.overall == 0 {
                     couldNotHearState
                 } else {
-                    // One forward action, and it lands on the breakdown. The
-                    // reveal is a headline; the detail view is where a first
-                    // score becomes information, so offering "home" instead
-                    // was offering people the version with nothing in it.
                     OnboardingBaselineRevealView(
                         analysis: analysis,
                         userName: userName,
@@ -633,9 +593,6 @@ private struct OnboardingBaselineResultView: View {
         .task(id: retryToken) { await runStages() }
     }
 
-    /// First three rows are paced for comprehension; the last waits on the
-    /// real pipeline. Transcript and analysis persist in one save, so the
-    /// stage labels are rhythm, not per-stage telemetry — the gate is real.
     private func runStages() async {
         shownStages = 0
         abandonedWithoutScore = false
@@ -643,7 +600,6 @@ private struct OnboardingBaselineResultView: View {
             if shownStages == Self.stages.count - 1 {
                 while recording.analysis == nil {
                     if failed { return }
-                    // Cancel / defer / orphan: processing stopped with no score.
                     if !recording.isProcessing {
                         abandonedWithoutScore = true
                         return
@@ -758,11 +714,6 @@ private struct OnboardingBaselineResultView: View {
 /// The payoff: starting line, not report card. One score, two metrics, one
 /// coaching insight, and the promise that every later session compares back
 /// to this. A low first score never leads with the number — first-session
-/// churn is not worth numeric purity.
-///
-/// One exit, and it goes forward into the breakdown. The screen used to offer
-/// "Take me home" alongside it, which let people leave the flow one tap before
-/// the part that explains their score.
 private struct OnboardingBaselineRevealView: View {
     let analysis: SpeechAnalysis
     let userName: String
@@ -913,8 +864,6 @@ private struct OnboardingBaselineRevealView: View {
         withAnimation(AppMotion.reveal.delay(0.2)) {
             ringProgress = target
         }
-        // Ascending ticks while the ring sweeps — the score arrives as an
-        // event, not a label.
         Task {
             for _ in 0..<5 {
                 try? await Task.sleep(for: .milliseconds(180))

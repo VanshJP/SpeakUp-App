@@ -1,12 +1,9 @@
 import SwiftUI
 
 struct ConfidenceToolsView: View {
-    /// nil = all categories. The page opens unfiltered so the whole map of
-    /// exercises is visible; a category pill narrows from there.
     @State private var selectedCategory: ConfidenceCategory?
     @State private var showingExercise: ConfidenceExercise?
 
-    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
     var presentation: ToolPresentation = .sheet
 
     private var exercises: [ConfidenceExercise] {
@@ -14,7 +11,6 @@ struct ConfidenceToolsView: View {
         return DefaultConfidenceExercises.all.filter { $0.category == selectedCategory }
     }
 
-    /// Denominator for every row's duration arc, scoped to what is visible.
     private var longestExerciseMinutes: Double {
         Double(exercises.map(\.durationMinutes).max() ?? 0)
     }
@@ -51,9 +47,6 @@ struct ConfidenceToolsView: View {
 
     // MARK: - Exercise Content
 
-    /// Unfiltered shows every category as a labeled section (name, what it's
-    /// for, how many), so browsing teaches the taxonomy. A filter collapses
-    /// to the single matching group.
     @ViewBuilder
     private var exerciseContent: some View {
         if selectedCategory != nil {
@@ -115,9 +108,6 @@ struct ConfidenceToolsView: View {
                 longest: longestExerciseMinutes
             ),
             durationLabel: "\(exercise.durationMinutes)m",
-            // Cost before commit: minutes in the dial, and how many steps that
-            // buys in the chip — a 10-step ladder and a 4-step reset read very
-            // differently, and both never fit in the dial's 8pt label.
             tag: "\(exercise.steps.count) steps"
         ) {
             Haptics.medium()

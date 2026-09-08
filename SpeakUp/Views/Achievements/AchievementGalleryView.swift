@@ -23,10 +23,8 @@ struct AchievementGalleryView: View {
 
             PageScrollView {
                 VStack(spacing: 20) {
-                    // Progress Header
                     achievementProgressHeader
 
-                    // Achievement Grid
                     if achievements.isEmpty {
                         EmptyStateCard(
                             icon: "trophy",
@@ -34,7 +32,6 @@ struct AchievementGalleryView: View {
                             message: "Complete practice sessions to start unlocking achievements."
                         )
                     } else {
-                        // Unlocked section
                         let unlocked = achievements.filter(\.isUnlocked)
                         let locked = achievements.filter { !$0.isUnlocked }
 
@@ -154,7 +151,6 @@ private struct AchievementCard: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                // Date or locked indicator
                 Group {
                     if let date = achievement.unlockedDate {
                         Text(date.formatted(date: .abbreviated, time: .omitted))

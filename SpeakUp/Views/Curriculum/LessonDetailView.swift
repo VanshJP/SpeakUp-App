@@ -6,9 +6,9 @@ struct LessonDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var userSettings: [UserSettings]
+    @Query(sort: \Recording.date, order: .reverse) private var recentRecordings: [Recording]
 
-    /// Mutable so "Next Lesson" can swap in place instead of dismissing back
-    /// to the Learning Path and forcing a scroll hunt.
+    /// Mutable so "Next Lesson" can swap in place instead of dismissing back to the path.
     @State private var lesson: CurriculumLesson
     @State private var currentStepIndex: Int = 0
     @State private var activeSheet: ActiveSheet?
@@ -17,10 +17,23 @@ struct LessonDetailView: View {
     @State private var confidenceExerciseOpened = false
     @State private var stepCompleteMessage: String?
     @State private var completedActivityIds: Set<String> = []
+    @State private var reviewTarget: ReviewTarget?
+
+    private struct ReviewTarget: Identifiable, Hashable {
+        let id: UUID
+    }
 
     init(lesson: CurriculumLesson, viewModel: CurriculumViewModel) {
         self.viewModel = viewModel
         _lesson = State(initialValue: lesson)
+    }
+
+    private var lessonIdentity: LessonIdentity {
+        LessonIdentity.forLesson(id: lesson.id)
+    }
+
+    private var isRevisitingCompletedLesson: Bool {
+        viewModel.isLessonCompleted(lesson.id)
     }
 
     // MARK: - ActiveSheet
@@ -81,37 +94,22 @@ struct LessonDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 4) {
-                    Text("Step \(currentStepIndex + 1) of \(lesson.activities.count)")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 4) {
-                        ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
-                            Capsule()
-                                .fill(dotColor(for: index, activity: activity))
-                                .frame(maxWidth: 20, maxHeight: 3)
-                                .contentShape(Rectangle().size(width: 20, height: 20))
-                                .onTapGesture {
-                                    if index <= currentStepIndex || viewModel.isActivityCompleted(activity.id) {
-                                        Haptics.light()
-                                        practiceResult = nil
-                                        confidenceExerciseOpened = false
-                                        currentStepIndex = index
-                                    }
-                                }
-                        }
-                    }
-                    .frame(maxWidth: 160)
-                }
+                let role = currentActivity.type.teacherRole
+                Text("\(role) · \(currentStepIndex + 1)/\(lesson.activities.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("\(role), step \(currentStepIndex + 1) of \(lesson.activities.count)")
             }
         }
         .fullScreenCover(item: $activeSheet) { sheet in
             sheetContent(for: sheet)
         }
+        .navigationDestination(item: $reviewTarget) { target in
+            RecordingDetailView(recordingId: target.id.uuidString)
+                .restoresNavigationBar()
+        }
         .onAppear {
             currentStepIndex = viewModel.initialStepIndex(for: lesson)
-            // Seed already-completed activity IDs so we don't animate pre-existing completions
             completedActivityIds = Set(lesson.activities.filter { viewModel.isActivityCompleted($0.id) }.map(\.id))
         }
     }
@@ -164,18 +162,16 @@ struct LessonDetailView: View {
     }
 
     private func showStepCompletion() {
+        let role = currentActivity.type.teacherRole
         let messages = [
-            "Nice work!",
-            "Keep it up!",
-            "One step closer!",
-            "Great progress!",
-            "You're on a roll!",
-            "Looking good!",
-            "Well done!",
-            "Solid effort!",
+            "\(role) done — nice.",
+            "Solid \(role.lowercased()).",
+            "Locked in.",
+            "That's the move.",
+            "Keep that focus.",
         ]
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            stepCompleteMessage = messages.randomElement()
+            stepCompleteMessage = messages[abs(currentActivity.id.hashValue) % messages.count]
         }
         Task {
             try? await Task.sleep(for: .seconds(1.8))
@@ -202,28 +198,36 @@ struct LessonDetailView: View {
             ScrollViewReader { proxy in
                 PageScrollView {
                     VStack(spacing: 16) {
-                        // Scroll anchor
                         Color.clear
                             .frame(height: 0)
                             .id("scrollTop")
 
-                        // Lesson header
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(lesson.title)
-                                .font(.title2.weight(.bold))
+                        LessonBoardHeader(
+                            lesson: lesson,
+                            identity: lessonIdentity,
+                            isReviewing: isRevisitingCompletedLesson
+                        )
 
-                            Text(lesson.objective)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                        LessonPlanStrip(
+                            lesson: lesson,
+                            currentIndex: currentStepIndex,
+                            completedIds: completedActivityIds.union(
+                                Set(lesson.activities.filter { viewModel.isActivityCompleted($0.id) }.map(\.id))
+                            ),
+                            accent: lessonIdentity.accent
+                        ) { index in
+                            practiceResult = nil
+                            confidenceExerciseOpened = false
+                            currentStepIndex = index
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                        // Current activity content
+                        LessonCoachCue(activity: currentActivity)
+
                         activityContent(for: currentActivity)
 
                         Spacer().frame(height: 80)
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, AppLayout.pageHorizontal)
                     .padding(.top, 12)
                 }
                 .scrollIndicators(.hidden)
@@ -234,19 +238,12 @@ struct LessonDetailView: View {
                 }
             }
 
-            // Bottom action bar
             bottomBar
         }
     }
 
-    private func dotColor(for index: Int, activity: CurriculumActivity) -> Color {
-        if completedActivityIds.contains(activity.id) || viewModel.isActivityCompleted(activity.id) {
-            return AppColors.success
-        } else if index == currentStepIndex {
-            return AppColors.primary
-        } else {
-            return AppColors.categoryNeutral.opacity(0.3)
-        }
+    private func isActivityDone(_ activity: CurriculumActivity) -> Bool {
+        completedActivityIds.contains(activity.id) || viewModel.isActivityCompleted(activity.id)
     }
 
     // MARK: - Activity Content Dispatch
@@ -306,11 +303,22 @@ struct LessonDetailView: View {
 
     private func practiceLaunchCard(_ activity: CurriculumActivity) -> some View {
         GlassCard(tint: AppColors.glassTintPrimary) {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text(activity.description)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Hold this focus")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(lessonIdentity.accent)
+                        .textCase(.uppercase)
+                        .tracking(0.4)
+                    Text(lesson.objective)
+                        .font(.callout.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 HStack(spacing: 16) {
                     if let duration = activity.targetDuration {
@@ -326,7 +334,7 @@ struct LessonDetailView: View {
                     }
                 }
 
-                GlassButton(title: "Start Practice", icon: "mic.fill", style: .primary, fullWidth: true) {
+                GlassButton(title: "Start practice", icon: "mic.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     let duration = recordingDuration(from: activity.targetDuration)
                     activeSheet = .recording(
@@ -494,34 +502,86 @@ struct LessonDetailView: View {
     // MARK: - Review Activity
 
     private func reviewActivityContent(_ activity: CurriculumActivity, isCompleted: Bool) -> some View {
-        VStack(spacing: 16) {
+        let snapshots = Array(recentRecordings.prefix(3))
+
+        return VStack(spacing: 16) {
             activityHeader(activity, isCompleted: isCompleted)
 
-            GlassCard(tint: AppColors.categoryNeutral.opacity(0.10)) {
-                VStack(spacing: 16) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.title2)
-                            .foregroundStyle(AppColors.categoryNeutral)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(AppColors.categoryNeutral.opacity(0.15)))
+            GlassCard(tint: lessonIdentity.accent.opacity(0.08)) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(activity.description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(activity.title)
-                                .font(.subheadline.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Listen for")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(lessonIdentity.accent)
+                            .textCase(.uppercase)
+                            .tracking(0.4)
 
-                            Text(activity.description)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        Text(lesson.objective)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if snapshots.isEmpty {
+                        Text("Record a practice take first, then come back and listen with this lens.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(snapshots, id: \.id) { recording in
+                                Button {
+                                    Haptics.light()
+                                    reviewTarget = ReviewTarget(id: recording.id)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "waveform")
+                                            .foregroundStyle(lessonIdentity.accent)
+                                            .frame(width: 28, height: 28)
+                                            .background(Circle().fill(lessonIdentity.accent.opacity(0.15)))
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(recording.displayTitle)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(.white)
+                                                .lineLimit(1)
+                                            Text(recording.date, style: .date)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer(minLength: 0)
+
+                                        if let score = recording.overallScore {
+                                            Text("\(score)")
+                                                .font(.caption.weight(.bold).monospacedDigit())
+                                                .foregroundStyle(AppColors.scoreColor(for: score))
+                                        }
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Open recording from \(recording.date.formatted(date: .abbreviated, time: .omitted))")
+                            }
                         }
-
-                        Spacer()
                     }
 
                     if !isCompleted {
-                        GlassButton(title: "Mark as Done", icon: "checkmark", style: .primary, fullWidth: true) {
+                        GlassButton(title: "I reviewed these", icon: "checkmark", style: .primary, fullWidth: true) {
                             completeCurrentActivity()
                         }
+                    } else {
+                        Label("Review marked complete", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.success)
                     }
                 }
             }
@@ -532,14 +592,21 @@ struct LessonDetailView: View {
 
     private func activityHeader(_ activity: CurriculumActivity, isCompleted: Bool) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: activityIcon(for: activity.type))
+            Image(systemName: activity.type.teacherIcon)
                 .font(.subheadline)
-                .foregroundStyle(activityColor(for: activity.type))
+                .foregroundStyle(activity.type.teacherColor)
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(activityColor(for: activity.type).opacity(0.15)))
+                .background(Circle().fill(activity.type.teacherColor.opacity(0.15)))
 
-            Text(activity.title)
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(activity.title)
+                    .font(.headline)
+
+                Text(activity.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
 
             if isCompleted {
                 Image(systemName: "checkmark.circle.fill")
@@ -548,30 +615,51 @@ struct LessonDetailView: View {
                     .transition(.scale.combined(with: .opacity))
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isCompleted)
     }
 
     private func completedCard(_ activity: CurriculumActivity) -> some View {
         GlassCard(tint: AppColors.glassTintSuccess) {
-            HStack(spacing: 12) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(AppColors.success)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Completed")
-                        .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
                         .foregroundStyle(AppColors.success)
 
-                    Text(activity.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Completed")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.success)
+
+                        Text(activity.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
                 }
 
-                Spacer()
+                if activity.type == .practice {
+                    GlassButton(title: "Practice again", icon: "mic.fill", style: .secondary, fullWidth: true) {
+                        Haptics.medium()
+                        let duration = recordingDuration(from: activity.targetDuration)
+                        activeSheet = .recording(
+                            duration: duration,
+                            framework: SpeechFramework.fromCurriculumHint(activity.frameworkHint)
+                        )
+                    }
+                } else if activity.type == .drill, let modeRaw = activity.drillMode, let mode = DrillMode(rawValue: modeRaw) {
+                    GlassButton(title: "Drill again", icon: "bolt.fill", style: .secondary, fullWidth: true) {
+                        Haptics.medium()
+                        let vm = DrillViewModel()
+                        vm.targetWPM = userSettings.first.resolvedTargetWPM
+                        vm.startDrill(mode: mode)
+                        activeSheet = .drill(vm)
+                    }
+                }
             }
         }
         .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -583,39 +671,15 @@ struct LessonDetailView: View {
         VStack(spacing: 0) {
             Divider().opacity(0.2)
 
-            Group {
-                let isCurrentComplete = viewModel.isActivityCompleted(currentActivity.id)
-                let isLastStep = currentStepIndex >= lesson.activities.count - 1
+            VStack(spacing: 10) {
+                let doneCount = lesson.activities.filter { isActivityDone($0) }.count
+                Text("\(doneCount) of \(lesson.activities.count) done")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                if isLastStep && allActivitiesComplete {
-                    GlassButton(title: "Complete Lesson", icon: "trophy.fill", style: .primary, fullWidth: true) {
-                        Haptics.success()
-                        withAnimation(.spring(response: 0.4)) {
-                            showingLessonCompletion = true
-                        }
-                    }
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-                } else if currentActivity.type == .lesson && !isCurrentComplete {
-                    GlassButton(title: "Mark as Read", icon: "checkmark", style: .primary, fullWidth: true) {
-                        completeCurrentActivity()
-                        advanceStep()
-                    }
-                } else if isCurrentComplete && !isLastStep {
-                    GlassButton(title: "Next Step", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
-                        Haptics.light()
-                        advanceStep()
-                    }
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-                } else if isCurrentComplete && isLastStep {
-                    GlassButton(title: "Next Step", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
-                        Haptics.light()
-                        advanceStep()
-                    }
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-                }
+                bottomBarActions
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.isActivityCompleted(currentActivity.id))
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentStepIndex)
             .padding(.horizontal, AppLayout.pageHorizontal)
             .padding(.vertical, 12)
             .background {
@@ -624,6 +688,53 @@ struct LessonDetailView: View {
                     .ignoresSafeArea(edges: .bottom)
             }
         }
+    }
+
+    @ViewBuilder
+    private var bottomBarActions: some View {
+        let isCurrentComplete = viewModel.isActivityCompleted(currentActivity.id)
+        let isLastStep = currentStepIndex >= lesson.activities.count - 1
+
+        Group {
+            if isLastStep && allActivitiesComplete {
+                if isRevisitingCompletedLesson {
+                    GlassButton(title: "Done reviewing", icon: "checkmark", style: .primary, fullWidth: true) {
+                        Haptics.light()
+                        dismiss()
+                    }
+                } else {
+                    GlassButton(title: "Finish lesson", icon: "flag.checkered", style: .primary, fullWidth: true) {
+                        Haptics.success()
+                        withAnimation(.spring(response: 0.4)) {
+                            showingLessonCompletion = true
+                        }
+                    }
+                }
+            } else if currentActivity.type == .lesson && !isCurrentComplete {
+                GlassButton(title: "Got it", icon: "checkmark", style: .primary, fullWidth: true) {
+                    completeCurrentActivity()
+                    advanceStep()
+                }
+            } else if isCurrentComplete && !isLastStep {
+                GlassButton(
+                    title: LessonTeachingCopy.nextCTA(after: currentStepIndex, in: lesson),
+                    icon: "arrow.right",
+                    iconPosition: .right,
+                    style: .primary,
+                    fullWidth: true
+                ) {
+                    Haptics.light()
+                    advanceStep()
+                }
+            } else if isCurrentComplete && isLastStep {
+                GlassButton(title: "Wrap up", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
+                    Haptics.light()
+                    advanceStep()
+                }
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.isActivityCompleted(currentActivity.id))
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentStepIndex)
     }
 
     // MARK: - Navigation
@@ -684,26 +795,6 @@ struct LessonDetailView: View {
     }
 
     // MARK: - Helpers
-
-    private func activityIcon(for type: CurriculumActivityType) -> String {
-        switch type {
-        case .lesson: return "book"
-        case .practice: return "mic"
-        case .drill: return "bolt"
-        case .exercise: return "figure.walk"
-        case .review: return "arrow.counterclockwise"
-        }
-    }
-
-    private func activityColor(for type: CurriculumActivityType) -> Color {
-        switch type {
-        case .lesson: return AppColors.info
-        case .practice: return AppColors.primary
-        case .drill: return AppColors.warning
-        case .exercise: return AppColors.success
-        case .review: return AppColors.categoryBrandBright
-        }
-    }
 
     private func recordingDuration(from seconds: Int?) -> RecordingDuration {
         guard let seconds else { return .sixty }

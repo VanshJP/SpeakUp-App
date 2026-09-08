@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// The daily word workout's own row in Settings.
-///
-/// These knobs used to sit at the top of the Vocab tab inside Word Lists —
-/// two levels down, above a list they are not about. The workout is the
-/// feature; the bank is one of its inputs. It gets its own row.
 struct WordWorkoutSettingsView: View {
     @Bindable var viewModel: SettingsViewModel
 

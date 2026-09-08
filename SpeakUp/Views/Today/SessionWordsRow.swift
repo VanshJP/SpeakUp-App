@@ -1,25 +1,11 @@
 import SwiftUI
 
-/// Today's words, inside the prompt card under a hairline the row draws itself
-/// — so a day with no workout ends the card at the prompt text, no stray rule.
-///
-/// Duration does not belong on this line. It sat here until the three-word cap
-/// pushed the last chip onto a second row directly beneath the pill, orphaned
-/// next to a control it has nothing to do with — and the width the pill took is
-/// what forced that wrap. It lives in the card header now.
-///
-/// Skip and add-to-bank hang off each chip as a tap `Menu`: a sheet was a whole
-/// screen of chrome for two rare verbs and it covered the prompt, a
-/// `contextMenu` hid them completely. The chevron is the affordance and the
-/// sage dot marks a word introduced today.
 struct SessionWordsRow: View {
     var workout: DailyVocabChallenge?
     var bankWords: [String] = []
     var onSkip: ((VocabChallengeWord) -> Void)?
     var onAddToBank: ((VocabChallengeWord) -> Void)?
 
-    /// `FlowLayout` top-aligns a line, so children of mixed height come out
-    /// ragged. One height for every chip is the whole fix.
     private let chipHeight: CGFloat = 44
 
     var body: some View {
@@ -30,8 +16,6 @@ struct SessionWordsRow: View {
                     .frame(height: 1)
                     .accessibilityHidden(true)
 
-                // `USE` is the label these chips spent their whole life
-                // without — two bare words explain nothing on their own.
                 FlowLayout(spacing: 6) {
                     Text("USE")
                         .font(.system(size: 10, weight: .semibold))
@@ -45,8 +29,6 @@ struct SessionWordsRow: View {
                     }
                 }
             }
-            // A `Rectangle` has no ideal width, so the `VStack` would otherwise
-            // size to the chips and the rule would stop short of the card edge.
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -78,8 +60,6 @@ struct SessionWordsRow: View {
             }
         } label: {
             HStack(spacing: 5) {
-                // New words earn the one dot of colour in this row — it is the
-                // only state a chip has that the user cannot infer from reading.
                 if isNew, !used {
                     Circle()
                         .fill(AppColors.categorySage)
@@ -105,7 +85,6 @@ struct SessionWordsRow: View {
             }
         }
         .buttonStyle(.plain)
-        // Visual capsule stays compact; the Menu gets a full HIG-sized target.
         .frame(minHeight: chipHeight)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)

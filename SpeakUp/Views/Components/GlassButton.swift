@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// The visual chrome for a glass capsule control — shared by `GlassButton` and
-/// by card labels that sit inside a `NavigationLink` (where nesting a `Button`
-/// is illegal). One shape language for every primary / secondary / outline /
-/// danger CTA in the app.
 struct GlassButtonLabel: View {
     let title: String
     var icon: String? = nil
@@ -74,8 +70,6 @@ struct GlassButtonLabel: View {
     }
 }
 
-/// Applies the capsule chrome after padding so Liquid Glass sits on the final
-/// shape. Primary stays an opaque white fill — the one loud CTA on a page.
 private struct GlassButtonChrome: ViewModifier {
     let style: GlassButton.GlassButtonVariant
 
@@ -195,9 +189,6 @@ struct GlassButton: View {
 /// Shared pressed-state feedback for glass controls — a subtle scale + dim,
 /// spring-animated. Keeps taps feeling physical without any layout shift.
 ///
-/// Press scale is exactly `0.96` (anything below ~0.95 feels exaggerated).
-/// Under Reduce Motion the scale is skipped so state still dims without a
-/// transform the user asked not to see.
 struct GlassPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

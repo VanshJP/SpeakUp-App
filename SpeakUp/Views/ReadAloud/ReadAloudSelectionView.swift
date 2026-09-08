@@ -9,11 +9,8 @@ struct ReadAloudSelectionView: View {
     @State private var showingDictionary = false
     @FocusState private var customFieldFocused: Bool
 
-    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
     var presentation: ToolPresentation = .sheet
 
-    /// Denominator for each row's arc, scoped to what the filters leave
-    /// visible — within one set the relative lengths are what's worth reading.
     private var longestPassageWords: Double {
         Double(viewModel.passages.map(\.wordCount).max() ?? 0)
     }
@@ -46,8 +43,6 @@ struct ReadAloudSelectionView: View {
             .tint(AppColors.toolReadAloud)
             .padding(.horizontal, 4)
 
-            // Two axes, one grammar: both rows lead with All, so neither can
-            // strand you in a filtered state with no way back.
             ToolFilterBar {
                 FilterPill(
                     title: "All",
@@ -115,8 +110,6 @@ struct ReadAloudSelectionView: View {
                     ForEach(viewModel.passages) { passage in
                         PracticeItemRow(
                             title: passage.title,
-                            // The passage itself is the subtitle: you pick one
-                            // by reading a line of it, not by its name.
                             subtitle: passage.text,
                             icon: passage.category.icon,
                             tint: AppColors.difficultyColor(passage.difficulty),
@@ -153,8 +146,6 @@ struct ReadAloudSelectionView: View {
 
     // MARK: - Custom practice
 
-    /// Type a word, sentence, or short paragraph — hear the model, look it up,
-    /// then run the same alignment scoring as a catalog passage.
     private var customPracticeCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 14) {
@@ -261,8 +252,6 @@ struct ReadAloudSelectionView: View {
 // MARK: - Cost
 
 extension ReadAloudSelectionView {
-    /// Rough cost at a conversational ~150 wpm, so a passage says what it
-    /// takes before you commit. Short enough to sit inside the row's dial.
     static func estimatedTime(_ wordCount: Int) -> String {
         let minutes = Double(wordCount) / 150.0
         if minutes < 1 { return "<1m" }

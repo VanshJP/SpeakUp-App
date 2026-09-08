@@ -1,18 +1,9 @@
 import SwiftUI
 
 /// What you were doing, in two lines and no card.
-///
-/// This is metadata, not content — giving it a glass surface of its own made it
-/// compete with the score for the top of the page. Category, date, time,
-/// duration, and difficulty collapse into one caption line; the prompt itself
 /// stays legible because it is the only thing here the user actually re-reads.
-///
-/// Shared by `RecordingDetailView` and the analyzing skeleton so the header does
-/// not move, restyle, or re-wrap the moment the score lands: everything it shows
-/// is known before analysis starts.
 struct DetailContextStrip: View {
     let recording: Recording
-    /// Nil while the session is still scoring — the strip renders read-only.
     var onEditTitle: (() -> Void)?
 
     var body: some View {
@@ -72,7 +63,6 @@ struct DetailContextStrip: View {
         return "waveform"
     }
 
-    /// "Storytelling · Hard · Mar 14, 9:41 AM · 1:04"
     private var contextMetaLine: String {
         var parts: [String] = []
 

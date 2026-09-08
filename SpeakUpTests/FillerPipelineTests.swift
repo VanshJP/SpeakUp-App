@@ -2,12 +2,9 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// FillerDetectionPipeline is shared by Whisper, Apple Speech, and the live
-// counter — one regression here miscounts fillers on every surface at once.
 
 @MainActor
 struct FillerPipelineTests {
-    /// Evenly spaced words with small gaps (no pauses, no sentence boundaries).
     private func timings(_ list: [String], gap: TimeInterval = 0.1) -> [RawWordTiming] {
         var cursor: TimeInterval = 0
         return list.map { word in

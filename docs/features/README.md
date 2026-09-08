@@ -26,7 +26,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | Today / Practice Hub | [today-library.md](./today-library.md) | `Views/Today/`, `Views/Practice/`, `TodayHomeModule`, `PracticeToolKind` | — | — |
 | Daily word workout | [vocab-challenge.md](./vocab-challenge.md) | `VocabChallengeService`, `Views/Today/VocabChallengeResultCard.swift` | — | — |
 | History / trajectory / readiness / journal | [history-progress.md](./history-progress.md) | `Views/History/`, `Views/Progress/`, `Views/Streak/`, `ScenarioReadinessEngine` | gotchas §2b, §3 | — |
-| Learn / curriculum | [curriculum.md](./curriculum.md) | `Views/Curriculum/`, `CurriculumService` | monetization.md | — |
+| Learn / curriculum | [curriculum.md](./curriculum.md) | `Views/Curriculum/` (+ `LessonGlyphView`), `LessonIdentity`, `CurriculumService` | monetization.md · ui-design-system.md | — |
 | Warm-ups / drills / confidence | [practice-tools.md](./practice-tools.md) | `Views/WarmUp/`, `Drills/`, `Confidence/` · `DrillMode` (+ vocal/emphasis/Q&A) | — | — |
 | Onboarding / app tour | `/ONBOARDING_VISION.md` | `Views/Onboarding/`, `AppTourView` | gotchas §10 | — |
 | Settings | [settings.md](./settings.md) | `Views/Settings/` | playbook | — |

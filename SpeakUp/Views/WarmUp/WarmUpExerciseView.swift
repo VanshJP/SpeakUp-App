@@ -15,11 +15,8 @@ struct WarmUpExerciseView: View {
             AppBackground(style: .recording)
 
             VStack(spacing: 32) {
-                // Close button
                 HStack {
                     Button {
-                        // Parity with the drill runner: an active session asks
-                        // before it discards your progress.
                         if viewModel.isRunning {
                             Haptics.warning()
                             showingExitConfirm = true
@@ -85,9 +82,6 @@ struct WarmUpExerciseView: View {
                 .font(.headline)
                 .foregroundStyle(.white.opacity(0.6))
 
-            // Where you are in the exercise — the breathing circle carries
-            // this visually, but a 12-step articulation drill had no position
-            // affordance at all until this counter existed.
             VStack(spacing: 6) {
                 Text("Step \(viewModel.currentStepIndex + 1) of \(viewModel.currentExercise?.steps.count ?? 0)")
                     .font(.caption.weight(.medium))
@@ -133,7 +127,6 @@ struct WarmUpExerciseView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 20) {
-            // Rounds picker (breathing only, before start)
             if viewModel.canCustomizeRounds,
                viewModel.currentStepIndex == 0,
                !viewModel.isRunning {
@@ -224,7 +217,6 @@ struct WarmUpExerciseView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-        // One swipe adjusts; no need to hunt for the tiny −/+ buttons.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Rounds")
         .accessibilityValue("\(viewModel.selectedRounds)")

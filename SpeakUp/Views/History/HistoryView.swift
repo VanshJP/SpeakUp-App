@@ -16,7 +16,6 @@ struct HistoryView: View {
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
     var onShowGoals: () -> Void = {}
-    /// Empty-state CTA — typically switches to Today so the user can start a take.
     var onStartPractice: () -> Void = {}
 
     // MARK: - Filtered Summaries
@@ -48,21 +47,10 @@ struct HistoryView: View {
                 Section {
                     switch selectedSection {
                     case .recordings:
-                        // Search belongs to the section, not the page — the
-                        // Progress tab has nothing to search — so it lives
-                        // here with the filter menu on its trailing end, and
-                        // only the picker pins. The nav bar this replaced was
-                        // permanent and said "History" above a tab button
-                        // already labelled History.
                         InlineSearchField(text: $searchText, prompt: "Search recordings…") {
                             filterMenu
                         }
 
-                        // The strip earns its place back by being
-                        // switchable — showing up and doing well are
-                        // different questions, and one grid answers both.
-                        // Suppressed while searching or filtering, where
-                        // the list is the answer and the grid is noise.
                         if searchText.isEmpty, selectedFilter == .all, !viewModel.summaries.isEmpty {
                             ActivityStrip(summaries: viewModel.summaries)
                         }
@@ -81,14 +69,7 @@ struct HistoryView: View {
             .pageContentInsets()
         }
         .scrollIndicators(.hidden)
-        // `.searchable` used to hand this over for free; an inline field has
-        // to say it, or the keyboard sits over half the results.
         .scrollDismissesKeyboard(.interactively)
-        // No nav bar. The tab bar already names the tab, so the row held one
-        // redundant word plus a filter button, and `.searchable` hung another
-        // 50pt off it — ~100pt of permanent chrome before the first recording.
-        // The pinned picker plus each section's own `InlineSearchField` are
-        // this page's header now.
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
@@ -99,8 +80,6 @@ struct HistoryView: View {
         .alert("Delete Recording?", isPresented: $showingDeleteAlert) {
             Button("Delete", role: .destructive) {
                 if let summary = summaryToDelete {
-                    // Stop playback first — unlinking media under AVAudioPlayer
-                    // leaves a stuck isPlaying / decode error.
                     audioService.stop()
                     Task {
                         await viewModel.deleteRecording(id: summary.id)
@@ -118,15 +97,6 @@ struct HistoryView: View {
 
     // MARK: - Progress Content
 
-    // The Progress tab shows the charts directly — the same experience the
-    // old "Progress Charts" card used to navigate to. One VStack owns the
-    // page rhythm: every chapter (conclusion, trends, guidance, review) sits
-    // 20pt apart. Word Bank usage renders inside the Language tab now, so the
-    // page ends at Review instead of an orphaned chip rail.
-    //
-    // Review tiles also live on Library → Tools (denser `ToolCategoryCard`).
-    // History keeps the compact `ToolTileLabel` grid under the charts; both
-    // surfaces read `ReviewToolKind` so names and tints cannot drift.
     private var progressContent: some View {
         VStack(spacing: AppLayout.chapterSpacing) {
             ProgressChartsContent(vocabWords: viewModel.aggregatedVocab)
@@ -156,8 +126,6 @@ struct HistoryView: View {
 
     @ViewBuilder
     private func reviewToolButton(_ tool: ReviewToolKind) -> some View {
-        // Compare / Listen back need at least two sessions; Goals and Journal
-        // stay available so empty history still has a door into the feature.
         switch tool {
         case .compare:
             if viewModel.summaries.count >= 2 {
@@ -244,8 +212,6 @@ struct HistoryView: View {
 
     private var recordingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Only speak up when a filter is narrowing the list — the tab is
-            // already called History, so "Sessions · 42 total" said nothing.
             if selectedFilter != .all && !filteredSummaries.isEmpty {
                 HStack(spacing: 6) {
                     Text("\(filteredSummaries.count) \(selectedFilter.title.lowercased())")
@@ -313,9 +279,6 @@ struct HistoryView: View {
 
 // MARK: - History Filter
 
-/// Three filters, not five. "High Score" and "This Week" were slicing a list
-/// that is already reverse-chronological and searchable — scrolling answered
-/// both faster than a chip did.
 enum HistoryFilter: String, CaseIterable, Identifiable {
     case all, favorites, stories
 
@@ -345,13 +308,9 @@ struct FilterChip: View {
     let icon: String
     let isSelected: Bool
     var count: Int? = nil
-    /// Identity color for chips that stand for a user-owned thing (a Story
-    /// folder). Idle chips wear it on the glyph; selected chips are the solid
-    /// white pill either way, so selection always reads the same.
     var tint: Color? = nil
     let action: () -> Void
 
-    /// Ink on a selected (solid white) chip.
     private static let onLight = Color(red: 0.07, green: 0.07, blue: 0.08)
 
     private var iconStyle: AnyShapeStyle {
@@ -384,7 +343,6 @@ struct FilterChip: View {
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
         }
-        // Plain: GlassPressStyle scales live glass into the dark clipped flash.
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
@@ -405,9 +363,6 @@ struct RecordingRow: View {
         Self.detailedDateFormatter.string(from: summary.date)
     }
 
-    /// One plain-language metadata line: date · duration · category. Color
-    /// and chips stay out of the list — the score gauge on the right is the
-    /// only colored element, so rows scan instead of shouting.
     private var metadataLine: String {
         var parts = [detailedDateString, summary.formattedDuration]
         if summary.storyId != nil {

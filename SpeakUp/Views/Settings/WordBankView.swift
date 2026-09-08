@@ -10,7 +10,6 @@ struct WordBankView: View {
     @State private var isFillerInputFocused = false
     @State private var newFillerIsContextDependent = false
 
-    // Dictation state
     @State private var dictationEngine = DictationService()
 
     var body: some View {
@@ -19,7 +18,6 @@ struct WordBankView: View {
                 .ignoresSafeArea(.keyboard)
 
             VStack(spacing: 0) {
-                // Segmented picker
                 Picker("", selection: $selectedTab) {
                     Text("Vocab").tag(0)
                     Text("Dictionary").tag(1)
@@ -76,7 +74,6 @@ struct WordBankView: View {
     @ViewBuilder
     private var bottomInputBar: some View {
         VStack(spacing: 8) {
-            // Error messages
             if let error = dictationEngine.errorMessage {
                 errorLabel(error)
             } else if selectedTab == 0, let error = viewModel.vocabWordError {
@@ -112,10 +109,8 @@ struct WordBankView: View {
 
     private var bottomVocabInput: some View {
         HStack(spacing: 10) {
-            // Mic button
             micButton(tint: AppColors.primary)
 
-            // Text input
             HStack(spacing: 8) {
                 PersistentTextField(
                     hint: "Add a word...",
@@ -152,10 +147,8 @@ struct WordBankView: View {
 
     private var bottomDictionaryInput: some View {
         HStack(spacing: 10) {
-            // Mic button
             micButton(tint: AppColors.primary)
 
-            // Text input
             HStack(spacing: 8) {
                 PersistentTextField(
                     hint: "Add a name or phrase...",
@@ -228,7 +221,6 @@ struct WordBankView: View {
                     }
             }
 
-            // Detection type picker
             HStack(spacing: 6) {
                 Text("Detect as")
                     .font(.caption2)
@@ -308,13 +300,10 @@ struct WordBankView: View {
 
     private var wordBankTab: some View {
         VStack(spacing: 16) {
-            // Live dictation preview
             if dictationEngine.isListening {
                 dictationPreview(tint: AppColors.primary)
             }
 
-            // Word chips — above the explainer so the list, not the settings,
-            // is what the tab is about.
             vocabWordsSection
 
             HStack(spacing: 8) {
@@ -343,7 +332,6 @@ struct WordBankView: View {
             }
             .padding(.horizontal, 4)
 
-            // Live dictation preview
             if dictationEngine.isListening {
                 dictationPreview(tint: AppColors.primary)
             }
@@ -506,7 +494,6 @@ struct WordBankView: View {
 
     private var fillerWordsTab: some View {
         VStack(spacing: 16) {
-            // Explanation
             HStack(spacing: 8) {
                 Image(systemName: "waveform.badge.minus")
                     .font(.caption)
@@ -517,18 +504,14 @@ struct WordBankView: View {
             }
             .padding(.horizontal, 4)
 
-            // Always Detected section
             alwaysDetectedSection
 
-            // Context-Dependent section
             contextDependentSection
 
-            // Removed section (only if any removed)
             if !viewModel.removedDefaultFillers.isEmpty {
                 removedFillersSection
             }
 
-            // Reset button (only if customized)
             if viewModel.hasFillerCustomizations {
                 Button {
                     withAnimation(.spring(duration: 0.3)) {
@@ -706,8 +689,6 @@ struct WordBankView: View {
 
 // MARK: - Daily word workout
 
-/// The word-level knob. Raw value 0 follows the speaker level; 1–3 pin a
-/// lexicon tier, matching `VocabChallengePreferences.levelOverrideRaw`.
 private enum VocabLevelChoice: Int {
     case automatic = 0
     case easy = 1
@@ -771,11 +752,6 @@ struct VocabChallengeSettingsCard: View {
                         }
                     }
 
-                    // ponytail: the bank, your dictionary terms and spaced review
-                    // are always in play. They were four more switches on the very
-                    // page that manages the words, and no answer but "on" made the
-                    // workout better. Whether the app teaches you words you have
-                    // never tracked is the one real choice left.
                     Toggle(isOn: $viewModel.vocabChallengeIntroduceNew) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Teach new words")
@@ -790,15 +766,10 @@ struct VocabChallengeSettingsCard: View {
                         viewModel.saveVocabChallengeSettings()
                     }
 
-                    // Only meaningful while fresh words exist: the tier shapes
-                    // what gets taught, so it hides when teaching is off — below
-                    // the toggle, so flipping it never moves rows under the finger.
                     if viewModel.vocabChallengeIntroduceNew {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Word level")
                                 .font(.subheadline)
-                            // Four labels will not fit beside a title, so unlike
-                            // "Words per day" the pills get their own row.
                             HStack(spacing: 6) {
                                 ForEach(vocabLevelChoices, id: \.rawValue) { choice in
                                     CardPill(
@@ -819,10 +790,6 @@ struct VocabChallengeSettingsCard: View {
     }
 }
 
-/// The in-card sibling of `FilterPill`. Same job, but `FilterPill` fills with
-/// `.ultraThinMaterial`, which turns to mud stacked inside a `GlassCard`, so
-/// this keeps the card's own translucent treatment. Two hand-rolled copies of
-/// it lived in this file — word count and filler detection type.
 private struct CardPill: View {
     let label: String
     let isSelected: Bool

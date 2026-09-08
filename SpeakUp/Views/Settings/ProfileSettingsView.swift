@@ -65,8 +65,6 @@ struct ProfileSettingsView: View {
         }
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
-        // Persist on every change so the name + its dictionary linkage survive
-        // even if the user leaves without tapping Done.
         .onChange(of: viewModel.userName) { _, _ in
             guard !viewModel.isSyncing else { return }
             Task { await viewModel.saveSettings() }

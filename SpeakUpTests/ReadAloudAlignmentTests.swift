@@ -1,10 +1,6 @@
 import Testing
 @testable import SpeakUp
 
-/// Pins the read-aloud alignment engine: greedy matching against a reference
-/// passage, including the two ways real reading drifts from the page —
-/// skipped words and inserted fillers — plus number normalization, because
-/// the page says "seventy-two" while the recognizer writes "72".
 struct ReadAloudAlignmentTests {
 
     // MARK: - Matching basics
@@ -74,8 +70,6 @@ struct ReadAloudAlignmentTests {
     }
 
     @Test func fillerBeforeSkippedWordStillResyncs() {
-        // "well" is an insertion whose successor resolves two references
-        // ahead; it must drop without eating the skipped word.
         let reference = ["the", "cat", "sat", "down"]
         let result = ReadAloudService.computeAlignment(
             reference: reference,
@@ -91,9 +85,6 @@ struct ReadAloudAlignmentTests {
     }
 
     @Test func substitutionWithoutResolvingSuccessorCountsAsMismatch() {
-        // "zebra" before a resolving successor reads as an insertion (see
-        // fillerBeforeSkippedWordStillResyncs); only when nothing after it
-        // resolves is it scored as a genuine miss.
         let reference = ["the", "cat"]
         let result = ReadAloudService.computeAlignment(
             reference: reference,
@@ -116,8 +107,6 @@ struct ReadAloudAlignmentTests {
             spokenWords: ["zebra", "cat"]
         )
 
-        // The stumble re-syncs on the next word; "the" reads as skipped, not
-        // double-penalized.
         #expect(result.states[0] == .skipped)
         #expect(result.states[1] == .matched)
         #expect(result.matched == 1)

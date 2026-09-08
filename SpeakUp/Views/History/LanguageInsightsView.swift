@@ -10,9 +10,6 @@ import Charts
 /// instead: …"), never as unlabeled chips.
 struct LanguageInsightsView: View {
     let profile: LexiconProfile?
-    /// Saved Word Bank words spotted across takes. Lives here so the page
-    /// has one word story instead of a lexicon tab plus an orphaned chip
-    /// rail at the page tail.
     var vocabWords: [VocabCount] = []
 
     var body: some View {
@@ -183,11 +180,6 @@ struct LanguageInsightsView: View {
             .accessibilityLabel("\(usage.word), \(categoryLabel(usage.category)), \(usage.count) times, \(directionLabel(usage.direction)).")
 
             if !usage.swapsPreview.isEmpty {
-                // Advice, not vocabulary. As capsules these sat one card above
-                // the Word Mix chips and read as "more words you said" — and a
-                // pill saying "cut it" is indistinguishable from a pill saying
-                // "significant". As a sentence, the quoted entries are the
-                // wording to borrow and the unquoted ones are the move to make.
                 let lead = Text("Try instead  ").foregroundStyle(.tertiary)
                 let swaps = Text(usage.swapsPreview.joined(separator: "  ·  "))
                     .foregroundStyle(AppColors.primary)
@@ -238,9 +230,6 @@ struct LanguageInsightsView: View {
 
     // MARK: Word mix
 
-    /// Impact verbs and recurring topics in ONE card with labeled groups —
-    /// the former two separate chip stacks read as two unexplained word
-    /// lists; now the card says what each group is for.
     private func wordMixCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -271,9 +260,6 @@ struct LanguageInsightsView: View {
         }
     }
 
-    /// Label, one line of why it matters, then the chips. One tint drives the
-    /// label and its chips together — a group whose heading disagreed with its
-    /// own chips is the drift this consolidation exists to prevent.
     private func wordGroup(
         label: String,
         context: String,
@@ -302,9 +288,6 @@ struct LanguageInsightsView: View {
 
     // MARK: Word Bank practice
 
-    /// The user's saved practice words and how often they landed in real
-    /// takes. Formerly a clipped chip rail at the very bottom of the page;
-    /// here it sits inside the language story with one line of context.
     private var vocabPracticeCard: some View {
         let totalUses = vocabWords.reduce(0) { $0 + $1.count }
 
@@ -407,10 +390,6 @@ struct LanguageInsightsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 GlassCardTitle("Coach Notes", icon: "lightbulb.fill")
 
-                // Says only what `makeSuggestions` actually does: it fires a
-                // fixed set of rules against the numbers on this page and
-                // keeps the first four. It does NOT rank by impact, and the
-                // list can include positive notes — so no "N things to fix".
                 Text("What your numbers on this page add up to. At most four at a time.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -468,8 +447,6 @@ struct LanguageInsightsView: View {
 // MARK: - Swaps preview
 
 private extension WordUsageSummary {
-    /// First few alternatives shown inline on the Words tab; the full list
-    /// lives in the engine map and surfaces on the session card.
     var swapsPreview: [String] {
         Array((LexiconInsightsEngine.alternativesFor(word) ?? []).prefix(3))
     }

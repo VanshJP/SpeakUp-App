@@ -2,7 +2,6 @@ import Foundation
 
 struct DefaultConfidenceExercises {
     static let all: [ConfidenceExercise] = [
-        // Calming
         ConfidenceExercise(
             id: "grounding_54321",
             category: .calming,
@@ -32,7 +31,6 @@ struct DefaultConfidenceExercises {
             ],
             durationMinutes: 4
         ),
-        // Visualization
         ConfidenceExercise(
             id: "visualize_success",
             category: .visualization,
@@ -62,7 +60,6 @@ struct DefaultConfidenceExercises {
             ],
             durationMinutes: 3
         ),
-        // Progressive Exposure
         ConfidenceExercise(
             id: "progressive_exposure",
             category: .progressive,
@@ -76,7 +73,6 @@ struct DefaultConfidenceExercises {
             ],
             durationMinutes: 5
         ),
-        // Affirmation
         ConfidenceExercise(
             id: "power_statements",
             category: .affirmation,

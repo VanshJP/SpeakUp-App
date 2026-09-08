@@ -1,26 +1,11 @@
 import SwiftUI
 
-/// How a practice-tool page is hosted.
-///
-/// - `sheet`: own `NavigationStack` + ✕ (Today tiles, focus card, next-steps).
-/// - `pushed`: caller-owned stack; system Back (legacy Library push).
-/// - `embedded`: in-place Library drill-down — no second nav title, no outcome
-///   chrome (the parent already named the tool), just filters + items.
 enum ToolPresentation: Equatable {
     case sheet
     case pushed
     case embedded
 }
 
-/// Shared skeleton for the four practice-tool pages — Warm-Ups, Drills,
-/// Read Aloud, Calm.
-///
-/// They had drifted into four dialects: three different content paddings, a
-/// nav title that disagreed with the tool catalog ("Quick Drills" vs `Drills`),
-/// filter rows that were double-inset on one page and flush on another, and a
-/// grid of fixed-height tiles on one page where the rest used rows. All of the
-/// page chrome lives here now, so a fifth dialect can't be invented by
-/// accident — a tool page supplies its filters and its items, nothing else.
 struct ToolPage<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -28,7 +13,6 @@ struct ToolPage<Content: View>: View {
     var presentation: ToolPresentation = .sheet
     @ViewBuilder var content: Content
 
-    /// Convenience for older call sites that only knew "sheet vs push".
     init(
         tool: PracticeToolKind,
         isPushed: Bool = false,
@@ -68,9 +52,6 @@ struct ToolPage<Content: View>: View {
         }
     }
 
-    /// Library in-place: parent owns back + title. No second AppBackground —
-    /// PracticeHub already paints one, and nesting two navy canvases read as a
-    /// card popping over the tab.
     private var embeddedBody: some View {
         VStack(alignment: .leading, spacing: 16) {
             content
@@ -84,8 +65,6 @@ struct ToolPage<Content: View>: View {
 
             PageScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // The only header: the nav bar already names the page, so
-                    // this says what the tool gets you and gets out of the way.
                     Text(tool.outcome)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -102,7 +81,6 @@ struct ToolPage<Content: View>: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            // The ✕ is a sheet affordance; a pushed page closes with Back.
             if presentation == .sheet {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: {
@@ -120,13 +98,6 @@ struct ToolPage<Content: View>: View {
 
 // MARK: - Filter Bar
 
-/// The horizontal pill row every tool page filters with. Owning the spacing
-/// here is the point: one page used to inset its pills inside the already
-/// padded column, so its filters sat visibly further in than its cards.
-///
-/// `scrollClipDisabled` lets the pills run to the screen edge while the column
-/// around them keeps its padding — the row reads as scrollable instead of
-/// stopping short.
 struct ToolFilterBar<Content: View>: View {
     @ViewBuilder var content: Content
 

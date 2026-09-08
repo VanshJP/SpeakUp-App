@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// Waiting on Today when a friend-challenge link arrived during onboarding,
-/// or the recipient cancelled the countdown. Tapping starts the same prompt
-/// with challenge chrome still attached.
 struct FriendChallengeCard: View {
     let challenge: SharedChallenge
     let onAccept: () -> Void

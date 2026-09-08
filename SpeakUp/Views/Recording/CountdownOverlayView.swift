@@ -8,15 +8,11 @@ struct CountdownOverlayView: View {
     let countdownStyle: CountdownStyle
     var look: TimerLook = .ring
     var backdrop: RecordingBackdrop = .base
-    /// Optional context line for flows that prep for a named format rather
-    /// than read a prompt — drills show the mode and what it costs. nil keeps
-    /// the recording layout byte-identical.
     var prepTitle: String? = nil
     var prepSubtitle: String? = nil
     let onComplete: () -> Void
     let onCancel: () -> Void
     @Binding var selectedGoalId: UUID?
-    /// Set when this session came from a friend-challenge link.
     var challenge: SharedChallenge? = nil
 
     @Query(filter: #Predicate<UserGoal> { !$0.isCompleted })
@@ -28,7 +24,6 @@ struct CountdownOverlayView: View {
 
     private var totalSeconds: Int { countdownDuration }
 
-    /// The number displayed in the timer circle.
     private var displayNumber: Int {
         switch countdownStyle {
         case .countDown:
@@ -38,7 +33,6 @@ struct CountdownOverlayView: View {
         }
     }
 
-    /// Remaining seconds until completion (used for haptic timing).
     private var remainingSeconds: Int {
         max(0, totalSeconds - elapsedSeconds)
     }
@@ -75,20 +69,11 @@ struct CountdownOverlayView: View {
         ZStack {
             RecordingBackdropView(backdrop: backdrop)
 
-            // Laid out against the recording screen, slot for slot: prompt
-            // where the compact prompt card will be, dial in a `SessionDialSlot`
-            // exactly like the clock's, actions along the bottom. Same 16pt
-            // page inset as the recording screen, which is load-bearing — the
-            // dial's size comes from its slot's width, and that is what makes
-            // the two screens draw the same dial (see `SessionDial`).
             VStack(spacing: 16) {
                 if let prompt {
                     prominentPromptCard(prompt)
                 }
 
-                // Prep context for prompt-less flows (drills): what you
-                // picked and what it costs — or, for impromptu, the topic to
-                // start thinking about.
                 if let prepTitle {
                     VStack(spacing: 4) {
                         Text(prepTitle)
@@ -147,20 +132,12 @@ struct CountdownOverlayView: View {
                     }
                 }
             }
-            // Safe-area insets do this job now. The screen used to consume
-            // them and then guess at 50pt top and bottom, which on a Dynamic
-            // Island phone put the prompt card under the status bar.
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        // Full-screen covers and root overlays must own the hit surface —
-        // without this, a parent scroll / LazyVStack can eat the first few
-        // taps while layout settles (Cancel felt dead until ~7 on a 10s clock).
         .contentShape(Rectangle())
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
-            // `.task` cancels on disappear, so Cancel cannot race a stray tick
-            // the way the old `Timer.publish` View-`let` could.
             await runCountdown()
         }
         .ambientLoop(AppMotion.ambient(duration: 1.0)) { isPulsing = true }
@@ -175,8 +152,6 @@ struct CountdownOverlayView: View {
 
     @MainActor
     private func runCountdown() async {
-        // One cancellable loop instead of `Timer.publish` as a View `let` —
-        // that publisher was recreated on every body refresh and raced Cancel.
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled, !hasCompleted else { return }

@@ -11,12 +11,8 @@ struct GlassCard<Content: View>: View {
     @Environment(\.glassAppearance) private var glassAppearance
 
     init(
-        // Default matches `glassCard()` / editing overlays (20). Nested inner
-        // surfaces should sit ~padding below this for concentric radii.
         cornerRadius: CGFloat = 20,
         tint: Color? = nil,
-        // Tightened from 16. Every card in the app inherits this, so it is the
-        // single highest-leverage control over how large the app feels.
         padding: CGFloat = 13,
         accentBorder: Color? = nil,
         elevated: Bool = false,
@@ -113,7 +109,6 @@ struct TickMeter: View {
 
 struct EmptyStateCard: View {
     let icon: String
-    /// Sentence case. Empty titles are headings, not buttons — keep them calm.
     let title: String
     let message: String
     var buttonTitle: String? = nil
@@ -162,9 +157,6 @@ struct EmptyStateCard: View {
 /// Empty state for a slot that already sits inside a card — a chart well, a
 /// section body. `EmptyStateCard` would nest a `GlassCard` in a `GlassCard`.
 ///
-/// Exists because four chart fallbacks were each a bare `Text` in a
-/// `minHeight: 100` frame: technically an empty state, visibly an oversight
-/// next to the designed ones elsewhere in the app.
 struct EmptyStateInline: View {
     let icon: String
     let message: String

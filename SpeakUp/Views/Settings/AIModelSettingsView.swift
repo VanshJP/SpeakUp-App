@@ -12,10 +12,6 @@ struct AIModelSettingsView: View {
 
             PageScrollView {
                 VStack(spacing: 20) {
-                    // Apple Intelligence is only shown when it exists on this
-                    // device — a permanent "Not Available" badge told the user
-                    // nothing they could act on and sat above the card that
-                    // actually has an action (download the local model).
                     if llmService.appleIntelligenceAvailable {
                         appleIntelligenceCard
                     }
@@ -87,8 +83,6 @@ struct AIModelSettingsView: View {
 
                 Spacer()
 
-                // Only rendered when Apple Intelligence is on this device,
-                // so there is exactly one state to show.
                 Text("Active")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
@@ -104,7 +98,6 @@ struct AIModelSettingsView: View {
     private var localModelCard: some View {
         GlassCard(tint: AppColors.categoryBrandBright.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 14) {
-                // Header
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.down.circle")
                         .font(.title2)
@@ -126,7 +119,6 @@ struct AIModelSettingsView: View {
                     localModelStatusBadge
                 }
 
-                // Description
                 modelTierSection
 
                 if !llmService.appleIntelligenceAvailable {
@@ -143,7 +135,6 @@ struct AIModelSettingsView: View {
                     preferLocalToggle
                 }
 
-                // Actions based on state
                 localModelActions
             }
         }
@@ -365,9 +356,6 @@ struct AIModelSettingsView: View {
                         .padding(.top, 4)
                 }
             }
-            // GlassCard hugs its content, and nothing in this stack is
-            // intrinsically full-width, so without this the card renders
-            // narrower than its neighbours.
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

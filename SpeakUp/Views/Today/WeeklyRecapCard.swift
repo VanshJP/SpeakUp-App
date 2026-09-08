@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// "This week vs last" recap — appears once per week when both weeks have
-/// enough sessions to compare. Dismissing hides it until next week.
-/// Color lives only in the deltas (the data); everything else stays neutral.
 struct WeeklyRecapCard: View {
     let progress: WeeklyProgressData
     let onDismiss: () -> Void
@@ -108,8 +105,6 @@ struct WeeklyRecapCard: View {
         value > 0 ? "+\(value)" : "\(value)"
     }
 
-    /// Collapses a fractional fillers/min change to a comparison direction,
-    /// treating tiny drift (< 0.05) as flat.
     private func changeDirection(_ change: Double) -> Int {
         if abs(change) < 0.05 { return 0 }
         return change > 0 ? 1 : -1

@@ -1,13 +1,6 @@
 import SwiftUI
 
 /// A number that counts through every value on its way to the target.
-///
-/// `.contentTransition(.numericText())` — used elsewhere in the app — rolls
-/// digits between two values, which is right for a number that *updated*. A
-/// score being revealed for the first time should climb, so this conforms to
-/// `Animatable` and re-renders per frame while SwiftUI interpolates the value.
-///
-/// Drive it from a `withAnimation` (or `.motion`) on whatever state feeds
 /// `value`. Under Reduce Motion the value simply lands, which is correct.
 struct CountUpText: View, Animatable {
     var value: Double

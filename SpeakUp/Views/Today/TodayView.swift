@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+/// Today tab. Modules via `TodayHomeModule`; widget reloads fingerprint-gated in `TodayViewModel`.
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LLMService.self) private var llmService
@@ -17,13 +18,9 @@ struct TodayView: View {
     @State private var challengeStore = SharedChallengeStore.shared
     @State private var coachMoments = CoachMomentService.shared
 
-    // Focus-card routing — mirrors the post-session NextStep sheets in
-    // RecordingDetailView so both entry points land on the same tool.
     @State private var focusDrill: DrillMode?
     @State private var showingFocusWarmUp = false
     @State private var showingFocusReadAloud = false
-    /// Home-screen edit mode, in place. The blocks below are the real ones —
-    /// frozen, wiggling, and draggable — not stand-ins on a sheet.
     @State private var isEditingLayout = false
     @State private var dropTarget: TodayHomeModule?
     @State private var trayTargeted = false
@@ -36,15 +33,11 @@ struct TodayView: View {
     var onShowCurriculum: () -> Void
     var onStartStoryPractice: ((Story, RecordingDuration) -> Void)?
 
-    /// Ordered visible modules from Settings. Empty storage → factory default.
     private var homeModules: [TodayHomeModule] {
         userSettings.first?.todayHomeModules ?? TodayHomeModule.defaultVisible
     }
 
     var body: some View {
-        // Vertical only, and `PageScrollView` is what makes that true: an
-        // over-wide child used to let this page pan sideways. No horizontal
-        // paging, no TabView page style, no horizontal scroller.
         PageScrollView {
             VStack(spacing: AppLayout.chapterSpacing) {
 
@@ -75,22 +68,15 @@ struct TodayView: View {
                     )
                 }
 
-                // Modular home — Bevel-style. Order and visibility come from
-                // `UserSettings.todayHomeLayoutRaw`; session is always forced on.
-                // Editing happens right here: same blocks, wiggling in place.
                 ForEach(homeModules) { module in
                     editableModule(module)
                 }
 
                 if isEditingLayout {
-                    // Same hard cut: the tray's chips are glass too.
                     hiddenTray.transition(.identity)
                     resetLayoutButton.transition(.identity)
                 }
 
-                // Edit lives in the scroll. Done does not — leaving edit
-                // mode used to mean scrolling past every block, the hidden
-                // tray and the reset button. The safe-area inset owns Done.
                 if !isEditingLayout {
                     editHomepageButton
                 }
@@ -104,10 +90,6 @@ struct TodayView: View {
                 doneEditingBar
             }
         }
-        // No nav bar at all: it held nothing but a spare Done, and 44pt of
-        // empty chrome pushed the greeting down on the one screen that opens
-        // every session. `topHeaderRow` is this page's header; `doneEditingBar`
-        // is its Done.
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
@@ -118,12 +100,8 @@ struct TodayView: View {
         .task {
             playArrivalIfNeeded()
             await checkFirstRunSurfaces()
-            // Fire-and-forget: tops up the fresh-word pool while the user is
-            // looking at Today, so tomorrow's workout has novel words ready.
             viewModel.warmVocabFreshWords(llmService: llmService)
         }
-        // The streak is only known once the load finishes, so the moment waits
-        // for it rather than celebrating a zero.
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading { playArrivalIfNeeded() }
         }
@@ -148,16 +126,6 @@ struct TodayView: View {
 
     // MARK: - Layout Editing
 
-    /// The block's own content: the real module, or the dashed stand-in while
-    /// editing when it has nothing to draw yet.
-    ///
-    /// **Every path is `.transition(.identity)`, and it has to stay that way.**
-    /// Entering or leaving edit mode swaps this subtree's identity, so under
-    /// `withAnimation` SwiftUI cross-fades the swap. Glass does not cross-fade:
-    /// for the length of the spring a `glassEffect` card samples its backdrop
-    /// wrong and renders as a dark plate, and two `GlassCard` shadows stack on
-    /// top of each other — the block visibly turns into its own shadow for a
-    /// beat. A hard cut is correct here; the chrome around it still animates.
     @ViewBuilder
     private func moduleBody(_ module: TodayHomeModule) -> some View {
         if isEditingLayout, !moduleHasContent(module) {
@@ -169,24 +137,17 @@ struct TodayView: View {
         }
     }
 
-    /// A Today block, editable in place. Not a preview of the block — the block
-    /// itself, frozen and wiggling, which is the whole point: you rearrange the
-    /// page while looking at the page.
     @ViewBuilder
     private func editableModule(_ module: TodayHomeModule) -> some View {
         if isEditingLayout {
             moduleBody(module)
                 .allowsHitTesting(false)
                 .overlay {
-                    // Grab layer above the frozen block: gives the drag something
-                    // to catch, and swallows taps meant for the controls beneath.
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(.white.opacity(0.001))
                 }
                 .overlay(alignment: .topLeading) {
                     if !module.isPinned {
-                        // Extra hit area hangs off the card, not over the
-                        // grab layer — a 44pt badge at -8,-8 ate the drag.
                         removeBadge(module).offset(x: -16, y: -16)
                     }
                 }
@@ -209,20 +170,15 @@ struct TodayView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(module.title)
                 .accessibilityActions {
-                    // Drag is unreachable for assistive tech; same moves, spelled out.
                     Button("Move up") { shiftModule(module, by: -1) }
                     Button("Move down") { shiftModule(module, by: 1) }
                     if !module.isPinned {
                         Button("Hide") { setModuleVisible(module, false) }
                     }
                 }
-                // The whole editing chain is what gets inserted and removed when
-                // edit mode flips, so the hard cut belongs here too.
                 .transition(.identity)
         } else {
             moduleBody(module)
-                // The Home-screen gesture: hold the page to rearrange it.
-                // Simultaneous so it never eats a tap meant for a control.
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.9).onEnded { _ in
                         Haptics.medium()
@@ -249,9 +205,6 @@ struct TodayView: View {
         .accessibilityLabel("Hide \(module.title)")
     }
 
-    /// Weekly recap and Coach focus render nothing until they have data. In edit
-    /// mode that would be an invisible, undraggable gap where a block should be,
-    /// so the block states itself and says when it will show up for real.
     private func moduleHasContent(_ module: TodayHomeModule) -> Bool {
         switch module {
         case .rings, .session, .tools, .learn:
@@ -307,8 +260,6 @@ struct TodayView: View {
 
     // MARK: - Hidden Tray
 
-    /// Where hidden blocks wait, and a drop target — so hiding a block is
-    /// either its ⊖ or a drag down here.
     private var hiddenTray: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Hidden")
@@ -397,8 +348,6 @@ struct TodayView: View {
         Button {
             Haptics.light()
             withAnimation(AppMotion.settle) {
-                // Empty raw is the "never customized" marker TodayHomeLayout
-                // resolves back to the factory default.
                 userSettings.first?.todayHomeLayoutRaw = []
                 try? modelContext.save()
             }
@@ -475,8 +424,6 @@ struct TodayView: View {
         case .weeklyRecap:
             weeklyRecapSection
         case .focus:
-            // What to do about the rings. Sits above the prompt so the focus
-            // is an instruction for the take, not a post-session report.
             focusSection
         case .session:
             sessionModule
@@ -512,8 +459,6 @@ struct TodayView: View {
         }
     }
 
-    /// Visible until dismissed; a dismissal stamps lastWeeklySummaryDate, which
-    /// hides the card until the next calendar week starts.
     private var shouldShowWeeklyRecap: Bool {
         guard let weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start else {
             return false
@@ -524,16 +469,8 @@ struct TodayView: View {
 
     // MARK: - Focus Section
 
-    /// Hidden until there is something to average. One analyzed session is a
-    /// mood, not a pattern — below the threshold the prompt card is the honest
-    /// primary action.
     private static let focusMinimumSessions = 2
 
-    /// The instruction the user reads *before* they speak.
-    ///
-    /// This is the placement that makes the focus a training instruction rather
-    /// than a report — the session screen can only ever tell you what to work
-    /// on after the take you could have applied it to.
     @ViewBuilder
     private var focusSection: some View {
         if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
@@ -617,13 +554,6 @@ struct TodayView: View {
 
     // MARK: - First Run Surfaces
 
-    /// The two things that wait for a score before they earn the user's
-    /// attention: the deferred setup sheet (calibration, AI model, reminders)
-    /// and the layout tour. Strictly sequential — the tour spotlights cut out
-    /// of a dimmed layer, which a presented sheet would sit on top of.
-    ///
-    /// Both are gated on a recording existing, so a user who skipped the
-    /// baseline meets them after their first real session instead.
     private func checkFirstRunSurfaces() async {
         guard let settings = userSettings.first else { return }
         let needsSetup = !settings.hasShownFirstRecordingSetup
@@ -641,8 +571,6 @@ struct TodayView: View {
         try? modelContext.save()
     }
 
-    /// Called on setup-sheet dismissal and directly when that sheet has
-    /// already been seen. Callers have established that a recording exists.
     private func startTourIfNeeded() {
         guard userSettings.first?.hasSeenAppTour == false else { return }
         tour?.begin()
@@ -680,8 +608,6 @@ struct TodayView: View {
                 StreakDetailView()
             } label: {
                 StreakChip(streak: viewModel.userStats.currentStreak)
-                    // The chip is the reward, so it is what moves: one spring
-                    // pop on the day's first open, nothing on later ones.
                     .scaleEffect(arrived ? 1 : 0.6)
                     .opacity(arrived ? 1 : 0)
             }
@@ -701,11 +627,6 @@ struct TodayView: View {
             : "Day \(streak) · ready when you are"
     }
 
-    /// Bottom-of-page customize control. Lives under the modules so the
-    /// greeting and Start Speaking keep the first viewport; long-press on a
-    /// block still enters edit mode without scrolling. Done is not here —
-    /// `doneEditingBar` pins it to the screen so leaving edit mode never
-    /// depends on scroll position.
     private var editHomepageButton: some View {
         GlassButton(
             title: "Edit homepage",
@@ -721,9 +642,6 @@ struct TodayView: View {
         .padding(.top, 4)
     }
 
-    /// Always-on-screen exit, inset above the tab bar. Primary (solid white,
-    /// not glass) so it can fade in without the Liquid Glass cross-fade that
-    /// turns a capsule into its own shadow.
     private var doneEditingBar: some View {
         GlassButton(
             title: "Done",
@@ -746,9 +664,6 @@ struct TodayView: View {
         withAnimation(AppMotion.settle) { isEditingLayout = false }
     }
 
-    /// Runs once per calendar day: pops the streak chip and fires one haptic.
-    /// Milestones already have achievement celebrations; duplicating confetti
-    /// here made the same practice feel like three separate events.
     private func playArrivalIfNeeded() {
         let today = Calendar.current.startOfDay(for: .now).ISO8601Format()
         guard lastArrivalDay != today else {
@@ -829,8 +744,6 @@ struct TodayView: View {
 
     // MARK: - Interactive Prompt Section
 
-    /// Story days practice a story, so the label above the card says which
-    /// brief sits below — the card header alone didn't say whose take it was.
     private var promptSectionTitle: String {
         (viewModel.storyPracticeEnabled && viewModel.todaysStory != nil)
             ? "Today's story"
@@ -860,11 +773,6 @@ struct TodayView: View {
 
     // MARK: - Prep Tools
 
-    /// Four doors, icon and name only. The tiles used to carry a two-line
-    /// outcome apiece, which turned a 2x2 grid into a wall of small grey text;
-    /// the one tool worth explaining is explained by the banner above it, and
-    /// the rest introduce themselves on arrival. Customize lives at the foot of
-    /// the page (and on long-press), not as chrome above the greeting.
     private var prepToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader("Prep tools", icon: "wrench.and.screwdriver.fill")
@@ -894,8 +802,6 @@ struct TodayView: View {
         }
     }
 
-    /// Coach route wins when we have enough sessions; otherwise warm-up is the
-    /// honest default before a cold take.
     private var recommendedPrepTool: PracticeToolKind? {
         if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
             return PracticeToolKind.recommended(for: plan.focus.practiceRoute)
@@ -1000,15 +906,6 @@ struct TodayView: View {
 /// Today's topic: the brief and its action in one object. Header, prompt text,
 /// words row, then the Start capsule as the footer — the button used to float
 /// between this card and the tools strip, a third island that belonged to
-/// neither neighbor.
-///
-/// Still not a control: no whole-card tap (the invisible gesture fought the
-/// duration `Menu` for the same taps). The Start button is the only way to
-/// begin.
-///
-/// Never line-limit the prompt: it clipped at four lines, which is the one
-/// thing a prompt card must not do. The size comes from 14pt padding and 18pt
-/// type instead.
 struct InteractivePromptCard: View {
     let prompt: Prompt?
     @Binding var selectedDuration: RecordingDuration
@@ -1023,8 +920,6 @@ struct InteractivePromptCard: View {
     var body: some View {
         GlassCard(padding: 14, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
-                // Everything *about* the take on one line, so the space under
-                // the text belongs to the words alone.
                 HStack(spacing: 6) {
                     HStack(spacing: 5) {
                         Image(systemName: categoryIcon)
@@ -1034,8 +929,6 @@ struct InteractivePromptCard: View {
                             .textCase(.uppercase)
                             .tracking(0.6)
                             .lineLimit(1)
-                            // Shrinks before it truncates; "Current Events &
-                            // Opinions" is the one that needs the headroom.
                             .minimumScaleFactor(0.8)
                     }
                     .foregroundStyle(categoryColor)
@@ -1048,10 +941,6 @@ struct InteractivePromptCard: View {
 
                     DurationPill(selectedDuration: $selectedDuration)
 
-                    // Reroll belongs beside the thing it rerolls; in a footer
-                    // it cost a whole 44pt row. The negative gutter trims the
-                    // layout box back to the header's height and edge, while
-                    // the tap target itself stays 44pt.
                     SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
                         .padding(.trailing, -6)
                         .padding(.vertical, -6)
@@ -1067,13 +956,9 @@ struct InteractivePromptCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .redacted(reason: redaction)
 
-                // Carries its own divider, so a day with no word workout ends
-                // the brief at the prompt text.
                 words
                     .redacted(reason: redaction)
 
-                // The action lives with the brief it starts; loading state
-                // never redacts it into looking broken.
                 footer
                     .padding(.top, 4)
             }
@@ -1094,14 +979,6 @@ struct InteractivePromptCard: View {
 
 // MARK: - Session Start Footer
 
-/// The page's one hero action: a filled capsule and one quiet escape hatch.
-/// Lives inside whichever brief card renders so the button can't drift away
-/// from the thing it starts.
-///
-/// No prompt is not a mode you set and then confirm — it is a different way to
-/// start, so it is a second start: quiet, unmistakably subordinate, one tap,
-/// always visible. Give it a filled or stroked shape and it becomes the twin
-/// capsule again; contrast only.
 struct SessionStartFooter: View {
     var showFreeTalk = true
     let startHint: String
@@ -1134,8 +1011,6 @@ struct SessionStartFooter: View {
                         Text("Talk without a prompt")
                             .font(.system(size: 15, weight: .semibold))
                     }
-                    // 0.8 white on glass reads as a control only because it
-                    // sits beside the capsule; alone it would be a caption.
                     .foregroundStyle(.white.opacity(0.8))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
@@ -1231,10 +1106,6 @@ struct DurationPill: View {
 // MARK: - Wiggle
 
 private extension TodayHomeModule {
-    /// Stable per-block offset so the stack doesn't wobble in lockstep — the
-    /// Home screen's icons are each a little out of phase with their neighbours.
-    /// Scaled to the slower half-swing: a 0.035s spread that read as staggered
-    /// at 0.17s is near-lockstep at 0.45s.
     var wigglePhase: Double {
         Double(TodayHomeModule.allCases.firstIndex(of: self) ?? 0) * 0.09
     }
@@ -1251,14 +1122,6 @@ private extension View {
 /// Rocks ±0.3° on a 0.9s period. Driven by `TimelineView` so a drop or
 /// re-render cannot restart the swing — the old `@State` + `repeatForever`
 /// version jumped back to the start of the ease every time a block moved,
-/// which is what made edit mode feel like the page was shaking.
-///
-/// Scale is everything here. A Home-screen icon is ~60pt wide, so ±0.5° at a
-/// 0.17s half-swing moves its corners a hair. The same numbers on a ~350pt card
-/// swing the corners several points several times a second, and six of them
-/// stacked read as the page shaking rather than the blocks being loose. Keep
-/// the amplitude and the rate low enough that the motion says "these are
-/// draggable" and nothing more — if it draws the eye, it is too much.
 private struct WiggleModifier: ViewModifier {
     let active: Bool
     let phase: Double

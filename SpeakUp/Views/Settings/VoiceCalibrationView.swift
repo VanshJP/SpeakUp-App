@@ -270,10 +270,8 @@ struct VoiceCalibrationView: View {
             }
 
             do {
-                // Start audio recording first (for voice profile extraction)
                 let _ = try await audioService.startRecording()
 
-                // Start speech recognition for live word tracking
                 try wordTracker.start()
                 phase = .recording
             } catch {
@@ -298,7 +296,6 @@ struct VoiceCalibrationView: View {
                 ConversationIsolationService.extractVoiceProfile(from: audioURL)
             }.value
 
-            // Clean up calibration audio
             try? FileManager.default.removeItem(at: audioURL)
 
             if let profile {

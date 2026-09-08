@@ -27,7 +27,6 @@ struct WordDetailSheet: View {
             AppBackground(style: .subtle)
 
             VStack(spacing: 20) {
-                // Word + inline speaker button
                 GlassCard {
                     VStack(spacing: 14) {
                         HStack(spacing: 16) {
@@ -67,7 +66,6 @@ struct WordDetailSheet: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                // Definition button
                 if PronunciationService.canDefine(detail.word) {
                     GlassButton(
                         title: "View Definition",

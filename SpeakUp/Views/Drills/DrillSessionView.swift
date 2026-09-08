@@ -10,14 +10,10 @@ struct DrillSessionView: View {
 
     var body: some View {
         ZStack {
-            // Carries the backdrop over from the drill countdown instead of
-            // swapping it out the moment the drill starts.
             RecordingBackdropView(
                 backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
             )
 
-            // Same three slots as the recording screen — the drill countdown
-            // hands off to this, so the dial has to land where it left.
             VStack(spacing: 0) {
                 topBar
 
@@ -133,7 +129,6 @@ struct DrillSessionView: View {
 
             Spacer()
 
-            // Voice activity indicator
             if viewModel.isActive {
                 MicLevelPill(isHearing: viewModel.audioService.isHearingInput)
             } else {
@@ -146,7 +141,6 @@ struct DrillSessionView: View {
 
     private var drillContent: some View {
         SessionDialSlot(spacing: 28) { diameter in
-            // Mode-specific metric
             if let mode = viewModel.selectedMode {
                 Group {
                     switch mode {
@@ -177,7 +171,6 @@ struct DrillSessionView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 8) {
-            // Stop button (same style as RecordButton when recording)
             ZStack {
                 if viewModel.isActive {
                     CircularWaveformView(

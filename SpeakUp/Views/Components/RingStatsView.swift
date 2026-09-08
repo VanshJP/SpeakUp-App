@@ -5,11 +5,8 @@ struct RingStatsView: View {
     let sessionsGoal: Int
     let score: Int
     var bestScore: Int = 0
-    /// 7-day score trend in percentage points. Positive = improving,
-    /// negative = regressing, 0 = no data or flat.
     var improvement: Double = 0
 
-    /// Improvement magnitude that fills the trend gauge completely.
     private let improvementTarget: Double = 30
 
     private var improvementRingProgress: Double {
@@ -29,9 +26,6 @@ struct RingStatsView: View {
     }
 
     var body: some View {
-        // Shared card chrome, not a hand-rolled twin: the background used to
-        // duplicate `GlassCard` at radius 24 while every neighbor sat at 18,
-        // which is exactly the shape drift that makes a page read as islands.
         GlassCard(padding: 20) {
             VStack(spacing: 18) {
                 // Three standalone gauges — value inside, label beneath.
@@ -58,7 +52,6 @@ struct RingStatsView: View {
                     )
                 }
 
-                // Best-score footer under a hairline, integrated into the card.
                 VStack(spacing: 12) {
                     Rectangle()
                         .fill(.white.opacity(0.08))

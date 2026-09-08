@@ -24,7 +24,6 @@ struct JournalExportView: View {
     @State private var includeAchievements = true
     @State private var isExporting = false
     @State private var errorMessage: String?
-    /// Analyzed takes across all ranges, date-ascending; filtered purely per render.
     @State private var scorePoints: [JournalScorePoint] = []
 
     enum DateRangeOption: String, CaseIterable, Identifiable {

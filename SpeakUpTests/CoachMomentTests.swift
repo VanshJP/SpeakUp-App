@@ -303,7 +303,6 @@ struct CoachMomentBudgetTests {
             return
         }
 
-        // Both accept and dismiss call this same pure transition.
         let spent = budget.recordingDelivery(of: celebration, now: t0)
         #expect(spent.celebrationsUsed == CoachMomentBudget.weeklyCelebrationCap)
         #expect(spent.deliveredIDs.contains(celebration.id))

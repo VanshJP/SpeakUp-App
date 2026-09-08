@@ -1,24 +1,10 @@
 import SwiftUI
 
-/// One measured number, as a full-width row.
-///
-/// This replaces a 2×2 grid of tiles that each stacked four things vertically —
-/// label, value, baseline, verdict pill — in a narrow column, leaving the whole
-/// right half of every tile empty. Four short stacks in tall boxes used more
-/// height than the numbers deserved and less width than they had.
-///
-/// As rows: the label and its verdict read left, the value and its baseline
-/// right-align into a shared column, so the numbers line up down the card and
-/// the eye can compare them without re-scanning. Same information, roughly half
-/// the height, and no dead space.
 struct MetricRow: View {
     let icon: String
     let label: String
     let value: String
     var unit: String? = nil
-    /// What this number usually looks like for this user — "vs 132 avg".
-    /// A metric with no baseline is trivia: 148 wpm only means something once
-    /// you know you normally run 132. Nil until enough history exists.
     var baseline: String? = nil
     var status: Status? = nil
 
@@ -94,7 +80,6 @@ struct MetricRowGroup<Content: View>: View {
     }
 }
 
-/// Hairline between rows. Its own view so callers read as a list of rows.
 struct MetricRowDivider: View {
     var body: some View {
         Rectangle()

@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// A word and how often it happened — the vocabulary chip.
-///
-/// ONE recipe for every tracked-word list on the Progress page. The former
-/// filled-badge variant made each group look like a different component, so
-/// three stacked word lists read as three unrelated systems shouting at once.
-/// Now the shape is fixed and only the tint changes: the group's label says
-/// what the words are, the tint agrees with it, and the count stays quiet.
 struct WordCountChip: View {
     let word: String
     let count: Int

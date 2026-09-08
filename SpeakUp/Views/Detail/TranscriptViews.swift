@@ -1,9 +1,5 @@
 import SwiftUI
 
-// Extracted from RecordingDetailView. `SpeakerTurn` and its views were
-// file-private; they are internal now so the detail view can still build
-// turns while the rendering lives here.
-
 
 struct TranscriptContentView: View {
     let words: [TranscriptionWord]
@@ -12,7 +8,6 @@ struct TranscriptContentView: View {
     let showVocabHighlights: Bool
     let showSpeakerTurns: Bool
     let hasSpeakerSeparation: Bool
-    /// Opening-frame word ids from structural repetition (plum highlight).
     var structuralWordIDs: Set<UUID> = []
     var onPlayWord: ((TranscriptionWord) -> Void)? = nil
 

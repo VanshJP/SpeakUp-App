@@ -5,15 +5,6 @@ import SwiftUI
 /// The session background menu — Recording Look, painted behind the prepare
 /// countdown and the take itself, so the look a speaker picked does not vanish
 /// the moment they start talking.
-///
-/// A thin persisted list over the shared `CanvasLook` catalogue, exactly like
-/// `AppCanvas`. It is not a second theme system and it owns no art: Aurora and
-/// Ember here are the same painters the app canvas uses, turned up to
-/// `.session` intensity.
-///
-/// Raw values are the SwiftData payload; do not reorder existing cases.
-/// `nonisolated` so settings tests and any off-main decode of the stored Int
-/// do not hop the MainActor.
 nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Sendable {
     case base = 0
     case aurora = 1
@@ -73,8 +64,6 @@ struct RecordingBackdropView: View {
     var backdrop: RecordingBackdrop = .base
     /// Unused — every look is a still. Kept so thumbnail call sites do not churn.
     var animated: Bool = true
-    /// Full-screen session / countdown. Picker tiles pass `false` so the
-    /// canvas stays inside the 76pt box instead of expanding under neighbors.
     var fillsSafeArea: Bool = true
 
     var body: some View {
@@ -92,9 +81,6 @@ struct RecordingBackdropView: View {
         }
     }
 
-    /// Keeps white countdown type readable on a busy canvas. Base is already
-    /// dark enough at recording tone, and a second wash over it just muddies
-    /// the navy.
     @ViewBuilder
     private var readability: some View {
         if backdrop != .base {

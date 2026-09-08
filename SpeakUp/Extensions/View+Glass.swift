@@ -1,11 +1,6 @@
 import SwiftUI
 
 // MARK: - Shimmer Effect
-//
-// Wrap a block of shimmering primitives in `ShimmerHost` so one animation +
-// zero GeometryReaders drive the entire tree via an environment value. The
-// modifier animates a LinearGradient through the content's own bounds via
-// UnitPoint — no GeometryReader, no per-instance timing.
 
 private struct ShimmerPhaseKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
@@ -25,8 +20,6 @@ struct ShimmerHost<Content: View>: View {
     var body: some View {
         content
             .environment(\.shimmerPhase, phase)
-            // Under Reduce Motion the sweep never starts and the highlight
-            // stays parked off-frame, leaving plain skeleton bars.
             .ambientLoop(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                 phase = 1
             }

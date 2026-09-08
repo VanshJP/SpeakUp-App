@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// Turns a finished session into a next action.
-///
-/// Scores tell the user *how they did*; this tells them *what to do about it*.
-/// Picks the weakest subscore and routes to the practice tool that targets it,
-/// so the practice loop closes on this screen instead of dead-ending in metrics.
 struct NextStep {
     enum Action: Equatable {
         case drill(DrillMode)
@@ -14,24 +9,14 @@ struct NextStep {
     }
 
     let area: String
-    /// Stable identifier for the weak area, reported to the outcome funnel.
-    /// Separate from `area` so rewording the card copy doesn't fork the data.
     let areaSlug: String
     let score: Int
     let coaching: String
     let actionTitle: String
     let action: Action
 
-    /// A session where nothing is weak enough to drill — offer another rep instead.
     var isStrong: Bool { score >= 75 }
 
-    /// The action to take after this session.
-    ///
-    /// Follows the cross-session plan when there is one. Picking the weakest
-    /// subscore of the session in hand sends the user somewhere new every time
-    /// — clarity today, pauses tomorrow — which is how people end up with nine
-    /// half-trained habits and no fixed ones. The plan's focus only moves once
-    /// the dimension is actually trained.
     static func from(_ subscores: SpeechSubscores, plan: CoachPlan? = nil) -> NextStep {
         if let plan, !plan.isGraduating {
             let route = route(for: plan.focus)
@@ -39,10 +24,6 @@ struct NextStep {
                 area: plan.focus.title,
                 areaSlug: plan.focus.analyticsSlug,
                 score: plan.focus.subscore(in: subscores) ?? plan.focusAverage,
-                // The technique, not `plan.headline`: the focus card on the
-                // coaching tab already carries the where-you-are line, and
-                // both are on screen once the user scrolls. This card is the
-                // action, so it says what to do.
                 coaching: plan.focus.technique.how,
                 actionTitle: route.title,
                 action: route.action
@@ -85,8 +66,6 @@ struct NextStep {
         )
     }
 
-    /// The CTA for a dimension, from the one route definition on
-    /// `CoachDimension`. This card used to carry its own copy of the mapping.
     private static func route(for dimension: CoachDimension) -> (title: String, action: Action) {
         switch dimension.practiceRoute {
         case .readAloud:
@@ -142,8 +121,6 @@ struct NextStepCard: View {
                         fullWidth: true
                     ) {
                         Haptics.medium()
-                        // Logged here rather than at each call site so every
-                        // surface that shows this card reports the same event.
                         AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
                         onAction(step.action)
                     }

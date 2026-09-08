@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Today's story, in the same slot and the same skeleton as
-/// `InteractivePromptCard`: header, text, words row, Start footer.
-///
-/// A reading surface, not a control. The whole-card tap it used to carry needed
-/// a pulsing "Tap to practice" caption to be discoverable at all, which is the
-/// tell that it was the wrong affordance — the Start capsule in the footer is
-/// the action now, and reroll moved into the header with the length.
 struct StoryPromptCard: View {
     let story: Story
     @Binding var selectedDuration: RecordingDuration
@@ -38,8 +31,6 @@ struct StoryPromptCard: View {
 
                     DurationPill(selectedDuration: $selectedDuration)
 
-                    // Negative gutter trims the 44pt tap frame back to the
-                    // header's height and edge; the target itself stays 44pt.
                     SmallIconButton(icon: "arrow.clockwise", label: "Different story", action: onRefresh)
                         .padding(.trailing, -6)
                         .padding(.vertical, -6)
@@ -61,8 +52,6 @@ struct StoryPromptCard: View {
 
                 words
 
-                // Same footer as the prompt card — one hero action on the page,
-                // owned by whichever brief renders.
                 footer
                     .padding(.top, 4)
             }

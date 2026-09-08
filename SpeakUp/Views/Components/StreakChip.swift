@@ -3,12 +3,6 @@ import SwiftUI
 /// Day streak, top-right of Today. Neutral glass — the flame is the only
 /// colored thing on it.
 ///
-/// The capsule used to be tinted `warning` at 0.35, which made a two-digit
-/// number the loudest object on the page and put a saturated orange slab
-/// beside a graphite header. The streak is one number; it does not need a
-/// billboard to be found, and the glyph alone carries the "you're on a run"
-/// signal. Zero-streak drops the flame to grey rather than swapping chrome, so
-/// the chip never changes shape underneath the user.
 struct StreakChip: View {
     let streak: Int
 
@@ -34,8 +28,6 @@ struct StreakChip: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .glassEffect(.regular.tint(glassAppearance.glassTint).interactive(), in: .capsule)
-        // Hit target expands *around* the capsule — same order as `FilterPill`.
-        // Under the glass it stretched the visible pill to 44pt instead.
         .frame(minHeight: AppLayout.minHitTarget)
         .contentShape(Capsule())
         .shadow(color: .black.opacity(0.2), radius: 6, y: 3)

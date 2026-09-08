@@ -13,13 +13,10 @@ struct ComparisonView: View {
             PageScrollView {
                 VStack(spacing: AppLayout.listSpacing) {
                     if viewModel.summaries.count >= 2 {
-                        // Hero score summary
                         heroSummarySection
 
-                        // Recording selectors
                         selectorSection
 
-                        // Comparison breakdown
                         if !viewModel.deltas.isEmpty {
                             breakdownSection
                         }
@@ -95,7 +92,6 @@ struct ComparisonView: View {
                         .opacity(0.8)
                 }
 
-                // Score comparison bar
                 HStack(spacing: 12) {
                     StatPair(
                         value: "\(scoreA)",
@@ -105,7 +101,6 @@ struct ComparisonView: View {
                     )
                     .frame(maxWidth: .infinity)
 
-                    // Progress arrow
                     HStack(spacing: 4) {
                         Rectangle()
                             .fill(
@@ -208,7 +203,6 @@ private struct ComparisonMetricRow: View {
     var body: some View {
         GlassCard(cornerRadius: 16, padding: 14) {
             HStack(spacing: 12) {
-                // Icon
                 Image(systemName: metricIcon)
                     .font(.caption)
                     .foregroundStyle(delta.arrowColor == .secondary ? AppColors.primary : delta.arrowColor)
@@ -218,13 +212,11 @@ private struct ComparisonMetricRow: View {
                             .fill((delta.arrowColor == .secondary ? AppColors.primary : delta.arrowColor).opacity(0.15))
                     }
 
-                // Label
                 Text(delta.label)
                     .font(.subheadline.weight(.medium))
 
                 Spacer()
 
-                // Values
                 Text(delta.valueA)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

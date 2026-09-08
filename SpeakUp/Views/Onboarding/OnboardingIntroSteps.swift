@@ -44,9 +44,6 @@ struct OnboardingWelcomeStep: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 16) {
-                // Three pills fit one row at default type and on the narrowest
-                // phone, but not at accessibility sizes, so fall back to two rows
-                // rather than letting them clip.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         onDevicePill
@@ -140,8 +137,6 @@ struct OnboardingNameStep: View {
             )
         }
         .task {
-            // Wait for the page crossfade to settle before raising the
-            // keyboard, otherwise the focus animation collides with it.
             try? await Task.sleep(for: .milliseconds(420))
             focused = true
         }
@@ -153,9 +148,6 @@ struct OnboardingNameStep: View {
 /// One question, up to three answers. Multi-select because the situations
 /// overlap in real life — interviews *and* everyday confidence is one person —
 /// and because the picks weight the prompt mix rather than choosing one lane.
-///
-/// Nothing auto-advances. A step that jumps a beat after the first tap makes a
-/// second pick a race against a timer, so the user says when they're done.
 struct OnboardingGoalStep: View {
     let counter: String?
     let userName: String
@@ -210,8 +202,6 @@ struct OnboardingGoalStep: View {
         return selectedGoals.count >= maxGoals ? 0.4 : 1
     }
 
-    /// One line for the whole selection, not one per pick. Three stacked "Got
-    /// it" lines is a receipt; the user needs to know the prompts moved.
     private var payoff: String {
         guard selectedGoals.count == 1, let goal = selectedGoals.first else {
             let names = selectedGoals.map(\.promptPayoffNoun)
@@ -229,9 +219,6 @@ struct OnboardingGoalStep: View {
 
 // MARK: - Level
 
-/// Reframed from an assessment ("Beginner / Advanced") to a feelings question
-/// — self-grading is exactly the anxiety this flow removes. Answers still map
-/// onto `SpeakerLevel`, which drives prompt difficulty and vocab seeding.
 struct OnboardingLevelStep: View {
     let counter: String?
     let selected: SpeakerLevel?
@@ -261,8 +248,6 @@ struct OnboardingLevelStep: View {
                 payoffLine(payoff(for: level))
             }
         } footer: {
-            // Explicit Continue, same as the goal step. Single-choice or not,
-            // one flow should not have two different ideas of what a tap does.
             OnboardingCTA(
                 title: selected == nil ? "Pick one" : "Continue",
                 icon: selected == nil ? nil : "arrow.right",
@@ -334,8 +319,6 @@ private extension Array where Element == String {
     }
 }
 
-/// The "it listened" line under a choice list. `id` keys the transition so a
-/// re-pick crossfades instead of mutating in place.
 private func payoffLine(_ text: String) -> some View {
     HStack(spacing: 8) {
         Image(systemName: "checkmark.circle.fill")

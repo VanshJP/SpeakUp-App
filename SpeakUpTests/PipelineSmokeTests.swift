@@ -2,17 +2,9 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// End-to-end pins for SpeechAnalysisPipeline.analyze: a realistic transcription
-// must come out with every subscore finite and bounded, a plausible WPM, and
-// identical scoring across repeated calls. Exact lexical expectations are
-// gated on NLPCapability (fresh simulators ship no NLP models); bounds hold
-// everywhere.
 
 @MainActor
 struct PipelineSmokeTests {
-    /// 57 words over ~39s: five sentences with 0.9s inter-sentence gaps
-    /// (real pauses), two flagged fillers, Whisper-like confidences.
-    /// Gross rate lands near 87 WPM — inside the plausibility band below.
     private func realisticTranscription() -> SpeechTranscriptionResult {
         let sentences: [[String]] = [
             ["daily", "practice", "um", "slowly", "rebuilt", "my", "speaking", "confidence",
@@ -70,7 +62,6 @@ struct PipelineSmokeTests {
         )
 
         #expect(result.totalWords == input.words.count)
-        // Gross rate over the full recording: 57 words / ~39s ≈ 87 WPM.
         #expect(result.wordsPerMinute > 0 && result.wordsPerMinute < 400)
         // The 0.9s sentence gaps must register as pauses.
         #expect(result.pauseCount >= 4)
@@ -82,22 +73,16 @@ struct PipelineSmokeTests {
             #expect((result.enhancedMetrics?.gibberishConfidence ?? 1) < 0.45)
             #expect(result.enhancedMetrics?.isDefinitelyGibberish != true)
         } else {
-            // Partial/absent NLP assets: pin the threshold invariant only.
             if let m = result.enhancedMetrics {
                 #expect(m.isDefinitelyGibberish == (m.gibberishConfidence >= 4.0 / 6.0))
             }
         }
-        // Coherence rides NLEmbedding, which can be missing even where the
-        // tagger works — so only its bounds are pinned, never its presence.
         if let relevance = result.promptRelevanceScore {
             #expect(relevance >= 0 && relevance <= 100)
         }
     }
 
     @Test func analyzeIsDeterministicAcrossCalls() {
-        // Not whole-struct Equatable: FillerWord/WPMDataPoint mint a fresh
-        // UUID per call inside analyze, so identity noise would mask real
-        // drift. Every deterministic field is compared instead.
         let input = realisticTranscription()
         let first = SpeechAnalysisPipeline.analyze(transcription: input, actualDuration: input.duration)
         let second = SpeechAnalysisPipeline.analyze(transcription: input, actualDuration: input.duration)
@@ -118,7 +103,6 @@ struct PipelineSmokeTests {
         #expect(first.emphasisMetrics == second.emphasisMetrics)
         #expect(first.energyArc == second.energyArc)
         #expect(first.textQuality == second.textQuality)
-        // Filler tallies are stable even though their row IDs are not.
         #expect(first.fillerWords.map(\.word) == second.fillerWords.map(\.word))
         #expect(first.fillerWords.map(\.count) == second.fillerWords.map(\.count))
         // Equal counts use a lexical tie-breaker, never Dictionary order.
@@ -126,8 +110,6 @@ struct PipelineSmokeTests {
     }
 
     @Test func emptyWordsReturnNonCrashingDefaults() {
-        // Characterization of the zero-score gate, not a designed product
-        // decision: no speech → all zeros, no trap.
         let result = SpeechAnalysisPipeline.analyze(
             transcription: SpeechTranscriptionResult(text: "", words: [], duration: 12),
             actualDuration: 12
@@ -141,9 +123,6 @@ struct PipelineSmokeTests {
     }
 
     @Test func allFillerInputCollapsesThroughTheZeroGate() {
-        // Characterization: every word flagged filler leaves zero non-fillers,
-        // so the zero-score gate fires — WPM included — instead of scoring a
-        // transcript that is 100% filler.
         let words = (0..<10).map { i in
             TranscriptionWord(word: "um", start: Double(i), end: Double(i) + 0.5,
                               confidence: 0.9, isFiller: true)

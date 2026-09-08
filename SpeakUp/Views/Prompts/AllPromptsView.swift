@@ -2,9 +2,6 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// Per-category prompt totals with answered counts — built once per load so
-/// the category grid does two dictionary lookups per tile instead of two
-/// full-array reduces. Keyed by raw category string.
 nonisolated struct PromptCategoryProgress {
     let total: Int
     let answered: Int
@@ -29,9 +26,6 @@ struct AllPromptsView: View {
     @State private var showingPromptWheel = false
 
     let onSelectPrompt: ((Prompt) -> Void)?
-    /// Owned by the hub (one search string per Library section), edited here:
-    /// this section draws its own search row so the filter menu can ride on it
-    /// instead of colliding with the chip row it used to sit at the end of.
     @Binding private var searchText: String
 
     init(
@@ -83,14 +77,10 @@ extension AllPromptsView {
     // MARK: - Body
 
     var body: some View {
-        // One filter+sort pass per render, threaded down to every consumer.
         let prompts = filteredPrompts
 
         return screenDecorations(
             VStack(spacing: 16) {
-                // Search first, with the filter menu on its trailing end — the
-                // same row shape History uses. It sat at the end of the chip
-                // row until the chips scrolled underneath it.
                 InlineSearchField(text: $searchText, prompt: "Search prompts…") {
                     filterMenu(prompts)
                 }
@@ -115,8 +105,6 @@ extension AllPromptsView {
         )
     }
 
-    /// Sheet/importer/alert tail, kept out of `body` so each builder
-    /// expression stays inside the compiler's type-check budget.
     private func screenDecorations(_ base: some View) -> some View {
         base
             .task {
@@ -184,9 +172,6 @@ extension AllPromptsView {
     }
     // MARK: - Filter / Import Menu
 
-    /// Lives on the trailing end of this section's search row, not in a
-    /// navigation bar — Library has no nav bar to hang it from, and the two
-    /// ways of narrowing the list belong together.
     private func filterMenu(_ prompts: [Prompt]) -> some View {
         Menu {
             Section("Export & Import") {
@@ -317,8 +302,6 @@ extension AllPromptsView {
     private func landingContent(_ prompts: [Prompt]) -> some View {
         spinTheWheelCard
 
-        // A non-"All" chip is a request to see prompts, not categories —
-        // otherwise the chips do nothing on this screen.
         if selectedFilter == .all {
             categoriesSection
         } else {
@@ -357,7 +340,6 @@ extension AllPromptsView {
 
                     Spacer(minLength: 0)
 
-                    // The one high-contrast element on this screen.
                     GlassButtonLabel(
                         title: "Spin",
                         style: .primary,
@@ -421,9 +403,6 @@ extension AllPromptsView {
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // Progress is the data — the only place color earns its keep.
-                    // Tick count is high enough that ticks stay taller than
-                    // they are wide, otherwise they read as a row of dots.
                     TickMeter(
                         fraction: total > 0 ? Double(done) / Double(total) : 0,
                         color: color,
@@ -520,10 +499,6 @@ extension AllPromptsView {
             let recordings = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
             let prompts = (try? context.fetch(FetchDescriptor<Prompt>())) ?? []
 
-            // Denormalized promptId keeps the common path off relationship
-            // traversal. Rows written before the column existed carry nil, so
-            // fall back to the relationship — and write the backfill through
-            // this context so the fast path converges.
             let categoryByPromptID = Dictionary(
                 prompts.map { ($0.id, $0.category) },
                 uniquingKeysWith: { first, _ in first }
@@ -646,8 +621,6 @@ private struct ImportConfirmation {
 
 // MARK: - Prompt Filter Enum
 
-/// Three filters, not five. "Default" was just the inverse of "My Prompts",
-/// and "Answered" is already visible as the x/y count on every category tile.
 enum PromptFilter: String, CaseIterable, Identifiable {
     case all
     case unanswered
@@ -709,8 +682,6 @@ struct PromptRow: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            // Category identity as a full-height rail, not a badge — one
-            // colored element instead of three competing chips.
             .padding(.leading, 10)
             .overlay(alignment: .leading) {
                 Capsule()
@@ -753,8 +724,6 @@ struct PromptRow: View {
 
 // MARK: - Prompt Meta Line
 
-/// Single secondary metadata line — category, difficulty, custom flag —
-/// separated by dots instead of stacked colored capsules.
 private struct PromptMetaLine: View {
     let prompt: Prompt
 
@@ -789,7 +758,6 @@ private struct PromptMetaLine: View {
 // MARK: - Category Short Name
 
 extension PromptCategory {
-    /// Compact label for chips and dense rows where `displayName` wraps.
     var shortName: String {
         switch self {
         case .professionalDevelopment: return "Professional"

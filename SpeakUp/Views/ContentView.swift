@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 
+/// App shell: 5 tabs + global sheets + deep links. Tab roots in `tabRoot(for:)`.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SpeechService.self) private var speechService
@@ -14,8 +15,6 @@ struct ContentView: View {
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
     @State private var pendingRecordingNavigation: String?
-    /// Only the result reached directly from RecordingView may generate a
-    /// coach note. Browsing an old History row must stay inert.
     @State private var freshResultRecordingId: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
@@ -24,7 +23,6 @@ struct ContentView: View {
     /// draws over the tab bar, neither of which a single tab's root can do.
     @State private var appTour = AppTourModel()
 
-    // Feature sheets
     @State private var showingWarmUps = false
     @State private var showingDrills = false
     @State private var showingConfidenceTools = false
@@ -34,11 +32,9 @@ struct ContentView: View {
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
 
-    // Story → Warm-Up / Drill routing
     @State private var warmUpStory: Story?
     @State private var drillStory: Story?
 
-    // Recording parameters
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
@@ -74,9 +70,6 @@ struct ContentView: View {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
     
-    /// One NavigationStack per tab, and the canvas is painted *inside* it.
-    /// A background behind the TabView is invisible: SwiftUI hosts navigation
-    /// content in an opaque system-background view, so the tabs read black.
     private func tabContent(for tab: AppTab) -> some View {
         NavigationStack {
             tabRoot(for: tab)
@@ -209,9 +202,6 @@ struct ContentView: View {
                     }
                 }
             }
-            // Stop SwiftUI from auto-filling every tab symbol; we supply the
-            // filled variant explicitly for the selected tab only, so inactive
-            // tabs stay outline.
             .environment(\.symbolVariants, .none)
             .tint(.white)
             
@@ -231,8 +221,6 @@ struct ContentView: View {
                     },
                     onCancel: {
                         showingCountdown = false
-                        // Clear session context so a later free/prompt practice
-                        // doesn't inherit a stale story link or prompt.
                         recordingPrompt = nil
                         recordingStoryId = nil
                         recordingGoalId = nil
@@ -244,8 +232,6 @@ struct ContentView: View {
                 .allowsHitTesting(true)
             }
 
-            // Above the tab bar on purpose: the tour points *at* the tabs, so
-            // it has to be able to dim and outline them.
             if appTour.activeStep != nil {
                 AppTourOverlay(tour: appTour, onFinish: finishTour)
                     .transition(.opacity)
@@ -258,7 +244,6 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .motion(AppMotion.settle, value: appTour.activeStep != nil)
         .onChange(of: appTour.activeStep) { _, step in
-            // The tour walks the tabs itself; the user's job is just to read.
             guard let step, selectedTab != step.tab else { return }
             selectedTab = step.tab
         }
@@ -280,9 +265,6 @@ struct ContentView: View {
                 sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
                 onSavedAndClosed: { recording in
                     Task {
-                        // The user chose to leave the analyzing screen. Wait
-                        // for its existing coordinator job rather than missing
-                        // score-based unlocks or starting a second analysis.
                         while RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
                             try? await Task.sleep(for: .milliseconds(500))
                             guard !Task.isCancelled else { return }
@@ -361,8 +343,6 @@ struct ContentView: View {
         .onOpenURL { url in
             handleDeepLink(url)
         }
-        // Universal links arrive as a browsing activity rather than an open-URL
-        // callback, but resolve to the same routes.
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
             guard let url = activity.webpageURL else { return }
             handleDeepLink(url)
@@ -399,20 +379,12 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView { result in
-                // Everything that decides what the user sees next runs before
-                // the cover comes down, so the destination is already in place
-                // behind it. Routing *after* an await meant the last tap landed
-                // the user on Today, then flipped the tab, then pushed a detail
-                // view at them — the flow's final impression was a stutter.
                 if let settings = userSettings.first {
                     applyOnboardingResult(result, to: settings)
                     try? modelContext.save()
                 }
                 OnboardingViewModel.clearResumeState()
 
-                // The baseline was recorded inside onboarding, so there is no
-                // post-dismissal handoff into an unguided recorder — that
-                // handoff was the moment the old flow lost people.
                 if let baselineID = result.baselineRecordingID, result.reviewBaselineOnFinish {
                     selectedTab = .history
                     selectedRecordingId = baselineID.uuidString
@@ -420,11 +392,6 @@ struct ContentView: View {
                 showOnboarding = false
 
                 Task { @MainActor in
-                    // None of the rest changes the screen, so none of it holds
-                    // up the dismissal.
-                    //
-                    // Sync SettingsViewModel's cached word lists so vocab and
-                    // dictionary words appear immediately without a restart.
                     await settingsViewModel.loadSettings()
 
                     if result.reminderEnabled {
@@ -437,9 +404,6 @@ struct ContentView: View {
                     }
 
                     if result.baselineRecordingID != nil {
-                        // The unlock overlay is full-screen confetti. Fired into
-                        // the dismissal it lands on top of the reveal the user
-                        // is still leaving, so it waits for the transition.
                         try? await Task.sleep(for: .milliseconds(700))
                         await achievementService.checkAchievements(context: modelContext)
                     }
@@ -459,7 +423,6 @@ struct ContentView: View {
         settings.speakerLevel = result.speakerLevel.rawValue
         settings.userName = result.userName
         settings.onboardingGoalsRaw = result.goals.map(\.rawValue)
-        // First pick stays the primary goal for anything that names one.
         settings.onboardingGoalRaw = (result.goals.first ?? .everydayConfidence).rawValue
 
         // Persist reminder preference + time so SettingsView reflects it.
@@ -467,16 +430,7 @@ struct ContentView: View {
         settings.dailyReminderHour = result.reminderHour
         settings.dailyReminderMinute = result.reminderMinute
 
-        // Prompt categories are intentionally NOT narrowed by the onboarding
-        // goals. The goals *weight* which categories surface (`PromptMix`),
-        // while every category stays enabled so the full pool remains
-        // reachable. Narrowing belongs to the user, via PromptSettingsView,
-        // and that gate beats the onboarding weighting when the two disagree.
 
-        // Voice calibration captured during onboarding. Matches
-        // `SettingsViewModel.saveCalibrationProfile`: a deliberate "this is my
-        // voice" reading earns full blend trust rather than starting at one
-        // sample, so speaker separation works on the very first conversation.
         if let profile = result.voiceProfile {
             settings.voiceProfileF0Hz = profile.f0Hz
             settings.voiceProfileEnergyDb = profile.energyDb
@@ -491,11 +445,6 @@ struct ContentView: View {
             settings.addDictationBiasWord(word)
         }
 
-        // If recordings already exist when onboarding completes (re-onboarding,
-        // app upgrade, or testing), suppress the first-recording setup sheet —
-        // the user clearly knows how to record. The baseline recorded inside
-        // onboarding doesn't count as "already knows": the sheet firing after
-        // it is exactly the deferred-setup moment it exists for.
         if !settings.hasShownFirstRecordingSetup {
             let count = (try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
             let baselineCount = result.baselineRecordingID != nil ? 1 : 0
@@ -540,8 +489,6 @@ struct ContentView: View {
 
     // MARK: - Onboarding
 
-    /// Show onboarding only for confirmed first-launch users. Evaluating before
-    /// `@Query` hydrates would flash onboarding over a returning user's home.
     private func evaluateOnboardingIfNeeded() {
         guard !hasEvaluatedOnboarding, let settings = userSettings.first else { return }
         hasEvaluatedOnboarding = true
@@ -553,27 +500,19 @@ struct ContentView: View {
     // MARK: - Deep Links
 
     private func handleDeepLink(_ url: URL) {
-        // A campaign link arrives as https on our own domain; normalise it into
-        // the custom-scheme form so both entry points route identically.
         let url = UniversalLink.route(from: url) ?? url
         guard url.scheme == "speakup" else { return }
 
-        // Any link can carry campaign parameters, so attribution is captured
-        // before routing rather than on one dedicated host.
         AttributionStore.shared.capture(from: url)
 
         switch url.host {
         case "open":
-            // Attribution-only entry point for campaign links that should land
-            // the user on the home screen.
             selectedTab = .today
 
         case "record":
             startRecording(from: url)
 
         case "story":
-            // Same first-run / in-session guards as record — never cover
-            // onboarding or a live take with the story editor.
             guard !showOnboarding, !showingRecording, !showingCountdown else { return }
             selectedTab = .library
             if url.pathComponents.contains("new") {
@@ -585,13 +524,7 @@ struct ContentView: View {
         }
     }
 
-    /// Widget, campaign, and friend-challenge links all land here. Challenge
-    /// chrome is only applied when `source=share` so a Daily Prompt widget tap
-    /// does not look like a dare.
     private func startRecording(from url: URL) {
-        // Never interrupt onboarding, a live take, or a second countdown.
-        // Queueing is future work; dropping the link is safer than mid-session
-        // overwrite — and must happen before SharedChallengeStore is touched.
         guard !showOnboarding, !showingRecording, !showingCountdown else { return }
 
         recordingPrompt = nil
@@ -620,8 +553,6 @@ struct ContentView: View {
         showingCountdown = true
     }
 
-    /// Keep friend-challenge chrome if Today/Library started the exact prompt
-    /// that was waiting; otherwise this is a normal session.
     private func adoptChallengeIfMatching(_ prompt: Prompt?) {
         guard let prompt, let pending = SharedChallengeStore.shared.pending,
               pending.promptID == prompt.id else {
@@ -653,7 +584,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Outline variant — shown when the tab is not selected.
     var icon: String {
         switch self {
         case .today: return "mic"
@@ -664,7 +594,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Filled variant — shown when the tab is selected.
     var selectedIcon: String {
         switch self {
         case .today: return "mic.fill"

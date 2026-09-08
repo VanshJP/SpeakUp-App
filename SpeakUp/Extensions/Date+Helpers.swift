@@ -63,7 +63,6 @@ nonisolated extension Date {
         
         guard let mostRecent = uniqueDates.first else { return 0 }
         
-        // Check if the most recent date is today or yesterday
         let today = Date().startOfDay
         let yesterday = today.adding(days: -1)
         
@@ -89,7 +88,6 @@ nonisolated extension Date {
 }
 
 nonisolated extension TimeInterval {
-    /// "M:SS" — the one duration formatter, shared by every surface.
     var minutesSeconds: String {
         String(format: "%d:%02d", Int(self) / 60, Int(self) % 60)
     }

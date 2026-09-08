@@ -164,7 +164,6 @@ struct ScoreWeightsView: View {
                 .frame(height: 24)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
-                // Legend
                 FlowLayout(spacing: 6) {
                     ForEach(weightItems) { item in
                         HStack(spacing: 4) {

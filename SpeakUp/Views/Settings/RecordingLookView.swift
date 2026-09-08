@@ -3,15 +3,6 @@ import SwiftUI
 /// Recording Look picker: one live preview of the session on top, every option
 /// laid out in grids underneath.
 ///
-/// It used to be four tabbed sections, each a horizontal filter strip, and the
-/// preview changed meaning depending on which tab you were in — sometimes a
-/// countdown, sometimes a recording. With twenty options across four groups,
-/// most of them sat off-screen and the preview never said which screen you were
-/// looking at. Now nothing hides behind a swipe, and the preview shows both
-/// halves of a real session at once, on the backdrop you picked.
-///
-/// The preview is the real components — `CircularWaveformView`, `RecordButton`,
-/// `TimerDial`, `RecordingBackdropView` — not stand-ins.
 struct RecordingLookView: View {
     @Bindable var viewModel: SettingsViewModel
 
@@ -46,9 +37,6 @@ struct RecordingLookView: View {
                     ) { backdrop in
                         viewModel.recordingBackdrop = backdrop
                     } thumbnail: { backdrop in
-                        // No frame/scale hack: the backdrop normalises its
-                        // composition against the view's diagonal, so a 76pt
-                        // tile is a true miniature of the session screen.
                         RecordingBackdropView(backdrop: backdrop, animated: false, fillsSafeArea: false)
                     }
 
@@ -62,8 +50,6 @@ struct RecordingLookView: View {
                         viewModel.waveformStyle = style
                     } thumbnail: { style in
                         if style == .off {
-                            // Off draws nothing, and a blank tile reads as a
-                            // broken thumbnail rather than a choice.
                             Image(systemName: "waveform.slash")
                                 .font(.title2)
                                 .foregroundStyle(.white.opacity(0.55))
@@ -98,9 +84,6 @@ struct RecordingLookView: View {
                             .scaleEffect(0.5)
                     }
 
-                    // Count up / count down used to live in Session Defaults,
-                    // which meant one dial was configured on two screens. It is
-                    // the same choice as the dial's shape, so it sits with it.
                     group(
                         title: "Timer Direction",
                         caption: "Whether the clock counts toward your limit or away from it.",
@@ -155,9 +138,6 @@ struct RecordingLookView: View {
 
     // MARK: - Hero
 
-    /// Both halves of a session in one card — the countdown dial and the
-    /// recording ring, on the chosen backdrop — so every pick below is visible
-    /// without switching modes.
     private var hero: some View {
         ZStack {
             RecordingBackdropView(backdrop: viewModel.recordingBackdrop, fillsSafeArea: false)
@@ -191,8 +171,6 @@ struct RecordingLookView: View {
             }
             .allowsHitTesting(false)
         }
-        // minHeight, not a hard height: the two labels grow with Dynamic Type
-        // and would otherwise push the recording half under the clip.
         .frame(minHeight: 320)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
@@ -243,9 +221,6 @@ struct RecordingLookView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Adaptive, not a fixed column count: the tiles are a hard 76pt so
-            // an oversized thumbnail (the backdrop renders at 320pt and gets
-            // clipped) can't stretch the grid.
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 76), spacing: 12)],
                 spacing: 14
@@ -261,19 +236,10 @@ struct RecordingLookView: View {
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                                     .fill(isSelected ? AppColors.glassTintPrimary : AppColors.surfaceLift)
 
-                                // Thumbnails are scaled-down full-size views, so
-                                // their layout stays big (the backdrop is 320pt,
-                                // the dial 150pt) even though they draw small.
-                                // Clamped and made inert here or the last tile in
-                                // a grid — drawn on top — swallows taps meant for
-                                // the row above it.
                                 thumbnail(option)
                                     .frame(width: 76, height: 76)
                                     .allowsHitTesting(false)
 
-                                // Canvas looks opt out of hit testing; this
-                                // overlay is what makes the picture itself the
-                                // control, not just the caption under it.
                                 Color.clear
                                     .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             }
@@ -294,7 +260,6 @@ struct RecordingLookView: View {
                                 .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)
                         }
-                        // Pins the tap target to this tile's own bounds.
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

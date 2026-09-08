@@ -1,22 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// The deferred tail of onboarding: the three asks the first run deliberately
-/// skips (reminder, voice calibration, AI feedback) plus the session defaults,
-/// shown once on Today after the first score exists. See `ONBOARDING_VISION.md`
-/// invariant 8 for why none of this happens before a score.
-///
-/// Three things this screen is careful about, each fixing a way the earlier
-/// version misled people:
-/// - **Every change persists the moment it is made.** Session defaults used to
-///   be written only by the "Done" toolbar button, so closing the sheet the way
-///   sheets are usually closed — dragging it down — silently discarded them.
-/// - **Each row reports its own state.** Calibration and AI feedback are either
-///   set up or not. Showing an identical "go do this" row either way leaves the
-///   user no way to tell what they already handled.
-/// - **Defaults are collapsed behind their summary.** They are preferences, not
-///   tasks; three expanded pill grids turned a one-line celebration into a
-///   settings export.
 struct FirstRecordingSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -31,7 +15,6 @@ struct FirstRecordingSetupSheet: View {
     @State private var showFullSettings = false
     @State private var showingDefaults = false
 
-    // Deferred onboarding steps, offered here instead of before the first score.
     @State private var reminderEnabled = false
     @State private var reminderTime = Date()
     @State private var isRequestingReminder = false
@@ -57,9 +40,6 @@ struct FirstRecordingSetupSheet: View {
                 .scrollIndicators(.hidden)
                 .safeAreaInset(edge: .bottom) { footer }
             }
-            // No title and no toolbar Done: the header card names the screen,
-            // and the one way forward is the pinned button, which is also the
-            // only control on screen that isn't already saved.
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -141,9 +121,6 @@ struct FirstRecordingSetupSheet: View {
         }
     }
 
-    /// Turns three unrelated asks into one visible count. Without it the rows
-    /// read as an open-ended to-do list, which is how a screen nobody has to
-    /// finish starts feeling like a chore.
     private var setupProgress: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
@@ -183,7 +160,6 @@ struct FirstRecordingSetupSheet: View {
         settings?.voiceProfileLastUpdated != nil
     }
 
-    /// Nil when no backend can generate — the row's "not set up" state.
     private var aiBackendLabel: String? {
         switch llmService.activeBackend {
         case .appleIntelligence: return "Apple Intelligence"
@@ -200,16 +176,10 @@ struct FirstRecordingSetupSheet: View {
 
     // MARK: - Deferred Setup
 
-    /// The three steps onboarding no longer asks for up front. They land here,
-    /// after the app has produced a score, where a reminder or a model download
-    /// is a decision about something the user has actually seen work.
     private var finishSetupSection: some View {
         VStack(spacing: 10) {
             GlassSectionHeader("Make it yours", icon: "sparkles")
 
-            // Card padding drops to 4 so each row owns its own hit area and can
-            // reach the card's edges — a 44pt row inset by card padding reads as
-            // a cramped label rather than a control.
             GlassCard(padding: 4) {
                 VStack(spacing: 0) {
                     reminderRow
@@ -316,7 +286,6 @@ struct FirstRecordingSetupSheet: View {
         }
     }
 
-    /// Whether a row still asks for something, or already reports a result.
     private enum RowStatus {
         case todo
         case done(String)
@@ -371,17 +340,12 @@ struct FirstRecordingSetupSheet: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// Inset past the glyph column so the rows read as one list.
     private var rowDivider: some View {
         Divider()
             .overlay(AppColors.cardStroke)
             .padding(.leading, 54)
     }
 
-    /// Requests notification permission only at the moment the user asks for a
-    /// reminder, and reverts the switch if they decline. The switch is swapped
-    /// for a spinner while the system prompt is up, so the row doesn't sit in a
-    /// state the user didn't get to choose yet.
     private func applyReminderPreference(_ enabled: Bool) async {
         let service = NotificationService()
 
@@ -417,9 +381,6 @@ struct FirstRecordingSetupSheet: View {
 
     // MARK: - Session Defaults
 
-    /// Preferences, not tasks — so they arrive as one line the user can read and
-    /// ignore. Expanded by default they were the tallest thing on a screen whose
-    /// job is to celebrate a first score.
     private var sessionDefaultsSection: some View {
         VStack(spacing: 10) {
             GlassSectionHeader("Session defaults", icon: "slider.horizontal.3")
@@ -478,8 +439,6 @@ struct FirstRecordingSetupSheet: View {
         .motion(AppMotion.settle, value: showingDefaults)
     }
 
-    /// The collapsed state has to say everything the expanded state would, or
-    /// collapsing it is just hiding settings.
     private var defaultsSummary: String {
         let behavior = TimerEndBehavior(rawValue: selectedTimerBehavior)?.displayName ?? "Save & Stop"
         return "\(selectedDuration.displayName) · \(behavior) · \(countdownSeconds)s countdown"

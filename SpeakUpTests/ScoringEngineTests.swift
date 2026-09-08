@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Pure, deterministic scoring math — the substance multiplier, gibberish gate,
-// and MATTR are the gates every score passes through, so they get the tests.
 
 @MainActor
 struct SubstanceMultiplierTests {
@@ -17,7 +15,6 @@ struct SubstanceMultiplierTests {
     }
 
     @Test func bandsMatchDocumentedCurve() {
-        // Interior points of each band (boundaries are float-sensitive).
         #expect(SpeechScoringEngine.applySubstanceMultiplier(overallScore: 100, substanceScore: 5) <= 20)
         #expect((25...65).contains(SpeechScoringEngine.applySubstanceMultiplier(overallScore: 100, substanceScore: 20)))
         #expect((65...88).contains(SpeechScoringEngine.applySubstanceMultiplier(overallScore: 100, substanceScore: 40)))
@@ -84,7 +81,6 @@ struct MATTRTests {
     }
 
     @Test func singleCharacterWordsAreFilteredOut() {
-        // "a"/"I" style tokens are excluded; nothing left → 0.
         #expect(SpeechScoringEngine.computeMATTR(words: words(["a", "b", "c"])) == 0)
     }
 

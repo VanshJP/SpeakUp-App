@@ -1,9 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// A TextField that keeps the keyboard open when the return key is pressed.
-/// Standard SwiftUI TextField always dismisses the keyboard on submit — this wraps
-/// UITextField to intercept the return key without resigning first responder.
 struct PersistentTextField: UIViewRepresentable {
     var hint: String
     @Binding var text: String

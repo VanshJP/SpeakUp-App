@@ -25,7 +25,6 @@ struct FrameworkOverlayView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // Section name and hint
             if let currentSection {
                 VStack(spacing: 4) {
                     Text(currentSection.title)
@@ -38,7 +37,6 @@ struct FrameworkOverlayView: View {
                 }
             }
 
-            // Progress dots
             HStack(spacing: 6) {
                 ForEach(Array(framework.sections.enumerated()), id: \.offset) { index, section in
                     HStack(spacing: 3) {

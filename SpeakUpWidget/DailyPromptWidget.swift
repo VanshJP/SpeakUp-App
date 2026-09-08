@@ -41,14 +41,10 @@ struct DailyPromptProvider: TimelineProvider {
 struct DailyPromptWidgetView: View {
     let entry: DailyPromptEntry
 
-    /// Mirrors `SharedPromptLink.customSchemeURL` so IDs with spaces or
-    /// non-ASCII characters survive the round trip.
     private var recordURL: URL? {
         var components = URLComponents()
         components.scheme = "speakup"
         components.host = "record"
-        // Empty id → no queryItems, matching `SharedPromptLink.customSchemeURL`
-        // (whose parser drops empty values anyway).
         if !entry.promptId.isEmpty {
             components.queryItems = [URLQueryItem(name: "prompt", value: entry.promptId)]
         }

@@ -2,7 +2,6 @@ import Foundation
 
 struct DefaultWarmUps {
     static let all: [WarmUpExercise] = [
-        // Breathing
         WarmUpExercise(
             id: "box_breathing",
             category: .breathing,
@@ -57,7 +56,6 @@ struct DefaultWarmUps {
             ],
             durationSeconds: 30
         ),
-        // Tongue Twisters
         WarmUpExercise(
             id: "she_sells",
             category: .tonguetwister,
@@ -86,7 +84,6 @@ struct DefaultWarmUps {
             ],
             durationSeconds: 30
         ),
-        // Vocal
         WarmUpExercise(
             id: "humming",
             category: .vocal,
@@ -126,7 +123,6 @@ struct DefaultWarmUps {
             ],
             durationSeconds: 32
         ),
-        // Articulation
         WarmUpExercise(
             id: "vowel_stretches",
             category: .articulation,

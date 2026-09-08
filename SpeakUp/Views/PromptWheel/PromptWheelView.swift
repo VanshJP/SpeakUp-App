@@ -225,7 +225,6 @@ struct SpinWheel: View {
             let segmentAngle = categories.isEmpty ? 360.0 : 360.0 / Double(categories.count)
             
             ZStack {
-                // Segments
                 ForEach(0..<categories.count, id: \.self) { index in
                     WheelSegment(
                         center: center,

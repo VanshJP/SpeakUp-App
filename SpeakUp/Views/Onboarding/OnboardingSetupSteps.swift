@@ -19,8 +19,6 @@ struct OnboardingMicStep: View {
         ) {
             GlassCard(tint: hasPermission ? AppColors.glassTintPrimary : nil, padding: 16) {
                 VStack(spacing: 14) {
-                    // Isolated so the 16 Hz meter only redraws the bars, not
-                    // this card, its copy, or the page's footer button.
                     LiveMicWaveform(viewModel: viewModel, isLive: hasPermission)
                         .frame(height: 104)
                         .opacity(hasPermission ? 1 : 0.3)
@@ -53,8 +51,6 @@ struct OnboardingMicStep: View {
                 )
             }
         }
-        // Granting permission rewrites the title, subtitle, card tint and CTA
-        // at once. Without this the whole page snaps between two layouts.
         .motion(AppMotion.settle, value: hasPermission)
     }
 
@@ -72,8 +68,6 @@ struct OnboardingMicStep: View {
     }
 }
 
-/// The only view that reads `micLevel`, so the ~16 Hz meter updates stop here
-/// instead of invalidating the whole mic page.
 private struct LiveMicWaveform: View {
     let viewModel: OnboardingViewModel
     let isLive: Bool
@@ -86,9 +80,6 @@ private struct LiveMicWaveform: View {
 /// Live input meter. Centre bars react hardest so the shape reads as a voice
 /// rather than a level bar.
 ///
-/// Drawn as one `Canvas` on a `TimelineView` clock. It used to be 28 sibling
-/// views, each holding its own `@State` phase on a `repeatForever` animation:
-/// 28 view bodies re-evaluating every frame for what is a single picture.
 struct OnboardingWaveform: View {
     let level: Float
 
@@ -100,13 +91,11 @@ struct OnboardingWaveform: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
-                // Matches the old 0→2π-per-0.6s linear loop.
                 let phase = context.date.timeIntervalSinceReferenceDate * (2 * Double.pi / 0.6)
                 let barWidth = max(1, (size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
 
                 for index in 0..<barCount {
                     let position = Double(index) / Double(barCount - 1)
-                    // Distance from middle (0 at center, 1 at edges).
                     let distance = abs(position - 0.5) * 2
                     let centerWeight = 1 - distance * 0.7
                     let noise = (sin(phase + Double(index) * 0.4) + 1) / 2
@@ -128,9 +117,6 @@ struct OnboardingWaveform: View {
 
 // MARK: - Voice Calibration
 
-/// Captures a baseline pitch/energy signature. Optional, since the profile is
-/// also learned automatically from quality-gated recordings, but doing it once
-/// up front means speaker separation works on the very first conversation.
 struct OnboardingCalibrationStep: View {
     let counter: String?
     let hasMicPermission: Bool
@@ -167,9 +153,6 @@ struct OnboardingCalibrationStep: View {
                 }
             }
 
-            // One line each. These were full sentences that each wrapped to
-            // two lines, so three bullets read as a six-line paragraph with
-            // icons in it rather than three separate facts.
             GlassCard(padding: 14) {
                 VStack(alignment: .leading, spacing: 12) {
                     OnboardingBullet(
@@ -215,7 +198,6 @@ struct OnboardingCalibrationStep: View {
                 OnboardingTextButton(title: "Skip for now", action: onSkip)
             }
         }
-        // The sheet dismisses and this page flips to its saved state behind it.
         .motion(AppMotion.settle, value: hasCalibrated)
         .motion(AppMotion.settle, value: hasMicPermission)
     }
@@ -223,9 +205,6 @@ struct OnboardingCalibrationStep: View {
 
 // MARK: - AI Features
 
-/// Surfaces which AI backend the device can use and, on devices without Apple
-/// Intelligence, offers the on-device model download up front instead of
-/// leaving the feature silently switched off.
 struct OnboardingIntelligenceStep: View {
     @Environment(LLMService.self) private var llmService
 
@@ -488,9 +467,6 @@ struct OnboardingReminderStep: View {
                 }
 
                 GlassCard(padding: 4) {
-                    // The wheel needs ~200pt to render its three rolling rows
-                    // without clipping; a shorter frame also shadows the centre
-                    // row's hit region so taps land off-target.
                     DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
@@ -527,7 +503,3 @@ struct OnboardingReminderStep: View {
     }
 }
 
-// The ready-step recap that used to live here is gone with the baseline
-// moving inside onboarding: the flow no longer needs a receipt or a
-// start-recording decision — the reveal in `OnboardingBaselineSteps` is the
-// terminal screen.

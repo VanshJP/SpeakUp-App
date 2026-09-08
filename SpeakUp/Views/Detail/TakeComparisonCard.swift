@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// This take against the last time the user answered the same thing.
-///
-/// A new prompt every session is variety, not practice. What actually moves a
-/// speaker is the same sixty seconds twice with feedback in between — and the
-/// second attempt only teaches anything if the difference is visible. Without
-/// this the app records the rep and then throws away the only comparison that
-/// was ever going to show whether the coaching worked.
 struct TakeComparisonCard: View {
     let takeNumber: Int
     let previous: Int
@@ -80,11 +73,7 @@ struct TakeComparisonCard: View {
         .accessibilityLabel("Take \(takeNumber) of this prompt. Previously \(previous), now \(current). \(verdict)")
     }
 
-    /// Names what the repeat proved. A delta with no reading attached is just
-    /// two numbers next to each other.
     private var verdict: String {
-        // ±3 on a 0-100 score is inside session noise. Calling that an
-        // improvement would teach the user to trust a number that is lying.
         if delta >= 8 {
             return "Clear improvement on the second run at this. Whatever you changed, that was it."
         } else if delta >= 3 {

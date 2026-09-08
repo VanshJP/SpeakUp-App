@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Opal-style candle flame: a clean teardrop silhouette with an inner
-/// bright core, sitting inside a large warm halo. Animated with subtle
-/// sin-driven scale and sway from a `TimelineView` so the whole thing
-/// "breathes" without ever looking jittery.
 struct FlameAnimationView: View {
     var size: CGFloat = 220
     var isLit: Bool = true
@@ -22,11 +18,8 @@ struct FlameAnimationView: View {
         TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
 
-            // Slow primary breath
             let breath = sin(t * 1.6)
-            // Higher-frequency micro-flicker stacked on top
             let flicker = sin(t * 4.7) * 0.4 + sin(t * 9.3) * 0.15
-            // Independent sway phase
             let sway = sin(t * 1.25)
             // Inner flame on a different phase so it doesn't move in lock-step
             let innerBreath = sin(t * 2.4 + 0.7)
@@ -35,11 +28,9 @@ struct FlameAnimationView: View {
             ZStack {
                 halo(t: t)
 
-                // Outer flame
                 FlameTeardropShape()
                     .fill(outerGradient)
                     .overlay {
-                        // Thin darker rim around the bottom for contact shadow
                         FlameTeardropShape()
                             .stroke(
                                 LinearGradient(
@@ -60,7 +51,6 @@ struct FlameAnimationView: View {
                     .shadow(color: Color(red: 1.0, green: 0.4, blue: 0.05).opacity(0.55), radius: 22, y: -2)
                     .blur(radius: 0.4)
 
-                // Inner core flame
                 FlameTeardropShape()
                     .fill(innerGradient)
                     .frame(width: size * 0.26, height: size * 0.42)
@@ -95,16 +85,12 @@ struct FlameAnimationView: View {
 
     // MARK: - Extinguished flame
 
-    /// Static, desaturated rendering used when the streak is 0. No halo,
-    /// no breath/flicker, cool gray gradient — reads as a snuffed candle.
     private var extinguishedFlame: some View {
         ZStack {
-            // Outer flame silhouette in cool gray
             FlameTeardropShape()
                 .fill(extinguishedOuterGradient)
                 .frame(width: size * 0.55, height: size * 0.85)
 
-            // Inner core in a slightly lighter gray to keep the shape readable
             FlameTeardropShape()
                 .fill(extinguishedInnerGradient)
                 .frame(width: size * 0.26, height: size * 0.42)
@@ -134,7 +120,6 @@ struct FlameAnimationView: View {
     private func halo(t: Double) -> some View {
         let pulse = 0.88 + 0.12 * sin(t * 1.3)
         return ZStack {
-            // Wide soft brown-orange halo
             Circle()
                 .fill(
                     RadialGradient(
@@ -152,7 +137,6 @@ struct FlameAnimationView: View {
                 .frame(width: size * 3.2, height: size * 3.2)
                 .blur(radius: 28)
 
-            // Tighter warm core glow right around the flame
             Circle()
                 .fill(
                     RadialGradient(
@@ -227,10 +211,6 @@ struct FlameAnimationView: View {
 
 // MARK: - Flame Shape
 
-/// Classic candle-flame teardrop: pointy at the top, rounded at the
-/// bottom, widest about 2/3 of the way down. Built from four cubic
-/// curves — two shoulder curves up to the tip, two bottom-quarter
-/// curves approximating a circle (Bezier constant k ≈ 0.5523).
 struct FlameTeardropShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()

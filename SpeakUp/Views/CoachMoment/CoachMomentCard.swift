@@ -73,7 +73,6 @@ struct CoachMomentCard: View {
     }
 }
 
-/// Full-screen note for rare practice anniversaries.
 struct CoachMomentOverlay: View {
     let moment: CoachMoment
     let onAccept: () -> Void

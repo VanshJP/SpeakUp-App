@@ -56,7 +56,6 @@ struct WeeklyProgressWidgetView: View {
                 Spacer()
             }
 
-            // Sessions progress
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("\(entry.sessionCount) / \(entry.goalSessions) sessions")
@@ -74,7 +73,6 @@ struct WeeklyProgressWidgetView: View {
             }
 
             HStack(spacing: 16) {
-                // Average score
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Avg Score")
                         .font(.system(size: 9, weight: .bold))
@@ -101,7 +99,6 @@ struct WeeklyProgressWidgetView: View {
                     Spacer()
                 }
 
-                // Practice minutes
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Practice")
                         .font(.system(size: 9, weight: .bold))

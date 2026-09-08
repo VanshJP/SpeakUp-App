@@ -1,5 +1,6 @@
 import Foundation
 
+/// Prompt seed corpus. Fingerprint: `seededPromptFingerprint_v1` (SpeakUpApp).
 struct PromptData {
     let id: String
     let text: String
@@ -9,9 +10,6 @@ struct PromptData {
 
 enum DefaultPrompts {
     static let all: [PromptData] = [
-        // ============================================
-        // Professional Development
-        // ============================================
         PromptData(
             id: "prof-1",
             text: "Describe a challenging project you completed and what you learned from it.",
@@ -49,9 +47,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
         
-        // ============================================
-        // Communication Skills
-        // ============================================
         PromptData(
             id: "comm-1",
             text: "Explain a complex topic you know well as if you were teaching it to a beginner.",
@@ -89,9 +84,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
         
-        // ============================================
-        // Personal Growth
-        // ============================================
         PromptData(
             id: "pers-1",
             text: "What is a habit you developed that has had a positive impact on your life?",
@@ -129,9 +121,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
         
-        // ============================================
-        // Problem Solving
-        // ============================================
         PromptData(
             id: "prob-1",
             text: "Walk me through your process for solving a difficult problem.",
@@ -169,9 +158,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
         
-        // ============================================
-        // Current Events & Opinions
-        // ============================================
         PromptData(
             id: "curr-1",
             text: "What emerging technology do you think will have the biggest impact in the next five years?",
@@ -209,9 +195,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
         
-        // ============================================
-        // Quick Fire (Easy - great for warm-ups)
-        // ============================================
         PromptData(
             id: "quick-1",
             text: "What did you do this morning before coming here?",
@@ -243,9 +226,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
         
-        // ============================================
-        // Debate & Persuasion (Hard - impromptu arguments)
-        // ============================================
         PromptData(
             id: "debate-1",
             text: "Argue for or against: Remote work is better than working in an office.",
@@ -277,9 +257,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Interview Prep
-        // ============================================
         PromptData(
             id: "intv-1",
             text: "Tell me about yourself and what makes you a great fit for this role.",
@@ -341,9 +318,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Storytelling
-        // ============================================
         PromptData(
             id: "story-1",
             text: "Tell a story about a moment that changed your perspective on life.",
@@ -393,9 +367,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Elevator Pitch
-        // ============================================
         PromptData(
             id: "pitch-1",
             text: "Pitch yourself to a potential employer in 60 seconds.",
@@ -439,9 +410,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Additional Professional Development
-        // ============================================
         PromptData(
             id: "prof-7",
             text: "How would you explain your biggest career achievement to a stranger?",
@@ -467,9 +435,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Additional Communication Skills
-        // ============================================
         PromptData(
             id: "comm-7",
             text: "How do you make yourself understood when discussing a controversial topic?",
@@ -495,9 +460,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Additional Personal Growth
-        // ============================================
         PromptData(
             id: "pers-7",
             text: "What would you tell your younger self about life?",
@@ -523,9 +485,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Additional Problem Solving
-        // ============================================
         PromptData(
             id: "prob-7",
             text: "Describe a time you had to solve a problem with limited resources.",
@@ -551,9 +510,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Additional Current Events
-        // ============================================
         PromptData(
             id: "curr-7",
             text: "What role should AI play in everyday life? Where should we draw the line?",
@@ -579,9 +535,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Additional Quick Fire
-        // ============================================
         PromptData(
             id: "quick-6",
             text: "If you could have dinner with anyone in history, who and why?",
@@ -613,9 +566,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Additional Debate & Persuasion
-        // ============================================
         PromptData(
             id: "debate-6",
             text: "Argue for or against: Everyone should learn to code.",
@@ -647,9 +597,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Professional Development (Expanded)
-        // ============================================
         PromptData(
             id: "prof-11",
             text: "How do you handle imposter syndrome in your career?",
@@ -741,9 +688,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Communication Skills (Expanded)
-        // ============================================
         PromptData(
             id: "comm-11",
             text: "How do you give feedback that is honest but still encouraging?",
@@ -835,9 +779,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Personal Growth (Expanded)
-        // ============================================
         PromptData(
             id: "pers-11",
             text: "What is a belief you held strongly but later changed your mind about?",
@@ -929,9 +870,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Problem Solving (Expanded)
-        // ============================================
         PromptData(
             id: "prob-11",
             text: "Describe a time you had to convince others to change their approach to a problem.",
@@ -1023,9 +961,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Current Events & Opinions (Expanded)
-        // ============================================
         PromptData(
             id: "curr-11",
             text: "How do you think climate change should be addressed at the individual level?",
@@ -1117,9 +1052,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Quick Fire (Expanded)
-        // ============================================
         PromptData(
             id: "quick-11",
             text: "What song always puts you in a good mood?",
@@ -1211,9 +1143,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Debate & Persuasion (Expanded)
-        // ============================================
         PromptData(
             id: "debate-11",
             text: "Argue for or against: Privacy is more important than security.",
@@ -1305,9 +1234,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Interview Prep (Expanded)
-        // ============================================
         PromptData(
             id: "intv-11",
             text: "What would your previous manager say is your biggest area for improvement?",
@@ -1399,9 +1325,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Storytelling (Expanded)
-        // ============================================
         PromptData(
             id: "story-9",
             text: "Tell a story about the strangest coincidence you have ever experienced.",
@@ -1493,9 +1416,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Elevator Pitch (Expanded)
-        // ============================================
         PromptData(
             id: "pitch-8",
             text: "Pitch a business idea that would improve your local community.",
@@ -1587,9 +1507,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Professional Development (More)
-        // ============================================
         PromptData(
             id: "prof-26",
             text: "How do you navigate the balance between perfectionism and getting things done?",
@@ -1681,9 +1598,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Communication Skills (More)
-        // ============================================
         PromptData(
             id: "comm-26",
             text: "Explain the concept of infinity to a five-year-old.",
@@ -1775,9 +1689,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Personal Growth (More)
-        // ============================================
         PromptData(
             id: "pers-26",
             text: "Tell me about a time you realized you were the villain in someone else's story.",
@@ -1869,9 +1780,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Problem Solving (More)
-        // ============================================
         PromptData(
             id: "prob-26",
             text: "Describe a complex problem you solved using an incredibly simple solution.",
@@ -1963,9 +1871,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Current Events & Opinions (More)
-        // ============================================
         PromptData(
             id: "curr-26",
             text: "What is a trend from the past you wish would make a comeback?",
@@ -2057,9 +1962,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Quick Fire (More)
-        // ============================================
         PromptData(
             id: "quick-26",
             text: "If you could instantly become an expert in any obscure subject, what would it be and why?",
@@ -2151,9 +2053,6 @@ enum DefaultPrompts {
             difficulty: .easy
         ),
 
-        // ============================================
-        // Debate & Persuasion (More)
-        // ============================================
         PromptData(
             id: "debate-26",
             text: "Argue for or against: Humans should colonize other planets.",
@@ -2245,9 +2144,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Interview Prep (More)
-        // ============================================
         PromptData(
             id: "intv-26",
             text: "How do you stay current with trends and developments in your field?",
@@ -2339,9 +2235,6 @@ enum DefaultPrompts {
             difficulty: .medium
         ),
 
-        // ============================================
-        // Storytelling (More)
-        // ============================================
         PromptData(
             id: "story-24",
             text: "Tell a story about a time you got completely lost and how you found your way back.",
@@ -2433,9 +2326,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Elevator Pitch (More)
-        // ============================================
         PromptData(
             id: "pitch-23",
             text: "Pitch a reality TV show concept based on your workplace or daily life.",
@@ -2526,9 +2416,6 @@ enum DefaultPrompts {
             category: "Elevator Pitch",
             difficulty: .hard
         ),
-        // ============================================
-        // Conversation Starters
-        // ============================================
         PromptData(
             id: "convo-1",
             text: "You are at a networking event and notice someone standing alone. Walk up and start a natural conversation.",
@@ -2650,9 +2537,6 @@ enum DefaultPrompts {
             difficulty: .hard
         ),
 
-        // ============================================
-        // Describe & Explain (Step-by-step / Descriptive)
-        // ============================================
         PromptData(
             id: "desc-1",
             text: "Describe how to make a peanut butter and jelly sandwich, step by step.",
@@ -2747,9 +2631,6 @@ enum DefaultPrompts {
 
     // MARK: - Helper Functions
 
-    /// Random prompt, difficulty biased by the user's self-reported speaker
-    /// level and category biased by their goal mix. Used for rerolls, so the
-    /// seed is random. Pass `.uniform` for no category bias.
     static func getRandomPrompt(for level: SpeakerLevel, mix: PromptMix) -> PromptData {
         pick(for: level, mix: mix, seed: Int.random(in: 0..<1_000_000))
     }
@@ -2772,8 +2653,6 @@ enum DefaultPrompts {
         if let pick = mix.pick(from: pool, seed: seed, category: \.category) {
             return pick
         }
-        // Every prompt at this difficulty sits in a category the user disabled.
-        // Widen to the whole set before giving up on the mix entirely.
         if let pick = mix.pick(from: all, seed: seed, category: \.category) {
             return pick
         }
@@ -2791,8 +2670,6 @@ enum DefaultPrompts {
         return (components.year ?? 0) * 366 + (components.month ?? 0) * 31 + (components.day ?? 0)
     }
 
-    /// Map a `(easy, medium, hard)` weight tuple onto the seed to pick a
-    /// difficulty bucket deterministically.
     private static func pickDifficulty(for level: SpeakerLevel, seed: Int) -> PromptDifficulty {
         let weights = level.dailyDifficultyWeights
         let total = max(weights.easy + weights.medium + weights.hard, 1)

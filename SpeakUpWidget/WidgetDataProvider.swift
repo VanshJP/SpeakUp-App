@@ -76,13 +76,10 @@ enum WidgetDataProvider {
         defaults?.integer(forKey: "storyCount") ?? 0
     }
 
-    /// Cross-session interview readiness written by TodayViewModel. `0` means
-    /// no analyzed history yet — widgets treat it as "no data", not a real 0.
     static var interviewReadinessScore: Int {
         defaults?.integer(forKey: "interviewReadinessScore") ?? 0
     }
 
-    // Streak tracking
     static var lastPracticeDate: Date? {
         guard let interval = defaults?.object(forKey: "lastPracticeDate") as? Double else { return nil }
         return Date(timeIntervalSince1970: interval)

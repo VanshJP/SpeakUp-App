@@ -2,9 +2,6 @@ import Foundation
 import Testing
 @testable import SpeakUp
 
-/// Two helpers that used to exist twice each, in files that could not see one
-/// another. Pinning their behaviour is what makes the single copy safe to
-/// change — before this, either copy could drift and nothing would notice.
 
 struct CoherenceParsingTests {
     private let block = """
@@ -31,9 +28,6 @@ struct CoherenceParsingTests {
     }
 
     @Test func aMinusSignIsNotAScore() {
-        // Digits are pulled out of the label, so "-20" reads as 20. Fine: a
-        // negative coherence score is nonsense from the model either way, and
-        // the band is what the rest of the app consumes.
         #expect(CoherenceResult(parsing: "SCORE: -20").score == 20)
     }
 
@@ -69,13 +63,10 @@ struct NearestWordIndexTests {
     }
 
     @Test func closeStampSnapsToTheNearestWord() {
-        // Inside the 80ms window, the closest word wins outright.
         #expect(words([0.0, 1.0, 2.0]).nearestIndex(to: 1.05) == 1)
     }
 
     @Test func coarseStampFallsForwardToRealSpeech() {
-        // Outside the window there is no "close" answer, so take the first
-        // word at or after the stamp rather than returning nothing.
         #expect(words([0.0, 1.0, 5.0]).nearestIndex(to: 3.0) == 2)
     }
 

@@ -17,7 +17,6 @@ struct PracticeResultsCard: View {
     var body: some View {
         GlassCard(tint: AppColors.glassTintPrimary) {
             VStack(spacing: 16) {
-                // Header
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
@@ -52,7 +51,6 @@ struct PracticeResultsCard: View {
             }
         }
         .onChange(of: recording.overallScore) { _, _ in
-            // Analysis may land after the card appears; refresh the cache.
             analysis = nil
             primaryTip = nil
             resolveAnalysisIfNeeded()
@@ -71,8 +69,6 @@ struct PracticeResultsCard: View {
 
     private func refreshPrimaryTip() {
         guard let analysis else { return }
-        // Same tip engine as Recording Detail — curriculum practice should not
-        // invent a second coaching voice.
         primaryTip = CoachingTipService.generateTips(
             from: analysis,
             context: CoachingContext(targetWPM: targetWPM)
@@ -83,7 +79,6 @@ struct PracticeResultsCard: View {
 
     private func resultsContent(_ analysis: SpeechAnalysis) -> some View {
         VStack(spacing: 12) {
-            // Overall score ring
             HStack(spacing: 20) {
                 scoreRing(score: analysis.speechScore.overall)
 
@@ -119,7 +114,6 @@ struct PracticeResultsCard: View {
 
             Divider().opacity(0.3)
 
-            // Relevant metrics for this lesson
             relevantMetrics(analysis)
         }
     }
@@ -206,7 +200,6 @@ struct PracticeResultsCard: View {
 
     // MARK: - Encouragement
 
-    /// Short status line only — the coaching tip below carries technique.
     private var practiceEncouragement: String {
         guard let analysis else { return "Recording saved" }
         if let tip = primaryTip, tip.kind == .win || tip.kind == .focus {

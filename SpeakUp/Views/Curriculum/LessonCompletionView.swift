@@ -11,15 +11,8 @@ struct LessonCompletionView: View {
     @State private var trophyOpacity: Double = 0
     @State private var contentOpacity: Double = 0
 
-    private var encouragement: String {
-        let messages = [
-            "You crushed it!",
-            "That's real progress!",
-            "You should be proud!",
-            "Another one in the books!",
-            "Your future self thanks you!",
-        ]
-        return messages[abs(lesson.id.hashValue) % messages.count]
+    private var identity: LessonIdentity {
+        LessonIdentity.forLesson(id: lesson.id)
     }
 
     var body: some View {
@@ -30,67 +23,99 @@ struct LessonCompletionView: View {
                 VStack(spacing: 24) {
                     Spacer().frame(height: 40)
 
-                    // Trophy icon with bounce animation
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 56))
-                        .foregroundStyle(AppColors.warning)
-                        .shadow(color: AppColors.warning.opacity(0.4), radius: 12)
-                        .scaleEffect(trophyScale)
-                        .opacity(trophyOpacity)
+                    ZStack {
+                        Circle()
+                            .fill(identity.accent.opacity(0.18))
+                            .frame(width: 96, height: 96)
+                        LessonGlyphView(identity: identity, state: .completed)
+                            .frame(width: 44, height: 44)
+                            .scaleEffect(trophyScale)
+                            .opacity(trophyOpacity)
+                    }
+                    .shadow(color: identity.accent.opacity(0.35), radius: 12)
 
-                    // Title
                     VStack(spacing: 8) {
-                        Text("Lesson Complete!")
+                        Text("Lesson wrapped")
                             .font(.title.weight(.bold))
 
                         Text(lesson.title)
                             .font(.title3)
                             .foregroundStyle(.secondary)
-
-                        Text(encouragement)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
-                            .padding(.top, 2)
                     }
                     .opacity(contentOpacity)
 
-                    // Activity summary
+                    GlassCard(tint: identity.accent.opacity(0.08)) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("You can now")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(identity.accent)
+                                .textCase(.uppercase)
+                                .tracking(0.4)
+
+                            Text(lesson.objective)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text(LessonTeachingCopy.roadmap(for: lesson))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .opacity(contentOpacity)
+
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("What You Completed")
+                            Text("What you worked")
                                 .font(.subheadline.weight(.semibold))
 
-                            ForEach(lesson.activities) { activity in
+                            ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
                                 HStack(spacing: 10) {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.subheadline)
                                         .foregroundStyle(AppColors.success)
 
+                                    Text("\(index + 1). \(activity.type.teacherRole)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(activity.type.teacherColor)
+                                        .frame(width: 72, alignment: .leading)
+
                                     Text(activity.title)
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
 
-                                    Spacer()
+                                    Spacer(minLength: 0)
                                 }
                             }
                         }
                     }
                     .opacity(contentOpacity)
 
-                    // Next lesson preview
                     if let nextLesson {
-                        GlassCard(tint: AppColors.glassTintPrimary) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Up Next")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(AppColors.primary)
+                        let nextIdentity = LessonIdentity.forLesson(id: nextLesson.id)
+                        GlassCard(tint: nextIdentity.accent.opacity(0.08)) {
+                            HStack(alignment: .top, spacing: 12) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(nextIdentity.accent.opacity(0.18))
+                                    LessonGlyphView(identity: nextIdentity, state: .available)
+                                        .frame(width: 24, height: 24)
+                                }
+                                .frame(width: 44, height: 44)
 
-                                Text(nextLesson.title)
-                                    .font(.headline)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Tomorrow's board")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(nextIdentity.accent)
 
-                                Text(nextLesson.objective)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    Text(nextLesson.title)
+                                        .font(.headline)
+
+                                    Text(nextLesson.objective)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -98,16 +123,15 @@ struct LessonCompletionView: View {
                         .opacity(contentOpacity)
                     }
 
-                    // Actions
                     VStack(spacing: 12) {
                         if nextLesson != nil {
-                            GlassButton(title: "Next Lesson", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
+                            GlassButton(title: "Next lesson", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
                                 Haptics.medium()
                                 onNextLesson()
                             }
                         }
 
-                        GlassButton(title: "Back to Learning Path", style: .secondary, fullWidth: true) {
+                        GlassButton(title: "Back to path", style: .secondary, fullWidth: true) {
                             Haptics.light()
                             onBackToCurriculum()
                         }
@@ -116,7 +140,7 @@ struct LessonCompletionView: View {
 
                     Spacer().frame(height: 20)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppLayout.pageHorizontal)
             }
             .scrollIndicators(.hidden)
 
@@ -128,7 +152,6 @@ struct LessonCompletionView: View {
         .onAppear {
             Haptics.success()
 
-            // Staggered entrance: trophy bounces in first, then content fades up
             withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                 trophyScale = 1.0
                 trophyOpacity = 1.0
@@ -138,7 +161,7 @@ struct LessonCompletionView: View {
                 contentOpacity = 1.0
             }
 
-            withAnimation(.easeOut(duration: 0.3).delay(0.2)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 showConfetti = true
             }
         }

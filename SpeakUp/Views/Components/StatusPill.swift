@@ -1,13 +1,5 @@
 import SwiftUI
 
-/// A small tinted capsule carrying one word of state or identity.
-///
-/// Covers both jobs the app was doing with separate hand-written copies: a
-/// *status* readout ("Done", "Active", "Good") that reports how something is
-/// going, and an *identity* badge ("Hard", "Storytelling") that names what
-/// something is. They differ only in fill weight — identity badges sit next to
-/// body text and need to hold their own, status pills sit inside a card that is
-/// already carrying the emphasis.
 struct StatusPill: View {
     enum Glyph: Equatable {
         case none
@@ -18,7 +10,6 @@ struct StatusPill: View {
     let text: String
     let color: Color
     var glyph: Glyph = .none
-    /// 0.12 for status readouts, 0.2 for identity badges.
     var fillOpacity: Double = 0.12
 
     var body: some View {
@@ -48,9 +39,6 @@ struct StatusPill: View {
 // MARK: - Convenience
 
 extension StatusPill {
-    /// Identity badge for a prompt difficulty. Replaces the standalone
-    /// `DifficultyBadge` and the read-aloud copy that reached for raw
-    /// `.green`/`.orange`/`.red` instead of the tuned palette.
     static func difficulty(_ difficulty: PromptDifficulty) -> StatusPill {
         StatusPill(
             text: difficulty.displayName,

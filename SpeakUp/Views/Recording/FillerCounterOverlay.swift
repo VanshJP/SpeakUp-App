@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// Live filler count, in the top-bar status row beside the mic indicator.
-///
-/// It used to be a wide "N / fillers (live)" pill sitting directly above the
-/// record button — the one spot on the screen the eye aims at to *stop*, and it
-/// mounted the moment recording began, shoving the button down. Filler count is
-/// status, not a control, so it belongs with the other status at the top.
 struct FillerCounterOverlay: View {
     let count: Int
 

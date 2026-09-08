@@ -1,23 +1,10 @@
 import SwiftUI
 
 /// The moment the app exists for: you stopped talking, here is how it went.
-///
-/// Before this screen, finishing a recording silently switched tabs and pushed
-/// a detail page — a 95 and a 45 arrived identically. The reveal is scaled to
-/// the band so the app's reaction matches the result:
-///
-/// - **Strong (80+)** — confetti, success haptic, the score is the celebration.
-/// - **Solid (60–79)** — the number climbs and lands. No particles; a good
-///   session doesn't need a parade, and spending confetti here would make it
-///   worthless at 90.
-/// - **Building (<60)** — no celebration language at all. The verdict, then one
-///   forward-looking line naming what held it back. Honest, not a failure state,
 ///   and never congratulatory — a low score met with confetti reads as sarcasm.
 struct ScoreRevealView: View {
     let score: Int
-    /// Rolling baselines excluding this session. All-nil on a first session.
     let baselines: PersonalAverage.Baselines
-    /// Label of the lowest-scoring axis, used only in the building band.
     let weakestAxisLabel: String?
     let onDismiss: () -> Void
 
@@ -92,8 +79,6 @@ struct ScoreRevealView: View {
 
     // MARK: - Subviews
 
-    /// The numeral sits inside a ring that fills as it climbs, so the score is
-    /// read twice — once as a value, once as a position on the scale.
     private var scoreDial: some View {
         ZStack {
             RingProgress(
@@ -132,9 +117,6 @@ struct ScoreRevealView: View {
                 .multilineTextAlignment(.center)
                 .opacity(showContext ? 1 : 0)
 
-            // Lands after the delta, so the reveal builds rather than dumping
-            // every fact at once. Rare by construction — it only ever shows on
-            // an actual new high.
             if let personalBestLabel {
                 StatusPill(
                     text: personalBestLabel,
@@ -154,8 +136,6 @@ struct ScoreRevealView: View {
     private var contextLine: String {
         switch band {
         case .building:
-            // Name the lever rather than the shortfall — the detail screen's
-            // next-step card picks this same thread up.
             if let weakestAxisLabel {
                 return "Next lever: \(weakestAxisLabel)"
             }
@@ -189,8 +169,6 @@ struct ScoreRevealView: View {
             showContext = true
             showBest = true
             showHint = true
-            // Reduce Motion removes movement, not feedback — the band still
-            // gets its own haptic.
             bandHaptic()
             try? await Task.sleep(for: .seconds(2.4))
             onDismiss()
@@ -223,8 +201,6 @@ struct ScoreRevealView: View {
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.4)) { showHint = true }
 
-        // Long enough to land, short enough that it never feels like a gate.
-        // A new high earns a beat more.
         try? await Task.sleep(for: .milliseconds(personalBestLabel != nil ? 1900 : 1400))
         guard !Task.isCancelled else { return }
         onDismiss()

@@ -1,11 +1,10 @@
 import Foundation
 
-// To add new content:
-//   1. Add a CurriculumLesson to an existing phase, or add a new CurriculumPhase
-//   2. Use factory methods: .lesson(), .practice(), .drill(), .exercise(), .review()
-//   3. Build lesson content with: .concepts(), .tip(), .example(), .keyTakeaway(), .callout()
-//   4. Activity IDs must be unique — use the pattern w{week}_l{lesson}_a{activity}
-//   5. For practice auto-completion, mention the duration in the description (e.g. "60-second")
+// Seed: SpeakUp/Data/DefaultCurriculum.swift
+// Add content: new CurriculumLesson/Phase; factories .lesson/.practice/.drill/.exercise/.review;
+// LessonContent builders .concepts/.tip/.example/.keyTakeaway/.callout;
+// Unique activity IDs: w{week}_l{lesson}_a{activity}. New lesson → also LessonIdentity.catalog.
+// Practice auto-complete: mention duration in the description (e.g. "60-second").
 
 struct DefaultCurriculum {
     static let phases: [CurriculumPhase] = [

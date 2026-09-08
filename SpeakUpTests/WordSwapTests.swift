@@ -186,8 +186,6 @@ struct WordSwapTests {
 
         let like = hit(LexiconInsightsEngine.sessionHits(from: words), "like")
 
-        // Two different patterns, one occurrence each: earliest wins the row,
-        // and the winner's own fallback fills the third chip.
         #expect(like?.count == 2)
         #expect(like?.swaps == ["\u{201C}about\u{201D}", "\u{201C}such as\u{201D}", "\u{201C}roughly\u{201D}"])
         #expect(like?.exampleFragment?.contains(where: \.isTarget) == true)
@@ -202,7 +200,6 @@ struct WordSwapTests {
 
         let like = hit(LexiconInsightsEngine.sessionHits(from: words), "like")
 
-        // "such as" fires twice, "cut it" (sentence-initial) once: majority wins.
         #expect(like?.count == 3)
         #expect(like?.swaps.first == "\u{201C}such as\u{201D}")
     }
@@ -234,7 +231,6 @@ struct WordSwapTests {
 
         #expect(fragment?.first?.text == "\u{2026}")
         #expect(fragment?.last?.text == "\u{2026}")
-        // Ellipsis + 13 window words + ellipsis.
         #expect(fragment?.count == 15)
 
         let targetIndex = fragment?.firstIndex(where: \.isTarget)

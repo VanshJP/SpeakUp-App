@@ -2,10 +2,6 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Whisper occasionally emits a word whose end timestamp overshoots by minutes.
-// Normalization used to carry that overshoot forward, collapsing every later
-// word into a sliver at the wrong offset — a transcript whose second half no
-// longer matched the audio.
 
 @MainActor
 struct WhisperTimingTests {
@@ -30,7 +26,6 @@ struct WhisperTimingTests {
         ]
         let output = WhisperService.normalizeTimings(input)
 
-        // The bad word is capped, and everything after it keeps its own place.
         #expect(output[1].end <= 1.0)
         #expect(output[2].start == 1.0)
         #expect(output[3].start == 1.5)

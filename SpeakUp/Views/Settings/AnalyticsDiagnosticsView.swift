@@ -1,11 +1,6 @@
 import SwiftUI
 
 /// The launch scorecard, computed on this device from the local event log.
-///
-/// There is no analytics backend, so this screen is how the beta gates
-/// (activation rate, time to value) actually get read: a tester opens it,
-/// exports the JSON, and sends it over. It doubles as
-/// the honest answer to "what do you collect?" — everything recorded is right
 /// here, in full, and it never leaves unless the user exports it.
 struct AnalyticsDiagnosticsView: View {
     private var analytics: AnalyticsService { AnalyticsService.shared }
@@ -90,8 +85,6 @@ struct AnalyticsDiagnosticsView: View {
     }
 
     #if DEBUG
-    /// Flips entitlement without a sandbox purchase so both sides of every gate
-    /// can be exercised in one run. Compiled out of Release, so it cannot ship.
     private var entitlementOverrideCard: some View {
         GlassCard(padding: 14) {
             Toggle(isOn: Binding(
@@ -111,8 +104,6 @@ struct AnalyticsDiagnosticsView: View {
         }
     }
 
-    /// Moves the 14-day trial clock so both sides of it can be seen in one run
-    /// instead of two weeks apart.
     private var trialOverrideCard: some View {
         GlassCard(padding: 14) {
             VStack(alignment: .leading, spacing: 10) {

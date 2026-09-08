@@ -16,8 +16,6 @@ struct RecordingView: View {
     @State private var completedRecording: Recording?
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
-    /// Set once analysis lands, to hold the score reveal on screen before the
-    /// detail page. Nil when there is nothing worth revealing.
     @State private var revealRecording: Recording?
     /// Snapshot for the reveal — never read `recording.analysis` from body.
     @State private var revealAnalysis: SpeechAnalysis?
@@ -33,12 +31,8 @@ struct RecordingView: View {
     var countdownStyle: CountdownStyle = .countUp
     var goalId: UUID? = nil
     var storyId: UUID? = nil
-    /// `share` when this session is answering a friend-challenge link.
     var sessionSource: String? = nil
-    /// Pre-selects a structure overlay (curriculum PREP/STAR practice).
     var initialFramework: SpeechFramework? = nil
-    /// Fires when the user leaves the analyzing stage without opening detail.
-    /// The parent can evaluate achievements without forcing navigation.
     var onSavedAndClosed: ((Recording) -> Void)? = nil
     let onComplete: (Recording) -> Void
     let onCancel: () -> Void
@@ -57,10 +51,6 @@ struct RecordingView: View {
                 recordingContent
             }
         }
-        // No blanket `.ignoresSafeArea()`. Every backdrop this screen can wear
-        // bleeds on its own (`RecordingBackdropView`, `AppBackground`), and
-        // consuming the insets here is what pushed the prompt card under the
-        // status bar and left the controls guessing with a hard-coded 50pt.
         .animation(AppMotion.settle, value: completedRecording?.id)
         .animation(AppMotion.settle, value: revealRecording?.id)
         .task {
@@ -90,7 +80,6 @@ struct RecordingView: View {
             }
             await viewModel.checkPermissions()
             refreshVocabOverlay()
-            // Auto-start recording after countdown
             if !viewModel.isRecording {
                 await viewModel.startRecording()
             }
@@ -98,9 +87,6 @@ struct RecordingView: View {
         .onChange(of: selectedFramework) { _, newValue in
             viewModel.frameworkUsed = newValue
         }
-        // Deliberate practice needs the instruction going in. Reading the focus
-        // afterwards on the results screen is always one take too late, so it
-        // rides along here as well.
         .task {
             let container = modelContext.container
             let weights = ScoreWeights(from: userSettings.first)
@@ -154,12 +140,6 @@ struct RecordingView: View {
         ZStack {
             audioBackground
 
-            // Three slots, no spacers: status on top, dial in the middle
-            // taking whatever is left, controls along the bottom. The old
-            // `Spacer() / dial / Spacer()` sized the dial without reference to
-            // the room it had — worst with `WaveformStyle.off`, where the
-            // controls collapse to 80pt and a fixed 200pt dial sat in a ~400pt
-            // gap with ~90pt empty on either side of it.
             VStack(spacing: 0) {
                 topBar
                 sessionStage
@@ -171,11 +151,6 @@ struct RecordingView: View {
     }
 
     // MARK: - Feedback Gate (pre-navigation)
-    //
-    // Presented in-place after the user stops recording. The analysis job runs
-    // in the background via RecordingProcessingCoordinator; this view blocks
-    // navigation to the detail screen until feedback is submitted or skipped
-    // (when enabled), or until analysis lands (when feedback is off).
 
     private var feedbackEnabled: Bool {
         userSettings.first?.sessionFeedbackEnabled ?? false
@@ -187,9 +162,6 @@ struct RecordingView: View {
     }
 
     private var feedbackGateActive: Bool {
-        // Same activation rule as Recording Detail: never put a questionnaire
-        // in front of the first scored take. Exclude the active recording so
-        // its own transcriptionText landing mid-gate cannot flip the bypass off.
         guard let id = completedRecording?.id else {
             return feedbackEnabled && !feedbackQuestions.isEmpty
         }
@@ -237,14 +209,10 @@ struct RecordingView: View {
                 analysisReady: recording.overallScore != nil || recording.transcriptionText != nil
             )
         }
-        // When feedback is off: auto-navigate once processing completes.
-        // `try? await Task.sleep` + `Task.isCancelled` guard prevents fall-through
-        // navigation if the key changes mid-sleep (coordinator lag race condition).
         .task(id: gateStateKey(for: recording)) {
             // Feedback active: wait for user to submit — onFeedbackCompleted drives navigation
             if feedbackGateActive { return }
 
-            // Feedback disabled: wait for processing to complete before navigating
             let stillProcessing =
                 recording.isProcessing ||
                 RecordingProcessingCoordinator.shared.isProcessing(recording.id)
@@ -277,8 +245,6 @@ struct RecordingView: View {
         )
     }
 
-    /// Only the building band names a lever, so this is nil above 60 — the
-    /// reveal shows the delta there instead.
     private func weakestAxisLabel(from analysis: SpeechAnalysis?) -> String? {
         guard let analysis,
               analysis.speechScore.overall < 60 else { return nil }
@@ -290,9 +256,6 @@ struct RecordingView: View {
         return axes.min(by: { $0.value < $1.value })?.label
     }
 
-    /// Holds on the reveal when there is a score to show, then hands off to the
-    /// detail page. A session with no analysis (transcription failed, silence)
-    /// skips straight through — there is nothing to reveal.
     private func finishAndNavigate(_ recording: Recording) {
         guard !hasNavigated, revealRecording == nil else { return }
 
@@ -308,9 +271,6 @@ struct RecordingView: View {
         let id = recording.id
         revealTask?.cancel()
         revealTask = Task {
-            // Resolve the baseline *before* the reveal appears. The context
-            // line reads it about a second in, and letting it pop mid-animation
-            // is exactly the jitter this screen exists to avoid.
             let baselines = await PersonalAverage.all(
                 excluding: id,
                 container: container
@@ -329,9 +289,6 @@ struct RecordingView: View {
 
     // MARK: - Audio Background
 
-    /// Same canvas the prepare countdown just showed, so the session doesn't
-    /// swap backgrounds under the user the second recording starts. `.base`
-    /// resolves to `AppBackground(style: .recording)`, the old look.
     private var audioBackground: some View {
         RecordingBackdropView(
             backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
@@ -343,11 +300,8 @@ struct RecordingView: View {
     private var topBar: some View {
         VStack(spacing: 12) {
             HStack {
-                // Close button
                 Button {
                     Haptics.warning()
-                    // A few seconds in, a mis-tap would destroy the take —
-                    // confirm before discarding anything substantial.
                     if viewModel.isRecording && viewModel.recordingDuration > 5 {
                         showingDiscardConfirm = true
                     } else {
@@ -383,9 +337,6 @@ struct RecordingView: View {
 
                 Spacer()
 
-                // Status cluster: how many fillers so far, and whether the mic
-                // is hearing anything. Both read state that changes rarely, so
-                // neither re-renders on the 0.1 s audioLevel write.
                 if viewModel.isRecording {
                     FillerCounterOverlay(count: viewModel.liveFillerCount)
                 }
@@ -395,10 +346,6 @@ struct RecordingView: View {
                 sessionOptionsMenu
             }
 
-            // The focus rides on the prompt card's meta line rather than in a
-            // pill of its own: two stacked capsules saying "Personal Growth"
-            // and "Vocal variety" were two rows of chrome for one sentence of
-            // context. Without a card it still needs somewhere to live.
             if let prompt, viewModel.isRecording {
                 compactPromptCard(prompt)
             } else if let focusPlan, !focusPlan.isGraduating {
@@ -417,13 +364,6 @@ struct RecordingView: View {
         .animation(AppMotion.settle, value: showingVocabStrip)
     }
 
-    /// The one thing to hold in mind during this take, for sessions with no
-    /// prompt card to carry it (story practice, free takes).
-    ///
-    /// Names the technique before the countdown ends, then drops to just the
-    /// area once recording starts — mid-take is the wrong moment to hand
-    /// somebody a paragraph, but the reminder still has to be there, because
-    /// that is the entire window in which they can act on it.
     @ViewBuilder
     private func focusIntentPill(_ plan: CoachPlan) -> some View {
         HStack(spacing: 6) {
@@ -445,12 +385,6 @@ struct RecordingView: View {
         .accessibilityLabel("This take's focus: \(plan.focus.title). \(plan.focus.technique.name)")
     }
 
-    /// Framework and vocab used to sit in the top bar as their own circular
-    /// buttons, alongside a read-only goal badge — five controls competing with
-    /// the timer and waveform for a screen whose entire job is "talk now".
-    /// They're mid-session adjustments, not primary actions, so they collapse
-    /// into one overflow. The goal badge is gone outright: it was pure context,
-    /// and the countdown screen showed it seconds earlier.
     private var sessionOptionsMenu: some View {
         Menu {
             Picker("Framework", selection: $selectedFramework) {
@@ -505,18 +439,12 @@ struct RecordingView: View {
             return
         }
 
-        // Bank fallback for users with the workout off. Trimmed by the strip
-        // itself — a fifty-word bank is not a recording-screen cue.
         overlayWords = settings.vocabWords
         overlayIntroduced = []
         overlayReviewing = []
         overlayTitle = "Your Words"
     }
 
-    /// The prompt, mid-take. Two lines of `.subheadline` used to truncate the
-    /// back half of anything longer than a sentence while a third of the screen
-    /// below it sat empty; the space the dial slot doesn't need is better spent
-    /// on the question being answered.
     private func compactPromptCard(_ prompt: Prompt) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
@@ -565,18 +493,8 @@ struct RecordingView: View {
     /// The dial, in a slot that owns everything the top bar and the controls
     /// didn't take.
     ///
-    /// The countdown draws the same slot in the same place at the same size:
-    /// the target comes from the slot's width, which both screens share, so
-    /// the hand-off moves nothing but the prompt card shrinking. The two
-    /// screens' *heights* differ a lot — this one's bottom carries a record
-    /// button inside up to 220pt of waveform — but height only ever steps the
-    /// dial down a rung, and only when a screen genuinely cannot show the
-    /// shared size. Nothing moves it within a take either: everything feeding
-    /// the slot's height is fixed once recording starts, which is why the
-    /// coaching cue is an overlay rather than a row.
     private var sessionStage: some View {
         SessionDialSlot(spacing: 24) { diameter in
-            // Framework overlay
             if let framework = selectedFramework, viewModel.isRecording {
                 FrameworkOverlayView(
                     framework: framework,
@@ -585,7 +503,6 @@ struct RecordingView: View {
                 )
             }
 
-            // Timer
             TimerView(
                 remainingTime: viewModel.displayTime,
                 progress: viewModel.progress,
@@ -593,8 +510,6 @@ struct RecordingView: View {
                 isRecording: viewModel.isRecording,
                 isOvertime: viewModel.isOvertime,
                 timerLabel: viewModel.timerLabel,
-                // Same dial the countdown just drew — the look is picked once
-                // in Settings and has to survive the hand-off to recording.
                 look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
                 diameter: diameter
             )
@@ -623,20 +538,10 @@ struct RecordingView: View {
         }
     }
 
-    // `promptCard` lived here, rendered only `if !viewModel.isRecording`. But
-    // `.task` auto-starts recording on appear, so it flashed for milliseconds
-    // while the permission check ran, duplicating the prompt card the countdown
-    // screen had shown two seconds earlier. Deleted rather than fixed — there
-    // was no moment at which the user was meant to read it.
 
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
-        // Snapshot observable reads into locals. Each child subview receives
-        // only the fields it needs as plain values — SwiftUI short-circuits
-        // child diffs when inputs are unchanged, so the waveform (driven by
-        // audioLevel) doesn't re-render on coaching-cue updates, and vice
-        // versa.
         let cue = viewModel.coachingService.currentCue
         let isRecording = viewModel.isRecording
         let level = viewModel.audioLevel
@@ -660,7 +565,6 @@ struct RecordingView: View {
                 }
             )
 
-            // Hint text
             Text(isRecording ? "Tap to stop" : "Tap to start recording")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white.opacity(0.75))
@@ -674,15 +578,6 @@ struct RecordingView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .animation(.easeInOut(duration: 0.2), value: isRecording)
         }
-        // The coaching cue floats above the controls instead of being a row
-        // inside them. As a row it pushed ~58pt into this column the moment it
-        // fired: that shoved the record button down mid-take, and because the
-        // dial slot is only ever "what the top bar and these controls left
-        // over", it resized the timer mid-sentence too. An overlay costs no
-        // height, so the cue can come and go without moving anything.
-        //
-        // It lands in the slack under the dial — the slot centres its content,
-        // so the space directly above the controls is empty.
         .overlay(alignment: .top) {
             if let cue, isRecording {
                 coachingCueView(cue)
@@ -691,9 +586,6 @@ struct RecordingView: View {
                     .id(cue.message)
             }
         }
-        // The safe area already holds the controls clear of the home
-        // indicator; the old 40pt on top of it was a second guess at the
-        // same gap.
         .padding(.bottom, 8)
     }
 
@@ -710,13 +602,7 @@ struct RecordingView: View {
 // MARK: - Circular Waveform View (surrounds record button)
 
 /// Radial waveform drawn in a single Canvas node inside a TimelineView.
-/// One draw per frame, no per-bar view diffing.
-///
 /// - `audioLevel`: incoming dB reading, smoothed to avoid jitter.
-/// - `style`: user-chosen look (Settings → Waveform).
-/// - `canvasSize`: geometry scales from the 220pt reference design, so the
-///   same view doubles as a settings thumbnail.
-/// - `simulated`: no mic — drive the envelope from a sine so previews move.
 struct CircularWaveformView: View {
     var audioLevel: Float = 0
     var style: WaveformStyle = .rings
@@ -728,14 +614,9 @@ struct CircularWaveformView: View {
     private var scale: CGFloat { canvasSize / 220 }
 
     var body: some View {
-        // Off takes no frame at all, so the record button doesn't sit in the
-        // middle of an invisible 220pt hole — and no 60 fps clock runs for a
-        // canvas with nothing on it.
         if style == .off {
             EmptyView()
         } else {
-            // Thumbnail-sized instances run at half rate — the picker shows six
-            // of these at once, and nobody reads 60 fps off a 76pt swatch.
             TimelineView(.animation(minimumInterval: canvasSize < 120 ? 1.0 / 30.0 : 1.0 / 60.0)) { context in
                 Canvas { graphics, size in
                     let center = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -757,8 +638,6 @@ struct CircularWaveformView: View {
 
     // MARK: - Drawing
 
-    /// Two detuned sines give each bar an organic, non-repeating bob that
-    /// still tracks the incoming audio envelope.
     private func amplitude(_ i: Int, time: Double, level: CGFloat) -> CGFloat {
         let wave = sin(time * 3.0 + Double(i) * 0.35) * 0.22
         let variation = sin(Double(i) * 1.7 + time * 1.1) * 0.12
@@ -779,10 +658,8 @@ struct CircularWaveformView: View {
             for i in 0..<barCount {
                 let angle = (Double(i) / Double(barCount)) * 2 * .pi
                 var h = amplitude(i, time: time, level: level)
-                // Spark alternates hairline lengths for a sharper, spikier ring.
                 if style == .spark && i.isMultiple(of: 2) { h *= 0.5 }
                 let barLength = minLength + (maxLength - minLength) * h
-                // Rings straddle the perimeter; the others grow outward only.
                 let inset = style == .rings ? barLength / 2 : 0
 
                 var layer = graphics
@@ -859,7 +736,6 @@ struct CircularWaveformView: View {
             ))
             graphics.stroke(base, with: .color(AppColors.primary.opacity(0.45)), lineWidth: 2 * scale)
 
-            // Rings born at the button edge, expanding outward and fading.
             for ring in 0..<4 {
                 let phase = (time * 0.5 + Double(ring) * 0.25).truncatingRemainder(dividingBy: 1)
                 let r = radius + (maxLength + 16 * scale) * CGFloat(phase)
@@ -880,17 +756,7 @@ struct CircularWaveformView: View {
 // MARK: - Mic Level Pill
 
 /// Answers one question — is the mic hearing me? — and stays quiet otherwise.
-///
-/// This used to read Speaking / Silent off the instantaneous level, so it
-/// strobed between every two words: a label that changes four times a sentence
-/// is read as broken, not informative. `AudioService.isHearingInput` starts a
 /// take green, drops to the warning only if the first few seconds bring in
-/// nothing at all, and latches green for good the moment the mic is proven to
-/// work — so this changes at most twice a take, and the words only appear when
-/// there is something to say.
-///
-/// Not private: the drill screen shows the same indicator, driven by the same
-/// service state.
 struct MicLevelPill: View {
     let isHearing: Bool
 
@@ -924,9 +790,6 @@ struct MicLevelPill: View {
 
 // MARK: - Record Button + Waveform Stack
 
-/// POD container for the circular waveform and record button. Isolated so
-/// the waveform subtree does not re-diff when coaching-cue state changes
-/// further up in `bottomControls`.
 private struct RecordButtonWaveformStack: View {
     let audioLevel: Float
     let waveformStyle: WaveformStyle
@@ -947,19 +810,11 @@ private struct RecordButtonWaveformStack: View {
 
 // MARK: - Vocab Strip
 
-/// Today's spotlight words, inline in the top bar.
-///
-/// This used to be a glass panel floating over the top of the screen, which
-/// landed squarely on the compact prompt card and hid the thing the speaker was
-/// supposed to be answering. A chip row that takes its own space costs a few
-/// points of height and blocks nothing.
 private struct VocabStrip: View {
     let words: [String]
     let introduced: Set<String>
     let reviewing: Set<String>
 
-    /// Mid-sentence is no time to read a list. Anything past a few chips is
-    /// reference material, and reference material belongs on Today.
     private var shown: [String] { Array(words.prefix(4)) }
 
     var body: some View {
