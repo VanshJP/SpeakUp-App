@@ -38,7 +38,6 @@ struct StoryEditorView: View {
     @State private var showingMoveSheet = false
     @State private var moveSheetSelectionToken: UUID = UUID()
 
-    // Auto-save
     @State private var draftStory: Story?
     @State private var autoSaveTask: Task<Void, Never>?
 
@@ -684,7 +683,6 @@ struct StoryEditorView: View {
         }
     }
 
-    /// Create a draft story on demand so it can host tags, folder moves, etc.
     private func ensureDraftForMove() {
         guard draftStory == nil else { return }
         let resolvedTitle = title.isEmpty ? autoTitle(from: plainText) : title

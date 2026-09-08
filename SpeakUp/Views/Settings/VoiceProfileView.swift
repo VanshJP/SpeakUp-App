@@ -1,11 +1,5 @@
 import SwiftUI
 
-/// Your learned voice signature and the calibration that seeds it.
-///
-/// This used to live inside Data Management, filed next to "Clear All Data" —
-/// but it is not data hygiene, it is an input to scoring. Auto Pace Target on
-/// the Analysis screen reads the same profile, so the profile now hangs off
-/// Analysis, one row under the target it feeds.
 struct VoiceProfileView: View {
     @Bindable var viewModel: SettingsViewModel
 

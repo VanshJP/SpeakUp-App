@@ -15,7 +15,6 @@ struct WarmUpExerciseView: View {
             AppBackground(style: .recording)
 
             VStack(spacing: 32) {
-                // Close button
                 HStack {
                     Button {
                         if viewModel.isRunning {
@@ -128,7 +127,6 @@ struct WarmUpExerciseView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 20) {
-            // Rounds picker (breathing only, before start)
             if viewModel.canCustomizeRounds,
                viewModel.currentStepIndex == 0,
                !viewModel.isRunning {
@@ -219,7 +217,6 @@ struct WarmUpExerciseView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-        // One swipe adjusts; no need to hunt for the tiny −/+ buttons.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Rounds")
         .accessibilityValue("\(viewModel.selectedRounds)")

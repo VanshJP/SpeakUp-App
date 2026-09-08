@@ -18,7 +18,6 @@ class AchievementService {
         let allCategoriesCovered: Bool
     }
 
-    /// Check all achievements against current data and unlock any that are newly earned.
     @MainActor
     func checkAchievements(context: ModelContext, listenBackCount: Int = 0) async {
         let container = context.container
@@ -35,13 +34,11 @@ class AchievementService {
             return
         }
 
-        // Seed achievements if empty
         if achievements.isEmpty {
             for def in AchievementDefinition.allCases {
                 context.insert(def.toModel())
             }
             try? context.save()
-            // Re-fetch after seeding
             guard let seeded = try? context.fetch(FetchDescriptor<Achievement>()) else { return }
             evaluateAll(achievements: seeded, signals: signals, context: context, listenBackCount: listenBackCount)
             return
@@ -115,8 +112,6 @@ class AchievementService {
         }
         for def in AchievementDefinition.allCases {
             if let existing = lookup[def.rawValue] {
-                // Definitions own display copy. Keep older rows in sync when
-                // wording becomes clearer without touching unlock state.
                 def.refreshDisplay(on: existing)
             } else {
                 let model = def.toModel()
@@ -148,11 +143,8 @@ class AchievementService {
             achievement.isUnlocked = true
             achievement.unlockedDate = Date()
 
-            // The retention signal the plan reads: how far into the habit
-            // people get before they stop. The id is already a fixed slug.
             AnalyticsService.shared.log(.milestone(type: id))
 
-            // Report the first newly unlocked one for celebration
             if newlyUnlocked == nil {
                 newlyUnlocked = achievement
             }

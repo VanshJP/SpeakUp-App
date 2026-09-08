@@ -5,11 +5,8 @@ struct RingStatsView: View {
     let sessionsGoal: Int
     let score: Int
     var bestScore: Int = 0
-    /// 7-day score trend in percentage points. Positive = improving,
-    /// negative = regressing, 0 = no data or flat.
     var improvement: Double = 0
 
-    /// Improvement magnitude that fills the trend gauge completely.
     private let improvementTarget: Double = 30
 
     private var improvementRingProgress: Double {
@@ -55,7 +52,6 @@ struct RingStatsView: View {
                     )
                 }
 
-                // Best-score footer under a hairline, integrated into the card.
                 VStack(spacing: 12) {
                     Rectangle()
                         .fill(.white.opacity(0.08))

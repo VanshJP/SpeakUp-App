@@ -19,9 +19,6 @@ struct ReadAloudResult {
     let mismatchedWords: Int
     let timeTaken: TimeInterval
     let wordStates: [WordMatchState]
-    /// Set when the session ended without a fair measurement — the recognizer
-    /// died mid-read, or nothing was heard at all. The result screen shows it
-    /// instead of letting a bare "0% · Complete" stand as a verdict.
     var notice: String?
 
     var score: Int {
@@ -35,10 +32,6 @@ struct ReadAloudResult {
 class ReadAloudViewModel {
     let service = ReadAloudService()
 
-    /// Session-scoped audio service: owns mic permission and the
-    /// record-capable session configuration. The read-aloud engine taps the
-    /// input directly, but without this setup a fresh launch runs under
-    /// whatever ambient category lingers — silent buffers, cryptic failures.
     private let audioService = AudioService()
 
     var selectedDifficulty: ReadAloudDifficulty? {
@@ -52,7 +45,6 @@ class ReadAloudViewModel {
     var result: ReadAloudResult?
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
-    /// When true, the session plays a TTS model pass before listening.
     var isShadowMode = false
     private(set) var filteredPassages: [ReadAloudPassage] = DefaultReadAloudPassages.all
 
@@ -150,7 +142,6 @@ class ReadAloudViewModel {
         )
 
         sessionState = .finished
-        // Bailing out before matching a word shouldn't advance curriculum signals
         if service.matchedWordCount > 0 {
             CurriculumActivitySignalStore.markReadAloudCompleted()
         }
@@ -207,14 +198,11 @@ class ReadAloudViewModel {
                 guard let self, let start = self.startTime else { continue }
                 self.elapsedTime = Date().timeIntervalSince(start)
 
-                // A recognizer that died mid-read ends the session now —
-                // letting the clock run on produces a confident-looking zero.
                 if self.service.recognitionFailureMessage != nil && self.sessionState == .listening {
                     self.stopSession()
                     continue
                 }
 
-                // Auto-stop if service finished
                 if self.service.isComplete && self.sessionState == .listening {
                     self.stopSession()
                 }

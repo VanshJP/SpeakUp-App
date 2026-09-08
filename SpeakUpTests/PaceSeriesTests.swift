@@ -5,8 +5,6 @@ import Foundation
 
 struct PaceSeriesTests {
 
-    /// A take with `pauseFraction` of its length spent silent and `articulation`
-    /// words/sec while actually talking — the shape of ordinary speech.
     private func take(
         duration: TimeInterval,
         pauseFraction: Double,
@@ -53,7 +51,6 @@ struct PaceSeriesTests {
             let stamps = series.map(\.timestamp)
             #expect(stamps == stamps.sorted())
             #expect(Set(stamps).count == stamps.count)
-            // Last window ends flush with the take.
             #expect(series.last!.timestamp < duration)
             #expect(series.allSatisfy { $0.timestamp > 0 })
         }

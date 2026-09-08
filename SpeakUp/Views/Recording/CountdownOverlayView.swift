@@ -8,15 +8,11 @@ struct CountdownOverlayView: View {
     let countdownStyle: CountdownStyle
     var look: TimerLook = .ring
     var backdrop: RecordingBackdrop = .base
-    /// Optional context line for flows that prep for a named format rather
-    /// than read a prompt — drills show the mode and what it costs. nil keeps
-    /// the recording layout byte-identical.
     var prepTitle: String? = nil
     var prepSubtitle: String? = nil
     let onComplete: () -> Void
     let onCancel: () -> Void
     @Binding var selectedGoalId: UUID?
-    /// Set when this session came from a friend-challenge link.
     var challenge: SharedChallenge? = nil
 
     @Query(filter: #Predicate<UserGoal> { !$0.isCompleted })
@@ -28,7 +24,6 @@ struct CountdownOverlayView: View {
 
     private var totalSeconds: Int { countdownDuration }
 
-    /// The number displayed in the timer circle.
     private var displayNumber: Int {
         switch countdownStyle {
         case .countDown:
@@ -38,7 +33,6 @@ struct CountdownOverlayView: View {
         }
     }
 
-    /// Remaining seconds until completion (used for haptic timing).
     private var remainingSeconds: Int {
         max(0, totalSeconds - elapsedSeconds)
     }

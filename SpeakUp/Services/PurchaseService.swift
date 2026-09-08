@@ -3,12 +3,7 @@ import Observation
 import StoreKit
 
 /// StoreKit 2 front-door for the single non-consumable Lifetime purchase.
-///
-/// Responsibilities, in the order the App Store exercises them: load the
 /// product, purchase it, verify the signed transaction, keep `EntitlementStore`
-/// in step with `Transaction.currentEntitlements`, listen for out-of-band
-/// updates (Ask to Buy approvals, purchases made on another device, refunds and
-/// revocations), and restore on a fresh install.
 @MainActor
 @Observable
 final class PurchaseService {
@@ -27,8 +22,6 @@ final class PurchaseService {
         case idle
         case purchasing
         case restoring
-        /// Ask to Buy or SCA — the transaction may land minutes later via
-        /// `Transaction.updates`.
         case pendingApproval
         case purchased
         case restored
@@ -56,8 +49,6 @@ final class PurchaseService {
         product?.displayPrice
     }
 
-    /// Whether a purchase can be attempted. False until the product loads, so
-    /// the button cannot ask for money the App Store has not priced.
     var canPurchase: Bool {
         product != nil
     }
@@ -122,9 +113,6 @@ final class PurchaseService {
         }
     }
 
-    /// Re-reads the App Store's answer for what this Apple Account owns. Cheap,
-    /// offline-tolerant (StoreKit serves a cached receipt), and safe to call on
-    /// every foreground.
     func refreshEntitlement() async {
         var owned = false
         var purchasedAt: Date?
@@ -166,8 +154,6 @@ final class PurchaseService {
                 return false
 
             case .pending:
-                // Ask to Buy / Strong Customer Authentication. The transaction
-                // arrives later on `Transaction.updates`.
                 phase = .pendingApproval
                 return false
 
@@ -181,17 +167,12 @@ final class PurchaseService {
         }
     }
 
-    /// Restore for a reinstall or a second device. `AppStore.sync()` forces a
-    /// receipt refresh (and may prompt for the Apple Account password), then the
-    /// entitlement re-read decides the answer.
     @discardableResult
     func restore() async -> Bool {
         phase = .restoring
         do {
             try await AppStore.sync()
         } catch {
-            // A cancelled password prompt is not an error worth shouting about,
-            // but the entitlement re-read below still runs.
             await refreshEntitlement()
             if EntitlementStore.shared.isLifetime {
                 phase = .restored
@@ -228,7 +209,6 @@ final class PurchaseService {
                 if finishing { await transaction.finish() }
                 return false
             }
-            // Refund or family-sharing revocation.
             if transaction.revocationDate != nil {
                 if finishing { await transaction.finish() }
                 await refreshEntitlement()

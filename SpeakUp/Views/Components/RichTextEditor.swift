@@ -1,9 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Reference handle that a parent SwiftUI view holds to send format commands
-/// into an active `RichTextEditor` without going through UIKit's keyboard
-/// accessory view.
 @MainActor
 final class RichTextController {
     fileprivate weak var coordinator: RichTextEditor.Coordinator?
@@ -20,10 +17,6 @@ final class RichTextController {
     func dismissKeyboard() { coordinator?.dismissKeyboard() }
 }
 
-/// Rich-text editor backed by NSAttributedString. Formatting commands are
-/// driven externally via a `RichTextController` so the hosting SwiftUI view
-/// can render a single unified bottom bar instead of stacking with a UIKit
-/// keyboard accessory.
 struct RichTextEditor: UIViewRepresentable {
     @Binding var attributedText: NSAttributedString
     @Binding var plainText: String
@@ -31,10 +24,6 @@ struct RichTextEditor: UIViewRepresentable {
     var isDisabled: Bool = false
     var placeholder: String = ""
     var minHeight: CGFloat = 200
-    /// One-shot focus request. When set to `true`, the editor grabs first
-    /// responder once and immediately resets the binding to `false` so that
-    /// subsequent re-renders (e.g. when the user taps a different field) do
-    /// not steal focus back.
     @Binding var requestFocus: Bool
 
     func makeUIView(context: Context) -> UITextView {
@@ -60,7 +49,6 @@ struct RichTextEditor: UIViewRepresentable {
         textView.setContentHuggingPriority(.defaultLow, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        // Placeholder label
         let placeholderLabel = UILabel()
         placeholderLabel.text = placeholder
         placeholderLabel.font = UIFont.preferredFont(forTextStyle: .body)
@@ -124,10 +112,6 @@ struct RichTextEditor: UIViewRepresentable {
 
     // MARK: - Markdown → Attributed String
 
-    /// Parses a lightweight Markdown subset (headings, bold, italic, bullet and numbered
-    /// lists, blank-line paragraphs) into an `NSAttributedString` styled to match the
-    /// editor's default appearance. Used by the dictation formatting flow so the LLM can
-    /// return Markdown and the editor can render it with real rich-text attributes.
     static func attributedString(fromMarkdown markdown: String) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let bodyFont = UIFont.preferredFont(forTextStyle: .body)
@@ -287,7 +271,6 @@ struct RichTextEditor: UIViewRepresentable {
             let lineRange = text.lineRange(for: NSRange(location: caret, length: 0))
             let line = text.substring(with: lineRange)
 
-            // Toggle: if already has ☐/☑, flip it; else insert ☐.
             if line.hasPrefix("☐ ") {
                 replaceLinePrefix(from: "☐ ", to: "☑ ", in: lineRange)
             } else if line.hasPrefix("☑ ") {

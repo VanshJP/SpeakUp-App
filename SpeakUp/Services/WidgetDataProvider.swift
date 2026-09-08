@@ -49,9 +49,6 @@ enum WidgetDataProvider {
         defaults?.set(date.timeIntervalSince1970, forKey: "lastPracticeDate")
     }
 
-    /// Removes the stored timestamp so widget readers fall back to their
-    /// "no practice yet" default when Today's data has none (e.g. every
-    /// recording was deleted).
     static func clearLastPracticeDate() {
         defaults?.removeObject(forKey: "lastPracticeDate")
     }
@@ -67,9 +64,6 @@ enum WidgetDataProvider {
     /// timeline reloads (loadData runs on every Today appearance). First run
     /// has no stored fingerprint, so it always reports a change.
     static func todayPayloadChanged(_ components: [String]) -> Bool {
-        // Length-prefix each component before joining so payload text that
-        // contains the separator byte (U+001F can arrive via CSV prompt
-        // import) cannot splice two components into one and mask a change.
         let joined = components.map { "\($0.count):\($0)" }.joined(separator: "\u{1F}")
         let digest = SHA256.hash(data: Data(joined.utf8))
         let fingerprint = digest.map { String(format: "%02x", $0) }.joined()

@@ -5,19 +5,6 @@ extension View {
     /// Drag-to-scrub over a date-indexed chart: maps the touch x-position back
     /// to a date, selects the nearest data point, and clears on release.
     ///
-    /// This block was copy-pasted four times in `ProgressChartsView` (score,
-    /// fillers, pace, activity), differing only in the collection and its date
-    /// keypath. Three copies guarded the haptic behind an index change; the
-    /// score chart's did not, so scrubbing it fired a selection haptic on every
-    /// gesture callback rather than once per data point. Collapsing them fixes
-    /// that by construction.
-    ///
-    /// - Parameters:
-    ///   - items: the same collection the chart plots, in plotted order.
-    ///   - selection: index of the scrubbed item; nil when not scrubbing.
-    ///   - date: each item's x-axis date. A closure rather than a `KeyPath`
-    ///     because every chart here plots an array of labeled tuples, and
-    ///     Swift has no key paths into tuple elements.
     func chartDateScrub<Item>(
         over items: [Item],
         selection: Binding<Int?>,

@@ -15,18 +15,12 @@ nonisolated struct CoachingTip: Identifiable, Sendable {
     }
 
     let kind: Kind
-    /// The dimension this tip trains. `nil` for wins and signal notes.
     let dimension: CoachDimension?
     let icon: String
     let title: String
-    /// The observation: what happened, with the number and the moment.
     let message: String
-    /// The technique: what to do about it, specifically enough to go do it.
     let teachingPoint: String
-    /// Where this tip sends the speaker to train it.
     let suggestedPractice: CoachPracticeRoute?
-    /// The moment in the recording this tip is about, when it has one.
-    /// A tip that can be *heard* is worth several that can only be read.
     let evidenceTime: TimeInterval?
 
     var id: String {
@@ -56,24 +50,12 @@ nonisolated struct CoachingTip: Identifiable, Sendable {
 
 // MARK: - Context
 
-/// Everything the tip service needs beyond the session itself.
-///
-/// Defaults reproduce the old context-free behaviour, so callers that only have
-/// an analysis in hand (onboarding's first take, the LLM fallback) still work.
 nonisolated struct CoachingContext: Sendable {
     var targetWPM: Int = 150
     var weights: ScoreWeights = .defaults
-    /// Cross-session plan. When present its focus is pinned to the top, so the
-    /// user is pointed at the same thing until they actually fix it.
     var plan: CoachPlan?
     var evidence: CoachEvidence = CoachEvidence()
-    /// This take's worst crutch habits, preformatted for the LLM prompt,
-    /// e.g. "\"like\" x7". Grounds the model in the lexicon engine's findings
-    /// so it can name the habit instead of the category.
     var crutchLines: [String] = []
-    /// Prompt category of the session ("Interview Prep", "Storytelling"), or
-    /// "Story" for story-linked takes. Lets the prompt angle the advice at
-    /// what the speaker was actually practicing.
     var sessionKind: String?
 
     init(
@@ -98,19 +80,10 @@ nonisolated struct CoachingContext: Sendable {
 nonisolated enum CoachingTipService {
     static let maximumTips = 3
 
-    /// Evaluates a session and returns the tips worth the user's attention,
-    /// most consequential first.
-    ///
-    /// Ordering is by weighted deficit, not by the order the checks happen to
-    /// run in. The old version returned the first three branches that fired,
-    /// which meant a noisy room could spend two of the three slots on
-    /// microphone advice while a 41 in filler usage went unmentioned.
     static func generateTips(
         from analysis: SpeechAnalysis,
         context: CoachingContext = CoachingContext()
     ) -> [CoachingTip] {
-        // The zero-word gate fired: there is nothing to coach, and pretending
-        // otherwise ("your pace was 0 WPM") reads as broken.
         guard analysis.speechScore.overall > 0, analysis.totalWords > 0 else {
             return [
                 CoachingTip(
@@ -137,16 +110,10 @@ nonisolated enum CoachingTipService {
             return (lhs.dimension?.rawValue ?? "") < (rhs.dimension?.rawValue ?? "")
         }
 
-        // Quotable structural-repetition beats a mid-band clarity/pace dip —
-        // the listener heard the triad; that is the coachable moment even when
-        // the structure subscore itself looks fine.
         if let index = candidates.firstIndex(where: { $0.title == "Vary the Opening" }) {
             candidates.insert(candidates.remove(at: index), at: 0)
         }
 
-        // The plan's focus leads regardless of what this single session did.
-        // Chasing whichever dimension dipped today is how users end up with
-        // nine half-trained habits instead of one fixed one.
         if let focus = context.plan?.focus,
            let index = candidates.firstIndex(where: { $0.dimension == focus }) {
             let promoted = candidates.remove(at: index)
@@ -167,15 +134,10 @@ nonisolated enum CoachingTipService {
 
         var tips = Array(candidates.prefix(maximumTips))
 
-        // Name one thing that worked. A screen that only lists faults trains
-        // people to stop opening it, and the strength is real information —
-        // it tells the speaker what to keep doing.
         if tips.count < maximumTips,
            let win = winTip(
                analysis: analysis,
                context: context,
-               // The focus card already carries the trend line; repeating it
-               // here would be the same sentence three times on one screen.
                allowTrendWin: !tips.contains { $0.kind == .focus }
            ) {
             tips.append(win)
@@ -236,9 +198,6 @@ nonisolated enum CoachingTipService {
         if let tip = vocabularyTip(analysis: analysis, context: context) { tips.append(tip) }
         if let tip = relevanceTip(analysis: analysis, context: context) { tips.append(tip) }
 
-        // A dimension the plan is focused on always gets a tip, even on a
-        // session where it happened to land above the threshold — otherwise the
-        // focus silently disappears on a good day and the user loses the thread.
         if let focus = context.plan?.focus,
            !tips.contains(where: { $0.dimension == focus }),
            let score = focus.subscore(in: subscores) {
@@ -267,8 +226,6 @@ nonisolated enum CoachingTipService {
         let subscore = analysis.speechScore.subscores.fillerUsage
         guard subscore < CoachPlanService.masteryTarget else { return nil }
 
-        // Classic hesitation only — repeated frames get structureTip language
-        // and the structure practice route, not "cut your ums."
         let classic = analysis.fillerWords.filter { $0.kind == .filler }
         let percentage = classic.isEmpty
             ? 0
@@ -280,9 +237,6 @@ nonisolated enum CoachingTipService {
         let count = top?.count ?? 0
         guard count > 0 || percentage > 0 else { return nil }
 
-        // The cluster is the coachable unit. Seven fillers spread over two
-        // minutes is background texture; four in twelve seconds is the moment
-        // the listener noticed.
         var message: String
         if let burst = context.evidence.fillerBurst, burst.count >= 3 {
             message = "\(burst.count) \"\(burst.word)\"s landed between \(CoachEvidence.stamp(burst.start)) and \(CoachEvidence.stamp(burst.end)), that stretch is where it was audible, not the \(count) across the whole take."
@@ -296,9 +250,6 @@ nonisolated enum CoachingTipService {
             message += " Your very first word was one of them."
         }
 
-        // Hoisted out of the interpolation below: mixed numeric conversion and
-        // a literal multiply inside a string is exactly the shape that stalls
-        // the type checker, and it reports the failure somewhere else entirely.
         let wordBudget: Int = max(1, Int(Double(analysis.totalWords) * 0.03))
         let technique = CoachDimension.fillers.technique
 
@@ -348,8 +299,6 @@ nonisolated enum CoachingTipService {
             message = "\(wpm) WPM sits on your \(target) target, so the \(subscore)/100 is coming from how much the speed moved inside the take rather than from the average."
         }
 
-        // A swing inside one session is invisible in an average and is usually
-        // the real problem when the average looks fine.
         if let fastest = context.evidence.fastestStretch,
            let slowest = context.evidence.slowestStretch,
            fastest.wpm - slowest.wpm >= 40 {
@@ -417,8 +366,6 @@ nonisolated enum CoachingTipService {
         var message = "\(subscore)/100. Words are arriving softer than you think they are, that is almost always word endings rather than volume."
         var title = "Sharpen Your Articulation"
 
-        // Hedging is a clarity problem the speaker can hear themselves, unlike
-        // articulation — so when it is present, lead with it.
         if context.evidence.hedgeCount >= 3 {
             title = "Drop the Hedging"
             message = "\(context.evidence.hedgeCount) hedges, \"maybe\", \"kind of\", \"I think\", in one take. Each one asks the listener to discount what follows it."
@@ -449,9 +396,6 @@ nonisolated enum CoachingTipService {
     // MARK: - Structure
 
     private static func structureTip(analysis: SpeechAnalysis, context: CoachingContext) -> CoachingTip? {
-        // Repeated openings are a structure problem with a scrubbable moment —
-        // lead with them before generic shape advice, and route to Impromptu
-        // Sprint (list/shape practice), not Filler Elimination.
         if let structural = context.evidence.structuralRepetition,
            structural.count >= StructuralRepetitionDetector.minRunLength {
             var message = "Same opening \"\(structural.frame)\" \(structural.count) times"
@@ -473,8 +417,6 @@ nonisolated enum CoachingTipService {
 
         let subscore = analysis.speechScore.subscores.structure
         let substance = analysis.enhancedMetrics?.substanceScore
-        // Structure is optional in the pipeline, but a thin answer is a
-        // structure problem whether or not the subscore was produced.
         guard (subscore ?? 100) < CoachPlanService.masteryTarget || (substance ?? 100) < 60 else { return nil }
 
         var title = "Build the Shape"
@@ -610,8 +552,6 @@ nonisolated enum CoachingTipService {
 
     // MARK: - Wins
 
-    /// The strongest dimension worth naming. Specific praise is usable — it
-    /// tells the speaker which behaviour produced the result.
     private static func winTip(
         analysis: SpeechAnalysis,
         context: CoachingContext,

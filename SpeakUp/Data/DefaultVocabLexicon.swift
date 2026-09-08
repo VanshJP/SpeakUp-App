@@ -5,12 +5,9 @@ nonisolated struct VocabLexiconEntry: Sendable, Equatable, Codable {
     let word: String
     let gloss: String
     let prompt: String
-    /// 0 beginner, 1 intermediate, 2 advanced — matches `SpeakerLevel.rawValue`.
     let level: Int
 }
 
-/// Curated, original glosses for daily introduction. Onboarding seeds live here
-/// too so bank words get a coach line. Every entry is WordSafety-clean.
 nonisolated enum DefaultVocabLexicon {
     static func entry(for word: String) -> VocabLexiconEntry? {
         let key = word.lowercased()
@@ -30,8 +27,6 @@ nonisolated enum DefaultVocabLexicon {
 
     static let entries: [VocabLexiconEntry] = beginner + intermediate + advanced
 
-    /// Lowercased lookup set, so generated-word validation can reject anything
-    /// the curated lexicon already owns.
     static let keys: Set<String> = Set(entries.map { $0.word.lowercased() })
 
     // MARK: - Beginner

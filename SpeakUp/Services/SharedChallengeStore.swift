@@ -1,8 +1,6 @@
 import Foundation
 import Observation
 
-/// Holds an inbound friend-challenge across onboarding, a cancelled countdown,
-/// and process death so the prompt is still waiting on Today.
 @MainActor
 @Observable
 final class SharedChallengeStore {

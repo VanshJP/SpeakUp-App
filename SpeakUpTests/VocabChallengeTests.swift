@@ -242,7 +242,6 @@ struct VocabChallengeServiceTests {
         #expect(next.words[1].text == original.words[1].text)
         #expect(next.words[2].text == original.words[2].text)
         #expect(next.words[0].text.caseInsensitiveCompare(skipped) != .orderedSame)
-        // The order has to survive the round trip, since Today rebuilds from cache.
         #expect(store.cached()?.words.map(\.text) == next.words.map(\.text))
     }
 
@@ -303,7 +302,6 @@ struct VocabChallengeServiceTests {
 
     @Test func forcedLevelPinsTheIntroTier() {
         let store = makeStore()
-        // Speaker says beginner; the override pins advanced anyway.
         let result = VocabChallengeService.todaysChallenge(
             preferences: prefs(
                 count: 3,
@@ -348,7 +346,6 @@ struct VocabChallengeServiceTests {
         let after = store.cached()?.fingerprint
 
         #expect(before != after)
-        // The re-pick honors the new tier immediately, same calendar day.
         let picked = store.cached()?.words.first
         if let picked {
             #expect(DefaultVocabLexicon.entry(for: picked.text)?.level == 2)
@@ -752,7 +749,6 @@ struct GeneratedVocabStoreTests {
 
     @Test func capacityTrimsOldest() {
         let (store, _) = makeStore()
-        // Overflow the ring, then confirm a late arrival survives intact.
         for i in 0..<210 {
             store.append(entry("Quiescent\(i)"))
         }

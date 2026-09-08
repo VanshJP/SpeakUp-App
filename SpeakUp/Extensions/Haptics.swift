@@ -9,19 +9,16 @@ enum Haptics {
     private static let notificationGenerator = UINotificationFeedbackGenerator()
     private static let selectionGenerator = UISelectionFeedbackGenerator()
 
-    /// Light tap — filter chips, toggles, small UI interactions
     static func light() {
         lightGenerator.prepare()
         lightGenerator.impactOccurred()
     }
 
-    /// Medium tap — buttons, card taps, play/pause
     static func medium() {
         mediumGenerator.prepare()
         mediumGenerator.impactOccurred()
     }
 
-    /// Heavy tap — countdown final seconds, recording stop, delete confirm
     static func heavy() {
         heavyGenerator.prepare()
         heavyGenerator.impactOccurred()
@@ -29,7 +26,6 @@ enum Haptics {
 
     // MARK: - Notification
 
-    /// Success — recording saved, achievement unlocked, goal created
     static func success() {
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.success)
@@ -41,7 +37,6 @@ enum Haptics {
         notificationGenerator.notificationOccurred(.warning)
     }
 
-    /// Error — delete, cancel, destructive action
     static func error() {
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.error)
@@ -49,7 +44,6 @@ enum Haptics {
 
     // MARK: - Selection
 
-    /// Selection change — picker value changes, scrubbing
     static func selection() {
         selectionGenerator.prepare()
         selectionGenerator.selectionChanged()

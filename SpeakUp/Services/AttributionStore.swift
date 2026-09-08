@@ -1,13 +1,6 @@
 import Foundation
 import Observation
 
-/// Remembers where an install came from, without identifying anyone.
-///
-/// A campaign link carries `source`, `campaign`, and `page` as query
-/// parameters; the first launch stores them and every later monetization event
-/// reports the same coarse strings. No device identifier, no IDFA, no
-/// AdServices token, no network call — the plan's measurement requirements are
-/// met by attributing the *install*, not the person.
 @MainActor
 @Observable
 final class AttributionStore {
@@ -20,8 +13,6 @@ final class AttributionStore {
         static let firstOpen = "attribution.firstOpenDate.v1"
     }
 
-    /// Accepted on any deep link, not only a dedicated one, so a partner can
-    /// point straight at the action they are promoting.
     private static let sourceKeys = ["source", "utm_source", "src"]
     private static let campaignKeys = ["campaign", "utm_campaign", "c"]
     private static let pageKeys = ["page", "ppid", "cpp"]
@@ -47,13 +38,10 @@ final class AttributionStore {
         }
     }
 
-    /// Minutes since the very first launch. Feeds the time-to-value metric.
     var minutesSinceFirstOpen: Double {
         Date().timeIntervalSince(firstOpenDate) / 60
     }
 
-    /// First attribution wins. A user who arrives from a partner link and later
-    /// taps a widget is still a partner install.
     func capture(from url: URL) {
         guard source == nil else { return }
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -79,9 +67,6 @@ final class AttributionStore {
         defaults.set(page, forKey: Key.page)
     }
 
-    /// Logs `first_open` exactly once per install. Called after a short grace
-    /// period so a launch that came in through a campaign link has already had
-    /// its parameters captured by `capture(from:)`.
     func logFirstOpenIfNeeded() {
         AnalyticsService.shared.logOnce(
             .firstOpen(source: source, campaign: campaign, page: page),

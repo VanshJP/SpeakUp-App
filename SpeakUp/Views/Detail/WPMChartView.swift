@@ -11,7 +11,6 @@ struct WPMChartView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Summary row
             HStack(spacing: 16) {
                 statPill(label: "Avg", value: "\(Int(averageWPM))", color: wpmColor(averageWPM))
                 statPill(label: "Target", value: "\(targetWPM)", color: AppColors.primary)
@@ -19,7 +18,6 @@ struct WPMChartView: View {
             }
 
             Chart {
-                // Optimal range band
                 RectangleMark(
                     xStart: .value("Start", 0),
                     xEnd: .value("End", maxTimestamp),
@@ -28,12 +26,10 @@ struct WPMChartView: View {
                 )
                 .foregroundStyle(AppColors.success.opacity(0.1))
 
-                // Target line
                 RuleMark(y: .value("Target", Double(targetWPM)))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 3]))
                     .foregroundStyle(AppColors.primary.opacity(0.5))
 
-                // WPM line
                 ForEach(dataPoints) { point in
                     LineMark(
                         x: .value("Time", point.timestamp),

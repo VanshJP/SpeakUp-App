@@ -1,34 +1,17 @@
 import Foundation
 
-/// Detects structural repetition (anaphora-as-tic): the same clause-opening
-/// frame repeated across consecutive or near-consecutive clauses.
-///
-/// Distinct from classic fillers (`um`, `like`). Each clause can be clean yet
-/// the repeated frame still weakens delivery — e.g. "I'm going to get socks,
-/// I'm going to get tomatoes, I'm going to get eggs."
-///
-/// Emits `[FillerWord]` with `kind == .structural` so the existing filler UI
-/// path works. Callers must pass primary-speaker words only when diarization
-/// ran.
 nonisolated enum StructuralRepetitionDetector {
 
     // MARK: - Constants
 
-    /// Shortest opening n-gram considered a shared frame.
     static let minOpeningNGram = 3
 
-    /// Longest opening n-gram tried (prefer longer matches when they agree).
     static let maxOpeningNGram = 5
 
-    /// Minimum repeated clauses before flagging. Two is often intentional
-    /// parallelism; three starts looking like a tic.
     static let minRunLength = 3
 
-    /// Non-matching clauses allowed between matching ones ("near-consecutive").
     static let maxInterveningClauses = 1
 
-    /// Gap that starts a new clause when Whisper omitted commas/periods.
-    /// Aligned with pause detection in `SpeechAnalysisPipeline.analyze`.
     static let clausePauseThreshold: TimeInterval = 0.4
 
     /// Openings that signal intentional list/rhetoric structure (curriculum
@@ -42,8 +25,6 @@ nonisolated enum StructuralRepetitionDetector {
 
     // MARK: - Public API
 
-    /// Detect structural-repetition runs in already speaker-filtered words.
-    /// Returns one `FillerWord` per distinct opening frame (aggregated).
     static func detect(in words: [TranscriptionWord]) -> [FillerWord] {
         guard words.count >= minOpeningNGram * minRunLength else { return [] }
 
@@ -76,9 +57,6 @@ nonisolated enum StructuralRepetitionDetector {
         }
     }
 
-    /// Word IDs that make up flagged opening frames — for plum transcript
-    /// highlights. One span per occurrence timestamp (surface length of the
-    /// frame label), matched by start time like coach evidence.
     static func highlightedWordIDs(
         in words: [TranscriptionWord],
         hits: [FillerWord]
@@ -113,7 +91,6 @@ nonisolated enum StructuralRepetitionDetector {
         var startTime: TimeInterval { words.first?.start ?? 0 }
     }
 
-    /// Split on punctuation, coordinating conjunctions, and pause gaps.
     private static func splitIntoClauses(_ words: [TranscriptionWord]) -> [Clause] {
         var clauses: [Clause] = []
         var current: [TranscriptionWord] = []
@@ -141,7 +118,6 @@ nonisolated enum StructuralRepetitionDetector {
                 flush()
             }
 
-            // Coordinating conjunction starts a new clause (not part of it).
             if isCoordinator(stripped), !current.isEmpty {
                 flush()
                 continue

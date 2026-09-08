@@ -113,7 +113,6 @@ struct PrivacyDataView: View {
         let answer: String
     }
 
-    /// ponytail: a nil link drops out rather than rendering a dead row.
     private static var legalRows: [(title: String, icon: String, url: URL)] {
         [
             SupportLinks.privacyPolicy.map { (title: "Privacy Policy", icon: "hand.raised", url: $0) },

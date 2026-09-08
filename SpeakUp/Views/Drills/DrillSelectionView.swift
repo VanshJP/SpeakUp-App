@@ -8,12 +8,9 @@ struct DrillSelectionView: View {
     @State private var showingSession = false
     @State private var selectedDrillMode: DrillMode?
 
-    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
     var presentation: ToolPresentation = .sheet
 
     var sourceStory: Story?
-    /// Arms a specific drill on open — used when a session's weakest subscore
-    /// routes the user straight to the drill that targets it.
     var initialMode: DrillMode?
 
     /// Denominator for each row's arc, so 15s and 60s drills read as

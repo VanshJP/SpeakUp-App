@@ -2,10 +2,6 @@ import SwiftUI
 
 // MARK: - MetricExplainerSheet
 
-/// Modal describing a single subscore axis from the `SubscoreRadarChart`.
-/// Presents the score value, a band label, what the metric measures, and
-/// how it is calculated. Text is sourced verbatim from `ScoreWeightsView` so
-/// the explainer matches the in-Settings breakdown word-for-word.
 struct MetricExplainerSheet: View {
     let axis: SubscoreRadarChart.Axis
 
@@ -14,10 +10,6 @@ struct MetricExplainerSheet: View {
             ?? ("No description available for this metric.", "")
     }
 
-    /// One source for the verdict word. This used to be a local switch saying
-    /// "Great" at 80+, while `AppColors.scoreVerdict` — used by the hero card
-    /// and everywhere else — says "Strong" for the same number. The same score
-    /// got two different names depending on which surface you were looking at.
     private var bandLabel: String {
         AppColors.scoreVerdict(for: axis.value)
     }
@@ -110,9 +102,6 @@ struct MetricExplainerSheet: View {
 // MARK: - Metric Descriptions
 
 extension SubscoreRadarChart {
-    /// Canonical descriptions keyed by `Axis.id` values produced in
-    /// `Axis.from(subscores:isPromptRelevance:)`. Text is mirrored from
-    /// `ScoreWeightsView.SubscoreDescription` to keep a single source of truth.
     static func description(for id: String) -> (measures: String, howCalculated: String)? {
         switch id {
         case "clarity":

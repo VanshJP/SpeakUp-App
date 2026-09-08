@@ -11,7 +11,6 @@ nonisolated struct WeeklyProgressData: Sendable {
     let fillersPerMinThisWeek: Double?
     let fillersPerMinLastWeek: Double?
 
-    /// Enough signal on both sides for a meaningful comparison.
     var hasRecap: Bool {
         sessionsThisWeek >= 2 && sessionsLastWeek >= 1
             && avgScoreThisWeek != nil && avgScoreLastWeek != nil

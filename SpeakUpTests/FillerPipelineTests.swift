@@ -5,7 +5,6 @@ import Foundation
 
 @MainActor
 struct FillerPipelineTests {
-    /// Evenly spaced words with small gaps (no pauses, no sentence boundaries).
     private func timings(_ list: [String], gap: TimeInterval = 0.1) -> [RawWordTiming] {
         var cursor: TimeInterval = 0
         return list.map { word in

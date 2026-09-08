@@ -12,13 +12,8 @@ class LiveTranscriptionService {
     var isActive = false
     var fillerConfig: FillerWordConfig = .default
 
-    /// Monotonic per-word filler counts for the running session. Feeds the
-    /// repeated-filler coaching cue ("that's 5× 'like'") without re-deriving
-    /// counts in the view layer. Reset with the other live counters on start.
     var liveFillerWordCounts: [String: Int] = [:]
 
-    /// Timestamp (relative to recognition start) when the last spoken word ended.
-    /// Used to detect sentence boundaries for graceful recording stop.
     var lastSegmentEndTime: TimeInterval = 0
 
     private var audioEngine: AVAudioEngine?
@@ -29,11 +24,7 @@ class LiveTranscriptionService {
     private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
     private var lastProcessedSegmentCount = 0
-    /// Cumulative offset so `lastSegmentEndTime` stays monotonic across
-    /// recognition restarts (SFSpeech resets timestamps per request).
     private var segmentTimeOffset: TimeInterval = 0
-    /// Bumped on every restart/stop so cancelled-task error callbacks cannot
-    /// re-enter `restartRecognitionPreservingEngine` in a tight loop.
     private var recognitionGeneration = 0
     /// `removeTap` crashes if no tap is installed — track it explicitly.
     private var isTapInstalled = false
@@ -77,13 +68,6 @@ class LiveTranscriptionService {
         }
     }
 
-    /// Start live transcription using its own audio engine tap.
-    /// Call this AFTER the AVAudioRecorder has started so the session is active.
-    ///
-    /// Wire input + tap *before* `engine.start()`. Starting an empty graph
-    /// while AVAudioRecorder already owns the mic (common on "Start Now"
-    /// during countdown) makes `AVAudioEngineGraph::Initialize` raise an
-    /// NSException that Swift `do/catch` cannot catch — abort.
     @MainActor
     func start() {
         guard let recognizer, recognizer.isAvailable else { return }
@@ -107,8 +91,6 @@ class LiveTranscriptionService {
         segmentTimeOffset = 0
         isActive = true
 
-        // Touch inputNode so the graph negotiates a hardware format before
-        // we start. A 0 Hz format → Initialize exception / silent m4a.
         let session = AVAudioSession.sharedInstance()
         try? session.setPreferredSampleRate(session.sampleRate > 0 ? session.sampleRate : 44_100)
         let inputNode = engine.inputNode
@@ -154,8 +136,6 @@ class LiveTranscriptionService {
         isActive = false
         recognitionGeneration += 1
 
-        // Stop first: mutating the tap on a running engine reconfigures the
-        // live AURemoteIO underneath its IO thread.
         audioEngine?.stop()
         removeTapIfNeeded()
         audioEngine = nil
@@ -175,16 +155,12 @@ class LiveTranscriptionService {
         isTapInstalled = false
     }
 
-    /// Installs a tap + recognition task on an already-running engine.
-    /// Returns false when the input format is unusable.
     @MainActor
     @discardableResult
     private func attachRecognition(on engine: AVAudioEngine) -> Bool {
         guard let recognizer, recognizer.isAvailable else { return false }
 
         let inputNode = engine.inputNode
-        // Prefer inputFormat — outputFormat can report 0 Hz before the graph
-        // is fully wired even after engine.start().
         var format = inputNode.inputFormat(forBus: 0)
         if format.sampleRate <= 0 {
             format = inputNode.outputFormat(forBus: 0)
@@ -207,13 +183,6 @@ class LiveTranscriptionService {
         recognitionGeneration += 1
         let generation = recognitionGeneration
 
-        // The tap outlives individual recognition requests. Installing one on a
-        // running engine makes AVAudioEngine reset the input node's format,
-        // which reconfigures AURemoteIO's converter while its IO thread is
-        // inside the input callback — that raced into a null callback pointer
-        // and segfaulted about a minute into every session, at the first
-        // recognition restart. Install once, before `engine.start()`, and swap
-        // the request underneath it.
         if !isTapInstalled {
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [requestBox] buffer, _ in
                 requestBox.withLock { $0?.append(buffer) }
@@ -229,15 +198,9 @@ class LiveTranscriptionService {
             let isFinal = result?.isFinal ?? false
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Ignore callbacks from cancelled generations (restart/stop).
                 guard self.isActive, self.recognitionGeneration == generation else { return }
                 if let result { self.processPartialResult(result) }
 
-                // SFSpeech auto-finalizes after a pause. Previously we tore
-                // down AVAudioEngine here, which yanked the shared input graph
-                // out from under AVAudioRecorder mid-take and left the rest of
-                // the m4a silent — Whisper then scored the session as Silent.
-                // Keep the engine running and open a fresh recognition request.
                 if hadError || isFinal {
                     self.restartRecognitionPreservingEngine()
                 }
@@ -246,8 +209,6 @@ class LiveTranscriptionService {
         return true
     }
 
-    /// Re-arms speech recognition without stopping AVAudioEngine, so the
-    /// concurrent AVAudioRecorder keeps a stable mic route.
     @MainActor
     private func restartRecognitionPreservingEngine() {
         guard isActive, let engine = audioEngine else {
@@ -255,12 +216,8 @@ class LiveTranscriptionService {
             return
         }
 
-        // Carry forward the furthest end time so sentence-boundary detection
-        // still works across request boundaries.
         segmentTimeOffset = max(segmentTimeOffset, lastSegmentEndTime)
 
-        // Invalidate in-flight callbacks before cancelling so the cancel error
-        // cannot recurse into another restart.
         recognitionGeneration += 1
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -270,8 +227,6 @@ class LiveTranscriptionService {
         }
 
         guard attachRecognition(on: engine) else {
-            // Leave the audio graph alone for AVAudioRecorder — only drop
-            // live-transcription state so metering / capture keep working.
             isActive = false
             recognitionTask = nil
             requestBox.withLock { $0 = nil }
@@ -310,18 +265,10 @@ class LiveTranscriptionService {
 
         let endTime = segments.last.map { $0.timestamp + $0.duration } ?? 0
 
-        // Monotonic during a single recognition session: partial revisions
-        // routinely reinterpret a word that was tagged as a filler into a
-        // non-filler (or vice versa) once more context arrives. Letting the
-        // display regress mid-utterance produces a flicker. Post-recording
-        // analysis computes the authoritative count.
         liveFillerCount = max(liveFillerCount, fillerCount)
         liveWordCount = max(liveWordCount, wordCount)
         lastSegmentEndTime = max(lastSegmentEndTime, segmentTimeOffset + endTime)
 
-        // Tag only the segments this revision added. Re-running the tagger
-        // over the whole transcript on every ~1 Hz partial made long sessions
-        // quadratic on the main actor; seen segments are final for live display.
         updateFillerWordCounts(
             words: Array(words[processedCount...]),
             timestamps: Array(timestamps[processedCount...]),
@@ -332,9 +279,6 @@ class LiveTranscriptionService {
     /// Per-word tallies from the same pause-aware pipeline that drives the
     /// headline count, so the repeated-filler cue names exactly what was said.
     /// Receives only the segments added since the last partial and accumulates
-    /// additively — each segment index is counted exactly once per recognition
-    /// request, and `lastProcessedSegmentCount` resets to 0 on every restart so
-    /// the next request's segments continue the tallies instead of colliding.
     @MainActor
     private func updateFillerWordCounts(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) {
         guard words.count == timestamps.count, words.count == durations.count else { return }

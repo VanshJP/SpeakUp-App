@@ -26,7 +26,6 @@ struct WhisperTimingTests {
         ]
         let output = WhisperService.normalizeTimings(input)
 
-        // The bad word is capped, and everything after it keeps its own place.
         #expect(output[1].end <= 1.0)
         #expect(output[2].start == 1.0)
         #expect(output[3].start == 1.5)

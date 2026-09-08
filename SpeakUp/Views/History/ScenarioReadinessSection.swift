@@ -2,11 +2,6 @@ import SwiftUI
 
 // MARK: - Scenario Readiness Section
 
-/// The middle band of the Progress page, answering "which situation needs
-/// work". One ranked card replaces the former always-open family of featured
-/// card + tile grid + separate invitation stack: practiced scenarios lead
-/// weakest-first with their verdicts inline, unpracticed ones follow as quiet
-/// rows in the same list. Same information, one object to parse.
 struct ScenarioReadinessSection: View {
     let cards: [ScenarioReadiness]
     /// Composite over all analyzed sessions — reported in the card footer,
@@ -81,8 +76,6 @@ struct ScenarioReadinessSection: View {
         }
     }
 
-    /// Unpracticed core scenarios close the same list — context, not a
-    /// separate to-do block shouting from the page.
     @ViewBuilder
     private var invitationRows: some View {
         let practiced = Set(cards.map(\.scenario))
@@ -99,8 +92,6 @@ struct ScenarioReadinessSection: View {
 
 // MARK: - Scenario Tint
 
-/// Identity tone per scenario — shared by practiced and invitation rows so
-/// the list reads as one system.
 private enum ScenarioTint {
     static func color(for scenario: PracticeScenario) -> Color {
         switch scenario {
@@ -118,10 +109,6 @@ private enum ScenarioTint {
 /// How a direction of travel looks, in one place. The Progress page renders
 /// this verdict twice — the hero's filled pill and this section's inline glyph
 /// — and each used to carry its own switch. They had already drifted: slipping
-/// was red in the hero and amber here, and steady disagreed on its opacity, on
-/// the same screen. Presentation lives in the view layer because the engine
-/// that emits `ScenarioMomentum` is `nonisolated` and Foundation-only; this
-/// mirrors `CrutchCategory.badgeColor` in `CrutchSwapsCard`.
 extension ScenarioMomentum {
     var symbolName: String {
         switch self {
@@ -139,8 +126,6 @@ extension ScenarioMomentum {
         }
     }
 
-    /// Amber, not red, for slipping: a dipping practice score wants attention,
-    /// and `AppColors.error` reads as "something is broken".
     var tint: Color {
         switch self {
         case .improving: return AppColors.success
@@ -150,9 +135,6 @@ extension ScenarioMomentum {
     }
 }
 
-/// Direction of travel as a single glyph + word — the compact counterpart of
-/// the hero's momentum pill. One verdict encoding per element; the number
-/// carries level, this carries direction.
 private struct MomentumGlyph: View {
     let momentum: ScenarioMomentum
 
@@ -228,8 +210,6 @@ private struct ScenarioRow: View {
         .accessibilityLabel(accessibilitySummary)
     }
 
-    /// Band, evidence, and the honesty flag on one quiet line — the verdict
-    /// used to sit in a second right-hand column, competing with the score.
     private var metaLine: String {
         var parts = [readiness.bandLabel, sessionCountText]
         if readiness.isEarlyRead {
@@ -238,8 +218,6 @@ private struct ScenarioRow: View {
         return parts.joined(separator: " · ")
     }
 
-    /// The one actionable fact in the row, so it gets a full line instead of
-    /// being truncated mid-word inside a shared caption.
     @ViewBuilder
     private var holdingBackLine: some View {
         if let word = readiness.holdingBackWord, let count = readiness.holdingBackCount {

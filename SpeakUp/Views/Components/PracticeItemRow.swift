@@ -1,18 +1,5 @@
 import SwiftUI
 
-/// A practice exercise in a browsable list.
-///
-/// Replaces two byte-identical implementations (`WarmUpListView` and
-/// `ConfidenceToolsView` had independently written the same icon-in-a-circle
-/// row, differing only in trailing glyph and duration unit).
-///
-/// The leading visual is the point of it. Every list in this app used to lead
-/// with an SF Symbol in a tinted circle, which meant a 30-second tongue twister
-/// and a 10-minute visualization presented identically — the row told you
-/// nothing until you read it. Here the icon sits inside an arc showing this
-/// item's length against the longest in the list, so a column of these scans as
-/// a duration histogram. Same information the caption always carried, moved
-/// somewhere the eye reads before the text.
 struct PracticeItemRow: View {
     enum Accessory {
         case chevron
@@ -23,14 +10,8 @@ struct PracticeItemRow: View {
     let subtitle: String
     let icon: String
     let tint: Color
-    /// This item's length as a share of the longest in the visible set, 0–1.
     let durationFraction: Double
-    /// Short enough to sit inside a 46pt dial — "45s", "3m", "≈2 min". Detail
-    /// that does not fit goes in `tag`; the dial used to be handed
-    /// "3m · 4 steps" and rendered it at 8pt, which nobody could read.
     let durationLabel: String
-    /// Optional qualifier chip: what the session shows while it runs, how many
-    /// steps it has, how hard the passage is.
     var tag: String?
     var accessory: Accessory = .play
     let action: () -> Void
@@ -103,9 +84,6 @@ struct PracticeItemRow: View {
 }
 
 extension PracticeItemRow {
-    /// Longest item in a set, used as the denominator for every row's arc.
-    /// Guards against a zero divisor and against a single-item list rendering
-    /// one lonely full circle.
     static func fraction(_ value: Double, longest: Double) -> Double {
         guard longest > 0 else { return 0 }
         return min(1, max(0.12, value / longest))

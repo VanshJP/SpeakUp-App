@@ -14,8 +14,6 @@ struct ProcessingReservationTests {
         ProcessingPolicy.reservation(for: decision, reservedAnalyses: reservedAnalyses)
     }
 
-    /// A free user past the trial with analyses left analyzes now and holds a
-    /// reservation while doing it — the charge lands later, on success only.
     @Test func aCountableFreeAnalysisReservesBeforeProcessing() {
         let decision = AllowanceDecision.cycle(remaining: 3, resetsOn: t0)
         let result = reservation(decision)
@@ -24,11 +22,6 @@ struct ProcessingReservationTests {
         #expect(result.holdsReservation)
     }
 
-    /// Two recordings started back-to-back both read the persisted counters
-    /// before either is charged — nothing serialises the reads, so each can
-    /// see the same `remaining` and one slot gets spent twice. One analysis
-    /// left with one already in flight is exactly that race: the second
-    /// recording must park.
     @Test func aRecordingBeyondTheReservedSlotsDefers() {
         let decision = AllowanceDecision.cycle(remaining: 1, resetsOn: t0)
 
@@ -65,10 +58,7 @@ struct ProcessingReservationTests {
 struct ProcessingChargePathTests {
     private let policy = FreeTierPolicy.expired
 
-    /// Success charges exactly once and frees the slot: a second recording
-    /// queued behind a spent allowance defers instead of sneaking through.
     @Test func successChargesOnceAndTheNextRecordingDefers() {
-        // One analysis left in the cycle.
         var state = AllowanceState(cycleStart: t0, cycleUsed: policy.monthlyAnalyses - 1)
         var reserved = 0
 

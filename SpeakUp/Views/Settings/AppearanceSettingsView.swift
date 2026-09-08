@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// Settings → App Look: glass density + app canvas. This page owns everything
-/// that paints behind the tabs. Recording Look (backdrop / waveform / button /
-/// timer) is its **sibling** on the hub, not a door at the bottom of this page —
-/// a cosmetic setting three pushes deep is a hidden setting.
 struct AppearanceSettingsView: View {
     @Bindable var viewModel: SettingsViewModel
 
@@ -176,9 +172,6 @@ struct AppearanceSettingsView: View {
         .accessibilityLabel("\(canvas.displayName). \(canvas.subtitle)")
     }
 
-    /// The swatch is the control. `CanvasLookView` opts out of hit testing so
-    /// it cannot steal scroll from a live background; a clear overlay on top
-    /// of the clip catches the tap for this button.
     private func canvasPreview(_ canvas: AppCanvas, selected: Bool) -> some View {
         ZStack {
             AppCanvasView(canvas: canvas, style: .primary)

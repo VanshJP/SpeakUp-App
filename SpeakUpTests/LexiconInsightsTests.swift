@@ -319,7 +319,6 @@ struct LexiconInsightsTests {
 
     @Test
     func swapsOfferSeveralAlternativesAndFallbacks() {
-        // Every mapped word carries multiple options.
         for (_, options) in LexiconInsightsEngine.alternatives {
             #expect(!options.isEmpty)
         }
@@ -327,15 +326,10 @@ struct LexiconInsightsTests {
         let verySwaps = LexiconInsightsEngine.alternativesFor("very") ?? []
         #expect(verySwaps.count >= 3)
 
-        // Unmapped words still get category-level advice instead of nothing.
         let fallback = SessionWordHit(word: "zzzunmapped", category: .vague, count: 4, timestamps: [])
         #expect(fallback.swaps == ["name the specifics"])
     }
 
-    /// The word loop tests `intensifierWords` / `vagueWords` / `powerVerbs`
-    /// before `stopwords` and `continue`s on each hit, so a word in both places
-    /// is silently dropped from the earlier list's counts. Nothing at the call
-    /// site makes that visible — this does.
     @Test
     func stopwordsStayDisjointFromTheClassifiedLists() {
         let stopwords = LexiconInsightsEngine.stopwords

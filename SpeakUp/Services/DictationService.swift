@@ -4,8 +4,6 @@ import Speech
 import AVFoundation
 import os
 
-/// Real-time speech recognition service using Apple Speech framework.
-/// Extracts individual words for the word bank via on-device recognition.
 @Observable
 @MainActor
 class DictationService {
@@ -18,7 +16,6 @@ class DictationService {
     /// path here is silent otherwise — the mic button simply never lights up.
     var errorMessage: String?
 
-    /// Current audio input level in dB (-160 silence … 0 max).
     var audioLevel: Float = -160
 
     private var audioEngine: AVAudioEngine?
@@ -36,15 +33,10 @@ class DictationService {
     /// Thread-safe storage for the latest RMS level computed in the audio tap callback.
     private let levelStorage = AudioLevelStorage()
 
-    /// Timer that reads the latest level from the tap callback and publishes to `audioLevel`.
     private var levelTimer: Timer?
 
-    /// Set while `stop()` tears the session down, so the cancellation error the
-    /// recognizer reports back is not mistaken for a real failure.
     private var isStopping = false
 
-    /// Bumped on every `start` / `stop` so a cancelled session's recognition
-    /// callback cannot `cleanup()` the replacement session.
     private var sessionGeneration = 0
 
     init() {
@@ -99,16 +91,10 @@ class DictationService {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        // Unconditional: on-device processing is a product guarantee, not a
-        // preference. Left unset, the recognizer is free to stream microphone
-        // audio to Apple's servers. If the on-device assets are not available
-        // the request fails, and failing is the correct outcome here.
         request.requiresOnDeviceRecognition = true
         requestBox.withLock { $0 = request }
 
         let inputNode = engine.inputNode
-        // Prefer inputFormat; outputFormat can report 0 Hz before the graph
-        // is wired — starting then raises an uncaught NSException.
         var recordingFormat = inputNode.inputFormat(forBus: 0)
         if recordingFormat.sampleRate <= 0 {
             recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -124,7 +110,6 @@ class DictationService {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [requestBox, storage] buffer, _ in
             requestBox.withLock { $0?.append(buffer) }
 
-            // Compute RMS from buffer for audio level visualization
             guard let channelData = buffer.floatChannelData?[0] else { return }
             let frameCount = Int(buffer.frameLength)
             guard frameCount > 0 else { return }
@@ -157,7 +142,6 @@ class DictationService {
 
         isListening = true
 
-        // Poll the level storage on the main thread for UI updates
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
@@ -244,8 +228,6 @@ class DictationService {
 
 // MARK: - Thread-Safe Audio Level Storage
 
-/// Lock-free atomic float storage for passing audio levels from the audio tap (real-time thread)
-/// to the main thread without blocking.
 private final class AudioLevelStorage: @unchecked Sendable {
     private let _value = UnsafeMutablePointer<Float>.allocate(capacity: 1)
 

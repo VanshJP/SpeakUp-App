@@ -12,8 +12,6 @@ class PronunciationService: NSObject {
         synthesizer.delegate = self
     }
 
-    /// Speak a word, sentence, or short paragraph for the user to model.
-    /// Longer text uses a slightly slower rate so each word stays clear.
     func speak(word: String) {
         let cleaned = Self.stripPunctuation(word)
         let tokenCount = cleaned.split(whereSeparator: { $0.isWhitespace }).count
@@ -21,8 +19,6 @@ class PronunciationService: NSObject {
         speak(text: cleaned, rate: tokenCount <= 3 ? 0.35 : 0.32)
     }
 
-    /// Speak a full phrase or passage (shadowing model). Keeps punctuation so
-    /// prosody has something to chew on; slower than system default.
     func speak(text: String, rate: Float = 0.42) {
         stop()
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

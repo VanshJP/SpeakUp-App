@@ -4,14 +4,10 @@ struct WarmUpListView: View {
     @State private var viewModel = WarmUpViewModel()
     @State private var showingExercise = false
 
-    /// How this list is hosted. See `ToolPresentation` / `ToolPage`.
     var presentation: ToolPresentation = .sheet
 
     var sourceStory: Story?
 
-    /// Denominator for every row's duration arc. Scoped to the visible
-    /// category, so the arcs re-scale as you filter — within one category the
-    /// relative lengths are what's worth comparing.
     private var longestExerciseSeconds: Double {
         Double(viewModel.exercises.map(\.durationSeconds).max() ?? 0)
     }
@@ -55,9 +51,6 @@ struct WarmUpListView: View {
 
     // MARK: - Exercise Content
 
-    /// Unfiltered shows every category as a labeled section (name, what it's
-    /// for, how many), so browsing teaches the taxonomy. A filter collapses
-    /// to the single matching group.
     @ViewBuilder
     private var exerciseContent: some View {
         if viewModel.selectedCategory != nil {

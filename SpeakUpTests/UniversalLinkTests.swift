@@ -29,7 +29,6 @@ struct UniversalLinkTests {
         #expect(route("https://bigtalk.app/")?.absoluteString == "speakup://open")
     }
 
-    /// Losing these turns a paid install into an organic one in the funnel.
     @Test func campaignParametersSurviveTranslation() {
         let translated = route("https://bigtalk.app/record?prompt=42&source=newsletter&campaign=launch")
         let components = URLComponents(string: translated?.absoluteString ?? "")

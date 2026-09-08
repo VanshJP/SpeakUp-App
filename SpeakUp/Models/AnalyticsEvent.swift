@@ -14,12 +14,6 @@ nonisolated enum AnalyticsFunnel: String, Codable, CaseIterable, Sendable {
 
 // MARK: - Event
 
-/// A single coarse behavioural event.
-///
-/// The privacy rule is structural, not a convention: an event carries a name, a
-/// funnel, and a dictionary of *bucketed* dimensions. Audio, transcripts,
-/// prompt or story text, exact scores, contacts, and share recipients have no
-/// representation here, so they cannot be logged by accident.
 nonisolated struct AnalyticsEvent: Sendable, Equatable {
     let name: String
     let funnel: AnalyticsFunnel
@@ -35,7 +29,6 @@ nonisolated struct AnalyticsEvent: Sendable, Equatable {
 // MARK: - Schema
 
 extension AnalyticsEvent {
-    // Acquisition
 
     static func firstOpen(source: String?, campaign: String?, page: String?) -> AnalyticsEvent {
         AnalyticsEvent("first_open", funnel: .acquisition, dimensions: [
@@ -52,7 +45,6 @@ extension AnalyticsEvent {
         ])
     }
 
-    // Activation
 
     static func onboardingStep(_ step: String, action: String) -> AnalyticsEvent {
         AnalyticsEvent("onboarding_step", funnel: .activation, dimensions: [
@@ -91,15 +83,12 @@ extension AnalyticsEvent {
         AnalyticsEvent("analysis_failed", funnel: .activation, dimensions: ["reason": reason])
     }
 
-    /// Fired once, when the user reaches their first completed analysis. The
-    /// plan's definition of an activated user.
     static func activated(minutesFromFirstOpen: Double) -> AnalyticsEvent {
         AnalyticsEvent("activated", funnel: .activation, dimensions: [
             "time_to_value_bucket": AnalyticsBucket.minutes(minutesFromFirstOpen)
         ])
     }
 
-    // Outcome
 
     static func nextActionTaken(area: String) -> AnalyticsEvent {
         AnalyticsEvent("next_action", funnel: .outcome, dimensions: ["weak_area": area])
@@ -109,7 +98,6 @@ extension AnalyticsEvent {
         AnalyticsEvent("milestone", funnel: .outcome, dimensions: ["type": type])
     }
 
-    // Advocacy
 
     static func shareCompleted(cardType: String, trigger: String) -> AnalyticsEvent {
         AnalyticsEvent("share_complete", funnel: .advocacy, dimensions: [
@@ -118,8 +106,6 @@ extension AnalyticsEvent {
         ])
     }
 
-    /// A recipient opened a friend-challenge link. No prompt text, no score —
-    /// only that the loop closed.
     static func sharedPromptOpened() -> AnalyticsEvent {
         AnalyticsEvent("shared_prompt_opened", funnel: .acquisition, dimensions: [
             "source": "share"
@@ -130,7 +116,6 @@ extension AnalyticsEvent {
         AnalyticsEvent("review_requested", funnel: .advocacy, dimensions: ["trigger": trigger])
     }
 
-    // Monetization
 
     /// Only ever logged for a paywall shown *after* a complete first result,
     /// which is what makes the qualified-conversion metric meaningful.
@@ -160,7 +145,6 @@ extension AnalyticsEvent {
         AnalyticsEvent("allowance_exhausted", funnel: .monetization)
     }
 
-    // Quality
 
     static func modelDownload(tier: String, result: String) -> AnalyticsEvent {
         AnalyticsEvent("model_download", funnel: .quality, dimensions: [
@@ -170,11 +154,6 @@ extension AnalyticsEvent {
         ])
     }
 
-    /// How the user rated their own session, coarsened to three buckets.
-    ///
-    /// Only the shape of the answer is recorded. Feedback questions can be
-    /// user-authored, so neither the question text nor its identifier is safe
-    /// to log — a custom question is free-text the user wrote themselves.
     static func sessionFeedback(sentiment: String) -> AnalyticsEvent {
         AnalyticsEvent("session_feedback", funnel: .quality, dimensions: ["sentiment": sentiment])
     }
@@ -182,8 +161,6 @@ extension AnalyticsEvent {
 
 // MARK: - Buckets
 
-/// Continuous values are always reported as ranges. A precise duration or score
-/// attached to a small cohort is re-identifying; a bucket is not.
 nonisolated enum AnalyticsBucket {
     static func elapsed(_ seconds: TimeInterval) -> String {
         switch seconds {
@@ -219,9 +196,6 @@ nonisolated enum AnalyticsBucket {
         }
     }
 
-    /// Coarse self-assessment. A 1–5 scale and a yes/no question both collapse
-    /// to the same three buckets so the quality trend survives the question set
-    /// being edited.
     static func sentiment(scale value: Int) -> String {
         switch value {
         case ..<3: return "negative"
@@ -243,7 +217,6 @@ nonisolated enum AnalyticsEnvironment {
 
 // MARK: - Recorded Event
 
-/// An event plus the timestamp it happened at. Persisted form.
 nonisolated struct RecordedAnalyticsEvent: Codable, Sendable, Identifiable {
     var id: UUID = UUID()
     var name: String

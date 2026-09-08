@@ -15,7 +15,6 @@ struct GoalsView: View {
 
                 PageScrollView {
                     VStack(spacing: 16) {
-                        // Summary header
                         if !viewModel.activeGoals.isEmpty || !viewModel.completedGoals.isEmpty {
                             summaryCard
                         } else {
@@ -26,7 +25,6 @@ struct GoalsView: View {
                             )
                         }
 
-                        // Active Goals
                         if !viewModel.activeGoals.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 GlassSectionHeader("Active Goals", icon: "target")
@@ -39,7 +37,6 @@ struct GoalsView: View {
                             }
                         }
 
-                        // Goal Templates
                         VStack(alignment: .leading, spacing: 10) {
                             GlassSectionHeader("Add a Goal", icon: "plus.circle")
 
@@ -52,7 +49,6 @@ struct GoalsView: View {
                             }
                         }
 
-                        // Completed Goals
                         if !viewModel.completedGoals.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 GlassSectionHeader("Completed", icon: "checkmark.circle")
@@ -213,7 +209,6 @@ struct GoalCard: View {
                 )
                 .frame(height: 10)
 
-                // Stats row
                 HStack {
                     Label("\(goal.current)/\(goal.target) \(goal.type.unit)", systemImage: "chart.bar.fill")
                         .font(.caption)
@@ -352,13 +347,11 @@ class GoalsViewModel {
         guard let context = modelContext else { return }
         GoalProgressService.refreshGoals(in: context)
 
-        // Active goals
         let activeDescriptor = FetchDescriptor<UserGoal>(
             predicate: #Predicate { $0.isActive && !$0.isCompleted },
             sortBy: [SortDescriptor(\.deadline)]
         )
 
-        // Completed goals
         let completedDescriptor = FetchDescriptor<UserGoal>(
             predicate: #Predicate { $0.isCompleted },
             sortBy: [SortDescriptor(\.deadline, order: .reverse)]

@@ -15,8 +15,6 @@ struct ContentView: View {
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
     @State private var pendingRecordingNavigation: String?
-    /// Only the result reached directly from RecordingView may generate a
-    /// coach note. Browsing an old History row must stay inert.
     @State private var freshResultRecordingId: String?
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService()
@@ -25,7 +23,6 @@ struct ContentView: View {
     /// draws over the tab bar, neither of which a single tab's root can do.
     @State private var appTour = AppTourModel()
 
-    // Feature sheets
     @State private var showingWarmUps = false
     @State private var showingDrills = false
     @State private var showingConfidenceTools = false
@@ -35,11 +32,9 @@ struct ContentView: View {
     @State private var settingsViewModel = SettingsViewModel()
     @State private var storiesViewModel = StoriesViewModel()
 
-    // Story → Warm-Up / Drill routing
     @State private var warmUpStory: Story?
     @State private var drillStory: Story?
 
-    // Recording parameters
     @State private var recordingPrompt: Prompt?
     @State private var recordingDuration: RecordingDuration = .sixty
     @State private var recordingGoalId: UUID?
@@ -75,9 +70,6 @@ struct ContentView: View {
         TimerEndBehavior(rawValue: userSettings.first?.timerEndBehavior ?? 0) ?? .saveAndStop
     }
     
-    /// One NavigationStack per tab, and the canvas is painted *inside* it.
-    /// A background behind the TabView is invisible: SwiftUI hosts navigation
-    /// content in an opaque system-background view, so the tabs read black.
     private func tabContent(for tab: AppTab) -> some View {
         NavigationStack {
             tabRoot(for: tab)
@@ -252,7 +244,6 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .motion(AppMotion.settle, value: appTour.activeStep != nil)
         .onChange(of: appTour.activeStep) { _, step in
-            // The tour walks the tabs itself; the user's job is just to read.
             guard let step, selectedTab != step.tab else { return }
             selectedTab = step.tab
         }
@@ -432,7 +423,6 @@ struct ContentView: View {
         settings.speakerLevel = result.speakerLevel.rawValue
         settings.userName = result.userName
         settings.onboardingGoalsRaw = result.goals.map(\.rawValue)
-        // First pick stays the primary goal for anything that names one.
         settings.onboardingGoalRaw = (result.goals.first ?? .everydayConfidence).rawValue
 
         // Persist reminder preference + time so SettingsView reflects it.
@@ -499,8 +489,6 @@ struct ContentView: View {
 
     // MARK: - Onboarding
 
-    /// Show onboarding only for confirmed first-launch users. Evaluating before
-    /// `@Query` hydrates would flash onboarding over a returning user's home.
     private func evaluateOnboardingIfNeeded() {
         guard !hasEvaluatedOnboarding, let settings = userSettings.first else { return }
         hasEvaluatedOnboarding = true
@@ -536,9 +524,6 @@ struct ContentView: View {
         }
     }
 
-    /// Widget, campaign, and friend-challenge links all land here. Challenge
-    /// chrome is only applied when `source=share` so a Daily Prompt widget tap
-    /// does not look like a dare.
     private func startRecording(from url: URL) {
         guard !showOnboarding, !showingRecording, !showingCountdown else { return }
 
@@ -568,8 +553,6 @@ struct ContentView: View {
         showingCountdown = true
     }
 
-    /// Keep friend-challenge chrome if Today/Library started the exact prompt
-    /// that was waiting; otherwise this is a normal session.
     private func adoptChallengeIfMatching(_ prompt: Prompt?) {
         guard let prompt, let pending = SharedChallengeStore.shared.pending,
               pending.promptID == prompt.id else {
@@ -601,7 +584,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Outline variant — shown when the tab is not selected.
     var icon: String {
         switch self {
         case .today: return "mic"
@@ -612,7 +594,6 @@ enum AppTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Filled variant — shown when the tab is selected.
     var selectedIcon: String {
         switch self {
         case .today: return "mic.fill"

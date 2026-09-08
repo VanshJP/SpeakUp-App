@@ -2,13 +2,9 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-/// Structural repetition (anaphora-as-tic) — same FillerWord shape as classic
-/// fillers so the detail UI needs no second render path.
 
 struct StructuralRepetitionTests {
 
-    /// Evenly spaced words; trailing punctuation on a token marks a clause end.
-    /// Pass `gap` ≥ `clausePauseThreshold` to simulate punctuation-poor Whisper.
     private func words(
         _ tokens: [String],
         gap: TimeInterval = 0.15,
@@ -32,7 +28,6 @@ struct StructuralRepetitionTests {
     // MARK: - Positive
 
     @Test func sockTomatoEggFlagsStructuralFrame() throws {
-        // "I'm going to get socks, I'm going to get tomatoes, I'm going to get eggs."
         let transcript = words([
             "I'm", "going", "to", "get", "socks,",
             "I'm", "going", "to", "get", "tomatoes,",
@@ -87,7 +82,6 @@ struct StructuralRepetitionTests {
                 ))
                 cursor = end + 0.12
             }
-            // Clause boundary pause (no comma on the last token).
             cursor += StructuralRepetitionDetector.clausePauseThreshold
         }
 
@@ -192,7 +186,6 @@ struct StructuralRepetitionTests {
         let hits = StructuralRepetitionDetector.detect(in: transcript)
         let ids = StructuralRepetitionDetector.highlightedWordIDs(in: transcript, hits: hits)
         #expect(!ids.isEmpty)
-        // Three openings × four surface words ("i'm going to get") ≈ 12.
         #expect(ids.count >= 9)
         #expect(ids.count <= 15)
     }

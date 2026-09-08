@@ -10,7 +10,6 @@ struct PracticeHubView: View {
     @State private var showingAddPrompt = false
     @State private var showingBatchAdd = false
     @State private var showingNewStory = false
-    /// Non-nil pushes Compare from Library → Tools → Review.
     @State private var compareRoute: CompareRoute?
 
     private enum LibraryTool: String, Identifiable, CaseIterable {
@@ -191,11 +190,6 @@ struct PracticeHubView: View {
         }
     }
 
-    /// Category grid — practice tools, then review tools. Same card recipe.
-    ///
-    /// Search is per-section on this page, so each section draws its own row
-    /// (see `AllPromptsView` / `StoriesListView`). Tools has no filter or sort
-    /// of its own, so this row is the field alone.
     private var toolsLanding: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visiblePractice = query.isEmpty
@@ -443,7 +437,6 @@ enum PracticeSection: String, CaseIterable, Identifiable {
     }
 }
 
-/// Stable identity for the Compare push from Library → Tools.
 private struct CompareRoute: Hashable, Identifiable {
     let id = UUID()
 }

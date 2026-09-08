@@ -7,26 +7,15 @@ import UniformTypeIdentifiers
 /// The share surface for a scored session: pick which card leaves the app, see
 /// it before it does, then save, copy, or send it.
 ///
-/// This replaced a confirmation dialog with two buttons and a paragraph
-/// explaining what each one would reveal. Nobody reads a paragraph about what a
-/// picture contains when the picture can be shown instead — and the preview is
-/// the privacy control, because the prompt is either visibly on the card or it
-/// is not.
 struct ShareCardSheet: View {
     let recording: Recording
-    /// Fires on any completed outbound action, not just the system sheet —
-    /// saving to Photos is the same intent by a different route.
     var onShared: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var userSettings: [UserSettings]
 
-    /// The challenge card is the default — it is the one that travels, because
-    /// it carries a link a friend can tap. Turning it off falls back to the
-    /// scores-only card.
     @State private var includePrompt = true
-    /// Keyed by variant *and* theme — switching either one is a different card.
     @State private var rendered: [String: UIImage] = [:]
     @State private var confirmation: String?
     /// A card needs a score. Reached by opening the sheet on a session that was
@@ -52,7 +41,6 @@ struct ShareCardSheet: View {
         }
     }
 
-    /// The challenge card only exists when there is something to challenge with.
     private var challengeAvailable: Bool {
         ScoreCardRenderer.promptCaption(for: recording) != nil
     }
@@ -146,8 +134,6 @@ struct ShareCardSheet: View {
         .padding(.top, 18)
     }
 
-    /// One line saying what is on the card in front of them. This is the whole
-    /// text budget of the screen — the card says the rest.
     private var subtitle: String {
         switch variant {
         case .scores:
@@ -206,8 +192,6 @@ struct ShareCardSheet: View {
         .padding(.vertical, 18)
     }
 
-    /// Filter-strip picker: the swatch is the actual backdrop the card uses,
-    /// so no second render is needed to show what you are choosing.
     private var themeStrip: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 10) {
@@ -294,9 +278,6 @@ struct ShareCardSheet: View {
         }
     }
 
-    /// Every action needs the rendered card. Rendering is fast enough to do
-    /// inline on the rare miss (a tap landing before `.task` finished) rather
-    /// than disabling the buttons until it lands.
     private func withImage(_ body: (UIImage) -> Void) {
         guard let image = rendered[renderKey] ?? render(variant) else { return }
         rendered[renderKey] = image
@@ -315,8 +296,6 @@ struct ShareCardSheet: View {
         report(trigger: "recording_detail_save")
     }
 
-    /// One pasteboard item carrying both representations, so a destination that
-    /// wants the picture gets the picture and one that wants text gets the link.
     private func copyToPasteboard(_ image: UIImage) {
         var item: [String: Any] = [:]
         if let png = image.pngData() {
@@ -358,8 +337,6 @@ struct ShareCardSheet: View {
 
     // MARK: - Rendering
 
-    /// Yields first so the sheet finishes animating in before `ImageRenderer`
-    /// takes the main thread for a frame or two.
     private func renderIfNeeded(_ option: Variant) async {
         let key = renderKey
         guard rendered[key] == nil else { return }
@@ -381,8 +358,6 @@ struct ShareCardSheet: View {
 
     // MARK: - Caption
 
-    /// The text that travels with the card. Only the challenge card carries a
-    /// prompt or a link; the scores card is a number and nothing else.
     private func caption() -> String {
         let score = recording.analysis?.speechScore.overall
         guard variant.includesPromptText else {

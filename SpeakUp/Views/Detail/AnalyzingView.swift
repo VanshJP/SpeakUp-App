@@ -30,9 +30,6 @@ final class SessionFeedbackGateStore {
 struct AnalyzingView: View {
     let recording: Recording
     let isModelLoading: Bool
-    /// True only while Whisper is actually downloading from Hub.
-    /// Distinct from `isModelLoading` so a failed first download does not keep
-    /// the "Downloading…" copy up through Apple Speech fallback.
     var isDownloadingModel: Bool = false
     var feedbackEnabled: Bool = false
     var feedbackQuestions: [FeedbackQuestion] = []
@@ -694,7 +691,6 @@ private struct DetailSkeletonView: View {
     var body: some View {
         PageScrollView {
             ShimmerHost {
-                // 20pt, matching RecordingDetailView.readyContent.
                 VStack(spacing: 20) {
                     statusHeader
                         .padding(.top, hasExternalTopBar ? 8 : systemTopSafeAreaInset + 8)
@@ -766,7 +762,6 @@ private struct DetailSkeletonView: View {
 
     // MARK: - Skeleton Sections
 
-    /// `ScoreHeroCard` — eyebrow row, subscore donut, verdict line.
     private var heroScoreSkeleton: some View {
         GlassCard(padding: 16, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
@@ -789,7 +784,6 @@ private struct DetailSkeletonView: View {
         }
     }
 
-    /// `NextStepCard` — eyebrow, area, coaching line, action pill + repeat.
     private var nextStepSkeleton: some View {
         GlassCard(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
@@ -807,8 +801,6 @@ private struct DetailSkeletonView: View {
         }
     }
 
-    /// The real picker, inert. Rebuilding its frame as a placeholder would fork
-    /// the styling; the tabs themselves are not waiting on the analysis.
     private var tabPickerSkeleton: some View {
         SectionPicker(
             sections: DetailTab.allCases,
@@ -820,7 +812,6 @@ private struct DetailSkeletonView: View {
         .opacity(0.4)
     }
 
-    /// `MetricRowGroup` — pace, fillers, words, pauses.
     private var metricRowsSkeleton: some View {
         GlassCard(padding: 14) {
             VStack(spacing: 10) {
@@ -849,9 +840,6 @@ private struct SkeletonBar: View {
     }
 }
 
-/// Stand-in for `SubscoreRadarChart`: the annulus at the geometry the chart
-/// itself uses (42pt label inset, inner radius 0.38 of outer), the centre score,
-/// and the orbiting axis labels.
 private struct SkeletonDonut: View {
     private let labelInset: CGFloat = 42
     private let axisCount = 6
@@ -886,7 +874,6 @@ private struct SkeletonDonut: View {
     }
 }
 
-/// Stand-in for one `MetricRow`: icon, label, and a right-aligned value.
 private struct SkeletonMetricRow: View {
     let labelWidth: CGFloat
 

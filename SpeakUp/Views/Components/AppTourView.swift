@@ -2,14 +2,6 @@ import SwiftUI
 
 // MARK: - Steps
 
-/// One-shot guided layout walkthrough. Runs the first time the user lands on
-/// Today after finishing onboarding: three stops on Today, one per remaining
-/// tab, ending on the Session Defaults row so the user knows where their
-/// recording preset lives. Each stop is a coach line, not a feature essay.
-///
-/// The overlay owns the whole screen while active (including the tab bar), so
-/// the tour drives tab selection itself and the user can't wander mid-tour.
-/// Skip is always one tap away.
 enum AppTourStep: Int, CaseIterable {
     case record
     case stats
@@ -29,8 +21,6 @@ enum AppTourStep: Int, CaseIterable {
         }
     }
 
-    /// The on-screen element this stop spotlights. Nil means the surface
-    /// itself is the subject: no cutout, bubble sits above the tab bar.
     var anchorID: AppTourAnchorID? {
         switch self {
         case .record: return .todayPrompt
@@ -75,8 +65,6 @@ enum AppTourStep: Int, CaseIterable {
     var next: AppTourStep? { AppTourStep(rawValue: rawValue + 1) }
 }
 
-/// Elements a tour stop can spotlight. Views register their frames with
-/// `.tourAnchor(_:)`; only the active step's anchor is ever read.
 enum AppTourAnchorID: String {
     case todayPrompt
     case todayStats
@@ -86,9 +74,6 @@ enum AppTourAnchorID: String {
 
 // MARK: - Model
 
-/// Shared between ContentView (which mounts the overlay and switches tabs)
-/// and the anchored views (which report their frames). Frames are in global
-/// coordinates; the overlay converts into its own space when drawing.
 @MainActor
 @Observable
 final class AppTourModel {
@@ -142,11 +127,8 @@ private struct TourAnchorReporter: ViewModifier {
 
 // MARK: - Overlay
 
-/// Dimmed layer with a rounded cutout over the active step's target and a
-/// glass coach bubble. Tap anywhere (or Next) advances; Skip ends the tour.
 struct AppTourOverlay: View {
     let tour: AppTourModel
-    /// `completed` is false when the user skipped partway.
     let onFinish: (_ completed: Bool) -> Void
 
     var body: some View {
@@ -192,13 +174,6 @@ struct AppTourOverlay: View {
 
     // MARK: Layout
 
-    /// Target frame in overlay space, padded out so the highlight breathes.
-    /// Nil for tab stops and while a just-mounted tab hasn't reported yet
-    /// (the bubble falls back to the tab-bar position for a frame or two).
-    ///
-    /// Also nil when the target has scrolled mostly out of view: a cutout
-    /// drawn off-screen reads as "the whole screen went dark for no reason",
-    /// so the step degrades to a plain bubble instead.
     private func spotlightRect(for step: AppTourStep, in proxy: GeometryProxy) -> CGRect? {
         guard let id = step.anchorID, let global = tour.frames[id] else { return nil }
         let origin = proxy.frame(in: .global).origin
@@ -235,7 +210,6 @@ struct AppTourOverlay: View {
 
     private func bubblePadding(for spotlight: CGRect?, in proxy: GeometryProxy) -> EdgeInsets {
         guard let spotlight else {
-            // Tab stops: sit just above the tab bar the copy is pointing at.
             return EdgeInsets(top: 0, leading: 0, bottom: 84, trailing: 0)
         }
         if spotlight.midY < proxy.size.height / 2 {

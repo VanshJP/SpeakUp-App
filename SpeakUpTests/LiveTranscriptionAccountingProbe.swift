@@ -70,7 +70,6 @@ struct LiveTranscriptionAccountingProbe {
                                          segments: ["um", "hello", "there"])
         #expect(counts["um"] == 1)
 
-        // Zero-segment revisions between utterances: watermark holds.
         watermark = advanceWatermark(counts: &counts, watermark: watermark, segments: [])
         #expect(watermark == 3 && counts["um"] == 1)
 
@@ -100,7 +99,6 @@ struct LiveTranscriptionAccountingProbe {
         var counts: [String: Int] = ["um": 4, "like": 2]
         var watermark = 3
 
-        // start():
         counts = [:]
         watermark = 0
 

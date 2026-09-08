@@ -1,25 +1,11 @@
 import SwiftUI
 
-/// Today's words, inside the prompt card under a hairline the row draws itself
-/// — so a day with no workout ends the card at the prompt text, no stray rule.
-///
-/// Duration does not belong on this line. It sat here until the three-word cap
-/// pushed the last chip onto a second row directly beneath the pill, orphaned
-/// next to a control it has nothing to do with — and the width the pill took is
-/// what forced that wrap. It lives in the card header now.
-///
-/// Skip and add-to-bank hang off each chip as a tap `Menu`: a sheet was a whole
-/// screen of chrome for two rare verbs and it covered the prompt, a
-/// `contextMenu` hid them completely. The chevron is the affordance and the
-/// sage dot marks a word introduced today.
 struct SessionWordsRow: View {
     var workout: DailyVocabChallenge?
     var bankWords: [String] = []
     var onSkip: ((VocabChallengeWord) -> Void)?
     var onAddToBank: ((VocabChallengeWord) -> Void)?
 
-    /// `FlowLayout` top-aligns a line, so children of mixed height come out
-    /// ragged. One height for every chip is the whole fix.
     private let chipHeight: CGFloat = 44
 
     var body: some View {
@@ -99,7 +85,6 @@ struct SessionWordsRow: View {
             }
         }
         .buttonStyle(.plain)
-        // Visual capsule stays compact; the Menu gets a full HIG-sized target.
         .frame(minHeight: chipHeight)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)

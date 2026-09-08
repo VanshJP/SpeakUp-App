@@ -1,13 +1,6 @@
 import SwiftUI
 
 /// About four months of practice as a dot grid, with a switchable metric.
-///
-/// One grid, two lenses: *did I show up* (session count) and *was it any good*
-/// (average score). Reading both off the same geometry is what makes the
-/// distinction visible — a dense green wall with mediocre scores is a different
-/// problem from a sparse wall with great ones.
-///
-/// Derived entirely from the `RecordingSummary` array History already holds, so
 /// it costs no extra fetch and never touches a `Recording` blob.
 struct ActivityStrip: View {
     let summaries: [RecordingSummary]
@@ -138,7 +131,6 @@ struct ActivityStrip: View {
 
     // MARK: - Derived Data
 
-    /// Per-day totals keyed by start-of-day.
     private static func buckets(from summaries: [RecordingSummary]) -> [Date: DayBucket] {
         var result: [Date: DayBucket] = [:]
         let calendar = Calendar.current
@@ -157,7 +149,6 @@ struct ActivityStrip: View {
         return result
     }
 
-    /// `weeksShown` columns of seven days, oldest first, ending on the current week.
     private var weeks: [[Date]] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -210,8 +201,6 @@ enum ActivityMetric: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Legend endpoints — the ramp means volume for sessions and quality for
-    /// score, so the wording has to follow the metric.
     var legendLow: String {
         switch self {
         case .sessions: return "Less"
@@ -226,8 +215,6 @@ enum ActivityMetric: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Sessions saturate at 3/day — beyond that the color stops carrying
-    /// information and the grid just looks uniformly loud.
     func intensity(for bucket: DayBucket?) -> Double {
         guard let bucket, bucket.count > 0 else { return 0 }
         switch self {

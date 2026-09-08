@@ -23,7 +23,6 @@ class StoriesViewModel {
     private(set) var sortOrder: StorySortOrder = .updatedAt
     private(set) var selectedEntryTypeFilter: StoryEntryType?
 
-    /// Selected folder scope. `nil` = All Notes. Pinned pseudo-folder uses `folderSelection`.
     var folderSelection: FolderSelection = .all
 
     var hasActiveFilters: Bool {
@@ -376,9 +375,6 @@ class StoriesViewModel {
         }
     }
 
-    /// Auto-save draft changes during editing. Writes the title plus the full
-    /// attributed (rich text) content; `Story.attributedContent` keeps the
-    /// plain `content` mirror in sync transparently.
     func autoSave(_ story: Story, title: String, attributed: NSAttributedString) {
         guard let context = modelContext else { return }
 
@@ -391,11 +387,9 @@ class StoriesViewModel {
         do {
             try context.save()
         } catch {
-            // best-effort
         }
     }
 
-    /// Merge newly extracted tags
     func appendTags(to story: Story, tags newTags: [StoryTag]) {
         guard let context = modelContext, !newTags.isEmpty else { return }
 
@@ -453,7 +447,6 @@ class StoriesViewModel {
         }
     }
 
-    /// Delete a story only if it has no meaningful content (used for empty draft cleanup).
     func deleteIfEmpty(_ story: Story) {
         let trimmedTitle = story.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedContent = story.content.trimmingCharacters(in: .whitespacesAndNewlines)

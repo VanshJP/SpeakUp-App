@@ -129,7 +129,6 @@ struct DrillSessionView: View {
 
             Spacer()
 
-            // Voice activity indicator
             if viewModel.isActive {
                 MicLevelPill(isHearing: viewModel.audioService.isHearingInput)
             } else {
@@ -142,7 +141,6 @@ struct DrillSessionView: View {
 
     private var drillContent: some View {
         SessionDialSlot(spacing: 28) { diameter in
-            // Mode-specific metric
             if let mode = viewModel.selectedMode {
                 Group {
                     switch mode {
@@ -173,7 +171,6 @@ struct DrillSessionView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 8) {
-            // Stop button (same style as RecordButton when recording)
             ZStack {
                 if viewModel.isActive {
                     CircularWaveformView(

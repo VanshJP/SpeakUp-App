@@ -2,20 +2,6 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-/// Interactive first-launch flow. Four quick questions build toward the one
-/// thing that matters: the guided baseline recording, which happens *inside*
-/// onboarding — briefing, take, analysis, and score reveal — instead of
-/// dropping the user into an unguided recorder afterwards.
-///
-/// Voice calibration, the on-device model, and reminders are not here. They ask
-/// for effort, storage, or a system permission before the app has produced a
-/// single score, so `FirstRecordingSetupSheet` offers them afterwards instead.
-/// Their steps still exist and still work — they are simply not in
-/// `OnboardingStep.firstRunSteps`.
-///
-/// Question pages route through `OnboardingPage`, so the header rhythm, glass
-/// surfaces, and call-to-action placement match the rest of the app instead of
-/// each step inventing its own layout.
 struct OnboardingView: View {
     @State private var viewModel = OnboardingViewModel()
     @Environment(\.scenePhase) private var scenePhase
@@ -94,9 +80,6 @@ struct OnboardingView: View {
 
     // MARK: - Top Bar
 
-    /// Both gutters are fixed and equal so the tick meter keeps one width and
-    /// one centre across every step. "Skip" is wider than the back chevron,
-    /// and letting the row self-size made the meter twitch on each transition.
     private static let topBarGutter: CGFloat = 44
 
     private var topBar: some View {

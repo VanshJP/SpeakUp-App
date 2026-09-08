@@ -18,7 +18,6 @@ struct BeforeAfterReplayView: View {
                 PageScrollView {
                     VStack(spacing: 20) {
                         if viewModel.isLoaded {
-                            // Header
                             VStack(spacing: 8) {
                                 Text("Then vs Now")
                                     .font(.title.weight(.bold))
@@ -35,7 +34,6 @@ struct BeforeAfterReplayView: View {
                             }
                             .padding(.top)
 
-                            // Early recording card
                             recordingCard(
                                 title: "Your First Session",
                                 snapshot: viewModel.earliestSnapshot,
@@ -43,7 +41,6 @@ struct BeforeAfterReplayView: View {
                                 onPlay: { playEarly() }
                             )
 
-                            // Arrow indicator
                             VStack(spacing: 4) {
                                 Image(systemName: "arrow.down")
                                     .font(.title2.weight(.bold))
@@ -57,7 +54,6 @@ struct BeforeAfterReplayView: View {
                             }
                             .padding(.vertical, 4)
 
-                            // Latest recording card
                             recordingCard(
                                 title: "Your Latest Session",
                                 snapshot: viewModel.latestSnapshot,
@@ -69,7 +65,6 @@ struct BeforeAfterReplayView: View {
                                 shareSection(card)
                             }
 
-                            // Motivational message
                             if viewModel.scoreImprovement > 20 {
                                 FeaturedGlassCard {
                                     VStack(spacing: 8) {
@@ -182,7 +177,6 @@ struct BeforeAfterReplayView: View {
                         .buttonStyle(.plain)
                     }
 
-                    // Stats row
                     HStack(spacing: 16) {
                         statItem(label: "WPM", value: "\(Int(snapshot.wpm))")
                         statItem(label: "Fillers", value: "\(snapshot.fillerCount)")

@@ -1,9 +1,6 @@
 import Foundation
 import Accelerate
 
-/// On-device pitch (F0) analysis using autocorrelation via Apple's Accelerate framework.
-/// Extracts fundamental frequency contour, variation metrics, and prosody scores from recorded audio.
-/// Zero external dependencies — operates on `MonoPCM` with vDSP only.
 nonisolated enum PitchAnalysisService {
 
     // MARK: - Configuration
@@ -16,8 +13,6 @@ nonisolated enum PitchAnalysisService {
 
     // MARK: - Public API
 
-    /// Analyze the pitch characteristics of a decoded mono PCM buffer.
-    /// Returns nil if there are insufficient voiced frames.
     static func analyze(monoPCM: MonoPCM) -> PitchMetrics? {
         guard monoPCM.sampleRate > 0 else { return nil }
 
@@ -34,8 +29,6 @@ nonisolated enum PitchAnalysisService {
         var f0Values: [Float] = []
         var totalFrames = 0
 
-        // Hoisted per-recording scratch: one Hann window and one reusable
-        // windowed-frame buffer, instead of two allocations per frame.
         var hannWindow = [Float](repeating: 0, count: windowSize)
         vDSP_hann_window(&hannWindow, vDSP_Length(windowSize), Int32(vDSP_HALF_WINDOW))
         var windowed = [Float](repeating: 0, count: windowSize)
@@ -57,7 +50,6 @@ nonisolated enum PitchAnalysisService {
 
         let voicedFrameRatio = totalFrames > 0 ? Float(f0Values.count) / Float(totalFrames) : 0
 
-        // Octave error correction: if consecutive F0 jumps by ~2x or ~0.5x, correct it
         var corrected = f0Values
         for i in 1..<corrected.count {
             let ratio = corrected[i] / corrected[i - 1]
@@ -68,7 +60,6 @@ nonisolated enum PitchAnalysisService {
             }
         }
 
-        // Median filter with 5-frame window to smooth single-frame outliers
         var filtered = corrected
         let filterRadius = 2
         var medianWindow = [Float](repeating: 0, count: filterRadius * 2 + 1)
@@ -90,9 +81,6 @@ nonisolated enum PitchAnalysisService {
 
         let rangeSemitones = hzToSemitones(from: p5, to: p95)
 
-        // Pitch variation score: semitone stddev mapped via sigmoid-like curve
-        // Research: engaging speakers have 3-5 semitone stddev
-        // Monotone speech: ~1-2 semitones, dynamic: 3-6+
         let stdDevSemitones = mean > 0 ? 12.0 * log2(Double((mean + stdDev) / mean)) : 0
         let pitchVariationScore: Int
         if stdDevSemitones < 1.0 {
@@ -136,8 +124,6 @@ nonisolated enum PitchAnalysisService {
         var bestLag = minLag
         var bestCorr: Float = -1
 
-        // Zero-copy pointer offsets per lag — same operand lengths as the
-        // previous Array-slice copies, so dot products are unchanged.
         windowed.withUnsafeBufferPointer { buf in
             guard let base = buf.baseAddress else { return }
             for lag in minLag...maxLag {
@@ -167,16 +153,11 @@ nonisolated enum PitchAnalysisService {
 
     // MARK: - Pitch-Energy Correlation
 
-    /// Compute Pearson correlation between pitch contour and energy contour.
-    /// Engaging speakers get louder when pitch rises (positive correlation).
-    /// Returns a score 0-100 where 50=no correlation, 100=strong positive, 0=strong negative.
     static func pitchEnergyCorrelation(pitchContour: [Float], audioLevelSamples: [Float]) -> Int {
-        // Downsample both to same length for alignment
         let targetCount = min(pitchContour.count, audioLevelSamples.count, 100)
         guard targetCount >= 5 else { return 50 }
 
         let pitchDS = downsample(pitchContour, targetCount: targetCount)
-        // Convert dB energy samples to linear, filtering silence
         let energyDS: [Float]
         if audioLevelSamples.count > targetCount {
             energyDS = downsample(audioLevelSamples, targetCount: targetCount)
@@ -187,7 +168,6 @@ nonisolated enum PitchAnalysisService {
 
         guard pitchDS.count == linearEnergy.count, pitchDS.count >= 5 else { return 50 }
 
-        // Pearson correlation
         let n = Double(pitchDS.count)
         let pitchMean = Double(pitchDS.reduce(0, +)) / n
         let energyMean = Double(linearEnergy.reduce(0, +)) / n
@@ -205,7 +185,6 @@ nonisolated enum PitchAnalysisService {
         guard denom > 1e-10 else { return 50 }
         let r = cov / denom  // -1 to +1
 
-        // Map r to 0-100: r=0 → 50, r=+1 → 100, r=-0.5 → 25
         return max(0, min(100, Int(50 + r * 50)))
     }
 

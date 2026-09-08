@@ -1,20 +1,9 @@
 import SwiftUI
 
-/// The stretch of speech where the fillers actually clustered, shown in the
-/// Breakdown tab next to the numbers that summarize it.
-///
-/// "12 fillers" is a fact you can't act on. Seeing *"so I um think that, uh,
-/// the main thing is"* is — the feedback attaches to the words that caused it,
-/// which is the one thing a transcript can do that a metric can't. The full
-/// transcript is a tab away; this is the part worth reading.
-///
-/// Renders nothing when there were no fillers. A clean take shouldn't be handed
-/// an empty card congratulating itself.
 struct TranscriptExcerptCard: View {
     let words: [TranscriptionWord]
     let onOpenTranscript: () -> Void
 
-    /// Wide enough to carry sentence context, short enough to stay scannable.
     private static let windowSize = 26
 
     var body: some View {
@@ -63,9 +52,6 @@ struct TranscriptExcerptCard: View {
         let fillerCount: Int
     }
 
-    /// Slides a fixed window across the transcript and keeps the densest one.
-    /// Ties resolve to the earliest window — the first stumble is the one the
-    /// speaker is most likely to remember.
     private var densestFillerWindow: Window? {
         guard words.contains(where: \.isFiller) else { return nil }
 

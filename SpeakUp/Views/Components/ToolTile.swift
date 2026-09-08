@@ -2,20 +2,6 @@ import SwiftUI
 
 // MARK: - Compact Tool Tile
 
-/// Compact action tile for secondary tool grids — the Today quick-action
-/// recipe (glass tile, identity-tinted icon, caption label) extracted so
-/// History's Review grid renders the same dialect instead of a full-width
-/// list of rows.
-///
-/// Label-only by design: wrap in `Button` / `NavigationLink` and apply
-/// `.buttonStyle(GlassPressStyle())` at the call site, so tiles can push a
-/// destination or run a closure with identical chrome.
-///
-/// Color lives in the icon chip, not the tile. Tinting the whole glass slab at
-/// 0.25 gave four saturated blocks in a 2x2 grid, which read as louder than
-/// the prompt card above them and looked nothing like the same four tools in
-/// the Library (`ToolCategoryCard`, tint 0.06 with a 0.18 icon circle). Same
-/// tools, same dialect — match that card, not a highlighter.
 struct ToolTileLabel: View {
     let icon: String
     let title: String
@@ -45,9 +31,6 @@ struct ToolTileLabel: View {
 
 // MARK: - Library Category Card
 
-/// Shared Library Tools tile — practice tools and review tools use the same
-/// glass card recipe (icon chip + title + meta). One component so a fifth
-/// dialect cannot sneak in via a hand-rolled VStack.
 struct ToolCategoryCard: View {
     let icon: String
     let title: String

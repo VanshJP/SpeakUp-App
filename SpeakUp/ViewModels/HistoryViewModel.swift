@@ -36,9 +36,6 @@ class HistoryViewModel {
     var summaries: [RecordingSummary] = []
     var isLoading = true
 
-    /// Vocab-word usage totals, the one derived stat the History screen still
-    /// renders. Streak / average / per-day counts moved out with the stats
-    /// strip and contribution graph — no view read them any more.
     var aggregatedVocab: [VocabCount] = []
 
     private var modelContext: ModelContext?
@@ -147,7 +144,6 @@ class HistoryViewModel {
     func deleteRecording(id: UUID) async {
         guard let context = modelContext else { return }
 
-        // Stop any in-flight analysis before the row disappears.
         RecordingProcessingCoordinator.shared.cancelProcessing(recordingID: id)
 
         var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == id })

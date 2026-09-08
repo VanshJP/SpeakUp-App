@@ -1,23 +1,10 @@
 import SwiftUI
 
 /// The moment the app exists for: you stopped talking, here is how it went.
-///
-/// Before this screen, finishing a recording silently switched tabs and pushed
-/// a detail page — a 95 and a 45 arrived identically. The reveal is scaled to
-/// the band so the app's reaction matches the result:
-///
-/// - **Strong (80+)** — confetti, success haptic, the score is the celebration.
-/// - **Solid (60–79)** — the number climbs and lands. No particles; a good
-///   session doesn't need a parade, and spending confetti here would make it
-///   worthless at 90.
-/// - **Building (<60)** — no celebration language at all. The verdict, then one
-///   forward-looking line naming what held it back. Honest, not a failure state,
 ///   and never congratulatory — a low score met with confetti reads as sarcasm.
 struct ScoreRevealView: View {
     let score: Int
-    /// Rolling baselines excluding this session. All-nil on a first session.
     let baselines: PersonalAverage.Baselines
-    /// Label of the lowest-scoring axis, used only in the building band.
     let weakestAxisLabel: String?
     let onDismiss: () -> Void
 
@@ -92,8 +79,6 @@ struct ScoreRevealView: View {
 
     // MARK: - Subviews
 
-    /// The numeral sits inside a ring that fills as it climbs, so the score is
-    /// read twice — once as a value, once as a position on the scale.
     private var scoreDial: some View {
         ZStack {
             RingProgress(

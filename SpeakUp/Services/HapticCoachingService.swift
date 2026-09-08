@@ -2,14 +2,11 @@ import Foundation
 import UIKit
 import SwiftUI
 
-/// Real-time coaching during recording sessions.
-/// Provides haptic feedback and written cue messages for pace, silence, and filler usage.
 @Observable
 @MainActor
 class HapticCoachingService {
     var isEnabled = false
 
-    /// Current coaching cue to display in the recording UI. `nil` when no cue is active.
     var currentCue: CoachingCue?
 
     // MARK: - Thresholds
@@ -27,24 +24,17 @@ class HapticCoachingService {
     private var lastHapticTime: Date = .distantPast
     private var lastCueTime: Date = .distantPast
     private var lastFillerCount = 0
-    /// Crutch words that already earned their named cue this session.
     private var cuedRepeatedFillers: Set<String> = []
     private var cueDismissTask: Task<Void, Never>?
 
-    /// Uses of one word before it earns the named repeated-filler cue.
     static let repeatedFillerCueThreshold = 5
 
-    /// Gate so one silence window fires one cue, not one per sample tick.
-    /// Reset when voice returns (level > -40) and in `reset()`.
     private var silenceCueFired = false
 
     private let hapticCooldown: TimeInterval = 3.0
     private let cueCooldown: TimeInterval = 6.0
     private let cueDisplayDuration: TimeInterval = 3.5
 
-    // Prepared haptic generators. `prepare()` is called in `init` so the
-    // first fire doesn't incur the per-call instantiation cost on the
-    // already-saturated main actor during recording.
     private let lightGenerator = UIImpactFeedbackGenerator(style: .light)
     private let mediumGenerator = UIImpactFeedbackGenerator(style: .medium)
     private let warningGenerator = UINotificationFeedbackGenerator()
@@ -121,7 +111,6 @@ class HapticCoachingService {
         let cutoff = now.addingTimeInterval(-wpmWindowSeconds)
         wordTimestamps.removeAll { $0 < cutoff }
 
-        // Need at least 5s of data
         let windowDuration = now.timeIntervalSince(wordTimestamps.first ?? now)
         guard windowDuration > 5 else { return }
 
@@ -189,9 +178,6 @@ class HapticCoachingService {
 
     // MARK: - Written Cue
 
-    /// Presents a cue unless the cue cooldown is running. Returns whether it
-    /// actually displayed — callers gate one-shot state on the answer so a
-    /// swallowed cue can fire later instead of being lost forever.
     @discardableResult
     private func showCue(_ cue: CoachingCue) -> Bool {
         guard Date().timeIntervalSince(lastCueTime) >= cueCooldown else { return false }

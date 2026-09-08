@@ -1,10 +1,6 @@
 import Testing
 @testable import SpeakUp
 
-/// Pins the read-aloud alignment engine: greedy matching against a reference
-/// passage, including the two ways real reading drifts from the page —
-/// skipped words and inserted fillers — plus number normalization, because
-/// the page says "seventy-two" while the recognizer writes "72".
 struct ReadAloudAlignmentTests {
 
     // MARK: - Matching basics

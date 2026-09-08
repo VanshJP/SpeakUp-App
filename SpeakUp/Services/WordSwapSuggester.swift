@@ -2,8 +2,6 @@ import Foundation
 
 // MARK: - Value types
 
-/// One span of a rendered context fragment: the crutch word itself or the
-/// ordinary words around it.
 nonisolated struct FragmentPiece: Hashable, Sendable {
     let text: String
     let isTarget: Bool
@@ -22,8 +20,6 @@ nonisolated struct WordSwapOption: Hashable, Sendable {
     }
 }
 
-/// One concrete "here is where you said it, here is what to say instead"
-/// moment backing a habit row.
 nonisolated struct WordSwapOccurrence: Identifiable, Hashable, Sendable {
     let timestamp: TimeInterval
     let fragment: [FragmentPiece]
@@ -35,9 +31,6 @@ nonisolated struct WordSwapOccurrence: Identifiable, Hashable, Sendable {
 
 // MARK: - Token
 
-/// A single timed transcript word with everything disambiguation needs:
-/// normalized text for matching, raw casing for fragments, timing for
-/// pause-based sentence boundaries, and pipeline filler tagging.
 nonisolated struct SwapToken: Hashable, Sendable {
     let text: String
     let raw: String
@@ -52,19 +45,10 @@ nonisolated struct SwapToken: Hashable, Sendable {
 
 // MARK: - Suggester
 
-/// Pure, deterministic, on-device swap suggestions. For one occurrence of a
-/// crutch word inside its token stream, produce ONE primary replacement plus
-/// up to two alternates — chosen from what actually surrounds the word
-/// (numbers, proper nouns, sentence position), not from a flat list.
-///
-/// Rules are ordered most-specific-first per word; the first match wins, so
-/// identical input always yields identical output.
 nonisolated enum WordSwapSuggester {
 
     // MARK: Entry point
 
-    /// Suggestions for one occurrence of `word` occupying `tokenRange`
-    /// (multi-word hedges like "kind of" span several tokens).
     static func options(
         for word: String,
         category: CrutchCategory,
@@ -175,8 +159,6 @@ nonisolated enum WordSwapSuggester {
     }
 
     private static func agreementMarkerOptions(at index: Int, _ tokens: [SwapToken]) -> [WordSwapOption] {
-        // Confirmation-seeking tag at the end of a thought: replace with a
-        // real check-in used once, not every sentence.
         if isSentenceEnd(index, tokens) {
             return [
                 option("hold silence — let it land", cue: "tag at sentence end"),
@@ -229,7 +211,6 @@ nonisolated enum WordSwapSuggester {
     private static func intensifierOptions(_ word: String, at index: Int, _ tokens: [SwapToken]) -> [WordSwapOption] {
         let next = token(index + 1, in: tokens)
 
-        // "really good" → "excellent": one strong word replaces two weak ones.
         if let next, let stronger = strengtheners[next] {
             return [
                 option("“\(stronger)”", cue: "one strong word beats two"),
@@ -238,7 +219,6 @@ nonisolated enum WordSwapSuggester {
             ]
         }
 
-        // Generic adjective underneath: at least name the move precisely.
         if let next, isAdjectiveish(next) {
             return [
                 option("one stronger adjective", cue: "upgrade “\(word) \(next)”"),
@@ -324,7 +304,6 @@ nonisolated enum WordSwapSuggester {
         }
     }
 
-    /// First entries of the static alternatives map as plain options.
     private static func mappedSlice(_ word: String) -> [WordSwapOption]? {
         guard let own = LexiconInsightsEngine.alternatives[word], !own.isEmpty else { return nil }
         return own.prefix(3).map { WordSwapOption($0) }
@@ -336,9 +315,6 @@ nonisolated enum WordSwapSuggester {
 
     // MARK: Row-level ranking
 
-    /// The dominant replacements across a habit's occurrences: most frequent
-    /// pattern first, ties broken by earliest use, then alphabetically. This
-    /// turns per-occurrence picks into one row-level suggestion.
     static func dominantReplacements(in occurrences: [WordSwapOccurrence]) -> [String] {
         var frequency: [String: Int] = [:]
         var firstSeen: [String: Int] = [:]
@@ -362,7 +338,6 @@ nonisolated enum WordSwapSuggester {
         return Array(ranked.prefix(3))
     }
 
-    /// The winning option itself, so its cue can render beside the chips.
     static func primaryOption(in occurrences: [WordSwapOccurrence]) -> WordSwapOption? {
         guard let winner = dominantReplacements(in: occurrences).first,
               let match = occurrences.first(where: { $0.best?.replacement == winner })
@@ -372,9 +347,6 @@ nonisolated enum WordSwapSuggester {
 
     // MARK: Fragment building
 
-    /// ±`radius` words around the occurrence range, original casing
-    /// preserved, every token of a multi-word hit marked. Ellipses mark
-    /// truncation on either side.
     static func fragment(
         tokenRange: Range<Int>,
         radius: Int = 6,
@@ -440,7 +412,6 @@ nonisolated enum WordSwapSuggester {
         if determiners.contains(next) { return true }
         if isNumeric(next) { return true }
         if isProperNounAt(index + 1, in: tokens) { return true }
-        // Plural-ish follower ("platforms like Slack") without a determiner.
         return next.count > 3 && next.hasSuffix("s") && !next.hasSuffix("ss") && !verbLikeSEndings.contains(next)
     }
 

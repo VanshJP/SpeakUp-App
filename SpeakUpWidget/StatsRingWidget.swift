@@ -69,7 +69,6 @@ struct StatsRingWidgetView: View {
     private var smallLayout: some View {
         VStack(spacing: 6) {
             ZStack {
-                // Outer ring - Streak
                 WidgetRing(
                     progress: Double(min(entry.streak, streakTarget)) / Double(streakTarget),
                     color: .orange,
@@ -77,7 +76,6 @@ struct StatsRingWidgetView: View {
                 )
                 .frame(width: 80, height: 80)
 
-                // Middle ring - Sessions
                 WidgetRing(
                     progress: Double(min(entry.sessions, entry.sessionsGoal)) / Double(max(entry.sessionsGoal, 1)),
                     color: .teal,
@@ -85,7 +83,6 @@ struct StatsRingWidgetView: View {
                 )
                 .frame(width: 60, height: 60)
 
-                // Inner ring - Score
                 WidgetRing(
                     progress: Double(entry.score) / 100,
                     color: scoreColor,
@@ -93,14 +90,12 @@ struct StatsRingWidgetView: View {
                 )
                 .frame(width: 40, height: 40)
 
-                // Center score
                 Text("\(entry.score)")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(scoreColor)
             }
             .frame(height: 90)
 
-            // Compact metrics row
             HStack(spacing: 0) {
                 miniMetric(icon: "flame.fill", value: "\(entry.streak)", color: .orange)
                 miniMetric(icon: "mic.fill", value: "\(entry.sessions)/\(entry.sessionsGoal)", color: .teal)
@@ -115,7 +110,6 @@ struct StatsRingWidgetView: View {
 
     private var mediumLayout: some View {
         HStack(spacing: 16) {
-            // Rings on the left
             ZStack {
                 WidgetRing(
                     progress: Double(min(entry.streak, streakTarget)) / Double(streakTarget),
@@ -148,7 +142,6 @@ struct StatsRingWidgetView: View {
                 }
             }
 
-            // Metrics on the right
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "chart.bar.fill")

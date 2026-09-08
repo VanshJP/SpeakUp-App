@@ -11,8 +11,6 @@ private let t0 = Date(timeIntervalSince1970: 1_750_000_000)
 
 @MainActor
 struct FreeTierPolicyTests {
-    /// The whole offer during the 14 days: see everything, then decide. iCloud
-    /// sync is the one exception, so it is the one thing pinned as gated.
     @Test func theTrialGatesOnlyICloudSync() {
         #expect(FreeTierPolicy.trial.gatedFeatures == [.iCloudSync])
         #expect(!FreeTierPolicy.trial.gates(.unlimitedAnalyses))
@@ -28,8 +26,6 @@ struct FreeTierPolicyTests {
         #expect(FreeTierPolicy.expired.gates(.iCloudSync))
     }
 
-    /// The share loop is the plan's primary distribution channel. Gating it
-    /// behind the purchase would mean only buyers can recruit users.
     @Test func progressCardsStayFree() {
         #expect(!FreeTierPolicy.expired.gates(.progressCards))
         #expect(!FreeTierPolicy.trial.gates(.progressCards))
@@ -59,8 +55,6 @@ struct PracticeTrialTests {
         #expect(PracticeTrial.state(startedAt: t0, now: t0.addingTimeInterval(365 * day)) == .expired)
     }
 
-    /// Any time left has to read as at least one day — a countdown showing zero
-    /// while the trial still works is a bug report.
     @Test func daysRemainingRoundsUp() {
         let endsOn = t0.addingTimeInterval(14 * day)
         #expect(PracticeTrial.daysRemaining(until: endsOn, now: t0) == 14)
@@ -117,7 +111,6 @@ struct AllowanceDisclosureTests {
         let decision = AllowanceDecision.trial(endsOn: t0.addingTimeInterval(14 * day))
         #expect(decision.summary(now: t0) == "Free trial · 14 days left")
         #expect(decision.summary(now: t0.addingTimeInterval(11 * day)) == "Free trial · 3 days left")
-        // Nothing is being counted down during the trial.
         #expect(decision.remaining == nil)
     }
 
@@ -182,8 +175,6 @@ struct PracticeAllowanceTests {
 
     // MARK: - Trial
 
-    /// The clock has not started, so nothing has been spent and the line reports
-    /// the full fourteen.
     @Test func anUnstartedTrialReportsItsFullLength() {
         #expect(decide(AllowanceState(), trial: .notStarted, at: t0)
                 == .trial(endsOn: t0.addingTimeInterval(14 * day)))
@@ -242,8 +233,6 @@ struct PracticeAllowanceTests {
                 == .cycle(remaining: 3, resetsOn: t0.addingTimeInterval(60 * day)))
     }
 
-    /// Someone who comes back after a year gets one allowance, not one for
-    /// every month they were away.
     @Test func longAbsenceGrantsOneAllowance() {
         var state = AllowanceState()
         for _ in 0..<3 { state = spend(state, at: t0) }
@@ -284,8 +273,6 @@ struct AnalyticsPrivacyTests {
         #expect(AnalyticsBucket.sentiment(scale: 5) == "positive")
     }
 
-    /// The schema is the privacy control. If a score or a recipient ever
-    /// appears in a dimension, this is where it should be caught.
     @Test func eventsCarryNoIdentifyingDetail() {
         let analysis = AnalyticsEvent.analysisCompleted(
             sessionNumber: 4, processingPath: "whisper", elapsed: 42

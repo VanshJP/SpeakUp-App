@@ -12,8 +12,6 @@ enum WordMatchState: Equatable {
     case mismatched(spoken: String)
     case skipped
 
-    /// The reader is past this word, however it went. Drives whether a word is
-    /// tappable and whether it still animates.
     var isSettled: Bool {
         switch self {
         case .matched, .mismatched, .skipped: return true
@@ -21,7 +19,6 @@ enum WordMatchState: Equatable {
         }
     }
 
-    /// Settled but not clean — the states worth colouring in a transcript.
     var needsAttention: Bool {
         switch self {
         case .mismatched, .skipped: return true
@@ -62,9 +59,6 @@ class ReadAloudService {
     var mismatchedWordCount: Int = 0
     var isListening = false
 
-    /// Set when the recognizer dies mid-session (missing on-device assets,
-    /// engine loss). The view model surfaces this as a result notice instead
-    /// of letting the session end in a confident-looking zero.
     var recognitionFailureMessage: String?
 
     private var referenceWords: [String] = []
@@ -130,10 +124,6 @@ class ReadAloudService {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        // Unconditional: on-device processing is a product guarantee, not a
-        // preference. Left unset, the recognizer is free to stream microphone
-        // audio to Apple's servers. If the on-device assets are not available
-        // the request fails, and failing is the correct outcome here.
         request.requiresOnDeviceRecognition = true
         requestBox.withLock { $0 = request }
 
@@ -166,8 +156,6 @@ class ReadAloudService {
             guard let self else { return }
 
             if let result {
-                // Apple fires this callback on an internal queue; hop to the
-                // main actor before processResult touches observable state.
                 Task { @MainActor in
                     self.processResult(result)
                 }
@@ -213,11 +201,6 @@ class ReadAloudService {
     // MARK: - Process Recognition Result
 
     private func processResult(_ result: SFSpeechRecognitionResult) {
-        // Use formattedString split into words instead of segments.
-        // Segments can split words mid-utterance in partial results (e.g. "quantum"
-        // appears as segment "quant" then later corrects). formattedString gives the
-        // recognizer's best word-boundary output, and re-evaluating on every callback
-        // lets earlier partial mis-splits self-correct as more audio arrives.
         let transcript = result.bestTranscription.formattedString
         guard transcript != lastProcessedTranscript else { return }
         lastProcessedTranscript = transcript
@@ -242,7 +225,6 @@ class ReadAloudService {
                 self.mismatchedWordCount = computed.mismatched
             }
 
-            // Check if passage is complete
             if computed.refIndex >= self.referenceWords.count {
                 self.stop()
             }
@@ -260,17 +242,6 @@ class ReadAloudService {
     /// Pure alignment core, static and nonisolated so unit tests can pin its
     /// behavior directly (default isolation would otherwise fence it behind
     /// the main actor).
-    ///
-    /// Greedy left-to-right match. Handles the two ways real reading drifts
-    /// from the page:
-    /// - **Skipped words** (reader drops a word): a spoken word that matches a
-    ///   nearby *reference* word marks everything between as `.skipped`.
-    /// - **Inserted words** (filler, stumble): a spoken word matching nothing
-    ///   is checked against what the *next* spoken word resolves to — if that
-    ///   lands on the current or an upcoming reference word, the first word
-    ///   was an insertion, not a miss. Single-word lookahead keeps skip vs
-    ///   insert deterministic; deeper stumbles re-sync on the next partial
-    ///   result anyway.
     nonisolated static func computeAlignment(
         reference: [String],
         normalizedReference: [String],
@@ -303,8 +274,6 @@ class ReadAloudService {
                 continue
             }
 
-            // Skipped-reference path: this spoken word belongs further ahead
-            // in the passage.
             let lookAhead = min(refIndex + 3, reference.count)
             var foundAhead = false
 
@@ -323,9 +292,6 @@ class ReadAloudService {
                 continue
             }
 
-            // Insertion path: if the NEXT spoken word resolves at or near the
-            // current position, this word was said in passing ("um") — drop it
-            // without consuming a reference word or counting a miss.
             let nextIndex = spokenIndex + 1
             if nextIndex < spokenWords.count {
                 let nextNorm = normalize(spokenWords[nextIndex])
@@ -387,12 +353,6 @@ class ReadAloudService {
         return Self.spelledNumberValue(stripped) ?? stripped
     }
 
-    /// Parses tokens composed entirely of number words to their digit string.
-    /// Handles both spaced ("one hundred") and fused ("onehundred",
-    /// "seventytwo" — hyphens were stripped upstream) forms by greedily
-    /// consuming the longest number-word prefix at each step. Returns nil for
-    /// anything containing a non-number word — including plain digits, which
-    /// are already canonical.
     private nonisolated static func spelledNumberValue(_ token: String) -> String? {
         guard !token.isEmpty, token.contains(where: \.isLetter) else { return nil }
 

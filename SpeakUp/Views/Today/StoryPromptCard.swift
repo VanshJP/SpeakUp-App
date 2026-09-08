@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Today's story, in the same slot and the same skeleton as
-/// `InteractivePromptCard`: header, text, words row, Start footer.
-///
-/// A reading surface, not a control. The whole-card tap it used to carry needed
-/// a pulsing "Tap to practice" caption to be discoverable at all, which is the
-/// tell that it was the wrong affordance — the Start capsule in the footer is
-/// the action now, and reroll moved into the header with the length.
 struct StoryPromptCard: View {
     let story: Story
     @Binding var selectedDuration: RecordingDuration

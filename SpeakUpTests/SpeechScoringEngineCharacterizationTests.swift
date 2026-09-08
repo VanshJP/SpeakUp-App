@@ -241,7 +241,6 @@ struct MeanLengthOfRunTests {
         spans.map { TranscriptionWord(word: "w", start: $0.0, end: $0.1) }
     }
 
-    // Three groups of three words separated by 0.5s gaps. Dyadic offsets keep floats exact.
     private func groupedSpans() -> [(Double, Double)] {
         var spans: [(Double, Double)] = []
         for group in 0..<3 {
@@ -279,7 +278,6 @@ struct MeanLengthOfRunTests {
     }
 
     @Test func outOfOrderSegmentsSortBeforeGapDetection() {
-        // WhisperKit can emit out-of-order segments; unsorted gaps once inflated MLR.
         let spans = groupedSpans()
         let sorted = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans), pauseMetadata: [])
         let reversed = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(Array(spans.reversed())), pauseMetadata: [])
@@ -438,7 +436,6 @@ struct EnhancedMetricsPipelineTests {
     }
 
     @Test func fillerWordsExcludedFromMATTRAndArticulation() {
-        // 30 content + 15 filler words, all 0.5s: voiced 22.5s, spoken 30 words.
         let metrics = SpeechScoringEngine.computeEnhancedMetrics(
             words: timedWords(interleavingFillers: true),
             scoringText: paragraph,
@@ -460,7 +457,6 @@ struct EnhancedMetricsPipelineTests {
     }
 
     @Test func emptyOrZeroDurationFallsBackToDefaults() {
-        // Unlike detectGibberish, the pipeline reports no gibberish for empty input.
         let noWords = SpeechScoringEngine.computeEnhancedMetrics(
             words: [], scoringText: paragraph, actualDuration: 30, pauseMetadata: [])
         let noTime = SpeechScoringEngine.computeEnhancedMetrics(

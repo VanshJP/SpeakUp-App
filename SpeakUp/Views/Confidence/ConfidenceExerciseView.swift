@@ -11,7 +11,6 @@ struct ConfidenceExerciseView: View {
             AppBackground(style: .recording)
 
             VStack(spacing: 32) {
-                // Close button
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
@@ -53,7 +52,6 @@ struct ConfidenceExerciseView: View {
 
             Spacer()
 
-            // Step card
             GlassCard(cornerRadius: 20, tint: exercise.category.color) {
                 VStack(spacing: 16) {
                     Image(systemName: exercise.category.icon)

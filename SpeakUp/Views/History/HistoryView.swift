@@ -16,7 +16,6 @@ struct HistoryView: View {
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
     var onShowGoals: () -> Void = {}
-    /// Empty-state CTA — typically switches to Today so the user can start a take.
     var onStartPractice: () -> Void = {}
 
     // MARK: - Filtered Summaries
@@ -280,9 +279,6 @@ struct HistoryView: View {
 
 // MARK: - History Filter
 
-/// Three filters, not five. "High Score" and "This Week" were slicing a list
-/// that is already reverse-chronological and searchable — scrolling answered
-/// both faster than a chip did.
 enum HistoryFilter: String, CaseIterable, Identifiable {
     case all, favorites, stories
 
@@ -312,13 +308,9 @@ struct FilterChip: View {
     let icon: String
     let isSelected: Bool
     var count: Int? = nil
-    /// Identity color for chips that stand for a user-owned thing (a Story
-    /// folder). Idle chips wear it on the glyph; selected chips are the solid
-    /// white pill either way, so selection always reads the same.
     var tint: Color? = nil
     let action: () -> Void
 
-    /// Ink on a selected (solid white) chip.
     private static let onLight = Color(red: 0.07, green: 0.07, blue: 0.08)
 
     private var iconStyle: AnyShapeStyle {
@@ -351,7 +343,6 @@ struct FilterChip: View {
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
         }
-        // Plain: GlassPressStyle scales live glass into the dark clipped flash.
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
@@ -372,9 +363,6 @@ struct RecordingRow: View {
         Self.detailedDateFormatter.string(from: summary.date)
     }
 
-    /// One plain-language metadata line: date · duration · category. Color
-    /// and chips stay out of the list — the score gauge on the right is the
-    /// only colored element, so rows scan instead of shouting.
     private var metadataLine: String {
         var parts = [detailedDateString, summary.formattedDuration]
         if summary.storyId != nil {

@@ -103,7 +103,6 @@ struct StoryDetailView: View {
         }
     }
 
-    /// One decode pass at load time — bodies render the value snapshots only.
     private func reloadRecordings() {
         recordingSummaries = PracticeRecordingSummary.from(
             recordings: viewModel.linkedRecordings(for: story)
@@ -190,12 +189,6 @@ struct StoryDetailView: View {
 
     // MARK: - Primary Actions grid
 
-    /// One light pill for the action you came here to take, two secondary
-    /// pills for the side doors.
-    ///
-    /// There is deliberately no score tile — the metrics row directly beneath
-    /// already reports best and average, and a fourth tile that only displayed
-    /// a number read as a button that did nothing.
     private var primaryActions: some View {
         VStack(spacing: 10) {
             GlassButton(
@@ -316,7 +309,6 @@ struct StoryDetailView: View {
         }
     }
 
-    /// Force white base color on read-only render so dark mode text is legible.
     private func styledForDisplay(_ attributed: NSAttributedString) -> NSAttributedString {
         let mutable = NSMutableAttributedString(attributedString: attributed)
         let range = NSRange(location: 0, length: mutable.length)

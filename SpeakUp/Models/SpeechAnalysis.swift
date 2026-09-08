@@ -52,8 +52,6 @@ nonisolated struct TranscriptionWord: Codable, Identifiable, Equatable {
     }
 }
 
-/// Distinguishes classic hesitation fillers from structural-repetition frames
-/// so one list UI can label them honestly without a second render path.
 nonisolated enum FillerHitKind: String, Codable, Sendable, Equatable {
     case filler
     case structural
@@ -64,7 +62,6 @@ nonisolated struct FillerWord: Codable, Identifiable, Sendable, Equatable {
     let word: String
     var count: Int
     var timestamps: [TimeInterval]
-    /// `.filler` for um/like; `.structural` for repeated opening frames.
     var kind: FillerHitKind
 
     init(
@@ -444,7 +441,6 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
     var sentenceAnalysis: SentenceAnalysis?
     var promptRelevanceScore: Int?
     var wpmTimeSeries: [WPMDataPoint]?
-    // Advanced metrics (populated when audio/text data available)
     var pitchMetrics: PitchMetrics?
     var rateVariation: RateVariationMetrics?
     var emphasisMetrics: EmphasisMetrics?
@@ -452,11 +448,7 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
     var textQuality: TextQualityMetrics?
     var audioIsolationMetrics: AudioIsolationMetrics?
     var speakerIsolationMetrics: SpeakerIsolationMetrics?
-    /// Enhanced scoring metrics from SpeechScoringEngine (MATTR, PTR, MLR, substance, fluency)
     var enhancedMetrics: EnhancedSpeechMetrics?
-    /// Timestamp set when `enhanceWithLLM` has applied LLM output to this analysis.
-    /// Used to gate `enhanceCoherenceIfNeeded` so the LLM does not re-run on every
-    /// detail-view open and drift the persisted overall score.
     var llmEnhancedAt: Date?
 
     init(
@@ -511,7 +503,6 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
         self.llmEnhancedAt = llmEnhancedAt
     }
 
-    // Custom Decodable to handle missing fields in existing data
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         fillerWords = try container.decode([FillerWord].self, forKey: .fillerWords)
@@ -707,7 +698,6 @@ nonisolated struct ScoreWeights: Sendable {
 
     nonisolated static let defaults = ScoreWeights()
 
-    /// Returns a copy with all weights normalized to sum to exactly 1.0
     var normalized: ScoreWeights {
         let total = clarity + pace + filler + pause + vocalVariety + delivery + vocabulary + structure + relevance
         guard total > 0 else { return .defaults }

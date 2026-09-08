@@ -68,7 +68,6 @@ final class Story {
 
     // MARK: - Attributed Content
 
-    /// Rich-text content, with a plain-text fallback if no attributed data has been saved yet.
     var attributedContent: NSAttributedString {
         get {
             if let data = contentAttributed,

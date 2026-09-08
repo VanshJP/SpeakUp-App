@@ -1,13 +1,5 @@
 import SwiftUI
 
-/// Full-screen try-on for the Recording Look picker. It plays one session in
-/// order — prepare countdown, then recording — on the chosen backdrop, because
-/// that is the sequence the user actually stands in. Splitting it into a
-/// "countdown preview" and a separate "recording preview" made one picker feel
-/// like two unrelated screens.
-///
-/// The record button is the way out, in both phases, exactly where it sits on
-/// the real screen.
 struct RecordingLookPreview: View {
     let waveformStyle: WaveformStyle
     let buttonStyle: RecordButtonStyle
@@ -21,9 +13,6 @@ struct RecordingLookPreview: View {
     @State private var isRecording = false
     @State private var isPulsing = false
 
-    /// Sitting through a real 15 s countdown to look at a dial is a waste. Five
-    /// seconds reads the style, and a tap skips ahead like the real screen's
-    /// Start Now.
     private var totalSeconds: Int { min(max(1, countdownDuration), 5) }
 
     var body: some View {

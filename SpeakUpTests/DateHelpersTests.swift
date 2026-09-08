@@ -32,7 +32,6 @@ struct StreakCalculationTests {
     }
 
     @Test func gapInMiddleStopsCount() {
-        // today, yesterday, then a hole at -2, then -3: streak is 2.
         let dates = [Self.today, daysAgo(1), daysAgo(3)]
         #expect(Date.calculateStreak(from: dates) == 2)
     }

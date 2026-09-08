@@ -17,12 +17,6 @@ extension CrutchCategory {
 
 // MARK: - Crutch Swaps Card
 
-/// The per-session version of the Words tab: every crutch word this take used,
-/// where it happened (playable), and what to say instead — grounded in one
-/// real sentence from the take, not generic advice.
-///
-/// Sits beside the Filler Words section on the transcript tab — fillers show
-/// the what-and-where, this card adds the so-what.
 struct CrutchSwapsCard: View {
     let hits: [SessionWordHit]
     let onPlay: (TimeInterval) -> Void
@@ -96,8 +90,6 @@ struct CrutchSwapsCard: View {
 
     // MARK: Context fragment
 
-    /// The actual sentence around the strongest occurrence; the crutch word
-    /// is tinted so the eye lands on what triggered the advice.
     private func exampleBlock(_ fragment: [FragmentPiece], tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("In context")

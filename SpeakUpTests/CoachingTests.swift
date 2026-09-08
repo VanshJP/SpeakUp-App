@@ -81,7 +81,6 @@ struct CoachPlanTests {
     }
 
     @Test func improvingTrendReadsNewestHalfAgainstOldest() {
-        // Newest-first: four recent 80s against four older 50s.
         let window = Array(repeating: analysis(clarity: 80), count: 4)
             + Array(repeating: analysis(clarity: 50), count: 4)
         let plan = CoachPlanService.plan(window: window)
@@ -132,7 +131,6 @@ struct CoachPlanTests {
     }
 
     @Test func analyticsSlugsMatchTheShippedFunnelNames() {
-        // These strings predate CoachDimension. Renaming one forks its series.
         #expect(CoachDimension.fillers.analyticsSlug == "filler")
         #expect(CoachDimension.pauses.analyticsSlug == "pause")
         #expect(CoachDimension.vocalVariety.analyticsSlug == "vocal_variety")
@@ -621,7 +619,6 @@ struct CoachingInsightSanitizerTests {
     }
 
     @Test func specificityAcceptsMetricsNumbersOrLateQuotes() {
-        // Metric plus number: always accepted.
         #expect(CoachingInsightSanitizer.isSpecificEnough(
             ["Fillers hit 9 in 120 words"],
             transcript: "irrelevant"
@@ -633,7 +630,6 @@ struct CoachingInsightSanitizerTests {
             transcript: lateQuote
         ))
 
-        // Pure generic advice fails.
         #expect(!CoachingInsightSanitizer.isSpecificEnough(
             ["Be more confident and engaging overall"],
             transcript: "something something else entirely different here"
@@ -642,7 +638,6 @@ struct CoachingInsightSanitizerTests {
 
     // MARK: Bare score naming
 
-    /// Distinct subscores so each bare number maps to exactly one metric.
     private let namingSubscores = SpeechSubscores(
         clarity: 71,
         pace: 82,

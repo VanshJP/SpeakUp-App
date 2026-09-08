@@ -1,8 +1,5 @@
 import Foundation
 
-/// Gates words that enter the vocab bank, dictation dictionary, or daily
-/// word-workout spotlight. Exact-token matching (not substrings) so "class"
-/// and "assessment" stay allowed.
 nonisolated enum WordSafety {
     enum Rejection: Equatable, Sendable {
         case empty
@@ -18,7 +15,6 @@ nonisolated enum WordSafety {
         word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    /// Whether this string may be stored in the word bank or dictation dictionary.
     static func allows(_ word: String) -> Bool {
         rejection(for: word) == nil
     }
@@ -67,8 +63,6 @@ nonisolated enum WordSafety {
 
     // MARK: - Fillers excluded from spotlight
 
-    /// Snapshot of hesitation sounds plus context-dependent fillers. Kept here
-    /// so challenge picking stays a pure, nonisolated function.
     private static let challengeFillers: Set<String> = [
         "um", "umm", "ummm", "uh", "uhh", "uhhh", "er", "err", "ah", "ahh",
         "eh", "oh", "ohh", "mm", "mmm", "mhm", "hmm", "hmmm", "huh", "erm",

@@ -6,21 +6,14 @@ enum AppColors {
     /// Muted Teal - Primary brand color
     static let primary = Color(red: 0.051, green: 0.518, blue: 0.533) // #0D8488
     
-    /// Warm Gray - Accent color
     static let accent = Color(red: 0.392, green: 0.455, blue: 0.545) // #64748B
     
     // MARK: - Semantic Colors
 
-    /// Vivid emerald. Positive state, completion, on-target metrics.
-    /// Matches `scoreHigh` so a passing score and a success pill agree.
     static let success = Color(red: 0.220, green: 0.800, blue: 0.502) // #38CC80
 
-    /// Bright amber. Caution, fillers, mid-range state. Warmer and far hotter
-    /// than `categoryAmber` so state reads as state, not category identity.
     static let warning = Color(red: 0.961, green: 0.663, blue: 0.235) // #F5A93C
 
-    /// Vivid coral red. Failure, destructive actions, low scores.
-    /// Matches `scoreLow` for the same reason `success` matches `scoreHigh`.
     static let error = Color(red: 0.961, green: 0.329, blue: 0.290) // #F5544A
 
     /// Muted steel blue. Informational badges only — never a score band.
@@ -35,19 +28,14 @@ enum AppColors {
 
     // MARK: - Score Colors
 
-    /// 0–39. Vivid coral red.
     static let scoreLow = Color(red: 0.961, green: 0.329, blue: 0.290) // #F5544A
 
-    /// 40–59. Bright orange.
     static let scoreMid = Color(red: 1.000, green: 0.565, blue: 0.212) // #FF9036
 
-    /// 60–79. Bright gold — reads as yellow without being `Color.yellow`.
     static let scoreGood = Color(red: 0.961, green: 0.773, blue: 0.259) // #F5C542
 
-    /// 80–100. Vivid emerald.
     static let scoreHigh = Color(red: 0.220, green: 0.800, blue: 0.502) // #38CC80
 
-    /// Neutral fill for an absent or not-yet-computed score.
     static let scoreEmpty = Color(red: 0.416, green: 0.435, blue: 0.463) // #6A6F76
 
     static func scoreColor(for score: Int) -> Color {
@@ -65,8 +53,6 @@ enum AppColors {
         }
     }
 
-    /// One-word verdict paired with `scoreColor`. Keeps the wording for a
-    /// given band identical everywhere a score is presented.
     static func scoreVerdict(for score: Int) -> String {
         switch score {
         case 0..<40: return "Building"
@@ -77,8 +63,6 @@ enum AppColors {
         }
     }
 
-    /// Recessed track behind any ring, meter, or progress capsule. Previously
-    /// hardcoded as `Color.white.opacity(0.07)` in a dozen places.
     static let meterTrack = Color.white.opacity(0.07)
 
     // MARK: - Difficulty Colors
@@ -94,8 +78,6 @@ enum AppColors {
         }
     }
 
-    /// Read-aloud carries its own difficulty enum but means the same three
-    /// bands. Same tones, so the two surfaces can't drift apart.
     static func difficultyColor(_ difficulty: ReadAloudDifficulty) -> Color {
         switch difficulty {
         case .easy:
@@ -123,31 +105,23 @@ enum AppColors {
     //    as distinct identities without screaming on the dark glass.
     //    Functional `success` / `warning` / `error` stay reserved for state.
 
-    /// Brighter teal-leaning tone — used widely as a gradient companion to `primary`.
     static let categoryBrandBright = Color(red: 0.169, green: 0.659, blue: 0.659)
 
-    /// Muted accent gray for reflective utility surfaces (callouts, takeaways).
     static let categoryNeutral = accent
 
-    /// Cooler accent for analytical utility surfaces.
     static let categoryNeutralCool = Color(red: 0.298, green: 0.388, blue: 0.494)
 
-    /// Brand teal as an identity tone (alias of `primary`).
     static let categoryTeal = primary
 
-    /// Muted blue-violet. Interpersonal / decision categories.
     static let categoryIndigo = Color(red: 0.349, green: 0.400, blue: 0.651) // #5966A6
 
-    /// Muted wine-purple. Narrative / introspective categories.
     static let categoryPlum = Color(red: 0.549, green: 0.361, blue: 0.518) // #8C5C84
 
     /// Muted gold. Energy / spark categories. Distinct from semantic warning orange.
     static let categoryAmber = Color(red: 0.749, green: 0.576, blue: 0.318) // #BF9351
 
-    /// Muted green-gray. Growth / calm categories. Distinct from semantic success green.
     static let categorySage = Color(red: 0.451, green: 0.624, blue: 0.502) // #739F80
 
-    /// Muted terracotta. Heat / analytical-warmth categories. Distinct from semantic error red.
     static let categoryCopper = Color(red: 0.749, green: 0.471, blue: 0.400) // #BF7866
 
     // MARK: - Practice Tool Tones
@@ -170,7 +144,6 @@ enum AppColors {
         accent
     ]
 
-    /// Stable tone for the subscore at `index`, wrapping if the list grows.
     static func subscoreTone(_ index: Int) -> Color {
         subscoreTones[index % subscoreTones.count]
     }
@@ -186,20 +159,13 @@ enum AppColors {
 
     // MARK: - Surfaces
 
-    /// Faint lift applied over the material fill of every card so surfaces
-    /// read a step lighter than the navy canvas.
     static let surfaceLift = Color.white.opacity(0.03)
 
-    /// Uniform hairline stroke around cards and controls.
     static let cardStroke = Color.white.opacity(0.07)
 
     // MARK: - Glass Tints
 
     static let glassTintPrimary = primary.opacity(0.10)
-    /// Soft white lift for untinted Liquid Glass on the navy canvas. Prefer
-    /// `@Environment(\.glassAppearance).glassTint` in live UI so Settings →
-    /// Appearance can switch Light/Dark; this constant is the Light default
-    /// for previews and call sites that cannot read the environment.
     static let glassTintAccent = GlassAppearance.light.glassTint
     static let glassTintSuccess = success.opacity(0.10)
 }

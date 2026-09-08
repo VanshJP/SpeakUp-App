@@ -5,10 +5,6 @@ import os
 /// Where recorded events go. One implementation ships (on-device); a network
 /// sink can be added later without touching a single call site.
 ///
-/// Requirements are `nonisolated` because the local sink owns a background
-/// queue — under the project's default MainActor isolation, plain protocol
-/// requirements would force every implementation onto the main actor and
-/// break the file writes.
 protocol AnalyticsSink: AnyObject {
     nonisolated func record(_ event: RecordedAnalyticsEvent)
     nonisolated func allEvents() -> [RecordedAnalyticsEvent]
@@ -19,11 +15,6 @@ protocol AnalyticsSink: AnyObject {
 /// Coarse behavioural measurement that keeps the no-account, nothing-uploaded
 /// promise intact.
 ///
-/// Events are buffered in memory and flushed to a JSON file inside the app's
-/// own container. Nothing is transmitted. That is enough to run the launch
-/// gates — activation rate, time to value, qualified paywall conversion — from
-/// a TestFlight device, and it means adopting a hosted analytics vendor later
-/// is a sink swap rather than an instrumentation project.
 @MainActor
 @Observable
 final class AnalyticsService {
@@ -32,8 +23,6 @@ final class AnalyticsService {
     private let logger = Logger.app("Analytics")
     private var sink: AnalyticsSink
 
-    /// Mirrors the most recent events so the diagnostics screen can render
-    /// without re-reading the file on every keystroke.
     private(set) var recentEvents: [RecordedAnalyticsEvent] = []
 
     private init(sink: AnalyticsSink = LocalAnalyticsSink()) {
@@ -41,7 +30,6 @@ final class AnalyticsService {
         recentEvents = sink.allEvents()
     }
 
-    /// Swap in a different destination (a hosted sink, or a no-op in tests).
     func use(sink newSink: AnalyticsSink) {
         sink = newSink
         recentEvents = newSink.allEvents()
@@ -57,7 +45,6 @@ final class AnalyticsService {
         logger.debug("\(event.name, privacy: .public)")
     }
 
-    /// Logs an event at most once for the lifetime of the install.
     func logOnce(_ event: AnalyticsEvent, key: String) {
         let flag = "analytics.once.\(key)"
         guard !UserDefaults.standard.bool(forKey: flag) else { return }
@@ -70,15 +57,12 @@ final class AnalyticsService {
         recentEvents = []
     }
 
-    /// Writes buffered events to disk immediately instead of waiting out the
-    /// debounce — called when the app backgrounds.
     func flushNow() {
         sink.flushNow()
     }
 
     // MARK: - Scorecard
 
-    /// The weekly scorecard, computed on-device from the local event log.
     func scorecard() -> AnalyticsScorecard {
         AnalyticsScorecard(events: sink.allEvents())
     }
@@ -96,9 +80,6 @@ final class AnalyticsService {
 /// Append-only on-device log with a hard cap. Writes are debounced to avoid a
 /// file write per event during a burst.
 ///
-/// Explicitly off the main actor: the project's `SWIFT_DEFAULT_ACTOR_ISOLATION`
-/// is MainActor, and without `nonisolated` every `queue.async` body would be a
-/// concurrency error for touching `events` off-actor.
 nonisolated final class LocalAnalyticsSink: AnalyticsSink, @unchecked Sendable {
     static let retainedEventLimit = 2000
 
@@ -175,8 +156,6 @@ nonisolated final class LocalAnalyticsSink: AnalyticsSink, @unchecked Sendable {
 
 // MARK: - Scorecard
 
-/// The launch metrics the plan governs stage gates with, derived from the
-/// local event log. Pure computation over a snapshot — no I/O.
 nonisolated struct AnalyticsScorecard {
     let firstOpens: Int
     let activations: Int
@@ -208,8 +187,6 @@ nonisolated struct AnalyticsScorecard {
         timeToValueBuckets = buckets
     }
 
-    /// First completed analyses over first opens. On a single device this is
-    /// 0 or 1 — it becomes meaningful once beta logs are pooled by hand.
     var activationRate: Double? {
         guard firstOpens > 0 else { return nil }
         return Double(activations) / Double(firstOpens)

@@ -2,15 +2,6 @@ import SwiftUI
 
 // MARK: - SubscoreRadarChart
 
-/// Sunburst / annular-wedge chart that visualizes a speech recording's subscores
-/// on a shared 0-100 scale. Each metric occupies one colored wedge whose radial
-/// length encodes its score. The composite overall score sits as plain text in
-/// the central hole.
-///
-/// Designed for the SpeakUp glassmorphism aesthetic — translucent track wedges,
-/// score-color gradient fills, subtle concentric grid rings, and an animated
-/// draw-in when `animate` is toggled true. Tapping a wedge or label opens a
-/// `MetricExplainerSheet` describing the metric.
 struct SubscoreRadarChart: View {
     struct Axis: Identifiable, Equatable {
         let id: String
@@ -29,26 +20,15 @@ struct SubscoreRadarChart: View {
     let axes: [Axis]
     let overallScore: Int
     var animate: Bool
-    /// Set false when the composite score is already displayed next to the
-    /// chart — the central numeral would otherwise be a second copy of it.
     var showsCenterScore: Bool
-    /// Optional best/worst callout. When either is set, the two named axes
-    /// render at full opacity with a direction marker and every other label
-    /// dims, so the chart carries the "strongest / weakest" story on its own.
     var emphasizedAxisIDs: (strongest: String?, weakest: String?)
     /// Share-card renders must not install tap targets or present sheets.
     var interactive: Bool
 
     @State private var drawProgress: CGFloat
     @State private var selectedAxis: Axis?
-    /// Blocks re-entrant `animateIn` from overlapping transactions; also used
-    /// so a second `onAppear` (tab/scroll recreation) does not replay the
-    /// count-up bounce every time the chart is shown.
     @State private var hasPlayedIntro = false
 
-    /// Room reserved outside the annulus for the orbiting labels. Tightened
-    /// from 52 — the labels were parked far enough out that the donut shrank
-    /// and the card gained a ring of dead space.
     private let labelInset: CGFloat = 42
 
     init(
@@ -133,12 +113,6 @@ struct SubscoreRadarChart: View {
     /// Draws every wedge in a single Canvas pass rather than one SwiftUI Shape
     /// per ring, so the view count stays flat during the draw-in animation.
     ///
-    /// Radius encodes the value continuously. It used to quantize into six
-    /// buckets aligned to the score bands, which meant everything from 60 to 79
-    /// drew an identical shape — five different subscores rendering the same
-    /// made the chart decorative rather than informative. The concentric rings
-    /// survive as a *scale grid* drawn across the full annulus: they are
-    /// graph paper now, not the encoding.
     private func wedgeCanvas(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
         let count = max(axes.count, 1)
         let step = 2 * Double.pi / Double(count)
@@ -208,16 +182,11 @@ struct SubscoreRadarChart: View {
         .allowsHitTesting(false)
     }
 
-    /// One hue for every wedge. Eight score-colored wedges became a rainbow
-    /// once the palette brightened; length and opacity carry the value, and
-    /// the only color accents left on the chart are the strongest/weakest
-    /// markers on the labels.
     private static let wedgeHue = AppColors.categoryBrandBright
 
     private struct WedgeGeometry {
         let start: Angle
         let end: Angle
-        /// Value mapped to 0...1 of the annulus span.
         let fraction: CGFloat
         let axisID: String
     }
@@ -358,8 +327,6 @@ struct AnnularWedge: Shape {
         )
     }
 
-    /// Shared path builder reused by both `Shape.path(in:)` and the
-    /// `Canvas`-based wedge renderer in `SubscoreRadarChart`.
     static func makePath(
         center: CGPoint,
         innerRadius: CGFloat,
@@ -455,7 +422,6 @@ extension SubscoreRadarChart.Axis {
         return axes
     }
 
-    /// Strongest and weakest ids, or nils when a single axis would be both.
     static func emphasisIDs(in axes: [SubscoreRadarChart.Axis]) -> (strongest: String?, weakest: String?) {
         let strongest = axes.max(by: { $0.value < $1.value })
         let weakest = axes.min(by: { $0.value < $1.value })

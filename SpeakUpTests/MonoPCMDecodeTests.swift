@@ -12,8 +12,6 @@ nonisolated struct MonoPCMDecodeTests {
         return dir
     }
 
-    /// Writes a float32 CAF with deterministic sine content and lets the file
-    /// close (flush its header) before returning, so decode reads finished data.
     private func writeAudio(channels: Int, frames: Int, sampleRate: Double, at url: URL) throws {
         guard let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,

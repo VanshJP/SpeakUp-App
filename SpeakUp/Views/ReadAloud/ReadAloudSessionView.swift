@@ -11,11 +11,8 @@ struct ReadAloudSessionView: View {
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
     @State private var didAutoStartSession = false
-    /// Shadow mode: wait for Hear → Speak before starting the recognizer.
     @State private var awaitingShadowStart = false
 
-    /// Passage text is the one surface the reader must see to perform; it has
-    /// to scale with their Dynamic Type setting like any other reading text.
     @ScaledMetric(relativeTo: .title2) private var passageFontSize: CGFloat = 22
 
     var body: some View {
@@ -23,15 +20,12 @@ struct ReadAloudSessionView: View {
             AppBackground(style: .recording)
 
             VStack(spacing: 0) {
-                // Top bar
                 topBar
 
-                // Progress bar
                 progressBar
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 
-                // Passage text with word highlighting
                 ScrollViewReader { proxy in
                     PageScrollView {
                         passageText
@@ -47,7 +41,6 @@ struct ReadAloudSessionView: View {
 
                 Spacer(minLength: 0)
 
-                // Bottom controls
                 bottomControls
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
@@ -167,7 +160,6 @@ struct ReadAloudSessionView: View {
 
             Spacer()
 
-            // Timer
             Text(viewModel.formattedElapsedTime)
                 .font(.system(size: 18, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
@@ -180,7 +172,6 @@ struct ReadAloudSessionView: View {
 
             Spacer()
 
-            // Accuracy badge
             HStack(spacing: 4) {
                 Circle()
                     .fill(accuracyColor)
@@ -294,7 +285,6 @@ struct ReadAloudSessionView: View {
     }
 
 
-
     private var accuracyColor: Color {
         // Accuracy is a score, so it rides the score ramp rather than the
         // state colors — a 70 is not a "warning".
@@ -337,7 +327,6 @@ struct ReadAloudSessionView: View {
             }
 
             HStack(spacing: 20) {
-                // Mic indicator
                 HStack(spacing: 8) {
                     Circle()
                         .fill(viewModel.isListening ? AppColors.success : AppColors.scoreEmpty)

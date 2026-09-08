@@ -41,8 +41,6 @@ struct DailyPromptProvider: TimelineProvider {
 struct DailyPromptWidgetView: View {
     let entry: DailyPromptEntry
 
-    /// Mirrors `SharedPromptLink.customSchemeURL` so IDs with spaces or
-    /// non-ASCII characters survive the round trip.
     private var recordURL: URL? {
         var components = URLComponents()
         components.scheme = "speakup"

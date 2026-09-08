@@ -6,9 +6,6 @@ struct StoriesListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var viewModel: StoriesViewModel
     @Binding var selectedStory: Story?
-    /// Owned by the hub (one search string per Library section), edited here:
-    /// this section draws its own search row so the sort menu can ride on it
-    /// instead of colliding with the folder chips it used to sit at the end of.
     @Binding var searchText: String
     @State private var showingDeleteAlert = false
     @State private var storyToDelete: Story?

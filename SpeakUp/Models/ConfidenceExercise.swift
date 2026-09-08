@@ -36,8 +36,6 @@ enum ConfidenceCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// What this category is *for* — the one line a section header shows so
-    /// someone browsing understands why the grouping exists.
     var purpose: String {
         switch self {
         case .calming: return "Settle nerves in the moment."
@@ -56,8 +54,6 @@ struct ConfidenceExercise: Identifiable {
     let steps: [String]
     let durationMinutes: Int
 
-    /// Bounds-checked step access. Every seed ships steps, but an empty or
-    /// shorter list must degrade to a placeholder instead of trapping.
     func step(safelyAt index: Int) -> String {
         guard steps.indices.contains(index) else { return "" }
         return steps[index]

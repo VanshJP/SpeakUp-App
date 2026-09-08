@@ -9,7 +9,6 @@ class JournalExportService {
     private let margin: CGFloat = 50
     private var contentWidth: CGFloat { pageWidth - margin * 2 }
 
-    // Reusable text styles
     private let titleAttrs: [NSAttributedString.Key: Any] = [
         .font: UIFont.systemFont(ofSize: 28, weight: .bold),
         .foregroundColor: UIColor.black
@@ -77,7 +76,6 @@ class JournalExportService {
                 y = drawText(line, at: y, attrs: bodyAttrs, indent: 10)
             }
 
-            // Subscore averages
             if !analyzedSorted.isEmpty {
                 y += 8
                 y = drawText("Average Subscores", at: y, attrs: subheaderAttrs, indent: 10)
@@ -89,7 +87,6 @@ class JournalExportService {
                 y = drawText("Clarity: \(avgClarity)/100  •  Pace: \(avgPace)/100  •  Filler Usage: \(avgFiller)/100  •  Pauses: \(avgPause)/100", at: y, attrs: bodyAttrs, indent: 10)
             }
 
-            // Top filler words across all sessions
             let allFillers = aggregateFillerWords(from: analyzedSorted)
             if !allFillers.isEmpty {
                 y += 8
@@ -125,11 +122,9 @@ class JournalExportService {
             y += 6
 
             for (index, recording) in allSorted.enumerated() {
-                // Estimate space needed for this session
                 let estimatedHeight: CGFloat = recording.analysis != nil ? 160 : 60
                 y = checkPageBreak(y: y, needed: estimatedHeight, context: context)
 
-                // Session header
                 let sessionNum = index + 1
                 let dateStr = recording.date.formatted(date: .abbreviated, time: .shortened)
                 let title = recording.displayTitle
@@ -150,7 +145,6 @@ class JournalExportService {
                 if let analysis = recording.analysis {
                     y += 4
 
-                    // Score + subscores
                     let scoreStr = "Score: \(analysis.speechScore.overall)/100"
                     let sub = analysis.speechScore.subscores
                     let subscoreStr = "Clarity: \(sub.clarity)  •  Pace: \(sub.pace)  •  Fillers: \(sub.fillerUsage)  •  Pauses: \(sub.pauseQuality)"
@@ -158,24 +152,20 @@ class JournalExportService {
                     y = drawText(subscoreStr, at: y, attrs: captionAttrs, indent: 10)
                     y += 2
 
-                    // Key metrics
                     let metricsStr = "WPM: \(Int(analysis.wordsPerMinute))  •  Words: \(analysis.totalWords)  •  Fillers: \(analysis.totalFillerCount)  •  Pauses: \(analysis.pauseCount)"
                     y = drawText(metricsStr, at: y, attrs: bodyAttrs, indent: 10)
 
-                    // Filler breakdown for this session
                     if !analysis.fillerWords.isEmpty {
                         let topFillers = analysis.fillerWords.prefix(5).map { "\"\($0.word)\" (\($0.count)x)" }.joined(separator: ", ")
                         y = drawText("Fillers: \(topFillers)", at: y, attrs: captionAttrs, indent: 10)
                     }
 
-                    // Vocab words used
                     if !analysis.vocabWordsUsed.isEmpty {
                         let vocabStr = analysis.vocabWordsUsed.map { "\($0.word) (\($0.count)x)" }.joined(separator: ", ")
                         y = drawText("Vocab used: \(vocabStr)", at: y, attrs: captionAttrs, indent: 10)
                     }
                 }
 
-                // Transcript
                 if let transcript = resolvedTranscript(for: recording) {
                     y += 4
                     y = checkPageBreak(y: y, needed: 40, context: context)
@@ -186,13 +176,11 @@ class JournalExportService {
                         .foregroundColor: UIColor.darkGray
                     ]
 
-                    // Draw transcript with word wrapping, handling page breaks
                     y = drawWrappedText(transcript, at: y, attrs: transcriptAttrs, indent: 10, context: context)
                 }
 
                 y += 12
 
-                // Light separator between sessions
                 if index < allSorted.count - 1 {
                     y = drawLightSeparator(at: y, context: context)
                     y += 6
@@ -251,7 +239,6 @@ class JournalExportService {
         let maxWidth = contentWidth - indent
         let maxChunkHeight: CGFloat = pageHeight - margin - 30 // leave room for footer
 
-        // Split into paragraphs to handle page breaks gracefully
         let paragraphs = text.components(separatedBy: "\n")
         var y = startY
 
@@ -266,13 +253,11 @@ class JournalExportService {
                 context: nil
             )
 
-            // Check if we need a page break
             if y + min(fullSize.height, 40) > maxChunkHeight {
                 drawFooter(context: context)
                 y = beginNewPage(context)
             }
 
-            // If the paragraph fits on the remaining page, draw it
             let availableHeight = maxChunkHeight - y
             if fullSize.height <= availableHeight {
                 (trimmed as NSString).draw(in: CGRect(x: x, y: y, width: maxWidth, height: fullSize.height), withAttributes: attrs)
@@ -283,7 +268,6 @@ class JournalExportService {
                 (trimmed as NSString).draw(in: CGRect(x: x, y: y, width: maxWidth, height: drawHeight), withAttributes: attrs)
                 y += drawHeight + 2
 
-                // If there's significant overflow, start a new page and draw the rest
                 if fullSize.height > availableHeight + 20 {
                     drawFooter(context: context)
                     y = beginNewPage(context)

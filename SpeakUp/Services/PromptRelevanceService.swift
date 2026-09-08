@@ -5,8 +5,6 @@ nonisolated enum PromptRelevanceService {
 
     // MARK: - Public API
 
-    /// Score how relevant the transcript is to the given prompt (0-100).
-    /// Uses keyword overlap + word-level semantic + sentence-level alignment.
     static func score(promptText: String, transcript: String) -> Int? {
         let promptKeywords = extractContentWords(from: promptText)
         let transcriptKeywords = extractContentWords(from: transcript, limit: 100)
@@ -16,12 +14,10 @@ nonisolated enum PromptRelevanceService {
         let keywordOverlap = computeKeywordOverlap(promptKeywords: promptKeywords, transcriptKeywords: transcriptKeywords)
         let wordSemantic = computeSemanticSimilarity(promptKeywords: promptKeywords, transcriptKeywords: transcriptKeywords)
 
-        // Sentence-level prompt alignment
         let sentenceAlignment = computeSentenceAlignment(promptText: promptText, transcript: transcript)
 
         var raw: Double
         if let sentAlign = sentenceAlignment, let wordSem = wordSemantic {
-            // Full 3-signal scoring
             raw = keywordOverlap * 0.25 + wordSem * 0.35 + sentAlign * 0.40
         } else if let wordSem = wordSemantic {
             // Fallback: no sentence embedding — weight word semantics more heavily
@@ -30,18 +26,13 @@ nonisolated enum PromptRelevanceService {
             raw = keywordOverlap
         }
 
-        // Compute coherence once (expensive NLEmbedding work)
         let coherence = coherenceScore(transcript: transcript)
 
-        // Topic consistency bonus: if the transcript is internally coherent,
-        // the speech is likely on-topic regardless of keyword overlap.
         if let coherence, coherence > 50 {
             let bonus = coherence > 70 ? 0.20 : 0.12
             raw = min(1.0, raw + bonus)
         }
 
-        // Floor: a coherent speech of substantial length given a prompt
-        // should score at least 30
         let transcriptWords = transcript.split(separator: " ").count
         if transcriptWords >= 50, raw < 0.30 {
             if let coherence, coherence > 65 {
@@ -52,9 +43,6 @@ nonisolated enum PromptRelevanceService {
         return max(0, min(100, Int(raw * 100)))
     }
 
-    /// LLM-enhanced coherence scoring with backend-aware blend ratios.
-    /// Apple Intelligence: 60% LLM / 40% rule-based (higher model confidence).
-    /// Local 0.5B model: 40% LLM / 60% rule-based (smaller model, let rules dominate).
     static func coherenceScore(
         transcript: String,
         llmService: LLMService?,
@@ -66,7 +54,6 @@ nonisolated enum PromptRelevanceService {
             if let llmResult = await llm.evaluateCoherence(transcript: transcript, promptText: promptText) {
                 let ruleBase = Double(ruleBasedScore ?? 50)
 
-                // Backend-aware blending: trust larger models more
                 let llmWeight: Double
                 switch await MainActor.run(body: { llm.activeBackend }) {
                 case .appleIntelligence:
@@ -85,14 +72,10 @@ nonisolated enum PromptRelevanceService {
         return ruleBasedScore
     }
 
-    /// Compute a coherence score for free-practice sessions (no prompt).
-    /// Multi-signal approach: entity continuity, sentence flow, sliding window
-    /// topic drift, weighted discourse markers, and structural progression.
     static func coherenceScore(transcript: String) -> Int? {
         let sentences = splitIntoSentences(transcript)
         guard sentences.count >= 2 else { return nil }
 
-        // Gibberish detection: cap coherence for gibberish
         let wordCounts = sentences.map { $0.split(separator: " ").count }
         let avgSentenceWordCount = Double(wordCounts.reduce(0, +)) / Double(wordCounts.count)
 
@@ -139,11 +122,9 @@ nonisolated enum PromptRelevanceService {
             guard words.count < limit else { return false }
             guard let tag, contentTags.contains(tag) else { return true }
 
-            // Get lemma for normalization
             let lemmaTag = tagger.tag(at: range.lowerBound, unit: .word, scheme: .lemma)
             let word = (lemmaTag.0?.rawValue ?? String(text[range])).lowercased()
 
-            // Skip very short words and common stopword verbs
             guard word.count >= 3, !stopVerbs.contains(word) else { return true }
 
             words.append(word)
@@ -178,8 +159,6 @@ nonisolated enum PromptRelevanceService {
             for transcriptWord in transcriptSet {
                 guard embedding.contains(transcriptWord) else { continue }
                 let distance = embedding.distance(between: promptWord, and: transcriptWord)
-                // NLEmbedding distance is cosine distance (0=identical, 2=opposite)
-                // Non-linear scaling: distance < 0.8 is meaningfully related
                 let sim = max(0, 1.0 - distance * 0.55)
                 bestSim = max(bestSim, sim)
             }
@@ -218,20 +197,16 @@ nonisolated enum PromptRelevanceService {
 
     // MARK: - Coherence Signal 1: Entity Continuity
 
-    /// Tracks nouns and named entities across sentences.
-    /// Score = fraction of sentences that share at least one entity with the previous sentence.
     private static func computeEntityContinuity(sentences: [String]) -> Double {
         guard sentences.count >= 2 else { return 1.0 }
 
         let tagger = NLTagger(tagSchemes: [.lexicalClass, .nameType])
         let entityTags: Set<NLTag> = [.noun, .personalName, .placeName, .organizationName]
-        // Pronouns indicate back-reference to prior entities
         let pronouns: Set<String> = [
             "he", "she", "it", "they", "him", "her", "them", "his", "hers",
             "its", "their", "this", "that", "these", "those", "who", "which"
         ]
 
-        // Extract entities per sentence
         var sentenceEntities: [Set<String>] = []
         for sentence in sentences {
             tagger.string = sentence
@@ -249,7 +224,6 @@ nonisolated enum PromptRelevanceService {
             sentenceEntities.append(entities)
         }
 
-        // Score: % of sentences that share entities with prior sentence or use pronouns
         var continuityCount = 0
         for i in 1..<sentenceEntities.count {
             let prev = sentenceEntities[i - 1]
@@ -262,18 +236,14 @@ nonisolated enum PromptRelevanceService {
         }
 
         let ratio = Double(continuityCount) / Double(sentences.count - 1)
-        // Map: 0% shared = 0.1, 50% = 0.5, 80%+ = 0.9+
         return min(1.0, ratio * 1.15 + 0.1)
     }
 
     // MARK: - Coherence Signal 2: Sentence Flow (stricter thresholds)
 
-    /// Measures semantic similarity between adjacent sentences.
-    /// Uses stricter non-linear mapping than before.
     private static func computeSentenceFlowScore(sentences: [String]) -> Double {
         guard sentences.count >= 2 else { return 1.0 }
 
-        // Try sentence-level embeddings first
         if let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english) {
             var totalSim = 0.0
             var pairs = 0
@@ -284,10 +254,6 @@ nonisolated enum PromptRelevanceService {
                 guard sentenceEmbedding.contains(current), sentenceEmbedding.contains(next) else { continue }
 
                 let distance = sentenceEmbedding.distance(between: current, and: next)
-                // Stricter non-linear mapping:
-                // distance 0.0-0.5 = high similarity (0.7-1.0)
-                // distance 0.5-1.0 = moderate (0.3-0.7)
-                // distance 1.0-1.5 = low (0.0-0.3)
                 let sim: Double
                 if distance < 0.5 {
                     sim = 0.7 + (0.5 - distance) * 0.6
@@ -305,13 +271,11 @@ nonisolated enum PromptRelevanceService {
             }
         }
 
-        // Fallback: word-level topic consistency
         return computeTopicConsistencyWordLevel(sentences: sentences)
     }
 
     // MARK: - Coherence Signal 3: Sliding Window Topic Drift
 
-    /// Checks every 3-sentence window for topic drift instead of just first/last/middle.
     private static func computeSlidingWindowDrift(sentences: [String]) -> Double {
         guard sentences.count >= 3 else { return 0.8 }
 
@@ -324,7 +288,6 @@ nonisolated enum PromptRelevanceService {
             let windowSets = sentenceKeywords[i..<(i + windowSize)]
             totalWindows += 1
 
-            // Check if all sentences in window share any content words
             var allKeywords = Set<String>()
             var pairwiseOverlap = 0
             let windowArray = Array(windowSets)
@@ -337,13 +300,11 @@ nonisolated enum PromptRelevanceService {
                 }
             }
 
-            // Violation: no pairwise overlap in the window = topic jump
             if pairwiseOverlap == 0 && !allKeywords.isEmpty {
                 driftViolations += 1
             }
         }
 
-        // Also use sentence embeddings if available for stronger drift detection
         if let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english) {
             for i in 0...(sentences.count - windowSize) {
                 let first = sentences[i]
@@ -365,12 +326,10 @@ nonisolated enum PromptRelevanceService {
 
     // MARK: - Coherence Signal 4: Weighted Discourse Markers
 
-    /// Scores connectives by category weight and sentence-boundary position.
     private static func computeWeightedConnectives(sentences: [String]) -> Double {
         let totalWordCount = sentences.reduce(0) { $0 + $1.split(separator: " ").count }
         guard totalWordCount >= 10 else { return 0.5 }
 
-        // Categories with semantic weights
         let logicalConnectives: Set<String> = ["therefore", "because", "consequently", "thus", "hence", "accordingly"]
         let contrastConnectives: Set<String> = ["however", "although", "nevertheless", "on the other hand", "in contrast"]
         let additiveConnectives: Set<String> = ["also", "furthermore", "moreover", "in addition", "additionally"]
@@ -382,17 +341,14 @@ nonisolated enum PromptRelevanceService {
 
         for sentence in sentences {
             let lowered = sentence.lowercased()
-            // Get first 4 words for sentence-boundary detection
             let firstWords = lowered.split(separator: " ").prefix(4).joined(separator: " ")
 
             func checkCategory(_ name: String, _ connectives: Set<String>, weight: Double) {
                 for conn in connectives {
                     if firstWords.contains(conn) {
-                        // Full weight: connective at sentence start
                         weightedScore += weight
                         uniqueCategories.insert(name)
                     } else if lowered.contains(conn) {
-                        // Reduced weight: connective mid-sentence
                         weightedScore += weight * 0.3
                         uniqueCategories.insert(name)
                     }
@@ -406,9 +362,7 @@ nonisolated enum PromptRelevanceService {
             checkCategory("common", commonConnectives, weight: 0.5)
         }
 
-        // Category variety bonus (using 3+ categories shows structured thinking)
         let varietyBonus = min(0.3, Double(uniqueCategories.count) * 0.08)
-        // Normalize weighted score (target: ~8.0 for well-structured speech)
         let normalizedScore = min(1.0, weightedScore / 10.0)
 
         return min(1.0, normalizedScore * 0.7 + varietyBonus + 0.1)
@@ -416,22 +370,17 @@ nonisolated enum PromptRelevanceService {
 
     // MARK: - Coherence Signal 5: Structural Progression
 
-    /// Checks if the speech has an intro→body→conclusion arc.
     private static func computeStructuralProgression(sentences: [String]) -> Double {
         guard sentences.count >= 3 else { return 0.5 }
 
         var score = 0.5  // Base: neutral
 
-        // 1. Opening sentence is substantial (>5 words) = has a topic statement
         let openingWords = sentences[0].split(separator: " ").count
         if openingWords >= 5 { score += 0.1 }
 
-        // 2. Closing sentence is substantial = has a conclusion/summary
         let closingWords = sentences[sentences.count - 1].split(separator: " ").count
         if closingWords >= 5 { score += 0.1 }
 
-        // 3. Body sentences (middle) are longer than opening/closing on average
-        // = depth/elaboration in the body
         if sentences.count >= 5 {
             let bodyRange = 1..<(sentences.count - 1)
             let bodyLengths = sentences[bodyRange].map { $0.split(separator: " ").count }
@@ -439,14 +388,12 @@ nonisolated enum PromptRelevanceService {
             if avgBody > Double(openingWords) * 0.8 { score += 0.1 }
         }
 
-        // 4. Sentence length variety (not all same length = more natural)
         let lengths = sentences.map { Double($0.split(separator: " ").count) }
         let avgLen = lengths.reduce(0, +) / Double(lengths.count)
         let lengthVariance = lengths.reduce(0.0) { $0 + pow($1 - avgLen, 2) } / Double(lengths.count)
         let lengthCV = avgLen > 0 ? sqrt(lengthVariance) / avgLen : 0
         if lengthCV > 0.3 && lengthCV < 1.0 { score += 0.1 }  // Good variety
 
-        // 5. Last sentence references topics from first sentence (circular closure)
         let firstKeywords = Set(extractContentWords(from: sentences[0]))
         let lastKeywords = Set(extractContentWords(from: sentences[sentences.count - 1]))
         if !firstKeywords.isEmpty && !lastKeywords.isEmpty {

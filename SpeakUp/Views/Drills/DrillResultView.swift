@@ -9,7 +9,6 @@ struct DrillResultView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            // Score circle
             ZStack {
                 RingProgress(
                     progress: Double(result.score) / 100,
@@ -31,7 +30,6 @@ struct DrillResultView: View {
                 }
             }
 
-            // Details
             Text(result.details)
                 .font(.body)
                 .foregroundStyle(.white.opacity(0.8))
@@ -40,7 +38,6 @@ struct DrillResultView: View {
 
             Spacer()
 
-            // Buttons
             VStack(spacing: 12) {
                 GlassButton(title: "Try Again", style: .primary, size: .large, fullWidth: true) {
                     onTryAgain()

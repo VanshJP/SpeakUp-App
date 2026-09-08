@@ -1,7 +1,6 @@
 import SwiftUI
 
 
-
 struct TranscriptContentView: View {
     let words: [TranscriptionWord]
     let turns: [SpeakerTurn]
@@ -9,7 +8,6 @@ struct TranscriptContentView: View {
     let showVocabHighlights: Bool
     let showSpeakerTurns: Bool
     let hasSpeakerSeparation: Bool
-    /// Opening-frame word ids from structural repetition (plum highlight).
     var structuralWordIDs: Set<UUID> = []
     var onPlayWord: ((TranscriptionWord) -> Void)? = nil
 

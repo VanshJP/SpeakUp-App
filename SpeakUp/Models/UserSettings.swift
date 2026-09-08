@@ -18,22 +18,17 @@ final class UserSettings {
     var showImprovement: Bool = true
     var hasCompletedOnboarding: Bool = false
 
-    // Analysis Features
     var trackPauses: Bool = true
     var trackFillerWords: Bool = true
 
-    // Prompt Settings
     var showDailyPrompt: Bool = true
     var enabledPromptCategories: [String] = []
 
-    // Weekly Summary
     var lastWeeklySummaryDate: Date?
 
-    // Countdown Settings
     var countdownDuration: Int = 10
     var countdownStyle: Int = 0 // 0 = count down, 1 = count up
 
-    // Timer End Behavior
     var timerEndBehavior: Int = 0 // 0 = save & stop, 1 = keep going
 
     // Look & feel — cosmetic only, raw values of the enums named in comments
@@ -49,49 +44,37 @@ final class UserSettings {
     var glassAppearance: Int = 0    // GlassAppearance
     var appCanvas: Int = 0          // AppCanvas
 
-    // Word Bank
     var vocabWords: [String] = []
     var dictationBiasWords: [String] = []
 
-    // Target Pace
     var targetWPM: Int = 150
 
-    // Auto Pace Calibration — learned from every quality-gated recording.
-    // calibratedWPM is an EMA of observed WPM, clamped to the coaching band.
     var autoPaceTarget: Bool = true
     var calibratedWPM: Double?
 
-    // Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 
-    // Audio Cues
     var chirpSoundEnabled: Bool = true
 
-    // Prompt Filtering
     var hideAnsweredPrompts: Bool = true
 
-    // Listen Back
     var listenBackCount: Int = 0
 
-    // Session Feedback
     /// Ask after each session before showing the score. Defaults off so the
     /// first scored take is never blocked by a questionnaire (activation moment).
     /// Users who want the self-check can enable it in Session Defaults.
     var sessionFeedbackEnabled: Bool = false
     var customFeedbackQuestions: [FeedbackQuestion] = []
 
-    // Filler Word Customization
     var customFillerWords: [String] = []              // user-added always-detected fillers
     var customContextFillerWords: [String] = []       // user-added context-dependent fillers
     var removedDefaultFillers: [String] = []          // default fillers the user disabled
 
-    // Voice Profile
     var voiceProfileF0Hz: Double?
     var voiceProfileEnergyDb: Double?
     var voiceProfileSampleCount: Int = 0
     var voiceProfileLastUpdated: Date?
 
-    // Story Practice
     var storyPracticeEnabled: Bool = false
 
     // Daily word workout. Additive defaults so existing rows keep the feature
@@ -102,18 +85,12 @@ final class UserSettings {
     var vocabChallengeUseDictionary: Bool = true
     var vocabChallengeIntroduceNew: Bool = true
     var vocabChallengeSpacedReview: Bool = true
-    // Word-level control for fresh picks: 0 follows `speakerLevel`, 1–3 pin
-    // beginner / intermediate / advanced. Raw Int like every enum-backed knob
-    // so lightweight migration stays automatic.
     var vocabChallengeLevelOverride: Int = 0
 
-    // Dictation
     var autoFormatDictation: Bool = true
 
-    // First Recording Setup
     var hasShownFirstRecordingSetup: Bool = false
 
-    // Guided layout walkthrough, shown once after the first score lands.
     var hasSeenAppTour: Bool = false
 
     // Today home layout — ordered raw values of visible `TodayHomeModule`s.
@@ -127,11 +104,8 @@ final class UserSettings {
     var coachMomentWeekKey: String = ""
     var coachMomentCelebrationsUsedThisWeek: Int = 0
     var coachMomentDeliveredIDs: [String] = []
-    /// `CoachDimension.rawValue`s that have cleared mastery at least once —
-    /// drives the first-axis-win note so it fires once per dimension.
     var coachMomentClearedDimensionsRaw: [String] = []
 
-    // iCloud Sync
     var iCloudSyncEnabled: Bool = false
 
     // Speaker Level (drives daily-prompt difficulty weighting)
@@ -139,13 +113,8 @@ final class UserSettings {
     // databases without a manual migration step.
     var speakerLevel: Int = SpeakerLevel.intermediate.rawValue
 
-    // User identity (captured during onboarding, used for personalised copy
-    // and seeded into the dictation dictionary so transcripts spell it right).
     var userName: String = ""
 
-    // Primary practice goal selected during onboarding. Kept as a single Int
-    // for backward compatibility (and for copy that names one goal); the full
-    // multi-select list lives in `onboardingGoalsRaw` below.
     var onboardingGoalRaw: Int = OnboardingGoal.everydayConfidence.rawValue
 
     // Every goal picked during onboarding, in pick order. Weights which prompt
@@ -172,12 +141,10 @@ final class UserSettings {
     var freeCycleStart: Date?
     var freeCycleAnalysesUsed: Int = 0
 
-    // Paywall / review-prompt bookkeeping
     var hasSeenPaywall: Bool = false
     var lastReviewRequestVersion: String?
     var lastReviewRequestDate: Date?
 
-    // Score Weights
     var clarityWeight: Double = 0.18
     var paceWeight: Double = 0.12
     var fillerWeight: Double = 0.14
@@ -228,7 +195,6 @@ final class UserSettings {
         self.trackPauses = trackPauses
         self.trackFillerWords = trackFillerWords
         self.showDailyPrompt = showDailyPrompt
-        // Default to all categories enabled
         self.enabledPromptCategories = enabledPromptCategories ?? PromptCategory.allCases.map { $0.rawValue }
         self.countdownDuration = countdownDuration
         self.countdownStyle = countdownStyle
@@ -237,18 +203,14 @@ final class UserSettings {
         self.dictationBiasWords = dictationBiasWords
     }
     
-    // Helper to get enabled categories as enum values
     var enabledCategories: [PromptCategory] {
         enabledPromptCategories.compactMap { PromptCategory(rawValue: $0) }
     }
 
-    /// Resolved Today modules in display order. Empty storage → factory default.
     var todayHomeModules: [TodayHomeModule] {
         TodayHomeLayout.resolve(todayHomeLayoutRaw)
     }
 
-    /// Weekly celebration budget for coach notes. Empty week key rolls into a
-    /// fresh week on first read after the calendar week changes.
     var coachMomentBudget: CoachMomentBudget {
         CoachMomentBudget(
             weekKey: coachMomentWeekKey,
@@ -265,9 +227,6 @@ final class UserSettings {
 
     // MARK: - Pace Target Resolution
 
-    /// The effective pace target for scoring AND charts — the single source of
-    /// truth replacing scattered `targetWPM ?? 150` fallbacks. Auto mode uses
-    /// the per-recording calibrated value once one exists.
     var resolvedTargetWPM: Int {
         guard autoPaceTarget, let calibrated = calibratedWPM else { return targetWPM }
         return Int(calibrated.rounded())
@@ -325,7 +284,6 @@ final class UserSettings {
         return [OnboardingGoal(rawValue: onboardingGoalRaw) ?? .everydayConfidence]
     }
 
-    /// Category weighting for prompt selection: goals bias, enabled categories gate.
     var promptMix: PromptMix {
         PromptMix(
             goals: resolvedOnboardingGoals,
@@ -335,8 +293,6 @@ final class UserSettings {
 
     // MARK: - Free-Tier Allowance
 
-    /// Bridge between the persisted counters and the pure allowance arithmetic
-    /// in `PracticeAllowance`, which is where the rules actually live.
     var allowanceState: AllowanceState {
         get {
             AllowanceState(
@@ -353,11 +309,7 @@ final class UserSettings {
     // MARK: - Transcription Bias
 
     /// Unified list of user-defined terms to bias Whisper transcription toward.
-    /// Combines the user's name, the dictation dictionary, the vocabulary word
-    /// bank, and custom filler words (always-detected and context-dependent).
     /// De-duplicated case-insensitively; the name leads, followed by the
-    /// dictation dictionary, so the most deliberate user entries front the
-    /// prompt. The name is always included so transcripts spell it correctly.
     var transcriptionBiasTerms: [String] {
         let sources: [[String]] = [
             [userName],
@@ -383,8 +335,6 @@ final class UserSettings {
 }
 
 extension Optional where Wrapped == UserSettings {
-    /// Settings may not exist yet (first launch, background contexts) — keep
-    /// the 150 WPM default in exactly one place.
     var resolvedTargetWPM: Int { self?.resolvedTargetWPM ?? 150 }
 }
 
@@ -452,8 +402,6 @@ enum SpeakerLevel: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Weighted distribution of (easy, medium, hard) prompts for daily
-    /// rotation. Higher weight = more frequent on the home screen.
     var dailyDifficultyWeights: (easy: Int, medium: Int, hard: Int) {
         switch self {
         case .beginner:     return (easy: 6, medium: 3, hard: 1)
@@ -465,8 +413,6 @@ enum SpeakerLevel: Int, Codable, CaseIterable, Identifiable {
 
 // MARK: - Onboarding Goal
 
-/// What the user wants out of SpeakUp. Picked during onboarding (up to three)
-/// and weighted into the daily prompt category mix by `PromptMix`.
 enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
     case interviews = 0
     case meetings = 1
@@ -489,9 +435,6 @@ enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// What the prompts for this goal are actually like. Every one of these
-    /// used to be a three-item comma list, and five identical rhythms stacked
-    /// in a picker is the thing that reads as generated.
     var subtitle: String {
         switch self {
         case .interviews: return "Questions you have to answer well the first time."
@@ -512,9 +455,6 @@ enum OnboardingGoal: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// One muted-jewel tone per goal so the onboarding goal picker shows
-    /// five distinct identities. All tones live in the same desaturated band
-    /// so the screen stays cohesive on glass.
     var color: Color {
         switch self {
         case .interviews:
@@ -596,8 +536,6 @@ enum CountdownStyle: Int, Codable, CaseIterable, Identifiable {
 
 // MARK: - Waveform Style
 
-/// Look of the live waveform ringing the record button. Form only — every
-/// style keeps the brand gradient so the recording screen stays one palette.
 enum WaveformStyle: Int, Codable, CaseIterable, Identifiable {
     case rings = 0
     case bars = 1
@@ -625,8 +563,6 @@ enum WaveformStyle: Int, Codable, CaseIterable, Identifiable {
 
 // MARK: - Record Button Style
 
-/// Look of the record button. Every case keeps the 80pt footprint so no
-/// surrounding layout shifts when it changes.
 enum RecordButtonStyle: Int, Codable, CaseIterable, Identifiable {
     case classic = 0
     case ring = 1
@@ -647,8 +583,6 @@ enum RecordButtonStyle: Int, Codable, CaseIterable, Identifiable {
 
 // MARK: - Timer Look
 
-/// Shape of the countdown dial. Orthogonal to `CountdownStyle`, which decides
-/// whether the number counts up or down.
 enum TimerLook: Int, Codable, CaseIterable, Identifiable {
     case ring = 0
     case orb = 1

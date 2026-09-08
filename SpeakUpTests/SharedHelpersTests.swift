@@ -2,9 +2,6 @@ import Foundation
 import Testing
 @testable import SpeakUp
 
-/// Two helpers that used to exist twice each, in files that could not see one
-/// another. Pinning their behaviour is what makes the single copy safe to
-/// change — before this, either copy could drift and nothing would notice.
 
 struct CoherenceParsingTests {
     private let block = """
@@ -66,7 +63,6 @@ struct NearestWordIndexTests {
     }
 
     @Test func closeStampSnapsToTheNearestWord() {
-        // Inside the 80ms window, the closest word wins outright.
         #expect(words([0.0, 1.0, 2.0]).nearestIndex(to: 1.05) == 1)
     }
 

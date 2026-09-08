@@ -56,8 +56,6 @@ final class CoachMomentService {
             pendingOverlay = moment
             pendingToday = nil
         case .detail:
-            // Today's snapshot has no latest-take metrics, so no detail signal
-            // can be produced. Keep the guard explicit if that ever changes.
             pendingOverlay = nil
             pendingToday = nil
         }
@@ -65,8 +63,6 @@ final class CoachMomentService {
 
     // MARK: - After session
 
-    /// Call once the results screen has analysis. Soft landings and first-axis
-    /// wins live here; anniversary overlays may also land.
     func evaluateAfterSession(
         context: ModelContext,
         analysis: SpeechAnalysis,

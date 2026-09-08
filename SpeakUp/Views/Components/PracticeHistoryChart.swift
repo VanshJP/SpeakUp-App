@@ -121,7 +121,6 @@ nonisolated struct PracticeRecordingSummary: Identifiable {
 struct PracticeMetricsRow: View {
     let recordings: [PracticeRecordingSummary]
 
-    /// Avg, best, and total time in ONE pass over already-decoded values.
     private var aggregate: (avgScore: Int?, bestScore: Int?, totalDuration: String) {
         var scoreTotal = 0
         var scoreCount = 0

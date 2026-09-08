@@ -1,14 +1,9 @@
 import SwiftUI
 
 struct CoachingTipsView: View {
-    /// The cross-session plan. Absent until enough sessions exist to say
-    /// anything honest about direction.
     var plan: CoachPlan?
     let tips: [CoachingTip]
-    /// Launches the practice tool a tip recommends. The suggestion used to be
-    /// a static label, which meant the coaching ended in a dead end.
     var onPractice: ((CoachPracticeRoute) -> Void)?
-    /// Plays the recording from the moment a tip is about.
     var onPlayFrom: ((TimeInterval) -> Void)?
 
     var body: some View {

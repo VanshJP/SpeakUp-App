@@ -1,23 +1,11 @@
 import SwiftUI
 
 /// The answer to the question the user opened this screen to ask.
-///
-/// A score with nothing to compare it against is trivia — 78 means nothing
-/// until you know your average is 72. So the number leads, the verdict names
-/// the band in words, and the delta supplies the only context that makes the
-/// number actionable. Everything else on the page is evidence for this card.
-///
-/// The full subscore breakdown rides along as a radar directly under the
-/// number: seeing every axis at once is what makes the composite score legible,
 /// and the strongest/weakest callouts live on the chart itself rather than as a
-/// separate labeled row.
 struct ScoreHeroCard: View {
     let score: Int
-    /// Rolling average of recent sessions, excluding this one. Nil until it
-    /// loads, or when there is no prior session to compare against.
     let personalAverage: Int?
     let axes: [SubscoreRadarChart.Axis]
-    /// Nil when there is no meaningful spread (a single axis is both).
     let strongestAxisID: String?
     let weakestAxisID: String?
     let onShowWeights: () -> Void
@@ -37,7 +25,6 @@ struct ScoreHeroCard: View {
                 onShowWeights: onShowWeights
             )
         }
-        // The weights button is a real child action; `.combine` swallowed it.
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySummary)
     }
@@ -68,9 +55,6 @@ struct ScoreHeroCard: View {
 
 // MARK: - Shared body
 
-/// Innards of the in-app hero and the share card. Sharing a screenshot of a
-/// different layout than the one the user just celebrated is how the "aha"
-/// dies in the share sheet.
 struct ScoreHeroBody: View {
     let score: Int
     let axes: [SubscoreRadarChart.Axis]
@@ -78,8 +62,6 @@ struct ScoreHeroBody: View {
     var weakestAxisID: String? = nil
     var personalAverage: Int? = nil
     var showsWeightsButton: Bool = true
-    /// Personal average is for the owner. A share card that tells a friend
-    /// they are "5 above your average" is talking to the wrong person.
     var showsPersonalContext: Bool = true
     var animate: Bool = true
     var interactive: Bool = true
@@ -118,7 +100,6 @@ struct ScoreHeroBody: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Verdict and (optionally) delta on one centred line beneath the ring.
     private var verdictLine: some View {
         HStack(spacing: 8) {
             Text(AppColors.scoreVerdict(for: score))
@@ -159,7 +140,6 @@ struct ScoreHeroBody: View {
         }
     }
 
-    /// Only used when there is no breakdown to anchor the number.
     private var soloScoreRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 2) {

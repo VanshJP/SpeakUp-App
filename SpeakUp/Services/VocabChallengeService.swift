@@ -92,8 +92,6 @@ nonisolated enum VocabChallengeService {
         calendar: Calendar = .current
     ) -> DailyVocabChallenge? {
         let stamp = dayStamp(now, calendar: calendar)
-        // The rebuild below drops skipped words from the cached day on its own,
-        // so the cache is only read here — for where the word was sitting.
         var previous: [VocabChallengeWord] = []
         if let cached = store.cached(), cached.dayStamp == stamp {
             previous = cached.words
@@ -109,9 +107,6 @@ nonisolated enum VocabChallengeService {
             calendar: calendar
         ) else { return nil }
 
-        // The rebuild appends, so the replacement would otherwise land at the
-        // bottom of the card and the row the user just tapped would jump away
-        // from under their finger. Put it back in the skipped word's slot.
         guard let slot,
               refilled.words.count >= previous.count,
               slot < refilled.words.count - 1 else { return refilled }
@@ -177,15 +172,6 @@ nonisolated enum VocabChallengeService {
         return DailyVocabChallenge(dayStamp: dayStamp, words: words, usedKeys: [], isCompleted: false)
     }
 
-    /// The workout one recording is scored against.
-    ///
-    /// - Snapshot present → that day's pick. Authoritative even if the day
-    ///   cache was later skipped or refilled elsewhere: the snapshot captured
-    ///   what the user actually saw when they spoke.
-    /// - No snapshot but recorded today → today's pick, preserving scoring for
-    ///   takes analyzed by an app version older than snapshots.
-    /// - No snapshot and recorded earlier → nil; the detail view hides the
-    ///   card. Guessing would mislabel history loudly, so it stays silent.
     static func workout(
         forRecordingAt recordedOn: Date,
         snapshotDayStamp: String?,
@@ -207,8 +193,6 @@ nonisolated enum VocabChallengeService {
 
     // MARK: - Picking
 
-    /// Anki's leech rule, loosely: four missed days running means the word is
-    /// being ignored, not learned.
     private static let leechThreshold = 4
 
     private static func emptyChallenge(dayStamp: String) -> DailyVocabChallenge {
@@ -230,8 +214,6 @@ nonisolated enum VocabChallengeService {
         var exclude = skipped
             .union(existing.map { $0.text.lowercased() })
             .union(bannedKeys(preferences))
-        // Words spotlighted recently, scheduled or not. Only fresh picks
-        // respect this — a due review is spaced repetition doing its job.
         let recent = recentlySpotlighted(reviews: reviews, now: now)
 
         let spaced = preferences.spacedReviewEnabled
@@ -259,9 +241,6 @@ nonisolated enum VocabChallengeService {
         // single word a day there is nothing to reserve, and a word going stale
         // outranks meeting a new one.
         let reserveIntro = preferences.introduceNew && (!spaced || target >= 2)
-        // Anything with a schedule is off the table for the random draw: it has
-        // either just led the day or is deliberately resting, and re-teaching it
-        // as brand new would reset the very schedule that is doing the work.
         let scheduled: Set<String> = spaced ? Set(reviews.keys) : []
         let introAlready = picked.contains { $0.source == .introduced }
         if reserveIntro, !introAlready, picked.count < target {
@@ -290,8 +269,6 @@ nonisolated enum VocabChallengeService {
             exclude.formUnion(extras.map { $0.text.lowercased() })
         }
 
-        // Words scheduled for later, used only to keep the card from going
-        // empty on a day with nothing due and no new words left.
         drain(ranked.deferred)
 
         if picked.count > target {
@@ -309,9 +286,6 @@ nonisolated enum VocabChallengeService {
         calendar: Calendar
     ) {
         guard let cached = store.cached(), cached.dayStamp != today else { return }
-        // Graded on the day it was missed, not today — otherwise a word skipped
-        // on Monday would not resurface until the day after the user next opens
-        // the app, and a week away would cost only one lapse-day.
         let missedOn = date(fromDayStamp: cached.dayStamp, calendar: calendar) ?? now
         var reviews = store.reviews()
         var changed = false
@@ -324,9 +298,6 @@ nonisolated enum VocabChallengeService {
         if changed { store.saveReviews(reviews) }
     }
 
-    /// Records that tracked words were actually spoken, which is the passing
-    /// review. Idempotent per day, so re-analysing or a second session the same
-    /// day does not double-count.
     static func recordUsage(
         _ usages: [VocabWordUsage],
         preferences: VocabChallengePreferences,
@@ -341,8 +312,6 @@ nonisolated enum VocabChallengeService {
         for usage in usages where usage.count > 0 {
             let key = usage.word.lowercased()
             if reviews[key]?.lastGradedDay == stamp { continue }
-            // Leaning on a word several times in one day is the strongest
-            // signal available without asking the user to rate anything.
             let grade: VocabGrade = usage.count >= 3 ? .easy : .good
             reviews[key] = VocabScheduler.review(reviews[key], grade: grade, on: now, calendar: calendar)
             changed = true
@@ -357,13 +326,8 @@ nonisolated enum VocabChallengeService {
         return keys
     }
 
-    /// How long a freshly shown word stays off the fresh-draw list. FSRS owns
-    /// deliberate returns; this only stops chance from re-dealing a card the
-    /// user just saw.
     private static let freshnessWindowDays = 21
 
-    /// Keys graded inside the freshness window. Day stamps sort as strings, so
-    /// a lexicographic cutoff is exact.
     private static func recentlySpotlighted(
         reviews: [String: VocabReviewState],
         now: Date,
@@ -380,8 +344,6 @@ nonisolated enum VocabChallengeService {
         )
     }
 
-    /// The workout's full word book: the curated lexicon plus everything the
-    /// on-device model has added since.
     private static func lexiconEntry(
         for key: String,
         generated: GeneratedVocabStore
@@ -389,8 +351,6 @@ nonisolated enum VocabChallengeService {
         DefaultVocabLexicon.entry(for: key) ?? generated.entry(for: key)
     }
 
-    /// `primary` is what today should draw from; `deferred` is everything FSRS
-    /// wants to leave alone for now, kept only as a fallback.
     private static func rankedPool(
         preferences: VocabChallengePreferences,
         usedCounts: [String: Int],
@@ -415,10 +375,6 @@ nonisolated enum VocabChallengeService {
             }
         }
 
-        // A word the workout taught is scheduled too, even when the user never
-        // tapped Add. Without this a new word is spotlighted once and only ever
-        // returns by chance, which is the opposite of what spacing is for.
-        // Generated words get schedules on the same terms — they are first-class.
         if preferences.spacedReviewEnabled, preferences.introduceNew {
             var known = Set(pool.map(\.id))
             for (key, state) in reviews where state.due <= now && !known.contains(key) {
@@ -449,11 +405,6 @@ nonisolated enum VocabChallengeService {
             return (shuffle(unused, seed: seed) + used, [])
         }
 
-        // Most overdue first: the word closest to being forgotten is the one
-        // worth spending a slot on. A word missed several days running has
-        // stopped being a review and started being a nag, so it gives up the
-        // lead — otherwise ignoring the workout pins the same words on screen
-        // forever.
         func leads(_ word: VocabChallengeWord) -> Bool {
             guard let state = reviews[word.id] else { return false }
             return state.due <= now && (state.consecutiveLapses ?? 0) < leechThreshold

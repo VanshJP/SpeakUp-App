@@ -16,7 +16,6 @@ struct ReadAloudResultView: View {
 
             PageScrollView {
                 VStack(spacing: 24) {
-                    // Header
                     VStack(spacing: 8) {
                         Text(result.notice == nil ? "Session Complete" : "Session Ended")
                             .font(.title2.bold())
@@ -27,7 +26,6 @@ struct ReadAloudResultView: View {
                     }
                     .padding(.top, 20)
 
-                    // Score ring
                     ZStack {
                         RingProgress(
                             progress: Double(result.score) / 100.0,
@@ -48,7 +46,6 @@ struct ReadAloudResultView: View {
                         }
                     }
 
-                    // Stats row
                     HStack(spacing: 12) {
                         StatBadge(
                             icon: "checkmark.circle.fill",
@@ -93,10 +90,8 @@ struct ReadAloudResultView: View {
                         .accessibilityElement(children: .combine)
                     }
 
-                    // Word review
                     wordReviewSection
 
-                    // Action buttons
                     VStack(spacing: 12) {
                         GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .primary) {
                             Haptics.medium()
@@ -179,7 +174,6 @@ struct ReadAloudResultView: View {
     }
 
 
-
     private func reviewWordColor(for index: Int) -> Color {
         guard index < result.wordStates.count else { return .white.opacity(0.4) }
         switch result.wordStates[index] {
@@ -204,8 +198,6 @@ struct ReadAloudResultView: View {
         result.timeTaken.minutesSeconds
     }
 
-    /// Actual pace against the ≈150 wpm the passage card promised. Needs a
-    /// long enough take to mean anything.
     private var paceLabel: String? {
         guard result.timeTaken > 5 else { return nil }
         let spoken = result.matchedWords + result.mismatchedWords

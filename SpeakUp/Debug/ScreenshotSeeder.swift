@@ -5,10 +5,6 @@ import SwiftData
 /// Populates the store with a realistic practice history so App Store captures
 /// show the app in use rather than in its empty state. Runs only when the app
 /// is launched with `-seedScreenshotData`, and only when no recordings exist.
-///
-/// The data is written directly rather than produced by recording, because the
-/// simulator has no usable microphone and the screenshot set needs a three-week
-/// upward trend that no capture session could perform live.
 @MainActor
 enum ScreenshotSeeder {
     static let launchArgument = "-seedScreenshotData"
@@ -74,8 +70,6 @@ enum ScreenshotSeeder {
 
     // MARK: - Recordings
 
-    /// Twelve sessions across 24 days, scored 58 → 84. The climb is deliberate:
-    /// the progress screens are only worth capturing if the trend has a shape.
     private static func insertRecordings(context: ModelContext, story: Story) {
         let sessions: [(daysAgo: Int, score: Int, wpm: Double, title: String, story: Bool)] = [
             (24, 58, 187, "Tell me about yourself", false),
@@ -187,9 +181,6 @@ enum ScreenshotSeeder {
     them, and to a lifetime of interrupting each other.
     """
 
-    /// The one place a word is classified. The inline highlights, the filler
-    /// tally, and the vocab footer all read from this, so a word cannot be
-    /// green in the transcript and missing from the summary underneath it.
     private static let fillers: Set<String> = ["um", "like", "you", "know"]
     private static let vocab: Set<String> = ["sideways", "habit", "deliberate", "interrupting"]
 
@@ -200,7 +191,6 @@ enum ScreenshotSeeder {
             .map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }
     }
 
-    /// Counted from the same marked words the transcript highlights.
     private static func vocabUsage(in text: String) -> [VocabWordUsage] {
         var counts: [String: Int] = [:]
         for word in bareWords(in: text) where vocab.contains(word) {
@@ -210,8 +200,6 @@ enum ScreenshotSeeder {
             .map { VocabWordUsage(word: $0.key, count: $0.value) }
     }
 
-    /// "you" and "know" are marked separately so both highlight inline, but
-    /// they report as the single phrase a user would recognise.
     private static func fillerUsage(in text: String) -> [FillerWord] {
         var counts: [String: Int] = [:]
         for word in bareWords(in: text) where fillers.contains(word) {
@@ -227,8 +215,6 @@ enum ScreenshotSeeder {
         return result
     }
 
-    /// Every session carries word timings so the transcript screen can mark
-    /// fillers inline — a transcript with nothing marked demonstrates nothing.
     private static func words(from text: String) -> [TranscriptionWord] {
         return text
             .replacingOccurrences(of: "\n", with: " ")

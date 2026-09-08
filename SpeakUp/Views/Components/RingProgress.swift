@@ -1,13 +1,5 @@
 import SwiftUI
 
-/// A single progress ring — recessed track, colored arc, rounded cap, starting
-/// at twelve o'clock.
-///
-/// This recipe was hand-rewritten in ten places (drill and read-aloud results,
-/// the history row, the achievement header, two curriculum cards, the countdown,
-/// the recording timer, the analyzing spinner, the goal badge) with slightly
-/// different line widths and, in a few, a slightly different track color.
-/// One ring, one track.
 struct RingProgress: View {
     let progress: Double
     let color: Color

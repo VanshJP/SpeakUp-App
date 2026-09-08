@@ -21,8 +21,6 @@ struct ScenarioReadinessTests {
         )
     }
 
-    /// A transcript with enough substance that depth/evidence components are
-    /// stable across comparisons.
     private let substantiveText =
         "I led the migration project and delivered it two weeks early. " +
         "The team reduced build time by forty percent and saved real money. "
@@ -147,7 +145,6 @@ struct ScenarioReadinessTests {
             )
         }
 
-        // Same bucket merges; per-bucket scores stay independent.
         #expect(ScenarioReadinessEngine.readiness(from: messy + clean).count == 1)
 
         let messyScore = try #require(

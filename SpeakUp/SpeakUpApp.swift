@@ -110,7 +110,6 @@ struct SpeakUpApp: App {
                         await Self.migrateRecordingURLsIfNeeded(container: container)
                     }
 
-                    // Migrate local audio files to iCloud when sync is enabled
                     if ICloudStorageService.shared.isSyncEnabled {
                         Task(priority: .background) {
                             await ICloudStorageService.shared.migrateLocalFilesToICloud()
@@ -128,7 +127,6 @@ struct SpeakUpApp: App {
                     Task.detached(priority: .background) {
                         await speechService.preloadModel()
                     }
-                    // Auto-load local LLM if downloaded and Apple Intelligence unavailable
                     Task(priority: .background) {
                         await llmService.loadLocalModelIfNeeded()
                     }
@@ -286,7 +284,6 @@ struct SpeakUpApp: App {
                 context.insert(defaultSettings)
                 try context.save()
             } else if let settings = existingSettings.first {
-                // Keep startup sync preference in lock-step with persisted settings.
                 ICloudStorageService.shared.isSyncEnabled = settings.iCloudSyncEnabled
                 ChirpPlayer.shared.isEnabled = settings.chirpSoundEnabled
                 ChirpPlayer.shared.pack = SoundPack(rawValue: settings.soundPack) ?? .soft

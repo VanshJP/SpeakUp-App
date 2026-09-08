@@ -1,8 +1,6 @@
 import Foundation
 import os.log
 
-/// Manages iCloud ubiquity container for audio file storage and sync.
-/// Falls back to local Documents directory when iCloud is unavailable.
 @Observable
 final class ICloudStorageService {
     private let logger = Logger.app("iCloudStorage")
@@ -26,34 +24,26 @@ final class ICloudStorageService {
         return FileManager.default.ubiquityIdentityToken != nil
     }
 
-    /// The resolved iCloud container URL, or nil if iCloud is unavailable.
     private(set) var ubiquityContainerURL: URL?
 
-    /// Whether the ubiquity container check has completed.
     private(set) var hasResolvedContainer = false
 
-    /// Whether iCloud Drive is available AND the user has enabled sync.
     var isICloudAvailable: Bool {
         ubiquityContainerURL != nil && isSyncEnabled
     }
 
-    /// Whether the user has opted in to iCloud sync.
     var isSyncEnabled: Bool {
         get { Self.resolvedSyncEnabledPreference }
         set { UserDefaults.standard.set(newValue, forKey: Self.syncEnabledKey) }
     }
 
-    /// Whether iCloud is technically reachable (signed in), regardless of user preference.
     var isICloudReachable: Bool { ubiquityContainerURL != nil }
 
     private init() {
-        // Persist an initial preference on fresh installs so app startup and
-        // Settings stay consistent for this installation lifecycle.
         if UserDefaults.standard.object(forKey: Self.syncEnabledKey) == nil {
             UserDefaults.standard.set(Self.resolvedSyncEnabledPreference, forKey: Self.syncEnabledKey)
         }
 
-        // Resolve ubiquity container on a background thread (can block briefly)
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
             let url = FileManager.default.url(forUbiquityContainerIdentifier: self.containerIdentifier)
@@ -61,7 +51,6 @@ final class ICloudStorageService {
                 self.ubiquityContainerURL = url
                 self.hasResolvedContainer = true
             }
-            // Ensure the Recordings subdirectory exists in iCloud
             if let url {
                 let recordingsDir = url.appendingPathComponent("Documents/\(self.recordingsSubdirectory)")
                 try? FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
@@ -72,16 +61,11 @@ final class ICloudStorageService {
     // MARK: - Storage Directory
 
     /// Directory for active AVAudioRecorder captures.
-    ///
     /// Always local Documents — never the ubiquity container. Writing an open
-    /// recorder directly into iCloud Drive races the daemon and can finalize
-    /// empty / silent m4a files that later transcribe as "Silent". Sync happens
-    /// after stop via `promoteToICloudIfNeeded(localURL:)` / migration.
     var recordingsDirectory: URL {
         Self.localDocumentsDirectory
     }
 
-    /// iCloud Recordings folder when the ubiquity container is resolved, else nil.
     var iCloudRecordingsDirectory: URL? {
         guard let ubiquityURL = ubiquityContainerURL else { return nil }
         return ubiquityURL
@@ -89,20 +73,15 @@ final class ICloudStorageService {
             .appendingPathComponent(recordingsSubdirectory)
     }
 
-    /// Local-only Documents directory (always available).
     static let localDocumentsDirectory: URL = {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }()
 
     // MARK: - File Resolution
 
-    /// Resolves a filename to a full URL, checking iCloud first, then local Documents.
-    /// Returns nil if the file doesn't exist in either location, or if `filename`
-    /// is not a single safe basename (`MediaPath.sanitizedFilename`).
     func resolveFile(named filename: String) -> URL? {
         guard let filename = MediaPath.sanitizedFilename(filename) else { return nil }
 
-        // Check iCloud container first
         if let ubiquityURL = ubiquityContainerURL {
             let iCloudPath = ubiquityURL
                 .appendingPathComponent("Documents")
@@ -119,13 +98,11 @@ final class ICloudStorageService {
                 .appendingPathComponent(".\(filename).icloud")
             if FileManager.default.fileExists(atPath: iCloudPlaceholder.path),
                MediaPath.isUnderAllowedMediaRoot(iCloudPath, ubiquityContainer: ubiquityURL) {
-                // Trigger download and return the expected final path
                 try? FileManager.default.startDownloadingUbiquitousItem(at: iCloudPath)
                 return iCloudPath
             }
         }
 
-        // Fall back to local Documents
         let localPath = Self.localDocumentsDirectory.appendingPathComponent(filename)
         if FileManager.default.fileExists(atPath: localPath.path),
            MediaPath.isUnderAllowedMediaRoot(localPath) {
@@ -137,9 +114,6 @@ final class ICloudStorageService {
 
     // MARK: - Migration
 
-    /// Moves a freshly finished local recording into the iCloud container when
-    /// sync is enabled. Returns the ubiquitous URL on success, otherwise the
-    /// original local URL so callers always have a readable path.
     @discardableResult
     func promoteToICloudIfNeeded(localURL: URL) -> URL {
         guard isICloudAvailable, let iCloudDir = iCloudRecordingsDirectory else {
@@ -161,8 +135,6 @@ final class ICloudStorageService {
         }
     }
 
-    /// Moves existing local recordings to iCloud container.
-    /// Called once when iCloud becomes available.
     func migrateLocalFilesToICloud() async {
         guard isICloudAvailable, let iCloudRecordingsDir = iCloudRecordingsDirectory else { return }
 
@@ -187,7 +159,6 @@ final class ICloudStorageService {
 
     // MARK: - Download Status
 
-    /// Checks whether a file is fully downloaded from iCloud.
     func isFileDownloaded(at url: URL) -> Bool {
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
 
@@ -203,7 +174,6 @@ final class ICloudStorageService {
         }
     }
 
-    /// Triggers download of an iCloud file if it's not yet local.
     func ensureDownloaded(at url: URL) {
         if !isFileDownloaded(at: url) {
             try? FileManager.default.startDownloadingUbiquitousItem(at: url)
@@ -212,9 +182,6 @@ final class ICloudStorageService {
 
     // MARK: - Deletion
 
-    /// Removes a file from both local storage and iCloud (if ubiquitous).
-    /// `FileManager.removeItem` on a ubiquitous file automatically propagates
-    /// the deletion to iCloud, so no extra API call is needed.
     func removeFile(at url: URL) {
         try? FileManager.default.removeItem(at: url)
     }

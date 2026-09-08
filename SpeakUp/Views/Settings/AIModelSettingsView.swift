@@ -98,7 +98,6 @@ struct AIModelSettingsView: View {
     private var localModelCard: some View {
         GlassCard(tint: AppColors.categoryBrandBright.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 14) {
-                // Header
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.down.circle")
                         .font(.title2)
@@ -120,7 +119,6 @@ struct AIModelSettingsView: View {
                     localModelStatusBadge
                 }
 
-                // Description
                 modelTierSection
 
                 if !llmService.appleIntelligenceAvailable {
@@ -137,7 +135,6 @@ struct AIModelSettingsView: View {
                     preferLocalToggle
                 }
 
-                // Actions based on state
                 localModelActions
             }
         }

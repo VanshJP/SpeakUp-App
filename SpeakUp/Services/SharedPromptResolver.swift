@@ -1,11 +1,6 @@
 import Foundation
 import SwiftData
 
-/// Turns a share-link payload into a `Prompt` the recorder can use.
-///
-/// Catalog ids win so a friend on the same seed gets the official wording.
-/// Missing catalog rows (an older install, a user-authored prompt) fall back
-/// to the text in the URL and are inserted once, under a stable id.
 @MainActor
 enum SharedPromptResolver {
     static func resolve(_ payload: SharedPromptPayload, in context: ModelContext) -> Prompt? {

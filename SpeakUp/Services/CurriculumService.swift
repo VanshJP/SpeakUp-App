@@ -82,7 +82,6 @@ class CurriculumService {
            currentIndex + 1 < lessons.count {
             progress.currentLessonId = lessons[currentIndex + 1].id
         } else {
-            // Move to next phase
             if let phaseIndex = phases.firstIndex(where: { $0.id == currentPhase.id }),
                phaseIndex + 1 < phases.count {
                 let nextPhase = phases[phaseIndex + 1]
@@ -270,14 +269,11 @@ nonisolated struct CurriculumSessionSignals {
     private(set) var longestDuration: TimeInterval = 0
     private(set) var hasAnyFiller = false
     private(set) var hasPositivePace = false
-    /// A take with at least 25 words and at most 2 fillers.
     private(set) var hasFocusedTake = false
-    /// A take with at least 30 words at 130–170 wpm.
     private(set) var hasOnPaceTake = false
     private(set) var hasPrepFramework = false
     private(set) var hasStarFramework = false
     private(set) var hasDeliberatePauses = false
-    /// At least 3 sentences, no more than 2 left incomplete.
     private(set) var hasStructuredTake = false
     private(set) var hasPromptedTake = false
 
@@ -286,7 +282,6 @@ nonisolated struct CurriculumSessionSignals {
         signals.recordingCount = recordings.count
 
         for recording in recordings {
-            // The single decode this session contributes to the refresh.
             let analysis = recording.analysis
             if analysis != nil {
                 signals.analyzedCount += 1

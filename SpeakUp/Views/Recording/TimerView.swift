@@ -6,15 +6,12 @@ import SwiftUI
 struct TimerDial: View {
     let look: TimerLook
     let progress: Double
-    /// Already formatted: "7" for countdown, "1:23" for running clock.
     let text: String
     var caption: String? = nil
     var accent: Color = AppColors.primary
     var textColor: Color = .white
     var isPulsing: Bool = false
     var diameter: CGFloat = 150
-    /// Seconds between progress updates — countdown = 1s, recording = 0.1s.
-    /// Wrong tick stutters or lags the number.
     var tick: Double = 1
 
     private let segmentCount = 12
@@ -193,7 +190,6 @@ struct TimerView: View {
     var isOvertime: Bool = false
     var timerLabel: String = "remaining"
     var look: TimerLook = .ring
-    /// From `SessionDialSlot`. Default = old fixed size for previews/thumbnails.
     var diameter: CGFloat = 200
 
     var body: some View {

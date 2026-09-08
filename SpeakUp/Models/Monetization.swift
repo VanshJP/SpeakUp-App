@@ -5,18 +5,14 @@ import Foundation
 /// Master switch for the public beta: everything unlocked, no paywall, no
 /// allowance accounting, no buy button anywhere in the app.
 ///
-/// StoreKit stays wired up underneath — a real purchase still verifies and
-/// still persists. Flipping this flag alone does not restore monetization:
-/// the paywall views and call sites were deleted with it. Follow
-/// docs/features/monetization.md as the restore guide before shipping paid.
+/// StoreKit still verifies underneath. Flipping this alone does not restore
+/// monetization — paywall UI was deleted. Guide: docs/features/monetization.md
 nonisolated enum BetaAccess {
     static let allFeaturesFree = true
 }
 
 // MARK: - Product
 
-/// The single paid SKU. One non-consumable, no tiers — the ownership offer is
-/// meant to be a one-decision purchase.
 nonisolated enum LifetimeProduct {
     /// Must match the product identifier configured in App Store Connect and
     /// in `Products.storekit`.
@@ -26,11 +22,9 @@ nonisolated enum LifetimeProduct {
 // MARK: - Founding Offer
 
 /// Controls the founding-price framing on the paywall.
-///
 /// This only changes copy. The price itself is whatever App Store Connect
 /// serves, so `deadline` must be moved and the App Store Connect price raised
 /// on the same day. It ships as `nil` on purpose: an unset deadline shows no
-/// urgency at all, which is the only safe default for a claim about scarcity.
 nonisolated enum FoundingOffer {
     static let deadline: Date? = nil
 
@@ -40,7 +34,6 @@ nonisolated enum FoundingOffer {
     /// US storefront.
     static let standardDisplayPrice = "$99.99"
 
-    /// The currency `standardDisplayPrice` is written in.
     static let standardPriceCurrencyCode = "USD"
 
     static func isActive(now: Date = Date()) -> Bool {
@@ -49,14 +42,8 @@ nonisolated enum FoundingOffer {
     }
 
     /// The "…after" comparison, or nil when it cannot be stated honestly.
-    ///
     /// Returns nil on any storefront that is not selling in the currency the
     /// literal is written in, rather than putting "$99.99 after" next to a
-    /// button reading "£74.99". A comparison in the wrong currency is a
-    /// misstated price, not a rounding problem, so the banner drops the
-    /// comparison and keeps the framing instead of guessing at a conversion.
-    ///
-    /// `currencyCode` is nil until StoreKit answers, which also suppresses it.
     static func comparisonPrice(currencyCode: String?, now: Date = Date()) -> String? {
         guard isActive(now: now) else { return nil }
         guard currencyCode == standardPriceCurrencyCode else { return nil }
@@ -70,11 +57,8 @@ nonisolated enum FoundingOffer {
 /// gated set lives in `FreeTierPolicy`, not at the call site, so the boundary
 /// can be moved in one place after launch measurement.
 nonisolated enum PaidFeature: String, CaseIterable, Sendable {
-    /// Practice beyond the free analysis allowance.
     case unlimitedAnalyses
-    /// Curriculum phases past the first.
     case fullCurriculum
-    /// Journal PDF export.
     case journalExport
     /// Turning on iCloud sync (never revoked once enabled).
     case iCloudSync
@@ -91,12 +75,9 @@ nonisolated enum PaidFeature: String, CaseIterable, Sendable {
         }
     }
 
-    /// Why the user is seeing the paywall. Drives the paywall headline.
     var paywallReason: String {
         switch self {
         case .unlimitedAnalyses:
-            // Worded to be true on both sides of the free trial: the day it
-            // ends, and any later month whose three analyses are spent.
             return "Unlimited scored practice is part of Lifetime."
         case .fullCurriculum:
             return "The eight-week curriculum is part of Lifetime."
@@ -113,9 +94,6 @@ nonisolated enum PaidFeature: String, CaseIterable, Sendable {
 // MARK: - Free Trial
 
 /// The 14-day window in which everything except iCloud sync is open.
-///
-/// The clock starts at the first *completed* analysis, not at first launch, so
-/// a user who installs and does not record yet burns no days, and a failed
 /// transcription cannot start it. `AllowanceGate.consume` is the one place that
 /// starts it; `EntitlementStore` owns the date.
 nonisolated enum PracticeTrial {
@@ -128,15 +106,12 @@ nonisolated enum PracticeTrial {
         return now < endsOn ? .active(endsOn: endsOn) : .expired
     }
 
-    /// Whole days left, rounded up — any time left is at least "1 day", because
-    /// a countdown that reads 0 while the trial still works is a bug report.
     static func daysRemaining(until endsOn: Date, now: Date = Date()) -> Int {
         max(0, Int((endsOn.timeIntervalSince(now) / 86_400).rounded(.up)))
     }
 }
 
 nonisolated enum TrialState: Sendable, Equatable {
-    /// No analysis has completed yet, so the clock has not been started.
     case notStarted
     case active(endsOn: Date)
     case expired
@@ -146,13 +121,8 @@ nonisolated enum TrialState: Sendable, Equatable {
 
 // MARK: - Free Tier Policy
 
-/// The free/paid boundary in one value. Deliberately a stored policy rather
-/// than scattered `if isLifetime` literals so the boundary can be tuned from
-/// launch measurement without touching feature code.
 nonisolated struct FreeTierPolicy: Sendable, Equatable {
-    /// Full analyses per rolling month once the trial has expired.
     var monthlyAnalyses: Int
-    /// Features that require the Lifetime purchase.
     var gatedFeatures: Set<PaidFeature>
 
     func gates(_ feature: PaidFeature) -> Bool {
@@ -170,16 +140,11 @@ nonisolated struct FreeTierPolicy: Sendable, Equatable {
     /// After the 14 days: three analyses per rolling month, and the full
     /// ownership boundary (curriculum, export, sync).
     ///
-    /// `progressCards` is intentionally *not* gated. The GTM plan makes
-    /// Then-vs-Now sharing the primary distribution loop, and a share loop that
-    /// only buyers can run cannot acquire the users it is budgeted to acquire.
-    /// Add it here if measurement says otherwise.
     static let expired = FreeTierPolicy(
         monthlyAnalyses: 3,
         gatedFeatures: [.unlimitedAnalyses, .fullCurriculum, .journalExport, .iCloudSync]
     )
 
-    /// Everything open. Used for entitled users and for debug overrides.
     static let unrestricted = FreeTierPolicy(
         monthlyAnalyses: .max,
         gatedFeatures: []
@@ -195,15 +160,10 @@ nonisolated struct AllowanceState: Sendable, Equatable {
     var cycleUsed: Int = 0
 }
 
-/// What the user is allowed to do right now.
 nonisolated enum AllowanceDecision: Sendable, Equatable {
-    /// Inside the free trial — unlimited and uncounted until `endsOn`.
     case trial(endsOn: Date)
-    /// Part of the current monthly cycle.
     case cycle(remaining: Int, resetsOn: Date)
-    /// Out of free analyses until `resetsOn`.
     case exhausted(resetsOn: Date)
-    /// Entitled — no accounting at all.
     case unlimited
 
     var isAllowed: Bool {
@@ -211,7 +171,6 @@ nonisolated enum AllowanceDecision: Sendable, Equatable {
         return true
     }
 
-    /// Analyses left before the paywall, or nil when nothing is being counted.
     var remaining: Int? {
         switch self {
         case .cycle(let remaining, _): return remaining
@@ -223,9 +182,6 @@ nonisolated enum AllowanceDecision: Sendable, Equatable {
     /// One line stating what is left, for the surfaces that disclose the limit
     /// *before* it is spent. Nil when there is nothing to say, which is both the
     /// entitled case and the reason an entitled user sees no plan chatter.
-    ///
-    /// Lives here rather than in a view so the two places that show it cannot
-    /// word it differently, and so the pluralisation is covered by tests.
     var shortSummary: String? { summary(now: Date()) }
 
     /// `shortSummary` with an injected clock, because the trial line counts days
@@ -269,8 +225,6 @@ nonisolated enum PracticeAllowance {
     ) -> AllowanceDecision {
         guard !isEntitled else { return .unlimited }
 
-        // A trial that has not started yet still reports its full length: the
-        // clock only starts at the first score, so nothing has been spent.
         switch trial {
         case .notStarted: return .trial(endsOn: now.addingTimeInterval(PracticeTrial.length))
         case .active(let endsOn): return .trial(endsOn: endsOn)
@@ -307,8 +261,6 @@ nonisolated enum PracticeAllowance {
         return updated
     }
 
-    /// Rolls the window forward past any elapsed cycles so a user who returns
-    /// after three months gets one fresh allowance, not three.
     private static func normalizedCycle(state: AllowanceState, now: Date) -> (start: Date, used: Int) {
         guard let start = state.cycleStart else { return (now, 0) }
         guard now.timeIntervalSince(start) >= cycleLength else { return (start, state.cycleUsed) }

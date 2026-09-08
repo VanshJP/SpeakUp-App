@@ -60,7 +60,6 @@ class PromptCSVService {
             let category: String
             if fields.count >= 2 {
                 let raw = fields[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                // Validate category or default to Personal Growth
                 if PromptCategory(rawValue: raw) != nil {
                     category = raw
                 } else {
@@ -104,7 +103,6 @@ class PromptCSVService {
         while let char = chars.next() {
             if inQuotes {
                 if char == "\"" {
-                    // Check for escaped quote
                     if let next = chars.next() {
                         if next == "\"" {
                             current.append("\"")

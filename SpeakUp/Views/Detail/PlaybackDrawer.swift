@@ -15,7 +15,6 @@ struct PlaybackDrawerContainer: View {
     @State private var drawerState: PlaybackDrawerState = .collapsed
     @State private var dragOffset: CGFloat = 0
 
-    // Gesture tuning. Distances in points, velocities in points/sec.
     private let drawerSpring: Animation = .spring(response: 0.26, dampingFraction: 0.90)
     private let collapseDistance: CGFloat = 50      // drag-to-close threshold
     private let expandDistance: CGFloat = 40        // drag-to-open threshold
@@ -140,9 +139,6 @@ struct PlaybackDrawerContainer: View {
         }
     }
 
-    /// Progressive resistance past `limit`: finger travel still moves the
-    /// drawer but each additional point contributes `factor` as much. Keeps
-    /// the drag feeling alive without letting the drawer slide unbounded.
     private static func rubberBanded(_ offset: CGFloat, limit: CGFloat, factor: CGFloat) -> CGFloat {
         guard offset > limit else { return offset }
         return limit + (offset - limit) * factor
@@ -242,9 +238,6 @@ struct PlaybackDrawerContainer: View {
         }
     }
 
-    /// Play button + the actual waveform + elapsed time in one 56pt row. A
-    /// waveform next to a play button does not need a "Playback" caption, and
-    /// showing the audio only in the tallest state was backwards.
     @ViewBuilder
     private var collapsedPlaybackBar: some View {
         HStack(spacing: 12) {
@@ -289,8 +282,6 @@ struct PlaybackDrawerContainer: View {
     }
 }
 
-/// POD scrubber bar row. All inputs are plain values, so SwiftUI skips the
-/// whole row while `playedBars` is unchanged between display-link ticks.
 struct ScrubberBars: View {
     let barCount: Int
     let playedBars: Int

@@ -3,9 +3,6 @@ import Foundation
 @MainActor @Observable
 final class StoryTaggingService {
 
-    /// Extracts tags from story text using the best available LLM backend.
-    /// Returns an empty array if no LLM is available (graceful degradation).
-    /// Conservative: only tags things explicitly and clearly mentioned in the text.
     func extractTags(from text: String, using llmService: LLMService) async -> [StoryTag] {
         guard llmService.isAvailable else { return [] }
         guard text.trimmingCharacters(in: .whitespacesAndNewlines).count >= 20 else { return [] }
@@ -73,7 +70,6 @@ final class StoryTaggingService {
             parsed = Self.isoFormatter.date(from: dateStr)
         }
 
-        // Fallback: try NSDataDetector on the display text
         if parsed == nil {
             parsed = detectDate(from: displayText)
         }
@@ -142,7 +138,6 @@ final class StoryTaggingService {
 
         guard value.count >= 2, value.count <= 50 else { return false }
 
-        // Reject anything that looks like the LLM is hedging
         if lower.hasPrefix("none") || lower.hasPrefix("n/a") || lower.hasPrefix("no ") { return false }
 
         switch tag.type {
@@ -150,17 +145,14 @@ final class StoryTaggingService {
             if Self.invalidFriendNames.contains(lower) { return false }
             // Names must have at least one uppercase letter (proper noun signal)
             if value == value.lowercased() { return false }
-            // Single-character "names" are noise
             if value.count < 2 { return false }
         case .location:
             if Self.invalidLocations.contains(lower) { return false }
-            // Locations should be proper nouns (at least one capital letter)
             if value == value.lowercased() { return false }
         case .date:
             if Self.invalidDateWords.contains(lower) { return false }
         case .topic:
             if Self.invalidTopics.contains(lower) { return false }
-            // Topics should be at least 3 chars to be meaningful
             if value.count < 3 { return false }
         case .custom:
             break

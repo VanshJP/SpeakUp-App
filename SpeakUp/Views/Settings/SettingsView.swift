@@ -90,11 +90,6 @@ struct SettingsView: View {
 
     // MARK: - Appearance
 
-    /// Two sibling rows, not one door into another door. Recording Look used to
-    /// sit three pushes deep (Look → Appearance → Session look), behind two
-    /// generic words, which is the wrong depth for the settings people actually
-    /// browse for fun. A section header also has to earn itself: one row under
-    /// "Look" was a label with nothing to label.
     private var appearanceSection: some View {
         VStack(spacing: 12) {
             GlassSectionHeader("Appearance", icon: "paintpalette.fill")
@@ -134,13 +129,6 @@ struct SettingsView: View {
         }
     }
 
-    /// A cosmetic row's value *is* its affordance — a swatch answers "what is it
-    /// set to?" without opening the page, which no verb-shaped subtitle can.
-    ///
-    /// Canvases and backdrops are sized for a full screen: their orbs, stars and
-    /// shards are laid out against ~320pt, so drawn straight into a 52pt box
-    /// every option renders as the same flat rectangle. Lay out big, draw
-    /// scaled, clamp — the same trick `RecordingLookView`'s tiles use.
     private func lookSwatch<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
             .frame(width: 320, height: 210)
@@ -211,8 +199,6 @@ struct SettingsView: View {
 
     // MARK: - About
 
-    /// Demoted to a quiet footer row: version and legal links are read once,
-    /// not configured, so About no longer earns a card inside a section.
     private var aboutFooter: some View {
         NavigationLink {
             AboutSettingsView()
@@ -339,10 +325,6 @@ struct SettingsView: View {
         }
     }
 
-    /// Icon chip, not a bare glyph: `iCloudSyncRow` and `ToolCategoryCard`
-    /// already draw tinted circles, so a loose symbol made the hub the one
-    /// surface speaking a different dialect — and a column of identical grey
-    /// glyphs is read line by line instead of scanned by color.
     private func settingsLink<Destination: View, Accessory: View>(
         icon: String,
         iconColor: Color,

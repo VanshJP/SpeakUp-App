@@ -18,9 +18,6 @@ nonisolated enum AudioWaveformGenerator {
         }
     }
 
-    /// Read an audio file in small chunks and produce `binCount` peak values.
-    /// Uses a fixed-size buffer instead of allocating the full PCM buffer up front
-    /// so memory stays bounded regardless of recording length.
     static func generatePeaks(from url: URL, binCount: Int) -> [Float] {
         guard binCount > 0,
               let audioFile = try? AVAudioFile(forReading: url) else {

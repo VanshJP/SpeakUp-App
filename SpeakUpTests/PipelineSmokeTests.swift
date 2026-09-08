@@ -5,9 +5,6 @@ import Foundation
 
 @MainActor
 struct PipelineSmokeTests {
-    /// 57 words over ~39s: five sentences with 0.9s inter-sentence gaps
-    /// (real pauses), two flagged fillers, Whisper-like confidences.
-    /// Gross rate lands near 87 WPM — inside the plausibility band below.
     private func realisticTranscription() -> SpeechTranscriptionResult {
         let sentences: [[String]] = [
             ["daily", "practice", "um", "slowly", "rebuilt", "my", "speaking", "confidence",
@@ -65,7 +62,6 @@ struct PipelineSmokeTests {
         )
 
         #expect(result.totalWords == input.words.count)
-        // Gross rate over the full recording: 57 words / ~39s ≈ 87 WPM.
         #expect(result.wordsPerMinute > 0 && result.wordsPerMinute < 400)
         // The 0.9s sentence gaps must register as pauses.
         #expect(result.pauseCount >= 4)
@@ -77,7 +73,6 @@ struct PipelineSmokeTests {
             #expect((result.enhancedMetrics?.gibberishConfidence ?? 1) < 0.45)
             #expect(result.enhancedMetrics?.isDefinitelyGibberish != true)
         } else {
-            // Partial/absent NLP assets: pin the threshold invariant only.
             if let m = result.enhancedMetrics {
                 #expect(m.isDefinitelyGibberish == (m.gibberishConfidence >= 4.0 / 6.0))
             }
@@ -108,7 +103,6 @@ struct PipelineSmokeTests {
         #expect(first.emphasisMetrics == second.emphasisMetrics)
         #expect(first.energyArc == second.energyArc)
         #expect(first.textQuality == second.textQuality)
-        // Filler tallies are stable even though their row IDs are not.
         #expect(first.fillerWords.map(\.word) == second.fillerWords.map(\.word))
         #expect(first.fillerWords.map(\.count) == second.fillerWords.map(\.count))
         // Equal counts use a lexical tie-breaker, never Dictionary order.

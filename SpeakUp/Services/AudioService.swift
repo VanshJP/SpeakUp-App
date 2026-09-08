@@ -8,48 +8,27 @@ import UIKit
 @Observable
 class AudioService: NSObject {
     private let logger = Logger.app("Audio")
-    // Recording
     private var audioRecorder: AVAudioRecorder?
     private var recordingSession: AVAudioSession?
-    /// Set synchronously at the top of `startRecording` so a second caller
-    /// cannot pass the idle guard while the first awaits permission.
     private var isStartingRecording = false
     var isRecording = false
     var recordingURL: URL?
     var recordingDuration: TimeInterval = 0
 
-    // Playback
     private var audioPlayer: AVAudioPlayer?
-    /// File the current `audioPlayer` was loaded from. Taps on coaching
-    /// surfaces re-request the same URL constantly; this is what lets `play`
-    /// tell "seek the live player" apart from "load a different take".
     private var playerURL: URL?
     var isPlaying = false
     var playbackProgress: Double = 0
     var playbackDuration: TimeInterval = 0
     var currentPlaybackTime: TimeInterval = 0
 
-    // Permission
     var hasPermission = false
 
     /// True while the mic is working — and, once it has been proven to work in
     /// this take, true for the rest of it.
     ///
-    /// Two versions of this indicator have now been wrong in the same way. The
-    /// first read the instantaneous level (`audioLevel > -40`) and strobed on
-    /// every gap between words. The decaying peak below fixed the strobe but
-    /// still dropped out on a long pause, which is the same false alarm
-    /// arriving more slowly — and a warning that comes and goes mid-sentence
-    /// reads as a broken app, not a broken mic.
-    ///
-    /// The question worth answering is "is this mic working", not "is sound
-    /// arriving in this exact 100 ms". So the check is one-shot: the first
-    /// confirmed input latches the indicator on until the next take starts. A
-    /// genuinely dead mic never latches, so the warning still reaches the only
-    /// user who can act on it.
     private(set) var isHearingInput = true
 
-    /// Latched once a real reading clears `hearingFloor` during this take.
     private var hasConfirmedInput = false
 
     /// Tuning knobs for `isHearingInput` *before* it latches. `getAudioLevel()`
@@ -64,7 +43,6 @@ class AudioService: NSObject {
     private var displayLink: CADisplayLink?
     private var lifecycleObservers: [NSObjectProtocol] = []
 
-    // Completion handler for recording finish
     private var recordingCompletion: ((Bool) -> Void)?
 
     override init() {
@@ -96,20 +74,14 @@ class AudioService: NSObject {
         }
     }
 
-    /// Shared session config for capture. Matches recorder sample rate to the
-    /// hardware IO rate — a hardcoded 44.1 kHz under `.voiceChat` / HFP (often
-    /// 8–16 kHz) was producing silent or time-stretched m4a files.
     private func configureRecordingSession() throws {
         let session = recordingSession ?? AVAudioSession.sharedInstance()
         recordingSession = session
-        // `.bluetoothHighQualityRecording` (iOS 26+) prefers AirPods HQ capture
-        // when available; HFP remains for classic BT headsets.
         try session.setCategory(
             .playAndRecord,
             mode: .voiceChat,
             options: [.defaultToSpeaker, .allowBluetoothHFP, .bluetoothHighQualityRecording]
         )
-        // Prefer a speech-friendly rate; hardware may still negotiate lower on HFP.
         try? session.setPreferredSampleRate(44_100)
         try? session.setPreferredIOBufferDuration(0.005)
         try session.setActive(true)
@@ -144,8 +116,6 @@ class AudioService: NSObject {
                 userInfo: [NSLocalizedDescriptionKey: "Recording is still finalizing"]
             ))
         }
-        // Re-entrancy: reserve before any await so a second tap cannot spawn
-        // two AVAudioRecorders on one session.
         guard !isRecording, !isStartingRecording, audioRecorder == nil else {
             if isRecording, let recordingURL {
                 return recordingURL
@@ -175,7 +145,6 @@ class AudioService: NSObject {
             ))
         }
         
-        // Always capture to local Documents. iCloud promotion happens after stop.
         let storageDir = ICloudStorageService.shared.recordingsDirectory
         try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
         let audioFilename = storageDir.appendingPathComponent("\(UUID().uuidString).m4a")
@@ -199,13 +168,8 @@ class AudioService: NSObject {
             recordingURL = audioFilename
             recordingDuration = 0
 
-            // Full grace window at the top of a take, so the indicator doesn't
-            // cry "no sound" in the second before the speaker starts. The latch
-            // is per-take: a mic proven on the last session proves nothing
-            // about this one.
             resetInputConfidence()
 
-            // Start duration timer
             await MainActor.run {
                 recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                     self?.recordingDuration = self?.audioRecorder?.currentTime ?? 0
@@ -230,11 +194,8 @@ class AudioService: NSObject {
             return nil
         }
 
-        // A stop is already in flight — overwriting recordingCompletion would
-        // leak its continuation and hang the first caller forever.
         guard recordingCompletion == nil else { return nil }
 
-        // Wait for the recorder to properly finalize the file
         let success = await withCheckedContinuation { continuation in
             recordingCompletion = { success in
                 continuation.resume(returning: success)
@@ -261,9 +222,6 @@ class AudioService: NSObject {
         // Promote to iCloud only after the file is fully finalized locally.
         let url = localURL.map { ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: $0) }
 
-        // Duration comes from the finalized file, not recorder.currentTime —
-        // the latter drifts under audio-session interruptions and sample-rate
-        // mismatches (e.g. .voiceChat + HFP), occasionally by 60× or more.
         recordingDuration = url.flatMap { getAudioDuration(at: $0) } ?? 0
 
         return url
@@ -281,7 +239,6 @@ class AudioService: NSObject {
         audioRecorder = nil
         isRecording = false
 
-        // Delete the file if it exists (user cancelled recording)
         if let url = recordingURL {
             try? FileManager.default.removeItem(at: url)
         }
@@ -333,11 +290,6 @@ class AudioService: NSObject {
             try recordingSession?.setCategory(.playback, mode: .default)
             try recordingSession?.setActive(true)
 
-            // The same file is already loaded (playing or paused)? Seek the
-            // live player instead of rebuilding it. Creating a new
-            // AVAudioPlayer tears down and re-primes the decoder, which lands
-            // on the ear as a jump-cut restart — exactly what tapping a word
-            // mid-playback used to feel like.
             if let player = audioPlayer, playerURL == url {
                 playbackDuration = player.duration
                 seekPlayer(to: startTime)
@@ -386,7 +338,6 @@ class AudioService: NSObject {
         currentPlaybackTime = 0
     }
 
-    /// Fraction-based seek for the drawer scrubber (0…1 of the duration).
     func seek(to progress: Double) {
         guard let player = audioPlayer else { return }
         let clamped = max(0, min(1, progress))
@@ -402,8 +353,6 @@ class AudioService: NSObject {
         seekPlayer(to: time)
     }
 
-    /// Shared seek core. The final tenth of a second is unusable — seeking
-    /// there plays nothing and reports finished immediately.
     private func seekPlayer(to time: TimeInterval) {
         guard let player = audioPlayer, player.duration > 0 else { return }
         let clamped = min(max(0, time), max(0, player.duration - 0.1))
@@ -496,7 +445,6 @@ class AudioService: NSObject {
         displayLink?.isPaused = true
     }
 
-    /// Unplugged headphones mid-take: keep recording on the built-in mic.
     private func handleRouteChange(_ notification: Notification) {
         guard
             let info = notification.userInfo,
@@ -505,8 +453,6 @@ class AudioService: NSObject {
             reason == .oldDeviceUnavailable,
             isRecording
         else { return }
-        // Recorder keeps writing after route change; re-assert category so
-        // `.defaultToSpeaker` wins over a dead BT/HFP path.
         try? configureRecordingSession()
         if audioRecorder?.isRecording == false {
             _ = audioRecorder?.record()

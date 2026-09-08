@@ -35,23 +35,19 @@ class NotificationService {
             guard granted else { return }
         }
         
-        // Cancel existing reminder
         await cancelDailyReminder()
         
-        // Create content
         let content = UNMutableNotificationContent()
         content.title = "Ready for a short speaking rep?"
         content.body = getRandomReminderMessage()
         content.sound = .default
         
-        // Create trigger
         var dateComponents = DateComponents()
         dateComponents.hour = hour
         dateComponents.minute = minute
         
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
         
-        // Create request
         let request = UNNotificationRequest(
             identifier: "daily_reminder",
             content: content,
@@ -75,8 +71,6 @@ class NotificationService {
         try? await center.setBadgeCount(0)
     }
 
-    /// One-time-compatible cleanup for requests scheduled by older builds.
-    /// Daily reminder is the only notification contract now.
     func removeLegacyPressureNotifications() {
         center.removePendingNotificationRequests(
             withIdentifiers: ["streak_at_risk", "lapsed_nudge"]

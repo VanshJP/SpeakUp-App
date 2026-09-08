@@ -2631,9 +2631,6 @@ enum DefaultPrompts {
 
     // MARK: - Helper Functions
 
-    /// Random prompt, difficulty biased by the user's self-reported speaker
-    /// level and category biased by their goal mix. Used for rerolls, so the
-    /// seed is random. Pass `.uniform` for no category bias.
     static func getRandomPrompt(for level: SpeakerLevel, mix: PromptMix) -> PromptData {
         pick(for: level, mix: mix, seed: Int.random(in: 0..<1_000_000))
     }
@@ -2673,8 +2670,6 @@ enum DefaultPrompts {
         return (components.year ?? 0) * 366 + (components.month ?? 0) * 31 + (components.day ?? 0)
     }
 
-    /// Map a `(easy, medium, hard)` weight tuple onto the seed to pick a
-    /// difficulty bucket deterministically.
     private static func pickDifficulty(for level: SpeakerLevel, seed: Int) -> PromptDifficulty {
         let weights = level.dailyDifficultyWeights
         let total = max(weights.easy + weights.medium + weights.hard, 1)

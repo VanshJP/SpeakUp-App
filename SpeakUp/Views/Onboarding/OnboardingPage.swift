@@ -36,7 +36,6 @@ struct OnboardingPage<Content: View, Footer: View>: View {
                 .padding(.top, 14)
                 .padding(.bottom, 24)
             }
-            // Short pages shouldn't rubber-band; keyboard pages should dismiss on scroll.
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
 
@@ -77,7 +76,6 @@ struct OnboardingPage<Content: View, Footer: View>: View {
 
 // MARK: - Glyph
 
-/// Row-level choice glyph (goal / level / backend) — not stamped on every page header.
 struct OnboardingGlyph: View {
     let icon: String
     var tint: Color = AppColors.primary
@@ -215,7 +213,6 @@ struct OnboardingBullet: View {
 
 // MARK: - Brand Orb
 
-/// Hero steps only.
 struct OnboardingOrb: View {
     let size: CGFloat
     var glowColor: Color = AppColors.primary
