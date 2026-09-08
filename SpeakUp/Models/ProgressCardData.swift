@@ -10,6 +10,7 @@ nonisolated struct ProgressCardData: Equatable, Sendable {
         let label: String
         let before: Int
         let after: Int
+        /// Whether a lower number is the better one (filler count).
         let lowerIsBetter: Bool
 
         var improved: Bool {
@@ -33,6 +34,9 @@ nonisolated struct ProgressCardData: Equatable, Sendable {
         return max(days, 0)
     }
 
+    /// The one line the card leads with. Progress is stated plainly and a
+    /// flat or negative delta is not dressed up as a win — a share card that
+    /// lies is worth less than no share card.
     var headline: String {
         if delta > 0 { return "+\(delta) points" }
         if delta == 0 { return "Holding steady" }
@@ -48,6 +52,8 @@ nonisolated struct ProgressCardData: Equatable, Sendable {
 }
 
 extension ProgressCardData {
+    /// Builds the card from the two analyses the comparison screens already
+    /// hold. Returns nil when either side is unscored.
     static func make(
         first: SpeechAnalysis?,
         firstDate: Date,

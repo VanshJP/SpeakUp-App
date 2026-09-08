@@ -8,6 +8,7 @@ import os
 class SpeechService {
     private let logger = Logger.app("Speech")
 
+    // State
     var isTranscribing = false
     var hasPermission = false
     var transcriptionProgress: Double = 0
@@ -15,10 +16,15 @@ class SpeechService {
     var isLoadingModel: Bool { whisperService.isLoadingModel }
     var isDownloadingModel: Bool { whisperService.isDownloadingModel }
 
+    /// Which leg of the fallback chain produced the last transcript. Reported
+    /// as a coarse analytics dimension so a rise in Apple Speech fallbacks (a
+    /// Whisper regression) is visible without inspecting any transcript.
     private(set) var lastTranscriptionBackend = "unknown"
 
+    // Transcription backend
     private let whisperService = WhisperService()
 
+    // Fallback: Apple Speech recognizer (for when WhisperKit fails)
     private let recognizer: SFSpeechRecognizer?
 
     init() {
@@ -38,10 +44,12 @@ class SpeechService {
 
     // MARK: - Model Loading
 
+    /// Pre-load the Whisper model (call on app launch for better UX)
     func preloadModel() async {
         await whisperService.loadModel(modelVariant: "base")
     }
 
+    /// Unload the Whisper model to free memory (e.g. before the local LLM loads)
     func unloadWhisperModel() async {
         await whisperService.unloadModel()
     }
@@ -49,6 +57,8 @@ class SpeechService {
     // MARK: - Permission
 
     func requestPermission() async -> Bool {
+        // For WhisperKit, we only need microphone permission (handled by AudioService)
+        // Keep this for backward compatibility
         let status = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status)
@@ -91,6 +101,7 @@ class SpeechService {
         }
 
         if !skipModelReload {
+            // Retry once with a fresh model in case WhisperKit got into a bad state.
             await whisperService.unloadModel()
             await whisperService.loadModel(modelVariant: "base")
 
@@ -103,6 +114,7 @@ class SpeechService {
                 causes.append("whisper_reload: empty transcript")
             } catch {
                 causes.append(Self.chainCause(backend: "whisper_reload", error))
+                // Fall through to Apple Speech fallback.
             }
         }
 
@@ -116,18 +128,27 @@ class SpeechService {
 
     // MARK: - Fallback Cause Tracking
 
+    /// UserInfo key carrying the joined fallback-chain causes. Purely
+    /// diagnostic — `localizedDescription` stays the stable user-facing string.
     private static let fallbackCausesKey = "SpeechService.fallbackCauses"
 
+    /// True when Whisper already burned its Hub download budget. Reload would
+    /// just hit the network again — callers should fall through to Apple Speech.
     private static func isModelDownloadTimeout(_ error: Error) -> Bool {
         if case WhisperServiceError.modelDownloadTimedOut = error { return true }
         return false
     }
 
+    /// One link of the fallback chain: backend tag + error domain#code,
+    /// matching the codes-only diagnostics pattern LLMService uses. Message
+    /// text stays out so the userInfo string carries no user content.
     private static func chainCause(backend: String, _ error: Error) -> String {
         let nsError = error as NSError
         return "\(backend): \(nsError.domain)#\(nsError.code)"
     }
 
+    /// Terminal "no speech" failure: logs the accumulated chain and embeds it
+    /// in userInfo so a bare "No speech detected" stays diagnosable.
     private func noSpeechError(causes: [String]) -> SpeechServiceError {
         logger.error("Speech fallback chain exhausted: \(causes.joined(separator: " | "), privacy: .private(mask: .hash))")
         return .transcriptionFailed(
@@ -285,6 +306,8 @@ class SpeechService {
             causes.append("whisper: empty result")
         } catch {
             causes.append(Self.chainCause(backend: "whisper", error))
+            // A Hub timeout already burned ~45s — reloading would just hit Hub
+            // again. Skip straight to Apple Speech after the optional raw retry.
             if Self.isModelDownloadTimeout(error) {
                 skipModelReload = true
             }
@@ -328,6 +351,7 @@ class SpeechService {
                 causes.append("whisper_reload: empty result")
             } catch {
                 causes.append(Self.chainCause(backend: "whisper_reload", error))
+                // Fall through to Apple Speech.
             }
         }
 
@@ -342,6 +366,7 @@ class SpeechService {
         throw noSpeechError(causes: causes + ["apple_speech: empty result"])
     }
 
+    /// Fallback transcription using Apple's SFSpeechRecognizer
     private func transcribeWithAppleSpeech(audioURL: URL) async throws -> SpeechTranscriptionResult {
         guard let recognizer, recognizer.isAvailable else {
             throw SpeechServiceError.recognizerUnavailable
@@ -362,6 +387,12 @@ class SpeechService {
         // about cleaning up raw speech and removing filler words
         request.addsPunctuation = false
 
+        // Unconditional: on-device processing is a product guarantee, not a
+        // preference, and `supportsOnDeviceRecognition` can read false while
+        // assets are still installing. This was the one leg of the chain that
+        // left the device at all. Server-side recognition also stops at roughly
+        // a minute of audio and returns that prefix as a final result, so a long
+        // recording reaching this fallback came back silently truncated.
         request.requiresOnDeviceRecognition = true
 
         // Thread-safe resume-once gate — the recognition callback and the
@@ -400,6 +431,10 @@ class SpeechService {
                 continuation.resume(returning: transcription)
             }
 
+            // Apple Speech can stall with no final result and no error, leaking
+            // the continuation (and hanging dictation) forever. Force-resume —
+            // scaled to the file, since a flat 90 s aborted long recordings that
+            // were still being recognized normally.
             let audioDuration = (try? AVAudioFile(forReading: audioURL)).map {
                 Double($0.length) / $0.processingFormat.sampleRate
             } ?? 0
@@ -453,6 +488,9 @@ class SpeechService {
 
     // MARK: - LLM Enhancement
 
+    /// Post-analysis step: re-evaluate coherence with LLM blending, enhance structure/vocabulary
+    /// with transcript quality evaluation, and recalculate overall score.
+    /// `promptText` enables prompt-aware coherence scoring for prompted sessions.
     func enhanceWithLLM(
         analysis: inout SpeechAnalysis,
         transcript: String,
@@ -478,6 +516,7 @@ class SpeechService {
             return
         }
 
+        // 1. Enhanced coherence scoring (prompt-aware)
         if let enhancedCoherence = await PromptRelevanceService.coherenceScore(
             transcript: transcript,
             llmService: llmService,
@@ -492,7 +531,10 @@ class SpeechService {
             analysis.speechScore.subscores.relevance = stabilized
         }
 
+        // 2. Transcript quality evaluation (structure + vocabulary)
         if let quality = await llmService.evaluateTranscriptQuality(transcript: transcript) {
+            // Blend LLM scores with existing rule-based subscores.
+            // Increased blend so active models have a perceptible impact.
             let llmWeight: Double = llmService.activeBackend == .appleIntelligence ? 0.45 : 0.40
             let ruleWeight = 1.0 - llmWeight
 
@@ -515,11 +557,14 @@ class SpeechService {
             }
         }
 
+        // 3. Recalculate overall score with all updated subscores
         var newOverall = SpeechAnalysisPipeline.calculateOverallScore(
             subscores: analysis.speechScore.subscores,
             weights: scoreWeights
         )
 
+        // 4. Re-apply substance multiplier after LLM enhancement
+        // This ensures LLM cannot inflate scores for gibberish/near-empty speech
         if let em = analysis.enhancedMetrics {
             newOverall = SpeechScoringEngine.applySubstanceMultiplier(
                 overallScore: newOverall,
@@ -552,7 +597,12 @@ class SpeechService {
 // MARK: - Scoring Pipeline
 
 /// The transcription-to-`SpeechAnalysis` scoring pipeline as pure statics.
+///
 /// Isolation comes from the TYPE under the project's MainActor default, so
+/// these steps were silently main-bound no matter which queue invoked them —
+/// the coordinator's old GCD bridge compiled clean and still hopped. Every
+/// member here is pure value math over PODs, so the whole enum opts out with
+/// one `nonisolated` and the coordinator can detach the leg outright.
 nonisolated enum SpeechAnalysisPipeline {
 
     // MARK: - Analysis
@@ -572,6 +622,8 @@ nonisolated enum SpeechAnalysisPipeline {
         speakerIsolationMetrics: SpeakerIsolationMetrics? = nil,
         monoPCM: MonoPCM? = nil
     ) -> SpeechAnalysis {
+        // Sort words by start time to ensure accurate pause detection
+        // Whisper/Apple Speech results are usually sorted but segments can sometimes overlap or be out of order
         let sortedWords = transcription.words.sorted { $0.start < $1.start }
 
         let primarySpeakerWords = sortedWords.filter(\.isPrimarySpeaker)
@@ -583,6 +635,7 @@ nonisolated enum SpeechAnalysisPipeline {
         let scoringWords = shouldUsePrimarySpeakerWords ? primarySpeakerWords : sortedWords
         let scoringText = scoringWords.map(\.word).joined(separator: " ")
 
+        // Count filler words
         var fillerCounts: [String: (count: Int, timestamps: [TimeInterval])] = [:]
         var totalWords = 0
         var pauseMetadata: [PauseInfo] = []
@@ -592,6 +645,7 @@ nonisolated enum SpeechAnalysisPipeline {
         for (index, word) in scoringWords.enumerated() {
             totalWords += 1
 
+            // Check for filler words (honor settings flag)
             if trackFillerWords {
                 let lowercased = word.word.lowercased()
                 if word.isFiller {
@@ -607,6 +661,7 @@ nonisolated enum SpeechAnalysisPipeline {
                 let gap = word.start - previousEnd
                 if gap > 0.4 {
                     let cappedDuration = min(gap, 10.0)  // Cap at 10s — longer gaps are recording artifacts
+                    // Context detection
                     let isTransition: Bool
                     if index > 0 {
                         let prevWord = scoringWords[index - 1].word
@@ -621,6 +676,7 @@ nonisolated enum SpeechAnalysisPipeline {
             previousEnd = word.end
         }
 
+        // Build filler words array
         let unsortedFillerWords: [FillerWord] = fillerCounts.map { entry in
             let value = entry.value
             return FillerWord(
@@ -641,6 +697,8 @@ nonisolated enum SpeechAnalysisPipeline {
             : []
         let mergedFillers = mergeFillerWords(unsortedFillerWords + structuralHits)
         let fillerWords: [FillerWord] = mergedFillers.sorted { lhs, rhs in
+            // Dictionary iteration order is undefined. Count ties need a
+            // stable key or identical analyses can reorder rows between runs.
             if lhs.count != rhs.count {
                 return lhs.count > rhs.count
             }
@@ -657,6 +715,8 @@ nonisolated enum SpeechAnalysisPipeline {
         let wordsPerMinute = Double(totalWords) / (wpmDuration / 60)
 
         let pauses = pauseMetadata.map { $0.duration }
+        // Mean over pauses ≤ 5 s; gaps longer than that are recording artifacts, not speech pauses.
+        // Median was tried but skews too low when many micro-gaps (0.4–0.7 s) outnumber intentional pauses.
         let averagePauseLength: Double
         if pauses.isEmpty {
             averagePauseLength = 0
@@ -666,13 +726,17 @@ nonisolated enum SpeechAnalysisPipeline {
             averagePauseLength = relevant.reduce(0, +) / Double(relevant.count)
         }
 
+        // Count strategic vs hesitation pauses
         let strategicPauseCount = pauseMetadata.filter { $0.isTransition }.count
         let hesitationPauseCount = pauseMetadata.filter { !$0.isTransition && $0.duration > 1.2 }.count
 
+        // Run sub-analyses
         let volumeMetrics = !audioLevelSamples.isEmpty ? analyzeVolume(samples: audioLevelSamples) : nil
         let vocabComplexity = !scoringWords.isEmpty ? analyzeVocabComplexity(words: scoringWords) : nil
         let sentenceAnalysis = !scoringWords.isEmpty ? analyzeSentenceStructure(words: scoringWords) : nil
 
+        // Advanced analyses — reuse post-Whisper PCM when the caller has it
+        // (gotcha §16); otherwise decode once here for pitch.
         let pitchMetrics: PitchMetrics? = (monoPCM ?? audioURL.flatMap {
             MonoPCM.decode(url: $0)
         }).flatMap { PitchAnalysisService.analyze(monoPCM: $0) }
@@ -688,6 +752,7 @@ nonisolated enum SpeechAnalysisPipeline {
         let textQuality = !scoringText.isEmpty ?
             TextAnalysisService.analyze(text: scoringText, totalWords: totalWords) : nil
 
+        // Zero-score gate: no meaningful speech
         let nonFillerWordCount = totalWords - totalFillers
         if totalWords == 0 || nonFillerWordCount == 0 {
             return SpeechAnalysis(
@@ -711,6 +776,7 @@ nonisolated enum SpeechAnalysisPipeline {
 
         let fillerRatio = totalWords > 0 ? Double(totalFillers) / Double(totalWords) : 0
 
+        // Prompt relevance / coherence
         let relevanceScore: Int?
         if let promptText, totalWords >= 10 {
             relevanceScore = PromptRelevanceService.score(promptText: promptText, transcript: scoringText)
@@ -720,11 +786,14 @@ nonisolated enum SpeechAnalysisPipeline {
             relevanceScore = nil
         }
 
+        // Content density
         let contentDensity = contentDensityScore(words: scoringWords)
 
         // Detect vocab word usage (before subscores so we can feed it in)
         let vocabWordsUsed = VocabMatcher.usages(in: scoringText, vocabWords: vocabWords)
 
+        // ── Enhanced Scoring Engine ──────────────────────────────────────────────────
+        // Compute research-backed metrics: MATTR, PTR, MLR, substance, fluency, gibberish.
         let enhancedMetrics = SpeechScoringEngine.computeEnhancedMetrics(
             words: scoringWords,
             scoringText: scoringText,
@@ -732,6 +801,7 @@ nonisolated enum SpeechAnalysisPipeline {
             pauseMetadata: pauseMetadata
         )
 
+        // Calculate subscores
         let subscores = calculateSubscores(
             wordsPerMinute: wordsPerMinute,
             fillerRatio: fillerRatio,
@@ -760,11 +830,17 @@ nonisolated enum SpeechAnalysisPipeline {
 
         var overallScore = calculateOverallScore(subscores: subscores, weights: scoreWeights)
 
+        // ── Substance Gate (replaces simple word-count cap) ──────────────────────────
+        // Apply substance score as a MULTIPLIER, not just a ceiling.
+        // This ensures gibberish/near-empty speech collapses to near-zero regardless
+        // of how "fluent" the few words were.
         overallScore = SpeechScoringEngine.applySubstanceMultiplier(
             overallScore: overallScore,
             substanceScore: enhancedMetrics.substanceScore
         )
 
+        // ── Enhanced Gibberish Gate ──────────────────────────────────────────────────
+        // Graduated 5-signal confidence (0–1) from SpeechScoringEngine.
         overallScore = SpeechScoringEngine.applyGibberishGate(
             score: overallScore,
             gibberishConfidence: enhancedMetrics.gibberishConfidence
@@ -772,6 +848,7 @@ nonisolated enum SpeechAnalysisPipeline {
 
         let clarity = Double(subscores.clarity)
 
+        // Compute WPM time series
         let wpmTimeSeries = SpeechAnalysisPipeline.computeWPMTimeSeries(
             words: scoringWords,
             actualDuration: wpmDuration
@@ -886,6 +963,7 @@ nonisolated enum SpeechAnalysisPipeline {
     ) -> Double {
         let signalReliability = audioIsolationMetrics.map { metrics in
             let residual = max(0.0, min(1.0, Double(metrics.residualNoiseScore) / 100.0))
+            // Keep sessions near full reliability unless residual noise is clearly poor.
             if residual >= 0.55 { return 1.0 }
             return max(0.55, residual * 0.70 + 0.30)
         }
@@ -928,6 +1006,9 @@ nonisolated enum SpeechAnalysisPipeline {
     ) -> Bool {
         guard totalWords >= 12, let metrics = speakerIsolationMetrics else { return false }
 
+        // Raised minimum primary words from 45% to 55% of total.
+        // Scoring on fewer than 55% of words means we're discarding nearly half the speech,
+        // which produces an unreliable score. Better to fall back to full transcript.
         let minimumPrimaryWords = max(10, Int(Double(totalWords) * 0.55))
         guard primaryWordsCount >= minimumPrimaryWords else { return false }
 
@@ -984,6 +1065,10 @@ nonisolated enum SpeechAnalysisPipeline {
         // which applies a graduated multiplier to the final overall score. This prevents the
         // ceiling from artificially compressing subscores while still penalizing short/empty speech.
 
+        // Clarity score — blends two articulation signals (voiced-frame ratio and ASR confidence)
+        // with duration steadiness, authority, and a small hedge/pace adjustment. Calibrated so
+        // a typical conversational session (VFR 0.30, avgConf 0.78, CV 0.70, authority 70) lands
+        // in the low-80s, while mumbled delivery stays below 60 and strong delivery reaches 90+.
         let clarityScore: Int
         do {
             let hasVFR = (pitchMetrics?.voicedFrameRatio ?? 0) > 0
@@ -1026,6 +1111,8 @@ nonisolated enum SpeechAnalysisPipeline {
                 hedgePenalty = 0
             }
 
+            // Redistribute weight when one articulation source is unavailable so the absent
+            // component doesn't silently drop 25-30% of the score.
             let vfrWeight: Double
             let asrWeight: Double
             switch (hasVFR, hasConfidence) {
@@ -1045,6 +1132,10 @@ nonisolated enum SpeechAnalysisPipeline {
             clarityScore = max(0, min(100, Int(rawClarity.rounded())))
         }
 
+        // Pace score — WPM Gaussian + optional rate variation and fluency bonuses.
+        // Sigma widened from 45→55 so WPM ±30 from target still scores well.
+        // When optional metrics are available they replace part of the base weight;
+        // when absent, WPM gets the full weight so the score isn't artificially capped.
         let optimalWPM = Double(targetWPM)
         let sigma = 55.0
         let deviation = wordsPerMinute - optimalWPM
@@ -1065,6 +1156,9 @@ nonisolated enum SpeechAnalysisPipeline {
         let rawPaceScore = basePaceScore * paceBaseWeight + bonusComponents
         let paceScore = max(0, min(100, Int(rawPaceScore)))
 
+        // Filler usage score — gentler log curve so beginners can see progress.
+        // Old multiplier of 20 was brutal: 5% fillers → score 0. New multiplier of 8
+        // means 5% fillers → ~52, 3% → ~72, 1% → ~91, giving room to improve.
         let hedgeAdjustment: Double
         let weakPhraseAdjustment: Double
         if let tq = textQuality {
@@ -1078,6 +1172,7 @@ nonisolated enum SpeechAnalysisPipeline {
         let rawFillerScore = 100.0 * max(0, 1.0 - log2(1.0 + effectiveFillerRatio * 8.0))
         let fillerScore = max(0, min(100, Int(rawFillerScore)))
 
+        // Pause quality score
         let pauseScore: Int
         if !trackPauses {
             pauseScore = 50
@@ -1180,6 +1275,7 @@ nonisolated enum SpeechAnalysisPipeline {
                 weights.append(0.15)  // Reduced: pace variation is weakly correlated with vocal variety
             }
 
+            // Cross-signal correlation: engaging speakers modulate pitch and energy together
             if let pm = pitchMetrics, let contour = pm.f0Contour, !audioLevelSamples.isEmpty {
                 let correlationScore = PitchAnalysisService.pitchEnergyCorrelation(
                     pitchContour: contour,
@@ -1214,7 +1310,10 @@ nonisolated enum SpeechAnalysisPipeline {
                 let powerBonus = min(5, Int(powerRatio * 150))  // Capped at +5 (down from +10)
                 vocabularyScore = min(100, (vocabularyScore ?? base) + powerBonus)
             }
+            // MATTR bonus: blend in lexical sophistication from SpeechScoringEngine
+            // MATTR is length-invariant and more reliable than simple TTR
             if let em = enhancedMetrics {
+                // Blend: 60% existing complexity, 40% MATTR-based lexical sophistication
                 let mattrBlended = Int(Double(vocabularyScore ?? base) * 0.60 +
                                        Double(em.lexicalSophisticationScore) * 0.40)
                 vocabularyScore = max(0, min(100, mattrBlended))
@@ -1247,6 +1346,7 @@ nonisolated enum SpeechAnalysisPipeline {
         )
     }
 
+    /// Pause scoring with gentler penalties so beginners aren't crushed by natural hesitations.
     private static func calculatePauseScore(
         metadata: [PauseInfo],
         fillerRatio: Double,
@@ -1268,6 +1368,7 @@ nonisolated enum SpeechAnalysisPipeline {
         score += Double(strategicMediumCount) * 4.0
         score += Double(strategicLongCount) * 6.0
 
+        // Softer hesitation penalty (was -15 per long hesitation)
         let hesitationLongCount = longPauses.filter { !$0.isTransition }.count
         score -= Double(min(hesitationLongCount, 4)) * 8.0
 
@@ -1330,6 +1431,18 @@ nonisolated enum SpeechAnalysisPipeline {
     /// Speaking rate over a **sliding 15-second window**, stepped a third of a
     /// window so consecutive points overlap.
     ///
+    /// Disjoint 5-second buckets measured articulation rate, not pace: any
+    /// bucket that happened to land inside one fluent run reported words/minute
+    /// as if the speaker never breathed. A take with 45% silence and a normal
+    /// 5 words/sec delivery — a gross rate of 170 WPM — peaked at 300 on the
+    /// chart, and the 3-point moving average could not save it because the
+    /// first and last buckets were never smoothed. Fifteen seconds always
+    /// contains breaths, so a window reads the rate the user actually spoke at
+    /// and the peaks stay near the headline average.
+    ///
+    /// The window shrinks on short takes (never more than a third of the clip,
+    /// floor 5s) so a 30-second session still gets a curve rather than a dot.
+    /// Overlapping windows are self-smoothing — the moving average is gone.
     static func computeWPMTimeSeries(
         words: [TranscriptionWord],
         actualDuration: TimeInterval,
@@ -1341,6 +1454,9 @@ nonisolated enum SpeechAnalysisPipeline {
         let step = window / 3
         let lastStart = max(0, actualDuration - window)
 
+        // Window starts, with the final one flush to the end of the take so the
+        // chart covers it. The half-step guard keeps that flush window from
+        // landing on top of the one before it.
         var starts: [TimeInterval] = []
         var cursor: TimeInterval = 0
         while cursor < lastStart - step / 2 {
@@ -1382,14 +1498,19 @@ nonisolated enum SpeechAnalysisPipeline {
         let average = samples.reduce(0, +) / Float(samples.count)
         let peak = samples.max() ?? 0
 
+        // Dynamic range: peak minus 5th percentile (ignoring outlier silence)
         let sorted = samples.sorted()
         let lowIdx = max(0, Int(Double(sorted.count) * 0.05))
         let highIdx = min(sorted.count - 1, Int(Double(sorted.count) * 0.95))
         let dynamicRange = sorted[highIdx] - sorted[lowIdx]
 
+        // Monotone score: convert dB to linear energy, exclude silence, use CV
+        // Raw dB values from AVAudioRecorder are typically -160 to 0.
+        // Silence threshold: anything below -40 dB is not speech.
         let speechSamples = samples.filter { $0 > -40 }
         let monotoneScore: Int
         if speechSamples.count >= 4 {
+            // Convert dB to linear volume for meaningful variation measurement
             let linearSamples = speechSamples.map { pow(10.0, Double($0) / 20.0) }
             let linMean = linearSamples.reduce(0, +) / Double(linearSamples.count)
             guard linMean > 1e-6 else {
@@ -1400,6 +1521,9 @@ nonisolated enum SpeechAnalysisPipeline {
             let linVariance = linearSamples.reduce(0.0) { $0 + pow($1 - linMean, 2) } / Double(linearSamples.count)
             let cv = sqrt(linVariance) / linMean  // Coefficient of variation
 
+            // Map CV to score with calibrated thresholds:
+            // CV < 0.15 → monotone (20-40), 0.15-0.35 → moderate (40-70),
+            // 0.35-0.60 → good (70-90), > 0.60 → excellent (90-100)
             if cv < 0.15 {
                 monotoneScore = 20 + Int(cv / 0.15 * 20)
             } else if cv < 0.35 {
@@ -1413,6 +1537,8 @@ nonisolated enum SpeechAnalysisPipeline {
             monotoneScore = 30 // Not enough speech samples
         }
 
+        // Energy score: based on average level relative to -40dB baseline
+        // -40dB is quiet, 0dB is max; typical speech is -20 to -5 dB
         let normalizedAvg = max(0, min(1, (average + 40) / 40))
         let energyScore = min(100, max(0, Int(normalizedAvg * 100)))
 
@@ -1445,6 +1571,7 @@ nonisolated enum SpeechAnalysisPipeline {
         let longWordCount = longWords.count
         let longWordRatio = Double(longWordCount) / Double(totalCount)
 
+        // Find repeated 2-3 word n-grams appearing 3+ times
         var phraseCounts: [String: Int] = [:]
         for n in 2...3 {
             guard cleaned.count >= n else { continue }
@@ -1458,12 +1585,16 @@ nonisolated enum SpeechAnalysisPipeline {
             .map { RepeatedPhrase(phrase: $0.key, count: $0.value) }
             .sorted { $0.count > $1.count }
 
+        // Word rarity — delegate to SpeechScoringEngine.computeWordRarityScore to avoid
+        // duplicating the NLEmbedding lookup that already runs in the enhanced scoring pipeline.
         let rarityComponent: Double = SpeechScoringEngine.computeWordRarityScore(words: Array(uniqueWords)) * 20.0
 
+        // Composite score with calibrated thresholds for conversational speech
         let uniqueComponent = min(1.0, uniqueRatio / 0.65) * 35
         let repeatPenalty = min(1.0, Double(repeatedPhrases.count) / 5.0)
         let repeatComponent = (1.0 - repeatPenalty) * 20
 
+        // Word diversity bonus: reward using words of varied lengths
         let lengthBuckets = Set(cleaned.map { min($0.count, 10) })
         let diversityScore = min(1.0, Double(lengthBuckets.count) / 7.0) * 25
 
@@ -1483,6 +1614,7 @@ nonisolated enum SpeechAnalysisPipeline {
     nonisolated static func analyzeSentenceStructure(words: [TranscriptionWord]) -> SentenceAnalysis {
         guard !words.isEmpty else { return SentenceAnalysis() }
 
+        // Split into sentences based on long pauses (>1.0s) or punctuation
         var sentences: [[TranscriptionWord]] = []
         var currentSentence: [TranscriptionWord] = []
 
@@ -1515,8 +1647,10 @@ nonisolated enum SpeechAnalysisPipeline {
         let avgLength = Double(sentenceLengths.reduce(0, +)) / Double(totalSentences)
         let longestSentence = sentenceLengths.max() ?? 0
 
+        // Detect incomplete sentences (<3 words)
         let incompleteSentences = sentences.filter { $0.count < 3 }.count
 
+        // Detect restarts: "I think... I mean...", words repeated at sentence starts
         let restartPatterns = ["i mean", "what i'm saying", "let me", "i think i", "sorry"]
         var restartCount = 0
         var restartExamples: [String] = []
@@ -1535,22 +1669,28 @@ nonisolated enum SpeechAnalysisPipeline {
             }
         }
 
+        // Structure score
         let incompleteRatio = Double(incompleteSentences) / Double(totalSentences)
         let restartRatio = Double(restartCount) / Double(totalSentences)
         let runOnPenalty = sentences.filter { $0.count > 40 }.count
 
         var score = 60  // Start at 60 base (neutral)
 
+        // Penalties (up to -40)
         score -= Int(incompleteRatio * 20)
         score -= Int(restartRatio * 20)
         score -= min(20, runOnPenalty * 10)
 
+        // Rewards (up to +40)
+        // 1. Sentence variety: std dev of lengths between 3-12 is good (+10)
         let lengthStdDev = standardDeviation(sentenceLengths.map { Double($0) })
         if lengthStdDev >= 3 && lengthStdDev <= 12 { score += 10 }
 
+        // 2. Good average length: 8-25 words is ideal (+10)
         if avgLength >= 8 && avgLength <= 25 { score += 10 }
         else if avgLength >= 5 && avgLength <= 30 { score += 5 }
 
+        // 3. Has opening AND closing sentence of reasonable length (+10)
         if totalSentences >= 3 {
             let firstLen = sentenceLengths[0]
             let lastLen = sentenceLengths[totalSentences - 1]
@@ -1594,9 +1734,12 @@ nonisolated enum SpeechAnalysisPipeline {
         let cv = mean > 0 ? stddev / mean : 0
         let rateRange = (windowedWPMs.max() ?? 0) - (windowedWPMs.min() ?? 0)
 
+        // Note: SpeechScoringEngine also computes articulationRate for fluency scoring.
+        // This instance feeds RateVariationMetrics which is displayed in the Vocal Variety UI section.
         let totalSpeechTime = words.reduce(0.0) { $0 + $1.duration }
         let articulationRate = totalSpeechTime > 0 ? Double(words.count) / (totalSpeechTime / 60.0) : 0
 
+        // Smooth Gaussian: ideal CV ~0.15, sigma=0.08
         let idealCV = 0.15
         let sigmaCv = 0.08
         let variationScore = max(0, min(100, 15 + Int(85.0 * exp(-pow(cv - idealCV, 2) / (2 * sigmaCv * sigmaCv)))))
@@ -1623,8 +1766,10 @@ nonisolated enum SpeechAnalysisPipeline {
 
         var emphasisPositions: [Double] = []
 
+        // Signal-based emphasis detection when pitch/volume data available
         let useSignalDetection = pitchContour != nil && !audioLevelSamples.isEmpty
         if useSignalDetection, let contour = pitchContour, !audioLevelSamples.isEmpty {
+            // Build moving averages for pitch and volume
             let pitchWindowSize = max(1, contour.count / 20)
             let volWindowSize = max(1, audioLevelSamples.count / 20)
 
@@ -1632,20 +1777,25 @@ nonisolated enum SpeechAnalysisPipeline {
                 let wordMidpoint = word.start + word.duration / 2.0
                 let normalizedPos = wordMidpoint / actualDuration
 
+                // Map word position to contour/level indices
                 let pitchIdx = min(contour.count - 1, max(0, Int(normalizedPos * Double(contour.count))))
                 let volIdx = min(audioLevelSamples.count - 1, max(0, Int(normalizedPos * Double(audioLevelSamples.count))))
 
+                // Local moving average for pitch
                 let pitchStart = max(0, pitchIdx - pitchWindowSize)
                 let pitchEnd = min(contour.count, pitchIdx + pitchWindowSize + 1)
                 let pitchSlice = contour[pitchStart..<pitchEnd]
                 let pitchLocalAvg = pitchSlice.reduce(Float(0), +) / Float(pitchSlice.count)
 
+                // Local moving average for volume
                 let volStart = max(0, volIdx - volWindowSize)
                 let volEnd = min(audioLevelSamples.count, volIdx + volWindowSize + 1)
                 let volSlice = audioLevelSamples[volStart..<volEnd]
                 let volLocalAvg = volSlice.reduce(Float(0), +) / Float(volSlice.count)
 
                 let pitchSpike = pitchLocalAvg > 0 ? contour[pitchIdx] / pitchLocalAvg : 1.0
+                // Levels are dB (negative) — a ratio inverts the comparison.
+                // Use a dB difference: 6 dB above the local average = emphasis.
                 let volSpikeDb = volLocalAvg < -60 ? Float(0) : audioLevelSamples[volIdx] - volLocalAvg
 
                 if pitchSpike > 1.2 && volSpikeDb > 6 {
@@ -1654,6 +1804,7 @@ nonisolated enum SpeechAnalysisPipeline {
             }
         }
 
+        // Fallback: duration-based emphasis detection
         if emphasisPositions.isEmpty {
             let durations = nonFillerWords.map { $0.duration }.filter { $0 > 0 }
             guard !durations.isEmpty else { return EmphasisMetrics() }
@@ -1698,6 +1849,7 @@ nonisolated enum SpeechAnalysisPipeline {
     nonisolated static func analyzeEnergyArc(samples: [Float], words: [TranscriptionWord], actualDuration: TimeInterval) -> EnergyArcMetrics {
         guard !samples.isEmpty, actualDuration > 5 else { return EnergyArcMetrics() }
 
+        // Smooth samples with a moving average to reduce noise
         let smoothWindowSize = max(1, samples.count / 20)
         let smoothed: [Float] = (0..<samples.count).map { i in
             let start = max(0, i - smoothWindowSize / 2)
@@ -1706,12 +1858,15 @@ nonisolated enum SpeechAnalysisPipeline {
             return slice.reduce(Float(0), +) / Float(slice.count)
         }
 
+        // Convert to linear energy for analysis
         let linearEnergy = smoothed.map { pow(10.0, Double($0) / 20.0) }
         guard !linearEnergy.isEmpty else { return EnergyArcMetrics() }
 
+        // Find actual peak position
         let peakIdx = linearEnergy.enumerated().max(by: { $0.element < $1.element })?.offset ?? 0
         let peakPosition = Double(peakIdx) / Double(linearEnergy.count) // 0.0-1.0
 
+        // Opening/body/closing energy (thirds for reporting)
         let thirdSize = max(1, linearEnergy.count / 3)
         let opening = linearEnergy[0..<thirdSize].reduce(0, +) / Double(thirdSize)
         let body = linearEnergy[thirdSize..<min(thirdSize * 2, linearEnergy.count)].reduce(0, +) / Double(thirdSize)
@@ -1723,10 +1878,12 @@ nonisolated enum SpeechAnalysisPipeline {
         let normBody = body / maxEnergy
         let normClosing = closing / maxEnergy
 
+        // Peak detection: is there a clear peak?
         let peakValue = linearEnergy.max() ?? 0
         let avgValue = linearEnergy.reduce(0, +) / Double(linearEnergy.count)
         let hasClearPeak = peakValue > avgValue * 1.3
 
+        // Build-up to peak: energy before peak should generally increase
         let prePeak = Array(linearEnergy[0..<max(1, peakIdx)])
         let prePeakFirstHalf: Double
         let prePeakSecondHalf: Double

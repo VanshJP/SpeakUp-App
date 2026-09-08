@@ -3,6 +3,11 @@ import SwiftUI
 // MARK: - Glass Appearance
 
 /// How untinted Liquid Glass reads on the navy canvas.
+///
+/// Light is the post-brighten default (soft white lift). Dark drops the lift
+/// and softens the rim so cards sink into the canvas — the look before the
+/// brighten pass, available as a user preference.
+///
 /// Raw values are the SwiftData payload; do not reorder existing cases.
 enum GlassAppearance: Int, Codable, CaseIterable, Identifiable {
     case light = 0
@@ -40,8 +45,11 @@ enum GlassAppearance: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Soft white lift for `.regular.tint(...)` on untinted surfaces. The only
+    /// knob this setting has left now that cards draw no rim of their own.
     var glassTint: Color { Color.white.opacity(tintLift) }
 
+    /// How much the plate lifts off the canvas. Dark lifts less so cards sink.
     var tintLift: Double {
         switch self {
         case .light: return 0.08

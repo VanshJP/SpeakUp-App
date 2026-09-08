@@ -1,9 +1,22 @@
 import UIKit
 
 /// One place that puts a rendered card into the system share sheet.
+///
 /// Both share surfaces — the score card and the Then-vs-Now card — need the
+/// same three things: a presenter, a completion that only counts a *finished*
+/// share, and the advocacy event. Duplicating that meant one of them would
+/// eventually stop logging.
 @MainActor
 enum SharePresenter {
+    /// Presents `image` (and optional caption / link) and reports the share
+    /// once the user completes it.
+    ///
+    /// `message` is the caption iMessage, Mail, and Notes attach under the
+    /// card — it should already contain the tappable URL when there is one.
+    /// Passing the URL as a separate activity item doubles the preview in
+    /// some destinations, so the caption is the single carrier.
+    ///
+    /// Returns false when no window is available to present from.
     @discardableResult
     static func present(
         image: UIImage,
@@ -14,6 +27,8 @@ enum SharePresenter {
     ) -> Bool {
         guard let root = rootViewController else { return false }
 
+        // Refuse if a sheet is already up — or if the top controller *is* the
+        // share sheet (its presentedViewController is nil while active).
         guard canPresent(from: root) else { return false }
 
         var items: [Any] = [image]
@@ -30,6 +45,8 @@ enum SharePresenter {
         }
 
         activity.completionWithItemsHandler = { _, completed, _, _ in
+            // A dismissed sheet is not a share. Counting it would inflate the
+            // one advocacy number the growth plan is steered by.
             guard completed else { return }
             Task { @MainActor in
                 AnalyticsService.shared.log(.shareCompleted(cardType: cardType, trigger: trigger))
@@ -41,6 +58,8 @@ enum SharePresenter {
         return true
     }
 
+    /// Presents a file URL (e.g. the prompt CSV export) with no analytics
+    /// attached.
     static func present(url: URL) {
         guard let root = rootViewController else { return }
         guard canPresent(from: root) else { return }
@@ -56,12 +75,18 @@ enum SharePresenter {
         root.present(activity, animated: true)
     }
 
+    /// True when nothing is already presenting and the top controller is not
+    /// itself an in-flight activity sheet.
     private static func canPresent(from root: UIViewController) -> Bool {
         if root is UIActivityViewController { return false }
         if root.presentedViewController != nil { return false }
         return true
     }
 
+    /// The *topmost* presented controller, not the window root. Callers now
+    /// include `ShareCardSheet`, which is itself a presented sheet — presenting
+    /// on the root while it is up throws "already presenting" and no share
+    /// sheet ever appears.
     private static var rootViewController: UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first

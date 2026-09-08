@@ -1,7 +1,11 @@
 import Foundation
 
 /// Outbound support and legal destinations.
+///
 /// The values come from Info.plist rather than source so the site can be stood
+/// up without a code change, and so a build that has not had them filled in
+/// simply hides those rows instead of shipping a dead link. The in-app
+/// `PrivacyDataView` carries the storage and deletion disclosure, so a
 /// missing website degrades the experience rather than breaking a requirement.
 nonisolated enum SupportLinks {
     private static func url(for key: String) -> URL? {

@@ -30,6 +30,7 @@ nonisolated struct VocabChallengeStore: @unchecked Sendable {
         defaults.set(data, forKey: cacheKey)
     }
 
+    /// FSRS state per word, keyed by lowercased word.
     func reviews() -> [String: VocabReviewState] {
         guard let data = defaults.data(forKey: reviewKey) else { return [:] }
         return (try? JSONDecoder().decode([String: VocabReviewState].self, from: data)) ?? [:]

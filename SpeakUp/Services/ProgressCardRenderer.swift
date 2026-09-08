@@ -14,6 +14,7 @@ enum ProgressCardRenderer {
         return renderer.uiImage
     }
 
+    /// Renders and presents the system share sheet.
     @discardableResult
     static func share(
         _ data: ProgressCardData,

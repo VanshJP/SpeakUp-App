@@ -16,8 +16,12 @@ final class Recording {
     var transcriptionWords: [TranscriptionWord]?
     var analysis: SpeechAnalysis?
     /// Full-fidelity JSON mirror of `analysis`, written beside it.
+    ///
     /// SwiftData's decoder drops every advanced metric on read (see
+    /// `SpeechAnalysis.init(from:)` for why it has to), so `analysis` comes
+    /// back carrying only the headline numbers once a recording has been read
     /// from the store rather than just written to it. Coaching reasons about
+    /// exactly the fields that go missing, so it reads `fullAnalysis` instead.
     var analysisJSON: Data?
     var isProcessing: Bool = false
     var lastProcessingError: String?
@@ -35,6 +39,8 @@ final class Recording {
     /// cheap stats queries — never predicate on the Codable `analysis` blob.
     var overallScore: Int?
     var promptId: String?
+    /// Persisted mirror of the live level samples (JSON-encoded `[Float]`), so
+    /// resumed analyses keep real delivery metrics across relaunch.
     var audioLevelSamplesData: Data?
 
     /// Live level samples over `audioLevelSamplesData`. Decodes JSON on access —
@@ -52,6 +58,9 @@ final class Recording {
     /// Word-workout snapshot: the day stamp and spotlight words that were live
     /// when this recording's analysis landed. Written once by
     /// `RecordingProcessingCoordinator`; the detail view scores this session
+    /// against these words so an older take is judged by its own day's list,
+    /// never today's. Both optional — recordings analyzed before snapshots
+    /// existed simply have none.
     var vocabChallengeDayStamp: String?
     var vocabChallengeWords: [VocabChallengeWord]?
     /// Set when the recording was saved but left unanalyzed because the free
@@ -109,6 +118,9 @@ final class Recording {
     /// Writes the analysis and its full-fidelity mirror together, refreshing
     /// the `overallScore` projection beside them.
     ///
+    /// Always use this rather than assigning `analysis` directly — a write that
+    /// skips the mirror leaves the advanced metrics recoverable only until the
+    /// next launch.
     func setAnalysis(_ analysis: SpeechAnalysis?) {
         self.analysis = analysis
         self.analysisJSON = analysis?.encodedMirror()
@@ -125,6 +137,7 @@ final class Recording {
         return SpeechAnalysis.decodedMirror(analysisJSON) ?? analysis
     }
 
+    /// Display title: custom title, story title, prompt text, or fallback
     var displayTitle: String {
         if let customTitle, !customTitle.isEmpty {
             return customTitle
@@ -137,18 +150,22 @@ final class Recording {
 
     // MARK: - Resolved File URLs
 
+    /// Resolves the stored audio path (filename or legacy absolute) to a full Documents URL.
     var resolvedAudioURL: URL? {
         Self.resolveStoredURL(audioURL)
     }
 
+    /// Resolves the stored video path (filename or legacy absolute) to a full Documents URL.
     var resolvedVideoURL: URL? {
         Self.resolveStoredURL(videoURL)
     }
 
+    /// Resolves the stored thumbnail path (filename or legacy absolute) to a full Documents URL.
     var resolvedThumbnailURL: URL? {
         Self.resolveStoredURL(thumbnailURL)
     }
 
+    /// Converts a full file URL to a relative-only URL for storage.
     static func relativeURL(from url: URL) -> URL {
         let filename = url.lastPathComponent
         if let relative = URL(string: filename) {
@@ -164,6 +181,10 @@ final class Recording {
         return url
     }
 
+    /// Resolves a stored URL: if it's already absolute and the file exists under an
+    /// allowed media root, returns it as-is. If relative (just a filename), checks
+    /// iCloud container first, then local Documents. Path components with `../`
+    /// or separators are rejected — see `MediaPath`.
     private static func resolveStoredURL(_ stored: URL?) -> URL? {
         guard let stored else { return nil }
 
@@ -190,9 +211,11 @@ final class Recording {
             filename = safe
         }
 
+        // Resolve via iCloud service (checks iCloud container, then local Documents)
         return ICloudStorageService.shared.resolveFile(named: filename)
     }
 
+    // Formatted duration string
     var formattedDuration: String {
         actualDuration.minutesSeconds
     }

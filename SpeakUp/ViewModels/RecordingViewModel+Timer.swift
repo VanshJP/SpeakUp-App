@@ -10,16 +10,21 @@ extension RecordingViewModel {
         // Brief pause so the user sees the full starting state
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self, self.isRecording else { return }
+            // A cancel→restart within the 0.5s window can queue a second block —
+            // invalidate any timer a previous block created so only one ever runs.
             self.timer?.invalidate()
             self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let self else { return }
 
                 Task { @MainActor in
+                    // Audio-level sampling piggy-backs on this same timer to
+                    // keep the main-actor task rate at 10/s (not 20/s).
                     self.sampleAudioLevelTick()
 
                     self.remainingTime -= 0.1
                     self.recordingDuration = TimeInterval(self.targetDuration.seconds) - self.remainingTime
 
+                    // Haptic pulse at 10s and 5s remaining
                     if abs(self.remainingTime - 10.0) < 0.1 {
                         Haptics.warning()
                     } else if abs(self.remainingTime - 5.0) < 0.1 {
@@ -27,6 +32,7 @@ extension RecordingViewModel {
                     }
 
                     if self.remainingTime <= 0 {
+                        // Clamp progress once timer expires
                         self.progress = self.countdownStyle == .countDown ? 0.0 : 1.0
 
                         if self.timerEndBehavior == .saveAndStop {
@@ -54,6 +60,7 @@ extension RecordingViewModel {
                                 // Already in grace period — check for sentence end or timeout
                                 let graceElapsed = self.recordingDuration - (self.graceStartTime ?? self.recordingDuration)
 
+                                // Sentence ended = enough silence AND audio level is low
                                 let sentenceEnded = timeSinceLastWord >= self.sentenceSilenceThreshold && isQuiet
                                 let graceExpired = graceElapsed >= self.maxGracePeriod
 
@@ -66,6 +73,7 @@ extension RecordingViewModel {
                                 }
                             }
                         }
+                        // .keepGoing: timer continues into negative, recording keeps going
                     } else {
                         let rawProgress = 1 - (self.remainingTime / TimeInterval(self.targetDuration.seconds))
                         self.progress = self.countdownStyle == .countDown ? (1 - rawProgress) : rawProgress

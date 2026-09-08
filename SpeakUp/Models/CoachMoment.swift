@@ -21,6 +21,7 @@ nonisolated enum CoachMomentSignal: String, CaseIterable, Sendable, Identifiable
         }
     }
 
+    /// Higher wins when several signals fire at once.
     var priority: Int {
         switch self {
         case .softLanding: return 100
@@ -40,13 +41,17 @@ nonisolated enum CoachMomentAction: Sendable, Equatable {
 }
 
 nonisolated enum CoachMomentSurface: String, Sendable {
+    /// Inline card on Today (FriendChallenge-style).
     case today
+    /// Inline card on the session results screen.
     case detail
+    /// Full-screen celebration.
     case overlay
 }
 
 // MARK: - Moment
 
+/// One coach note — short copy, one optional action, rarity class.
 nonisolated struct CoachMoment: Sendable, Identifiable, Equatable {
     let id: String
     let signal: CoachMomentSignal
@@ -55,6 +60,7 @@ nonisolated struct CoachMoment: Sendable, Identifiable, Equatable {
     let actionTitle: String
     let action: CoachMomentAction
     let surface: CoachMomentSurface
+    /// Optional dimension slug for analytics (bucketed).
     let detailSlug: String?
 
     var isCelebration: Bool { signal.isCelebration }
@@ -69,8 +75,12 @@ nonisolated struct CoachMomentSnapshot: Sendable {
     var practicedToday: Bool = false
     /// Nil when the user has never completed a scored take.
     var daysSinceLastPractice: Int? = nil
+    /// Stable key for one absence episode. Welcome-back delivery is tied to
+    /// this date, not today's date, so it cannot nag every day while away.
     var lastPracticeDate: Date? = nil
     var firstPracticeDate: Date? = nil
+    /// Includes the current result. Detail notes start on session two so the
+    /// first score gets room to be understood without another intervention.
     var scoredSessionCount: Int = 0
     var latestOverall: Int? = nil
     var latestTotalWords: Int? = nil
@@ -83,6 +93,7 @@ nonisolated struct CoachMomentSnapshot: Sendable {
 nonisolated struct CoachMomentBudget: Sendable, Equatable {
     var weekKey: String
     var celebrationsUsed: Int
+    /// Moment ids already delivered (day-keyed ids are capped when persisting).
     var deliveredIDs: [String]
 
     static let weeklyCelebrationCap = 1
@@ -122,10 +133,15 @@ nonisolated struct CoachMomentBudget: Sendable, Equatable {
 
 // MARK: - Engine
 
+/// Rare coach notes: detect a signal, pick one note, respect the weekly cap.
 nonisolated enum CoachMomentEngine {
 
+    /// Quiet days before a welcome-back note. Higher than a single missed day
+    /// so the card does not nag after a busy weekend.
     static let lapseThresholdDays = 5
+    /// Soft-landing overall ceiling — below this, offer a gentle retry first.
     static let softLandingOverallCeiling = 45
+    /// Anniversary milestones (days since first practice).
     static let anniversaryDays: [Int] = [30, 100, 365]
 
     static func weekKey(for date: Date, calendar: Calendar = .current) -> String {
@@ -299,10 +315,13 @@ nonisolated enum CoachMomentEngine {
         }
     }
 
+    /// Cap delivered-id history so UserSettings does not grow forever.
     static func cappedDeliveredIDs(_ ids: [String], adding newID: String, limit: Int = 40) -> [String] {
         var next = ids.filter { $0 != newID }
         next.append(newID)
 
+        // Anniversary and axis ids are lifetime milestones. Return ids only
+        // need to outlive their absence episode, so keep the latest ten.
         let permanentMilestones = next.filter { id in
             id.hasPrefix("anniversary-")
                 || id.hasPrefix("axis-")

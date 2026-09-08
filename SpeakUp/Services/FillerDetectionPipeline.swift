@@ -25,16 +25,20 @@ nonisolated enum FillerDetectionPipeline: Sendable {
 
     // MARK: - Constants
 
+    /// Gap (seconds) between words that counts as a pause for context-aware filler detection.
     static let pauseThreshold: TimeInterval = 0.3
 
+    /// Gap (seconds) that indicates a sentence boundary.
     static let sentenceBoundaryThreshold: TimeInterval = 0.8
 
     // MARK: - Full Pipeline (returns TranscriptionWord array)
 
+    /// Tag fillers in the given word timings (no config — backward compat).
     static func tagFillers(in words: [RawWordTiming]) -> [TranscriptionWord] {
         tagFillers(in: words, config: .default)
     }
 
+    /// Tag fillers in the given word timings with user config.
     static func tagFillers(in words: [RawWordTiming], config: FillerWordConfig) -> [TranscriptionWord] {
         guard !words.isEmpty else { return [] }
 
@@ -67,6 +71,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
             ))
         }
 
+        // Second pass: detect multi-word filler phrases
         result = detectFillerPhrases(in: result)
 
         return result
@@ -74,10 +79,12 @@ nonisolated enum FillerDetectionPipeline: Sendable {
 
     // MARK: - Lightweight Count-Only (for LiveTranscriptionService)
 
+    /// Count fillers without creating TranscriptionWord objects (no config — backward compat).
     static func countFillers(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) -> Int {
         countFillers(words: words, timestamps: timestamps, durations: durations, config: .default)
     }
 
+    /// Count fillers with user config.
     static func countFillers(words: [String], timestamps: [TimeInterval], durations: [TimeInterval], config: FillerWordConfig) -> Int {
         guard words.count == timestamps.count, words.count == durations.count, !words.isEmpty else { return 0 }
 
@@ -90,6 +97,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
             let prev = i > 0 ? words[i - 1] : nil
             let next = i < words.count - 1 ? words[i + 1] : nil
 
+            // Pause before
             let pauseBefore: Bool
             if i == 0 {
                 pauseBefore = start > pauseThreshold
@@ -98,6 +106,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
                 pauseBefore = (start - prevEnd) > pauseThreshold
             }
 
+            // Pause after
             let pauseAfter: Bool
             if i == words.count - 1 {
                 pauseAfter = true
@@ -106,6 +115,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
                 pauseAfter = (nextStart - end) > pauseThreshold
             }
 
+            // Sentence boundary
             let isStartOfSentence: Bool
             if i == 0 {
                 isStartOfSentence = true
@@ -127,6 +137,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
             }
         }
 
+        // Second pass: filler phrases
         if words.count >= 2 {
             for i in 0..<(words.count - 1) {
                 if FillerWordList.isFillerPhrase(words[i], words[i + 1]) {

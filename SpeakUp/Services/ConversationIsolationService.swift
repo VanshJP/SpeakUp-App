@@ -25,6 +25,10 @@ nonisolated struct VoiceProfileUpdate: Sendable {
 }
 
 /// Heuristic single-speaker isolation for conversational recordings.
+/// Uses per-word acoustic similarity (pitch + energy) to the user's
+/// early-session voice profile and tags likely non-user words.
+///
+/// Pure acoustics — called from `SpeechService` GCD workers, so it must stay
 /// `nonisolated` under MainActor default isolation.
 nonisolated enum ConversationIsolationService {
     static func labelPrimarySpeaker(
@@ -37,6 +41,8 @@ nonisolated enum ConversationIsolationService {
         guard words.count >= 12, totalDuration >= 8 else {
             return (words, nil, nil)
         }
+        // Prefer a caller-supplied buffer so speaker labeling and pitch can
+        // share one decode after Whisper returns.
         guard let mono = monoPCM ?? MonoPCM.decode(url: audioURL) else {
             return (words, nil, nil)
         }
@@ -61,6 +67,7 @@ nonisolated enum ConversationIsolationService {
             return (words, nil, nil)
         }
 
+        // Blend persistent profile with session profile
         var profileF0 = sessionF0
         var profileEnergy = sessionEnergy
         if let persistent = persistentProfile, persistent.sampleCount > 0 {
@@ -77,27 +84,43 @@ nonisolated enum ConversationIsolationService {
             let f0Penalty: Double
             if let f0 = feature.f0Hz, f0 > 0 {
                 let semitoneDistance = abs(log2(f0 / profileF0) * 12.0)
+                // Tighter tolerance: 4 semitones = full penalty (was 6).
+                // Human speakers typically differ by 4+ semitones; 6 was too permissive
+                // and let other-speaker words through as primary.
                 f0Penalty = min(1.0, semitoneDistance / 4.0)
             } else {
+                // Unknown F0: moderate penalty (was 0.35 — too forgiving).
+                // Unvoiced/noise segments should lean toward non-primary.
                 f0Penalty = 0.45
             }
 
+            // Tighter energy tolerance: 12 dB gap = full penalty (was 16 dB).
+            // A 16 dB gap is enormous — that's about a 6x signal-level difference.
+            // 12 dB (~4x signal level) is a more realistic threshold for a different speaker.
             let energyPenalty = min(1.0, abs(feature.energyDb - profileEnergy) / 12.0)
             let penalty = f0Penalty * 0.75 + energyPenalty * 0.25
             let confidence = max(0.0, min(1.0, 1.0 - penalty))
             wordConfidence[i] = confidence
+            // Raised threshold: 0.52 (was 0.48) to reduce false-positive primary labels.
+            // At 0.48 too many borderline words were included as primary speaker.
             isPrimary[i] = confidence >= 0.52
         }
 
+        // Smooth unstable flips using a local majority window.
+        // Widened to ±3 (7-word window, was ±2 / 5-word window).
+        // Natural speaker turns last at least 3-5 words; a 5-word window was too
+        // narrow and caused single-word islands to flip the label back and forth.
         if isPrimary.count >= 7 {
             var smoothed = isPrimary
             for i in 3..<(isPrimary.count - 3) {
                 let local = isPrimary[(i - 3)...(i + 3)]
                 let positives = local.filter { $0 }.count
+                // Require majority of 4/7 (was 3/5) to flip label
                 smoothed[i] = positives >= 4
             }
             isPrimary = smoothed
         } else if isPrimary.count >= 5 {
+            // Fallback for short sessions: keep the original 5-word window
             var smoothed = isPrimary
             for i in 2..<(isPrimary.count - 2) {
                 let local = isPrimary[(i - 2)...(i + 2)]
@@ -195,6 +218,7 @@ nonisolated enum ConversationIsolationService {
             conversationDetected: conversationDetected
         )
 
+        // Produce voice profile update from primary speaker's observed features
         let profileUpdate: VoiceProfileUpdate?
         if let aF0 = speakerAF0, let aEnergy = speakerAEnergy {
             if shouldApplyIsolation || primaryRatio > 0.95 {
@@ -215,6 +239,8 @@ nonisolated enum ConversationIsolationService {
 
     // MARK: - Voice Profile Extraction
 
+    /// Extract a baseline voice profile from a calibration audio recording.
+    /// Splits the audio into fixed-size windows and computes median F0/energy.
     nonisolated static func extractVoiceProfile(from audioURL: URL) -> VoiceProfile? {
         guard let mono = MonoPCM.decode(url: audioURL) else { return nil }
 
@@ -234,6 +260,7 @@ nonisolated enum ConversationIsolationService {
             let rms = sqrt(max(1e-9, sumSq / Float(windowSamples)))
             let energyDb = 20.0 * log10(Double(rms))
 
+            // Skip silence
             if energyDb > -40.0 {
                 energyValues.append(energyDb)
                 if let f0 = estimateDominantF0(in: mono.samples, range: range, sampleRate: mono.sampleRate) {
@@ -290,7 +317,11 @@ nonisolated enum ConversationIsolationService {
         return WordAcousticFeatures(energyDb: energyDb, f0Hz: f0)
     }
 
+    /// Pitch detection via autocorrelation on a downsampled version of the signal.
+    /// Downsampling to ~4kHz reduces computation by ~100x for 44.1kHz audio while
+    /// preserving the 85-320Hz fundamental frequency range we care about.
     nonisolated private static func estimateDominantF0(in samples: [Float], range: Range<Int>, sampleRate: Double) -> Double? {
+        // Downsample to ~4kHz for F0 detection (Nyquist = 2kHz, well above 320Hz max F0)
         let targetRate = 4000.0
         let factor = max(1, Int(sampleRate / targetRate))
         let effectiveRate = sampleRate / Double(factor)

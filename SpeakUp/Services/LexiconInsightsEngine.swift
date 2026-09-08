@@ -158,11 +158,16 @@ nonisolated struct LexiconProfile: Sendable {
 
 // MARK: - Session-level hits
 
+/// One crutch word inside a single recording: what it was, how often it
+/// landed, where it happened, and — when the timed transcription is available
+/// — what to say instead *in that sentence*, not in general.
 nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
     let word: String
     let category: CrutchCategory
     let count: Int
     let timestamps: [TimeInterval]
+    /// Context-derived coaching moments, strongest suggestion pattern first.
+    /// Empty for hand-built hits; those fall back to the static map below.
     var occurrences: [WordSwapOccurrence]
 
     var id: String { word }
@@ -181,9 +186,15 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
         self.occurrences = occurrences
     }
 
+    /// Up to three ranked swaps: the dominant contextual replacement, distinct
+    /// alternates from other occurrences' patterns, then the winner's own
+    /// fallbacks. Without occurrences this falls back to the alternatives map,
+    /// then category advice.
     var swaps: [String] {
         var contextual = WordSwapSuggester.dominantReplacements(in: occurrences)
         if !contextual.isEmpty {
+            // The winner's own fallbacks: the remaining options on the
+            // occurrence that produced it, ranked behind its primary swap.
             if let winner = primarySwap,
                let source = occurrences.first(where: { $0.best?.replacement == winner.replacement }) {
                 for option in source.options.dropFirst() where contextual.count < 3 {
@@ -206,10 +217,12 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
         }
     }
 
+    /// The winning swap with its "when/why" cue, for emphasized rendering.
     var primarySwap: WordSwapOption? {
         WordSwapSuggester.primaryOption(in: occurrences)
     }
 
+    /// Sentence fragment around the occurrence whose suggestion won.
     var exampleFragment: [FragmentPiece]? {
         guard let primarySwap else { return occurrences.first?.fragment }
         return (occurrences.first(where: { $0.best?.replacement == primarySwap.replacement })
@@ -266,6 +279,13 @@ nonisolated enum LexiconInsightsEngine {
     ]
 
     /// Words that never become a "topic you return to".
+    ///
+    /// Blast radius is exactly `contentWords`: by the time this check runs,
+    /// fillers, hedges, intensifiers, vague nouns and impact verbs have each
+    /// been counted and `continue`d, so nothing here can suppress a crutch or
+    /// an impact verb. The corollary is a trap — a word listed both here and
+    /// in `intensifierWords` / `vagueWords` / `powerVerbs` silently takes the
+    /// earlier branch, so this list must stay disjoint from those.
     static let stopwords: Set<String> = [
         "the", "a", "an", "and", "or", "but", "so", "because", "if", "then", "than",
         "that", "this", "these", "those", "i", "me", "my", "mine", "we", "us", "our",
@@ -516,6 +536,7 @@ nonisolated enum LexiconInsightsEngine {
                 }
                 if let habit = topNamedHabit {
                     if let existing = categoryTopCrutch[category], existing.count >= habit.count {
+                        // keep the stronger offender
                     } else {
                         categoryTopCrutch[category] = habit
                     }
@@ -650,6 +671,9 @@ nonisolated enum LexiconInsightsEngine {
     /// Crutch hits for one recording, derived from its timed transcription so
     /// every occurrence carries a playable timestamp and a context-aware swap
     /// (see `WordSwapSuggester`). Pipeline-tagged fillers (`isFiller`) are
+    /// authoritative; hedge phrases are matched longest-first and consume
+    /// their tokens so "not really sure" never double-counts the "really"
+    /// inside it. Sorted by count, then alphabetically for stability.
     static func sessionHits(from words: [TranscriptionWord]) -> [SessionWordHit] {
         let tokens = words.map { word -> SwapToken in
             let trimmed = word.word.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -707,6 +731,8 @@ nonisolated enum LexiconInsightsEngine {
             }
         }
 
+        // Structural repetition frames are coached via tip + plum transcript
+        // highlights — not as word-swap rows (a frame is not a crutch word).
 
         return counts.map { word, count -> SessionWordHit in
             let category = categories[word] ?? .filler

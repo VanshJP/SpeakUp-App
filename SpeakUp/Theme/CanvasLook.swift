@@ -3,8 +3,22 @@ import SwiftUI
 // MARK: - Canvas Look
 
 /// The one catalogue of background art, shared by both menus that paint it:
+/// `AppCanvas` (Settings → App Look, behind every tab) and `RecordingBackdrop`
+/// (Recording Look, behind the countdown and the take).
+///
 /// Aurora means the same Aurora on both screens because there is exactly one
+/// painter per look. The two menus used to carry private copies — an
+/// `AppAuroraCanvas` and an `AuroraCanvas`, an `AppEmberCanvas` and an
+/// `EmberCanvas`, an `AppHorizonCanvas` and a `VoidCanvas` — which drifted
+/// apart the moment either was touched.
+///
 /// **Not persisted.** The two menus own the stored raw values; this is a
+/// render key, so cases here can be added, renamed or reordered freely, and
+/// either menu can grow into a look the other already has by adding one case.
+///
+/// Every look is a still. Motion behind every tab was burning frames for
+/// wallpaper the eye stops noticing after a day, and a tab switch restarted
+/// the clock. Intensity still differs by mood (`.ambient` vs `.session`).
 nonisolated enum CanvasLook: CaseIterable, Hashable, Sendable {
     case classic
     case midnight
@@ -22,6 +36,7 @@ nonisolated enum CanvasLook: CaseIterable, Hashable, Sendable {
     case signal
     case noir
 
+    /// One sentence, so a look is described the same way wherever it is offered.
     var summary: String {
         switch self {
         case .classic: return "Deep navy with soft teal light"
@@ -42,6 +57,8 @@ nonisolated enum CanvasLook: CaseIterable, Hashable, Sendable {
         }
     }
 
+    /// Kept for menu / test callers. Every look is a still now — motion behind
+    /// tabs cost frames and restarted on every switch.
     var isAnimated: Bool { false }
 }
 
@@ -50,7 +67,9 @@ nonisolated enum CanvasLook: CaseIterable, Hashable, Sendable {
 /// How hard a look pushes. The app canvas sits behind text all day; a session
 /// canvas *is* the screen. One knob, so a look never needs a second painter.
 nonisolated enum CanvasMood: Sendable {
+    /// Behind the tabs: dimmer light, fewer particles.
     case ambient
+    /// Behind a take: full intensity.
     case session
 
     var gain: Double { self == .session ? 1.0 : 0.74 }
@@ -61,9 +80,20 @@ nonisolated enum CanvasMood: Sendable {
 
 extension CanvasLook {
     /// Draws the whole look in **one `Canvas` pass**.
+    ///
+    /// Everything here goes through the primitives at the bottom of this file,
     /// so a background is never a stack of `RadialGradient` views flattened by
     /// `.drawingGroup`. That flattening cost an offscreen texture allocation
+    /// on every screen appearance — the beat of empty canvas on a push — plus
+    /// a re-rasterization every tick, once per screen still alive in the
+    /// navigation stack. A `Canvas` already *is* the flattened layer Liquid
+    /// Glass samples.
+    ///
+    /// All geometry is normalised against the view's diagonal. That makes a
     /// 76pt picker tile a true miniature of the full screen rather than a
+    /// close-up crop, and makes two stacked full-screen backgrounds paint
+    /// identical pixels, so a push no longer slides one composition over a
+    /// different one.
     func paint(
         into g: inout GraphicsContext,
         size: CGSize,
@@ -93,14 +123,20 @@ extension CanvasLook {
     }
 }
 
+/// Everything a painter needs, resolved once: the canvas box and the mood
+/// knobs. Passing this instead of `(size, mood)` keeps the painters below
+/// readable.
 private struct CanvasFrame {
     let size: CGSize
     let mood: CanvasMood
 
+    /// Diagonal — the unit every radius is expressed in.
     var d: CGFloat { hypot(size.width, size.height) }
 
+    /// Pixel scale, so a 1pt star on a 76pt tile is not a 1pt star on a phone.
     var unit: CGFloat { max(max(size.width, size.height) / 420, 0.35) }
 
+    /// Point at a normalised position.
     func at(_ x: Double, _ y: Double) -> CGPoint {
         CGPoint(x: size.width * x, y: size.height * y)
     }
@@ -108,6 +144,7 @@ private struct CanvasFrame {
     /// Particle count for this mood, never below a handful.
     func count(_ full: Int) -> Int { max(6, Int(Double(full) * mood.density)) }
 
+    /// Glow intensity for this mood.
     func gain(_ full: Double) -> Double { full * mood.gain }
 }
 
@@ -115,6 +152,10 @@ private struct CanvasFrame {
 
 // MARK: Classic
 
+/// The default: deep navy, teal high light, quiet blue counterweight. Tone
+/// only nudges the wash — `.subtle` sits a hair above `.primary` so a pushed
+/// detail view does not pop, `.recording` drops darker and pushes the teal.
+/// Keep this composition stable; other looks are free to experiment.
 private func paintClassic(_ g: inout GraphicsContext, _ f: CanvasFrame, _ tone: AppBackground.Style) {
     let lift: Double
     let teal: Double
@@ -205,6 +246,9 @@ private func paintMist(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Aurora
 
+/// Polar sky: a dark wash, a glowing oval on the horizon, then vertical
+/// shafts of light leaning a few degrees off true — the photograph, not a
+/// cartoon sine ribbon with a hard rim.
 private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.010, green: 0.028, blue: 0.062),
@@ -244,6 +288,7 @@ private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let visible = f.mood == .session ? shafts : Array(shafts.enumerated().compactMap { $0.offset % 2 == 0 ? $0.element : nil })
     for shaft in visible {
         canvasAuroraShaft(&g, f, shaft)
+        // Hot core at the base of the brighter columns.
         if shaft.strength > 0.26 {
             canvasGlow(&g, Color.white.opacity(0.9),
                        at: f.at(shaft.x, min(shaft.y + 0.22, 0.72)),
@@ -285,6 +330,8 @@ private func paintEmber(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Horizon
 
+/// Sky meeting ground: a graded field, a bloom sitting on the line, and a
+/// ground wash that darkens away from it so type below stays readable.
 private func paintHorizon(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let y = f.size.height * 0.72
 
@@ -307,6 +354,8 @@ private func paintHorizon(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Void
 
+/// Horizon's quiet sibling: no graded sky, a fainter line, more stars. The
+/// option for anyone who wants the frame spent on the waveform, not the sky.
 private func paintVoid(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let y = f.size.height * 0.72
 
@@ -329,6 +378,8 @@ private func paintVoid(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Prism
 
+/// Angled beams. A rotated, stretched glow is soft on both axes in one fill —
+/// no hard polygons, no `.blur` view modifier.
 private func paintPrism(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.044, green: 0.056, blue: 0.130),
@@ -364,6 +415,8 @@ private func paintPrism(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Depth
 
+/// Concentric wells. Rings fade outward so the canvas has a centre without a
+/// single bright object competing with the cards.
 private func paintDepth(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let center = f.at(0.5, 0.40)
 
@@ -393,6 +446,8 @@ private func paintDepth(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Hyperspace
 
+/// Warp streaks from a vanishing point. Depth is hashed per streak so the
+/// field stays a still — no clock, no recycle.
 private func paintHyperspace(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let center = f.at(0.5, 0.42)
     let maxR = f.d * 0.62
@@ -443,6 +498,9 @@ private func paintHyperspace(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Nebula
 
+/// Soft colour clouds, two hot cores, a dark dust lane cutting across them,
+/// and star layers front and back. The dust lane is the only *subtractive*
+/// mark on any canvas — without it this reads as overlapping orbs.
 private func paintNebula(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.052, green: 0.024, blue: 0.078),
@@ -490,6 +548,8 @@ private func paintNebula(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Tide
 
+/// Layered teal bands stacked from the bottom — water reading as depth, not
+/// as motion. Distinct from Depth's rings and Horizon's single line.
 private func paintTide(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.018, green: 0.036, blue: 0.070),
@@ -529,6 +589,8 @@ private func paintTide(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Dusk
 
+/// Warm amber in the upper third meeting cool teal below — a sunset split
+/// that stays readable under glass cards. Not Ember's bottom well.
 private func paintDusk(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.090, green: 0.040, blue: 0.055),
@@ -559,6 +621,8 @@ private func paintDusk(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Signal
 
+/// Soft waveform ribbons — on-brand for a speech app without competing with
+/// real meters on the recording screen.
 private func paintSignal(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.022, green: 0.032, blue: 0.078),
@@ -597,6 +661,8 @@ private func paintSignal(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Noir
 
+/// Near-black with one decisive teal slash. Maximum calm, maximum contrast
+/// for glass — the anti-nebula.
 private func paintNoir(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.012, green: 0.014, blue: 0.028),
@@ -650,6 +716,7 @@ private func canvasHorizonLine(
     ), lineWidth: 1)
 }
 
+/// Ground below the horizon, darkening away from the line so type stays legible.
 private func canvasGround(_ g: inout GraphicsContext, _ f: CanvasFrame, y: CGFloat, depth: Double) {
     g.fill(
         Path(CGRect(x: 0, y: y, width: f.size.width, height: f.size.height - y)),
@@ -661,6 +728,8 @@ private func canvasGround(_ g: inout GraphicsContext, _ f: CanvasFrame, y: CGFlo
     )
 }
 
+/// Soft sine ribbon used by Signal. One fat glow-stroke, no white hairline —
+/// that inner stroke made it look like a chart overlay.
 private func canvasWaveRibbon(
     _ g: inout GraphicsContext,
     _ f: CanvasFrame,
@@ -706,12 +775,14 @@ private func canvasWaveRibbon(
 private let canvasViolet = Color(red: 0.46, green: 0.28, blue: 0.90)
 private let canvasMint = Color(red: 0.30, green: 0.92, blue: 0.78)
 private let canvasDeepTeal = Color(red: 0.08, green: 0.26, blue: 0.40)
+/// Quiet navy-blue counterweight for Classic / Midnight — deliberately not purple.
 private let canvasQuietBlue = Color(red: 0.20, green: 0.28, blue: 0.52)
 private let auroraGreen = Color(red: 0.38, green: 0.96, blue: 0.62)
 private let auroraMagenta = Color(red: 0.78, green: 0.34, blue: 0.94)
 
 // MARK: - Primitives
 
+/// Full-bleed linear wash. The base layer of every look.
 private func canvasWash(
     _ g: inout GraphicsContext,
     _ size: CGSize,
@@ -762,6 +833,7 @@ private func canvasGlow(
     )
 }
 
+/// Deterministic star field. Index `i` always lands in the same place.
 private func canvasStars(
     _ g: inout GraphicsContext,
     count: Int,
@@ -784,6 +856,8 @@ private func canvasStars(
     }
 }
 
+/// Embers frozen above a well. Life is hashed, not timed — same scatter every
+/// paint.
 private func canvasSparks(
     _ g: inout GraphicsContext,
     _ f: CanvasFrame,
@@ -809,6 +883,8 @@ private func canvasSparks(
     }
 }
 
+/// Vertical aurora column. Rotate a wide glow onto its side so the shaft is
+/// soft on every edge — no polygon, no rim stroke.
 private func canvasAuroraShaft(
     _ g: inout GraphicsContext,
     _ f: CanvasFrame,
@@ -824,6 +900,7 @@ private func canvasAuroraShaft(
     )
 }
 
+/// Darkens the edges so glass cards keep their contrast wherever they scroll.
 private func canvasVignette(
     _ g: inout GraphicsContext,
     _ size: CGSize,
@@ -846,6 +923,7 @@ private func canvasVignette(
     )
 }
 
+/// Cheap hash for particle fields. Same index always yields the same 0...1.
 private func canvasHash(_ i: Int, _ salt: Double) -> Double {
     canvasFract(sin(Double(i) * 127.139 + salt * 311.7) * 43758.5453123)
 }

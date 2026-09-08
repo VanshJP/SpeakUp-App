@@ -17,6 +17,7 @@ class ProgressReplayViewModel {
     var latestRecording: Recording?
     private(set) var earliestSnapshot: ReplaySessionSnapshot?
     private(set) var latestSnapshot: ReplaySessionSnapshot?
+    /// Plain-value share card, built once at load instead of per redraw.
     private(set) var progressCard: ProgressCardData?
     var scoreImprovement: Int = 0
     var isLoaded = false
@@ -32,6 +33,8 @@ class ProgressReplayViewModel {
 
         guard let recordings = try? context.fetch(descriptor) else { return }
 
+        // Single decode pass: earliest/latest snapshots, improvement, and the
+        // share card all come out of this loop.
         var earliest: (recording: Recording, analysis: SpeechAnalysis)?
         var latest: (recording: Recording, analysis: SpeechAnalysis)?
         var analyzedCount = 0

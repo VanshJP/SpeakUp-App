@@ -1,5 +1,8 @@
 import Foundation
 
+/// Shared inflection-aware matching for tracked vocab and the daily word workout.
+/// Extracted from `SpeechService` so challenge evaluation and transcript
+/// highlighting use one regex.
 nonisolated enum VocabMatcher {
     static func usages(in text: String, vocabWords: [String]) -> [VocabWordUsage] {
         guard !vocabWords.isEmpty, !text.isEmpty else { return [] }
@@ -72,17 +75,24 @@ nonisolated enum VocabMatcher {
         return unique
     }
 
+    /// Build a regex that matches a word and its common English inflections
+    /// (plurals, past tense, progressive, comparative, adverb forms, etc.)
     static func inflectedPattern(for word: String) -> String {
         let escaped = NSRegularExpression.escapedPattern(for: word)
         var alternatives: [String] = []
 
+        // 1. Exact word + directly appended suffixes (e.g. "talk" → "talks", "talked", "talking")
         alternatives.append("\(escaped)(s|es|ed|d|ing|er|ers|est|ly)?")
 
+        // 2. Words ending in 'e': drop 'e' before vowel-starting suffixes
+        //    e.g. "create" → "creating", "created", "creative"
         if word.hasSuffix("e") {
             let stem = NSRegularExpression.escapedPattern(for: String(word.dropLast()))
             alternatives.append("\(stem)(ed|ing|er|ers|est|ive|ion|ation|y|ly)")
         }
 
+        // 3. Words ending in consonant + 'y': change 'y' → 'i' before suffixes
+        //    e.g. "happy" → "happier", "happiest", "happily", "happiness"
         if word.hasSuffix("y"), word.count > 1 {
             let vowels: Set<Character> = ["a", "e", "i", "o", "u"]
             let beforeY = word[word.index(word.endIndex, offsetBy: -2)]
@@ -92,6 +102,8 @@ nonisolated enum VocabMatcher {
             }
         }
 
+        // 4. CVC consonant doubling before vowel-starting suffixes
+        //    e.g. "run" → "running", "runner"; "big" → "bigger", "biggest"
         let chars = Array(word.lowercased())
         if chars.count >= 3 {
             let vowels: Set<Character> = ["a", "e", "i", "o", "u"]

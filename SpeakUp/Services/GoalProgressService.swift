@@ -1,10 +1,15 @@
 import Foundation
 import SwiftData
 
+/// Per-goal numbers from the background scan — plain values, so the main
+/// context only applies diffs (pattern: `HistoryViewModel.RecordingSummary`).
 nonisolated struct GoalProgressOutcome: Sendable {
     let current: Int
 }
 
+/// What the scanner needs per goal. Built on the main actor; the window is
+/// frozen at dispatch (`min(deadline, Date())`), matching when the old inline
+/// pass computed it.
 nonisolated struct GoalProgressRequest: Sendable {
     let id: UUID
     let type: GoalType
@@ -79,6 +84,7 @@ enum GoalProgressService {
             var fillerRatios: [UUID: [Double]] = [:]
 
             for recording in recordings {
+                // One decode feeds every goal whose window this session falls in.
                 let analysis = recording.analysis
                 for request in requests where recording.date >= request.startDate && recording.date <= request.effectiveEnd {
                     switch request.type {

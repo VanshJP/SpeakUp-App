@@ -16,6 +16,7 @@ final class RecordingDetailPlaybackViewModel {
             : fallbackDuration
         playbackDuration = max(0, resolvedDuration)
 
+        // Authoritative time comes directly from AVAudioPlayer via AudioService.
         let clampedTime = max(0, min(audioService.currentPlaybackTime, playbackDuration))
         currentTime = clampedTime
 

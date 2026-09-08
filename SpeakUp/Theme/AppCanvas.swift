@@ -5,6 +5,11 @@ import SwiftUI
 /// The app-wide background menu — Settings → App Look, painted behind every
 /// tab. A thin persisted list over the shared `CanvasLook` catalogue, which is
 /// where the art lives; `RecordingBackdrop` is the other menu over the same
+/// catalogue, so Aurora means the same Aurora on both screens.
+///
+/// Raw values are the SwiftData payload; do not reorder existing cases. Adding
+/// a look this menu does not offer yet is one new case plus one line in `look`.
+/// `nonisolated` so settings tests and off-main decode stay off the MainActor.
 nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
     case classic = 0
     case midnight = 1
@@ -38,6 +43,7 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The art this entry paints.
     var look: CanvasLook {
         switch self {
         case .classic: return .classic
@@ -55,6 +61,8 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Comes from the catalogue, so the same look is described the same way
+    /// wherever it is offered.
     var subtitle: String { look.summary }
 }
 
@@ -66,6 +74,7 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
 struct AppCanvasView: View {
     var canvas: AppCanvas = .classic
     var style: AppBackground.Style = .primary
+    /// Kept for call-site compatibility. All canvases are stills now.
     var animated: Bool = true
 
     var body: some View {
@@ -75,6 +84,10 @@ struct AppCanvasView: View {
 
 // MARK: - Look View
 
+/// The one view that paints a canvas. Both menus render through it, so the
+/// still-frame budget and freeze-for-thumbnails behaviour are written once.
+/// No `TimelineView` — motion behind tabs burned frames and restarted on
+/// every switch.
 struct CanvasLookView: View {
     let look: CanvasLook
     let mood: CanvasMood

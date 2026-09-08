@@ -4,11 +4,27 @@ import SwiftData
 import WidgetKit
 import os
 
+/// Pure decisions behind the coordinator's monetization flow: what reserves,
+/// what defers, and how a resume pass walks the deferred backlog. No IO — the
+/// coordinator owns every fetch, save, and analytics event.
+///
+/// The gate reads persisted counters and the charge lands minutes later, after
+/// transcription. Nothing serialises two different recordings, so anything
+/// countable must hold a reservation in between or concurrent analyses all see
+/// the same `remaining`.
 nonisolated enum ProcessingPolicy {
+    /// Ceiling on one resume pass. Someone returning after a long break has a
+    /// backlog worth clearing, but not an unbounded one.
     static let deferredResumeLimit = 20
 
+    /// What one recording should do at the free-tier gate, given what is
+    /// already reserved by in-flight analyses.
     struct Reservation: Sendable, Equatable {
+        /// Park the recording under `analysisBlockedByAllowance` instead of
+        /// analyzing it now.
         let shouldDefer: Bool
+        /// Claim one of the reserved slots while processing runs; released when
+        /// processing returns, charged only on success.
         let holdsReservation: Bool
     }
 
@@ -29,10 +45,14 @@ nonisolated enum ProcessingPolicy {
         )
     }
 
+    /// Oldest-first pick across the fetched window, stepping over recordings
+    /// the user is already retrying by hand instead of ending the whole pass.
     static func nextResumeIndex(in orderedIDs: [UUID], skippingActive activeIDs: Set<UUID>) -> Int? {
         orderedIDs.firstIndex(where: { !activeIDs.contains($0) })
     }
 
+    /// A recording still flagged after its turn means the allowance ran out
+    /// mid-run, so stop; a deleted one just means move on.
     static func stopsResumePass(doesRecordingExist: Bool, stillBlockedByAllowance: Bool) -> Bool {
         doesRecordingExist && stillBlockedByAllowance
     }
@@ -45,10 +65,18 @@ final class RecordingProcessingCoordinator {
 
     private let logger = Logger.app("RecordingProcessing")
     private var activeRecordingIDs: Set<UUID> = []
+    /// Handles for the per-recording jobs, so cancellation actually stops the
+    /// work instead of only striking it from the dedupe set.
     private var activeTasks: [UUID: Task<Void, Never>] = [:]
     private var resumeInFlight = false
     private var resumeTask: Task<Void, Never>?
 
+    /// Analyses that cleared the allowance gate but have not been charged yet.
+    ///
+    /// The gate reads persisted counters and the charge lands minutes later,
+    /// after transcription. Nothing serialises two different recordings, so
+    /// without this both see the same `remaining` and both go through — a user
+    /// with one analysis left who stops two recordings in a row gets two.
     private var reservedAnalyses = 0
 
     private init() {}
@@ -58,6 +86,9 @@ final class RecordingProcessingCoordinator {
     }
 
     /// Stops an in-flight analysis and forgets the recording was queued.
+    ///
+    /// Best-effort by design: a leg already past its last cancellation check
+    /// still runs to completion, and every persist re-fetches first, so a
     /// deleted recording can never be written to. Deletion flows should call
     /// this BEFORE removing the SwiftData object.
     func cancelProcessing(recordingID: UUID) {
@@ -90,6 +121,15 @@ final class RecordingProcessingCoordinator {
         activeTasks[recordingID] = job
     }
 
+    /// Scores the recordings the free allowance held back, oldest first.
+    ///
+    /// The deferred card tells the user their audio is safe and will score
+    /// itself when the allowance resets or Lifetime is unlocked. Nothing kept
+    /// that promise before: a held-back recording was only retried if the user
+    /// happened to reopen it. Called on foreground and on entitlement change.
+    ///
+    /// Runs strictly one at a time — a batch of concurrent Whisper passes on a
+    /// cold foreground would be a memory spike, not a feature.
     func resumeDeferredRecordings(
         modelContext: ModelContext,
         speechService: SpeechService,
@@ -162,6 +202,9 @@ final class RecordingProcessingCoordinator {
         speechService: SpeechService,
         llmService: LLMService
     ) async {
+        // Keep the OS from suspending mid-analyze. Without this, a home-button
+        // during Whisper can freeze the stall watchdog's sleep, then look like
+        // a 60s decode hang on resume and abort into a truncated Apple path.
         var backgroundTask = UIBackgroundTaskIdentifier.invalid
         backgroundTask = UIApplication.shared.beginBackgroundTask(
             withName: "SpeakUp.ProcessRecording"
@@ -197,6 +240,8 @@ final class RecordingProcessingCoordinator {
             return
         }
 
+        // Newly promoted iCloud files can briefly report a non-current download
+        // status; kick the download and wait a beat before giving up.
         if !FileManager.default.fileExists(atPath: mediaURL.path)
             || !ICloudStorageService.shared.isFileDownloaded(at: mediaURL) {
             ICloudStorageService.shared.ensureDownloaded(at: mediaURL)
@@ -231,6 +276,8 @@ final class RecordingProcessingCoordinator {
             AnalyticsService.shared.log(.allowanceExhausted())
             return
         }
+        // Held until this call returns, which is after `consume` has persisted
+        // the charge on the success path. A failure releases it uncharged.
         if reservation.holdsReservation { reservedAnalyses += 1 }
         defer { if reservation.holdsReservation { reservedAnalyses -= 1 } }
 
@@ -243,6 +290,9 @@ final class RecordingProcessingCoordinator {
         save(modelContext, context: "marking recording processing \(recordingID.uuidString)")
 
         let startedAt = Date()
+        // One pick feeds transcript detection, FSRS grading, and the snapshot
+        // persisted below, so all three agree even if the user edits the
+        // workout while transcription is still running.
         let vocabWorkout = VocabChallengeService.todaysChallenge(
             preferences: settings?.vocabChallengePreferences ?? .disabled
         )
@@ -306,6 +356,9 @@ final class RecordingProcessingCoordinator {
                 // before touching its properties (deleted SwiftData objects trap).
                 guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
 
+                // Job cancelled mid-transcribe (deletion flow or background):
+                // bail before the expensive scoring leg instead of burning
+                // minutes of CPU on audio nobody wants scored.
                 if Task.isCancelled {
                     persisted.isProcessing = false
                     save(modelContext, context: "clearing processing flag after cancellation \(recordingID.uuidString)")
@@ -340,6 +393,8 @@ final class RecordingProcessingCoordinator {
             // while transcription/analysis ran (potentially minutes). Writing to a deleted
             // SwiftData object traps.
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+            // `analyzeTranscript` is non-throwing; cancel during that await does
+            // not raise CancellationError — check before charging / persisting.
             if Task.isCancelled {
                 persisted.isProcessing = false
                 save(modelContext, context: "clearing processing flag after cancellation \(recordingID.uuidString)")
@@ -437,6 +492,7 @@ final class RecordingProcessingCoordinator {
         return (try? modelContext.fetchCount(descriptor)) ?? 0
     }
 
+    /// Coarse reason only — an error string can contain a file path.
     private static func failureCategory(for error: Error) -> String {
         if error is CancellationError { return "cancelled" }
         let text = error.localizedDescription.lowercased()
@@ -471,6 +527,7 @@ final class RecordingProcessingCoordinator {
            !conversationDetected || update.separationConfidence >= 50 {
             if let existingF0 = settings.voiceProfileF0Hz, settings.voiceProfileSampleCount > 0 {
                 settings.voiceProfileF0Hz = existingF0 * (1 - alpha) + update.sessionF0Hz * alpha
+                // Seed nil energy instead of blending toward 0 dB.
                 settings.voiceProfileEnergyDb = settings.voiceProfileEnergyDb.map {
                     $0 * (1 - alpha) + update.sessionEnergyDb * alpha
                 } ?? update.sessionEnergyDb
@@ -482,6 +539,10 @@ final class RecordingProcessingCoordinator {
             settings.voiceProfileLastUpdated = Date()
         }
 
+        // Learned pace target — EMA of observed WPM, clamped to the coaching
+        // band so the target adapts to the speaker without endorsing racing or
+        // crawling. Conversations skipped: elapsed-time WPM is distorted when
+        // someone else holds the floor.
         if !conversationDetected,
            transcription.duration >= 30,
            analysis.totalWords >= 40,
@@ -492,6 +553,9 @@ final class RecordingProcessingCoordinator {
         }
     }
 
+    /// Keep the linked story's best score in sync once analysis is available.
+    /// `RecordingViewModel.stopRecording()` runs before analysis exists, so the
+    /// score half of story stats can only be updated here.
     private func updateStoryBestScore(for recording: Recording, modelContext: ModelContext) {
         guard let storyId = recording.storyId,
               let score = recording.analysis?.speechScore.overall,
@@ -525,6 +589,10 @@ final class RecordingProcessingCoordinator {
         // MainActor-isolated service instance nor the Whisper model.
         return await Task.detached(priority: .userInitiated) {
             () -> (analysis: SpeechAnalysis, markedWords: [TranscriptionWord]) in
+            // Recordings saved before `audioLevelSamplesData` existed lost
+            // their live samples on relaunch. Stand in peaks regenerated
+            // from the file (converted to dB) so delivery metrics stay
+            // grounded in real audio instead of silently flattening.
             let levelSamples: [Float] = {
                 if !audioLevelSamples.isEmpty { return audioLevelSamples }
                 guard let audioURL,

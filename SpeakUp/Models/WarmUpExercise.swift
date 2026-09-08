@@ -36,6 +36,8 @@ enum WarmUpCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What this category is *for* — the one line a section header shows so
+    /// someone browsing understands why the grouping exists.
     var purpose: String {
         switch self {
         case .breathing: return "Steady your nerves and breath support."

@@ -6,6 +6,7 @@ final class ChirpPlayer {
     static let shared = ChirpPlayer()
 
     var isEnabled: Bool = true
+    /// Timbre of every cue. Set from `UserSettings.soundPack`.
     var pack: SoundPack = .soft
 
     private let sampleRate: Double = 44100
@@ -72,6 +73,7 @@ final class ChirpPlayer {
 
         var data = Data()
 
+        // WAV header (44 bytes)
         data.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // "RIFF"
         appendUInt32(&data, UInt32(36 + dataSize))          // file size - 8
         data.append(contentsOf: [0x57, 0x41, 0x56, 0x45]) // "WAVE"
@@ -86,6 +88,8 @@ final class ChirpPlayer {
         data.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
         appendUInt32(&data, UInt32(dataSize))               // data size
 
+        // Generate samples — the pack decides the harmonic stack and envelope,
+        // which is the whole difference between a beep and a marimba.
         let harmonics = pack.harmonics
         let gainSum = harmonics.reduce(Float(0)) { $0 + $1.gain }
 
@@ -124,6 +128,8 @@ final class ChirpPlayer {
 
 // MARK: - Sound Pack
 
+/// Timbre of the practice cues. A pack is three numbers and an envelope —
+/// no audio files, so adding one costs nothing at build or download time.
 enum SoundPack: Int, Codable, CaseIterable, Identifiable {
     case soft = 0
     case marimba = 1
@@ -151,6 +157,7 @@ enum SoundPack: Int, Codable, CaseIterable, Identifiable {
         case .soft:
             return [Harmonic(multiple: 1, gain: 1)]
         case .marimba:
+            // The 4th partial is what makes a struck bar sound like wood.
             return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 4, gain: 0.3), Harmonic(multiple: 9.2, gain: 0.08)]
         case .beep:
             // Odd harmonics only — an approximated square wave.
@@ -176,6 +183,7 @@ enum SoundPack: Int, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Amplitude at `progress` through the tone, 0...1.
     func envelope(_ progress: Float) -> Float {
         switch self {
         case .soft:

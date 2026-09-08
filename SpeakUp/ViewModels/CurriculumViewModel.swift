@@ -40,6 +40,7 @@ class CurriculumViewModel {
     }
 
     func isLessonAccessible(_ lesson: CurriculumLesson, in phase: CurriculumPhase) -> Bool {
+        // Completed lessons are always accessible (for review)
         if isLessonCompleted(lesson.id) { return true }
 
         // Phase gate: previous phase must be fully complete

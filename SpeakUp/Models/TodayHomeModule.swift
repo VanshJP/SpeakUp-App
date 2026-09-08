@@ -46,8 +46,11 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         }
     }
 
+    /// Cannot be hidden or pushed out of the layout — the home screen's job.
     var isPinned: Bool { self == .session }
 
+    /// Factory default order and visibility. Learn is off until the user opts in
+    /// so Today stays a practice surface, not a second Learning Path tab.
     static let defaultVisible: [TodayHomeModule] = [
         .rings, .weeklyRecap, .focus, .session, .tools
     ]
@@ -67,6 +70,8 @@ nonisolated enum TodayHomeLayout {
             ordered.append(module)
         }
 
+        // Session is required. If a stale or hand-edited payload dropped it,
+        // put it back after focus (or at the front if focus is also missing).
         if !ordered.contains(.session) {
             if let focusIndex = ordered.firstIndex(of: .focus) {
                 ordered.insert(.session, at: focusIndex + 1)
@@ -82,6 +87,13 @@ nonisolated enum TodayHomeLayout {
         modules.map(\.rawValue)
     }
 
+    /// Where a dragged block lands when it is dropped on `target`.
+    ///
+    /// Direction matters, which the first version missed: it always inserted at
+    /// the target's index, so a block dragged *down* the page landed above the
+    /// block it was dropped on and nothing could ever be moved into the last
+    /// slot. Dropping below inserts after; dropping above — or arriving from
+    /// the hidden tray, where there is no origin — inserts before.
     static func reorder(
         _ list: [TodayHomeModule],
         moving dragged: TodayHomeModule,

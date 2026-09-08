@@ -6,6 +6,8 @@ extension RecordingViewModel {
     // MARK: - Recording Control
 
     func startRecording() async {
+        // Block while a stop is still finalizing — VM clears `isRecording`
+        // before the service await returns.
         guard !isRecording, !isProcessing, !audioService.isFinalizingRecording else { return }
         do {
             recordingURL = try await audioService.startRecording()
@@ -18,6 +20,9 @@ extension RecordingViewModel {
             startTimer()
             startAudioLevelMonitoring()
 
+            // Start live filler counting after the recorder owns the mic route.
+            // Immediate dual-start (esp. "Start Now" mid-countdown) races the
+            // session into a 0 Hz format and aborts inside AVAudioEngine.
             liveTranscriptionService.fillerConfig = fillerConfig
             let authorized = await liveTranscriptionService.requestAuthorization()
             if authorized {
@@ -42,6 +47,8 @@ extension RecordingViewModel {
         liveTranscriptionService.stop()
         coachingService.reset()
 
+        // `isProcessing` blocks a new start until finalize finishes — clearing
+        // `isRecording` alone used to let a double-tap start timers with no recorder.
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
         isProcessing = true
@@ -79,6 +86,7 @@ extension RecordingViewModel {
 
         recording.storyId = storyId
 
+        // Denormalize story title for display in history
         if let storyId {
             let targetId = storyId
             var storyDescriptor = FetchDescriptor<Story>()
@@ -93,6 +101,7 @@ extension RecordingViewModel {
         do {
             try context.save()
 
+            // Update linked story practice stats
             if let storyId {
                 let targetId = storyId
                 var storyDescriptor = FetchDescriptor<Story>()
@@ -101,6 +110,8 @@ extension RecordingViewModel {
                     story.practiceCount += 1
                     story.lastPracticeDate = Date()
                     story.updatedAt = Date()
+                    // bestScore updates in RecordingProcessingCoordinator once
+                    // analysis exists — it is always nil at this point.
                     try? context.save()
                 }
             }
@@ -130,6 +141,9 @@ extension RecordingViewModel {
 
     // MARK: - Analytics
 
+    /// Reports the start of a session so the funnel can measure how many
+    /// starts reach a score. Logged once the recorder is actually running, not
+    /// when the screen opens — an abandoned countdown is not a practice start.
     private func logPracticeStart() {
         let useCase: String
         if sessionSource == SharedPromptLink.shareSource {

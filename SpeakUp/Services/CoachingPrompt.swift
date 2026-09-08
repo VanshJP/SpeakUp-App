@@ -1,11 +1,31 @@
 import Foundation
 
 /// The prompt both LLM backends are given for coaching.
+///
+/// There used to be two copies of this, one in `LLMService`, one in
+/// `LocalLLMService`, and they had already drifted. One builder, one place
+/// to improve the coaching.
+///
 /// What makes the output usable rather than a metric paraphrase:
+/// - The dimension the user is actually working on, pinned to tip one.
+/// - Their own pace target, not a textbook band.
+/// - Quotable moments from the session (evidence the model could not invent).
+/// - Crutch habits from the lexicon engine, so advice names "your 'like'".
+/// - A worked example: small models copy examples far more reliably than rules.
+/// - Head-and-tail transcript excerpt; conclusions live at the end, and a
+///   naive prefix chop was coaching the opening while ignoring the close.
 nonisolated enum CoachingPrompt {
+    /// Transcript characters per backend. Apple Intelligence reasons over a
+    /// whole answer; the local Gemma builds are small enough that a long
+    /// transcript crowds out the instructions. The local budget is also
+    /// shrunk further at call time when the profile runs a 512-token window.
     static let appleTranscriptBudget = 1600
     static let localTranscriptBudget = 600
 
+    /// The subscore display names, verbatim from `CoachDimension`. Quoted into
+    /// the prompt so the model labels scores with the same words the rest of
+    /// the app uses, and reused by the sanitizer that catches whatever slips
+    /// past this instruction.
     static let dimensionNameList = CoachDimension.allCases.map(\.title).joined(separator: ", ")
 
     // MARK: - System
@@ -88,6 +108,8 @@ nonisolated enum CoachingPrompt {
         }
     }
 
+    /// One line of type-specific coaching angle. Matched on substrings so
+    /// free-form user categories still land somewhere sensible.
     static func kindDirective(_ kind: String?) -> String? {
         guard let kind, !kind.isEmpty else { return nil }
         let lowered = kind.lowercased()
@@ -139,6 +161,9 @@ nonisolated enum CoachingPrompt {
             parts.append("- Speaking \(Int((metrics.phonationTimeRatio * 100).rounded()))% of the take, \(String(format: "%.1f", metrics.meanLengthOfRun)) words between pauses")
         }
 
+        // Reliability caveats belong in the prompt, not just in the UI: a model
+        // told nothing will confidently coach a filler count that came out of a
+        // noisy room or somebody else's voice.
         if let audio = analysis.audioIsolationMetrics, audio.residualNoiseScore < 45 {
             parts.append("- CAUTION: the recording was noisy, so the transcript and filler counts are less reliable than usual. Do not build a whole tip on them.")
         }
@@ -184,6 +209,11 @@ nonisolated enum CoachingPrompt {
 
     // MARK: - Transcript excerpt
 
+    /// Head plus tail of the transcript within `budget` characters.
+    ///
+    /// Interview answers put their payoff in the close; a naive prefix chop
+    /// hid exactly the material structure tips need to quote. Cuts land on
+    /// word boundaries so neither half ends mid-word.
     static func transcriptExcerpt(_ transcript: String, budget: Int) -> String {
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return "" }
@@ -222,8 +252,11 @@ nonisolated enum CoachingPrompt {
 
 // MARK: - Output sanitizer
 
+/// Pure post-processing for LLM coaching output, split out of `LLMService`
+/// so the acceptance rules are testable without a model or an actor hop.
 nonisolated enum CoachingInsightSanitizer {
 
+    /// Turns raw model output into at most three clean tip lines.
     static func tips(from raw: String) -> [String] {
         let lines = raw
             .components(separatedBy: .newlines)
@@ -266,6 +299,10 @@ nonisolated enum CoachingInsightSanitizer {
         return deduped
     }
 
+    /// Accepts output grounded in either the metrics or the speaker's own
+    /// words. The old check scanned only the first 24 transcript tokens, so a
+    /// tip quoting the answer's close (where interview payoffs live) was
+    /// thrown away even when it was the best line in the batch.
     static func isSpecificEnough(_ tips: [String], transcript: String) -> Bool {
         let combined = tips.joined(separator: " ").lowercased()
 
@@ -285,11 +322,18 @@ nonisolated enum CoachingInsightSanitizer {
             .filter { $0.count >= 5 }
         guard !tokens.isEmpty else { return false }
 
+        // Distinct content words across the whole transcript, capped so very
+        // long takes cannot make the scan quadratic against every tip.
         let tokenSet = Set(tokens.prefix(150))
         let overlapCount = tokenSet.filter { combined.contains($0) }.count
         return overlapCount >= 2
     }
 
+    /// Drops a tip that recommends filler words as a technique.
+    ///
+    /// Distinguishes "add an 'um' to sound natural" from "swap the 'um' for a
+    /// pause": any removal verb clears the line, which is why naming a filler
+    /// alone is not enough to reject.
     static func containsDisallowedAdvice(_ tip: String) -> Bool {
         let lowered = tip.lowercased()
         let containsFillerTerm = lowered.range(
@@ -316,6 +360,7 @@ nonisolated enum CoachingInsightSanitizer {
 
     // MARK: - Bare score naming
 
+    /// A score cited without its metric: "44/100", "44 / 100", "44 out of 100".
     private static let bareScorePattern = #"\b(\d{1,3})(?:\s*/\s*100|\s+out of\s+100)\b"#
 
     /// If one of these appears shortly before a score, the metric is already
@@ -335,8 +380,20 @@ nonisolated enum CoachingInsightSanitizer {
         "overall"
     ]
 
+    /// How far back a bare-score match looks for an already-named metric.
+    /// Long enough to cross "you scored a" or "came in at"; short enough that
+    /// a previous sentence's metric cannot bleed into this sentence's score.
     private static let metricLookback = 40
 
+    /// Rewrites bare score citations so each carries its metric name.
+    ///
+    /// The prompt instructs the model to write "Vocal variety 44/100"; small
+    /// local models drop the label anyway, and a bare verdict-number was the
+    /// first thing users read. A match is only rewritten when its number
+    /// equals one of THIS session's subscores and no metric word sits within
+    /// the look-back window — anything else stays exactly as written rather
+    /// than guessing a label. Ties (two dimensions sharing a value) resolve to
+    /// the first in `CoachDimension` order, deterministically.
     static func namingBareScores(_ tips: [String], subscores: SpeechSubscores) -> [String] {
         guard let regex = try? NSRegularExpression(pattern: bareScorePattern) else { return tips }
 

@@ -59,6 +59,8 @@ class ComparisonViewModel {
     }
 
     func configure(with context: ModelContext) {
+        // Once-configured: refetching on every onAppear would reset the
+        // user's A/B picks and flash zeros mid-interaction.
         guard summaries.isEmpty else { return }
 
         let container = context.container
@@ -99,6 +101,7 @@ class ComparisonViewModel {
             guard let self else { return }
             summaries = points
 
+            // Auto-select oldest vs latest, matching the previous behavior.
             if points.count >= 2 {
                 selectionA = points.last?.id // oldest
                 selectionB = points.first?.id // newest

@@ -17,9 +17,12 @@ struct ReadAloudPassage: Identifiable, Hashable {
         text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
     }
 
+    /// User-typed word, sentence, or short paragraph for pronunciation practice.
     static let customMinCharacters = 2
     static let customMaxCharacters = 800
 
+    /// Builds an ephemeral passage from freeform text. Returns `nil` when the
+    /// input is empty or only punctuation/whitespace.
     static func custom(from raw: String) -> ReadAloudPassage? {
         let cleaned = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -53,6 +56,7 @@ struct ReadAloudPassage: Identifiable, Hashable {
         )
     }
 
+    /// True when this passage came from the freeform practice field.
     var isCustom: Bool { category == .custom }
 }
 
@@ -90,6 +94,7 @@ enum ReadAloudCategory: String, CaseIterable, Identifiable {
     case technical
     case tongueTwister
     case minimalPairs
+    /// Ephemeral user-typed practice — not shown in catalog filters.
     case custom
 
     var id: String { rawValue }
@@ -116,6 +121,7 @@ enum ReadAloudCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Catalog filters — excludes freeform custom passages.
     static var catalogCases: [ReadAloudCategory] {
         allCases.filter { $0 != .custom }
     }

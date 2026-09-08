@@ -10,6 +10,8 @@ extension RecordingViewModel {
     func startAudioLevelMonitoring() {
         audioLevelSampleCounter = 0
         audioLevelSamples = []
+        // Reserve an upper bound ahead of time so routine appends don't
+        // cause mid-recording allocations. 2 samples/sec + a small cushion.
         audioLevelSamples.reserveCapacity(targetDuration.seconds * 2 + 32)
         lastCoachingWordCount = 0
     }
@@ -33,6 +35,7 @@ extension RecordingViewModel {
         guard audioLevelSampleCounter >= 5 else { return }
         audioLevelSampleCounter = 0
 
+        // Soft cap with FIFO drop for long `.keepGoing` sessions.
         if audioLevelSamples.count >= RecordingViewModel.audioLevelSampleCap {
             audioLevelSamples.removeFirst(RecordingViewModel.audioLevelSampleDropChunk)
         }

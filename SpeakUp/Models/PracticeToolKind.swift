@@ -13,6 +13,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Short label for dense chrome (toolbar tiles, tour copy).
     var shortTitle: String {
         switch self {
         case .warmUp: return "Warm-Up"
@@ -23,6 +24,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Full title for list rows and sheet chrome.
     var title: String {
         switch self {
         case .warmUp: return "Warm-Ups"
@@ -33,6 +35,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What the user gets — the line that makes the tool worth tapping.
     var outcome: String {
         switch self {
         case .warmUp: return "Open the voice before a scored take"
@@ -43,6 +46,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// When this tool is the right pick — shown on Library cards and sheet headers.
     var bestFor: String {
         switch self {
         case .warmUp: return "Best before interviews, presentations, or a cold start"
@@ -73,8 +77,12 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Tools that appear on Today's prep strip by default. The Prompt Wheel
+    /// is deliberately absent — it lives in Library → Prompts, where you pick
+    /// what to say, not in the strip that gets your voice ready.
     static let todayStripDefaults: [PracticeToolKind] = [.warmUp, .drills, .calm, .readAloud]
 
+    /// Map a coach practice route onto the tool that owns that work.
     static func recommended(for route: CoachPracticeRoute?) -> PracticeToolKind? {
         guard let route else { return nil }
         switch route {

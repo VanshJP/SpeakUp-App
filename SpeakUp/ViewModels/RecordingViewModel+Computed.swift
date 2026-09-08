@@ -8,6 +8,7 @@ extension RecordingViewModel {
         remainingTime < 0 && timerEndBehavior == .keepGoing
     }
 
+    /// The time value shown in the timer, accounting for countdown style.
     var displayTime: TimeInterval {
         if isOvertime {
             return abs(remainingTime)

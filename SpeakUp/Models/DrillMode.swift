@@ -24,6 +24,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What this drill trains — shown on the selection card.
     var outcome: String {
         switch self {
         case .fillerElimination: return "Cut ums and likes in short bursts"
@@ -36,6 +37,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Duration + mechanic — the cost line under the outcome.
     var description: String {
         switch self {
         case .fillerElimination: return "\(defaultDurationSeconds)s · goal: zero fillers"
@@ -84,6 +86,8 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What the session actually shows while you run it — the concrete thing
+    /// a tile promises so the format is understood before committing.
     var liveFeedback: String {
         switch self {
         case .fillerElimination: return "Live filler counter"
@@ -96,6 +100,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Prep countdown should reveal the prompt before the clock starts.
     var preparesPromptUpFront: Bool {
         switch self {
         case .impromptuSprint, .vocalVariety, .emphasis, .qaSprint: return true
@@ -103,10 +108,12 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Scores from the recording's pitch contour after stop — not from live ASR.
     var usesPitchAnalysis: Bool {
         self == .vocalVariety
     }
 
+    /// Mic metering alone is enough to run (no speech-recognition requirement).
     var allowsMeteringOnly: Bool {
         switch self {
         case .pausePractice, .vocalVariety: return true

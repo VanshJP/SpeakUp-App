@@ -14,52 +14,71 @@ class SettingsViewModel {
     var showingVoiceCalibration = false
     var clearDataAcknowledgement = ""
     
+    // Local state - Profile
     var userName: String = ""
 
+    // Local state for pickers - Recording Defaults
     var defaultDuration: RecordingDuration = .sixty
     
+    // Local state - Reminders
     var dailyReminderEnabled: Bool = false
     var reminderTime: Date = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
     
+    // Local state - Goals
     var weeklyGoalSessions: Int = 5
     
+    // Local state - Analysis Features
     var trackPauses: Bool = true
     var trackFillerWords: Bool = true
     var targetWPM: Int = 150
     var autoPaceTarget: Bool = true
     
+    // Local state - Prompt Settings
     var enabledPromptCategories: Set<PromptCategory> = Set(PromptCategory.allCases)
 
+    // Local state - Prompt Filtering
     var hideAnsweredPrompts: Bool = false
 
+    // Local state - Story Practice
     var storyPracticeEnabled: Bool = false
 
+    // Local state - Daily word workout
     var vocabChallengeEnabled: Bool = true
     var vocabChallengeWordCount: Int = 2
     var vocabChallengeIntroduceNew: Bool = true
+    /// 0 follows the speaker level; 1–3 pin beginner / intermediate / advanced.
     var vocabChallengeLevelOverride: Int = 0
 
+    // Local state - Speaker Level
     var speakerLevel: SpeakerLevel = .intermediate
 
+    // Local state - Countdown
     var countdownDuration: CountdownDuration = .fifteen
     var countdownStyle: CountdownStyle = .countDown
 
+    // Local state - Timer End Behavior
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
 
+    // Local state - Recording Look
     var waveformStyle: WaveformStyle = .rings
     var recordButtonStyle: RecordButtonStyle = .classic
     var countdownLook: TimerLook = .ring
     var recordingBackdrop: RecordingBackdrop = .base
 
+    // Local state - App Appearance
     var glassAppearance: GlassAppearance = .light
     var appCanvas: AppCanvas = .classic
 
+    // Local state - Sound Pack
     var soundPack: SoundPack = .soft
 
+    // Local state - Haptic Coaching
     var hapticCoachingEnabled: Bool = false
 
+    // Local state - Audio Cues
     var chirpSoundEnabled: Bool = true
 
+    // Local state - Session Feedback
     var sessionFeedbackEnabled: Bool = false
     var customFeedbackQuestions: [FeedbackQuestion] = []
     var showingAddFeedbackQuestion: Bool = false
@@ -70,6 +89,7 @@ class SettingsViewModel {
         DefaultFeedbackQuestions.questions + customFeedbackQuestions
     }
 
+    // Local state - Score Weights
     var clarityWeight: Double = 0.18
     var paceWeight: Double = 0.12
     var fillerWeight: Double = 0.14
@@ -89,6 +109,7 @@ class SettingsViewModel {
                relevanceWeight != d.relevance
     }
 
+    // Local state - Word Bank
     var vocabWords: [String] = []
     var newVocabWord: String = ""
     var vocabWordError: String? = nil
@@ -98,6 +119,7 @@ class SettingsViewModel {
     var dictationWordError: String? = nil
     private var dictationErrorDismissID = 0
 
+    // Local state - Filler Words
     var customFillerWords: [String] = []
     var customContextFillerWords: [String] = []
     var removedDefaultFillers: [String] = []
@@ -105,23 +127,28 @@ class SettingsViewModel {
     var fillerWordError: String? = nil
     private var fillerErrorDismissID = 0
 
+    /// All active filler words (defaults minus removed + custom), sorted.
     var activeFillerWords: [(word: String, isCustom: Bool, isContextDependent: Bool)] {
         let removed = Set(removedDefaultFillers)
 
         var result: [(word: String, isCustom: Bool, isContextDependent: Bool)] = []
 
+        // Default unconditional fillers (not removed)
         for word in FillerWordList.unconditionalFillers where !removed.contains(word) {
             result.append((word: word, isCustom: false, isContextDependent: false))
         }
 
+        // Default context-dependent fillers (not removed)
         for word in FillerWordList.contextDependentFillers where !removed.contains(word) {
             result.append((word: word, isCustom: false, isContextDependent: true))
         }
 
+        // Custom always-detected fillers
         for word in customFillerWords {
             result.append((word: word, isCustom: true, isContextDependent: false))
         }
 
+        // Custom context-dependent fillers
         for word in customContextFillerWords {
             result.append((word: word, isCustom: true, isContextDependent: true))
         }
@@ -160,6 +187,7 @@ class SettingsViewModel {
                 settings = existingSettings
                 syncLocalState()
             } else {
+                // Create default settings
                 let newSettings = UserSettings()
                 context.insert(newSettings)
                 try context.save()
@@ -188,11 +216,13 @@ class SettingsViewModel {
 
         weeklyGoalSessions = settings.weeklyGoalSessions
 
+        // Analysis features
         trackPauses = settings.trackPauses
         trackFillerWords = settings.trackFillerWords
         targetWPM = settings.targetWPM
         autoPaceTarget = settings.autoPaceTarget
 
+        // Prompt settings
         hideAnsweredPrompts = settings.hideAnsweredPrompts
         enabledPromptCategories = Set(settings.enabledCategories)
         storyPracticeEnabled = settings.storyPracticeEnabled
@@ -202,13 +232,17 @@ class SettingsViewModel {
         vocabChallengeIntroduceNew = settings.vocabChallengeIntroduceNew
         vocabChallengeLevelOverride = settings.vocabChallengeLevelOverride
 
+        // Speaker Level
         speakerLevel = settings.resolvedSpeakerLevel
 
+        // Countdown duration & style
         countdownDuration = CountdownDuration(rawValue: settings.countdownDuration) ?? .fifteen
         countdownStyle = CountdownStyle(rawValue: settings.countdownStyle) ?? .countDown
 
+        // Timer end behavior
         timerEndBehavior = TimerEndBehavior(rawValue: settings.timerEndBehavior) ?? .saveAndStop
 
+        // Recording look
         waveformStyle = WaveformStyle(rawValue: settings.waveformStyle) ?? .rings
         recordButtonStyle = RecordButtonStyle(rawValue: settings.recordButtonStyle) ?? .classic
         countdownLook = TimerLook(rawValue: settings.countdownLook) ?? .ring
@@ -217,24 +251,31 @@ class SettingsViewModel {
         glassAppearance = GlassAppearance(rawValue: settings.glassAppearance) ?? .light
         appCanvas = AppCanvas(rawValue: settings.appCanvas) ?? .classic
 
+        // Sound pack
         soundPack = SoundPack(rawValue: settings.soundPack) ?? .soft
         ChirpPlayer.shared.pack = soundPack
 
+        // Word Bank
         vocabWords = settings.vocabWords
         dictationBiasWords = settings.dictationBiasWords
 
+        // Filler Words
         customFillerWords = settings.customFillerWords
         customContextFillerWords = settings.customContextFillerWords
         removedDefaultFillers = settings.removedDefaultFillers
 
+        // Haptic Coaching
         hapticCoachingEnabled = settings.hapticCoachingEnabled
 
+        // Audio Cues
         chirpSoundEnabled = settings.chirpSoundEnabled
         ChirpPlayer.shared.isEnabled = settings.chirpSoundEnabled
 
+        // Session Feedback
         sessionFeedbackEnabled = settings.sessionFeedbackEnabled
         customFeedbackQuestions = settings.customFeedbackQuestions
 
+        // Score Weights
         clarityWeight = settings.clarityWeight
         paceWeight = settings.paceWeight
         fillerWeight = settings.fillerWeight
@@ -260,11 +301,13 @@ class SettingsViewModel {
         
         settings.weeklyGoalSessions = weeklyGoalSessions
 
+        // Analysis features
         settings.trackPauses = trackPauses
         settings.trackFillerWords = trackFillerWords
         settings.targetWPM = targetWPM
         settings.autoPaceTarget = autoPaceTarget
         
+        // Prompt settings
         settings.hideAnsweredPrompts = hideAnsweredPrompts
         settings.enabledPromptCategories = enabledPromptCategories.map { $0.rawValue }
         settings.storyPracticeEnabled = storyPracticeEnabled
@@ -279,13 +322,17 @@ class SettingsViewModel {
         settings.vocabChallengeIntroduceNew = vocabChallengeIntroduceNew
         settings.vocabChallengeSpacedReview = true
 
+        // Speaker Level
         settings.speakerLevel = speakerLevel.rawValue
 
+        // Countdown duration & style
         settings.countdownDuration = countdownDuration.rawValue
         settings.countdownStyle = countdownStyle.rawValue
 
+        // Timer end behavior
         settings.timerEndBehavior = timerEndBehavior.rawValue
 
+        // Recording look
         settings.waveformStyle = waveformStyle.rawValue
         settings.recordButtonStyle = recordButtonStyle.rawValue
         settings.countdownLook = countdownLook.rawValue
@@ -294,24 +341,31 @@ class SettingsViewModel {
         settings.glassAppearance = glassAppearance.rawValue
         settings.appCanvas = appCanvas.rawValue
 
+        // Sound pack
         settings.soundPack = soundPack.rawValue
         ChirpPlayer.shared.pack = soundPack
 
+        // Word Bank
         settings.vocabWords = vocabWords
         settings.dictationBiasWords = dictationBiasWords
 
+        // Filler Words
         settings.customFillerWords = customFillerWords
         settings.customContextFillerWords = customContextFillerWords
         settings.removedDefaultFillers = removedDefaultFillers
 
+        // Haptic Coaching
         settings.hapticCoachingEnabled = hapticCoachingEnabled
 
+        // Audio Cues
         settings.chirpSoundEnabled = chirpSoundEnabled
         ChirpPlayer.shared.isEnabled = chirpSoundEnabled
 
+        // Session Feedback
         settings.sessionFeedbackEnabled = sessionFeedbackEnabled
         settings.customFeedbackQuestions = customFeedbackQuestions
 
+        // Score Weights
         settings.clarityWeight = clarityWeight
         settings.paceWeight = paceWeight
         settings.fillerWeight = fillerWeight
@@ -325,6 +379,7 @@ class SettingsViewModel {
         do {
             try context.save()
             
+            // Update notifications if needed
             if dailyReminderEnabled {
                 await scheduleReminderNotification()
             } else {
@@ -335,6 +390,9 @@ class SettingsViewModel {
         }
     }
     
+    /// Commit an edited display name. The name is permanently linked into the
+    /// transcription bias terms (see `UserSettings.transcriptionBiasTerms`), so
+    /// persisting it is enough to keep it in the dictation dictionary.
     @MainActor
     func commitUserName() async {
         userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -514,7 +572,9 @@ class SettingsViewModel {
             newFillerWord = ""
             return
         }
+        // Already a default filler?
         if FillerWordList.unconditionalFillers.contains(trimmed) || FillerWordList.contextDependentFillers.contains(trimmed) {
+            // If it was removed, restore it instead
             if removedDefaultFillers.contains(trimmed) {
                 restoreDefaultFiller(trimmed)
                 newFillerWord = ""
@@ -625,6 +685,7 @@ class SettingsViewModel {
     func resetSettings() async {
         guard let settings, let context = modelContext else { return }
 
+        // Reset to defaults
         settings.defaultDuration = 60
         settings.dailyReminderEnabled = false
         settings.dailyReminderHour = 9
@@ -665,11 +726,13 @@ class SettingsViewModel {
         settings.sessionFeedbackEnabled = false
         settings.customFeedbackQuestions = []
 
+        // Voice Profile
         settings.voiceProfileF0Hz = nil
         settings.voiceProfileEnergyDb = nil
         settings.voiceProfileSampleCount = 0
         settings.voiceProfileLastUpdated = nil
 
+        // Score Weights
         let defaults = ScoreWeights.defaults
         settings.clarityWeight = defaults.clarity
         settings.paceWeight = defaults.pace
@@ -694,6 +757,7 @@ class SettingsViewModel {
         guard let context = modelContext else { return }
 
         do {
+            // Delete all recordings and their files (local + iCloud)
             let recordingDescriptor = FetchDescriptor<Recording>()
             let recordings = try context.fetch(recordingDescriptor)
             for recording in recordings {
@@ -706,24 +770,28 @@ class SettingsViewModel {
                 context.delete(recording)
             }
 
+            // Delete all goals
             let goalDescriptor = FetchDescriptor<UserGoal>()
             let goals = try context.fetch(goalDescriptor)
             for goal in goals {
                 context.delete(goal)
             }
 
+            // Delete all achievements
             let achievementDescriptor = FetchDescriptor<Achievement>()
             let achievements = try context.fetch(achievementDescriptor)
             for achievement in achievements {
                 context.delete(achievement)
             }
 
+            // Delete curriculum progress
             let curriculumDescriptor = FetchDescriptor<CurriculumProgress>()
             let curriculumItems = try context.fetch(curriculumDescriptor)
             for item in curriculumItems {
                 context.delete(item)
             }
 
+            // Clear word bank and filler customizations from settings
             if let settings {
                 settings.vocabWords = []
                 settings.dictationBiasWords = []
@@ -755,6 +823,7 @@ class SettingsViewModel {
 
     // MARK: - Pace Target
 
+    /// Effective target shown in UI — learned value in auto mode, slider value otherwise.
     var displayTargetWPM: Int {
         settings.resolvedTargetWPM
     }
@@ -788,6 +857,8 @@ class SettingsViewModel {
         guard let settings, let context = modelContext else { return }
         settings.voiceProfileF0Hz = profile.f0Hz
         settings.voiceProfileEnergyDb = profile.energyDb
+        // Manual calibration is a deliberate "this is my voice" — grant full
+        // blend trust (3 = 0.7 weight) instead of resetting accumulated trust.
         settings.voiceProfileSampleCount = max(settings.voiceProfileSampleCount, 3)
         settings.voiceProfileLastUpdated = Date()
         try? context.save()

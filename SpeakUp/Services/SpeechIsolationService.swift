@@ -42,6 +42,10 @@ nonisolated enum SpeechIsolationService {
             return nil
         }
 
+        // Adjusted suppression score formula to account for the new 22 dB skip threshold.
+        // Previously: (delta + 2.0) / 8.0 — a 6 dB improvement scored 100.
+        // Now: (delta + 1.5) / 10.0 — a 8.5 dB improvement scores 100.
+        // This gives a more honest score since we're now processing noisier audio.
         let suppressionScore = max(0, min(100, Int(((delta + 1.5) / 10.0) * 100.0)))
         // Adjusted residual noise score to match the new skip threshold.
         // Previously: (improvedSNR + 5.0) / 20.0 — 15 dB output SNR scored 100.
@@ -90,7 +94,12 @@ nonisolated enum SpeechIsolationService {
         let frameRMS = rmsPerFrame(samples: samples, frameSize: frameSize)
         guard !frameRMS.isEmpty else { return samples }
 
+        // Raised noise floor percentile from 20th to 15th percentile.
+        // The 20th percentile includes some low-energy speech frames (soft consonants, pauses).
+        // The 15th percentile more accurately captures the true noise floor.
         let noiseFloor = percentile(frameRMS, p: 0.15)
+        // 2.0× noise floor — enough to separate stationary noise without
+        // gating soft consonants / quiet near-field speech into the floor.
         let threshold = max(noiseFloor * 2.0, 0.00012)
 
         var output = samples

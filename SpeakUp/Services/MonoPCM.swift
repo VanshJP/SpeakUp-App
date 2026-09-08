@@ -12,6 +12,7 @@ nonisolated struct MonoPCM: Sendable {
 
     // MARK: - Decoding
 
+    /// Decode any AVAudio-readable file to mono float32 at the file's sample rate.
     static func decode(url: URL) -> MonoPCM? {
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let sourceFormat = file.processingFormat
@@ -37,6 +38,8 @@ nonisolated struct MonoPCM: Sendable {
                 return nil
             }
         } else {
+            // Convert inside a scope so the source-format buffer is released
+            // before the sample array is copied out.
             let converted: Bool = {
                 guard let sourceBuffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: frameCount) else {
                     return false

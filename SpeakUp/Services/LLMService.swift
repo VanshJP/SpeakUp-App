@@ -15,6 +15,11 @@ extension CoherenceResult {
     /// Parses the `SCORE:` / `TOPIC_FOCUS:` / `LOGICAL_FLOW:` / `REASON:` block
     /// both backends ask the model for.
     ///
+    /// Never fails: a model that ignores the format and answers with prose
+    /// still scores, because the first 0...100 integer anywhere in the output
+    /// wins. A chatty local model should cost the user its reasoning, not its
+    /// coherence read. Apple Intelligence and the local LLM used to carry
+    /// identical private copies of this, fallback included.
     init(parsing output: String) {
         var score: Int?
         var topicFocus = ""
@@ -76,11 +81,16 @@ final class LLMService {
     /// cleared at each attempt start. Reason codes only — no user content.
     private(set) var lastFailure: LLMPassFailure?
 
+    /// Touched from the off-main memory-pressure handler, hence nonisolated.
     nonisolated private let logger = Logger.app("LLMService")
 
+    /// Local on-device LLM for devices without Apple Intelligence.
     let localLLM = LocalLLMService()
 
-    /// Force local Gemma even when Apple Intelligence available. Persisted in UserDefaults.
+    /// When `true`, route inference to the local Gemma model even on devices
+    /// where Apple Intelligence is available. Persisted across launches so the
+    /// preference survives backgrounding. Defaults to `false` (Apple
+    /// Intelligence preferred), matching the original behaviour.
     var preferLocalLLM: Bool {
         didSet {
             UserDefaults.standard.set(preferLocalLLM, forKey: Self.preferLocalDefaultsKey)
@@ -145,10 +155,14 @@ final class LLMService {
         SystemLanguageModel.default.isAvailable
     }
 
+    /// True when any LLM backend is ready to generate.
     var isAvailable: Bool {
         appleIntelligenceAvailable || localLLM.isModelReady
     }
 
+    /// The backend that will be used for the next generation request.
+    /// Honors `preferLocalLLM` so the user can force the on-device Gemma path
+    /// even when Apple Intelligence is available.
     var activeBackend: LLMBackend {
         if preferLocalLLM && localLLM.isModelReady { return .localLLM }
         if appleIntelligenceAvailable { return .appleIntelligence }
@@ -156,6 +170,9 @@ final class LLMService {
         return .none
     }
 
+    /// Whether the next inference request should route to Apple Intelligence
+    /// first. False when the user has explicitly opted into the local model and
+    /// the local model is loaded.
     private var prefersAppleIntelligence: Bool {
         guard appleIntelligenceAvailable else { return false }
         if preferLocalLLM && localLLM.isModelReady { return false }
@@ -164,12 +181,17 @@ final class LLMService {
 
     // MARK: - Local Model Management
 
+    /// Download and immediately load the local model.
     func setupLocalModel() async {
         await localLLM.downloadModel()
         await localLLM.loadModel()
     }
 
+    /// Loads the local model if it's downloaded but not yet loaded.
     func loadLocalModelIfNeeded() async {
+        // Load when (a) Apple Intelligence is unavailable, OR (b) the user has
+        // opted to prefer the local model — in both cases the local engine
+        // needs to be ready before the next inference call.
         let shouldLoad = (!appleIntelligenceAvailable || preferLocalLLM)
             && localLLM.isModelDownloaded
             && !localLLM.isModelReady
@@ -181,12 +203,16 @@ final class LLMService {
 
     // MARK: - General-Purpose Generation
 
+    /// Public general-purpose text generation using the best available backend.
+    /// Falls back from Apple Intelligence to the local model if the AI call
+    /// returns nil (e.g. simulator, feature disabled).
     func generateText(prompt: String, systemPrompt: String) async -> String? {
         lastFailure = nil
         if prefersAppleIntelligence {
             if let result = await generateWithAppleIntelligence(prompt: prompt, systemPrompt: systemPrompt) {
                 return result
             }
+            // Reason already recorded by the Apple Intelligence leg.
         }
         if localLLM.isModelReady {
             if let result = await localLLM.generate(prompt: prompt, systemPrompt: systemPrompt) {
@@ -202,7 +228,13 @@ final class LLMService {
     // MARK: - Dictation Formatting
 
     /// Cleans up raw dictated speech into lightly-formatted Markdown for the story editor.
+    /// The editor parses the returned Markdown into rich text (bold, italic, headings, lists,
+    /// paragraphs). Preserves the speaker's wording, voice, and meaning. Falls back to the
+    /// input on failure. The returned string is Markdown, not plain text.
+    ///
     /// IMPORTANT: local llama backends are more fragile with this long formatting prompt and
+    /// can trigger low-level batch assertions on some devices/builds. To keep dictation stable,
+    /// only Apple Intelligence is used for formatting; local model callers get passthrough text.
     func formatDictation(_ raw: String) async -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, isAvailable else { return raw }
@@ -284,6 +316,7 @@ final class LLMService {
 
         var cleaned = output.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Strip accidental code fences if the model wrapped its reply.
         if cleaned.hasPrefix("```") {
             if let firstNewline = cleaned.firstIndex(of: "\n") {
                 cleaned = String(cleaned[cleaned.index(after: firstNewline)...])
@@ -315,6 +348,7 @@ final class LLMService {
             if let result = await evaluateCoherenceWithAppleIntelligence(transcript: transcript, promptText: promptText) {
                 return result
             }
+            // Reason already recorded by the Apple Intelligence leg.
         }
 
         if localLLM.isModelReady {
@@ -331,6 +365,9 @@ final class LLMService {
 
     // MARK: - Coaching Tips
 
+    /// - Parameter context: the speaker's pace target, focus, and this
+    ///   session's quotable moments. Without it the model can only paraphrase
+    ///   the metrics back; with it, it can coach.
     func generateCoachingInsight(
         from analysis: SpeechAnalysis,
         transcript: String,
@@ -376,8 +413,10 @@ final class LLMService {
             if let result = await evaluateTranscriptQualityWithAppleIntelligence(transcript: transcript) {
                 return result
             }
+            // Reason already recorded by the Apple Intelligence leg.
         }
 
+        // Fall back to local LLM
         if localLLM.isModelReady {
             if let result = await localLLM.evaluateTranscriptQuality(transcript: transcript) {
                 return result
@@ -453,6 +492,7 @@ final class LLMService {
             return nil
         }
 
+        // Parse STRUCTURE and VOCABULARY lines
         var structure: Int?
         var vocabulary: Int?
         for line in output.components(separatedBy: "\n") {
@@ -473,6 +513,8 @@ final class LLMService {
         return (structure: max(0, min(100, s)), vocabulary: max(0, min(100, v)))
     }
 
+    /// Stable error identifier (domain#code) for diagnostics. Message text is
+    /// deliberately omitted so no prompt/response content can leak into logs.
     private static func appleFailureReason(_ error: Error) -> String {
         if error is CancellationError { return "cancelled" }
         let nsError = error as NSError
@@ -559,7 +601,13 @@ final class LLMService {
         transcript: String,
         context: CoachingContext
     ) -> String {
+        // Pure rules live in `CoachingInsightSanitizer` (testable without a
+        // model); this wrapper only owns the fallback decision.
         let extracted = CoachingInsightSanitizer.tips(from: raw)
+        // Small local models drop the metric label despite the prompt rule,
+        // and a bare "44/100" reads as a verdict from nowhere. The naming
+        // pass runs before specificity so a relabelled score still counts as
+        // its numeric signal.
         let tips = CoachingInsightSanitizer.namingBareScores(
             extracted,
             subscores: analysis.speechScore.subscores
@@ -572,6 +620,12 @@ final class LLMService {
         return tips.map { "- \($0)" }.joined(separator: "\n")
     }
 
+    /// What the user sees when the model produced nothing usable.
+    ///
+    /// Not a placeholder. The rule-based tips already carry both halves of a
+    /// real tip, the observation with its evidence and the named technique,
+    /// so the fallback is coaching written by the deterministic path rather
+    /// than an apology for the model.
     private func deterministicCoachingFallback(
         analysis: SpeechAnalysis,
         context: CoachingContext

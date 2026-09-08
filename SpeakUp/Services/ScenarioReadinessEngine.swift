@@ -2,6 +2,9 @@ import Foundation
 
 // MARK: - Scenario taxonomy
 
+/// The named situations readiness is reported against. Sessions are bucketed
+/// by their prompt category so each scenario card aggregates real, labeled
+/// practice instead of one opaque composite.
 nonisolated enum PracticeScenario: String, CaseIterable, Sendable, Hashable, Identifiable {
     case interviews = "Interviews"
     case publicSpeaking = "Public Speaking"
@@ -25,6 +28,7 @@ nonisolated enum PracticeScenario: String, CaseIterable, Sendable, Hashable, Ide
         }
     }
 
+    /// One line under the title on an invitation row — what practicing here builds.
     var blurb: String {
         switch self {
         case .interviews: return "Behavioral answers, case questions, career stories."
@@ -35,6 +39,7 @@ nonisolated enum PracticeScenario: String, CaseIterable, Sendable, Hashable, Ide
         }
     }
 
+    /// Core scenarios get invitation rows while unpracticed; `other` does not.
     var isCore: Bool { self != .other }
 }
 
@@ -48,17 +53,23 @@ nonisolated enum ScenarioMomentum: Sendable, Hashable {
 
 // MARK: - Readiness model
 
+/// One scenario's verdict: a 0–100 composite reused from the interview-readiness
+/// weights, an honest thin-data flag, the direction of travel, and the habit
+/// most responsible for whatever is holding it back.
 nonisolated struct ScenarioReadiness: Identifiable, Sendable, Hashable {
     let scenario: PracticeScenario
     let sessions: Int
+    /// Nil when the bucket exists but carries too little language to score.
     let score: Int?
     let isEarlyRead: Bool
     let momentum: ScenarioMomentum
+    /// The dominant crutch in this bucket, e.g. ("like", 12).
     let holdingBackWord: String?
     let holdingBackCount: Int?
 
     var id: PracticeScenario { scenario }
 
+    /// Below this many sessions a read is honest but thin.
     static let confidenceThreshold = 4
     /// Thin buckets never reach the "Ready" band boundary (85).
     static let earlyReadScoreCap = 84
@@ -76,10 +87,13 @@ nonisolated struct ScenarioReadiness: Identifiable, Sendable, Hashable {
 
 // MARK: - Trajectory summary
 
+/// Glanceable answer to "which way am I moving": latest, best, average, and a
+/// momentum verdict comparing the mean of recent sessions against earlier ones.
 nonisolated struct TrajectorySummary: Sendable, Equatable {
     let latestScore: Int?
     let bestScore: Int
     let averageScore: Int
+    /// Recent-half mean minus early-half mean; 0 until two sessions exist.
     let delta: Int
     let momentum: ScenarioMomentum
 
@@ -132,8 +146,14 @@ nonisolated struct TrajectorySummary: Sendable, Equatable {
 
 nonisolated enum ScenarioReadinessEngine {
 
+    /// Marker ProgressChartsContent passes for story-linked sessions instead
+    /// of a prompt category.
     static let storyMarker = "Story"
 
+    /// Compiler-checked map from every prompt category to its scenario.
+    /// Categories land where the skill gets performed: evaluation settings
+    /// feed Interviews, audience-facing pressure feeds Public Speaking,
+    /// day-to-day talk feeds Everyday Conversation.
     static func scenario(for category: PromptCategory) -> PracticeScenario {
         switch category {
         case .interviewPrep, .professionalDevelopment, .problemSolving:
@@ -148,6 +168,8 @@ nonisolated enum ScenarioReadinessEngine {
         }
     }
 
+    /// Resolves the session-level category string. Anything unrecognizable
+    /// (freeform takes, user-created categories) lands in `.other`.
     static func scenario(forRawCategory raw: String?) -> PracticeScenario {
         if raw == storyMarker { return .storytelling }
         guard let raw, !raw.isEmpty else { return .other }
@@ -155,6 +177,9 @@ nonisolated enum ScenarioReadinessEngine {
         return scenario(for: category)
     }
 
+    /// One readiness card per practiced scenario, weakest first — after the
+    /// hero band answers trajectory, attention goes to the highest-leverage gap.
+    /// Unpracticed core scenarios are omitted; callers render invitations.
     static func readiness(from sessions: [LexiconSessionInput]) -> [ScenarioReadiness] {
         var buckets: [PracticeScenario: [LexiconSessionInput]] = [:]
         for session in sessions {
@@ -165,6 +190,8 @@ nonisolated enum ScenarioReadinessEngine {
             readinessCard(scenario: target, sessions: bucket.sorted { $0.date < $1.date })
         }
         .sorted { lhs, rhs in
+            // Strongest signal first: lowest readiness leads, then whichever
+            // bucket has more evidence behind its number.
             let lhsKey = lhs.score ?? Int.max
             let rhsKey = rhs.score ?? Int.max
             if lhsKey != rhsKey { return lhsKey < rhsKey }
@@ -179,6 +206,9 @@ nonisolated enum ScenarioReadinessEngine {
     ) -> ScenarioReadiness? {
         guard !orderedBucket.isEmpty else { return nil }
 
+        // Reuses the exact composite weights of the former aggregate
+        // Interview Readiness (fluency .18, authority .20, impact .22,
+        // evidence .12, depth .14, consistency .14), computed per bucket.
         let profile = LexiconInsightsEngine.profile(from: orderedBucket)
 
         let early = orderedBucket.count < ScenarioReadiness.confidenceThreshold

@@ -4,6 +4,7 @@ import SwiftUI
 @Observable
 @MainActor
 class DrillViewModel {
+    // Reuse the same audio services as RecordingViewModel
     let audioService = AudioService()
     let liveTranscriptionService = LiveTranscriptionService()
 
@@ -13,14 +14,17 @@ class DrillViewModel {
     var score: Int = 0
     var result: DrillResult?
     var isComplete = false
+    /// Pace-control target from the user's settings (default 150).
     var targetWPM: Int = 150
     /// Set when the audio/recognition stack can't run (mic denied, speech
     /// recognition off, dead engine). The session view surfaces it and exits —
     /// a drill that can't hear must not end as a confident clean run.
     var errorMessage: String?
 
+    // Audio level for waveform visualization (same as RecordingViewModel)
     var audioLevel: Float = -160
 
+    // Live metrics derived from transcription service
     var liveFillerCount: Int { liveTranscriptionService.liveFillerCount }
     var liveWordCount: Int { liveTranscriptionService.liveWordCount }
 
@@ -30,6 +34,7 @@ class DrillViewModel {
         return Double(liveWordCount) / elapsed * 60
     }
 
+    // Pause Practice state
     var pauseMarkerActive = false
     var pauseMarkersHit = 0
     let pauseMarkersTotal = 3
@@ -38,6 +43,7 @@ class DrillViewModel {
     private var silentFramesInPause = 0
     private var totalFramesInPause = 0
 
+    // Impromptu Sprint state
     var impromptuPrompt: String = ""
     private static let impromptuTopics = [
         "Describe your perfect weekend from start to finish",
@@ -88,8 +94,11 @@ class DrillViewModel {
         "How would you handle a question you don't know the answer to?",
     ]
 
+    /// Word the emphasis drill wants stressed (uppercase in the prompt line).
     var emphasisTargetWord: String = ""
+    /// True while post-stop pitch analysis is still running.
     var isAnalyzingPitch = false
+    /// Live peak-over-median energy swing (dB) for emphasis / variety HUD.
     private(set) var liveEnergySwing: Double = 0
     private var levelSamples: [Float] = []
 
@@ -116,6 +125,7 @@ class DrillViewModel {
         return 1.0 - Double(timeRemaining) / Double(totalDuration)
     }
 
+    /// Timed structure cue for Impromptu (PREP) and Q&A (CLEAR-lite).
     var structureBeat: String? {
         guard let mode = selectedMode, isActive else { return nil }
         let p = progress
@@ -151,6 +161,7 @@ class DrillViewModel {
         liveEnergySwing = 0
         levelSamples = []
 
+        // Pause Practice: schedule 3 pause windows evenly across the drill
         pauseMarkerActive = false
         pauseMarkersHit = 0
         silentFramesInPause = 0
@@ -164,6 +175,9 @@ class DrillViewModel {
             pauseTimings = []
         }
 
+        // Prompted modes: keep the topic picked at selection time (so the
+        // prep countdown can show it and retries stay fair); only fall back
+        // to a fresh pick when entering without one.
         if mode.preparesPromptUpFront, impromptuPrompt.isEmpty {
             preparePrompt(for: mode)
         }
@@ -216,11 +230,13 @@ class DrillViewModel {
             .practiceStarted(useCase: "drill", sessionNumber: drillsStarted)
         )
 
+        // Start audio level monitoring (same as RecordingViewModel)
         startAudioLevelMonitoring()
 
         let authorized = await liveTranscriptionService.requestAuthorization()
         guard authorized else {
             if selectedMode?.allowsMeteringOnly == true {
+                // Pause Practice / Vocal Variety can score without ASR.
                 return true
             }
             errorMessage = "Speech recognition is off for this app. Enable it in Settings to run this drill."
@@ -247,12 +263,17 @@ class DrillViewModel {
     private func tick() {
         guard isActive else { return }
 
+        // Recognition dying mid-drill (interruption, recognizer loss) must end
+        // the scoring window now — letting the clock run on produces silent
+        // zeros for every mode that scores from transcription.
         if transcriptionLive, selectedMode?.allowsMeteringOnly != true,
            !liveTranscriptionService.isActive {
             finishDrill(endedEarly: true)
             return
         }
 
+        // Decrement-then-finish inside the same tick: finishing on a later
+        // tick stretched every drill one second past its advertised length.
         if timeRemaining > 1 {
             timeRemaining -= 1
             if selectedMode == .pausePractice {
@@ -320,6 +341,8 @@ class DrillViewModel {
         }
     }
 
+    /// Peak-minus-median of recent dB samples — a crude live stand-in for
+    /// "are you actually changing energy," not a final score.
     private static func energySwing(in samples: [Float]) -> Double {
         let voiced = samples.filter { $0 > -50 }
         guard voiced.count >= 8 else { return 0 }
@@ -353,6 +376,7 @@ class DrillViewModel {
             return
         }
 
+        // Flush any in-progress pause window before scoring
         if mode == .pausePractice && pauseMarkerActive {
             pauseMarkerActive = false
             evaluatePauseWindow()
@@ -461,6 +485,7 @@ class DrillViewModel {
 
         case .emphasis:
             let swing = Self.energySwing(in: levelSamples)
+            // ~8–20 dB of peak-vs-median swing reads as intentional stress.
             let swingScore = min(100, Int(swing * 6))
             let saidSomething = liveWordCount >= 4
             drillScore = saidSomething ? max(20, swingScore) : 0
@@ -506,6 +531,8 @@ class DrillViewModel {
         stopAudioLevelMonitoring()
         liveTranscriptionService.stop()
         audioService.cleanup()
+        // Fresh topic on the next selection; a kept topic would let "Try
+        // Again" leak across different drill entries.
         impromptuPrompt = ""
         emphasisTargetWord = ""
         levelSamples = []

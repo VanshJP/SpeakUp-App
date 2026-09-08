@@ -13,6 +13,10 @@ enum LocalModelState: Equatable {
     case error(String)
 }
 
+/// Typed errors surfaced from `LocalLLMService.loadModel()` so the UI can
+/// distinguish recoverable problems (missing file → re-download) from
+/// transient ones (insufficient RAM → close other apps and retry) from
+/// hard llama backend failures.
 nonisolated enum LocalLLMError: LocalizedError, Sendable {
     case fileNotFound(path: String)
     case downloadFailed(status: Int)
@@ -59,6 +63,11 @@ final class LocalLLMService {
     // MARK: - Configuration
 
     enum ModelProfile: String, CaseIterable, Identifiable {
+        /// Gemma 3 1B instruction-tuned — smallest viable profile. ~0.8 GB on
+        /// disk, ~1 GB resident. Fits inside the iOS app budget on every
+        /// supported device (iPhone XR / SE 2nd gen onward) without the
+        /// increased-memory entitlement. Uses the standard
+        /// `<start_of_turn>` Gemma chat template the engine already emits.
         case gemma3_1B
         case gemmaE2B
         case gemmaE4B
@@ -104,10 +113,23 @@ final class LocalLLMService {
         }
 
         /// Minimum *app-available* memory required to load this profile.
+        ///
         /// iOS does not let an app allocate the device's total RAM — `jetsam`
+        /// will kill the app at a much lower threshold reported by
+        /// `os_proc_available_memory()`. Even on an 8 GB iPhone 15 Pro a
+        /// foreground app typically gets ~3 GB before being killed (more with
+        /// the `com.apple.developer.kernel.increased-memory-limit` entitlement,
+        /// which this target enables).
+        ///
+        /// These values are tuned to the *real* app budget after the
+        /// model weights, KV cache (Q8 quantized), activations and decode
+        /// buffers are accounted for — not the on-disk model size.
         nonisolated var minimumRecommendedMemoryBytes: Int {
             switch self {
             case .gemma3_1B:
+                // ~0.8 GB Q4_K_M weights + ~25 MB KV (Q4_0 @ 1024 ctx) +
+                // ~150 MB activations / compute buffer + Swift/UIKit overhead.
+                // Sized to fit inside the default app budget on iPhone XR / SE.
                 return 900 * 1024 * 1024
             case .gemmaE2B:
                 // ~1.6 GB Q4_K_M weights (hot mmap pages) + ~30 MB KV
@@ -118,10 +140,17 @@ final class LocalLLMService {
                 // 4 GB increased-memory-entitlement budget.
                 return 2_100 * 1024 * 1024
             case .gemmaE4B:
+                // IQ2_M weights mmap'd (~2.5 GB hot pages on CPU backend) +
+                // ~20 MB KV (Q4_0 @ 512 ctx) + activations. Tuned for iPhone 14
+                // Pro and up with the increased-memory entitlement enabled.
                 return 2_400 * 1024 * 1024
             }
         }
 
+        /// llama_context `n_ctx`. Per-profile because the KV cache scales
+        /// linearly with context size and the larger models have less headroom.
+        /// 1024 tokens covers the full coaching system prompt + speech summary +
+        /// transcript tail without truncation for the smaller models.
         nonisolated var contextTokenLimit: Int {
             switch self {
             case .gemma3_1B, .gemmaE2B:
@@ -152,6 +181,7 @@ final class LocalLLMService {
         }
     }
 
+    /// Minimum available memory (bytes) required before running inference.
     nonisolated private static let minimumMemoryForInference: Int = 350 * 1024 * 1024 // 350 MB
     private static let selectedProfileDefaultsKey = "local_llm_selected_profile"
 
@@ -189,6 +219,12 @@ final class LocalLLMService {
     /// Background `URLSession` used for multi-GB GGUF downloads. The background
     /// configuration lets the system keep the transfer running when the user
     /// navigates away from the settings screen or backgrounds the app. The
+    /// session is created lazily because instantiating a background session
+    /// with a given identifier can only happen once per process.
+    ///
+    /// `@ObservationIgnored` is required: the `@Observable` macro rewrites
+    /// stored properties into init-accessor computed pairs, which is
+    /// incompatible with `lazy`.
     @ObservationIgnored
     private lazy var backgroundSession: URLSession = {
         let identifier = "com.vansh.SpeakUp.LocalLLM.download"
@@ -204,7 +240,11 @@ final class LocalLLMService {
     }()
 
     /// Optional hook awaited just before the `LLMInferenceEngine` is created.
+    /// Host code (typically `LLMService` at app startup) should set this to a
     /// closure that unloads other heavy in-memory assets — primarily the
+    /// Whisper model — so the LLM can claim the RAM. When `nil`, the
+    /// `Notification.Name.localLLMWillLoad` notification is still posted so
+    /// observers can react.
     @ObservationIgnored
     var preloadCleanupHandler: (@MainActor @Sendable () async -> Void)?
 
@@ -244,6 +284,9 @@ final class LocalLLMService {
             modelState = .downloaded
         }
 
+        // Retired profiles (Qwen) leave multi-GB GGUFs behind that no UI can
+        // reach — `deleteModel()` only removes the *selected* profile's file.
+        // Sweep off the main thread; the directory holds nothing but weights.
         let directory = Self.modelsDirectory
         let known = Set(ModelProfile.allCases.map(\.modelFileName))
         Task.detached(priority: .utility) {
@@ -251,6 +294,8 @@ final class LocalLLMService {
         }
     }
 
+    /// Removes any file in the models directory that no current `ModelProfile`
+    /// claims.
     nonisolated private static func deleteOrphanedModelFiles(in directory: URL, keeping known: Set<String>) {
         let contents = (try? FileManager.default.contentsOfDirectory(
             at: directory,
@@ -264,6 +309,7 @@ final class LocalLLMService {
 
     // MARK: - Memory Check
 
+    /// Returns true if sufficient memory is available for LLM inference.
     nonisolated static func hasSufficientMemory() -> Bool {
         let available = Int(clamping: os_proc_available_memory())
         return available > minimumMemoryForInference
@@ -279,6 +325,12 @@ final class LocalLLMService {
         return .gemma3_1B
     }
 
+    /// Switches the active model profile.
+    ///
+    /// Returns `false` and leaves the active profile unchanged when a download
+    /// is in progress — silently interrupting a multi-GB transfer would be
+    /// hostile. Callers must surface this to the UI so the user can choose to
+    /// invoke `cancelDownload()` explicitly.
     @discardableResult
     func selectProfile(_ profile: ModelProfile) -> Bool {
         guard selectedProfile != profile else { return true }
@@ -305,6 +357,8 @@ final class LocalLLMService {
             modelState = .downloaded
             return
         }
+        // Guard against double-starts — the background session would happily
+        // launch a second copy of the same transfer.
         if case .downloading = modelState { return }
 
         modelState = .downloading(progress: 0)
@@ -314,6 +368,7 @@ final class LocalLLMService {
             let activeProfile = selectedProfile
             let tempURL = try await downloadWithProgress(url: activeProfile.downloadURL)
 
+            // Move to final location
             let dest = Self.modelFilePath(for: activeProfile)
             if FileManager.default.fileExists(atPath: dest.path) {
                 try FileManager.default.removeItem(at: dest)
@@ -357,6 +412,8 @@ final class LocalLLMService {
 
         let path = Self.modelFilePath(for: selectedProfile).path
 
+        // Pre-check 1: file existence. Distinguishes a missing file (re-download
+        // path) from a corrupt file (llama internal error path).
         guard FileManager.default.fileExists(atPath: path) else {
             modelState = .error(
                 LocalLLMError.fileNotFound(path: path).errorDescription ?? "Model file missing"
@@ -366,11 +423,18 @@ final class LocalLLMService {
 
         modelState = .loading
 
+        // Aggressive memory release: tell observers (WhisperService, etc.) to
+        // unload before we claim multiple GB for llama context. Best-effort —
+        // a missing host hook is not fatal, just makes the next memory check
+        // more likely to fail.
         NotificationCenter.default.post(name: .localLLMWillLoad, object: self)
         if let handler = preloadCleanupHandler {
             await handler()
         }
 
+        // Pre-check 2: memory headroom, measured *after* cleanup. The
+        // pre-cleanup reading would frequently false-negative on devices that
+        // had Whisper loaded.
         let availableAfterCleanup = Int(clamping: os_proc_available_memory())
         let required = selectedProfile.minimumRecommendedMemoryBytes
         if availableAfterCleanup < required {
@@ -419,6 +483,7 @@ final class LocalLLMService {
 
     // MARK: - Auto-Unload Timer
 
+    /// Resets the auto-unload timer. Call after each inference to reclaim memory after inactivity.
     private func resetUnloadTimer() {
         unloadTimer?.invalidate()
         unloadTimer = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { [weak self] _ in
@@ -440,6 +505,7 @@ final class LocalLLMService {
         // if a back-to-back generation is still holding it.
         guard isModelReady else { return nil }
 
+        // Pre-inference memory check
         guard Self.hasSufficientMemory() else {
             Self.logger.error("Insufficient memory for inference, skipping")
             return nil
@@ -454,6 +520,8 @@ final class LocalLLMService {
         let result = await withTaskCancellationHandler {
             await inferenceTask.value
         } onCancel: {
+            // Ensure local inference exits promptly when callers cancel (e.g. user
+            // cancels dictation formatting in the journal editor).
             inferenceTask.cancel()
             engine.cancel()
         }
@@ -464,6 +532,9 @@ final class LocalLLMService {
 
     // MARK: - Coherence Evaluation
 
+    /// Evaluate speech coherence with prompt-aware scoring.
+    /// When `promptText` is provided, the rubric emphasises prompt relevance.
+    /// For free-practice (nil prompt), the rubric focuses on internal consistency.
     func evaluateCoherence(transcript: String, promptText: String? = nil) async -> CoherenceResult? {
         let truncated = String(transcript.prefix(800))
 
@@ -471,6 +542,7 @@ final class LocalLLMService {
         let userPrompt: String
 
         if let promptText, !promptText.isEmpty {
+            // --- Prompt-based session ---
             systemPrompt = """
             You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
 
@@ -501,6 +573,7 @@ final class LocalLLMService {
 
             userPrompt = "Prompt: \(promptText)\n\nSpeech transcript:\n\(truncated)"
         } else {
+            // --- Free-practice session ---
             systemPrompt = """
             You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
 
@@ -532,6 +605,7 @@ final class LocalLLMService {
             userPrompt = "Evaluate the coherence of this speech:\n\n\(truncated)"
         }
 
+        // Near-deterministic temperature for reliable scoring
         guard let output = await generate(prompt: userPrompt, systemPrompt: systemPrompt, maxTokens: 64, temperature: 0.05) else {
             return nil
         }
@@ -546,6 +620,11 @@ final class LocalLLMService {
         transcript: String,
         context: CoachingContext = CoachingContext()
     ) async -> String? {
+        // Prompt shared with the Apple Intelligence path. The transcript
+        // budget scales with the profile's context window: on the E4B's 512
+        // tokens a 600-character excerpt plus the full rules crowd the system
+        // instructions out of attention, and the engine's keep-the-tail
+        // truncation would then drop them entirely.
         let smallWindow = selectedProfile.contextTokenLimit <= 512
         let budget = smallWindow ? 300 : CoachingPrompt.localTranscriptBudget
 
@@ -566,6 +645,8 @@ final class LocalLLMService {
 
     // MARK: - Transcript Quality Evaluation
 
+    /// Evaluates transcript quality for structure and vocabulary richness.
+    /// Returns a tuple of (structureScore, vocabularyScore) each 0-100, or nil on failure.
     func evaluateTranscriptQuality(transcript: String) async -> (structure: Int, vocabulary: Int)? {
         let truncated = String(transcript.prefix(800))
 
@@ -610,6 +691,7 @@ final class LocalLLMService {
         }
 
         guard let s = structure, let v = vocabulary else {
+            // Fallback: try to extract any two numbers
             let nums = output.components(separatedBy: CharacterSet.decimalDigits.inverted)
                 .compactMap { Int($0) }
                 .filter { $0 >= 0 && $0 <= 100 }
@@ -630,8 +712,11 @@ final class LocalLLMService {
         // `add_special: true`, so it is intentionally omitted here.
         switch profile {
         case .gemma3_1B:
+            // Gemma 2 / 3 / 3n family template.
             return "<start_of_turn>user\n\(systemPrompt)\n\n\(userPrompt)<end_of_turn>\n<start_of_turn>model\n"
         case .gemmaE2B, .gemmaE4B:
+            // Gemma 4 template (HF `chat_template.jinja`): `<|turn>` opens
+            // a turn, `<turn|>` closes it.
             return "<|turn>user\n\(systemPrompt)\n\n\(userPrompt)<turn|>\n<|turn>model\n"
         }
     }
@@ -643,6 +728,9 @@ final class LocalLLMService {
 
     private func downloadWithProgress(url: URL) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
+            // Re-target the long-lived background-session delegate at this
+            // call's continuation. The delegate is one-shot per completion
+            // handler so cancel/success/error all resolve exactly once.
             downloadDelegate.update(
                 onProgress: { [weak self] progress in
                     Task { @MainActor [weak self] in
@@ -667,6 +755,9 @@ final class LocalLLMService {
 
 // MARK: - Download Progress Delegate
 
+/// Long-lived delegate attached to the background `URLSession`. Handlers are
+/// re-targeted per call via `update(...)` so a single delegate instance can
+/// serve consecutive downloads without leaking continuations across calls.
 nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     typealias ProgressHandler = @Sendable (Double) -> Void
     typealias CompletionHandler = @Sendable (Result<URL, Error>) -> Void
@@ -688,6 +779,8 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
         return _onProgress
     }
 
+    /// One-shot: clears the stored handler so a subsequent error callback for
+    /// the same task cannot double-resume the continuation.
     private func takeCompletionHandler() -> CompletionHandler? {
         lock.lock()
         defer { lock.unlock() }
@@ -713,6 +806,11 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        // A download "succeeds" for any status code, so an error page arrives
+        // here looking exactly like a model. Saved unchecked, a few hundred
+        // bytes of JSON get stored as a .gguf, the UI reports the model as
+        // downloaded, and the failure only surfaces much later as an
+        // unexplained load error.
         if let http = downloadTask.response as? HTTPURLResponse,
             !(200...299).contains(http.statusCode)
         {
@@ -720,6 +818,8 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
             return
         }
 
+        // Background sessions reclaim the temp file as soon as this callback
+        // returns, so the copy must happen synchronously on this thread.
         let tempDir = FileManager.default.temporaryDirectory
         let tempFile = tempDir.appendingPathComponent(UUID().uuidString + ".gguf")
         do {
@@ -754,9 +854,22 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
     private var ctx: OpaquePointer?                         // llama_context *
     private var smpl: UnsafeMutablePointer<llama_sampler>?  // llama_sampler *
     private let lock = NSLock()
+    /// Context window in tokens. Set by `load(modelPath:contextSize:)` based on
+    /// the active `ModelProfile`. The KV cache scales linearly with `n_ctx`,
+    /// so the smaller Gemma 4 E4B / IQ2_M build is pinned to 512 while the
+    /// E2B / 3 1B profiles use 1024 to fit full coaching system prompts
+    /// without truncation. The `maxPromptTokens` calculation reads from this
+    /// value so the budget tracks the configured window automatically.
     private(set) var contextTokenLimit: Int = 512
+    /// Keep prompt decode chunks very small to stay below runtime `n_batch`
+    /// defaults across llama builds. Some builds assert when a single decode
+    /// batch is larger than the configured context batch size.
     private let promptDecodeChunkSize: Int32 = 8
 
+    /// Cancellation flag protected by a *separate* lock so callers can request
+    /// abort without contending with the heavyweight inference lock held by
+    /// `generate`. Sharing the inference lock would defeat the purpose — the
+    /// flag would only become observable *after* generation returned.
     private let cancelLock = NSLock()
     private var _cancelled = false
 
@@ -791,10 +904,15 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     // MARK: - Load
 
+    /// Loads the model from `modelPath`. Throws a typed `LocalLLMError` so the
+    /// caller can distinguish missing-file / OOM / llama-internal failures and
+    /// surface the right recovery action. `contextSize` is the `n_ctx` value
+    /// to use for this profile — caller picks based on memory budget.
     func load(modelPath: String, contextSize: Int) throws {
         lock.lock()
         defer { lock.unlock() }
 
+        // Clean up any previous state (including backend)
         freeResources()
         contextTokenLimit = contextSize
 
@@ -901,6 +1019,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         }
         ctx = loadedCtx
 
+        // Initialize sampler chain: top-k → top-p → temperature → dist
         let sparams = llama_sampler_chain_default_params()
         let chain = llama_sampler_chain_init(sparams)
         llama_sampler_chain_add(chain, llama_sampler_init_top_k(40))
@@ -923,6 +1042,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             return nil
         }
 
+        // 1. Tokenize the prompt
         let tokens = tokenize(text: prompt, model: model)
         guard !tokens.isEmpty else {
             Self.logger.error("Tokenization produced no tokens")
@@ -930,8 +1050,15 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             return nil
         }
 
+        // 2. Clear KV cache for fresh generation
         llama_memory_clear(llama_get_memory(ctx), false)
 
+        // 3. Decode prompt tokens. Reserve space for the generation window
+        // plus a 16-token safety margin so the final assistant token never
+        // overruns `n_ctx`. When the prompt is longer than the remaining
+        // budget, keep the most recent tail — the active user request and
+        // assistant tag survive truncation, which matters far more than the
+        // leading system prompt for chat-template-formatted input.
         let reservedForGeneration = max(64, min(maxTokens, 320))
         let maxPromptTokens = max(128, contextTokenLimit - reservedForGeneration - 16)
         var boundedTokens = tokens
@@ -961,6 +1088,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             decodeCursor += chunkCount
         }
 
+        // 4. Generate tokens
         var result = ""
 
         for i in 0..<maxTokens {
@@ -972,14 +1100,18 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
                 break
             }
 
+            // Sample the next token
             let newToken = llama_sampler_sample(smpl, ctx, -1)
 
+            // Check for end-of-generation
             if llama_vocab_is_eog(llama_model_get_vocab(model), newToken) { break }
 
+            // Decode token to text
             if let piece = tokenToPiece(token: newToken, model: model) {
                 result += piece
             }
 
+            // Prepare and decode the new token
             var nextToken = newToken
             let nextBatch = llama_batch_get_one(&nextToken, 1)
             guard llama_decode(ctx, nextBatch) == 0 else {
@@ -988,6 +1120,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             }
         }
 
+        // Reset sampler state for next generation
         llama_sampler_reset(smpl)
         lock.unlock()
 
@@ -1022,6 +1155,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     private func tokenize(text: String, model: OpaquePointer) -> [llama_token] {
         let utf8 = Array(text.utf8)
+        // Estimate max tokens (roughly 1 token per 4 chars, with generous headroom)
         let maxTokens = Int32(utf8.count / 2 + 128)
         var tokens = [llama_token](repeating: 0, count: Int(maxTokens))
 
@@ -1045,6 +1179,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         let n = llama_token_to_piece(llama_model_get_vocab(model), token, &buf, Int32(buf.count), 0, false)
         guard n > 0 else { return nil }
 
+        // Create a null-terminated buffer for String(cString:)
         var terminated = Array(buf.prefix(Int(n)))
         terminated.append(0)
         return String(cString: terminated)

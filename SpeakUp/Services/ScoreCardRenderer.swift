@@ -3,6 +3,12 @@ import UIKit
 
 @MainActor
 enum ScoreCardRenderer {
+    /// Render a branded score card image at @3x resolution.
+    ///
+    /// The prompt or story caption is off unless the caller asks for it. What
+    /// someone was told to talk about can be a job interview question or the
+    /// title of a personal story, and a share card is the one place in this app
+    /// where private practice becomes public.
     static func render(
         recording: Recording,
         includePromptText: Bool = false,
@@ -21,6 +27,9 @@ enum ScoreCardRenderer {
         return renderer.uiImage
     }
 
+    /// The caption text a card *could* carry, or nil when the session has none.
+    /// Views use this to decide whether the include-prompt choice is worth
+    /// offering at all.
     static func promptCaption(for recording: Recording) -> String? {
         recording.prompt?.text ?? recording.storyTitle
     }
@@ -28,6 +37,9 @@ enum ScoreCardRenderer {
 
 // MARK: - Score Card Theme
 
+/// Backdrop of the shared card. Every theme stays dark so the hero body, the
+/// radar chart, and the white type inside it need no per-theme handling —
+/// only the canvas behind them changes.
 enum ScoreCardTheme: Int, Codable, CaseIterable, Identifiable {
     case midnight = 0
     case aurora = 1
@@ -136,6 +148,8 @@ private struct ScoreCardView: View {
         }
     }
 
+    /// Same information architecture as `DetailContextStrip`: meta line, then
+    /// the prompt as the only large text.
     private var contextBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {

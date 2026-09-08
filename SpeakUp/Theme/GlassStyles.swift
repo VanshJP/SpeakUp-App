@@ -27,6 +27,8 @@ extension View {
         modifier(GlassCardModifier(cornerRadius: cornerRadius, tint: tint))
     }
 
+    /// Material fallback when a non-card surface still wants a soft glass plate
+    /// (text fields, compact chips that are not `GlassCard`).
     func glassBackground(cornerRadius: CGFloat = 16) -> some View {
         self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
@@ -72,6 +74,11 @@ extension GlassSectionHeader where Accessory == EmptyView {
 
 // MARK: - Glass Card Title
 
+/// Card-level title row — the quieter sibling of `GlassSectionHeader`: same
+/// anatomy (icon, name, trailing accessory), one register down in size.
+/// Chart cards and multi-card sections use it so card headers stop being
+/// hand-rolled `Label`s with drifting fonts, while section headers keep the
+/// headline weight above them.
 struct GlassCardTitle<Accessory: View>: View {
     let title: String
     let icon: String?

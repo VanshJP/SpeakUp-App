@@ -11,6 +11,7 @@ nonisolated struct GeneratedVocabStore: @unchecked Sendable {
     private let entriesKey = "vocabChallenge.generated.v1"
     private let seenKey = "vocabChallenge.generatedSeen.v1"
 
+    /// Oldest generated words fall off once the store outgrows this.
     private static let capacity = 200
     /// Every word ever accepted or offered, so the model never repeats itself.
     private static let seenCapacity = 600
@@ -48,6 +49,8 @@ nonisolated struct GeneratedVocabStore: @unchecked Sendable {
         markSeen([entry.word])
     }
 
+    /// Lowercased keys of everything in the store plus everything ever seen,
+    /// for exclusion sets.
     func knownKeys() -> Set<String> {
         var keys = Set(entries().map { $0.word.lowercased() })
         keys.formUnion(seenKeys())
@@ -61,6 +64,8 @@ nonisolated struct GeneratedVocabStore: @unchecked Sendable {
         }
         var ordered = Array(seen)
         if ordered.count > Self.seenCapacity {
+            // The set loses insertion order; trimming arbitrary members is
+            // fine — the ring only exists to bound growth.
             ordered.removeFirst(ordered.count - Self.seenCapacity)
         }
         defaults.set(ordered, forKey: seenKey)
@@ -71,7 +76,11 @@ nonisolated struct GeneratedVocabStore: @unchecked Sendable {
     }
 }
 
+/// Turns raw model output into entries safe enough to spotlight. Pure and
+/// nonisolated so tests can hammer it without a service.
 nonisolated enum FreshWordSanitizer {
+    /// Parses `WORD | gloss | prompt` lines from model output, keeping only
+    /// entries that would survive WordSafety on their own.
     static func sanitize(
         _ output: String,
         level: Int,
@@ -85,6 +94,7 @@ nonisolated enum FreshWordSanitizer {
             line = line
                 .trimmingCharacters(in: CharacterSet(charactersIn: "*`•-"))
                 .trimmingCharacters(in: .whitespaces)
+            // Numbered lists are common model manners; strip "1." prefixes.
             if let dot = line.firstIndex(of: "."), line[..<dot].allSatisfy(\.isNumber) {
                 line = String(line[line.index(after: dot)...]).trimmingCharacters(in: .whitespaces)
             }
@@ -109,15 +119,18 @@ nonisolated enum FreshWordSanitizer {
         let gloss = clean(parts[1])
         let prompt = clean(parts[2])
         guard (4...120).contains(gloss.count), (4...140).contains(prompt.count) else { return nil }
+        // Definitions that merely echo the headword teach nothing.
         guard !gloss.lowercased().contains(word.lowercased()) else { return nil }
         return VocabLexiconEntry(word: word, gloss: gloss, prompt: prompt, level: level)
     }
 
+    /// Strays from markdown-flavored output.
     private static func clean(_ part: String) -> String {
         part.trimmingCharacters(in: CharacterSet(charactersIn: "*`•\""))
             .trimmingCharacters(in: .whitespaces)
     }
 
+    /// Display form: first letter capitalized, rest lowercased.
     private static func normalize(_ word: String) -> String {
         let lowered = word.lowercased()
         guard let first = lowered.first else { return lowered }
@@ -134,10 +147,16 @@ nonisolated enum FreshWordSanitizer {
     }
 }
 
+/// Keeps the intro pool from running dry: asks the on-device model for novel
+/// words at the user's chosen difficulty and files the ones that survive
+/// validation. Every failure path degrades silently — the curated lexicon has
+/// always been the fallback and still is.
 @MainActor
 enum VocabFreshWordGenerator {
+    /// One refill attempt at most every six hours.
     private static let throttleInterval: TimeInterval = 6 * 60 * 60
     private static let throttleKey = "vocabChallenge.freshRefillAt.v1"
+    /// Refill once live stock drops below this many candidates.
     private static let bufferTarget = 10
     private static let requestCount = 8
 
@@ -202,6 +221,8 @@ enum VocabFreshWordGenerator {
         return lines
     }
 
+    /// Recently graded words plus current stock, capped so the prompt stays
+    /// small enough for the local model's context window.
     private static func recentKeys(
         preferences: VocabChallengePreferences,
         store: GeneratedVocabStore
