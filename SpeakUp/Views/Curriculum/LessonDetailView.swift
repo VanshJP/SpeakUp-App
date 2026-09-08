@@ -6,9 +6,9 @@ struct LessonDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var userSettings: [UserSettings]
+    @Query(sort: \Recording.date, order: .reverse) private var recentRecordings: [Recording]
 
-    /// Mutable so "Next Lesson" can swap in place instead of dismissing back
-    /// to the Learning Path and forcing a scroll hunt.
+    /// Mutable so "Next Lesson" can swap in place instead of dismissing back to the path.
     @State private var lesson: CurriculumLesson
     @State private var currentStepIndex: Int = 0
     @State private var activeSheet: ActiveSheet?
@@ -17,10 +17,23 @@ struct LessonDetailView: View {
     @State private var confidenceExerciseOpened = false
     @State private var stepCompleteMessage: String?
     @State private var completedActivityIds: Set<String> = []
+    @State private var reviewTarget: ReviewTarget?
+
+    private struct ReviewTarget: Identifiable, Hashable {
+        let id: UUID
+    }
 
     init(lesson: CurriculumLesson, viewModel: CurriculumViewModel) {
         self.viewModel = viewModel
         _lesson = State(initialValue: lesson)
+    }
+
+    private var lessonIdentity: LessonIdentity {
+        LessonIdentity.forLesson(id: lesson.id)
+    }
+
+    private var isRevisitingCompletedLesson: Bool {
+        viewModel.isLessonCompleted(lesson.id)
     }
 
     // MARK: - ActiveSheet
@@ -109,9 +122,12 @@ struct LessonDetailView: View {
         .fullScreenCover(item: $activeSheet) { sheet in
             sheetContent(for: sheet)
         }
+        .navigationDestination(item: $reviewTarget) { target in
+            RecordingDetailView(recordingId: target.id.uuidString)
+                .restoresNavigationBar()
+        }
         .onAppear {
             currentStepIndex = viewModel.initialStepIndex(for: lesson)
-            // Seed already-completed activity IDs so we don't animate pre-existing completions
             completedActivityIds = Set(lesson.activities.filter { viewModel.isActivityCompleted($0.id) }.map(\.id))
         }
     }
@@ -207,18 +223,41 @@ struct LessonDetailView: View {
                             .frame(height: 0)
                             .id("scrollTop")
 
-                        // Lesson header
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(lesson.title)
-                                .font(.title2.weight(.bold))
+                        HStack(alignment: .top, spacing: 14) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(lessonIdentity.accent.opacity(0.18))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .stroke(lessonIdentity.accent.opacity(0.4), lineWidth: 1)
+                                    }
+                                LessonGlyphView(
+                                    identity: lessonIdentity,
+                                    state: isRevisitingCompletedLesson ? .completed : .current
+                                )
+                                .frame(width: 28, height: 28)
+                            }
+                            .frame(width: 52, height: 52)
 
-                            Text(lesson.objective)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 6) {
+                                if isRevisitingCompletedLesson {
+                                    Text("Reviewing")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(lessonIdentity.accent)
+                                        .textCase(.uppercase)
+                                        .tracking(0.5)
+                                }
+
+                                Text(lesson.title)
+                                    .font(.title2.weight(.bold))
+
+                                Text(lesson.objective)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                        // Current activity content
                         activityContent(for: currentActivity)
 
                         Spacer().frame(height: 80)
@@ -494,34 +533,86 @@ struct LessonDetailView: View {
     // MARK: - Review Activity
 
     private func reviewActivityContent(_ activity: CurriculumActivity, isCompleted: Bool) -> some View {
-        VStack(spacing: 16) {
+        let snapshots = Array(recentRecordings.prefix(3))
+
+        return VStack(spacing: 16) {
             activityHeader(activity, isCompleted: isCompleted)
 
-            GlassCard(tint: AppColors.categoryNeutral.opacity(0.10)) {
-                VStack(spacing: 16) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.title2)
-                            .foregroundStyle(AppColors.categoryNeutral)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(AppColors.categoryNeutral.opacity(0.15)))
+            GlassCard(tint: lessonIdentity.accent.opacity(0.08)) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(activity.description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(activity.title)
-                                .font(.subheadline.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Listen for")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(lessonIdentity.accent)
+                            .textCase(.uppercase)
+                            .tracking(0.4)
 
-                            Text(activity.description)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        Text(lesson.objective)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if snapshots.isEmpty {
+                        Text("Record a practice take first, then come back and listen with this lens.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(snapshots, id: \.id) { recording in
+                                Button {
+                                    Haptics.light()
+                                    reviewTarget = ReviewTarget(id: recording.id)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "waveform")
+                                            .foregroundStyle(lessonIdentity.accent)
+                                            .frame(width: 28, height: 28)
+                                            .background(Circle().fill(lessonIdentity.accent.opacity(0.15)))
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(recording.displayTitle)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(.white)
+                                                .lineLimit(1)
+                                            Text(recording.date, style: .date)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer(minLength: 0)
+
+                                        if let score = recording.overallScore {
+                                            Text("\(score)")
+                                                .font(.caption.weight(.bold).monospacedDigit())
+                                                .foregroundStyle(AppColors.scoreColor(for: score))
+                                        }
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Open recording from \(recording.date.formatted(date: .abbreviated, time: .omitted))")
+                            }
                         }
-
-                        Spacer()
                     }
 
                     if !isCompleted {
-                        GlassButton(title: "Mark as Done", icon: "checkmark", style: .primary, fullWidth: true) {
+                        GlassButton(title: "I reviewed these", icon: "checkmark", style: .primary, fullWidth: true) {
                             completeCurrentActivity()
                         }
+                    } else {
+                        Label("Review marked complete", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.success)
                     }
                 }
             }
@@ -555,23 +646,44 @@ struct LessonDetailView: View {
 
     private func completedCard(_ activity: CurriculumActivity) -> some View {
         GlassCard(tint: AppColors.glassTintSuccess) {
-            HStack(spacing: 12) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(AppColors.success)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Completed")
-                        .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
                         .foregroundStyle(AppColors.success)
 
-                    Text(activity.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Completed")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.success)
+
+                        Text(activity.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
                 }
 
-                Spacer()
+                if activity.type == .practice {
+                    GlassButton(title: "Practice again", icon: "mic.fill", style: .secondary, fullWidth: true) {
+                        Haptics.medium()
+                        let duration = recordingDuration(from: activity.targetDuration)
+                        activeSheet = .recording(
+                            duration: duration,
+                            framework: SpeechFramework.fromCurriculumHint(activity.frameworkHint)
+                        )
+                    }
+                } else if activity.type == .drill, let modeRaw = activity.drillMode, let mode = DrillMode(rawValue: modeRaw) {
+                    GlassButton(title: "Drill again", icon: "bolt.fill", style: .secondary, fullWidth: true) {
+                        Haptics.medium()
+                        let vm = DrillViewModel()
+                        vm.targetWPM = userSettings.first.resolvedTargetWPM
+                        vm.startDrill(mode: mode)
+                        activeSheet = .drill(vm)
+                    }
+                }
             }
         }
         .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -588,13 +700,21 @@ struct LessonDetailView: View {
                 let isLastStep = currentStepIndex >= lesson.activities.count - 1
 
                 if isLastStep && allActivitiesComplete {
-                    GlassButton(title: "Complete Lesson", icon: "trophy.fill", style: .primary, fullWidth: true) {
-                        Haptics.success()
-                        withAnimation(.spring(response: 0.4)) {
-                            showingLessonCompletion = true
+                    if isRevisitingCompletedLesson {
+                        GlassButton(title: "Done reviewing", icon: "checkmark", style: .primary, fullWidth: true) {
+                            Haptics.light()
+                            dismiss()
                         }
+                        .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    } else {
+                        GlassButton(title: "Complete Lesson", icon: "trophy.fill", style: .primary, fullWidth: true) {
+                            Haptics.success()
+                            withAnimation(.spring(response: 0.4)) {
+                                showingLessonCompletion = true
+                            }
+                        }
+                        .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
                 } else if currentActivity.type == .lesson && !isCurrentComplete {
                     GlassButton(title: "Mark as Read", icon: "checkmark", style: .primary, fullWidth: true) {
                         completeCurrentActivity()
