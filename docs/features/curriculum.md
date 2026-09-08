@@ -8,7 +8,7 @@ Multi-week phases and lessons with signal-driven progression (not only manual �
 
 | Role | Path |
 |------|------|
-| Views | `SpeakUp/Views/Curriculum/` — `CurriculumView`, `LessonDetailView`, `LessonContentView`, `LessonCompletionView`, `LessonPath`, `LessonGlyphView`, `PracticeResultsCard` |
+| Views | `SpeakUp/Views/Curriculum/` — `CurriculumView`, `LessonDetailView`, `LessonContentView`, `LessonCompletionView`, `LessonPath`, `LessonGlyphView`, `LessonTeachingChrome`, `PracticeResultsCard` |
 | Glyphs | `LessonIdentity` + `LessonMotif` (`Models/LessonIdentity.swift`) → `LessonGlyphView` (Canvas art per lesson) |
 | VM | `SpeakUp/ViewModels/CurriculumViewModel.swift` |
 | Services | `CurriculumService`, `CurriculumActivitySignalStore` |
@@ -28,6 +28,7 @@ Multi-week phases and lessons with signal-driven progression (not only manual �
 8. **Next lesson stays in the detail stack.** `LessonDetailView` holds `@State lesson` and on "Next Lesson" swaps it in place (`advanceToNextLessonInPlace`) instead of `dismiss()`-ing back to the path list.
 9. **Path nodes use lesson glyphs**, not a shared book SF Symbol. Completed rows caption **Tap to review**; revisiting a completed lesson shows **Done reviewing** (does not re-fire the completion celebration). Review activities list recent recordings and a listen lens from the lesson objective — not a lone “Mark as Done” button.
 10. Glyph accents come from `AppColors` category tones; phase headers tint with `LessonIdentity.forPhase(week:)`. Keep glass tint ≤ 0.10 on cards ([ui-design-system.md](./ui-design-system.md) rule 12).
+11. **Lesson detail is teacher-led.** `LessonBoardHeader` states today's focus + roadmap; `LessonPlanStrip` shows labeled Learn/Practice/Drill/Warm-up/Review chips (not anonymous capsules); `LessonCoachCue` frames the current stage. Bottom CTAs use pedagogical verbs (`Got it`, `Next · Practice`, `Finish lesson`). Completion restates the objective as “You can now…” plus the worked stages — not a trophy checklist alone.
 
 ## Cross-links
 

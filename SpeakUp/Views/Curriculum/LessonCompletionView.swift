@@ -15,17 +15,6 @@ struct LessonCompletionView: View {
         LessonIdentity.forLesson(id: lesson.id)
     }
 
-    private var encouragement: String {
-        let messages = [
-            "You crushed it!",
-            "That's real progress!",
-            "You should be proud!",
-            "Another one in the books!",
-            "Your future self thanks you!",
-        ]
-        return messages[abs(lesson.id.hashValue) % messages.count]
-    }
-
     var body: some View {
         ZStack {
             AppBackground()
@@ -46,36 +35,57 @@ struct LessonCompletionView: View {
                     .shadow(color: identity.accent.opacity(0.35), radius: 12)
 
                     VStack(spacing: 8) {
-                        Text("Lesson Complete!")
+                        Text("Lesson wrapped")
                             .font(.title.weight(.bold))
 
                         Text(lesson.title)
                             .font(.title3)
                             .foregroundStyle(.secondary)
+                    }
+                    .opacity(contentOpacity)
 
-                        Text(encouragement)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(identity.accent)
-                            .padding(.top, 2)
+                    GlassCard(tint: identity.accent.opacity(0.08)) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("You can now")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(identity.accent)
+                                .textCase(.uppercase)
+                                .tracking(0.4)
+
+                            Text(lesson.objective)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text(LessonTeachingCopy.roadmap(for: lesson))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .opacity(contentOpacity)
 
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("What You Completed")
+                            Text("What you worked")
                                 .font(.subheadline.weight(.semibold))
 
-                            ForEach(lesson.activities) { activity in
+                            ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
                                 HStack(spacing: 10) {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.subheadline)
                                         .foregroundStyle(AppColors.success)
 
+                                    Text("\(index + 1). \(activity.type.teacherRole)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(activity.type.teacherColor)
+                                        .frame(width: 72, alignment: .leading)
+
                                     Text(activity.title)
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
 
-                                    Spacer()
+                                    Spacer(minLength: 0)
                                 }
                             }
                         }
@@ -95,7 +105,7 @@ struct LessonCompletionView: View {
                                 .frame(width: 44, height: 44)
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Up Next")
+                                    Text("Tomorrow's board")
                                         .font(.caption.weight(.medium))
                                         .foregroundStyle(nextIdentity.accent)
 
@@ -115,13 +125,13 @@ struct LessonCompletionView: View {
 
                     VStack(spacing: 12) {
                         if nextLesson != nil {
-                            GlassButton(title: "Next Lesson", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
+                            GlassButton(title: "Next lesson", icon: "arrow.right", iconPosition: .right, style: .primary, fullWidth: true) {
                                 Haptics.medium()
                                 onNextLesson()
                             }
                         }
 
-                        GlassButton(title: "Back to Learning Path", style: .secondary, fullWidth: true) {
+                        GlassButton(title: "Back to path", style: .secondary, fullWidth: true) {
                             Haptics.light()
                             onBackToCurriculum()
                         }
@@ -130,7 +140,7 @@ struct LessonCompletionView: View {
 
                     Spacer().frame(height: 20)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppLayout.pageHorizontal)
             }
             .scrollIndicators(.hidden)
 
