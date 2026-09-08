@@ -16,12 +16,13 @@ struct DrillSessionView: View {
                 backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base
             )
 
+            // Same three slots as the recording screen — the drill countdown
+            // hands off to this, so the dial has to land where it left.
             VStack(spacing: 0) {
                 topBar
 
-                Spacer()
-
                 if viewModel.isComplete, let result = viewModel.result {
+                    Spacer()
                     DrillResultView(result: result) {
                         if let mode = viewModel.selectedMode {
                             viewModel.startDrill(mode: mode)
@@ -30,17 +31,17 @@ struct DrillSessionView: View {
                         viewModel.cleanup()
                         dismiss()
                     }
+                    Spacer()
                 } else {
                     drillContent
                 }
-
-                Spacer()
 
                 if viewModel.isActive {
                     bottomControls
                 }
             }
-            .padding()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
         .onChange(of: viewModel.isActive) { _, active in
             if active { ChirpPlayer.shared.play(.tick) }
@@ -139,13 +140,12 @@ struct DrillSessionView: View {
                 Spacer().frame(width: 44)
             }
         }
-        .padding(.top, 50)
     }
 
     // MARK: - Drill Content
 
     private var drillContent: some View {
-        VStack(spacing: 28) {
+        SessionDialSlot(spacing: 28) { diameter in
             // Mode-specific metric
             if let mode = viewModel.selectedMode {
                 Group {
@@ -167,7 +167,8 @@ struct DrillSessionView: View {
                 color: viewModel.selectedMode?.color ?? AppColors.primary,
                 isRecording: viewModel.isActive,
                 timerLabel: "remaining",
-                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring
+                look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
+                diameter: diameter
             )
         }
     }
@@ -197,7 +198,7 @@ struct DrillSessionView: View {
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.6))
         }
-        .padding(.bottom, 20)
+        .padding(.bottom, 8)
     }
 
     // MARK: - Mode Displays

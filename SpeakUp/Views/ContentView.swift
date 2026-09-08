@@ -185,6 +185,7 @@ struct ContentView: View {
                         showingConfidenceTools = true
                     }
                 )
+                .restoresNavigationBar()
                 .onDisappear {
                     if freshResultRecordingId == recordingId {
                         freshResultRecordingId = nil

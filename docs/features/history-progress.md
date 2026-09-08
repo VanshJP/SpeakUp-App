@@ -167,7 +167,8 @@ counts ("Saved words from your daily workouts, counted across your takes").
 4. Journal export is ungated during the beta ([monetization.md](./monetization.md)).
 5. Progress / share cards are **not** gated (`PaidFeature.progressCards` exists but is omitted from both `FreeTierPolicy.trial` and `.expired`) — share loop must stay free for acquisition. Shares go through `SharePresenter`.
 6. Streak sheet is presentation from Today/History — not a tab.
-7. Chart math is memoized per points-change (`PlotModel` built in each chart's `init(points:)`; scrub state never re-runs it), and plots key points by stable recording UUIDs. Comparison, replay, and Story Detail render value snapshots decoded once at load; journal export decodes its date range once in a detached background pass and hands the file to `SharePresenter`.
+7. **The page has no navigation bar.** `HistoryView` hides it (`.toolbar(.hidden, for: .navigationBar)`) like every root tab. The `SectionPicker` (Recordings / Progress) is the one pinned row; the `InlineSearchField` lives inside the Recordings section — Progress has nothing to search — carrying the filter menu on its trailing edge and scrolling away with the content. The bar it replaced said "History" above a tab button labelled History, and `.searchable` hung another ~50pt off it. `ComparisonView` and the pushed recording detail add `.restoresNavigationBar()`. Details: [ui-design-system.md](./ui-design-system.md) rule 9.
+8. Chart math is memoized per points-change (`PlotModel` built in each chart's `init(points:)`; scrub state never re-runs it), and plots key points by stable recording UUIDs. Comparison, replay, and Story Detail render value snapshots decoded once at load; journal export decodes its date range once in a detached background pass and hands the file to `SharePresenter`.
 
 ## Cross-links
 

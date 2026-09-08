@@ -6,6 +6,10 @@ struct StoriesListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var viewModel: StoriesViewModel
     @Binding var selectedStory: Story?
+    /// Owned by the hub (one search string per Library section), edited here:
+    /// this section draws its own search row so the sort menu can ride on it
+    /// instead of colliding with the folder chips it used to sit at the end of.
+    @Binding var searchText: String
     @State private var showingDeleteAlert = false
     @State private var storyToDelete: Story?
     @State private var folderEditorPresentation: FolderEditorPresentation?
@@ -18,12 +22,14 @@ struct StoriesListView: View {
     init(
         viewModel: StoriesViewModel,
         selectedStory: Binding<Story?>,
+        searchText: Binding<String>,
         onStartPractice: ((Story) -> Void)? = nil,
         onSendToWarmUp: ((Story) -> Void)? = nil,
         onSendToDrill: ((Story) -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self._selectedStory = selectedStory
+        self._searchText = searchText
         self.onStartPractice = onStartPractice
         self.onSendToWarmUp = onSendToWarmUp
         self.onSendToDrill = onSendToDrill
@@ -31,6 +37,13 @@ struct StoriesListView: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            // Search first, with the sort menu on its trailing end — the same
+            // row shape History uses. Sort sat at the end of the folder bar
+            // until the folder chips scrolled underneath it.
+            InlineSearchField(text: $searchText, prompt: "Search stories…") {
+                sortMenu
+            }
+
             // No stats strip — folder counts and tag counts were inventory
             // numbers nobody acts on. The folder bar and the list already say
             // how much is here.
@@ -60,11 +73,6 @@ struct StoriesListView: View {
                 .padding(.top, 20)
             } else {
                 storyList
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                toolbarSortMenu
             }
         }
         .sheet(item: $folderEditorPresentation) { presentation in
@@ -235,9 +243,9 @@ struct StoriesListView: View {
         }
     }
 
-    // MARK: - Toolbar
+    // MARK: - Sort Menu
 
-    private var toolbarSortMenu: some View {
+    private var sortMenu: some View {
         Menu {
             Section("Sort") {
                 ForEach(StorySortOrder.allCases) { order in
@@ -265,8 +273,11 @@ struct StoriesListView: View {
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.body.weight(.semibold))
+                .foregroundStyle(viewModel.hasActiveFilters ? AppColors.primary : Color.white.opacity(0.75))
+                .symbolVariant(viewModel.hasActiveFilters ? .fill : .none)
+                .headerIconChrome()
         }
+        .accessibilityLabel("Sort and filter stories")
     }
 
 }

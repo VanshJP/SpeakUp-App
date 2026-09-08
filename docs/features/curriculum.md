@@ -22,7 +22,8 @@ Multi-week phases and lessons with signal-driven progression (not only manual �
 4. `CurriculumView` opens on the **Continue** card (progress is a quiet accessory in that card's header). No intro card and no separate stats card — those buried the CTA under boxes. Warm-ups/drills/calm stay under Library → Tools.
 5. Lesson practice feedback uses `CoachingTipService` (same voice as Recording Detail) — no parallel praise strings. `PracticeResultsCard` resolves `recording.analysis` + the tip once into `@State` (blob re-decodes on every access). Pace UI and curriculum copy follow `resolvedTargetWPM`, not a fixed 130–170 band.
 6. Curriculum practice with a `frameworkHint` opens `RecordingView` with that framework pre-selected and persists `frameworkUsed` so PREP/STAR completion signals are real, not “any analyzed take.”
-7. **Next lesson stays in the detail stack.** `LessonDetailView` holds `@State lesson` and on "Next Lesson" swaps it in place (`advanceToNextLessonInPlace`) instead of `dismiss()`-ing back to the path list.
+7. **No navigation bar** (`.toolbar(.hidden, for: .navigationBar)`, like every root tab): the row said "Learn" above a tab button labelled Learn and reserved 44pt permanently for one button. The Achievements trophy is `awardsRow`, a right-aligned `.headerIconChrome()` button at the top of the scroll. Pushed `LessonDetailView` adds `.restoresNavigationBar()`. Details: [ui-design-system.md](./ui-design-system.md) rule 9.
+8. **Next lesson stays in the detail stack.** `LessonDetailView` holds `@State lesson` and on "Next Lesson" swaps it in place (`advanceToNextLessonInPlace`) instead of `dismiss()`-ing back to the path list.
 
 ## Cross-links
 

@@ -32,19 +32,30 @@ class AudioService: NSObject {
     // Permission
     var hasPermission = false
 
-    /// True while the mic is actually picking something up.
+    /// True while the mic is working — and, once it has been proven to work in
+    /// this take, true for the rest of it.
     ///
-    /// The recording and drill screens used to derive this from the
-    /// instantaneous level (`audioLevel > -40`), which flipped on every gap
-    /// between words — a strobe in the corner of a screen whose whole job is
-    /// "talk now". This holds a decaying peak instead, so ordinary pauses keep
-    /// it lit and only real silence puts it out.
+    /// Two versions of this indicator have now been wrong in the same way. The
+    /// first read the instantaneous level (`audioLevel > -40`) and strobed on
+    /// every gap between words. The decaying peak below fixed the strobe but
+    /// still dropped out on a long pause, which is the same false alarm
+    /// arriving more slowly — and a warning that comes and goes mid-sentence
+    /// reads as a broken app, not a broken mic.
+    ///
+    /// The question worth answering is "is this mic working", not "is sound
+    /// arriving in this exact 100 ms". So the check is one-shot: the first
+    /// confirmed input latches the indicator on until the next take starts. A
+    /// genuinely dead mic never latches, so the warning still reaches the only
+    /// user who can act on it.
     private(set) var isHearingInput = true
 
-    /// Tuning knobs for `isHearingInput`. `getAudioLevel()` runs at 10 Hz, so
-    /// the peak sheds 15 dB/s: a normal speaking peak survives ~2.5 s of quiet
-    /// before the indicator drops. Raise the decay to react faster; lower the
-    /// floor if a quiet room reads as silence.
+    /// Latched once a real reading clears `hearingFloor` during this take.
+    private var hasConfirmedInput = false
+
+    /// Tuning knobs for `isHearingInput` *before* it latches. `getAudioLevel()`
+    /// runs at 10 Hz, so the peak sheds 15 dB/s: priming it to 0 at the top of
+    /// a take buys ~2.5 s of grace before the indicator can drop. Raise the
+    /// decay to react faster; lower the floor if a quiet room reads as silence.
     private static let peakDecayPerSample: Float = 1.5
     private static let hearingFloor: Float = -40
     private var inputPeak: Float = 0
@@ -189,9 +200,10 @@ class AudioService: NSObject {
             recordingDuration = 0
 
             // Full grace window at the top of a take, so the indicator doesn't
-            // cry "no sound" in the second before the speaker starts.
-            inputPeak = 0
-            isHearingInput = true
+            // cry "no sound" in the second before the speaker starts. The latch
+            // is per-take: a mic proven on the last session proves nothing
+            // about this one.
+            resetInputConfidence()
 
             // Start duration timer
             await MainActor.run {
@@ -231,6 +243,7 @@ class AudioService: NSObject {
         }
 
         isRecording = false
+        resetInputConfidence()
         try? await Task.sleep(for: .milliseconds(100))
 
         let localURL = recordingURL
@@ -275,6 +288,7 @@ class AudioService: NSObject {
 
         recordingURL = nil
         recordingDuration = 0
+        resetInputConfidence()
     }
     
     func getAudioLevel() -> Float {
@@ -285,12 +299,28 @@ class AudioService: NSObject {
         // dead mic. Written only when it flips, so observers don't re-render at
         // the sampling rate.
         inputPeak = max(level, inputPeak - Self.peakDecayPerSample)
-        let hearing = inputPeak > Self.hearingFloor
+
+        // Latch on `level`, never on `inputPeak`: the peak is primed to 0 at
+        // the top of a take, which is already above the floor, so latching on
+        // it would declare every mic healthy before the first sample arrives.
+        if !hasConfirmedInput, level > Self.hearingFloor {
+            hasConfirmedInput = true
+        }
+
+        let hearing = hasConfirmedInput || inputPeak > Self.hearingFloor
         if hearing != isHearingInput {
             isHearingInput = hearing
         }
 
         return level
+    }
+
+    /// Back to "unproven, but give it a moment" — called at the top of every
+    /// take and whenever one ends, so the latch can never leak across sessions.
+    private func resetInputConfidence() {
+        inputPeak = 0
+        hasConfirmedInput = false
+        isHearingInput = true
     }
     
     // MARK: - Playback

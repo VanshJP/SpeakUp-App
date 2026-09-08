@@ -76,18 +76,15 @@ struct CountdownOverlayView: View {
             RecordingBackdropView(backdrop: backdrop)
 
             // Laid out against the recording screen, slot for slot: prompt
-            // where the compact prompt card will be, dial where the clock will
-            // be and at the clock's size, actions along the bottom. The
-            // hand-off used to drop the dial from the top of the screen to the
-            // middle and grow it 150 → 200, so the one thing the eye was
-            // holding onto moved the instant recording started.
-            VStack(spacing: 20) {
+            // where the compact prompt card will be, dial in a `SessionDialSlot`
+            // exactly like the clock's, actions along the bottom. Same 16pt
+            // page inset as the recording screen, which is load-bearing — the
+            // dial's size comes from its slot's width, and that is what makes
+            // the two screens draw the same dial (see `SessionDial`).
+            VStack(spacing: 16) {
                 if let prompt {
                     prominentPromptCard(prompt)
-                        .padding(.horizontal, 20)
                 }
-
-                Spacer(minLength: 0)
 
                 // Prep context for prompt-less flows (drills): what you
                 // picked and what it costs — or, for impromptu, the topic to
@@ -117,16 +114,16 @@ struct CountdownOverlayView: View {
                     .accessibilityElement(children: .combine)
                 }
 
-                TimerDial(
-                    look: look,
-                    progress: progress,
-                    text: "\(displayNumber)",
-                    caption: "sec",
-                    isPulsing: isPulsing,
-                    diameter: 200
-                )
-
-                Spacer(minLength: 0)
+                SessionDialSlot { diameter in
+                    TimerDial(
+                        look: look,
+                        progress: progress,
+                        text: "\(displayNumber)",
+                        caption: "sec",
+                        isPulsing: isPulsing,
+                        diameter: diameter
+                    )
+                }
 
                 HStack(spacing: 12) {
                     GlassButton(
@@ -149,17 +146,18 @@ struct CountdownOverlayView: View {
                         skipCountdown()
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 50)
             }
-            .padding(.top, 50)
+            // Safe-area insets do this job now. The screen used to consume
+            // them and then guess at 50pt top and bottom, which on a Dynamic
+            // Island phone put the prompt card under the status bar.
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
         // Full-screen covers and root overlays must own the hit surface —
         // without this, a parent scroll / LazyVStack can eat the first few
         // taps while layout settles (Cancel felt dead until ~7 on a 10s clock).
         .contentShape(Rectangle())
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
         .task {
             // `.task` cancels on disappear, so Cancel cannot race a stray tick
             // the way the old `Timer.publish` View-`let` could.

@@ -51,21 +51,22 @@ struct PracticeHubView: View {
             PageScrollView {
                 LazyVStack(spacing: AppLayout.listSpacing, pinnedViews: [.sectionHeaders]) {
                     Section {
-                        // Each section owns a topBarTrailing toolbar item. A
+                        // Sections swap instantly rather than crossfading: a
                         // crossfade keeps the outgoing section alive for the
-                        // animation, so two filter buttons render at once —
-                        // swap instantly instead. The picker pill still slides.
+                        // animation, so two filter controls would render at
+                        // once. The picker pill still slides.
                         switch selectedSection {
                         case .prompts:
                             AllPromptsView(
                                 onSelectPrompt: onSelectPrompt,
-                                searchText: promptsSearchText
+                                searchText: $promptsSearchText
                             )
                             .transition(.identity)
                         case .stories:
                             StoriesListView(
                                 viewModel: storiesViewModel,
                                 selectedStory: $selectedStory,
+                                searchText: $storiesSearchText,
                                 onStartPractice: onStartStoryPractice,
                                 onSendToWarmUp: onSendToWarmUp,
                                 onSendToDrill: onSendToDrill
@@ -81,21 +82,25 @@ struct PracticeHubView: View {
                         pinnedSectionPicker
                     }
                 }
+                .padding(.top, 4)
                 .pageContentInsets()
             }
             .scrollIndicators(.hidden)
+            // `.searchable` used to hand this over for free; an inline field
+            // has to say it, or the keyboard sits over half the results.
+            .scrollDismissesKeyboard(.interactively)
 
             floatingActionButton
                 .padding(.trailing, 20)
                 .padding(.bottom, 24)
         }
-        // The tab bar names the tab; the nav row names the page you are on.
-        // Inline (never large) so the title costs no height the trailing
-        // filter / trophy button was not already reserving.
-        .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .searchable(text: activeSearchText, prompt: searchPrompt)
+        // No nav bar. It carried the word "Library" above a tab button
+        // labelled Library, and `.searchable` hung off it — together ~100pt of
+        // permanent chrome above a picker, a chip row, and only then a prompt.
+        // The picker is the only pinned row now; search belongs to whichever
+        // section you are in, so each section draws its own row and hangs its
+        // filter or sort menu off the end of it.
+        .toolbar(.hidden, for: .navigationBar)
         .onChange(of: storiesSearchText) { _, newValue in
             storiesViewModel.setSearch(newValue)
         }
@@ -112,9 +117,11 @@ struct PracticeHubView: View {
                 onSendToWarmUp: onSendToWarmUp,
                 onSendToDrill: onSendToDrill
             )
+            .restoresNavigationBar()
         }
         .navigationDestination(item: $compareRoute) { _ in
             ComparisonView()
+                .restoresNavigationBar()
         }
         .sheet(isPresented: $showingAddPrompt) {
             AddPromptView()
@@ -204,6 +211,10 @@ struct PracticeHubView: View {
     }
 
     /// Category grid — practice tools, then review tools. Same card recipe.
+    ///
+    /// Search is per-section on this page, so each section draws its own row
+    /// (see `AllPromptsView` / `StoriesListView`). Tools has no filter or sort
+    /// of its own, so this row is the field alone.
     private var toolsLanding: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visiblePractice = query.isEmpty
@@ -225,6 +236,10 @@ struct PracticeHubView: View {
         // Practice and Review, and a sentence of preamble is a row of scroll
         // between the user and the tool they came for.
         return VStack(alignment: .leading, spacing: 20) {
+            InlineSearchField(text: $toolsSearchText, prompt: "Search tools…") {
+                EmptyView()
+            }
+
             if visiblePractice.isEmpty && visibleReview.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
@@ -395,24 +410,6 @@ struct PracticeHubView: View {
             }
     }
 
-    // MARK: - Search Routing
-
-    private var activeSearchText: Binding<String> {
-        switch selectedSection {
-        case .prompts: return $promptsSearchText
-        case .stories: return $storiesSearchText
-        case .tools: return $toolsSearchText
-        }
-    }
-
-    private var searchPrompt: String {
-        switch selectedSection {
-        case .prompts: return "Search prompts…"
-        case .stories: return "Search stories…"
-        case .tools: return "Search tools…"
-        }
-    }
-
     // MARK: - Helpers
 
     private var currentStoryFolderId: UUID? {
@@ -423,9 +420,11 @@ struct PracticeHubView: View {
     // MARK: - Pinned Section Picker
 
     private var pinnedSectionPicker: some View {
-        sectionPicker
-            .padding(.top, 4)
-            .padding(.bottom, 10)
+        PinnedPageHeader {
+            sectionPicker
+        } accessory: {
+            EmptyView()
+        }
     }
 
     // MARK: - Section Picker
