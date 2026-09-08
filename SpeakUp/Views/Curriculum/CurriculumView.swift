@@ -75,7 +75,7 @@ struct CurriculumView: View {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
                 .restoresNavigationBar()
         } label: {
-            GlassCard(padding: 18, elevated: true, tint: identity.accent.opacity(0.08)) {
+            GlassCard(tint: identity.accent.opacity(0.08), padding: 18, elevated: true) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 6) {
                         Image(systemName: isReviewing ? "arrow.counterclockwise" : "play.circle.fill")
@@ -159,7 +159,7 @@ struct CurriculumView: View {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
                 .restoresNavigationBar()
         } label: {
-            GlassCard(padding: 14, tint: identity.accent.opacity(0.06)) {
+            GlassCard(tint: identity.accent.opacity(0.06), padding: 14) {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
