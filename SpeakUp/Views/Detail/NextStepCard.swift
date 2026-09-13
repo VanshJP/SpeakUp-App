@@ -85,6 +85,7 @@ struct NextStep {
 
 struct NextStepCard: View {
     let step: NextStep
+    let analyticsSource: String
     let onAction: (NextStep.Action) -> Void
     let onPracticeAgain: () -> Void
 
@@ -121,14 +122,18 @@ struct NextStepCard: View {
                         fullWidth: true
                     ) {
                         Haptics.medium()
-                        AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
+                        AnalyticsService.shared.log(
+                            .nextActionTaken(area: step.areaSlug, source: analyticsSource)
+                        )
                         onAction(step.action)
                     }
 
                     if step.action != .practiceAgain {
                         Button {
                             Haptics.light()
-                            AnalyticsService.shared.log(.nextActionTaken(area: step.areaSlug))
+                            AnalyticsService.shared.log(
+                                .nextActionTaken(area: step.areaSlug, source: analyticsSource)
+                            )
                             onPracticeAgain()
                         } label: {
                             Image(systemName: "arrow.counterclockwise")
@@ -154,11 +159,13 @@ struct NextStepCard: View {
         VStack(spacing: 16) {
             NextStepCard(
                 step: .from(SpeechSubscores(clarity: 80, pace: 74, fillerUsage: 52, pauseQuality: 70)),
+                analyticsSource: "preview",
                 onAction: { _ in },
                 onPracticeAgain: {}
             )
             NextStepCard(
                 step: .from(SpeechSubscores(clarity: 88, pace: 84, fillerUsage: 91, pauseQuality: 79)),
+                analyticsSource: "preview",
                 onAction: { _ in },
                 onPracticeAgain: {}
             )

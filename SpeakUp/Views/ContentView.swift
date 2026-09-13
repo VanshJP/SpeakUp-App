@@ -159,21 +159,22 @@ struct ContentView: View {
                 onShowGoals: {
                     showingGoals = true
                 },
-                onStartPractice: {
+                onShowToday: {
                     selectedTab = .today
                 }
             )
             .navigationDestination(item: $selectedRecordingId) { recordingId in
                 RecordingDetailView(
                     recordingId: recordingId,
-                    allowsCoachMoments: freshResultRecordingId == recordingId,
-                    onPracticeAgain: { prompt in
-                        recordingPrompt = prompt
-                        recordingStoryId = nil
-                        recordingDuration = .sixty
+                    source: freshResultRecordingId == recordingId ? .postSession : .history,
+                    onPracticeAgain: { recording in
+                        recordingPrompt = recording.storyId == nil ? recording.prompt : nil
+                        recordingStoryId = recording.storyId
+                        recordingDuration = RecordingDuration(rawValue: recording.targetDuration) ?? .sixty
                         recordingChallenge = nil
                         showingCountdown = true
                     },
+                    allowsCoachMoments: freshResultRecordingId == recordingId,
                     onShowConfidence: {
                         showingConfidenceTools = true
                     }

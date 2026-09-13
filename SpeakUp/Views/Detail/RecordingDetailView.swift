@@ -3,17 +3,27 @@ import SwiftData
 import AVFoundation
 import UIKit
 
+/// Stable analytics source for the result-to-next-action funnel.
+nonisolated enum RecordingDetailSource: String {
+    case postSession = "post_session"
+    case history
+    case story
+    case learn
+    case preview
+}
+
 struct RecordingDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     let recordingId: String
+    let source: RecordingDetailSource
+    /// Re-runs this recording's subject with its original session settings.
+    /// Required because this detail is reachable from History, Stories, and Learn.
+    let onPracticeAgain: (Recording) -> Void
     /// True only when navigation came directly from the recording that just
     /// finished. History browsing never generates a new coach note.
     var allowsCoachMoments = false
-    /// Re-runs the session that produced this recording. Owned by ContentView
-    /// because the countdown + recording covers live at the app root.
-    var onPracticeAgain: ((Prompt?) -> Void)? = nil
     var onShowConfidence: (() -> Void)? = nil
 
     @State private var recording: Recording?
@@ -256,6 +266,7 @@ struct RecordingDetailView: View {
         }
         .sheet(item: $pendingShareRecording) { shareTarget in
             ShareCardSheet(recording: shareTarget) {
+                markActivatedIfFirstResult()
                 noteReviewWorthyMoment(.shareCompleted)
             }
         }
@@ -657,15 +668,36 @@ struct RecordingDetailView: View {
     private func nextStepSection(_ analysis: SpeechAnalysis, recording: Recording) -> some View {
         NextStepCard(
             step: NextStep.from(analysis.speechScore.subscores, plan: coachPlan),
+            analyticsSource: source.rawValue,
             onAction: { action in
+                if action != .practiceAgain {
+                    markActivatedIfFirstResult()
+                }
                 switch action {
                 case .drill(let mode): nextStepDrill = mode
                 case .warmUp: showingNextStepWarmUp = true
                 case .readAloud: showingNextStepReadAloud = true
-                case .practiceAgain: onPracticeAgain?(recording.prompt)
+                case .practiceAgain: repeatPractice(recording)
                 }
             },
-            onPracticeAgain: { onPracticeAgain?(recording.prompt) }
+            onPracticeAgain: { repeatPractice(recording) }
+        )
+    }
+
+    private func repeatPractice(_ recording: Recording) {
+        markActivatedIfFirstResult()
+        dismiss()
+        onPracticeAgain(recording)
+    }
+
+    private func markActivatedIfFirstResult() {
+        guard isFirstAnalyzedSession else { return }
+        AnalyticsService.shared.logOnce(
+            .activated(
+                minutesFromFirstOpen: AttributionStore.shared.minutesSinceFirstOpen,
+                source: source.rawValue
+            ),
+            key: "activated"
         )
     }
 
@@ -674,11 +706,12 @@ struct RecordingDetailView: View {
     private func acceptCoachMoment(_ moment: CoachMoment, recording: Recording) {
         let action = moment.action
         coachMoments.consume(moment, context: modelContext)
+        markActivatedIfFirstResult()
         switch action {
         case .openConfidence:
             onShowConfidence?()
         case .practiceAgain:
-            onPracticeAgain?(recording.prompt)
+            repeatPractice(recording)
         case .close:
             break
         }

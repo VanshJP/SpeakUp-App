@@ -183,12 +183,9 @@ from launch.
   spot."), the starter chips remain the anti-freeze aid, and Read-Aloud
   practice lives in the Library for users who want read speech.
 
-## Known ceilings / deferred (fine to build, in this order)
+## Known ceiling / deferred
 
-1. **Today hero card** for users who skipped the baseline ("Your starting
-   line is waiting…") — the funnel re-entry. Until it exists, their first
-   normal recording serves as the implicit comparison point.
-2. **"You said N words"** on the analyzing screen — blocked on the pipeline
+1. **"You said N words"** on the analyzing screen — blocked on the pipeline
    persisting transcript before analysis (today both land in one save).
 
 ## Measurement
@@ -198,9 +195,12 @@ from launch.
   actions `continue / skip / back / complete`, plus baseline-internal
   actions `take_saved / retry / swap_prompt / reveal`.
 - `practiceStarted(useCase: "baseline")` on record start.
-- `.activated` already logs once in `RecordingProcessingCoordinator` when
-  the first analysis completes — time-to-value is measured where the work
-  finishes, not where the UI notices.
+- `analysis_complete` records when the first value is ready. `.activated`
+  logs once when the user taps the reveal's full-breakdown action; for users
+  who skipped the baseline, the first result's next action logs it instead.
+- Skipping the baseline lands on a zero-session Today state that reframes the
+  existing prompt hero as **Set your starting line** and hides prompt-less
+  free talk. It does not add a competing card or a second recorder.
 - Watch: % of first takes ≥ 30s, retry distribution, swap-prompt share
   (if high, the default prompt is too scary — fix the prompt), % tapping
   "See my full breakdown", second session within 48h.

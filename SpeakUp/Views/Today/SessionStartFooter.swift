@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Session Start Footer
 
 struct SessionStartFooter: View {
+    var startTitle = "Start Speaking"
     var showFreeTalk = true
     let startHint: String
     let freeHint: String
@@ -12,7 +13,7 @@ struct SessionStartFooter: View {
     var body: some View {
         VStack(spacing: 6) {
             GlassButton(
-                title: "Start Speaking",
+                title: startTitle,
                 icon: "mic.fill",
                 style: .primary,
                 size: .large,

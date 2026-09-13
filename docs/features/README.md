@@ -6,6 +6,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 
 | Contract | Path | When |
 |----------|------|------|
+| User journeys | `/docs/USER_JOURNEYS.md` | Cross-feature flow audits and prioritization |
 | Speech scoring | `/SPEECH.md` | Transcription / scoring / LLM coherence |
 | Onboarding invariants | `/ONBOARDING_VISION.md` | `Views/Onboarding/` or onboarding in `ContentView` |
 | Onboarding research | `/ONBOARDING_REDESIGN.md` | Redesign rationale only — do not load by default |

@@ -474,10 +474,6 @@ final class RecordingProcessingCoordinator {
                 elapsed: elapsed
             )
         )
-        AnalyticsService.shared.logOnce(
-            .activated(minutesFromFirstOpen: AttributionStore.shared.minutesSinceFirstOpen),
-            key: "activated"
-        )
     }
 
     /// Counted on `transcriptionText`: SwiftData stores the Codable `analysis`

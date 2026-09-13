@@ -91,18 +91,22 @@ extension AnalyticsEvent {
         AnalyticsEvent("analysis_failed", funnel: .activation, dimensions: ["reason": reason])
     }
 
-    /// Fired once, when the user reaches their first completed analysis. The
-    /// plan's definition of an activated user.
-    static func activated(minutesFromFirstOpen: Double) -> AnalyticsEvent {
+    /// Fired once when the user takes a forward action from their first result.
+    /// Analysis completion alone is value readiness, not activation.
+    static func activated(minutesFromFirstOpen: Double, source: String) -> AnalyticsEvent {
         AnalyticsEvent("activated", funnel: .activation, dimensions: [
-            "time_to_value_bucket": AnalyticsBucket.minutes(minutesFromFirstOpen)
+            "time_to_value_bucket": AnalyticsBucket.minutes(minutesFromFirstOpen),
+            "source": source
         ])
     }
 
     // Outcome
 
-    static func nextActionTaken(area: String) -> AnalyticsEvent {
-        AnalyticsEvent("next_action", funnel: .outcome, dimensions: ["weak_area": area])
+    static func nextActionTaken(area: String, source: String) -> AnalyticsEvent {
+        AnalyticsEvent("next_action", funnel: .outcome, dimensions: [
+            "weak_area": area,
+            "source": source
+        ])
     }
 
     static func milestone(type: String) -> AnalyticsEvent {

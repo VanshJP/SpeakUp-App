@@ -698,6 +698,9 @@ struct TodayView: View {
 
     private var headline: String {
         let name = userSettings.first?.userName.trimmingCharacters(in: .whitespaces) ?? ""
+        if isAwaitingStartingLine {
+            return name.isEmpty ? "Set your starting line" : "\(name), set your starting line"
+        }
         return name.isEmpty ? "Ready to practice?" : "\(greeting), \(name)"
     }
 
@@ -721,13 +724,24 @@ struct TodayView: View {
 
     // MARK: - Start Footer
 
+    /// A user who skipped the guided baseline still needs a named way back
+    /// into activation. Reframe the existing hero instead of adding a second
+    /// competing card or sending them into prompt-less free practice.
+    private var isAwaitingStartingLine: Bool {
+        !viewModel.isLoading && viewModel.userStats.totalRecordings == 0
+    }
+
     /// The one hero action on Today, handed to whichever brief card renders so
     /// button and subject are the same object. Twin capsules and a segmented
     /// picker both failed here; read `docs/features/today-library.md`
     /// invariants 11–13 before changing it.
     private var sessionStartFooter: SessionStartFooter {
         SessionStartFooter(
-            startHint: "Records a \(viewModel.selectedDuration.displayName) take on the topic above",
+            startTitle: isAwaitingStartingLine ? "Set My Starting Line" : "Start Speaking",
+            showFreeTalk: !isAwaitingStartingLine,
+            startHint: isAwaitingStartingLine
+                ? "Records your first \(viewModel.selectedDuration.displayName) take on the topic above"
+                : "Records a \(viewModel.selectedDuration.displayName) take on the topic above",
             freeHint: "Records a \(viewModel.selectedDuration.displayName) take with no topic",
             onStart: {
                 if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
@@ -745,7 +759,10 @@ struct TodayView: View {
     // MARK: - Interactive Prompt Section
 
     private var promptSectionTitle: String {
-        (viewModel.storyPracticeEnabled && viewModel.todaysStory != nil)
+        if isAwaitingStartingLine {
+            return "Your first prompt"
+        }
+        return (viewModel.storyPracticeEnabled && viewModel.todaysStory != nil)
             ? "Today's story"
             : "Today's prompt"
     }

@@ -105,7 +105,16 @@ struct LessonDetailView: View {
             sheetContent(for: sheet)
         }
         .navigationDestination(item: $reviewTarget) { target in
-            RecordingDetailView(recordingId: target.id.uuidString)
+            RecordingDetailView(
+                recordingId: target.id.uuidString,
+                source: .learn,
+                onPracticeAgain: { recording in
+                    activeSheet = .recording(
+                        duration: RecordingDuration(rawValue: recording.targetDuration) ?? .sixty,
+                        framework: SpeechFramework.fromCurriculumHint(recording.frameworkUsed)
+                    )
+                }
+            )
                 .restoresNavigationBar()
         }
         .onAppear {

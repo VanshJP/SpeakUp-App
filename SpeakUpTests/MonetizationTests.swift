@@ -287,6 +287,15 @@ struct AnalyticsPrivacyTests {
 
         let feedback = AnalyticsEvent.sessionFeedback(sentiment: "positive")
         #expect(feedback.dimensions == ["sentiment": "positive"])
+
+        let nextAction = AnalyticsEvent.nextActionTaken(area: "pace", source: "story")
+        #expect(nextAction.dimensions == ["weak_area": "pace", "source": "story"])
+
+        let activated = AnalyticsEvent.activated(minutesFromFirstOpen: 3.5, source: "onboarding_reveal")
+        #expect(activated.dimensions == [
+            "time_to_value_bucket": "2-4m",
+            "source": "onboarding_reveal"
+        ])
     }
 
     /// The paywall shows no price until StoreKit returns one, so a purchase

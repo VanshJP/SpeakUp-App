@@ -419,7 +419,13 @@ struct StoryDetailView: View {
                 LazyVStack(spacing: 10) {
                     ForEach(recordingSummaries) { summary in
                         NavigationLink {
-                            RecordingDetailView(recordingId: summary.id.uuidString)
+                            RecordingDetailView(
+                                recordingId: summary.id.uuidString,
+                                source: .story,
+                                onPracticeAgain: { _ in
+                                    onStartPractice?(story)
+                                }
+                            )
                         } label: {
                             GlassCard(padding: 12) {
                                 HStack {

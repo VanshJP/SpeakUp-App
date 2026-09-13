@@ -612,6 +612,15 @@ final class OnboardingViewModel {
 
     func makeResult(baselineRecordingID: UUID? = nil, reviewBaseline: Bool = false) -> OnboardingResult {
         AnalyticsService.shared.log(.onboardingStep(currentStep.analyticsName, action: "complete"))
+        if baselineRecordingID != nil, reviewBaseline {
+            AnalyticsService.shared.logOnce(
+                .activated(
+                    minutesFromFirstOpen: AttributionStore.shared.minutesSinceFirstOpen,
+                    source: "onboarding_reveal"
+                ),
+                key: "activated"
+            )
+        }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         // Always commit the current name into the dictation dictionary at
         // result time so renaming after the name step (back-nav, edit on a

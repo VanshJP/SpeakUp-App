@@ -46,7 +46,7 @@ enum AppTourStep: Int, CaseIterable {
     var message: String {
         switch self {
         case .record:
-            return "A fresh prompt every day. Tap a start button, talk, get scored. One rep a day moves the line."
+            return "A fresh prompt every day. Tap Start Speaking, talk, get scored. One rep a day moves the line."
         case .stats:
             return "Streak up top, rings for sessions and scores. Tap the rings for full charts."
         case .tools:

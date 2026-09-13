@@ -16,7 +16,7 @@ struct HistoryView: View {
     var onShowBeforeAfter: () -> Void = {}
     var onShowJournalExport: () -> Void = {}
     var onShowGoals: () -> Void = {}
-    var onStartPractice: () -> Void = {}
+    var onShowToday: () -> Void = {}
 
     // MARK: - Filtered Summaries
 
@@ -239,8 +239,8 @@ struct HistoryView: View {
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
                         : "Try adjusting your filters or search terms.",
-                    buttonTitle: selectedFilter == .all && searchText.isEmpty ? "Start Speaking" : nil,
-                    buttonAction: selectedFilter == .all && searchText.isEmpty ? onStartPractice : nil
+                    buttonTitle: selectedFilter == .all && searchText.isEmpty ? "Choose Today's Prompt" : nil,
+                    buttonAction: selectedFilter == .all && searchText.isEmpty ? onShowToday : nil
                 )
             } else {
                 LazyVStack(spacing: 12) {

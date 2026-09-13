@@ -60,6 +60,7 @@
 18. **Never line-limit the prompt text.** `InteractivePromptCard` clipped at four lines, which is the one thing a prompt card must not do. Condensing comes from `GlassCard(padding: 14)`, 10pt inner spacing, 18pt type, and folding the word strip into the card — not from truncation.
 19. `TodayView.onStartStoryPractice` is `((Story, RecordingDuration) -> Void)` — it carries the duration because `StoryPromptCard` shows a `DurationPill` and `ContentView` used to hardcode `.sixty`, so picking a length there silently did nothing. `PracticeHubView` has its own separate callback and still passes no duration; it has no length control to honour.
 20. Today tool tiles expose their full title + outcome to assistive tech; duration announces itself as recording length. Word-workout menus keep compact visual pills but own 44pt hit targets.
+21. **Skipped-baseline re-entry uses the existing session hero.** Once loading finishes, zero recordings reframes Today as “Set your starting line,” labels the brief “Your first prompt,” and changes the one primary CTA to “Set My Starting Line.” Prompt-less free talk stays hidden until one recording exists. Do not add a second activation card above the session or reintroduce an unguided first take; the same prompt card, duration control, countdown, recorder, and result flow should earn the first recording.
 
 ## Cross-links
 

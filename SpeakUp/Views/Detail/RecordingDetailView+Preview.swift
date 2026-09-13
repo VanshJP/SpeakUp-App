@@ -56,7 +56,11 @@ import SwiftData
 
         var body: some View {
             NavigationStack {
-                RecordingDetailView(recordingId: recordingId)
+                RecordingDetailView(
+                    recordingId: recordingId,
+                    source: .preview,
+                    onPracticeAgain: { _ in }
+                )
             }
             .modelContainer(container)
             .environment(AudioService())

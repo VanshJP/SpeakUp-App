@@ -32,6 +32,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 4a. Coach moments are fresh-result-only (`ContentView.freshResultRecordingId` → `RecordingDetailView.allowsCoachMoments`). Browsing an old History/Story recording never evaluates or shows a new note.
 4b. The full-screen post-recording analyzing state always offers **Save & close**. The saved recording remains in History and the coordinator keeps scoring in the background; a model download must never trap the user. `ContentView` waits for that existing job, then evaluates achievements silently — unlock state stays correct without replacing the user's chosen exit with an overlay.
 4c. Recovery copy protects the work: "Couldn't score this take" + "Your recording is safe." Raw backend errors never appear on the result screen, and playback failures never interpolate `localizedDescription`.
+4d. Every production `RecordingDetailView` entry supplies a repeat route and a stable `RecordingDetailSource`. The callback receives the full `Recording`, not only its optional prompt: History preserves Story id and target duration; Story routes to the same Story; Learn preserves target duration and framework. A result must never render a primary “Practice Again” action backed by an optional/no-op callback. Repeat dismisses the old detail before launching the new take.
 5. After long transcribe/analyze: coordinator re-fetches by id before write (deleted object trap).
 6. Share score / progress cards via `SharePresenter` only (completed-share analytics). Score-card shares that include the prompt also attach a caption with a try-this-prompt URL (`SharedPromptLink`); do not invent a second activity sheet.
 7. Prompt text on a share card and in the share URL is opt-in. Scores-only shares must not put the prompt (or `beat`) on the link. Story sessions may show the title on the card but never encode story body into the URL.
@@ -85,9 +86,16 @@ The coaching prompt (`CoachingPrompt.system`) instructs every backend to prefix 
 
 `PersonalAverage.PreviousTake` finds the last attempt at the same prompt or story (`storyId ?? prompt?.id`, matching how relevance picks its source text) inside a `repeatScanLimit` tail, and `TakeComparisonCard` renders it directly under the hero.
 
-This is the one surface that answers "did the coaching work". The scan filters on the relationship *before* unwrapping `analysis`, so the extra rows cost a fault each rather than a blob decode each. `NextStepCard`'s retry passes `recording.prompt`, so a practice-again always lands back here with a comparison; story re-runs only match when re-practiced through the Stories flow.
+This is the one surface that answers "did the coaching work". The scan filters on the relationship *before* unwrapping `analysis`, so the extra rows cost a fault each rather than a blob decode each. `NextStepCard` passes the full recording into the required repeat route, preserving prompt or Story identity and target duration so a practice-again lands back here with a comparison.
 
 Deltas inside ±3 are reported as noise, not progress — same threshold as `CoachPlan.Trend`.
+
+`next_action` includes `RecordingDetailSource` (`post_session`, `history`,
+`story`, `learn`) so the result-to-action funnel can be compared by entry
+point. On the first analyzed session, taking a next step, accepting a coach
+action, repeating, or completing a share logs `activated` once. Onboarding's
+“See my full breakdown” logs the same event at its own forward action;
+analysis completion alone remains `analysis_complete`, not activation.
 
 ## Cross-links
 
