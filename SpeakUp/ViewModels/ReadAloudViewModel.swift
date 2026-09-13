@@ -168,7 +168,7 @@ class ReadAloudViewModel {
             return failure
         }
         if heardNothing {
-            return "We didn't catch any words — try speaking up, or move somewhere quieter."
+            return "We didn't catch any words. Try speaking up, or move somewhere quieter."
         }
         return nil
     }

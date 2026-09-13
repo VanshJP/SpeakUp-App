@@ -608,7 +608,7 @@ enum WhisperServiceError: LocalizedError {
         case .modelNotLoaded:
             return "Speech model isn't ready yet."
         case .modelDownloadTimedOut:
-            return "Speech model download timed out. Check your connection, or try again later — on-device recognition can still finish the take."
+            return "Speech model download timed out. Check your connection, or try again later. On-device recognition can still finish the take."
         case .noSpeechTranscriptionResult:
             return "No transcription result was produced."
         case .transcriptionFailed(let error):

@@ -164,7 +164,7 @@ struct LessonDetailView: View {
     private func showStepCompletion() {
         let role = currentActivity.type.teacherRole
         let messages = [
-            "\(role) done — nice.",
+            "\(role) done. Nice.",
             "Solid \(role.lowercased()).",
             "Locked in.",
             "That's the move.",

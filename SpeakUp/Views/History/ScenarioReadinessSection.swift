@@ -185,7 +185,7 @@ private struct ScenarioRow: View {
 
                     MomentumGlyph(momentum: readiness.momentum)
 
-                    Text(readiness.score.map(String.init) ?? "—")
+                    Text(readiness.score.map(String.init) ?? "N/A")
                         .font(.system(size: 17, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(scoreColor)

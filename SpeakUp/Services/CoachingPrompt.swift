@@ -40,7 +40,7 @@ nonisolated enum CoachingPrompt {
         - At most 28 words per tip.
 
         Scores:
-        - A score is never written as a bare number. Always prefix it with its metric name, using these names exactly: \(dimensionNameList). Write "Vocal variety 44/100", "Clarity 71/100" — never just "44/100".
+        - A score is never written as a bare number. Always prefix it with its metric name, using these names exactly: \(dimensionNameList). Write "Vocal variety 44/100" or "Clarity 71/100". Never write just "44/100".
 
         Never do these:
         - No praise opener, no "great job", no restating the overall score.

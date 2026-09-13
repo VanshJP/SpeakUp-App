@@ -458,7 +458,7 @@ nonisolated enum CoachingTipService {
             if !structural.example.isEmpty {
                 message += ": \"\(structural.example)\""
             }
-            message += ". Vary the frame — name the list once, then the items."
+            message += ". Vary the frame. Name the list once, then the items."
 
             return CoachingTip(
                 dimension: .structure,

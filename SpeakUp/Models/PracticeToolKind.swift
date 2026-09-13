@@ -40,7 +40,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         switch self {
         case .warmUp: return "Open the voice before a scored take"
         case .drills: return "Fix one weakness in under a minute"
-        case .readAloud: return "Train clarity on a passage — or your own word"
+        case .readAloud: return "Train clarity on a passage, including your own text"
         case .calm: return "Settle nerves so the take starts clean"
         case .learn: return "Follow a week-by-week speaking curriculum"
         }

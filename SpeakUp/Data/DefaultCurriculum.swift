@@ -72,10 +72,10 @@ struct DefaultCurriculum {
                             title: "The ideal pace range",
                             description: "Conversational speaking usually sits near 150 words per minute. Your Settings target is the number that matters for scoring.",
                             content: LessonContent(sections: [
-                                .concepts(title: "Speaking Pace Explained", body: "A useful conversational default is around 150 words per minute (WPM), with room on either side.\nWell below your target can feel slow and cause listeners to drift. Well above it makes ideas hard to follow.\nPace naturally varies — you might speed up when excited and slow down for emphasis. That variation is useful when you choose it on purpose.\nBig Talk scores pace against your personal target (Settings → Pace). Auto-calibration can move that target as you practice.", icon: "speedometer"),
+                                .concepts(title: "Speaking Pace Explained", body: "A useful conversational default is around 150 words per minute (WPM), with room on either side.\nWell below your target can feel slow and cause listeners to drift. Well above it makes ideas hard to follow.\nPace naturally varies. You might speed up when excited and slow down for emphasis. That variation is useful when you choose it on purpose.\nBig Talk scores pace against your personal target (Settings → Pace). Auto-calibration can move that target as you practice.", icon: "speedometer"),
                                 .example(title: "Famous Speakers' Pace", body: "Martin Luther King Jr.'s \"I Have a Dream\" averaged ~100 WPM, deliberately slow for dramatic impact.\nJohn F. Kennedy's inaugural address was ~135 WPM, measured and presidential.\nCasual TED talks typically range 150-170 WPM, energetic but clear."),
                                 .tip("If you tend to rush, try breathing between sentences. Each breath creates a natural pause that slows you down without feeling forced."),
-                                .keyTakeaway("Pace isn't about hitting an exact universal number — it's about being clear and comfortable relative to your target. Know your range, then adjust with intention."),
+                                .keyTakeaway("Pace isn't about hitting an exact universal number. It's about being clear and comfortable relative to your target. Know your range, then adjust with intention."),
                             ])
                         ),
                         .practice(id: "w1_l3_a2", title: "Record focusing on pace", description: "Record a session and check your WPM against your pace target in the analysis. Are you near it, or consistently fast/slow?", duration: 60),
@@ -737,7 +737,7 @@ struct DefaultCurriculum {
                                 .keyTakeaway("Q&A is not a threat, it's an opportunity to demonstrate expertise and poise. With the CLEAR method, every question becomes a chance to shine."),
                             ])
                         ),
-                        .drill(id: "w8_l1_a2", title: "Rapid-fire Q&A drill", description: "Q&A sprint with CLEAR beats. Get a question and answer on the clock — clarify, answer, support, close.", mode: "qaSprint"),
+                        .drill(id: "w8_l1_a2", title: "Rapid-fire Q&A drill", description: "Q&A sprint with CLEAR beats. Get a question and answer on the clock: clarify, answer, support, close.", mode: "qaSprint"),
                         .practice(id: "w8_l1_a3", title: "Q&A practice session", description: "Record a 60-second response to this question: \"What's the biggest challenge in your field right now, and how would you solve it?\" Use the CLEAR method.", duration: 60),
                     ]
                 ),

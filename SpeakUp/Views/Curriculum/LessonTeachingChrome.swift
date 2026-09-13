@@ -25,11 +25,11 @@ extension CurriculumActivityType {
     var teacherCue: String {
         switch self {
         case .lesson:
-            return "Read this first — then you'll put it into a take."
+            return "Read this first. Then put it into a take."
         case .practice:
             return "Your turn. Keep today's focus in mind while you speak."
         case .drill:
-            return "Short reps. Chase one skill only — ignore everything else."
+            return "Short reps. Chase one skill only and ignore everything else."
         case .exercise:
             return "Prep the voice and body before the scored take."
         case .review:

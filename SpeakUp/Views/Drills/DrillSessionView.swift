@@ -320,7 +320,7 @@ struct DrillSessionView: View {
             HStack(spacing: 8) {
                 Image(systemName: "waveform.path.ecg")
                     .foregroundStyle(AppColors.categoryTeal)
-                Text(viewModel.isAnalyzingPitch ? "Scoring pitch…" : "Vary your pitch — glide low to high")
+                Text(viewModel.isAnalyzingPitch ? "Scoring pitch…" : "Vary your pitch. Glide low to high")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.white.opacity(0.75))
             }

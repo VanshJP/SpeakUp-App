@@ -267,7 +267,7 @@ struct TodayView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if hiddenModules.isEmpty {
-                Text("Nothing hidden — every block is on Today.")
+                Text("Nothing hidden. Every block is on Today.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)

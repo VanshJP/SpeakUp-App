@@ -156,7 +156,7 @@ struct CrutchSwapsCard: View {
     private func swapsAccessibility(_ hit: SessionWordHit) -> String {
         var label = "Try instead: \(hit.swaps[0])"
         if let cue = hit.primarySwap?.cue {
-            label += " — \(cue)"
+            label += ": \(cue)"
         }
         let alternates = hit.swaps.dropFirst()
         if !alternates.isEmpty {
