@@ -1,7 +1,11 @@
 import SwiftUI
 import SwiftData
 
-/// Learn tab — path of phases/lessons. Detail: `LessonDetailView`.
+/// Learn tab — skill studio of capability chapters. Detail: `LessonDetailView`.
+///
+/// Not a Duolingo-style path. Speaking gains come from proving one skill with your
+/// voice, so the page surfaces outcomes and modalities (learn / drill / speak),
+/// not decorative rails between nodes.
 struct CurriculumView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = CurriculumViewModel()
@@ -15,15 +19,15 @@ struct CurriculumView: View {
 
                 if let currentLesson = viewModel.currentLesson,
                    let currentPhase = viewModel.currentPhase {
-                    continueCard(lesson: currentLesson, phase: currentPhase)
+                    studioSessionCard(lesson: currentLesson, phase: currentPhase)
 
                     if let reviewLesson = suggestedReviewLesson(before: currentLesson) {
-                        reviewNudge(lesson: reviewLesson)
+                        reinforceNudge(lesson: reviewLesson)
                     }
                 }
 
                 ForEach(viewModel.phases) { phase in
-                    phaseSection(phase)
+                    chapterSection(phase)
                 }
             }
             .padding(.top, 4)
@@ -43,19 +47,13 @@ struct CurriculumView: View {
         .alert("Lesson Locked", isPresented: $showingLockedInfo) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Finish the earlier lessons first, each one builds on the last.")
+            Text("Finish the earlier lessons first — each skill builds on the last.")
         }
     }
 
-    // MARK: - Awards Row
+    // MARK: - Header
 
-    /// The page's one header row: what the tab is, and the trophy.
-    ///
-    /// Learn hides the navigation bar like every root tab, so without a title
-    /// here the page opened on a lone icon floating over empty space. Same
-    /// grammar as Today's header — eyebrow, name, trailing accessory — and the
-    /// trophy wears `headerIconChrome()`, so it is the same 44pt plate as the
-    /// filter buttons on Prompts, Stories and History.
+    /// Page name + trophy. Learn hides the nav bar like every root tab.
     private var awardsRow: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
@@ -65,7 +63,7 @@ struct CurriculumView: View {
                     .textCase(.uppercase)
                     .tracking(0.8)
 
-                Text("Your path")
+                Text("Skill studio")
                     .font(.title2.bold())
                     .foregroundStyle(.white)
             }
@@ -85,9 +83,10 @@ struct CurriculumView: View {
         .padding(.top, 4)
     }
 
-    // MARK: - Continue Card
+    // MARK: - Studio Session
 
-    private func continueCard(lesson: CurriculumLesson, phase: CurriculumPhase) -> some View {
+    /// One skill to prove with your voice. Outcome first; progress is accessory.
+    private func studioSessionCard(lesson: CurriculumLesson, phase: CurriculumPhase) -> some View {
         let identity = LessonIdentity.forLesson(id: lesson.id)
         let isReviewing = viewModel.isLessonCompleted(lesson.id)
 
@@ -95,15 +94,13 @@ struct CurriculumView: View {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
                 .restoresNavigationBar()
         } label: {
-            // Not `elevated`: the white `GlassButtonLabel` inside already casts
-            // its own shadow, and stacking the heavy card shadow under it read
-            // as a second, doubled edge. Same reasoning as `CoachFocusCard`.
+            // Not `elevated`: white `GlassButtonLabel` already casts its own shadow.
             GlassCard(tint: identity.accent.opacity(0.08), padding: 18) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 6) {
-                        Image(systemName: isReviewing ? "arrow.counterclockwise" : "play.circle.fill")
+                        Image(systemName: isReviewing ? "arrow.counterclockwise" : "mic.fill")
                             .font(.system(size: 10, weight: .semibold))
-                        Text(isReviewing ? "Review" : "Up next")
+                        Text(isReviewing ? "Reinforce" : "Studio session")
                             .font(.system(size: 10, weight: .semibold))
                             .textCase(.uppercase)
                             .tracking(0.6)
@@ -143,10 +140,17 @@ struct CurriculumView: View {
                         }
                     }
 
+                    Text(LessonTeachingCopy.roadmap(for: lesson))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    LessonModalityStrip(types: lesson.studioPlan)
+
                     GlassButtonLabel(
                         title: isReviewing
-                            ? "Review · \(Self.lessonMeta(lesson))"
-                            : "Continue · \(Self.lessonMeta(lesson))",
+                            ? "Practice again · \(Self.lessonMeta(lesson))"
+                            : "Start · \(Self.lessonMeta(lesson))",
                         icon: isReviewing ? "arrow.counterclockwise" : "play.fill",
                         style: .primary,
                         fullWidth: true
@@ -158,15 +162,15 @@ struct CurriculumView: View {
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel(
             isReviewing
-                ? "Review \(lesson.title), \(Self.lessonMeta(lesson))"
-                : "Continue \(lesson.title), \(Self.lessonMeta(lesson))"
+                ? "Practice again \(lesson.title), \(Self.lessonMeta(lesson))"
+                : "Start \(lesson.title), \(Self.lessonMeta(lesson))"
         )
         .accessibilityHint(lesson.objective)
     }
 
-    // MARK: - Review Nudge
+    // MARK: - Reinforce
 
-    /// Prior completed lesson — keeps review in the first viewport, not buried in the path.
+    /// Prior completed lesson — keep review in the first viewport.
     private func suggestedReviewLesson(before current: CurriculumLesson) -> CurriculumLesson? {
         let ordered = viewModel.phases.flatMap(\.lessons)
         guard let index = ordered.firstIndex(where: { $0.id == current.id }), index > 0 else {
@@ -175,7 +179,7 @@ struct CurriculumView: View {
         return ordered[..<index].last(where: { viewModel.isLessonCompleted($0.id) })
     }
 
-    private func reviewNudge(lesson: CurriculumLesson) -> some View {
+    private func reinforceNudge(lesson: CurriculumLesson) -> some View {
         let identity = LessonIdentity.forLesson(id: lesson.id)
 
         return NavigationLink {
@@ -193,38 +197,43 @@ struct CurriculumView: View {
                     .frame(width: 44, height: 44)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Review last lesson")
+                        Text("Prove it again")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(identity.accent)
                         Text(lesson.title)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.leading)
+                        Text(lesson.objective)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
                     }
 
                     Spacer(minLength: 0)
 
-                    Image(systemName: "arrow.counterclockwise")
+                    Image(systemName: "ear.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .buttonStyle(GlassPressStyle())
-        .accessibilityLabel("Review last lesson, \(lesson.title)")
+        .accessibilityLabel("Prove it again, \(lesson.title)")
         .accessibilityHint(lesson.objective)
     }
 
-    // MARK: - Phase Section
+    // MARK: - Capability Chapters
 
-    private func phaseSection(_ phase: CurriculumPhase) -> some View {
+    private func chapterSection(_ phase: CurriculumPhase) -> some View {
         let completedInPhase = phase.lessons.filter { viewModel.isLessonCompleted($0.id) }.count
         let isLocked = !isPreviousPhaseCompleted(before: phase) && phase.week > 1
         let isPhaseComplete = completedInPhase == phase.lessons.count && !phase.lessons.isEmpty
         let phaseAccent = LessonIdentity.forPhase(week: phase.week)
 
         return VStack(alignment: .leading, spacing: 12) {
-            phaseHeader(
+            chapterHeader(
                 phase,
                 completed: completedInPhase,
                 isLocked: isLocked,
@@ -232,8 +241,8 @@ struct CurriculumView: View {
                 accent: phaseAccent
             )
 
-            VStack(spacing: 0) {
-                ForEach(Array(phase.lessons.enumerated()), id: \.element.id) { index, lesson in
+            VStack(spacing: 10) {
+                ForEach(phase.lessons) { lesson in
                     let isAccessible = viewModel.isLessonAccessible(lesson, in: phase)
 
                     if isAccessible {
@@ -241,7 +250,7 @@ struct CurriculumView: View {
                             LessonDetailView(lesson: lesson, viewModel: viewModel)
                                 .restoresNavigationBar()
                         } label: {
-                            lessonPathRow(lesson, at: index, in: phase, isLocked: false)
+                            lessonStudioRow(lesson, in: phase, isLocked: false)
                         }
                         .buttonStyle(GlassPressStyle())
                     } else {
@@ -249,90 +258,16 @@ struct CurriculumView: View {
                             Haptics.warning()
                             showingLockedInfo = true
                         } label: {
-                            lessonPathRow(lesson, at: index, in: phase, isLocked: true)
+                            lessonStudioRow(lesson, in: phase, isLocked: true)
                         }
                         .buttonStyle(GlassPressStyle())
                     }
                 }
             }
-            .padding(.top, 4)
         }
     }
 
-    private func isLeading(_ index: Int) -> Bool { index.isMultiple(of: 2) }
-
-    private func lessonPathRow(
-        _ lesson: CurriculumLesson,
-        at index: Int,
-        in phase: CurriculumPhase,
-        isLocked: Bool
-    ) -> some View {
-        let isCompleted = viewModel.isLessonCompleted(lesson.id)
-        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
-        let identity = LessonIdentity.forLesson(id: lesson.id)
-
-        let state: LessonNodeState = {
-            if isCompleted { return .completed }
-            if isLocked { return .locked }
-            if isCurrent { return .current }
-            return .available
-        }()
-        let stateLabel: String = {
-            switch state {
-            case .completed: return "Completed, tap to review"
-            case .locked: return "Locked"
-            case .current: return "Current lesson"
-            case .available: return "Available"
-            }
-        }()
-
-        return LessonPathRow(
-            state: state,
-            identity: identity,
-            isLeading: isLeading(index),
-            hasNext: index < phase.lessons.count - 1,
-            nextIsLeading: isLeading(index + 1)
-        ) {
-            lessonLabel(lesson, state: state, alignedLeading: isLeading(index))
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(lesson.title), \(stateLabel)")
-        .accessibilityHint(lesson.objective)
-    }
-
-    private func lessonLabel(
-        _ lesson: CurriculumLesson,
-        state: LessonNodeState,
-        alignedLeading: Bool
-    ) -> some View {
-        VStack(alignment: alignedLeading ? .leading : .trailing, spacing: 3) {
-            Text(lesson.title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(state == .locked ? Color.secondary : Color.white)
-
-            Text(caption(for: lesson, state: state))
-                .font(.caption)
-                .foregroundStyle(state == .completed ? AppColors.success.opacity(0.9) : .secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .multilineTextAlignment(alignedLeading ? .leading : .trailing)
-        .opacity(state == .locked ? 0.55 : 1.0)
-    }
-
-    private func caption(for lesson: CurriculumLesson, state: LessonNodeState) -> String {
-        switch state {
-        case .completed:
-            return "Tap to review"
-        case .current:
-            return lesson.objective
-        case .available:
-            return Self.lessonMeta(lesson)
-        case .locked:
-            return lesson.objective
-        }
-    }
-
-    private func phaseHeader(
+    private func chapterHeader(
         _ phase: CurriculumPhase,
         completed: Int,
         isLocked: Bool,
@@ -346,7 +281,7 @@ struct CurriculumView: View {
                     .frame(width: 8, height: 8)
                     .accessibilityHidden(true)
 
-                Text("Week \(phase.week)")
+                Text("Chapter \(phase.week)")
                     .font(.system(size: 10, weight: .semibold))
                     .textCase(.uppercase)
                     .tracking(0.6)
@@ -382,18 +317,174 @@ struct CurriculumView: View {
             }
         }
         .padding(.top, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Chapter \(phase.week), \(phase.title), \(completed) of \(phase.lessons.count) complete"
+        )
+    }
+
+    private func lessonStudioRow(
+        _ lesson: CurriculumLesson,
+        in phase: CurriculumPhase,
+        isLocked: Bool
+    ) -> some View {
+        let isCompleted = viewModel.isLessonCompleted(lesson.id)
+        let isCurrent = viewModel.currentLesson?.id == lesson.id && !isCompleted && !isLocked
+        let identity = LessonIdentity.forLesson(id: lesson.id)
+
+        let state: LessonNodeState = {
+            if isCompleted { return .completed }
+            if isLocked { return .locked }
+            if isCurrent { return .current }
+            return .available
+        }()
+
+        let stateLabel: String = {
+            switch state {
+            case .completed: return "Completed, tap to review"
+            case .locked: return "Locked"
+            case .current: return "Current skill"
+            case .available: return "Available"
+            }
+        }()
+
+        return GlassCard(
+            tint: rowTint(for: state, accent: identity.accent),
+            padding: 14
+        ) {
+            HStack(alignment: .top, spacing: 12) {
+                lessonGlyphPlate(identity: identity, state: state)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(lesson.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(state == .locked ? Color.secondary : Color.white)
+                            .multilineTextAlignment(.leading)
+
+                        Spacer(minLength: 0)
+
+                        statusChip(for: state)
+                    }
+
+                    Text(lesson.objective)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(state == .locked ? 0.7 : 1)
+
+                    HStack(spacing: 8) {
+                        LessonModalityStrip(types: lesson.studioPlan, compact: true)
+                        Spacer(minLength: 0)
+                        Text(Self.lessonMeta(lesson))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .opacity(state == .locked ? 0.72 : 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(lesson.title), \(stateLabel)")
+        .accessibilityHint(lesson.objective)
+    }
+
+    private func lessonGlyphPlate(identity: LessonIdentity, state: LessonNodeState) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(glyphFill(for: state, accent: identity.accent))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(glyphStroke(for: state, accent: identity.accent), lineWidth: state == .current ? 2 : 1)
+                }
+
+            if state == .locked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.45))
+            } else if state == .current {
+                ZStack {
+                    LessonGlyphView(identity: identity, state: state)
+                        .frame(width: 22, height: 22)
+                        .opacity(0.35)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(identity.accent)
+                }
+            } else {
+                LessonGlyphView(
+                    identity: identity,
+                    state: state,
+                    showsCheckBadge: state == .completed
+                )
+                .frame(width: 22, height: 22)
+            }
+        }
+        .frame(width: 48, height: 48)
+    }
+
+    private func statusChip(for state: LessonNodeState) -> some View {
+        Group {
+            switch state {
+            case .completed:
+                Text("Spoken")
+                    .foregroundStyle(AppColors.success)
+            case .current:
+                Text("Now")
+                    .foregroundStyle(AppColors.primary)
+            case .available:
+                Text("Open")
+                    .foregroundStyle(.tertiary)
+            case .locked:
+                Text("Locked")
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(.caption2.weight(.semibold))
+        .textCase(.uppercase)
+        .tracking(0.4)
+    }
+
+    private func rowTint(for state: LessonNodeState, accent: Color) -> Color {
+        switch state {
+        case .completed: return AppColors.success.opacity(0.06)
+        case .current: return accent.opacity(0.10)
+        case .available: return accent.opacity(0.05)
+        case .locked: return .white.opacity(0.02)
+        }
+    }
+
+    private func glyphFill(for state: LessonNodeState, accent: Color) -> Color {
+        switch state {
+        case .completed: return AppColors.success.opacity(0.18)
+        case .current: return accent.opacity(0.22)
+        case .available: return accent.opacity(0.12)
+        case .locked: return .white.opacity(0.05)
+        }
+    }
+
+    private func glyphStroke(for state: LessonNodeState, accent: Color) -> Color {
+        switch state {
+        case .completed: return AppColors.success.opacity(0.5)
+        case .current: return accent
+        case .available: return accent.opacity(0.4)
+        case .locked: return AppColors.cardStroke
+        }
     }
 
     // MARK: - Helpers
 
     private static func lessonMeta(_ lesson: CurriculumLesson) -> String {
-        let count = lesson.activities.count
-        var parts = ["\(count) activit\(count == 1 ? "y" : "ies")"]
+        var parts: [String] = []
 
-        let practiceSeconds = lesson.activities.compactMap(\.targetDuration).reduce(0, +)
+        let practiceSeconds = lesson.practiceSeconds
         if practiceSeconds > 0 {
             let minutes = max(1, Int((Double(practiceSeconds) / 60).rounded()))
-            parts.append("\(minutes) min practice")
+            parts.append("\(minutes) min speak")
+        } else {
+            let count = lesson.activities.count
+            parts.append("\(count) step\(count == 1 ? "" : "s")")
         }
 
         return parts.joined(separator: " · ")
@@ -404,5 +495,36 @@ struct CurriculumView: View {
               index > 0 else { return true }
         let previousPhase = viewModel.phases[index - 1]
         return previousPhase.lessons.allSatisfy { viewModel.isLessonCompleted($0.id) }
+    }
+}
+
+// MARK: - Modality Strip
+
+/// Ordered unique activity roles for a lesson — the interactive plan at a glance.
+struct LessonModalityStrip: View {
+    let types: [CurriculumActivityType]
+    var compact: Bool = false
+
+    var body: some View {
+        HStack(spacing: compact ? 4 : 6) {
+            ForEach(Array(types.enumerated()), id: \.offset) { index, type in
+                if index > 0 {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: compact ? 7 : 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+
+                HStack(spacing: 3) {
+                    Image(systemName: type.teacherIcon)
+                        .font(.system(size: compact ? 8 : 9, weight: .semibold))
+                    Text(type.teacherRole)
+                        .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
+                }
+                .foregroundStyle(type.teacherColor.opacity(0.95))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(types.map(\.teacherRole).joined(separator: ", then "))
     }
 }

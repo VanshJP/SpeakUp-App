@@ -48,6 +48,21 @@ struct CurriculumLesson: Identifiable, Codable {
     let objective: String
     let activities: [CurriculumActivity]
     var isCompleted: Bool = false
+
+    /// Unique activity roles in lesson order — the interactive plan at a glance.
+    var studioPlan: [CurriculumActivityType] {
+        var seen = Set<CurriculumActivityType>()
+        var ordered: [CurriculumActivityType] = []
+        for activity in activities where seen.insert(activity.type).inserted {
+            ordered.append(activity.type)
+        }
+        return ordered
+    }
+
+    /// Sum of practice target durations (seconds). Zero when the lesson has no timed speak.
+    var practiceSeconds: Int {
+        activities.compactMap(\.targetDuration).reduce(0, +)
+    }
 }
 
 struct CurriculumPhase: Identifiable, Codable {
