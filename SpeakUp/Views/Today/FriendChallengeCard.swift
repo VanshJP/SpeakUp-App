@@ -6,7 +6,7 @@ struct FriendChallengeCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        GlassCard(tint: AppColors.primary, padding: 16, elevated: true) {
+        GlassCard(tint: AppColors.primary.opacity(0.10), padding: 16, elevated: true) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
                     Text("Friend challenge")

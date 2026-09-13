@@ -10,7 +10,7 @@ struct CoachMomentCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        GlassCard(tint: tint, padding: 16, elevated: moment.surface == .today) {
+        GlassCard(tint: tint.opacity(0.10), padding: 16, elevated: moment.surface == .today) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
                     Text("Coach note")

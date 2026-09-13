@@ -49,4 +49,62 @@ struct ReadAloudCustomPassageTests {
     @Test func canDefineRejectsMultiWord() {
         #expect(PronunciationService.canDefine("hello world") == false)
     }
+
+    // MARK: - Saved passages
+
+    @Test func savedPassageIdIsStableAcrossCalls() throws {
+        let first = try #require(ReadAloudPassage.saved(from: "  Clarity beats volume.  "))
+        let second = try #require(ReadAloudPassage.saved(from: "Clarity beats volume."))
+        #expect(first.id == second.id)
+        #expect(first.id.hasPrefix("saved-"))
+    }
+
+    @Test func customPassageIdIsFreshEachCall() throws {
+        let first = try #require(ReadAloudPassage.custom(from: "Clarity beats volume."))
+        let second = try #require(ReadAloudPassage.custom(from: "Clarity beats volume."))
+        #expect(first.id != second.id)
+    }
+
+    @Test func savedPassageKeepsCustomTitleAndDifficultyRules() throws {
+        let word = try #require(ReadAloudPassage.saved(from: "entrepreneurial"))
+        #expect(word.title == "Word practice")
+        #expect(word.difficulty == .easy)
+        #expect(word.category == .custom)
+
+        let paragraph = try #require(
+            ReadAloudPassage.saved(from: Array(repeating: "word", count: 45).joined(separator: " "))
+        )
+        #expect(paragraph.title == "Paragraph practice")
+        #expect(paragraph.difficulty == .hard)
+    }
+
+    @Test func savedPassageRejectsWhatCustomRejects() {
+        #expect(ReadAloudPassage.saved(from: "") == nil)
+        #expect(ReadAloudPassage.saved(from: "   \n\t  ") == nil)
+        #expect(ReadAloudPassage.saved(from: "a") == nil)
+    }
+
+    @Test func savedTextsAreNewestFirstAndDeduplicated() {
+        var list: [String] = []
+        list = SavedReadAloudTexts.adding("Clarity beats volume.", to: list)
+        list = SavedReadAloudTexts.adding("  Pause instead of filling.  ", to: list)
+        list = SavedReadAloudTexts.adding("clarity BEATS volume.", to: list) // same passage
+
+        #expect(list == ["Pause instead of filling.", "Clarity beats volume."])
+        #expect(SavedReadAloudTexts.contains("CLARITY BEATS VOLUME.", in: list))
+    }
+
+    @Test func savedTextsIgnoreUnusableInput() {
+        var list: [String] = []
+        list = SavedReadAloudTexts.adding("   ", to: list)
+        list = SavedReadAloudTexts.adding("a", to: list)
+        #expect(list.isEmpty)
+    }
+
+    @Test func removingSavedTextIsCaseInsensitive() {
+        let list = SavedReadAloudTexts.adding("Clarity beats volume.", to: [])
+        let pruned = SavedReadAloudTexts.removing("clarity beats volume.", from: list)
+        #expect(pruned.isEmpty)
+        #expect(!SavedReadAloudTexts.contains("Clarity beats volume.", in: pruned))
+    }
 }

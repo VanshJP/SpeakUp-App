@@ -1,6 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct ReadAloudSelectionView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var userSettings: [UserSettings]
+
     @State private var viewModel = ReadAloudViewModel()
     @State private var showingSession = false
     @State private var customText = ""
@@ -27,9 +31,56 @@ struct ReadAloudSelectionView: View {
         PronunciationService.canDefine(trimmedCustomText)
     }
 
+    // MARK: - Saved passage state
+
+    private var settings: UserSettings? { userSettings.first }
+
+    /// Stored text → passage, in stored (newest first) order. The id is derived
+    /// from the text, so rows keep their identity across renders.
+    private var savedPassages: [ReadAloudPassage] {
+        (settings?.savedReadAloudTexts ?? []).compactMap { ReadAloudPassage.saved(from: $0) }
+    }
+
+    private var isCurrentTextSaved: Bool {
+        settings?.hasSavedReadAloudText(customText) ?? false
+    }
+
+    /// Normalize once: the stored text is capped and trimmed, so removing has to
+    /// match on the same string the save wrote, not on the raw field.
+    private func toggleSaveCustom() {
+        guard let settings,
+              let text = ReadAloudPassage.normalizedCustomText(customText) else { return }
+        if settings.hasSavedReadAloudText(text) {
+            settings.removeSavedReadAloudText(text)
+            Haptics.light()
+        } else {
+            settings.addSavedReadAloudText(text)
+            Haptics.success()
+        }
+        try? modelContext.save()
+    }
+
+    private func deleteSaved(_ passage: ReadAloudPassage) {
+        guard let settings else { return }
+        settings.removeSavedReadAloudText(passage.text)
+        try? modelContext.save()
+        Haptics.light()
+    }
+
+    private func practice(_ passage: ReadAloudPassage) {
+        Haptics.medium()
+        customFieldFocused = false
+        pronunciationService.stop()
+        viewModel.isShadowMode = shadowMode
+        viewModel.selectedPassage = passage
+        showingSession = true
+    }
+
     var body: some View {
         ToolPage(tool: .readAloud, presentation: presentation) {
             customPracticeCard
+
+            savedSection
 
             Toggle(isOn: $shadowMode) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -120,12 +171,7 @@ struct ReadAloudSelectionView: View {
                             durationLabel: Self.estimatedTime(passage.wordCount),
                             tag: "\(passage.difficulty.displayName) · \(passage.wordCount) words"
                         ) {
-                            Haptics.medium()
-                            viewModel.isShadowMode = shadowMode
-                            customFieldFocused = false
-                            pronunciationService.stop()
-                            viewModel.selectedPassage = passage
-                            showingSession = true
+                            practice(passage)
                         }
                     }
                 }
@@ -157,9 +203,13 @@ struct ReadAloudSelectionView: View {
                     Text("Practice anything")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
+
+                    Spacer(minLength: 0)
+
+                    keepButton
                 }
 
-                Text("Type a word, sentence, or short paragraph. Hear it, then say it back.")
+                Text("Type a word, sentence, or short paragraph. Hear it, then say it back — keep it to practice again later.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -174,51 +224,46 @@ struct ReadAloudSelectionView: View {
                 .focused($customFieldFocused)
                 .padding(12)
                 .background {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.white.opacity(0.06))
                 }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                }
 
+                // `GlassButton` rather than two hand-rolled tinted rectangles:
+                // same capsule language, same 44pt minimum, same press feedback
+                // as every other secondary action in the app.
                 HStack(spacing: 10) {
-                    Button {
+                    GlassButton(
+                        title: pronunciationService.isSpeaking ? "Playing" : "Hear it",
+                        icon: pronunciationService.isSpeaking
+                            ? "speaker.wave.3.fill"
+                            : "speaker.wave.2.fill",
+                        style: .secondary,
+                        size: .small,
+                        fullWidth: true
+                    ) {
                         Haptics.light()
                         customFieldFocused = false
                         pronunciationService.speak(word: trimmedCustomText)
-                    } label: {
-                        Label(
-                            pronunciationService.isSpeaking ? "Playing" : "Hear it",
-                            systemImage: pronunciationService.isSpeaking
-                                ? "speaker.wave.3.fill"
-                                : "speaker.wave.2.fill"
-                        )
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(canPracticeCustom ? AppColors.toolReadAloud : .secondary)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(AppColors.toolReadAloud.opacity(canPracticeCustom ? 0.15 : 0.06))
                     }
                     .disabled(!canPracticeCustom || pronunciationService.isSpeaking)
+                    .opacity(canPracticeCustom ? 1 : 0.45)
                     .accessibilityLabel("Hear pronunciation")
 
                     if canDefineCustom {
-                        Button {
+                        GlassButton(
+                            title: "Define",
+                            icon: "book.fill",
+                            style: .secondary,
+                            size: .small,
+                            fullWidth: true
+                        ) {
                             Haptics.light()
                             pronunciationService.stop()
                             showingDictionary = true
-                        } label: {
-                            Label("Define", systemImage: "book.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(AppColors.toolReadAloud)
-                        .background {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(AppColors.toolReadAloud.opacity(0.15))
                         }
                         .accessibilityLabel("View dictionary definition")
                     }
@@ -238,14 +283,77 @@ struct ReadAloudSelectionView: View {
         }
     }
 
+    /// Keep / un-keep whatever is in the field. Disabled until the text is long
+    /// enough to be a passage, which is the same gate as Practice.
+    private var keepButton: some View {
+        Button {
+            toggleSaveCustom()
+        } label: {
+            Image(systemName: isCurrentTextSaved ? "bookmark.fill" : "bookmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isCurrentTextSaved ? AppColors.toolReadAloud : .secondary)
+                .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressStyle())
+        .disabled(!canPracticeCustom)
+        .opacity(canPracticeCustom ? 1 : 0.4)
+        .accessibilityLabel(isCurrentTextSaved ? "Remove from your passages" : "Keep this passage")
+    }
+
+    // MARK: - Yours
+
+    /// Your own passages, above the catalog. They read as ordinary passage rows
+    /// — same `PracticeItemRow`, same scoring path — because that is what they
+    /// are; the only difference is that you wrote them.
+    @ViewBuilder
+    private var savedSection: some View {
+        let saved = savedPassages
+        if !saved.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                GlassSectionHeader("Yours", icon: "bookmark.fill") {
+                    Text("\(saved.count)")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(saved) { passage in
+                    PracticeItemRow(
+                        title: passage.title,
+                        subtitle: passage.text,
+                        icon: ReadAloudCategory.custom.icon,
+                        tint: AppColors.difficultyColor(passage.difficulty),
+                        durationFraction: PracticeItemRow.fraction(
+                            Double(passage.wordCount),
+                            longest: max(longestPassageWords, Double(passage.wordCount))
+                        ),
+                        durationLabel: Self.estimatedTime(passage.wordCount),
+                        tag: "Yours · \(passage.wordCount) words"
+                    ) {
+                        practice(passage)
+                    }
+                    .contextMenu {
+                        Button {
+                            customText = passage.text
+                            customFieldFocused = true
+                        } label: {
+                            Label("Edit in Practice anything", systemImage: "pencil")
+                        }
+
+                        Button(role: .destructive) {
+                            deleteSaved(passage)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func startCustomPractice() {
         guard let passage = ReadAloudPassage.custom(from: customText) else { return }
-        Haptics.medium()
-        customFieldFocused = false
-        pronunciationService.stop()
-        viewModel.isShadowMode = shadowMode
-        viewModel.selectedPassage = passage
-        showingSession = true
+        practice(passage)
     }
 }
 

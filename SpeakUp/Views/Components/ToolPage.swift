@@ -151,7 +151,7 @@ struct SourceStoryBanner: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular.tint(tint.opacity(0.35)), in: .rect(cornerRadius: 14))
+        .glassEffect(.regular.tint(tint.opacity(0.10)), in: .rect(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 }

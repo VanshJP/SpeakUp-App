@@ -253,7 +253,7 @@ private struct RecordingPicker: View {
     }
 
     var body: some View {
-        GlassCard(cornerRadius: 16, tint: color, padding: 12) {
+        GlassCard(cornerRadius: 16, tint: color.opacity(0.06), padding: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: icon)

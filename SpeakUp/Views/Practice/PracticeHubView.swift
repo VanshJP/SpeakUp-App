@@ -66,7 +66,7 @@ struct PracticeHubView: View {
                             )
                             .transition(.identity)
                         case .tools:
-                            toolsSection
+                            toolsLanding
                                 .transition(.identity)
                         }
 
@@ -89,8 +89,9 @@ struct PracticeHubView: View {
         .onChange(of: storiesSearchText) { _, newValue in
             storiesViewModel.setSearch(newValue)
         }
-        .onChange(of: selectedSection) { _, _ in
-            selectedTool = nil
+        .navigationDestination(item: $selectedTool) { tool in
+            toolDetail(tool)
+                .restoresNavigationBar()
         }
         .navigationDestination(item: $selectedStory) { story in
             StoryDetailView(
@@ -172,24 +173,6 @@ struct PracticeHubView: View {
 
     private var toolsCatalog: [LibraryTool] { LibraryTool.allCases }
 
-    private var toolsSection: some View {
-        Group {
-            if let selectedTool {
-                toolDetail(selectedTool)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .trailing).combined(with: .opacity)
-                    ))
-            } else {
-                toolsLanding
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
-            }
-        }
-    }
-
     private var toolsLanding: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visiblePractice = query.isEmpty
@@ -229,9 +212,7 @@ struct PracticeHubView: View {
                                 tint: tool.kind.color,
                                 accessibilityDetail: tool.kind.outcome
                             ) {
-                                withAnimation(AppMotion.settle) {
-                                    selectedTool = tool
-                                }
+                                selectedTool = tool
                             }
                             .accessibilityHint(tool.kind.bestFor)
                         }
@@ -290,41 +271,23 @@ struct PracticeHubView: View {
         }
     }
 
+    /// A tool opens as a real push — the same navigation motion and the same
+    /// system Back button as a story or Compare. It used to slide in and out of
+    /// the scroll view under `withAnimation`, behind a hand-rolled "All tools"
+    /// pill, which is why entering a tool felt unlike entering anything else in
+    /// the app. `ToolPage(.pushed)` supplies the inline title and the outcome
+    /// line the old wrapper drew by hand.
     @ViewBuilder
     private func toolDetail(_ tool: LibraryTool) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            GlassButton(
-                title: "All tools",
-                icon: "chevron.left",
-                style: .secondary,
-                size: .small
-            ) {
-                Haptics.light()
-                withAnimation(AppMotion.settle) {
-                    selectedTool = nil
-                }
-            }
-            .accessibilityHint("Returns to the tools list")
-
-            Text(tool.kind.title)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
-
-            Text(tool.kind.outcome)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            switch tool {
-            case .warmUps:
-                WarmUpListView(presentation: .embedded)
-            case .drills:
-                DrillSelectionView(presentation: .embedded)
-            case .readAloud:
-                ReadAloudSelectionView(presentation: .embedded)
-            case .confidence:
-                ConfidenceToolsView(presentation: .embedded)
-            }
+        switch tool {
+        case .warmUps:
+            WarmUpListView(presentation: .pushed)
+        case .drills:
+            DrillSelectionView(presentation: .pushed)
+        case .readAloud:
+            ReadAloudSelectionView(presentation: .pushed)
+        case .confidence:
+            ConfidenceToolsView(presentation: .pushed)
         }
     }
 

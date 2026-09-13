@@ -28,6 +28,7 @@ struct GlassCard<Content: View>: View {
 
     var body: some View {
         content
+            .environment(\.isOnGlass, true)
             .padding(padding)
             .glassEffect(resolvedGlass, in: .rect(cornerRadius: cornerRadius))
             .overlay {
@@ -73,6 +74,7 @@ struct FeaturedGlassCard<Content: View>: View {
 
     var body: some View {
         content
+            .environment(\.isOnGlass, true)
             .padding(padding)
             .glassEffect(.regular.tint(gradientColors.first ?? AppColors.primary), in: .rect(cornerRadius: cornerRadius))
             .shadow(color: .black.opacity(0.3), radius: 18, y: 9)

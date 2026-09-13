@@ -29,6 +29,8 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | New projection column reads nil on legacy rows | 18 |
 | CloudKit push warning / cfprefsd "detaching" console noise | 19 |
 | A root tab's toolbar item renders nowhere; a pushed page loses Back | 20 |
+| Chart fill bleeds out of its card; marks draw outside the plot | 21 |
+| A control inside a glass card reads as a grey band, not a button | 22 |
 
 ## Punch list
 
@@ -48,6 +50,8 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 13. `installTap` / `removeTap` on a running `AVAudioEngine` — audio-thread segfault, no app frames.
 14. Plain `ScrollView` for a full-screen page — use `PageScrollView`.
 15. A `topBarTrailing` toolbar item on a root tab (or on any view inside one) — root tabs have no navigation bar.
+16. `AreaMark(x:y:)` on a chart whose y-domain does not start at 0 — the fill runs to zero in data space, outside the card.
+17. A `glassEffect` surface nested directly inside a `GlassCard`.
 
 ---
 
@@ -263,3 +267,31 @@ Two consequences, both silent:
 - **A page pushed from a bar-less root should say `.restoresNavigationBar()`.** SwiftUI resolves toolbar visibility per view in the stack, so a push gets its bar back on its own — but a detail page silently missing its Back button is an expensive thing to be wrong about, so the pushes from these four roots declare it.
 
 Search on a root tab is `InlineSearchField` drawn by the **section**, not by the page, and not `.searchable`; it also needs `.scrollDismissesKeyboard(.interactively)`, which `.searchable` used to supply. Its trailing slot is where that section's filter or sort menu goes — not the end of a chip row or folder bar, where the rail scrolls underneath the button. Full rules: [features/ui-design-system.md](./features/ui-design-system.md) §9.
+
+---
+
+## 21. `AreaMark` fills to zero in *data* space, and Charts does not clip
+
+`AreaMark(x:y:)` with no `yStart` fills from **0**, not from the bottom of the plot. Any chart whose `chartYScale` domain starts above zero therefore draws its gradient below the plot rect — and Swift Charts does not clip marks to the plot area by default, so the fill keeps going straight out of the `GlassCard` and down the page. That is what the blue wash under the Overall Score trend was: its domain is `min(score) - 10 … max(score) + 10`.
+
+Fix is per-mark, not per-chart: pass the domain floor explicitly.
+
+```swift
+AreaMark(
+    x:      .value("Date", point.date),
+    yStart: .value("Baseline", model.yDomain.lowerBound),
+    yEnd:   .value("Score", point.score)
+)
+```
+
+`ScoreProgressChart` (`ProgressChartsView`) and `WPMChartView` both compute a non-zero floor and both needed it. `PracticeHistoryChart` is pinned to `0...100` so its baseline was already right, but `.interpolationMethod(.catmullRom)` overshoots past 100 on a spiky run — it takes `.chartPlotStyle { $0.clipped() }` instead, which is safe **only** because it draws no `PointMark`s for the clip to cut in half at the plot edges. Do not add that modifier to a chart with point symbols.
+
+---
+
+## 22. Glass on glass samples glass
+
+Liquid Glass samples what is behind it. A second `glassEffect` laid straight on a `GlassCard` therefore samples the plate rather than the canvas, and renders as a murky grey band where a control should be. It is worst on tall cards, which is how it showed up on the Today focus card once its CTA moved to `GlassButton.secondary` (a `.glassEffect(…, in: .capsule)`).
+
+`GlassCard`, `FeaturedGlassCard` and `.glassCard()` set `\.isOnGlass` on their content; `GlassButtonChrome` reads it and paints a capsule (white 0.10 fill, 0.16 rim) instead of glassing it. Any new glass surface that can appear inside a card owes the same branch — or wrap both in a `GlassEffectContainer` if two glass surfaces genuinely must share a region. Branch on the environment value, never on animated state (design rule 14: never animate a `glassEffect` on/off).
+
+Symptom without the fix: the control is legible in isolation and in a `#Preview` over `AppBackground`, and only goes grey once it is inside a card — which is why it survived review.
