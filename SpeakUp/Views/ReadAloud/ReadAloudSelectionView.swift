@@ -19,6 +19,13 @@ struct ReadAloudSelectionView: View {
         Double(viewModel.passages.map(\.wordCount).max() ?? 0)
     }
 
+    /// Saved rows size their dials against each other, not against whatever the
+    /// catalog filters happen to leave on screen — otherwise the same passage's
+    /// dial changes size when you tap a difficulty pill.
+    private var longestSavedWords: Double {
+        Double(savedPassages.map(\.wordCount).max() ?? 0)
+    }
+
     private var trimmedCustomText: String {
         customText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -325,7 +332,7 @@ struct ReadAloudSelectionView: View {
                         tint: AppColors.difficultyColor(passage.difficulty),
                         durationFraction: PracticeItemRow.fraction(
                             Double(passage.wordCount),
-                            longest: max(longestPassageWords, Double(passage.wordCount))
+                            longest: longestSavedWords
                         ),
                         durationLabel: Self.estimatedTime(passage.wordCount),
                         tag: "Yours · \(passage.wordCount) words"

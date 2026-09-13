@@ -253,44 +253,36 @@ struct MeanLengthOfRunTests {
     }
 
     @Test func emptyInputReturnsZero() {
-        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: [], pauseMetadata: []) == 0)
+        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: []) == 0)
     }
 
     @Test func singleWordIsARunOfOne() {
-        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: timed([(0.0, 0.5)]), pauseMetadata: []) == 1.0)
+        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: timed([(0.0, 0.5)])) == 1.0)
     }
 
     @Test func contiguousSpeechIsOneLongRun() {
         let spans = (0..<8).map { i -> (Double, Double) in (Double(i) * 0.5, Double(i) * 0.5 + 0.5) }
-        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans), pauseMetadata: []) == 8.0)
+        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans)) == 8.0)
     }
 
     @Test func pausesSplitRunsIntoGroups() {
-        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: timed(groupedSpans()), pauseMetadata: []) == 3.0)
+        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: timed(groupedSpans())) == 3.0)
     }
 
     @Test func gapOfQuarterSecondDoesNotSplitButHalfSecondDoes() {
         // Pins the >0.4s cutoff using dyadic offsets so the comparison is float-exact.
         let close = timed([(0.0, 1.0), (1.25, 1.75), (1.75, 2.25)])
-        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: close, pauseMetadata: []) == 3.0)
+        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: close) == 3.0)
         let far = timed([(0.0, 1.0), (1.5, 2.0), (2.0, 2.5)])
-        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: far, pauseMetadata: []) == 1.5)
+        #expect(SpeechScoringEngine.computeMeanLengthOfRun(words: far) == 1.5)
     }
 
     @Test func outOfOrderSegmentsSortBeforeGapDetection() {
         let spans = groupedSpans()
-        let sorted = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans), pauseMetadata: [])
-        let reversed = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(Array(spans.reversed())), pauseMetadata: [])
+        let sorted = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans))
+        let reversed = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(Array(spans.reversed())))
         #expect(reversed == sorted)
         #expect(sorted == 3.0)
-    }
-
-    @Test func pauseMetadataIsAcceptedButIgnored() {
-        let spans = (0..<8).map { i -> (Double, Double) in (Double(i) * 0.5, Double(i) * 0.5 + 0.5) }
-        let junk = [PauseInfo(duration: 99, isTransition: true, startTime: 3)]
-        let plain = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans), pauseMetadata: [])
-        let noisy = SpeechScoringEngine.computeMeanLengthOfRun(words: timed(spans), pauseMetadata: junk)
-        #expect(noisy == plain)
     }
 }
 

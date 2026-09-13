@@ -123,7 +123,7 @@ Returns `EnhancedSpeechMetrics`. All helpers live in `SpeechScoringEngine.swift`
 
 - **PTR (Phonation Time Ratio)** — `PTR = totalVoicedTime / actualDuration`, `totalVoicedTime = Σ max(0, word.duration)`. Ideal band **0.45–0.80**.
 - **Articulation Rate** — `nonFillerCount / (totalVoicedTime / 60)` (WPM during voiced frames only). Ideal band **100–200 WPM**.
-- **MLR (Mean Length of Run)** — `computeMeanLengthOfRun(words:pauseMetadata:)`. Avg consecutive non-filler words between pauses > 0.4 s. `MLR ≥ 8` = fluent, `< 4` = disfluent.
+- **MLR (Mean Length of Run)** — `computeMeanLengthOfRun(words:)`. Avg consecutive non-filler words between pauses > 0.4 s. `MLR ≥ 8` = fluent, `< 4` = disfluent.
 - **MATTR** — `computeMATTR(words:windowSize: 50)` (Covington & McFall 2010). Full marks **≥ 0.72**.
 - **Content Word Density** — `computeContentWordDensity(text:duration:)`. Unique nouns/verbs/adjectives/adverbs (stop verbs excluded) per minute.
 - **Substance Score** (0–100) — additive of 5 components (see table).

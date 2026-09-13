@@ -51,12 +51,6 @@ struct RecordingBackdropTests {
         #expect(RecordingBackdrop.base.look == .classic)
     }
 
-    @Test func everyLookIsAStill() {
-        for look in CanvasLook.allCases {
-            #expect(!look.isAnimated, "\(look) should be a still")
-        }
-    }
-
     @Test func everyMenuEntryMapsToItsOwnLook() {
         let looks = RecordingBackdrop.allCases.filter { $0 != .base }.map(\.look)
         #expect(Set(looks).count == looks.count)

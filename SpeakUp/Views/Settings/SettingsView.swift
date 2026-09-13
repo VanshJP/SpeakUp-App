@@ -102,7 +102,7 @@ struct SettingsView: View {
                 subtitle: appLookSubtitle,
                 accessory: {
                     lookSwatch {
-                        AppCanvasView(canvas: viewModel.appCanvas, style: .primary, animated: false)
+                        AppCanvasView(canvas: viewModel.appCanvas, style: .primary)
                     }
                 }
             ) {
@@ -118,7 +118,6 @@ struct SettingsView: View {
                     lookSwatch {
                         RecordingBackdropView(
                             backdrop: viewModel.recordingBackdrop,
-                            animated: false,
                             fillsSafeArea: false
                         )
                     }

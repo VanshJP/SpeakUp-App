@@ -37,7 +37,7 @@ struct RecordingLookView: View {
                     ) { backdrop in
                         viewModel.recordingBackdrop = backdrop
                     } thumbnail: { backdrop in
-                        RecordingBackdropView(backdrop: backdrop, animated: false, fillsSafeArea: false)
+                        RecordingBackdropView(backdrop: backdrop, fillsSafeArea: false)
                     }
 
                     group(

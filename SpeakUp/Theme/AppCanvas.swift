@@ -74,8 +74,6 @@ nonisolated enum AppCanvas: Int, Codable, CaseIterable, Identifiable, Sendable {
 struct AppCanvasView: View {
     var canvas: AppCanvas = .classic
     var style: AppBackground.Style = .primary
-    /// Kept for call-site compatibility. All canvases are stills now.
-    var animated: Bool = true
 
     var body: some View {
         CanvasLookView(look: canvas.look, mood: .ambient, tone: style)
@@ -92,8 +90,6 @@ struct CanvasLookView: View {
     let look: CanvasLook
     let mood: CanvasMood
     var tone: AppBackground.Style = .primary
-    /// Unused — every look is a still. Kept so thumbnail call sites do not churn.
-    var animated: Bool = true
 
     var body: some View {
         Canvas(opaque: true) { graphics, size in

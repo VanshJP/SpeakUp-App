@@ -8,8 +8,6 @@ import SwiftUI
 /// washes; every other look keeps one mood.
 struct AppBackground: View {
     var style: Style = .primary
-    /// Unused — every look is a still. Kept so tab call sites do not churn.
-    var animated: Bool = true
 
     @Environment(\.appCanvas) private var canvas
 

@@ -56,10 +56,6 @@ nonisolated enum CanvasLook: CaseIterable, Hashable, Sendable {
         case .noir: return "Near-black with one teal slash"
         }
     }
-
-    /// Kept for menu / test callers. Every look is a still now — motion behind
-    /// tabs cost frames and restarted on every switch.
-    var isAnimated: Bool { false }
 }
 
 // MARK: - Mood
