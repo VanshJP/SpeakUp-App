@@ -3,6 +3,8 @@ import SwiftData
 
 @Observable
 class AchievementService {
+    static let shared = AchievementService()
+
     var newlyUnlocked: Achievement?
 
     /// Recording-derived facts computed on a background context so achievement
@@ -48,6 +50,18 @@ class AchievementService {
         }
 
         evaluateAll(achievements: achievements, signals: signals, context: context, listenBackCount: listenBackCount)
+    }
+
+    /// Repairs the legacy path where the counter advanced without evaluating
+    /// Brave Listener, while avoiding a full recording scan after it unlocks.
+    @MainActor
+    func checkListenBackAchievement(context: ModelContext, listenBackCount: Int) async {
+        guard listenBackCount >= 1 else { return }
+        if let achievements = try? context.fetch(FetchDescriptor<Achievement>()),
+           achievements.contains(where: { $0.id == AchievementDefinition.listenBack.rawValue && $0.isUnlocked }) {
+            return
+        }
+        await checkAchievements(context: context, listenBackCount: listenBackCount)
     }
 
     nonisolated private static func computeSignals(container: ModelContainer) -> Signals? {

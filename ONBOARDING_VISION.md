@@ -90,6 +90,9 @@ be written in prose:
    strictly sequential — `TodayView.checkFirstRunSurfaces()` shows the sheet
    first and starts the tour from its `onDismiss`, because the tour's
    spotlight is a cutout in a dim layer that a presented sheet would cover.
+   Today may mount before onboarding creates the baseline, so the check also
+   runs when Today becomes the active, unobscured tab and after pull-to-refresh;
+   it is not a once-per-view-lifetime task.
 9. **Progress reads as "enough", not "deadline".** The take clock counts
    up; a baseline take is 30 seconds minimum — the stop button unlocks at
    the same moment the "Enough for a baseline ✓" tick flips, so the floor

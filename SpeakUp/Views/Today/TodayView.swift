@@ -25,6 +25,10 @@ struct TodayView: View {
     @State private var dropTarget: TodayHomeModule?
     @State private var trayTargeted = false
 
+    /// True only when Today is visible and onboarding is not covering the app.
+    /// First-run setup must wait for this edge because Today can mount before
+    /// onboarding creates the baseline recording.
+    var isActiveTab: Bool
     var onStartRecording: (Prompt?, RecordingDuration) -> Void
     var onShowReadAloud: () -> Void
     var onShowWarmUps: () -> Void
@@ -93,14 +97,23 @@ struct TodayView: View {
         .toolbar(.hidden, for: .navigationBar)
         .refreshable {
             await viewModel.loadData()
+            if isActiveTab {
+                await checkFirstRunSurfaces()
+            }
         }
         .onAppear {
             viewModel.configure(with: modelContext)
         }
         .task {
             playArrivalIfNeeded()
-            await checkFirstRunSurfaces()
+            if isActiveTab {
+                await checkFirstRunSurfaces()
+            }
             viewModel.warmVocabFreshWords(llmService: llmService)
+        }
+        .onChange(of: isActiveTab) { _, active in
+            guard active else { return }
+            Task { await checkFirstRunSurfaces() }
         }
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading { playArrivalIfNeeded() }
@@ -926,6 +939,7 @@ struct TodayView: View {
 #Preview {
     NavigationStack {
         TodayView(
+            isActiveTab: true,
             onStartRecording: { _, _ in },
             onShowReadAloud: {},
             onShowWarmUps: {},

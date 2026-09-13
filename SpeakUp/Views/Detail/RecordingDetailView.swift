@@ -88,6 +88,7 @@ struct RecordingDetailView: View {
     @State private var nextStepDrill: DrillMode?
     @State private var showingNextStepWarmUp = false
     @State private var showingNextStepReadAloud = false
+    @State private var achievementService = AchievementService.shared
     @State private var coachMoments = CoachMomentService.shared
     @State private var coachMomentEvaluated = false
     @State private var isDetailActive = false
@@ -1933,6 +1934,7 @@ struct RecordingDetailView: View {
             do {
                 try await audioService.play(url: url, startingAt: time)
                 playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+                await recordSuccessfulListenBack()
             } catch {
                 playbackErrorMessage = "This recording couldn't play right now. Try again in a moment."
             }
@@ -1940,10 +1942,6 @@ struct RecordingDetailView: View {
     }
 
     private func proceedWithPlayback() {
-        if let settings = userSettings.first {
-            settings.listenBackCount += 1
-            try? modelContext.save()
-        }
         guard case .ready(let recording) = detailScreenState,
               let url = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
             playbackErrorMessage = "Audio file is no longer available. It may have been moved or deleted."
@@ -1960,10 +1958,24 @@ struct RecordingDetailView: View {
             do {
                 try await audioService.play(url: url, startingAt: startTime)
                 playbackViewModel.sync(from: audioService, fallbackDuration: recording.actualDuration)
+                await recordSuccessfulListenBack()
             } catch {
                 playbackErrorMessage = "This recording couldn't play right now. Try again in a moment."
             }
         }
+    }
+
+    private func recordSuccessfulListenBack() async {
+        guard let settings = userSettings.first else { return }
+        if settings.listenBackCount == 0 {
+            settings.listenBackCount += 1
+            try? modelContext.save()
+        }
+        markActivatedIfFirstResult()
+        await achievementService.checkListenBackAchievement(
+            context: modelContext,
+            listenBackCount: settings.listenBackCount
+        )
     }
 
     private func toggleFavorite(_ recording: Recording) {

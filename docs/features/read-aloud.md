@@ -95,8 +95,13 @@ Unchanged for custom vs catalog:
 
 1. Show source text; record via `AudioService`.
 2. Transcribe (`SpeechService`).
-3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` produces matched, missed, and extra states.
-4. Persist `Recording` with `promptCategory: "Read Aloud"`, analysis JSON including alignment.
+3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` — matched / missed / extra.
+4. Show `ReadAloudResultView`, then reset on Done or run the same passage on Retry.
+
+Current code does **not** persist a SwiftData `Recording`; Read-Aloud results
+are session-local and therefore absent from History and longitudinal clarity
+charts. Successful matching still writes the curriculum activity signal. Treat
+History persistence as future product work, not as an implemented contract.
 
 Silence-is-not-a-score applies (see practice-tools invariant 14).
 
@@ -140,6 +145,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts; recognition failure sets `service.recognitionFailureMessage`, ends the session within 250 ms, and lands on the result screen as a warning notice, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
 - The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
 - Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
+- Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.
 - Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
 
 - Do **not** add a sixth `PracticeToolKind` for “pronounce word”. Extend Read Aloud.

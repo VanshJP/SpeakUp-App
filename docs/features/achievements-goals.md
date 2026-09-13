@@ -17,6 +17,13 @@ Presented as sheets from Today / `ContentView` — **not** a tab.
 
 **Gotchas:** CloudKit can duplicate Achievement rows — service dedupes by id. Celebrations are in-app only: no milestone notification and no review ask. New definition cases are inserted on launch (`SpeakUpApp`) and again in `evaluateAll` if a row is missing; existing rows refresh title/description/icon from `AchievementDefinition` without touching unlock state.
 
+`AchievementService.shared` is the app-wide observable instance used by
+`ContentView` and recording detail. The first successful playback increments
+`UserSettings.listenBackCount`, saves it, then checks achievements with that
+count; failed or still-downloading playback does not unlock **Brave Listener**.
+Using a throwaway service instance would persist the unlock but lose the
+root-level celebration.
+
 ## Goals
 
 | Role | Path |

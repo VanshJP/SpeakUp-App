@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var pendingRecordingNavigation: String?
     @State private var freshResultRecordingId: String?
     @State private var showOnboarding = false
-    @State private var achievementService = AchievementService()
+    @State private var achievementService = AchievementService.shared
     @State private var coachMoments = CoachMomentService.shared
     /// Owned here because the tour crosses tabs: it drives `selectedTab` and
     /// draws over the tab bar, neither of which a single tab's root can do.
@@ -82,6 +82,7 @@ struct ContentView: View {
         switch tab {
         case .today:
             TodayView(
+                isActiveTab: selectedTab == .today && !showOnboarding,
                 onStartRecording: { prompt, duration in
                     recordingPrompt = prompt
                     recordingStoryId = nil
