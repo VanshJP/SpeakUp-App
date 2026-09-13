@@ -15,7 +15,7 @@ nonisolated enum ReadAloudDocumentImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFormat:
-            return "Choose a TXT, RTF, HTML, or PDF document."
+            return "Choose a TXT, RTF, or PDF document."
         case .unreadableDocument:
             return "This document could not be read. Try another file or paste its text."
         case .emptyDocument:
@@ -29,7 +29,6 @@ nonisolated enum ReadAloudDocumentImporter {
         .plainText,
         .rtf,
         .rtfd,
-        .html,
         .pdf
     ]
 
@@ -74,12 +73,6 @@ nonisolated enum ReadAloudDocumentImporter {
 
         if contentType?.conforms(to: .rtfd) == true || pathExtension == "rtfd" {
             return try attributedText(from: url, type: .rtfd)
-        }
-
-        if contentType?.conforms(to: .html) == true
-            || pathExtension == "html"
-            || pathExtension == "htm" {
-            return try attributedText(from: url, type: .html)
         }
 
         if contentType?.conforms(to: .plainText) == true

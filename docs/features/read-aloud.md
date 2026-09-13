@@ -1,6 +1,6 @@
 # Read Aloud
 
-**Summary:** Practice reading scripted text with word-level accuracy scoring. Pick a catalog passage or a saved passage, or add personal text in a focused composer. The composer accepts typing, Clipboard paste, and TXT, RTF, RTFD, HTML, or PDF imports. Users can hear a TTS model, optionally open the system dictionary for a single word, then record and match against the source.
+**Summary:** Practice reading scripted text with word-level accuracy scoring. Pick a catalog passage or a saved passage, or add personal text in a focused composer. The composer accepts typing, Clipboard paste, and TXT, RTF, RTFD, or PDF imports. Users can hear a TTS model, optionally open the system dictionary for a single word, then record and match against the source.
 
 Also supports **Shadow mode** (hear the TTS model, then speak it back) and **Minimal pairs** packs.
 
@@ -39,7 +39,7 @@ Saved passages appear in a bounded horizontal rail. Tapping a card starts practi
 `ReadAloudComposerSheet` owns the creation flow:
 
 1. **Paste** reads Clipboard text after an explicit tap.
-2. **Import File** accepts TXT, RTF, RTFD, HTML, and text-based PDF documents through `ReadAloudDocumentImporter`.
+2. **Import File** accepts TXT, RTF, RTFD, and text-based PDF documents through `ReadAloudDocumentImporter`.
 3. **Type or edit** uses a dedicated editor with live word and character counts.
 4. **Hear It** uses `PronunciationService.speak(word:)`. Multi-word phrases speak as one utterance; more than three tokens use rate `0.32`, otherwise `0.35`.
 5. **Define** appears only when `PronunciationService.canDefine` is true. It opens `DictionaryView` and then `UIReferenceLibraryViewController`.
@@ -122,7 +122,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/Views/ReadAloud/ReadAloudComposerSheet.swift` | Paste, import, edit, preview, save, and practice flow |
 | `SpeakUp/Views/ReadAloud/ReadAloudSessionView.swift` | Record + score |
 | `SpeakUp/Views/ReadAloud/DictionaryView.swift` | System dictionary sheet |
-| `SpeakUp/Services/ReadAloudDocumentImporter.swift` | On-device TXT, rich text, HTML, and PDF extraction |
+| `SpeakUp/Services/ReadAloudDocumentImporter.swift` | On-device TXT, rich text, and PDF extraction |
 | `SpeakUp/Services/PronunciationService.swift` | TTS + define gate |
 | `SpeakUp/Services/ReadAloudService.swift` | Session listening + `computeAlignment` |
 | `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |

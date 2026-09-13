@@ -326,8 +326,9 @@ struct ReadAloudComposerSheet: View {
         )
     }
 
-    private func handleFileImport(_ result: Result<URL, Error>) {
-        guard case .success(let url) = result else {
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result,
+              let url = urls.first else {
             if case .failure(let error) = result,
                !(error is CancellationError) {
                 errorMessage = error.localizedDescription

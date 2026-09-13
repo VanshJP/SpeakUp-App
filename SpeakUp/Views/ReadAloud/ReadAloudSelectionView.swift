@@ -217,7 +217,7 @@ struct ReadAloudSelectionView: View {
                             Text("Add Your Own Passage")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
-                            Text("Paste, type, or import TXT, RTF, HTML, or PDF")
+                            Text("Paste, type, or import TXT, RTF, or PDF")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
