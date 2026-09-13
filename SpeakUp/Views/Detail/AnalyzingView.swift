@@ -153,44 +153,49 @@ struct AnalyzingView: View {
     }
 
     private var feedbackContent: some View {
-        Group {
-            if feedbackQuestions.count > 2 {
-                PageScrollView {
-                    feedbackContentStack
-                }
-                .scrollIndicators(.hidden)
-            } else {
-                feedbackContentStack
-            }
+        // Always scroll — two default questions plus the status orb already
+        // overflow a small phone once Dynamic Type climbs, and a non-scrolling
+        // stack was compressing the Yes/No row onto its polarity labels.
+        PageScrollView {
+            feedbackContentStack
         }
+        .scrollIndicators(.hidden)
     }
 
     private var feedbackContentStack: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             Spacer()
                 .frame(height: onSaveAndClose == nil ? systemTopSafeAreaInset + 8 : 8)
 
+            // scaleEffect does not change layout size. Size the host to the
+            // scaled bounds and clip so the orb cannot paint over the status
+            // copy or the self-check card.
             WaveformOrb(
                 phase: waveformPhase,
                 pulseScale: pulseScale,
                 showCheckmark: analysisReady
             )
+            .frame(width: 200, height: 200)
             .scaleEffect(0.58)
-            .frame(height: 94)
+            .frame(width: 116, height: 116)
+            .clipped()
 
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 Text(statusTitle)
                     .font(.subheadline.weight(.semibold))
                     .contentTransition(.numericText())
+                    .multilineTextAlignment(.center)
 
                 Text(statusSubtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             allQuestionsCard
 
-            Spacer(minLength: 6)
+            Spacer(minLength: 12)
         }
         .padding(.horizontal, 20)
     }
@@ -259,7 +264,12 @@ struct AnalyzingView: View {
             Divider()
                 .overlay(Color.white.opacity(0.06))
 
-            HStack(spacing: 12) {
+            // Vertical stack — the old HStack put "Skip to Results" beside
+            // "Answer any you'd like, or skip to results" and the two collided
+            // at accessibility text sizes / narrow widths.
+            VStack(spacing: 6) {
+                autoSubmitStatusLabel
+
                 Button {
                     Haptics.light()
                     pendingAutoSubmit?.cancel()
@@ -275,17 +285,14 @@ struct AnalyzingView: View {
                     }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-
-                Spacer()
-
-                autoSubmitStatusLabel
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .background(.ultraThinMaterial)
         }
         .animation(.easeInOut(duration: 0.2), value: allQuestionsAnswered)
@@ -302,13 +309,15 @@ struct AnalyzingView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppColors.primary)
             }
-            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
             .transition(.opacity)
         } else {
             Text("Answer any you'd like, or skip to results")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
                 .transition(.opacity)
         }
     }
@@ -507,21 +516,12 @@ private struct YesNoInput: View {
     let onSelect: (Bool) -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                optionButton(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning)
-                optionButton(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success)
-            }
-
-            HStack {
-                Text("Not really")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("Strong")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+        // Buttons already say No / Yes. The old "Not really" / "Strong"
+        // polarity captions belonged to a slider and sat under the buttons,
+        // colliding with them when the card was height-compressed.
+        HStack(spacing: 12) {
+            optionButton(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning)
+            optionButton(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success)
         }
     }
 

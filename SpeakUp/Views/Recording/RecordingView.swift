@@ -525,6 +525,8 @@ struct RecordingView: View {
             Text(cue.message)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -536,6 +538,11 @@ struct RecordingView: View {
                         .strokeBorder(cue.tint.opacity(0.4), lineWidth: 0.5)
                 }
         }
+        // Ideal width only — an overlay proposes the full controls width, and
+        // without this a long cue can compress into a narrow wrapping column
+        // that sits on top of the record button.
+        .fixedSize(horizontal: true, vertical: false)
+        .allowsHitTesting(false)
     }
 
 
@@ -578,10 +585,17 @@ struct RecordingView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .animation(.easeInOut(duration: 0.2), value: isRecording)
         }
+        // Float the cue in the slack under the dial. `.top` alone parks the
+        // cue's *top* on the controls' top edge, so most of the capsule still
+        // covered the record button / waveform. Align the cue's *bottom*
+        // instead, with a small gap, so the whole chip clears the controls
+        // without growing this stack (growing it would resize the dial).
         .overlay(alignment: .top) {
             if let cue, isRecording {
                 coachingCueView(cue)
-                    .offset(y: -18)
+                    .alignmentGuide(.top) { dimensions in
+                        dimensions[VerticalAlignment.bottom] + 12
+                    }
                     .transition(.opacity)
                     .id(cue.message)
             }
