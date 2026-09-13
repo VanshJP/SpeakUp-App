@@ -200,7 +200,7 @@ enum VocabFreshWordGenerator {
 
     private static let systemPrompt = """
     You expand the vocabulary of a public-speaking practice app. You answer \
-    with plain formatted lines only — no markdown, no commentary.
+    with plain formatted lines only. Do not use markdown or add commentary.
     """
 
     private static func request(level: Int, recentKeys: [String]) -> String {

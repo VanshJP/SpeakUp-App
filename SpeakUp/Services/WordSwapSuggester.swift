@@ -111,7 +111,7 @@ nonisolated enum WordSwapSuggester {
             return vagueNounOptions(word, at: index, tokens)
         case "a lot":
             if token(tokenRange.upperBound, in: tokens) == "of" {
-                return [option("quantify it — “70%”, “12 people”", cue: "“a lot of” hides the number"),
+                return [option("quantify it: “70%”, “12 people”", cue: "“a lot of” hides the number"),
                         option("“considerably”, sparingly")]
             }
             return [option("“often”", cue: "frequency adverb beats vagueness"),
@@ -157,7 +157,7 @@ nonisolated enum WordSwapSuggester {
         // Sentence-opening "Like, ..." — pure throat-clearing.
         if isSentenceStart(index, tokens) {
             return [
-                option("cut it — start straight in", cue: "sentence opener"),
+                option("cut it. Start straight in", cue: "sentence opener"),
                 option("a silent pause")
             ]
         }
@@ -179,14 +179,14 @@ nonisolated enum WordSwapSuggester {
         // real check-in used once, not every sentence.
         if isSentenceEnd(index, tokens) {
             return [
-                option("hold silence — let it land", cue: "tag at sentence end"),
+                option("hold silence. Let it land", cue: "tag at sentence end"),
                 option("“Does that make sense?”, at most once"),
                 option("nod instead")
             ]
         }
         if isSentenceStart(index, tokens) {
             return [
-                option("cut it — open on the point", cue: "throat-clearing opener"),
+                option("cut it. Open on the point", cue: "throat-clearing opener"),
                 option("a silent pause")
             ]
         }
@@ -209,7 +209,7 @@ nonisolated enum WordSwapSuggester {
         // "I just want..." — the hedge shrinks your own ask; delete it.
         if let next, desireVerbs.contains(next) {
             return [
-                option("“I \(next)”", cue: "drop “just” — state the ask"),
+                option("“I \(next)”", cue: "drop “just” and state the ask"),
                 option("drop “just” entirely"),
                 option("“only”, when counting matters")
             ]
@@ -233,7 +233,7 @@ nonisolated enum WordSwapSuggester {
         if let next, let stronger = strengtheners[next] {
             return [
                 option("“\(stronger)”", cue: "one strong word beats two"),
-                option("quantify instead — give the number"),
+                option("quantify instead. Give the number"),
                 option("cut “\(word)”")
             ]
         }
@@ -263,7 +263,7 @@ nonisolated enum WordSwapSuggester {
 
         if let next, isAdjectiveish(next) || matches(next, in: verbCues) || isPastOrProgressiveVerb(next) {
             return [
-                option("drop it — state it directly", cue: "hedged claim"),
+                option("drop it. State it directly", cue: "hedged claim"),
                 option("“somewhat”, sparingly"),
                 option("be specific instead")
             ]
@@ -278,8 +278,8 @@ nonisolated enum WordSwapSuggester {
            let referent = token(index + 2, in: tokens),
            referent.count <= 12 {
             return [
-                option("name them — “including \(referent)”", cue: "the example is already in reach"),
-                option("count them — “three things”, then name them"),
+                option("name them: “including \(referent)”", cue: "the example is already in reach"),
+                option("count them: “three things”, then name them"),
                 option("the specifics")
             ]
         }

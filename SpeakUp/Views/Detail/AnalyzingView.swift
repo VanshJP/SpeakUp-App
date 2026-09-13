@@ -645,7 +645,7 @@ private struct MotivationalTipCard: View {
         (icon: "text.bubble", text: "While you wait: name your top filler. Next take, swap it for a pause."),
         (icon: "speedometer", text: "Pace tip: breathe at sentence ends. That alone pulls many speakers onto target."),
         (icon: "pause.circle", text: "A one-beat pause after a key point is a technique, not a stall."),
-        (icon: "list.bullet", text: "Structure tip: lead with the point, then the reason — PREP in two moves."),
+        (icon: "list.bullet", text: "Structure tip: lead with the point, then the reason. Use PREP in two moves."),
         (icon: "scope", text: "One adjustment per take beats chasing every score at once.")
     ]
 

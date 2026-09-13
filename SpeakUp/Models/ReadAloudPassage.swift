@@ -47,6 +47,37 @@ nonisolated struct ReadAloudPassage: Identifiable, Hashable {
         return capped.isEmpty ? nil : capped
     }
 
+    /// Returns an opening that fits one scored take. Prefer a sentence or
+    /// paragraph boundary near the cap, then a word boundary, before using a
+    /// hard character boundary as the final fallback.
+    static func practiceSizedExcerpt(from raw: String) -> String? {
+        let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleaned.count >= customMinCharacters else { return nil }
+        guard cleaned.count > customMaxCharacters else { return cleaned }
+
+        let capped = String(cleaned.prefix(customMaxCharacters))
+        let preferredStart = capped.index(
+            capped.startIndex,
+            offsetBy: customMaxCharacters / 2
+        )
+        let preferredRange = preferredStart..<capped.endIndex
+
+        if let boundary = capped[preferredRange].lastIndex(where: {
+            $0 == "." || $0 == "!" || $0 == "?" || $0 == "\n"
+        }) {
+            let end = capped.index(after: boundary)
+            return String(capped[..<end])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let boundary = capped[preferredRange].lastIndex(where: \.isWhitespace) {
+            return String(capped[..<boundary])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return capped.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private static func make(text: String, id: String) -> ReadAloudPassage {
         let count = text.split(whereSeparator: { $0.isWhitespace }).count
         let title: String

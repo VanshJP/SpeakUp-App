@@ -251,7 +251,7 @@ struct LanguageInsightsView: View {
 
                     wordGroup(
                         label: "Topics you return to",
-                        context: "What your answers keep circling back to. A short list means a narrow story bank — worth widening before an interview.",
+                        context: "What your answers keep circling back to. A short list means a narrow story bank. Widen it before an interview.",
                         words: Array(profile.contentWords.prefix(12)),
                         tint: AppColors.primary
                     )

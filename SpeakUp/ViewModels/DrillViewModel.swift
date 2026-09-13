@@ -69,7 +69,7 @@ class DrillViewModel {
     private static let vocalVarietyLines = [
         "The storm rolled in, then the sky cracked open with light.",
         "Please lower your voice here, then lift it on the final word: victory.",
-        "Start soft and low — then climb until the last phrase rings clear.",
+        "Start soft and low, then climb until the last phrase rings clear.",
         "Whisper the opening, speak the middle, project the close.",
         "Glide from your lowest comfortable note to your highest on this line.",
     ]
@@ -89,7 +89,7 @@ class DrillViewModel {
         "What would you do differently if you started over tomorrow?",
         "How do you explain your work to someone outside your field?",
         "What's one risk worth taking this year, and why?",
-        "Where do most teams waste time — and what would you cut first?",
+        "Where do most teams waste time, and what would you cut first?",
         "What does success look like for you in six months?",
         "How would you handle a question you don't know the answer to?",
     ]
@@ -415,8 +415,8 @@ class DrillViewModel {
                 score: 0,
                 date: Date(),
                 details: endedEarly
-                    ? "No clear voice detected — ended early: recognition stopped"
-                    : "No clear voice detected — try speaking closer to the mic",
+                    ? "No clear voice detected. Recognition stopped early."
+                    : "No clear voice detected. Try speaking closer to the mic.",
                 passed: false
             )
             score = 0
@@ -443,7 +443,7 @@ class DrillViewModel {
             drillScore = finalFillerCount == 0 ? 100 : max(0, 100 - finalFillerCount * 25)
             passed = finalFillerCount == 0
             details = finalFillerCount == 0
-                ? "Clean run — zero fillers"
+                ? "Clean run: zero fillers"
                 : "\(finalFillerCount) filler(s) detected"
 
         case .paceControl:
@@ -493,7 +493,7 @@ class DrillViewModel {
             let target = emphasisTargetWord.isEmpty ? "the marked word" : emphasisTargetWord
             details = saidSomething
                 ? "Energy swing on “\(target)”: \(Int(swing)) dB peak-over-median"
-                : "No speech detected — emphasis needs a full sentence"
+                : "No speech detected. Emphasis needs a full sentence."
 
         case .qaSprint:
             drillScore = max(50, 100 - finalFillerCount * 10)
@@ -504,7 +504,7 @@ class DrillViewModel {
         }
 
         if endedEarly {
-            details += " — ended early: recognition stopped"
+            details += ". Recognition stopped early."
         }
 
         result = DrillResult(

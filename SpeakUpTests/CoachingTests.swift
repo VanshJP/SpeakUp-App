@@ -450,7 +450,7 @@ struct AnalysisMirrorTests {
     private func rich() -> SpeechAnalysis {
         var value = analysis()
         value.textQuality = TextQualityMetrics(hedgeWordCount: 5, powerWordCount: 2)
-        value.sentenceAnalysis = SentenceAnalysis(totalSentences: 6, restartCount: 1, restartExamples: ["I was going to — actually"])
+        value.sentenceAnalysis = SentenceAnalysis(totalSentences: 6, restartCount: 1, restartExamples: ["I was going to, actually"])
         value.promptRelevanceScore = 64
         return value
     }
@@ -462,7 +462,7 @@ struct AnalysisMirrorTests {
             return
         }
         #expect(restored.textQuality?.hedgeWordCount == 5)
-        #expect(restored.sentenceAnalysis?.restartExamples.first == "I was going to — actually")
+        #expect(restored.sentenceAnalysis?.restartExamples.first == "I was going to, actually")
         #expect(restored.promptRelevanceScore == 64)
     }
 

@@ -41,6 +41,22 @@ struct ReadAloudCustomPassageTests {
         #expect(passage.text.count <= ReadAloudPassage.customMaxCharacters)
     }
 
+    @Test func practiceSizedExcerptLeavesShortTextUnchanged() throws {
+        let text = "Clarity beats volume every time."
+        let excerpt = try #require(ReadAloudPassage.practiceSizedExcerpt(from: text))
+        #expect(excerpt == text)
+    }
+
+    @Test func practiceSizedExcerptUsesNearbySentenceBoundary() throws {
+        let firstSentence = String(repeating: "clear ", count: 100) + "finish."
+        let raw = firstSentence + " " + String(repeating: "later ", count: 100)
+        let excerpt = try #require(ReadAloudPassage.practiceSizedExcerpt(from: raw))
+
+        #expect(excerpt == firstSentence)
+        #expect(excerpt.count <= ReadAloudPassage.customMaxCharacters)
+        #expect(excerpt.hasSuffix("finish."))
+    }
+
     @Test func catalogCasesOmitCustom() {
         #expect(!ReadAloudCategory.catalogCases.contains(.custom))
         #expect(ReadAloudCategory.allCases.contains(.custom))

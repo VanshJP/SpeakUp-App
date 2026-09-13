@@ -83,7 +83,7 @@ struct WordSwapTests {
 
         let right = hit(LexiconInsightsEngine.sessionHits(from: words), "right")
 
-        #expect(right?.primarySwap?.replacement == "hold silence \u{2014} let it land")
+        #expect(right?.primarySwap?.replacement == "hold silence. Let it land")
         #expect(right?.swaps.contains("\u{201C}Does that make sense?\u{201D}, at most once") == true)
     }
 
