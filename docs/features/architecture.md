@@ -32,13 +32,13 @@ Concurrency / isolation traps: `/docs/AGENT_GOTCHAS.md`.
 
 | Tab | Symbol | Root |
 |-----|--------|------|
-| Today | `mic.badge.plus` | `TodayView` |
-| Library | `books.vertical.fill` | `PracticeHubView` |
-| History | `clock.fill` | `HistoryView` → detail |
-| Learn | `book` | `CurriculumView` |
-| Settings | `gearshape` | `SettingsView` |
+| Today | `mic` / `mic.fill` | `TodayView` |
+| Library | `books.vertical` / `books.vertical.fill` | `PracticeHubView` |
+| History | `clock` / `clock.fill` | `HistoryView` → detail |
+| Learn | `book` / `book.fill` | `CurriculumView` |
+| Settings | `gearshape` / `gearshape.fill` | `SettingsView` |
 
-Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentView`: countdown, recording, paywall, onboarding, prompt wheel, goals, warm-ups/drills (optional `sourceStory`), confidence, before/after, journal, read-aloud, story editor, achievement unlock, app tour (`AppTourModel`).
+Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentView`: countdown, recording, onboarding, goals, warm-ups/drills (optional `sourceStory`), confidence, before/after, journal, read-aloud, story editor, achievement unlock, app tour (`AppTourOverlay` / `AppTourModel`). Paywall UI is deleted for beta. Prompt wheel is a sheet on `AllPromptsView` (Library → Prompts), not on `ContentView`.
 
 ## Deep links
 

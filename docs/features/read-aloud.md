@@ -4,7 +4,7 @@
 
 Also supports **Shadow mode** (hear the TTS model, then speak it back) and **Minimal pairs** packs.
 
-**Key symbols:** `ReadAloudPassage`, `ReadAloudCategory`, `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `WordAlignmentScorer`, `PronunciationService`, `DictionaryView`
+**Key symbols:** `ReadAloudPassage`, `ReadAloudCategory`, `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `ReadAloudService`, `PronunciationService`, `DictionaryView`
 
 **Related:** [SPEECH.md](../../SPEECH.md) (alignment), [practice-tools.md](practice-tools.md), [monetization.md](monetization.md)
 
@@ -89,7 +89,7 @@ Unchanged for custom vs catalog:
 
 1. Show source text; record via `AudioService`.
 2. Transcribe (`SpeechService`).
-3. `WordAlignmentScorer.score(reference:transcript:)` — matched / missed / extra.
+3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` — matched / missed / extra.
 4. Persist `Recording` with `promptCategory: "Read Aloud"`, analysis JSON including alignment.
 
 Silence-is-not-a-score applies (see practice-tools invariant 14).
@@ -116,6 +116,8 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/Views/ReadAloud/ReadAloudSessionView.swift` | Record + score |
 | `SpeakUp/Views/ReadAloud/DictionaryView.swift` | System dictionary sheet |
 | `SpeakUp/Services/PronunciationService.swift` | TTS + define gate |
+| `SpeakUp/Services/ReadAloudService.swift` | Session listening + `computeAlignment` |
+| `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |
 | `SpeakUpTests/ReadAloudCustomPassageTests.swift` | Custom factory + define gate |
 
 ---

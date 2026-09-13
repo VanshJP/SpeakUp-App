@@ -10,7 +10,7 @@ Optional CloudKit-backed SwiftData + audio file migration into the ubiquity cont
 |------|------|
 | Service | `SpeakUp/Services/ICloudStorageService.swift` |
 | Boot wiring | `SpeakUp/SpeakUpApp.swift` |
-| Settings toggle | `SpeakUp/Views/Settings/SettingsView.swift` (via paywall gate) |
+| Settings toggle | `SpeakUp/Views/Settings/SettingsView.swift` (ungated during beta — see monetization.md) |
 | Entitlements | `SpeakUp/SpeakUp.entitlements` |
 
 Container id (in service): `iCloud.cam.vanshpatel.SpeakUp`.

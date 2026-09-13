@@ -22,7 +22,7 @@ The user controls **how hard** the fresh words are (`vocabChallengeLevelOverride
 | Lexicon | `SpeakUp/Data/DefaultVocabLexicon.swift` (three tiers, `level` 0/1/2) |
 | Models | `SpeakUp/Models/VocabChallenge.swift` (`VocabChallengePreferences.resolvedIntroLevel`) |
 | Per-recording snapshot | `Recording.vocabChallengeDayStamp` / `.vocabChallengeWords` (additive optionals) |
-| Today brief strip | `SpeakUp/Views/Today/SessionBriefRow.swift` |
+| Today brief strip | `SpeakUp/Views/Today/SessionWordsRow.swift` |
 | Session result card | `SpeakUp/Views/Today/VocabChallengeResultCard.swift` |
 | Settings | `WordWorkoutSettingsView` (hosts `VocabChallengeSettingsCard`, still defined in `WordBankView.swift`) |
 | Recording strip | `VocabStrip` in `RecordingView.swift` |
@@ -32,7 +32,7 @@ The user controls **how hard** the fresh words are (`vocabChallengeLevelOverride
 
 1. Off by toggle (`vocabChallengeEnabled`). Default on. Settings → Word Workout exposes exactly four things: the master toggle, words per day (1–3), word level (Auto/Easy/Medium/Hard), and whether the app teaches words the user does not already track. `vocabChallengeUseBank` / `UseDictionary` / `SpacedReview` are still stored and still honoured by the picker, but nothing writes them anything but `true` — they were knobs with only one sensible answer sitting on the page that manages the words themselves.
 2. `WordSafety` blocks profanity and slurs on **add** (bank + dictionary) and on **pick** — including every LLM-generated candidate, which must clear `allowsForChallenge` plus shape checks (single ASCII token, no digits/hyphens/apostrophes) before it can enter the store. Existing dirty entries are not deleted; they are never spotlighted. Fillers and the user's name are never spotlighted.
-3. Today's pick is cached for the calendar day so a recording does not reshuffle the words. Skip replaces one word for the rest of the day, and the replacement is written back into the skipped word's slot — the refill appends, so without that the chip jumps to the end of the strip under the user's finger. Skip is reached by long-pressing a chip in `SessionBriefRow`.
+3. Today's pick is cached for the calendar day so a recording does not reshuffle the words. Skip replaces one word for the rest of the day, and the replacement is written back into the skipped word's slot — the refill appends, so without that the chip jumps to the end of the strip under the user's finger. Skip is reached by opening the chip `Menu` on `SessionWordsRow` ("Swap for another word").
 4. Introduced lexicon words are merged into analysis `vocabWords` so they highlight in the transcript before the user taps Add.
 5. Completion = every spotlight word appears in today's transcripts (inflection-aware). Progress can accumulate across sessions the same day.
 6. Do not decode `Recording.analysis` in a view `body` to build the Today brief — `TodayViewModel` projects usage off the main thread.

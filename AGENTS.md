@@ -90,7 +90,7 @@ Probe once: `xcodebuild -version`.
 | Probe | Do |
 |-------|----|
 | Xcode present | After Swift changes: `test` (or `build` if no test target applies). Do not ask. Same scheme as CI: `SpeakUp`. |
-| Missing / Linux | Do not fake it, do not install Xcode. Grep landmines (playbook → Verify). CI (`.github/workflows/ci.yml`, `macos-26`) runs tests on PR. |
+| Missing / Linux | Do not fake it, do not install Xcode. Run `scripts/agent-verify.sh` (playbook → Verify). If docs changed, `scripts/agent-doc-drift.sh`. CI (`.github/workflows/ci.yml`, `macos-26` + `agent-guards`) covers the PR. |
 
 ```bash
 xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
