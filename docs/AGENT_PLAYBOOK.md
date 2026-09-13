@@ -8,7 +8,19 @@ Gotchas first: [AGENT_GOTCHAS.md](./AGENT_GOTCHAS.md). Index: [features/README.m
 
 ## Verify
 
-Always grep the **diff** for landmines. A hit in new code → stop, open the matching gotcha. Then, if `xcodebuild -version` works, run tests. If it does not (Linux cloud), stop after grep — CI on `macos-26` covers the PR.
+Prefer the wrapper (same greps + toolchain probe):
+
+```bash
+scripts/agent-verify.sh
+```
+
+If you touched feature docs or the index, also run:
+
+```bash
+scripts/agent-doc-drift.sh
+```
+
+Always grep the **diff** for landmines (script above, or the block below). A hit in new code → stop, open the matching gotcha. Then, if `xcodebuild -version` works, run tests. If it does not (Linux cloud), stop after grep — CI on `macos-26` covers the PR.
 
 ```bash
 # Isolation / UIKit-era state
@@ -31,6 +43,8 @@ rg -n 'noSpeechThreshold' SpeakUp --glob '*.swift'
 ```
 
 Known-good hits exist (`EntitlementStore.isLifetime`, tap install *before* `engine.start()`, unconditional `requiresOnDeviceRecognition = true`). New call sites outside those files are the bug. Add or extend a test under `SpeakUpTests/` when the change is pure policy / scoring / links — execute it when Xcode is present.
+
+Typed entry-point map (regenerate after large moves): `scripts/generate-surface-map.sh` → `docs/SURFACE_MAP.md`. Golden routing tasks: `agent/evals/`.
 
 ---
 

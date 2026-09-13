@@ -12,13 +12,13 @@ One non-consumable **Lifetime** purchase. Free users get a small analysis allowa
 | StoreKit | `SpeakUp/Services/PurchaseService.swift` |
 | Entitlement cache | `SpeakUp/Services/EntitlementStore.swift` |
 | Allowance IO | `SpeakUp/Services/AllowanceGate.swift` |
-| UI | **deleted for the beta** — was `SpeakUp/Views/Paywall/`; disclosure now lives in `SpeakUp/Views/Settings/PrivacyDataView.swift` |
+| UI | **deleted for the beta** — was SpeakUp/Views/Paywall/ (deleted); disclosure now lives in `SpeakUp/Views/Settings/PrivacyDataView.swift` |
 | StoreKit config | `/Products.storekit` |
 | Tests | `SpeakUpTests/MonetizationTests.swift` |
 
 ## Beta state — no payments in the UI
 
-**The paywall UI is deleted.** `SpeakUp/Views/Paywall/` (`PaywallView`, `PaywallCoordinator`, `PaywallProof`, `PaywallJourneySteps`, `LifetimeStatusRow`) is gone, along with every entry point: the Settings buy row, the Today allowance line, the curriculum phase lock, the deferred-analysis Unlock button, and the journal-export / iCloud gates. `LifetimeFAQView` became `SpeakUp/Views/Settings/PrivacyDataView.swift` — same storage, deletion, and legal disclosure, no purchase copy. The one-time-flag tracking for review prompts moved from `PaywallCoordinator` to `ReviewRequestService.markFirstResultSeen()`.
+**The paywall UI is deleted.** SpeakUp/Views/Paywall/ (deleted) (`PaywallView`, `PaywallCoordinator`, `PaywallProof`, `PaywallJourneySteps`, `LifetimeStatusRow`) is gone, along with every entry point: the Settings buy row, the Today allowance line, the curriculum phase lock, the deferred-analysis Unlock button, and the journal-export / iCloud gates. `LifetimeFAQView` became `SpeakUp/Views/Settings/PrivacyDataView.swift` — same storage, deletion, and legal disclosure, no purchase copy. The one-time-flag tracking for review prompts moved from `PaywallCoordinator` to `ReviewRequestService.markFirstResultSeen()`.
 
 **What is still here:** `BetaAccess.allFeaturesFree` (`SpeakUp/Models/Monetization.swift`) is **true**, which forces `EntitlementStore.isLifetime` true, so `AllowanceGate` never meters and `RecordingProcessingCoordinator` never defers an analysis. `PurchaseService`, `EntitlementStore`, `FreeTierPolicy`, and `Products.storekit` are untouched, so a real entitlement still verifies and persists into `ownsLifetime`.
 
@@ -45,6 +45,8 @@ The 14 days run from the first **completed** analysis — `AllowanceGate.consume
 **Not gated in either policy:** `progressCards` (Then-vs-Now / share loop must stay free for acquisition).
 
 ## Call-site matrix
+
+> **Deleted APIs until Paywall UI is restored.** `PaywallCoordinator` and the Paywall views are gone for beta. Do not call these from new code until the UI is restored (`git show` the deleted Paywall folder), then flip `BetaAccess.allFeaturesFree`.
 
 | API | Use when | Where today |
 |-----|----------|-------------|

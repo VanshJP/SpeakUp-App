@@ -1,6 +1,6 @@
 # Feature docs — agent index
 
-Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are changing.** Root `AGENTS.md` is the always-on kernel. Landmines: [`../AGENT_GOTCHAS.md`](../AGENT_GOTCHAS.md). Recipes: [`../AGENT_PLAYBOOK.md`](../AGENT_PLAYBOOK.md). Product router skill: `speakup`.
+Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are changing.** Root `AGENTS.md` is the always-on kernel. Landmines: [`../AGENT_GOTCHAS.md`](../AGENT_GOTCHAS.md). Recipes: [`../AGENT_PLAYBOOK.md`](../AGENT_PLAYBOOK.md). Product router skill: `speakup`. After edits: `scripts/agent-verify.sh`; if this index or a brief changed: `scripts/agent-doc-drift.sh`. Typed entry points: [`../SURFACE_MAP.md`](../SURFACE_MAP.md).
 
 ## Contracts (not duplicated here)
 
@@ -28,7 +28,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | History / trajectory / readiness / journal | [history-progress.md](./history-progress.md) | `Views/History/`, `Views/Progress/`, `Views/Streak/`, `ScenarioReadinessEngine` | gotchas §2b, §3 | — |
 | Learn / curriculum | [curriculum.md](./curriculum.md) | `Views/Curriculum/` (+ `LessonGlyphView`), `LessonIdentity`, `CurriculumService` | monetization.md · ui-design-system.md | — |
 | Warm-ups / drills / confidence | [practice-tools.md](./practice-tools.md) | `Views/WarmUp/`, `Drills/`, `Confidence/` · `DrillMode` (+ vocal/emphasis/Q&A) | — | — |
-| Onboarding / app tour | `/ONBOARDING_VISION.md` | `Views/Onboarding/`, `AppTourView` | gotchas §10 | — |
+| Onboarding / app tour | `/ONBOARDING_VISION.md` | `Views/Onboarding/`, `AppTourOverlay` | gotchas §10 | — |
 | Settings | [settings.md](./settings.md) | `Views/Settings/` | playbook | — |
 | Widgets / App Group | [widgets.md](./widgets.md) | `SpeakUpWidget/`, dual `WidgetDataProvider` | gotchas §8 | `widgetkit` |
 | iCloud / CloudKit | [icloud.md](./icloud.md) | `ICloudStorageService` | gotchas §1 | `swiftdata-pro` |

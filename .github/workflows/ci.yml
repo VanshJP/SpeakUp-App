@@ -18,10 +18,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  agent-guards:
+    name: Agent verify + doc drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Agent landmine verify
+        run: scripts/agent-verify.sh
+
+      - name: Feature doc drift
+        run: scripts/agent-doc-drift.sh
+
   test:
     name: Build and test
     runs-on: macos-26
     timeout-minutes: 60
+    needs: agent-guards
 
     steps:
       - uses: actions/checkout@v4

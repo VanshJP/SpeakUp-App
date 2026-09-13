@@ -17,7 +17,7 @@ Navy glass UI: deep canvas + translucent surfaces + one loud primary CTA. All ne
 | Type / motion | `AppType.swift`, `AppMotion.swift` |
 | Page rhythm | `AppLayout.swift` — `pageHorizontal` (16), `chapterSpacing` (20), `listSpacing` (16), `minHitTarget` (44), `.pageContentInsets()` |
 | Glass helpers | `SpeakUp/Extensions/View+Glass.swift`, `Haptics.swift` |
-| Components | `SpeakUp/Views/Components/` — `GlassCard`, `GlassButton`, `GlassButtonLabel`, `MetricTile`, `RingStatsView`, `FlowLayout`, `RichTextEditor`, `AppTourView`, `ToolTile`, … |
+| Components | `SpeakUp/Views/Components/` — `GlassCard`, `GlassButton`, `GlassButtonLabel`, `MetricRow`, `RingStatsView`, `FlowLayout`, `RichTextEditor`, `AppTourOverlay` (file `AppTourView.swift`), `ToolTile`, … |
 | Page chrome | `SpeakUp/Views/Components/PageHeaderBar.swift` — `InlineSearchField`, `PinnedPageHeader`, `.headerIconChrome()`, `.restoresNavigationBar()`. The header a root tab uses instead of a navigation bar (rule 9) |
 | Header roles | Section = `GlassSectionHeader` (headline, page chapters). Card = `GlassCardTitle` (subheadline, chart/insight cards). Both take a trailing accessory closure. |
 
