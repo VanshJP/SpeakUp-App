@@ -67,7 +67,7 @@ nonisolated enum SpeechScoringEngine {
         // ── Mean Length of Run (MLR) ─────────────────────────────────────────────────
         // Average number of words between pauses (>0.4s gaps).
         // Research: MLR > 8 indicates fluent speech. MLR < 4 indicates disfluency.
-        let mlr = computeMeanLengthOfRun(words: words, pauseMetadata: pauseMetadata)
+        let mlr = computeMeanLengthOfRun(words: words)
 
         // ── MATTR (Moving Average Type-Token Ratio) ──────────────────────────────────
         // Lexical diversity measure that is length-invariant (unlike simple TTR).
@@ -378,14 +378,12 @@ nonisolated enum SpeechScoringEngine {
 
     /// Computes the Mean Length of Run — average number of words between pauses.
     /// This is a key fluency metric used in PRAAT and academic speech analysis.
-    static func computeMeanLengthOfRun(
-        words: [TranscriptionWord],
-        pauseMetadata: [PauseInfo]
-    ) -> Double {
+    /// Runs are detected from word timing gaps (> 0.4 s) rather than from the
+    /// pipeline's `PauseInfo` list, which is coarser. The function used to take
+    /// a `pauseMetadata:` argument "for API consistency" and discard it — an
+    /// unused parameter that reads like an input.
+    static func computeMeanLengthOfRun(words: [TranscriptionWord]) -> Double {
         guard !words.isEmpty else { return 0 }
-        // Note: pauseMetadata is accepted for API consistency but we detect pauses
-        // directly from word timing gaps (>0.4s) for accuracy.
-        _ = pauseMetadata  // suppress unused parameter warning
 
         // Sort by start time to ensure correct gap detection.
         // The words array is usually sorted, but WhisperKit can occasionally produce

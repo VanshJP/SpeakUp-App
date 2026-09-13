@@ -49,8 +49,27 @@ struct CurriculumView: View {
 
     // MARK: - Awards Row
 
+    /// The page's one header row: what the tab is, and the trophy.
+    ///
+    /// Learn hides the navigation bar like every root tab, so without a title
+    /// here the page opened on a lone icon floating over empty space. Same
+    /// grammar as Today's header — eyebrow, name, trailing accessory — and the
+    /// trophy wears `headerIconChrome()`, so it is the same 44pt plate as the
+    /// filter buttons on Prompts, Stories and History.
     private var awardsRow: some View {
-        HStack {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Learn")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .textCase(.uppercase)
+                    .tracking(0.8)
+
+                Text("Your path")
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+            }
+
             Spacer(minLength: 0)
 
             Button {
@@ -63,6 +82,7 @@ struct CurriculumView: View {
             }
             .accessibilityLabel("Achievements")
         }
+        .padding(.top, 4)
     }
 
     // MARK: - Continue Card
@@ -75,7 +95,10 @@ struct CurriculumView: View {
             LessonDetailView(lesson: lesson, viewModel: viewModel)
                 .restoresNavigationBar()
         } label: {
-            GlassCard(tint: identity.accent.opacity(0.08), padding: 18, elevated: true) {
+            // Not `elevated`: the white `GlassButtonLabel` inside already casts
+            // its own shadow, and stacking the heavy card shadow under it read
+            // as a second, doubled edge. Same reasoning as `CoachFocusCard`.
+            GlassCard(tint: identity.accent.opacity(0.08), padding: 18) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 6) {
                         Image(systemName: isReviewing ? "arrow.counterclockwise" : "play.circle.fill")
@@ -316,22 +339,12 @@ struct CurriculumView: View {
         isComplete: Bool,
         accent: Color
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(accent.opacity(isLocked ? 0.25 : 0.85))
                     .frame(width: 8, height: 8)
                     .accessibilityHidden(true)
-
-                if isComplete {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(AppColors.success)
-                } else if isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
 
                 Text("Week \(phase.week)")
                     .font(.system(size: 10, weight: .semibold))
@@ -339,9 +352,15 @@ struct CurriculumView: View {
                     .tracking(0.6)
                     .foregroundStyle(.tertiary)
 
-                Text(phase.title)
-                    .font(.headline)
-                    .foregroundStyle(isLocked ? Color.secondary : Color.white)
+                if isComplete {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(AppColors.success)
+                } else if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
 
                 Spacer(minLength: 0)
 
@@ -349,6 +368,11 @@ struct CurriculumView: View {
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(isComplete ? AppColors.success : .secondary)
             }
+
+            Text(phase.title)
+                .font(.headline)
+                .foregroundStyle(isLocked ? Color.secondary : Color.white)
+                .fixedSize(horizontal: false, vertical: true)
 
             if !isComplete {
                 Text(phase.description)

@@ -74,6 +74,7 @@ private struct GlassButtonChrome: ViewModifier {
     let style: GlassButton.GlassButtonVariant
 
     @Environment(\.glassAppearance) private var glassAppearance
+    @Environment(\.isOnGlass) private var isOnGlass
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -84,6 +85,16 @@ private struct GlassButtonChrome: ViewModifier {
                     Capsule().fill(Color.white.opacity(0.94))
                 }
                 .clipShape(Capsule())
+        case .secondary where isOnGlass:
+            // Glass on glass samples glass, not the canvas, and comes out a
+            // murky band instead of a button. On a plate the secondary CTA is
+            // a painted capsule at the same volume. Branching on an
+            // environment value, never on animated state — see rule 14.
+            content
+                .background { Capsule().fill(Color.white.opacity(0.10)) }
+                .overlay {
+                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                }
         case .secondary:
             content
                 .glassEffect(

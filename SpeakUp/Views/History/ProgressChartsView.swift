@@ -473,9 +473,15 @@ struct ScoreProgressChart: View {
                 if model.points.count >= 2 {
                     Chart {
                         ForEach(model.points) { point in
+                            // `yStart` is the domain floor, not the implicit 0.
+                            // An AreaMark with only `y:` fills down to zero in
+                            // *data* space, and this domain starts at
+                            // `min - 10`, so the gradient used to run far below
+                            // the plot and spill out the bottom of the card.
                             AreaMark(
                                 x: .value("Date", point.date),
-                                y: .value("Score", point.score)
+                                yStart: .value("Baseline", model.yDomain.lowerBound),
+                                yEnd: .value("Score", point.score)
                             )
                             .foregroundStyle(
                                 LinearGradient(

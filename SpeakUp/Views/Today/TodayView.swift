@@ -845,6 +845,10 @@ struct TodayView: View {
             }
             .padding(12)
             .glassEffect(.regular.tint(tool.color.opacity(0.10)).interactive(), in: .rect(cornerRadius: 14))
+            // Same plate as the `ToolTileLabel` grid directly below it — same
+            // radius, same shadow. Without this the banner sat flat while the
+            // tiles it introduces floated.
+            .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel("Start with \(tool.title). \(tool.outcome)")

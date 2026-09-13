@@ -62,8 +62,6 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
 /// card and the live session all show the same composition at different scales.
 struct RecordingBackdropView: View {
     var backdrop: RecordingBackdrop = .base
-    /// Unused — every look is a still. Kept so thumbnail call sites do not churn.
-    var animated: Bool = true
     var fillsSafeArea: Bool = true
 
     var body: some View {

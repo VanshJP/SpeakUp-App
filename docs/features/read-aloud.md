@@ -1,6 +1,6 @@
 # Read Aloud
 
-**Summary:** Practice reading scripted text with word-level accuracy scoring. Pick a catalog passage **or type any word, sentence, or short paragraph**, hear a TTS model, optionally open the system dictionary for a single word, then record and match against the source.
+**Summary:** Practice reading scripted text with word-level accuracy scoring. Pick a catalog passage, one of **your own kept passages**, **or type any word, sentence, or short paragraph**, hear a TTS model, optionally open the system dictionary for a single word, then record and match against the source.
 
 Also supports **Shadow mode** (hear the TTS model, then speak it back) and **Minimal pairs** packs.
 
@@ -36,8 +36,13 @@ Top `GlassCard`:
 2. **Hear it** — `PronunciationService.speak(word:)` via `AVSpeechSynthesizer`. Multi-word phrases speak as one utterance; >3 tokens use rate `0.32`, else `0.35`.
 3. **Define** — shown only when `PronunciationService.canDefine` is true (single token + system dictionary has a definition). Opens `DictionaryView` → `UIReferenceLibraryViewController`. Phrases/sentences stay Hear + Practice only.
 4. **Practice saying it** — `ReadAloudPassage.custom(from:)` → same session sheet as catalog rows.
+5. **Keep** — the bookmark button on the card's header row stores the text on `UserSettings.savedReadAloudTexts`. Same gate as Practice.
 
-Empty / under-min / whitespace-only Practice and Hear are disabled.
+Hear and Define are `GlassButton.secondary` (rule 4), not hand-rolled tinted rectangles. Empty / under-min / whitespace-only Practice, Hear and Keep are disabled.
+
+### Yours (saved)
+
+Between the custom card and the catalog, when non-empty. Ordinary `PracticeItemRow`s built from `ReadAloudPassage.saved(from:)` — same scoring path as any passage; the only difference is who wrote them. Context menu: **Edit in Practice anything** (loads the text back into the field) and **Delete**.
 
 ### Catalog
 
@@ -48,8 +53,11 @@ Category chips from `ReadAloudCategory.catalogCases` (excludes `.custom`). Diffi
 ## Custom passage model
 
 ```swift
-ReadAloudPassage.custom(from: text) // id: "custom-<uuid>", category: .custom
+ReadAloudPassage.custom(from: text) // id: "custom-<uuid>", category: .custom — ephemeral
+ReadAloudPassage.saved(from: text)  // id: "saved-<text>",  category: .custom — kept
 ```
+
+Both run the same title / difficulty / cap rules (`make(text:id:)`); only the id differs. `custom` gets a fresh UUID per call because it is thrown away after the take; `saved` derives its id from the text so a kept row keeps one identity across renders and launches. Saved texts are de-duplicated case-insensitively, which is what makes the text a sound key.
 
 | Rule | Value |
 |------|--------|
@@ -58,7 +66,18 @@ ReadAloudPassage.custom(from: text) // id: "custom-<uuid>", category: .custom
 | Title | 1 word → "Word practice"; 2–20 → "Sentence practice"; else "Paragraph practice" |
 | Difficulty | 1–8 words → `.easy`; 9–40 → `.medium`; else `.hard` |
 
-Not in `DefaultReadAloudPassages.all` — ephemeral only. `isCustom` is `category == .custom`.
+Not in `DefaultReadAloudPassages.all`. `isCustom` is `category == .custom`.
+
+### Saved passages
+
+| Where | What |
+|-------|------|
+| Storage | `UserSettings.savedReadAloudTexts: [String]` — additive, defaulted, raw text only |
+| List rules | `SavedReadAloudTexts.adding/removing/contains` — `nonisolated enum` in `ReadAloudPassage.swift`, so the rules are testable without a `ModelContainer` (gotcha §12) |
+| Order | Newest first |
+| Derived | Title, difficulty and id all come from the text — never stored, so they cannot drift from `custom(from:)`'s rules |
+
+The seed catalog is still static: saving writes to `UserSettings`, never to `DefaultReadAloudPassages.all`.
 
 `ReadAloudCategory.custom` is for typing only; filters use `catalogCases`.
 
@@ -92,7 +111,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 
 | Path | Role |
 |------|------|
-| `SpeakUp/Models/ReadAloudPassage.swift` | Catalog types + `custom(from:)` |
+| `SpeakUp/Models/ReadAloudPassage.swift` | Catalog types + `custom(from:)` / `saved(from:)` + `SavedReadAloudTexts` |
 | `SpeakUp/Views/ReadAloud/ReadAloudSelectionView.swift` | Practice anything + catalog |
 | `SpeakUp/Views/ReadAloud/ReadAloudSessionView.swift` | Record + score |
 | `SpeakUp/Views/ReadAloud/DictionaryView.swift` | System dictionary sheet |
@@ -103,9 +122,9 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 
 ## Agent notes
 
-- Presented from Practice Hub **tools** section (pushed full page), Today, and RecordingDetail next-steps as sheets — not its own tab.
+- Presented from Practice Hub **tools** section (pushed full page — `ToolPresentation.pushed` via `navigationDestination`), Today, and RecordingDetail next-steps as sheets — not its own tab.
 - Difficulty coloring via `AppColors.difficultyColor` — not raw system colors.
-- Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`) and never appended to the seed array.
+- Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`); kept ones persist on `UserSettings.savedReadAloudTexts`. Neither is appended to the seed array.
 - Shadow mode plays `PronunciationService.speak(text:rate:)` before `startSession`; copy must not claim accent therapy — score remains alignment / clarity.
 - Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy.
 - **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts; recognition failure sets `service.recognitionFailureMessage`, ends the session within 250 ms, and lands on the result screen as a warning notice — never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
@@ -114,6 +133,6 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
 
 - Do **not** add a sixth `PracticeToolKind` for “pronounce word” — extend Read Aloud.
-- Custom passages are ephemeral (UUID id); never append to the static catalog.
+- Passages the user *types* stay ephemeral (UUID id). Passages the user *keeps* live on `UserSettings`, which is still not the static catalog — never append to `DefaultReadAloudPassages.all`.
 - `canDefine` must stay single-word; sentences use Hear + Practice only.
 - Filter chips: `catalogCases`, never `allCases` (would show a useless Custom chip).

@@ -52,6 +52,11 @@ struct PracticeHistoryChart: View {
                         .interpolationMethod(.catmullRom)
                     }
                     .chartYScale(domain: 0...100)
+                    // `catmullRom` overshoots past 100 on a spiky run, and
+                    // Charts does not clip marks to the plot on its own. Safe
+                    // here because this chart draws no point symbols on the
+                    // plot edges for the clip to cut in half.
+                    .chartPlotStyle { $0.clipped() }
                     .chartXAxis(.hidden)
                     .chartYAxis {
                         AxisMarks(values: [0, 25, 50, 75, 100]) { value in

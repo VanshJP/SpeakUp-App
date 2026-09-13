@@ -14,6 +14,7 @@ struct GlassCardModifier: ViewModifier {
             return .regular.tint(glassAppearance.glassTint)
         }()
         content
+            .environment(\.isOnGlass, true)
             .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
             // Matches `GlassCard`'s unelevated shadow — same name, same plate.
             .shadow(color: .black.opacity(0.18), radius: 10, y: 5)

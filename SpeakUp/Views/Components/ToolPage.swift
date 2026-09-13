@@ -3,7 +3,6 @@ import SwiftUI
 enum ToolPresentation: Equatable {
     case sheet
     case pushed
-    case embedded
 }
 
 struct ToolPage<Content: View>: View {
@@ -15,17 +14,7 @@ struct ToolPage<Content: View>: View {
 
     init(
         tool: PracticeToolKind,
-        isPushed: Bool = false,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.tool = tool
-        self.presentation = isPushed ? .pushed : .sheet
-        self.content = content()
-    }
-
-    init(
-        tool: PracticeToolKind,
-        presentation: ToolPresentation,
+        presentation: ToolPresentation = .sheet,
         @ViewBuilder content: () -> Content
     ) {
         self.tool = tool
@@ -36,27 +25,10 @@ struct ToolPage<Content: View>: View {
     var body: some View {
         switch presentation {
         case .sheet:
-            NavigationStack { page }
-        case .pushed, .embedded:
-            page
+            NavigationStack { hostedBody }
+        case .pushed:
+            hostedBody
         }
-    }
-
-    private var page: some View {
-        Group {
-            if presentation == .embedded {
-                embeddedBody
-            } else {
-                hostedBody
-            }
-        }
-    }
-
-    private var embeddedBody: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            content
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var hostedBody: some View {
@@ -151,7 +123,7 @@ struct SourceStoryBanner: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular.tint(tint.opacity(0.35)), in: .rect(cornerRadius: 14))
+        .glassEffect(.regular.tint(tint.opacity(0.10)), in: .rect(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 }

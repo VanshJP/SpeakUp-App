@@ -79,3 +79,24 @@ extension EnvironmentValues {
         set { self[AppCanvasKey.self] = newValue }
     }
 }
+
+// MARK: - On-Glass
+
+private struct IsOnGlassKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True for anything drawn *inside* a glass plate (`GlassCard`,
+    /// `FeaturedGlassCard`, `.glassCard()`).
+    ///
+    /// Liquid Glass samples what is behind it, so a second `glassEffect` laid
+    /// straight on a plate samples glass instead of the canvas and renders as a
+    /// murky grey band rather than a control — the shading that showed up on
+    /// the Today focus card once its CTA became `GlassButton.secondary`.
+    /// Nested glass surfaces read this and paint a fill instead.
+    var isOnGlass: Bool {
+        get { self[IsOnGlassKey.self] }
+        set { self[IsOnGlassKey.self] = newValue }
+    }
+}

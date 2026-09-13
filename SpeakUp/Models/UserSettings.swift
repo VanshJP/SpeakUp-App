@@ -53,6 +53,12 @@ final class UserSettings {
     var vocabWords: [String] = []
     var dictationBiasWords: [String] = []
 
+    // Read-Aloud — passages the user wrote and kept. Additive, defaulted, so
+    // existing rows read back as an empty list. Stored as the raw text: the
+    // title, difficulty and id are all derived by `ReadAloudPassage.saved(from:)`,
+    // and deriving beats storing four fields that can drift from the rules.
+    var savedReadAloudTexts: [String] = []
+
     // Target Pace
     var targetWPM: Int = 150
 
@@ -280,6 +286,22 @@ final class UserSettings {
         guard WordSafety.allows(trimmed) else { return }
         guard !vocabWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         vocabWords.append(trimmed)
+    }
+
+    // MARK: - Read-Aloud Saved Passages
+
+    /// The rules live in `SavedReadAloudTexts` so they are testable without a
+    /// `ModelContainer`; this is only the stored-property plumbing.
+    func addSavedReadAloudText(_ text: String) {
+        savedReadAloudTexts = SavedReadAloudTexts.adding(text, to: savedReadAloudTexts)
+    }
+
+    func removeSavedReadAloudText(_ text: String) {
+        savedReadAloudTexts = SavedReadAloudTexts.removing(text, from: savedReadAloudTexts)
+    }
+
+    func hasSavedReadAloudText(_ text: String) -> Bool {
+        SavedReadAloudTexts.contains(text, in: savedReadAloudTexts)
     }
 
     // MARK: - Dictation Dictionary Helpers

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Read Aloud Passage
 
-struct ReadAloudPassage: Identifiable, Hashable {
+nonisolated struct ReadAloudPassage: Identifiable, Hashable {
     let id: String
     let title: String
     let text: String
@@ -24,15 +24,31 @@ struct ReadAloudPassage: Identifiable, Hashable {
     /// Builds an ephemeral passage from freeform text. Returns `nil` when the
     /// input is empty or only punctuation/whitespace.
     static func custom(from raw: String) -> ReadAloudPassage? {
-        let cleaned = raw
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let text = normalizedCustomText(raw) else { return nil }
+        return make(text: text, id: "custom-\(UUID().uuidString)")
+    }
+
+    /// A custom passage the user kept. Identical title/difficulty rules to
+    /// `custom(from:)`, but the id is derived from the text rather than a fresh
+    /// UUID, so a saved row keeps one identity across re-renders and launches.
+    /// Saved texts are de-duplicated, so the text is a sound key.
+    static func saved(from raw: String) -> ReadAloudPassage? {
+        guard let text = normalizedCustomText(raw) else { return nil }
+        return make(text: text, id: "saved-\(text)")
+    }
+
+    /// Trimmed, length-checked, cap-applied. `nil` when there is nothing to say.
+    static func normalizedCustomText(_ raw: String) -> String? {
+        let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard cleaned.count >= customMinCharacters else { return nil }
 
         let capped = String(cleaned.prefix(customMaxCharacters))
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !capped.isEmpty else { return nil }
+        return capped.isEmpty ? nil : capped
+    }
 
-        let count = capped.split(whereSeparator: { $0.isWhitespace }).count
+    private static func make(text: String, id: String) -> ReadAloudPassage {
+        let count = text.split(whereSeparator: { $0.isWhitespace }).count
         let title: String
         switch count {
         case 1: title = "Word practice"
@@ -48,9 +64,9 @@ struct ReadAloudPassage: Identifiable, Hashable {
         }
 
         return ReadAloudPassage(
-            id: "custom-\(UUID().uuidString)",
+            id: id,
             title: title,
-            text: capped,
+            text: text,
             difficulty: difficulty,
             category: .custom
         )
@@ -60,9 +76,36 @@ struct ReadAloudPassage: Identifiable, Hashable {
     var isCustom: Bool { category == .custom }
 }
 
+// MARK: - Saved Passage List
+
+/// The list rules for the passages a user keeps, kept out of `UserSettings` so
+/// they are testable without standing up a `ModelContainer` (gotcha §12).
+/// `nonisolated` because default isolation here is MainActor (gotcha §1).
+nonisolated enum SavedReadAloudTexts {
+
+    /// Newest first, so a passage you just kept is the first one you see.
+    /// De-duplicated case-insensitively: the text *is* the passage's identity,
+    /// since `ReadAloudPassage.saved(from:)` derives the id from it.
+    static func adding(_ raw: String, to list: [String]) -> [String] {
+        guard let text = ReadAloudPassage.normalizedCustomText(raw) else { return list }
+        guard !contains(text, in: list) else { return list }
+        return [text] + list
+    }
+
+    static func removing(_ raw: String, from list: [String]) -> [String] {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return list.filter { $0.caseInsensitiveCompare(text) != .orderedSame }
+    }
+
+    static func contains(_ raw: String, in list: [String]) -> Bool {
+        guard let text = ReadAloudPassage.normalizedCustomText(raw) else { return false }
+        return list.contains { $0.caseInsensitiveCompare(text) == .orderedSame }
+    }
+}
+
 // MARK: - Difficulty
 
-enum ReadAloudDifficulty: String, CaseIterable, Identifiable {
+nonisolated enum ReadAloudDifficulty: String, CaseIterable, Identifiable {
     case easy
     case medium
     case hard
@@ -88,7 +131,7 @@ enum ReadAloudDifficulty: String, CaseIterable, Identifiable {
 
 // MARK: - Category
 
-enum ReadAloudCategory: String, CaseIterable, Identifiable {
+nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
     case news
     case literature
     case technical

@@ -159,7 +159,7 @@ struct PromptWheelView: View {
     private func resultCard(_ prompt: Prompt) -> some View {
         let color = categoryColor(for: prompt.category)
 
-        return GlassCard(tint: color.opacity(0.18), accentBorder: color.opacity(0.35)) {
+        return GlassCard(tint: color.opacity(0.10), accentBorder: color.opacity(0.35)) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
                     Image(systemName: PromptCategory(rawValue: prompt.category)?.iconName ?? "text.bubble")
