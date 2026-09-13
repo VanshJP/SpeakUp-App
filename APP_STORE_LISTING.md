@@ -280,11 +280,11 @@ is present.
 
 ## 5. Screenshot plan
 
-Seven slides, shipped, at iPhone 6.5" (1242 × 2688). App Store Connect rejects
-anything that is not an exact match for the display size it is uploaded under.
-The finished files are `screenshots/final/01-…` through `07-…`, numbered in
-upload order, and the composer that builds them is
-`screenshots/compose_creative.py`.
+Seven slides at iPhone 6.9" (1320 × 2868) — the only iPhone display size App
+Store Connect requires. Connect scales that set down for every smaller device,
+so the old 6.5" export is gone and there is nothing else to upload. Files are
+`screenshots/final/01-…` through `07-…`, numbered in upload order, and the
+composer that builds them is `screenshots/compose_creative.py`.
 
 **Treatment: graphite ground, per-slide accent.** The flat teal background in
 the original plan was abandoned — it fought the app's own dark canvas instead of
@@ -292,42 +292,43 @@ framing it. Each slide now sits on near-black with a colour glow behind the
 device, and that colour is the one the captured screen already uses for its
 data. The set reads as one system without any slide repeating a backdrop.
 
-Headlines are Title Case sentences, not the old two-line verb/descriptor stack,
-because the benefit-led copy that tested better does not fit a single verb.
+Every headline is one line. The composer picks the largest size that keeps it
+there (92-100 across this set), so each headline fills the same measure and the
+varying sizes read as deliberate. A headline that will not fit gets shortened,
+not shrunk — `fit_headline` wraps only as a last resort, and a wrapped headline
+means the copy is too long.
 
 | # | Headline | Subhead | Screen |
 |---|----------|---------|--------|
-| 1 | Practice Public Speaking | Build confidence with feedback on clarity, pace & more | `RecordingDetailView` breakdown — score ring and full sub-score radar |
-| 2 | Stop Saying "Um" & "Like" | Catch filler words and speak with more confidence | Transcript with fillers marked inline |
-| 3 | Practice Speeches & Interviews | Rehearse presentations, pitches, toasts & more | `StoryDetailView` with linked practice history |
-| 4 | 430 Public Speaking Prompts | Always know what to say next | Prompt library |
-| 5 | Build Speaking Confidence Daily | Short, focused practice that adds up | Today tab |
-| 6 | Track Your Speaking Progress | See your scores improve over time | Progress charts |
-| 7 | Private AI Speech Coaching | Your voice stays on your iPhone | Settings > AI Features |
+| 1 | Practice Public Speaking | Feedback on pace, clarity and fillers | `RecordingDetailView` breakdown — score ring and full sub-score radar |
+| 2 | Stop Saying Um and Like | Every filler marked where you said it | Transcript with fillers marked inline |
+| 3 | Rehearse Your Speech | Toasts, interviews, pitches, presentations | `StoryDetailView` with linked practice history |
+| 4 | 430 Speaking Prompts | Always know what to say next | Prompt library |
+| 5 | Practice a Minute a Day | Short sessions that actually add up | Today tab |
+| 6 | Watch Your Scores Rise | Every metric charted over time | Progress charts |
+| 7 | It Stays On Your iPhone | No account, no upload, no server | Settings > AI Features |
 
-**Slide 4 states a number.** `430` matches the seeded prompt count today and is
-baked into an image rather than a text field, so it goes stale silently the
-moment prompts are added or removed. Re-check it against `SpeakUp/Data/` before
-every submission, or replace it with `Hundreds of`.
+**Slide 4 states a number.** `430` matches `DefaultPrompts.all` as of this edit
+and is baked into an image rather than a text field, so it goes stale silently
+the moment prompts are added or removed. Re-check it against
+`SpeakUp/Data/DefaultPrompts.swift` before every submission
+(`grep -c "PromptData(" SpeakUp/Data/DefaultPrompts.swift`), or replace it with
+`Hundreds of`.
 
-**Slide 7 contradicts section 6.** "AI Speech Coaching" is the exact framing the
-do-not-claim list rules out. The optional on-device LLM pass makes the word
-defensible, but the rule exists because the scoring pipeline is signal
-processing, not a model. Either re-render slide 7 as `Your Voice Never Leaves
-Your iPhone` (a one-line change in the composer's `SLIDES` table) or amend
-section 6 to permit the narrower claim. Do not ship the two documents
-disagreeing.
+**Slide 7 no longer claims AI coaching.** The earlier `Private AI Speech
+Coaching` headline was the exact framing section 6 rules out; it now reads
+`It Stays On Your iPhone`, which is both true and the stronger line.
 
-Still missing: the live-recording slide — the filler counter ticking mid-
-sentence — which the original plan had at position 2. The simulator has no
-usable microphone, so it needs a capture on a physical device. It is the single
-best frame the app has, and worth the trip.
+Known gaps in the shipped set, both needing a capture session:
 
-**Check the required display size before uploading.** Apple has been moving the
-required iPhone slot to 6.9" (1320 × 2868), with 6.5" as the fallback that gets
-scaled. The composer takes its canvas from two constants, so re-exporting at
-another size is a one-line edit and a rerun — cheap enough to just do for both
-slots rather than gamble on which one Connect demands at submission.
+- **The raw captures predate 84 commits of UI work** (taken 2026-08-14). Slides
+  render correctly, but they show an older build. Re-capture before submitting.
+- **Slide 2 shows nav-bar bleed-through** — the previous screen's text ghosts
+  behind the translucent header. Re-capture with the detail view scrolled so
+  nothing sits under the bar.
+- **No live-recording slide** — the filler counter ticking mid-sentence, which
+  the original plan had at position 2. The simulator has no usable microphone,
+  so it needs a physical device. It is the single best frame the app has.
 
 ### Capture rules for the whole set
 
@@ -335,6 +336,8 @@ slots rather than gamble on which one Connect demands at submission.
   dark by definition — do not mix in a light-mode simulator.
 - Clean status bar: `Simulator → Features → Status Bar`, override to 9:41, full
   bars, full battery, no carrier text.
+- Capture on iPhone 17 Pro Max. Any other device is the wrong pixel size and the
+  composer will refuse it.
 - No empty states, no "Untitled", no `Test 1`. Launch with `-seedScreenshotData`
   (`SpeakUp/Debug/ScreenshotSeeder.swift`) on a fresh install — it writes twelve
   sessions climbing 58 → 84 and one story with linked practice, which is what
@@ -354,6 +357,11 @@ Reads raw captures from `simulator-screenshots/`, writes finished slides to
 `/Library/Fonts/`, and Pillow. Headlines, subheads, accents, and source captures
 all live in the `SLIDES` table at the bottom of that file — edit copy there, not
 in an image editor.
+
+Captures must be 1320 × 2868 (an iPhone 17 Pro Max / 16 Pro Max simulator). The
+composer refuses anything else rather than scaling it — the old `shot_offset`
+crop silently squashed slide 2's UI, and that is the failure mode this guard
+exists to stop. A screen that needs to be scrolled gets captured scrolled.
 
 The `aso-appstore-screenshots` skill's own `compose.py` produced the earlier
 flat-background scaffolds and still works, but its device frame deliberately

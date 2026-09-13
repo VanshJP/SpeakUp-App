@@ -1,37 +1,54 @@
 #!/usr/bin/env python3
 """
-Creative App Store slide composer for Big Talk.
+App Store slide composer for Big Talk.
 
-Renders 1290x2796 slides on a graphite ground with a per-slide accent glow,
-matching the app's own "colour only in data" language: each slide's accent is
-the colour that screen already uses for its data, so the set reads as one
-system without repeating a flat backdrop.
+Renders the 6.9" iPhone slot (1320x2868) on a graphite ground with a per-slide
+accent glow, matching the app's own "colour only in data" language: each slide's
+accent is the colour that screen already uses for its data, so the set reads as
+one system without repeating a flat backdrop.
 
-Uses the device frame asset from the aso-appstore-screenshots skill.
+6.9" is the only iPhone size App Store Connect requires — it scales that set
+down for every smaller device — so there is nothing else to export.
+
+    python3 screenshots/compose_creative.py
+
+Reads raw captures from simulator-screenshots/, writes screenshots/final/.
+Needs SF Pro Display Black + Medium in /Library/Fonts/ and Pillow.
 """
 
 import os
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+import sys
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-# iPhone 6.5" slot. App Store Connect rejects anything that is not an exact
-# match for the display size it is uploaded under.
-CANVAS_W, CANVAS_H = 1242, 2688
+# iPhone 6.9". App Store Connect rejects anything that is not an exact match
+# for the display size it is uploaded under.
+CANVAS_W, CANVAS_H = 1320, 2868
 
-# The whole device sits on the canvas, so its screen is sized to the capture's
-# own aspect (1320x2868) rather than the skill's deliberately over-tall bleed
-# frame. Height leaves room for a two-line headline and a two-line subhead.
-BEZEL = 13
-SCREEN_H = 1900
-SCREEN_W = round(SCREEN_H * 1320 / 2868)
+# Captures come off a 6.9" simulator, so a shot fills the drawn screen exactly.
+# Anything else would have to be squashed to fit, so it is rejected instead.
+NATIVE_W, NATIVE_H = 1320, 2868
+
+BEZEL = 15
+DEVICE_Y = 530
+DEVICE_H = CANVAS_H - 46 - DEVICE_Y
+SCREEN_H = DEVICE_H - 2 * BEZEL
+SCREEN_W = round(SCREEN_H * NATIVE_W / NATIVE_H)
 DEVICE_W = SCREEN_W + 2 * BEZEL
-DEVICE_H = SCREEN_H + 2 * BEZEL
-DEVICE_Y = 700
-DEVICE_CORNER_R = 76
-SCREEN_CORNER_R = 62
+DEVICE_X = (CANVAS_W - DEVICE_W) // 2
+DEVICE_CORNER_R = 91
+SCREEN_CORNER_R = 75
+
+# The text sits in a fixed slot and is centred inside it, so a slide whose
+# headline wraps to two lines still puts the device at the same y as every
+# other slide. A carousel where the phone jumps between swipes reads as broken.
+TEXT_TOP, TEXT_BOTTOM = 170, 470
+TEXT_MAX_W = int(CANVAS_W * 0.86)
+
 FONT_BLACK = "/Library/Fonts/SF-Pro-Display-Black.otf"
 FONT_MED = "/Library/Fonts/SF-Pro-Display-Medium.otf"
 
 GRAPHITE = (14, 18, 24)
+SUBHEAD_GREY = (168, 180, 196)
 
 
 def hex_rgb(h):
@@ -50,30 +67,32 @@ def gradient(accent):
     return base.resize((CANVAS_W, CANVAS_H))
 
 
-def _screen(a, b):
-    """Screen blend — lifts the glow without washing the graphite to grey."""
-    from PIL import ImageChops
-    return ImageChops.screen(a, b)
-
-
-def rings(canvas, accent):
+def rings(accent):
     layer = Image.new("RGB", (CANVAS_W, CANVAS_H), (0, 0, 0))
     d = ImageDraw.Draw(layer)
-    cx, cy = CANVAS_W // 2, 430
-    for r in range(300, 720, 70):
+    cx, cy = CANVAS_W // 2, 360
+    for r in range(320, 780, 74):
         d.ellipse([cx - r, cy - r, cx + r, cy + r],
                   outline=tuple(int(c * 0.13) for c in accent), width=3)
-    layer = layer.filter(ImageFilter.GaussianBlur(2))
-    return _screen(canvas, layer)
+    return layer.filter(ImageFilter.GaussianBlur(2))
 
 
-def fit(text, max_w, size_max, size_min, path=FONT_BLACK):
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    for size in range(size_max, size_min - 1, -3):
-        f = ImageFont.truetype(path, size)
-        if probe.textlength(text, font=f) <= max_w:
-            return f
-    return ImageFont.truetype(path, size_min)
+def bloom(accent):
+    """Glow behind the device, so the phone reads as lit rather than pasted on."""
+    layer = Image.new("RGB", (CANVAS_W, CANVAS_H), (0, 0, 0))
+    cx, cy = CANVAS_W // 2, DEVICE_Y + 190
+    ImageDraw.Draw(layer).ellipse(
+        [cx - 680, cy - 510, cx + 680, cy + 400],
+        fill=tuple(int(c * 0.38) for c in accent))
+    return layer.filter(ImageFilter.GaussianBlur(200))
+
+
+def shadow():
+    layer = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle(
+        [DEVICE_X + 12, DEVICE_Y + 28, DEVICE_X + DEVICE_W - 12, DEVICE_Y + DEVICE_H + 32],
+        radius=DEVICE_CORNER_R, fill=(0, 0, 0, 150))
+    return layer.filter(ImageFilter.GaussianBlur(40))
 
 
 def wrap(draw, text, font, max_w):
@@ -90,119 +109,132 @@ def wrap(draw, text, font, max_w):
     return lines
 
 
-def compose(accent_hex, headline, sub, shot_path, out_path, shot_offset=0):
+def fit_headline(draw, text):
+    """Largest size that keeps the headline on one line.
+
+    One line every time is the point: each headline then fills the same
+    measure, so the sizes reading 92-100 across the set look deliberate rather
+    than uneven. Copy that cannot make the floor wraps instead — treat that as
+    a signal to shorten the copy, not to accept a smaller headline.
+    """
+    for size in range(110, 77, -2):
+        font = ImageFont.truetype(FONT_BLACK, size)
+        if draw.textlength(text, font=font) <= TEXT_MAX_W:
+            return font, [text]
+    font = ImageFont.truetype(FONT_BLACK, 78)
+    return font, wrap(draw, text, font, TEXT_MAX_W)
+
+
+def _block(draw, headline, sub):
+    """Lay the text out as (y_offset, text, font) rows plus a rule marker."""
+    h_font, h_lines = fit_headline(draw, headline)
+    s_font = ImageFont.truetype(FONT_MED, 52)
+    s_lines = wrap(draw, sub, s_font, TEXT_MAX_W)
+
+    rows, y = [], 0
+    for line in h_lines:
+        bb = draw.textbbox((0, 0), line, font=h_font)
+        rows.append((y - bb[1], line, h_font))
+        y += (bb[3] - bb[1]) + 24
+    y += 20
+    rows.append((y, None, None))          # accent rule
+    y += 9 + 46
+    for line in s_lines:
+        bb = draw.textbbox((0, 0), line, font=s_font)
+        rows.append((y - bb[1], line, s_font))
+        y += (bb[3] - bb[1]) + 16
+    return rows, y - 16
+
+
+def compose(accent_hex, headline, sub, shot_path, out_path):
     accent = hex_rgb(accent_hex)
 
+    shot = Image.open(shot_path).convert("RGBA")
+    if shot.size != (NATIVE_W, NATIVE_H):
+        raise SystemExit(
+            f"{os.path.basename(shot_path)} is {shot.width}x{shot.height}; "
+            f"expected {NATIVE_W}x{NATIVE_H}. Re-capture on a 6.9\" simulator "
+            f"(iPhone 17 Pro Max) rather than scaling — scaling squashes the UI.")
+
     canvas = gradient(accent).convert("RGB")
-    canvas = rings(canvas, accent)
-    canvas = _screen(canvas, _bloom(accent))
+    canvas = ImageChops.screen(canvas, rings(accent))
+    canvas = ImageChops.screen(canvas, bloom(accent))
     canvas = canvas.convert("RGBA")
     draw = ImageDraw.Draw(canvas)
 
-    # Headline — wraps at 84% so it never crowds the edges.
-    max_w = int(CANVAS_W * 0.84)
-    h_font = fit(headline, max_w, 116, 84)
-    lines = wrap(draw, headline, h_font, max_w)
-    y = 175
-    for line in lines:
-        bb = draw.textbbox((0, 0), line, font=h_font)
-        draw.text((CANVAS_W // 2, y - bb[1]), line, font=h_font, fill="white", anchor="mt")
-        y += (bb[3] - bb[1]) + 22
+    rows, height = _block(draw, headline, sub)
+    top = TEXT_TOP + ((TEXT_BOTTOM - TEXT_TOP) - height) // 2
+    for dy, text, font in rows:
+        if text is None:
+            draw.rounded_rectangle(
+                [CANVAS_W // 2 - 58, top + dy, CANVAS_W // 2 + 58, top + dy + 9],
+                radius=5, fill=accent)
+        else:
+            draw.text((CANVAS_W // 2, top + dy), text, font=font,
+                      fill="white" if font.path == FONT_BLACK else SUBHEAD_GREY,
+                      anchor="mt")
 
-    # Accent rule between headline and subhead.
-    y += 18
-    draw.rounded_rectangle([CANVAS_W // 2 - 54, y, CANVAS_W // 2 + 54, y + 8], radius=4, fill=accent)
-    y += 46
-
-    s_font = ImageFont.truetype(FONT_MED, 50)
-    for line in wrap(draw, sub, s_font, max_w):
-        bb = draw.textbbox((0, 0), line, font=s_font)
-        draw.text((CANVAS_W // 2, y - bb[1]), line, font=s_font, fill=(168, 180, 196), anchor="mt")
-        y += (bb[3] - bb[1]) + 16
-
-    # Device — whole phone on canvas, entire screen visible.
-    dx = (CANVAS_W - DEVICE_W) // 2
-    sx, sy = dx + BEZEL, DEVICE_Y + BEZEL
-
-    canvas = Image.alpha_composite(canvas, _shadow(dx, DEVICE_Y))
+    canvas = Image.alpha_composite(canvas, shadow())
 
     body = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     bd = ImageDraw.Draw(body)
-    bd.rounded_rectangle([dx, DEVICE_Y, dx + DEVICE_W, DEVICE_Y + DEVICE_H],
+    bd.rounded_rectangle([DEVICE_X, DEVICE_Y, DEVICE_X + DEVICE_W, DEVICE_Y + DEVICE_H],
                          radius=DEVICE_CORNER_R, fill=(26, 27, 30, 255))
-    bd.rounded_rectangle([dx, DEVICE_Y, dx + DEVICE_W, DEVICE_Y + DEVICE_H],
-                         radius=DEVICE_CORNER_R, outline=(78, 82, 90, 255), width=3)
+    bd.rounded_rectangle([DEVICE_X, DEVICE_Y, DEVICE_X + DEVICE_W, DEVICE_Y + DEVICE_H],
+                         radius=DEVICE_CORNER_R, outline=(84, 89, 98, 255), width=3)
     canvas = Image.alpha_composite(canvas, body)
 
-    # The capture fills the screen exactly; a shot_offset crops a band off its
-    # top for screens where the translucent nav bar overlaps scrolled content.
-    shot = Image.open(shot_path).convert("RGBA")
-    if shot_offset:
-        shot = shot.crop((0, shot_offset, shot.width, shot.height))
-    shot = shot.resize((SCREEN_W, SCREEN_H), Image.LANCZOS)
-
+    sx, sy = DEVICE_X + BEZEL, DEVICE_Y + BEZEL
     mask = Image.new("L", canvas.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle(
         [sx, sy, sx + SCREEN_W, sy + SCREEN_H], radius=SCREEN_CORNER_R, fill=255)
 
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    layer.paste(shot, (sx, sy))
+    layer.paste(shot.resize((SCREEN_W, SCREEN_H), Image.LANCZOS), (sx, sy))
     layer.putalpha(mask)
     canvas = Image.alpha_composite(canvas, layer)
 
-    # No Dynamic Island is drawn here — the simulator capture already contains
-    # one, and painting a second produced a wide black blob across the notch.
-
+    # No Dynamic Island is drawn — the capture already contains one, and
+    # painting a second produced a wide black blob across the notch.
     canvas.convert("RGB").save(out_path)
     print(f"✓ {out_path}")
 
 
-def _shadow(dx, dy):
-    """Soft drop shadow so the device sits above the ground, not on it."""
-    layer = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
-    ImageDraw.Draw(layer).rounded_rectangle(
-        [dx + 10, dy + 26, dx + DEVICE_W - 10, dy + DEVICE_H + 30],
-        radius=DEVICE_CORNER_R, fill=(0, 0, 0, 150))
-    return layer.filter(ImageFilter.GaussianBlur(38))
-
-
-def _bloom(accent):
-    layer = Image.new("RGB", (CANVAS_W, CANVAS_H), (0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    cx, cy = CANVAS_W // 2, DEVICE_Y + 180
-    d.ellipse([cx - 640, cy - 480, cx + 640, cy + 380],
-              fill=tuple(int(c * 0.38) for c in accent))
-    return layer.filter(ImageFilter.GaussianBlur(200))
-
-
+# Headline copy is conversion copy only — screenshot text is not indexed by
+# App Store search — so it is written for the person already on the page.
 SLIDES = [
     ("#0FB3AE", "Practice Public Speaking",
-     "Build confidence with feedback on clarity, pace & more",
-     "01-breakdown.png", "01-practice.png", 0),
-    ("#E8A33D", "Stop Saying “Um” & “Like”",
-     "Catch filler words and speak with more confidence",
-     "02-transcript.png", "02-fillers.png", 560),
-    ("#E4587A", "Practice Speeches & Interviews",
-     "Rehearse presentations, pitches, toasts & more",
-     "04-story.png", "03-speeches.png", 0),
-    ("#7C6CF0", "430 Public Speaking Prompts",
+     "Feedback on pace, clarity and fillers",
+     "01-breakdown.png", "01-practice.png"),
+    ("#E8A33D", "Stop Saying Um and Like",
+     "Every filler marked where you said it",
+     "02-transcript.png", "02-fillers.png"),
+    ("#E4587A", "Rehearse Your Speech",
+     "Toasts, interviews, pitches, presentations",
+     "04-story.png", "03-speeches.png"),
+    ("#7C6CF0", "430 Speaking Prompts",
      "Always know what to say next",
-     "10-prompts.png", "04-prompts.png", 0),
-    ("#0FB3AE", "Build Speaking Confidence Daily",
-     "Short, focused practice that adds up",
-     "00-today.png", "05-daily.png", 0),
-    ("#34C77B", "Track Your Speaking Progress",
-     "See your scores improve over time",
-     "05-progress.png", "06-progress.png", 0),
-    ("#3D7DF6", "Private AI Speech Coaching",
-     "Your voice stays on your iPhone",
-     "11-ondevice.png", "07-private.png", 0),
+     "10-prompts.png", "04-prompts.png"),
+    ("#0FB3AE", "Practice a Minute a Day",
+     "Short sessions that actually add up",
+     "00-today.png", "05-daily.png"),
+    ("#34C77B", "Watch Your Scores Rise",
+     "Every metric charted over time",
+     "05-progress.png", "06-progress.png"),
+    # Deliberately not "AI speech coaching" — APP_STORE_LISTING.md section 6
+    # rules that claim out, and the privacy line converts better anyway.
+    ("#3D7DF6", "It Stays On Your iPhone",
+     "No account, no upload, no server",
+     "11-ondevice.png", "07-private.png"),
 ]
 
 if __name__ == "__main__":
-    src = os.path.expanduser("~/SpeakUp/simulator-screenshots")
-    dst = os.path.expanduser("~/SpeakUp/screenshots/final")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(root, "simulator-screenshots")
+    dst = os.path.join(root, "screenshots", "final")
     os.makedirs(dst, exist_ok=True)
-    for accent, head, sub, shot, out, offset in SLIDES:
-        compose(accent, head, sub, os.path.join(src, shot),
-                os.path.join(dst, out), shot_offset=offset)
+    for accent, head, sub, shot, out in SLIDES:
+        path = os.path.join(src, shot)
+        if not os.path.exists(path):
+            sys.exit(f"missing capture: {path}")
+        compose(accent, head, sub, path, os.path.join(dst, out))

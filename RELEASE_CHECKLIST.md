@@ -35,6 +35,12 @@ These change shipped copy and shipped behaviour, so settle them first.
 
 ## 2. App Store Connect
 
+- [ ] **Accept the Paid Apps agreement** (Business → Agreements, Tax, and
+      Banking) and complete the bank and tax forms. Until that agreement is
+      Active, App Store Connect will not let an in-app purchase reach
+      "Ready to Submit" and `Product.products(for:)` returns an empty array on
+      device — the paywall shows no price and looks broken. This is the longest
+      lead time in the whole release; start it first.
 - [ ] Create the non-consumable IAP with product id
       `com.vansh.SpeakUpMore.lifetime`. It must match `LifetimeProduct.identifier`
       and `Products.storekit` exactly, or the paywall shows no price.
@@ -46,13 +52,20 @@ These change shipped copy and shipped behaviour, so settle them first.
       data collected and no tracking. Re-answer if a hosted sink is adopted.
 - [ ] Paste the text fields from `APP_STORE_LISTING.md` and upload the seven
       default screenshots from `screenshots/final/`, in filename order.
-- [ ] Confirm the display size Connect is asking for (6.9" vs 6.5") and
-      re-export if it disagrees — the canvas is two constants in
-      `screenshots/compose_creative.py`.
-- [ ] Re-check the `430` prompt count on slide 4 against the seeds in
-      `SpeakUp/Data/`. It is baked into an image and goes stale silently.
-- [ ] Resolve the slide 7 wording against the do-not-claim list — "AI Speech
-      Coaching" is currently rendered and section 6 rules it out.
+- [x] Display size: 6.9" (1320 × 2868) is the only iPhone slot Connect requires;
+      the set is exported at that size and Connect scales it down for everything
+      smaller.
+- [ ] **Re-capture `simulator-screenshots/` before submitting.** The current
+      raws are from 2026-08-14 and 84 commits of UI work have landed since, so
+      the composed slides show an old build. Capture on iPhone 17 Pro Max with
+      `-seedScreenshotData`; the composer refuses any other pixel size.
+- [ ] Slide 2's capture has nav-bar bleed-through (the previous screen's text
+      ghosts behind the translucent header). Re-capture scrolled.
+- [ ] Re-check the `430` prompt count on slide 4:
+      `grep -c "PromptData(" SpeakUp/Data/DefaultPrompts.swift`. It is baked
+      into an image and goes stale silently. (430 as of 2026-09-06.)
+- [x] Slide 7 wording resolved — it reads "It Stays On Your iPhone", not "AI
+      Speech Coaching", so it no longer contradicts the do-not-claim list.
 - [ ] Create the four custom product pages in `APP_STORE_PRODUCT_PAGES.md`, each
       submitted with the build, and record the `ppid` URL each one returns. They
       can only be assigned keywords already present in the shared keyword field.
@@ -127,16 +140,17 @@ challenge (prompt visible, optional beat score on the countdown), and that
 
 ## 4. Build configuration to verify in Xcode
 
-- [ ] Add the **In-App Purchase** capability to the `SpeakUp` target if it is
-      not already on the provisioning profile.
+- [x] In-App Purchase needs no capability or entitlement — it is on by default
+      for every App ID and StoreKit 2 requires nothing in `SpeakUp.entitlements`.
+      The real gate is the Paid Apps agreement in section 2.
 - [ ] Confirm the App Group `group.com.speakup.shared` is enabled on both the
       app and the widget extension — entitlement mirroring and widget data both
       depend on it.
 - [ ] Bump `APP_MARKETING_VERSION` and `APP_BUILD_NUMBER` in
       `Config/SharedVersion.xcconfig`.
-- [ ] Confirm the shared `SpeakUp` scheme is used for archiving, and that its
-      StoreKit configuration reference is cleared for release builds (it is a
-      Debug/run-time convenience only).
+- [x] The shared `SpeakUp` scheme's `StoreKitConfigurationFileReference` sits in
+      its `LaunchAction` only, so archives and TestFlight builds already talk to
+      real StoreKit. Nothing to clear.
 
 ## 5. Test pass before archiving
 
