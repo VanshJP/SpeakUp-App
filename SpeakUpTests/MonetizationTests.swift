@@ -273,6 +273,13 @@ struct AnalyticsPrivacyTests {
         #expect(AnalyticsBucket.sentiment(scale: 5) == "positive")
     }
 
+    @Test func recordingDetailSourcesStayStable() {
+        #expect(RecordingDetailSource.postSession.rawValue == "post_session")
+        #expect(RecordingDetailSource.history.rawValue == "history")
+        #expect(RecordingDetailSource.story.rawValue == "story")
+        #expect(RecordingDetailSource.learn.rawValue == "learn")
+    }
+
     @Test func eventsCarryNoIdentifyingDetail() {
         let analysis = AnalyticsEvent.analysisCompleted(
             sessionNumber: 4, processingPath: "whisper", elapsed: 42

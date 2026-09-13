@@ -28,7 +28,7 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 2. Warm-ups and drills accept `sourceStory` from Library send-to actions.
 3. Deep links: `speakup://story`, `speakup://story/new`.
 4. Tagging must skip cleanly when no LLM backend is available.
-5. Recording detail opened from Story practice history supplies `RecordingDetailSource.story`; “Practice Again” routes through the parent Story callback so the next take keeps the same Story instead of becoming prompt-less free practice.
+5. Recording detail opened from Story practice history supplies `RecordingDetailSource.story`; “Practice Again” routes through the parent `((Story, RecordingDuration) -> Void)` callback so the next take keeps the same Story and target duration instead of becoming one-minute prompt-less free practice.
 6. **`StoryFolderBar` is `FilterChip`** — the same chip the Prompts tab filters with, so the two halves of the
    Library look like one control. It used to be a bespoke capsule filled with the folder's own color when
    selected (plus a white count bubble and a divider), which made the selected story chip the loudest thing on

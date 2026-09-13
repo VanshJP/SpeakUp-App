@@ -12,7 +12,7 @@ struct StoriesListView: View {
     @State private var folderEditorPresentation: FolderEditorPresentation?
     @State private var movingStory: Story?
 
-    var onStartPractice: ((Story) -> Void)?
+    var onStartPractice: ((Story, RecordingDuration) -> Void)?
     var onSendToWarmUp: ((Story) -> Void)?
     var onSendToDrill: ((Story) -> Void)?
 
@@ -20,7 +20,7 @@ struct StoriesListView: View {
         viewModel: StoriesViewModel,
         selectedStory: Binding<Story?>,
         searchText: Binding<String>,
-        onStartPractice: ((Story) -> Void)? = nil,
+        onStartPractice: ((Story, RecordingDuration) -> Void)? = nil,
         onSendToWarmUp: ((Story) -> Void)? = nil,
         onSendToDrill: ((Story) -> Void)? = nil
     ) {
@@ -186,7 +186,7 @@ struct StoriesListView: View {
         .contextMenu {
             if let onStartPractice {
                 Button {
-                    onStartPractice(story)
+                    onStartPractice(story, .sixty)
                 } label: {
                     Label("Practice", systemImage: "mic.fill")
                 }

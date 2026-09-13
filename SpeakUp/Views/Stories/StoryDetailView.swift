@@ -5,7 +5,7 @@ import UIKit
 struct StoryDetailView: View {
     var story: Story
     var viewModel: StoriesViewModel
-    var onStartPractice: ((Story) -> Void)?
+    var onStartPractice: ((Story, RecordingDuration) -> Void)?
     var onSendToWarmUp: ((Story) -> Void)?
     var onSendToDrill: ((Story) -> Void)?
 
@@ -200,7 +200,7 @@ struct StoryDetailView: View {
             ) {
                 guard let onStartPractice else { return }
                 Haptics.heavy()
-                onStartPractice(story)
+                onStartPractice(story, .sixty)
             }
 
             HStack(spacing: 10) {
@@ -422,8 +422,9 @@ struct StoryDetailView: View {
                             RecordingDetailView(
                                 recordingId: summary.id.uuidString,
                                 source: .story,
-                                onPracticeAgain: { _ in
-                                    onStartPractice?(story)
+                                onPracticeAgain: { recording in
+                                    let duration = RecordingDuration(rawValue: recording.targetDuration) ?? .sixty
+                                    onStartPractice?(story, duration)
                                 }
                             )
                         } label: {

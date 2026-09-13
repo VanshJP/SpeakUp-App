@@ -121,10 +121,10 @@ struct ContentView: View {
                     adoptChallengeIfMatching(prompt)
                     showingCountdown = true
                 },
-                onStartStoryPractice: { story in
+                onStartStoryPractice: { story, duration in
                     recordingPrompt = nil
                     recordingStoryId = story.id
-                    recordingDuration = .sixty
+                    recordingDuration = duration
                     recordingChallenge = nil
                     showingCountdown = true
                 },

@@ -33,7 +33,7 @@ struct PracticeHubView: View {
     @State private var selectedTool: LibraryTool?
 
     let onSelectPrompt: (Prompt) -> Void
-    var onStartStoryPractice: ((Story) -> Void)? = nil
+    var onStartStoryPractice: ((Story, RecordingDuration) -> Void)? = nil
     var onSendToWarmUp: ((Story) -> Void)? = nil
     var onSendToDrill: ((Story) -> Void)? = nil
     var onShowBeforeAfter: (() -> Void)? = nil

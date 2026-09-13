@@ -6,7 +6,7 @@ struct StoryEditorView: View {
     @Bindable var viewModel: StoriesViewModel
     var existingStory: Story?
     var initialFolderId: UUID?
-    var onStartPractice: ((Story) -> Void)?
+    var onStartPractice: ((Story, RecordingDuration) -> Void)?
     var onSendToWarmUp: ((Story) -> Void)?
     var onSendToDrill: ((Story) -> Void)?
 
@@ -557,7 +557,7 @@ struct StoryEditorView: View {
                 if let onStartPractice {
                     Button {
                         performSave()
-                        onStartPractice(story)
+                        onStartPractice(story, .sixty)
                     } label: {
                         Label("Practice This", systemImage: "mic.fill")
                     }
