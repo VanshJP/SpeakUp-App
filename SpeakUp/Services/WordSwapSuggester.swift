@@ -151,6 +151,28 @@ nonisolated struct WordSwapMoment: Identifiable, Hashable, Sendable {
     var example: WordSwapOccurrence? { occurrences.first }
     var count: Int { occurrences.count }
     var playable: [WordSwapOccurrence] { occurrences.filter(\.isPlayable) }
+
+    /// The corrected sentence as plain text, ready to hand to Read Aloud so
+    /// the user can rehearse it instead of only reading it.
+    ///
+    /// Nil when there is no rewrite, or when the line is too short to be worth
+    /// scoring — "I want" is a fragment, not a rep. Ellipses are dropped:
+    /// they mark where the quote was cut, and nobody says them out loud.
+    var practiceLine: String? {
+        guard let pieces = example?.rewritten else { return nil }
+
+        let text = pieces
+            .filter { $0.text != "\u{2026}" }
+            .map(\.text)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard text.count >= 12,
+              text.split(separator: " ").count >= 4
+        else { return nil }
+
+        return text
+    }
 }
 
 // MARK: - Token

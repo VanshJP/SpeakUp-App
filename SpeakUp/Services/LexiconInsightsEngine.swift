@@ -73,6 +73,37 @@ nonisolated struct WordUsageSummary: Identifiable, Hashable, Sendable {
     var id: String { word }
 }
 
+/// Per-100-word crutch rates across a window of earlier takes.
+///
+/// Rates, not raw counts: a habit that surfaced six times in a three-minute
+/// take is not worse than four times in forty seconds, and telling the user
+/// otherwise would make the comparison a lie.
+nonisolated struct CrutchBaseline: Sendable, Hashable {
+    /// Mean occurrences per 100 words, by crutch word.
+    let rates: [String: Double]
+    /// Earlier takes long enough to rate.
+    let takes: Int
+
+    static let empty = CrutchBaseline(rates: [:], takes: 0)
+
+    /// Two earlier takes minimum. One take is an anecdote, not a usual.
+    var isUsable: Bool { takes >= 2 }
+
+    /// Whether this take used `word` more or less than the window usually
+    /// does. Nil when no honest comparison exists — too little history, or
+    /// no prior use at all, where "more than usual" would invite the fair
+    /// reply that there is no usual.
+    func direction(for word: String, count: Int, totalWords: Int) -> UsageDirection? {
+        guard isUsable, totalWords > 0, count > 0 else { return nil }
+        guard let baseline = rates[word], baseline > 0 else { return nil }
+
+        let current = Double(count) / Double(totalWords) * 100
+        if current > baseline * 1.25 { return .rising }
+        if current < baseline * 0.75 { return .falling }
+        return .steady
+    }
+}
+
 nonisolated struct LanguageTrendPoint: Identifiable, Hashable, Sendable {
     let weekStart: Date
     let weakRate: Double
@@ -777,6 +808,80 @@ nonisolated enum LexiconInsightsEngine {
         }
         .sorted { ($0.count, $0.word) > ($1.count, $1.word) }
     }
+
+    // MARK: - Cross-take comparison
+
+    /// Crutch counts from plain transcript text.
+    ///
+    /// Reads the stored transcript string rather than each take's timed-word
+    /// blob, so a window of earlier sessions costs a string column per row
+    /// instead of a JSON decode per row. Detection matches `sessionHits`:
+    /// hedge phrases consume their tokens longest-first, so "not really sure"
+    /// never also counts the "really" inside it.
+    static func crutchCounts(in transcript: String) -> (counts: [String: Int], words: Int) {
+        let tokens = tokenize(transcript)
+        guard !tokens.isEmpty else { return ([:], 0) }
+
+        var consumed = Array(repeating: false, count: tokens.count)
+        var counts: [String: Int] = [:]
+
+        let phrases = hedgePhrases.sorted { $0.split(separator: " ").count > $1.split(separator: " ").count }
+        for phrase in phrases {
+            let parts = phrase.split(separator: " ").map(String.init)
+            guard parts.count > 1 else { continue }
+
+            var index = 0
+            while index + parts.count <= tokens.count {
+                defer { index += 1 }
+
+                guard !consumed[index] else { continue }
+                let window = Array(index..<index + parts.count)
+                guard zip(window, parts).allSatisfy({ tokens[$0] == $1 && !consumed[$0] }) else { continue }
+
+                counts[phrase, default: 0] += 1
+                for position in window {
+                    consumed[position] = true
+                }
+                index += parts.count - 1
+            }
+        }
+
+        for (offset, token) in tokens.enumerated() where !consumed[offset] {
+            guard !token.isEmpty else { continue }
+            if FillerWordList.isFillerWord(token)
+                || intensifierWords.contains(token)
+                || vagueWords.contains(token) {
+                counts[token, default: 0] += 1
+            }
+        }
+
+        return (counts, tokens.count)
+    }
+
+    /// Mean per-100-word crutch rates over earlier takes. Takes under
+    /// `baselineMinimumWords` are dropped: a ten-word answer produces rates
+    /// that swing on a single word.
+    static func crutchBaseline(from transcripts: [String]) -> CrutchBaseline {
+        var totals: [String: Double] = [:]
+        var takes = 0
+
+        for transcript in transcripts {
+            let result = crutchCounts(in: transcript)
+            guard result.words >= baselineMinimumWords else { continue }
+            takes += 1
+            for (word, count) in result.counts {
+                totals[word, default: 0] += Double(count) / Double(result.words) * 100
+            }
+        }
+
+        guard takes > 0 else { return .empty }
+        // Words absent from a take contribute zero, so dividing by every
+        // rated take (not just the ones containing the word) is the point:
+        // dropping a habit entirely should move its rate down.
+        return CrutchBaseline(rates: totals.mapValues { $0 / Double(takes) }, takes: takes)
+    }
+
+    static let baselineMinimumWords = 20
 
     // MARK: - Readiness
 

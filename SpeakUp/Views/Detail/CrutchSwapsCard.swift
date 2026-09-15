@@ -15,6 +15,16 @@ extension CrutchCategory {
     }
 }
 
+// MARK: - Practice request
+
+/// A rewritten line on its way to Read Aloud. Identity is the text itself, so
+/// tapping the same line twice reopens the same sheet rather than stacking a
+/// second one.
+nonisolated struct SwapPracticeLine: Identifiable, Hashable, Sendable {
+    let text: String
+    var id: String { text }
+}
+
 // MARK: - Crutch Swaps Card
 
 /// The take's crutch habits as *rehearsable lines*, not a word tally.
@@ -29,7 +39,14 @@ extension CrutchCategory {
 /// of examples expanded at once is a wall nobody reads.
 struct CrutchSwapsCard: View {
     let hits: [SessionWordHit]
+    /// Denominator for the "more or less than usual" comparison. Whisper's
+    /// word count, where the baseline counts tokenizer words — the few
+    /// percent of drift between them is far inside the comparison's own
+    /// 25% band, so it cannot flip a verdict.
+    let totalWords: Int
+    let baseline: CrutchBaseline
     let onPlay: (TimeInterval) -> Void
+    let onPractice: (String) -> Void
 
     @State private var expanded: Set<String> = []
     @State private var didSeedExpansion = false
@@ -115,13 +132,7 @@ struct CrutchSwapsCard: View {
                         .rotationEffect(.degrees(isExpanded(hit) ? 0 : -90))
                 }
 
-                // Collapsed rows still answer "so what do I do?".
-                if !isExpanded(hit), let fix {
-                    Label(fix, systemImage: "arrow.turn.down.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                secondLine(hit, fix: fix)
             }
             .contentShape(Rectangle())
         }
@@ -130,6 +141,56 @@ struct CrutchSwapsCard: View {
         .accessibilityLabel(headerAccessibility(hit, fix: fix))
         .accessibilityHint(isExpanded(hit) ? "Collapse this habit" : "Expand for examples and fixes")
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// Comparison pill plus, when collapsed, the fix itself — so a closed
+    /// row still answers "so what do I do?".
+    @ViewBuilder
+    private func secondLine(_ hit: SessionWordHit, fix: String?) -> some View {
+        let direction = comparison(hit)
+        let collapsedFix = isExpanded(hit) ? nil : fix
+
+        if direction != nil || collapsedFix != nil {
+            HStack(spacing: 6) {
+                if let direction {
+                    comparisonPill(direction)
+                }
+
+                if let collapsedFix {
+                    Label(collapsedFix, systemImage: "arrow.turn.down.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    /// Only a real change earns a pill. "About usual" on every row is noise,
+    /// and steady is what the reader already assumes.
+    private func comparison(_ hit: SessionWordHit) -> UsageDirection? {
+        let direction = baseline.direction(for: hit.word, count: hit.count, totalWords: totalWords)
+        guard direction == .falling || direction == .rising else { return nil }
+        return direction
+    }
+
+    @ViewBuilder
+    private func comparisonPill(_ direction: UsageDirection) -> some View {
+        if direction == .falling {
+            StatusPill(
+                text: "less than usual",
+                color: AppColors.success,
+                glyph: .icon("arrow.down"),
+                fillOpacity: 0.18
+            )
+        } else {
+            StatusPill(
+                text: "more than usual",
+                color: AppColors.warning,
+                glyph: .icon("arrow.up"),
+                fillOpacity: 0.18
+            )
+        }
     }
 
     // MARK: One teachable moment
@@ -171,7 +232,7 @@ struct CrutchSwapsCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(momentAccessibility(moment))
 
-                playRow(moment, hit: hit)
+                actionRow(moment, hit: hit)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
@@ -196,36 +257,72 @@ struct CrutchSwapsCard: View {
 
     // MARK: Play points
 
+    /// Hear what you did on the left, rehearse what to do instead on the right.
+    ///
     /// Stamps stay playable but never print a clock time — Whisper word
     /// timings drift enough that a wrong "0:37" reads as a broken app while a
     /// wrong seek just plays nearby audio (recording-detail invariant 17).
     /// Unusable zero starts get no button at all (invariant 18).
     @ViewBuilder
-    private func playRow(_ moment: WordSwapMoment, hit: SessionWordHit) -> some View {
+    private func actionRow(_ moment: WordSwapMoment, hit: SessionWordHit) -> some View {
         let playable = Array(moment.playable.prefix(6))
+        let line = moment.practiceLine
 
-        if !playable.isEmpty {
+        if !playable.isEmpty || line != nil {
             HStack(spacing: 6) {
-                Text("Hear it")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                if !playable.isEmpty {
+                    Text("Hear it")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
 
-                ForEach(Array(playable.enumerated()), id: \.element.id) { index, occurrence in
-                    Button {
-                        onPlay(occurrence.timestamp)
-                    } label: {
-                        Image(systemName: "waveform")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(hit.category.badgeColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(hit.category.badgeColor.opacity(0.15)))
+                    ForEach(Array(playable.enumerated()), id: \.element.id) { index, occurrence in
+                        Button {
+                            onPlay(occurrence.timestamp)
+                        } label: {
+                            Image(systemName: "waveform")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(hit.category.badgeColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(hit.category.badgeColor.opacity(0.15)))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Play \(hit.word), occurrence \(index + 1) of \(playable.count)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Play \(hit.word), occurrence \(index + 1) of \(playable.count)")
+                }
+
+                Spacer(minLength: 0)
+
+                if let line {
+                    practiceButton(line)
                 }
             }
         }
+    }
+
+    /// The whole point of a rewritten line is that it can be said out loud.
+    /// Read Aloud scores the attempt word by word, so the swap becomes a rep
+    /// rather than a sentence the user reads once and forgets.
+    private func practiceButton(_ line: String) -> some View {
+        Button {
+            Haptics.medium()
+            onPractice(line)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "mic.fill")
+                Text("Say it")
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(AppColors.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(AppColors.primary.opacity(0.18)))
+            .overlay {
+                Capsule().strokeBorder(AppColors.primary.opacity(0.45), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Practice saying the corrected line out loud")
     }
 
     // MARK: Alternates
@@ -334,6 +431,9 @@ struct CrutchSwapsCard: View {
 
     private func headerAccessibility(_ hit: SessionWordHit, fix: String?) -> String {
         var label = "\(hit.word), \(hit.category.label), \(hit.count) times"
+        if let direction = comparison(hit) {
+            label += direction == .falling ? ", less than usual" : ", more than usual"
+        }
         if !isExpanded(hit), let fix {
             label += ". Fix: \(fix)"
         }

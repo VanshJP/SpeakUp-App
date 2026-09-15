@@ -103,6 +103,20 @@ Accordion: the worst habit opens on appear, the rest collapse to `word · catego
 
 Hand-built hits without occurrences keep the legacy alternatives-map behavior end to end: header fix line, "Also works" pills, and `swaps` all fall back to the map, then to category advice.
 
+### Is this habit getting better?
+
+`PersonalAverage.snapshot` also returns a `CrutchBaseline`: mean per-100-word crutch rates over the same window, built from each earlier take's **`transcriptionText`**, not its timed-word blob. That keeps the window at one string column per row rather than a JSON decode per row, and `LexiconInsightsEngine.crutchCounts(in:)` applies the same longest-first phrase consumption as `sessionHits` so the two agree on what counts.
+
+Rates, not raw counts. Six uses in a three-minute take is not worse than four in forty seconds, and a row that said so would be lying. A habit reads as `less than usual` / `more than usual` outside a ±25% band; inside it nothing renders, because "about usual" on every row is noise. Two things deliberately produce no pill: fewer than two earlier takes long enough to rate (`baselineMinimumWords`), and a word with no prior use at all — "more than usual" against a usual of zero invites the fair reply that there is no usual.
+
+The card's denominator is Whisper's word count while the baseline counts tokenizer words. The few percent of drift between them sits far inside the 25% band, so it cannot flip a verdict.
+
+### Saying it out loud
+
+`WordSwapMoment.practiceLine` renders the rewrite as plain text (ellipses dropped — they mark where the quote was cut, and nobody says them aloud) and the card's **Say it** button hands it to `ReadAloudSelectionView(initialPracticeText:)`, which opens a scored session on an ephemeral `ReadAloudPassage.custom(from:)`. That is the loop the feature was missing: the swap stops being a sentence the user reads once and becomes a rep with word-level accuracy scoring.
+
+Lines under four words or twelve characters offer no button — "we shipped" is a fragment, not a rep — and advice-only options have no line at all. Practising counts as a next step, so it calls `markActivatedIfFirstResult()` like the other practice routes.
+
 ## Repeat takes
 
 `PersonalAverage.PreviousTake` finds the last attempt at the same prompt or story (`storyId ?? prompt?.id`, matching how relevance picks its source text) inside a `repeatScanLimit` tail, and `TakeComparisonCard` renders it directly under the hero.

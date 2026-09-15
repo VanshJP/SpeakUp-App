@@ -465,3 +465,146 @@ struct WordSwapTests {
         #expect(LexiconInsightsEngine.alternativesFor("very") != nil)
     }
 }
+
+// MARK: - Practice lines
+
+@Suite("Word Swap Practice Lines")
+struct WordSwapPracticeLineTests {
+
+    private func timedWords(_ text: String, fillers: Set<String> = []) -> [TranscriptionWord] {
+        var start = 0.0
+        return text.split(separator: " ").map { raw in
+            defer { start += 0.5 }
+            return TranscriptionWord(
+                word: String(raw),
+                start: start,
+                end: start + 0.4,
+                isFiller: fillers.contains(String(raw))
+            )
+        }
+    }
+
+    private func hit(_ hits: [SessionWordHit], _ word: String) -> SessionWordHit? {
+        hits.first { $0.word == word }
+    }
+
+    @Test
+    func rewrittenLineIsHandedOverAsPlainText() {
+        let words = timedWords("i just want to add one point here")
+
+        let just = hit(LexiconInsightsEngine.sessionHits(from: words), "just")
+
+        #expect(just?.moments.first?.practiceLine == "i want to add one point here")
+    }
+
+    @Test
+    func replacementLineCarriesTheStrongerWord() {
+        let words = timedWords("the demo was really good overall folks")
+
+        let really = hit(LexiconInsightsEngine.sessionHits(from: words), "really")
+
+        #expect(really?.moments.first?.practiceLine == "the demo was excellent overall folks")
+    }
+
+    @Test
+    func adviceWithoutARewriteHasNothingToPractice() {
+        let words = timedWords("we handled things like planning early on purpose")
+
+        let things = hit(LexiconInsightsEngine.sessionHits(from: words), "things")
+
+        #expect(things?.moments.first?.practiceLine == nil)
+    }
+
+    @Test
+    func tooShortALineIsNotARep() {
+        let words = timedWords("we just shipped")
+
+        let just = hit(LexiconInsightsEngine.sessionHits(from: words), "just")
+
+        // "we shipped" is a fragment — sending it to a pronunciation scorer
+        // would score nothing worth knowing.
+        #expect(just?.occurrences.first?.rewritten != nil)
+        #expect(just?.moments.first?.practiceLine == nil)
+    }
+}
+
+// MARK: - Cross-take comparison
+
+@Suite("Crutch Baseline")
+struct CrutchBaselineTests {
+
+    /// `count` filler tokens that are not crutch words, so only the words
+    /// under test move the rate.
+    private func padding(_ count: Int) -> String {
+        Array(repeating: "topic", count: count).joined(separator: " ")
+    }
+
+    @Test
+    func phrasesConsumeTheirTokensInPlainText() {
+        let result = LexiconInsightsEngine.crutchCounts(in: "not really sure about the timeline you know")
+
+        #expect(result.counts["not really sure"] == 1)
+        #expect(result.counts["you know"] == 1)
+        // The "really" inside the longer phrase must not count twice.
+        #expect(result.counts["really"] == nil)
+        #expect(result.words == 8)
+    }
+
+    @Test
+    func baselineAveragesPerHundredWordRates() {
+        let take = padding(24) + " just"
+
+        let baseline = LexiconInsightsEngine.crutchBaseline(from: [take, take])
+
+        #expect(baseline.takes == 2)
+        #expect(baseline.rates["just"] == 4.0)
+        #expect(baseline.isUsable)
+    }
+
+    @Test
+    func aDroppedHabitPullsTheBaselineDown() {
+        let withJust = padding(24) + " just"
+        let without = padding(25)
+
+        let baseline = LexiconInsightsEngine.crutchBaseline(from: [withJust, without])
+
+        // Averaged over every rated take, not only the ones containing it.
+        #expect(baseline.rates["just"] == 2.0)
+    }
+
+    @Test
+    func takesTooShortToRateAreSkipped() {
+        let baseline = LexiconInsightsEngine.crutchBaseline(from: ["just a few words"])
+
+        #expect(baseline.takes == 0)
+        #expect(baseline.isUsable == false)
+    }
+
+    @Test
+    func comparisonReadsRatesNotRawCounts() {
+        let baseline = CrutchBaseline(rates: ["just": 4.0], takes: 2)
+
+        // Same rate as usual.
+        #expect(baseline.direction(for: "just", count: 1, totalWords: 25) == .steady)
+        // Twice the rate.
+        #expect(baseline.direction(for: "just", count: 2, totalWords: 25) == .rising)
+        // Same raw count, twice the words — that is progress, not a wash.
+        #expect(baseline.direction(for: "just", count: 1, totalWords: 50) == .falling)
+    }
+
+    @Test
+    func oneEarlierTakeIsAnAnecdoteNotAUsual() {
+        let baseline = CrutchBaseline(rates: ["just": 4.0], takes: 1)
+
+        #expect(baseline.direction(for: "just", count: 9, totalWords: 25) == nil)
+    }
+
+    @Test
+    func aHabitWithNoHistoryGetsNoComparison() {
+        let baseline = CrutchBaseline(rates: ["just": 4.0], takes: 5)
+
+        // "More than usual" against a usual of zero invites the fair reply
+        // that there is no usual.
+        #expect(baseline.direction(for: "basically", count: 4, totalWords: 25) == nil)
+    }
+}

@@ -88,6 +88,8 @@ struct RecordingDetailView: View {
     @State private var nextStepDrill: DrillMode?
     @State private var showingNextStepWarmUp = false
     @State private var showingNextStepReadAloud = false
+    @State private var swapPracticeLine: SwapPracticeLine?
+    @State private var crutchBaseline: CrutchBaseline = .empty
     @State private var achievementService = AchievementService.shared
     @State private var coachMoments = CoachMomentService.shared
     @State private var coachMomentEvaluated = false
@@ -288,6 +290,10 @@ struct RecordingDetailView: View {
             ReadAloudSelectionView()
                 .presentationDetents([.large])
         }
+        .sheet(item: $swapPracticeLine) { line in
+            ReadAloudSelectionView(initialPracticeText: line.text)
+                .presentationDetents([.large])
+        }
         .overlay {
             if showingListenBackEncouragement {
                 ListenBackEncouragementView(
@@ -429,6 +435,7 @@ struct RecordingDetailView: View {
             currentDate: date
         )
         baselines = snapshot.baselines
+        crutchBaseline = snapshot.crutchBaseline
         coachPlan = snapshot.plan
         previousTake = snapshot.previousTake
         showsFocusCard = snapshot.currentIsInPlanWindow
@@ -1258,9 +1265,16 @@ struct RecordingDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 GlassSectionHeader("Word Swaps", icon: "arrow.triangle.swap")
 
-                CrutchSwapsCard(hits: crutchHits) { stamp in
-                    playFrom(stamp)
-                }
+                CrutchSwapsCard(
+                    hits: crutchHits,
+                    totalWords: sessionWords?.count ?? 0,
+                    baseline: crutchBaseline,
+                    onPlay: { playFrom($0) },
+                    onPractice: { line in
+                        markActivatedIfFirstResult()
+                        swapPracticeLine = SwapPracticeLine(text: line)
+                    }
+                )
             }
         }
     }
