@@ -105,7 +105,6 @@ struct AnalyzingView: View {
         VStack(spacing: 0) {
             if let onSaveAndClose {
                 HStack {
-                    Spacer()
                     Button("Save & close", systemImage: "xmark") {
                         Haptics.light()
                         onSaveAndClose()
@@ -114,8 +113,15 @@ struct AnalyzingView: View {
                     .foregroundStyle(.secondary)
                     .frame(minHeight: 44)
                     .accessibilityHint("Your recording stays in History and scoring continues")
+
+                    Spacer()
                 }
-                .padding(.top, systemTopSafeAreaInset + 8)
+                // No manual safe-area inset here. This bar only exists on the
+                // session path, where `RecordingView` presents the screen
+                // inside the safe area already, so adding the system inset was
+                // counting it twice and parking the control a full notch below
+                // where every other screen puts its close button.
+                .padding(.top, 8)
                 .padding(.horizontal, 20)
             }
 

@@ -4,12 +4,14 @@ import SwiftUI
 
 /// Hero step. Runs its own centred layout rather than `OnboardingPage`. This
 /// is the one screen that should feel like a cover, not a form.
+///
+/// The cascade runs through `.introReveal`, which fails visible. A first
+/// install reported this screen as the orb on an empty background with nothing
+/// to tap: everything but the orb was parked at opacity 0 waiting on an appear
+/// callback, and "Let's start" is the one forward action nobody can route
+/// around. Never gate a control on an animation that has to run first.
 struct OnboardingWelcomeStep: View {
     let onContinue: () -> Void
-
-    @State private var titleOpacity: Double = 0
-    @State private var subtitleOpacity: Double = 0
-    @State private var ctaOpacity: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,14 +22,14 @@ struct OnboardingWelcomeStep: View {
             VStack(spacing: 12) {
                 Text("Big Talk")
                     .eyebrowStyle()
-                    .opacity(titleOpacity)
+                    .introReveal(delay: .milliseconds(120))
 
                 Text("Hear yourself improve.")
                     .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
-                    .opacity(titleOpacity)
+                    .introReveal(delay: .milliseconds(120))
 
                 Text("Speak for 30 seconds a day. Big Talk scores and coaches on this iPhone, only while you record.")
                     .font(.subheadline)
@@ -35,7 +37,7 @@ struct OnboardingWelcomeStep: View {
                     .foregroundStyle(.secondary)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .opacity(subtitleOpacity)
+                    .introReveal(delay: .milliseconds(300))
                     .padding(.horizontal, 12)
             }
             .padding(.top, 24)
@@ -68,14 +70,9 @@ struct OnboardingWelcomeStep: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            .opacity(ctaOpacity)
+            .introReveal(delay: .milliseconds(460))
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
-        }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.55).delay(0.15)) { titleOpacity = 1 }
-            withAnimation(.easeOut(duration: 0.5).delay(0.35)) { subtitleOpacity = 1 }
-            withAnimation(.easeOut(duration: 0.45).delay(0.55)) { ctaOpacity = 1 }
         }
     }
 

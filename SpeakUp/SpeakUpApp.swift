@@ -123,8 +123,17 @@ struct SpeakUpApp: App {
                         AttributionStore.shared.logFirstOpenIfNeeded()
                     }
 
-                    // Preload Whisper model in background – don't block UI on launch
+                    // Preload the Whisper model. `Task.detached` does *not*
+                    // get this off the main actor: `SpeechService` and
+                    // `WhisperService` are plain classes, so default isolation
+                    // makes them MainActor (gotcha §7) and the detached task
+                    // hops straight back. On a fresh install this call is a
+                    // ~150 MB Hub download plus a Core ML prewarm, which is the
+                    // heaviest thing the first launch does. Let the first
+                    // screen paint and settle before starting it; nothing needs
+                    // the model until the user's first take, minutes away.
                     Task.detached(priority: .background) {
+                        try? await Task.sleep(for: .seconds(1.5))
                         await speechService.preloadModel()
                     }
                     Task(priority: .background) {

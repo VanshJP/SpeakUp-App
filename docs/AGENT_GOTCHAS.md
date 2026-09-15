@@ -295,3 +295,30 @@ Liquid Glass samples what is behind it. A second `glassEffect` laid straight on 
 `GlassCard`, `FeaturedGlassCard` and `.glassCard()` set `\.isOnGlass` on their content; `GlassButtonChrome` reads it and paints a capsule (white 0.10 fill, 0.16 rim) instead of glassing it. Any new glass surface that can appear inside a card owes the same branch — or wrap both in a `GlassEffectContainer` if two glass surfaces genuinely must share a region. Branch on the environment value, never on animated state (design rule 14: never animate a `glassEffect` on/off).
 
 Symptom without the fix: the control is legible in isolation and in a `#Preview` over `AppBackground`, and only goes grey once it is inside a card — which is why it survived review.
+
+---
+
+## 23. Never gate a control on an appear animation
+
+The pattern is `@State private var ctaOpacity: Double = 0` plus
+`withAnimation(…delay(0.15)) { ctaOpacity = 1 }` inside `.onAppear`. The
+resting state of that view is *invisible*, and every way of not reaching the
+animation — a missed `onAppear`, a cancelled task, a render loop that never
+ticks past the delay — leaves the control on screen but transparent, with no
+error and nothing in the log.
+
+It has bricked two screens. A fresh install reported the onboarding welcome
+cover as the orb on an empty background: "Let's start" was there, at opacity 0,
+and it is the one forward action in the app nobody can route around.
+`LessonCompletionView` hid both of its exits behind a single shared
+`contentOpacity`.
+
+Use `.introReveal(delay:)` (`Theme/AppMotion.swift`). Its resting state is
+shown; it only hides once `onAppear` has run, which is the same moment it takes
+on responsibility for showing it again, and a backstop task lands the final
+state with animations off if the reveal is interrupted. Reduce Motion skips it
+entirely. Decoration (a glyph scaling up, a card easing in) can still animate
+however it likes — the rule is about anything the user has to tap.
+
+Symptom: the screen renders, nothing is logged, and the user calls it frozen
+because from their side it is.

@@ -109,6 +109,13 @@ be written in prose:
 12. **Interruptions are blameless.** Backgrounding mid-take discards the
     take with "We saved nothing — clean slate…". A resume after force-quit
     lands on the briefing, never cold on the live recorder.
+13. **The flow fails visible.** No step may hide a control behind an appear
+    animation. The welcome cover shipped with its headline, its trust pills
+    and "Let's start" all at opacity 0 until an `onAppear` cascade raised
+    them, and a first install found the failure mode: the orb on an empty
+    background, no button, nothing logged. Every fade in onboarding goes
+    through `.introReveal` (`Theme/AppMotion.swift`), whose resting state is
+    shown. See gotcha §23.
 
 ## The flow as built
 
