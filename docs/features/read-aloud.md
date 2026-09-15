@@ -22,6 +22,8 @@ Free: catalog + custom. Same scoring path for both.
 
 Library (`PracticeHubView`) → **Read Aloud** (`PracticeToolKind.readAloud`) → `ReadAloudSelectionView` → `ReadAloudSessionView` → `ReadAloudResultView`.
 
+`ReadAloudSelectionView(initialPracticeText:)` opens a scored session immediately on an ephemeral `ReadAloudPassage.custom(from:)`, skipping the list and composer. Recording detail's word swaps use it to rehearse a rewritten line (see [recording-detail.md](./recording-detail.md)). Same auto-start shape as `DrillSelectionView(initialMode:)`: a `.task` on the selection view, so the cover presents after the sheet has settled.
+
 Hub outcome: *Train clarity on a passage, including your own text.*
 
 ---

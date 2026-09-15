@@ -15,7 +15,7 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 | Coaching / next | `CoachPlanService`, `CoachEvidenceService`, `CoachingTipService`, `CoachingPrompt`, `CoachingTipsView`, `NextStepCard`, `TakeComparisonCard`, `ListenBackEncouragementView` |
 | Coach note | `CoachMomentService.evaluateAfterSession` → `CoachMomentCard` above next step (axis mark); a soft landing replaces the next-step card so retry is never duplicated. See [coach-moments.md](./coach-moments.md). |
 | Word workout result | `VocabChallengeResultCard` on the breakdown tab when today's spotlight words exist |
-| Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each occurrence a playable stamp, each habit carrying swap suggestions. Structural repetition is **not** a swap row: tip + plum transcript highlight own that signal. |
+| Word swaps | `CrutchSwapsCard` (transcript tab) — per-session crutch words from `LexiconInsightsEngine.sessionHits`, each habit an accordion row of before/after rewrites with playable occurrences. Structural repetition is **not** a swap row: tip + plum transcript highlight own that signal. |
 | First-run setup | `FirstRecordingSetupSheet` (post-onboarding, after first score) |
 | Share cards | `ShareCardSheet` (picker + preview), `ScoreCardRenderer`, `ProgressCardRenderer`, `SharePresenter`, `SharedPromptLink`, `SharedPromptResolver` |
 | Inbound challenge | `SharedChallengeStore`, `FriendChallengeCard` (Today), countdown chrome in `CountdownOverlayView` |
@@ -71,8 +71,8 @@ Stickiness comes from averaging the window, not from stored state. There is no p
 14. The coaching plan loads *before* the LLM coherence pass fires (`runReadySetupIfNeeded`), so the generated insight has a focus to lead with.
 15. Coaching reads `Recording.fullAnalysis`, not `analysis` — see gotcha "SwiftData drops the advanced analysis metrics".
 16. Every play request goes through `startPlayback(of:at:)`. The drawer, the transcript, the filler chips, and the tips all need the same media checks and the same first-listen gate; a second path would drift from it. The gate holds the requested timestamp in `pendingPlaybackTime` rather than dropping it. `listenBackCount` increments only after `AudioService.play` succeeds, then `AchievementService.shared` rechecks **Brave Listener** with the saved count; missing/iCloud-pending/failed media earns nothing.
-17. Stamped surfaces stay **playable** but no longer print the clock time. Whisper word stamps drift enough that a visible "0:38" was often wrong — a wrong number reads as a broken app while a wrong seek just plays nearby audio. Filler chips render waveform glyphs (one per occurrence) and the tip pill says "Hear it"; both still route through `startPlayback(of:at:)`. Never reintroduce a printed stamp without also fixing stamp accuracy end-to-end.
-18. Word tap-to-play attaches only when the timestamp is usable (`start > 0`, finite). Whisper's alignment heads emit zero starts often enough that tapping such a word jumped to the top of the take; the drawer play button still covers "from the top".
+17. Stamped surfaces stay **playable** but no longer print the clock time. Whisper word stamps drift enough that a visible "0:38" was often wrong — a wrong number reads as a broken app while a wrong seek just plays nearby audio. Filler chips, **word-swap play points**, and the tip pill all render waveform glyphs (one per occurrence, the pill labelled "Hear it"); all route through `startPlayback(of:at:)`. Never reintroduce a printed stamp without also fixing stamp accuracy end-to-end. The swap card printed `0:37` three times for three occurrences seconds apart before it was brought in line — that is what the drift looks like on screen.
+18. Word tap-to-play attaches only when the timestamp is usable (`start > 0`, finite) — `WordSwapOccurrence.isPlayable` applies the same rule to swap play points. Whisper's alignment heads emit zero starts often enough that tapping such a word jumped to the top of the take; the drawer play button still covers "from the top".
 19. Playback seeks, it does not restart. `AudioService.play(url:startingAt:)` reuses the live `AVAudioPlayer` when the URL matches (`playerURL`) — recreating it mid-playback landed as an audible jump-cut. Fresh URLs still take the full load path. Absolute-time requests go through `seek(toTime:)`; the fraction-based `seek(to:)` remains the drawer scrubber's API. Both clamp into `[0, duration − 0.1]`.
 
 ### Insight scores are never bare numbers
@@ -81,7 +81,41 @@ The coaching prompt (`CoachingPrompt.system`) instructs every backend to prefix 
 
 ## Word swaps
 
-`CrutchSwapsCard.hits(for:)` runs `LexiconInsightsEngine.sessionHits(from:)` over the take's timed transcription words. Pipeline-tagged fillers (`isFiller`) are authoritative; hedge phrases match longest-first and consume their tokens so "not really sure" never double-counts its "really". Rows are habits only — two-plus occurrences, capped at six — each with category badge, playable stamps, a context fragment, and contextual swaps. Swaps come from `WordSwapSuggester` (pure, deterministic, on-device — no LLM): each occurrence is disambiguated by neighbors and sentence position — "like three weeks" → "about", "platforms like Figma" → "such as", "feels like we rushed" → "as if", sentence-final "right" → silence plus one real check-in, "really good" → "excellent", "just want" → "I want", "things like planning" → name them. Each row surfaces ONE primary swap (bolded, bordered chip) with its when/why cue plus up to two alternates, ranked by dominant pattern across occurrences (ties: earliest use). The strongest occurrence renders ±6 words of the actual transcript under "In context", crutch word tinted. `"a lot"` joined the hedge-phrase list, so vague quantity now counts toward softeners. Hand-built hits without occurrences keep the legacy alternatives-map behavior, and fragment/swaps blocks collapse into single accessibility elements.
+`CrutchSwapsCard.hits(from:)` runs `LexiconInsightsEngine.sessionHits(from:)` over the take's timed transcription words. Pipeline-tagged fillers (`isFiller`) are authoritative; hedge phrases match longest-first and consume their tokens so "not really sure" never double-counts its "really". Rows are habits only — two-plus occurrences, capped at six. `"a lot"` is in the hedge-phrase list, so vague quantity counts toward softeners.
+
+Swaps come from `WordSwapSuggester` (pure, deterministic, on-device — no LLM): each occurrence is disambiguated by neighbors and sentence position — "like three weeks" → "about", "platforms like Figma" → "such as", "feels like we rushed" → "as if", sentence-final "right" → silence plus one real check-in, "really good" → "excellent", "just want" → "I want", "things like planning" → name them, sentence-opening "I think" → state it directly, mid-sentence "you know" → cut it, "maybe three weeks" → "about".
+
+### The rewrite is the product
+
+Every option carries a `SwapEdit` describing what it does to the sentence: `.delete`, `.pause` (same edit, different coaching), `.replace(text, extraTokens:)`, or `.advice`. `WordSwapSuggester.rewrite` applies the winning edit to the occurrence's own words and returns the corrected line, so the card shows **You said → Say this** rather than only naming a fix. Rules with no single substitution ("quantify instead") stay `.advice` and render no rewrite — a wrong rewritten sentence is worse than none.
+
+Mechanics the rewrite owes the reader: `extraTokens` lets "really good" collapse to "excellent" instead of "excellent good"; a deleted sentence-initial crutch capitalizes whatever now starts the line; a deleted word hands back the full stop or comma it was carrying, so "we shipped on time right." becomes "we shipped on time."; and a rewrite identical to the original returns nil.
+
+Legacy `alternatives`-map entries have no declared edit, so `SwapEdit.inferred(from:)` reads one off the copy — conservatively: only a string that is *entirely* one quoted phrase becomes a substitution, because “only” when counting matters is a condition, not an instruction.
+
+### Moments, not repetitions
+
+`WordSwapSuggester.moments(in:)` groups occurrences by the advice they earned. Three "just"s in one sentence pattern are **one** moment with three play points; three "just"s in three patterns are three moments, each with its own before/after. `deduplicated` collapses options that edit the sentence identically, so a row can no longer print "cut it" beside “drop “just” entirely” — it did, from the alternatives map, before the edit model existed.
+
+### Card shape
+
+Accordion: the worst habit opens on appear, the rest collapse to `word · category · count` plus a one-line fix, so six habits' worth of examples are not a wall. Play points are waveform glyphs (invariant 17) filtered by `isPlayable` (invariant 18). Alternates render as flat un-tinted pills — they must never borrow the filled-capsule look of the play buttons beside them, which is exactly how the old card styled un-tappable suggestions. Fragment and rewrite collapse into one VoiceOver element so the comparison is read as a sentence pair, and the play buttons stay separately actionable.
+
+Hand-built hits without occurrences keep the legacy alternatives-map behavior end to end: header fix line, "Also works" pills, and `swaps` all fall back to the map, then to category advice.
+
+### Is this habit getting better?
+
+`PersonalAverage.snapshot` also returns a `CrutchBaseline`: mean per-100-word crutch rates over the same window, built from each earlier take's **`transcriptionText`**, not its timed-word blob. That keeps the window at one string column per row rather than a JSON decode per row, and `LexiconInsightsEngine.crutchCounts(in:)` applies the same longest-first phrase consumption as `sessionHits` so the two agree on what counts.
+
+Rates, not raw counts. Six uses in a three-minute take is not worse than four in forty seconds, and a row that said so would be lying. A habit reads as `less than usual` / `more than usual` outside a ±25% band; inside it nothing renders, because "about usual" on every row is noise. Two things deliberately produce no pill: fewer than two earlier takes long enough to rate (`baselineMinimumWords`), and a word with no prior use at all — "more than usual" against a usual of zero invites the fair reply that there is no usual.
+
+The card's denominator is Whisper's word count while the baseline counts tokenizer words. The few percent of drift between them sits far inside the 25% band, so it cannot flip a verdict.
+
+### Saying it out loud
+
+`WordSwapMoment.practiceLine` renders the rewrite as plain text (ellipses dropped — they mark where the quote was cut, and nobody says them aloud) and the card's **Say it** button hands it to `ReadAloudSelectionView(initialPracticeText:)`, which opens a scored session on an ephemeral `ReadAloudPassage.custom(from:)`. That is the loop the feature was missing: the swap stops being a sentence the user reads once and becomes a rep with word-level accuracy scoring.
+
+Lines under four words or twelve characters offer no button — "we shipped" is a fragment, not a rep — and advice-only options have no line at all. Practising counts as a next step, so it calls `markActivatedIfFirstResult()` like the other practice routes.
 
 ## Repeat takes
 

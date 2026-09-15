@@ -13,8 +13,14 @@ struct ReadAloudSelectionView: View {
     @State private var pendingPracticePassage: ReadAloudPassage?
     @State private var passagePendingDeletion: ReadAloudPassage?
     @State private var shadowMode = false
+    @State private var didStartInitialPractice = false
 
     var presentation: ToolPresentation = .sheet
+
+    /// A line handed in by another screen to rehearse immediately — today,
+    /// a word-swap rewrite from the recording detail. The session opens
+    /// straight away; the list underneath is where the user lands afterwards.
+    var initialPracticeText: String?
 
     private var longestPassageWords: Double {
         Double(viewModel.passages.map(\.wordCount).max() ?? 0)
@@ -151,6 +157,17 @@ struct ReadAloudSelectionView: View {
             if let passage = viewModel.selectedPassage {
                 ReadAloudSessionView(viewModel: viewModel, passage: passage)
             }
+        }
+        .task {
+            guard !didStartInitialPractice,
+                  let initialPracticeText,
+                  let passage = ReadAloudPassage.custom(from: initialPracticeText)
+            else { return }
+
+            didStartInitialPractice = true
+            viewModel.isShadowMode = false
+            viewModel.selectedPassage = passage
+            showingSession = true
         }
         .sheet(isPresented: $showingComposer, onDismiss: startPendingPractice) {
             ReadAloudComposerSheet(

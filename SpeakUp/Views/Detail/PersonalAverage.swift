@@ -52,6 +52,9 @@ nonisolated enum PersonalAverage {
         var plan: CoachPlan?
         var previousTake: PreviousTake?
         var currentIsInPlanWindow = false
+        /// What this speaker's crutch habits usually cost them, so today's
+        /// word swaps can be reported as better or worse than usual.
+        var crutchBaseline: CrutchBaseline = .empty
     }
 
     /// What a session was practising, as one comparable key.
@@ -120,6 +123,15 @@ nonisolated enum PersonalAverage {
 
             let live = recent.filter { !$0.isDeleted }
             let planWindow = live.prefix(window)
+            // Transcript text, not the timed-word blob: the crutch baseline
+            // only needs words in order, and this keeps the window at one
+            // string column per row rather than a JSON decode per row.
+            let crutchBaseline = LexiconInsightsEngine.crutchBaseline(
+                from: live
+                    .filter { $0.id != currentID }
+                    .prefix(window)
+                    .compactMap(\.transcriptionText)
+            )
             let currentIsInPlanWindow = planWindow.contains { $0.id == currentID }
             let previousTake = previousTake(
                 subject: repeatSubject,
@@ -145,7 +157,8 @@ nonisolated enum PersonalAverage {
                 return Snapshot(
                     plan: plan,
                     previousTake: previousTake,
-                    currentIsInPlanWindow: currentIsInPlanWindow
+                    currentIsInPlanWindow: currentIsInPlanWindow,
+                    crutchBaseline: crutchBaseline
                 )
             }
 
@@ -168,7 +181,8 @@ nonisolated enum PersonalAverage {
                 ),
                 plan: plan,
                 previousTake: previousTake,
-                currentIsInPlanWindow: currentIsInPlanWindow
+                currentIsInPlanWindow: currentIsInPlanWindow,
+                crutchBaseline: crutchBaseline
             )
         }.value
     }
