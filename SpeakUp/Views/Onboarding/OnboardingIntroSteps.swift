@@ -13,11 +13,32 @@ import SwiftUI
 struct OnboardingWelcomeStep: View {
     let onContinue: () -> Void
 
+    /// Orb rungs, largest first. The cover has no scroll view by design, so on
+    /// a short screen or at a large text size the orb is the only thing that
+    /// can give. Same shape as `SessionDial.ladder`: fixed arity, because
+    /// `ViewThatFits` measures candidates individually. The last rung scrolls,
+    /// so the headline and the button can never be clipped off an iPhone SE at
+    /// an accessibility size, whatever the earlier rungs cost.
+    private static let orbRungs: (CGFloat, CGFloat, CGFloat) = (200, 148, 104)
+
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            cover(orbSize: Self.orbRungs.0)
+            cover(orbSize: Self.orbRungs.1)
+            cover(orbSize: Self.orbRungs.2)
+            PageScrollView(showsIndicators: false) {
+                cover(orbSize: Self.orbRungs.2)
+            }
+        }
+    }
+
+    // MARK: - Cover
+
+    private func cover(orbSize: CGFloat) -> some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            OnboardingOrb(size: 200)
+            OnboardingOrb(size: orbSize)
 
             VStack(spacing: 12) {
                 Text("Big Talk")
@@ -46,22 +67,7 @@ struct OnboardingWelcomeStep: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 16) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        onDevicePill
-                        offlinePill
-                        noAccountPill
-                    }
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            onDevicePill
-                            offlinePill
-                        }
-                        noAccountPill
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("On-device, works offline, no account required")
+                trustPills
 
                 OnboardingCTA(title: "Let's start", action: onContinue)
 
@@ -69,11 +75,39 @@ struct OnboardingWelcomeStep: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .introReveal(delay: .milliseconds(460))
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
         }
+    }
+
+    /// Three across, then two-plus-one, then a column. The third rung matters
+    /// on a 320pt-wide SE once Dynamic Type climbs, where even two pills
+    /// overflow the row.
+    private var trustPills: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                onDevicePill
+                offlinePill
+                noAccountPill
+            }
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    onDevicePill
+                    offlinePill
+                }
+                noAccountPill
+            }
+            VStack(spacing: 8) {
+                onDevicePill
+                offlinePill
+                noAccountPill
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("On-device, works offline, no account required")
     }
 
     // MARK: - Subviews

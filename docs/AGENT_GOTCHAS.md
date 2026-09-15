@@ -322,3 +322,36 @@ however it likes — the rule is about anything the user has to tap.
 
 Symptom: the screen renders, nothing is logged, and the user calls it frozen
 because from their side it is.
+
+---
+
+## 24. Never read `keyWindow.safeAreaInsets` for layout
+
+`AnalyzingView` carried this, twice:
+
+```swift
+private var systemTopSafeAreaInset: CGFloat {
+    UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+        .first(where: \.isKeyWindow)?
+        .safeAreaInsets.top ?? 0
+}
+```
+
+Three things are wrong with it. It is a UIKit read from `body`, so it never
+invalidates — during presentation there may be no key window yet and it
+returns 0. It is added on top of whatever inset the layout already applied,
+and every host in this app insets its content (covers, `NavigationStack`,
+`safeAreaInset`), so the usual result is a doubled inset. And the doubling is
+device-dependent: +20pt on an SE, +59 on a Pro, +62 on a Pro Max — one screen
+that is wrong by a different amount on every iPhone, which reads as "sometimes
+it looks fine" and survives review on whatever device the author holds.
+
+Let the layout supply it. `GeometryProxy.safeAreaInsets`, `safeAreaPadding`, or
+just a plain constant inside an already-inset container. If the inset really is
+being consumed, the bug is the `.ignoresSafeArea()` upstream — fix that instead,
+per `features/recording.md` → "Session screens respect the safe area".
+
+Symptom: a close button or header sits a notch too low, and moving to a
+different iPhone changes how wrong it is.

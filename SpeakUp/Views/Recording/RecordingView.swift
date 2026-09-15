@@ -25,6 +25,12 @@ struct RecordingView: View {
     /// from the configure task so resolving it can never delay the countdown.
     @State private var focusPlan: CoachPlan?
 
+    /// Height of the coaching cue lane: one line of `.caption` plus the
+    /// capsule's 8pt vertical padding. Scaled, because a flat 34 is a one-line
+    /// lane at the default text size and a clipped one at accessibility sizes,
+    /// and the lane growing mid-take is the thing it exists to prevent.
+    @ScaledMetric(relativeTo: .caption) private var coachingCueLaneHeight: CGFloat = 34
+
     let prompt: Prompt?
     let duration: RecordingDuration
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
@@ -532,8 +538,12 @@ struct RecordingView: View {
             Text(cue.message)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
+                // One line, always. Every shipped cue is three to six words,
+                // and a cue that can wrap is a lane that can grow mid-take —
+                // the one thing the reserved lane exists to prevent. Scaling
+                // down a little beats moving the dial under the speaker.
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -545,8 +555,8 @@ struct RecordingView: View {
                         .strokeBorder(cue.tint.opacity(0.4), lineWidth: 0.5)
                 }
         }
-        // The cue is its own row now, so it sizes to its text and wraps only
-        // when the text genuinely will not fit the screen.
+        // The cue is its own row now, so it sizes to its own text rather than
+        // to the full controls width it used to be proposed as an overlay.
         .fixedSize(horizontal: false, vertical: true)
         .allowsHitTesting(false)
     }
@@ -573,14 +583,11 @@ struct RecordingView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: Self.coachingCueLaneHeight)
+            .frame(minHeight: coachingCueLaneHeight)
             .motion(AppMotion.settle, value: cue?.message)
         }
     }
 
-    /// One line of cue plus its capsule padding. Every shipped cue is one line
-    /// on a standard phone; a longer one grows the lane rather than clipping.
-    private static let coachingCueLaneHeight: CGFloat = 34
 
     // MARK: - Bottom Controls
 

@@ -93,14 +93,6 @@ struct AnalyzingView: View {
         "Scoring your delivery..."
     ]
 
-    private var systemTopSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets.top ?? 0
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             if let onSaveAndClose {
@@ -116,11 +108,14 @@ struct AnalyzingView: View {
 
                     Spacer()
                 }
-                // No manual safe-area inset here. This bar only exists on the
-                // session path, where `RecordingView` presents the screen
-                // inside the safe area already, so adding the system inset was
-                // counting it twice and parking the control a full notch below
-                // where every other screen puts its close button.
+                // Plain 8pt. Nothing in this screen's chain ignores the safe
+                // area — both hosts (`RecordingView`'s cover, the detail
+                // screen's `NavigationStack`) inset their content already, so
+                // the `keyWindow.safeAreaInsets.top` this used to add was
+                // counted twice. That error scaled with the device: +20pt on
+                // an SE, +59 here, +62 on a Pro Max, which is why the control
+                // sat a different amount too low on every iPhone. Let the
+                // layout supply the inset; it already knows the number.
                 .padding(.top, 8)
                 .padding(.horizontal, 20)
             }
@@ -153,8 +148,7 @@ struct AnalyzingView: View {
             statusSubtitle: statusSubtitle,
             stage: progressStage,
             currentTipIndex: currentTipIndex,
-            tipVisible: showTip,
-            hasExternalTopBar: onSaveAndClose != nil
+            tipVisible: showTip
         )
     }
 
@@ -171,7 +165,7 @@ struct AnalyzingView: View {
     private var feedbackContentStack: some View {
         VStack(spacing: 16) {
             Spacer()
-                .frame(height: onSaveAndClose == nil ? systemTopSafeAreaInset + 8 : 8)
+                .frame(height: 8)
 
             // scaleEffect does not change layout size. Size the host to the
             // scaled bounds and clip so the orb cannot paint over the status
@@ -692,14 +686,13 @@ private struct DetailSkeletonView: View {
     let stage: Int
     let currentTipIndex: Int
     let tipVisible: Bool
-    let hasExternalTopBar: Bool
 
     var body: some View {
         PageScrollView {
             ShimmerHost {
                 VStack(spacing: 20) {
                     statusHeader
-                        .padding(.top, hasExternalTopBar ? 8 : systemTopSafeAreaInset + 8)
+                        .padding(.top, 8)
 
                     DetailContextStrip(recording: recording)
 
@@ -716,18 +709,6 @@ private struct DetailSkeletonView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDisabled(true)
-    }
-
-    /// Top safe-area inset read directly from the key window. Using
-    /// GeometryProxy.safeAreaInsets here would return 0 because a parent view
-    /// in the hierarchy calls .ignoresSafeArea(); going through UIKit bypasses
-    /// the ignored value and gives us the true system inset.
-    private var systemTopSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets.top ?? 0
     }
 
     // MARK: - Status Header
