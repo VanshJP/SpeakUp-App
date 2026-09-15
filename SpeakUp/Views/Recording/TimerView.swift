@@ -155,7 +155,8 @@ nonisolated enum SessionDial {
 
 /// Middle of a session screen: dial + stacked cues, sized to leftover space.
 /// Slot height must not move mid-take (`container − topBar − bottomControls`) —
-/// coaching cue overlays `bottomControls` rather than growing it (see RecordingView).
+/// coaching cue overlays `bottomControls` rather than growing it, and aligns
+/// its bottom just above the controls (see RecordingView).
 struct SessionDialSlot<Content: View>: View {
     var spacing: CGFloat = 18
     @ViewBuilder var content: (CGFloat) -> Content
