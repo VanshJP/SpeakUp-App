@@ -186,25 +186,29 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
         self.occurrences = occurrences
     }
 
-    /// Up to three ranked swaps: the dominant contextual replacement, distinct
-    /// alternates from other occurrences' patterns, then the winner's own
-    /// fallbacks. Without occurrences this falls back to the alternatives map,
-    /// then category advice.
-    var swaps: [String] {
-        var contextual = WordSwapSuggester.dominantReplacements(in: occurrences)
-        if !contextual.isEmpty {
-            // The winner's own fallbacks: the remaining options on the
-            // occurrence that produced it, ranked behind its primary swap.
-            if let winner = primarySwap,
-               let source = occurrences.first(where: { $0.best?.replacement == winner.replacement }) {
-                for option in source.options.dropFirst() where contextual.count < 3 {
-                    if !contextual.contains(option.replacement) {
-                        contextual.append(option.replacement)
-                    }
-                }
-            }
-            return contextual
+    /// Up to three ranked swap options: the dominant contextual replacement,
+    /// distinct alternates from other occurrences' patterns, then the winner's
+    /// own fallbacks. Options editing the sentence identically collapse, so a
+    /// row never offers "cut it" beside "drop it entirely".
+    var swapOptions: [WordSwapOption] {
+        var ranked = WordSwapSuggester.dominantOptions(in: occurrences)
+        guard !ranked.isEmpty else { return [] }
+
+        // The winner's own fallbacks: the remaining options on the
+        // occurrence that produced it, ranked behind its primary swap.
+        if let winner = ranked.first,
+           let source = occurrences.first(where: { $0.best?.replacement == winner.replacement }) {
+            ranked.append(contentsOf: source.options.dropFirst())
         }
+        return Array(WordSwapSuggester.deduplicated(ranked).prefix(3))
+    }
+
+    /// Swap labels only — the legacy shape callers and share copy still read.
+    /// Without occurrences this falls back to the alternatives map, then
+    /// category advice.
+    var swaps: [String] {
+        let contextual = swapOptions
+        if !contextual.isEmpty { return contextual.map(\.replacement) }
 
         let own = LexiconInsightsEngine.alternatives[word] ?? []
         if !own.isEmpty { return own }
@@ -220,6 +224,20 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
     /// The winning swap with its "when/why" cue, for emphasized rendering.
     var primarySwap: WordSwapOption? {
         WordSwapSuggester.primaryOption(in: occurrences)
+    }
+
+    /// Distinct lessons inside this habit. Three occurrences sharing one fix
+    /// are one moment with three play points; three occurrences in three
+    /// different sentence patterns are three moments, each with its own
+    /// before/after. Never more than three — a card is not a report.
+    var moments: [WordSwapMoment] {
+        WordSwapSuggester.moments(in: occurrences)
+    }
+
+    /// Alternates worth printing under the primary fix, deduped against it.
+    var alternateOptions: [WordSwapOption] {
+        let primaries = Set(moments.map(\.option.replacement))
+        return swapOptions.filter { !primaries.contains($0.replacement) }
     }
 
     /// Sentence fragment around the occurrence whose suggestion won.
@@ -741,15 +759,11 @@ nonisolated enum LexiconInsightsEngine {
             let ranges = (occurrenceRanges[word] ?? [])
                 .sorted { tokens[$0.lowerBound].start < tokens[$1.lowerBound].start }
             let occurrences = ranges.map { range in
-                WordSwapOccurrence(
-                    timestamp: tokens[range.lowerBound].start,
-                    fragment: WordSwapSuggester.fragment(tokenRange: range, radius: 6, in: tokens),
-                    options: WordSwapSuggester.options(
-                        for: word,
-                        category: category,
-                        tokenRange: range,
-                        tokens: tokens
-                    )
+                WordSwapSuggester.occurrence(
+                    for: word,
+                    category: category,
+                    tokenRange: range,
+                    tokens: tokens
                 )
             }
 
