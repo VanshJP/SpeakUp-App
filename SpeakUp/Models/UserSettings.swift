@@ -10,6 +10,22 @@ final class UserSettings {
     var dailyReminderHour: Int = 9
     var dailyReminderMinute: Int = 0
     var weeklyGoalSessions: Int = 5
+
+    // Retention notifications — additive, defaulted on. `dailyReminderEnabled`
+    // above is the consent: with it off nothing here can send. These only shape
+    // what arrives once the user has said yes. See docs/features/retention.md.
+    var streakRemindersEnabled: Bool = true
+    var comebackRemindersEnabled: Bool = true
+    var milestoneNotificationsEnabled: Bool = true
+
+    // Streak protection. The days a freeze covered is the *only* stored state —
+    // the remaining balance is derived from practice-day count in
+    // `StreakProtection`, so recomputing converges instead of drifting.
+    var streakFrozenDays: [Date] = []
+
+    /// Highest streak already celebrated, so a milestone fires once rather than
+    /// on every refresh. Reset to 0 when the streak breaks.
+    var lastMilestoneNotified: Int = 0
     var exportFormat: ExportFormat = ExportFormat.portrait
     var showOverallScore: Bool = true
     var showClarity: Bool = true

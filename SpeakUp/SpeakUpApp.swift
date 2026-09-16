@@ -146,24 +146,16 @@ struct SpeakUpApp: App {
             if newPhase == .active {
                 Task {
                     let notifications = NotificationService()
-                    notifications.removeLegacyPressureNotifications()
+                    notifications.removeRetiredNotifications()
                     await notifications.clearBadge()
-                    await notifications.checkPermission()
 
-                    let context = sharedModelContainer.mainContext
-                    let descriptor = FetchDescriptor<UserSettings>()
-                    guard notifications.hasPermission,
-                          let settings = try? context.fetch(descriptor).first else {
-                        return
-                    }
-                    if settings.dailyReminderEnabled {
-                        await notifications.scheduleDailyReminder(
-                            hour: settings.dailyReminderHour,
-                            minute: settings.dailyReminderMinute
-                        )
-                    } else {
-                        await notifications.cancelDailyReminder()
-                    }
+                    // Rebuilds streak protection and the whole notification
+                    // ladder from current state, so the streak numbers quoted
+                    // in the copy are never more than one foreground stale.
+                    await RetentionScheduler.refresh(
+                        context: sharedModelContainer.mainContext,
+                        service: notifications
+                    )
                 }
                 Task {
                     await PurchaseService.shared.refreshEntitlement()

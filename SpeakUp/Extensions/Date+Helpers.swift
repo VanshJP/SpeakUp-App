@@ -55,32 +55,39 @@ nonisolated extension Date {
     
     // MARK: - Streak Calculation
     
-    static func calculateStreak(from dates: [Date]) -> Int {
+    /// Consecutive practice days ending today or yesterday.
+    ///
+    /// `frozenDays` are days a streak freeze covered (`StreakProtection`). A
+    /// frozen day **holds** the chain together but does not **extend** it: the
+    /// number stays a count of days the user actually spoke, so the streak
+    /// never claims practice that never happened.
+    static func calculateStreak(
+        from dates: [Date],
+        frozenDays: [Date] = [],
+        now: Date = Date()
+    ) -> Int {
         guard !dates.isEmpty else { return 0 }
-        
-        let sortedDates = dates.map { $0.startOfDay }.sorted(by: >)
-        let uniqueDates = Array(Set(sortedDates)).sorted(by: >)
-        
-        guard let mostRecent = uniqueDates.first else { return 0 }
-        
-        let today = Date().startOfDay
-        let yesterday = today.adding(days: -1)
-        
-        guard mostRecent == today || mostRecent == yesterday else {
-            return 0
-        }
-        
-        var streak = 1
-        var previousDate = mostRecent
 
-        for date in uniqueDates.dropFirst() {
-            let expectedPrevious = previousDate.adding(days: -1)
-            if date == expectedPrevious {
-                streak += 1
-                previousDate = date
-            } else {
-                break
-            }
+        let practice = Set(dates.map { $0.startOfDay })
+        // A day cannot be both practised and frozen; practice wins so the day
+        // still counts toward the number.
+        let frozen = Set(frozenDays.map { $0.startOfDay }).subtracting(practice)
+
+        let today = now.startOfDay
+        let isCovered: (Date) -> Bool = { practice.contains($0) || frozen.contains($0) }
+
+        // Anchor: the chain is alive if today or yesterday is covered. Today
+        // being empty is not a break yet — the day is not over.
+        var cursor = today
+        if !isCovered(cursor) {
+            cursor = today.adding(days: -1)
+            guard isCovered(cursor) else { return 0 }
+        }
+
+        var streak = 0
+        while isCovered(cursor) {
+            if practice.contains(cursor) { streak += 1 }
+            cursor = cursor.adding(days: -1)
         }
 
         return streak

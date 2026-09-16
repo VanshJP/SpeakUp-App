@@ -350,7 +350,7 @@ struct FirstRecordingSetupSheet: View {
         let service = NotificationService()
 
         guard enabled else {
-            await service.cancelDailyReminder()
+            RetentionScheduler.disable(service: service)
             settings?.dailyReminderEnabled = false
             try? modelContext.save()
             AnalyticsService.shared.log(.onboardingStep("reminder", action: "skip"))
@@ -369,12 +369,15 @@ struct FirstRecordingSetupSheet: View {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         let hour = comps.hour ?? 9
         let minute = comps.minute ?? 0
-        await service.scheduleDailyReminder(hour: hour, minute: minute)
 
         settings?.dailyReminderEnabled = true
         settings?.dailyReminderHour = hour
         settings?.dailyReminderMinute = minute
         try? modelContext.save()
+
+        // After the save: the scheduler reads the persisted row, so the
+        // preference must already be committed.
+        await RetentionScheduler.refresh(context: modelContext, service: service)
         AnalyticsService.shared.log(.onboardingStep("reminder", action: "complete"))
         Haptics.success()
     }

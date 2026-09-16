@@ -35,6 +35,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | iCloud / CloudKit | [icloud.md](./icloud.md) | `ICloudStorageService` | gotchas §1 | `swiftdata-pro` |
 | Paywall / Lifetime / allowance | [monetization.md](./monetization.md) | `Models/Monetization.swift` | gotchas §5, playbook | `greenlight` (ship) |
 | Analytics / attribution / review | [analytics-review.md](./analytics-review.md) | `AnalyticsService`, `ReviewRequestService` | gotchas §7 | — |
+| Retention / notifications / streak freeze | [retention.md](./retention.md) | `RetentionScheduler`, `RetentionNotificationPlanner`, `NotificationService`, `StreakProtection` | settings.md · `/ONBOARDING_VISION.md` | — |
 | Theme / glass / components | [ui-design-system.md](./ui-design-system.md) | `Theme/`, `Views/Components/` | gotchas §11 | `swiftui-expert-skill` |
 | Achievements / goals | [achievements-goals.md](./achievements-goals.md) | `Views/Achievements/`, `Views/Goals/` | — | — |
 | Coach notes (rare asides) | [coach-moments.md](./coach-moments.md) | `Models/CoachMoment.swift`, `CoachMomentService`, `Views/CoachMoment/` | — | — |
