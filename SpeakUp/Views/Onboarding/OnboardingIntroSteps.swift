@@ -4,30 +4,53 @@ import SwiftUI
 
 /// Hero step. Runs its own centred layout rather than `OnboardingPage`. This
 /// is the one screen that should feel like a cover, not a form.
+///
+/// The cascade runs through `.introReveal`, which fails visible. A first
+/// install reported this screen as the orb on an empty background with nothing
+/// to tap: everything but the orb was parked at opacity 0 waiting on an appear
+/// callback, and "Let's start" is the one forward action nobody can route
+/// around. Never gate a control on an animation that has to run first.
 struct OnboardingWelcomeStep: View {
     let onContinue: () -> Void
 
-    @State private var titleOpacity: Double = 0
-    @State private var subtitleOpacity: Double = 0
-    @State private var ctaOpacity: Double = 0
+    /// Orb rungs, largest first. The cover has no scroll view by design, so on
+    /// a short screen or at a large text size the orb is the only thing that
+    /// can give. Same shape as `SessionDial.ladder`: fixed arity, because
+    /// `ViewThatFits` measures candidates individually. The last rung scrolls,
+    /// so the headline and the button can never be clipped off an iPhone SE at
+    /// an accessibility size, whatever the earlier rungs cost.
+    private static let orbRungs: (CGFloat, CGFloat, CGFloat) = (200, 148, 104)
 
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            cover(orbSize: Self.orbRungs.0)
+            cover(orbSize: Self.orbRungs.1)
+            cover(orbSize: Self.orbRungs.2)
+            PageScrollView(showsIndicators: false) {
+                cover(orbSize: Self.orbRungs.2)
+            }
+        }
+    }
+
+    // MARK: - Cover
+
+    private func cover(orbSize: CGFloat) -> some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            OnboardingOrb(size: 200)
+            OnboardingOrb(size: orbSize)
 
             VStack(spacing: 12) {
                 Text("Big Talk")
                     .eyebrowStyle()
-                    .opacity(titleOpacity)
+                    .introReveal(delay: .milliseconds(120))
 
                 Text("Hear yourself improve.")
                     .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
-                    .opacity(titleOpacity)
+                    .introReveal(delay: .milliseconds(120))
 
                 Text("Speak for 30 seconds a day. Big Talk scores and coaches on this iPhone, only while you record.")
                     .font(.subheadline)
@@ -35,7 +58,7 @@ struct OnboardingWelcomeStep: View {
                     .foregroundStyle(.secondary)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .opacity(subtitleOpacity)
+                    .introReveal(delay: .milliseconds(300))
                     .padding(.horizontal, 12)
             }
             .padding(.top, 24)
@@ -44,22 +67,7 @@ struct OnboardingWelcomeStep: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 16) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        onDevicePill
-                        offlinePill
-                        noAccountPill
-                    }
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            onDevicePill
-                            offlinePill
-                        }
-                        noAccountPill
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("On-device, works offline, no account required")
+                trustPills
 
                 OnboardingCTA(title: "Let's start", action: onContinue)
 
@@ -67,16 +75,39 @@ struct OnboardingWelcomeStep: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .opacity(ctaOpacity)
+            .introReveal(delay: .milliseconds(460))
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
         }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.55).delay(0.15)) { titleOpacity = 1 }
-            withAnimation(.easeOut(duration: 0.5).delay(0.35)) { subtitleOpacity = 1 }
-            withAnimation(.easeOut(duration: 0.45).delay(0.55)) { ctaOpacity = 1 }
+    }
+
+    /// Three across, then two-plus-one, then a column. The third rung matters
+    /// on a 320pt-wide SE once Dynamic Type climbs, where even two pills
+    /// overflow the row.
+    private var trustPills: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                onDevicePill
+                offlinePill
+                noAccountPill
+            }
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    onDevicePill
+                    offlinePill
+                }
+                noAccountPill
+            }
+            VStack(spacing: 8) {
+                onDevicePill
+                offlinePill
+                noAccountPill
+            }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("On-device, works offline, no account required")
     }
 
     // MARK: - Subviews

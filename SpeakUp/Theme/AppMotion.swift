@@ -62,7 +62,70 @@ private struct MotionModifier<V: Equatable>: ViewModifier {
     }
 }
 
+// MARK: - Intro Reveal
+
+/// A fade-in that fails *visible*.
+///
+/// The naive version of this — `@State opacity = 0`, raised inside `onAppear`
+/// — has bricked two screens now. A first install reported the welcome cover
+/// as an orb on an empty background with no button to tap, because content the
+/// user cannot proceed without was parked at opacity 0 waiting on a callback
+/// and an animation clock. The lesson completion screen hid both of its exits
+/// the same way.
+///
+/// So the resting state here is *shown*. Nothing is hidden until `onAppear`
+/// has actually run, which is also the moment responsibility for showing it
+/// again is taken on, and a backstop lands the final state with animation off
+/// if the reveal is interrupted. Reduce Motion skips the whole dance.
+private struct IntroRevealModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let delay: Duration
+    let animation: Animation
+
+    private enum Phase { case pending, hidden, shown }
+
+    @State private var phase: Phase = .pending
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(phase == .hidden ? 0 : 1)
+            // Runs before the first frame is committed, so hiding costs no flash.
+            .onAppear(perform: begin)
+            .task { await landFailSafe() }
+    }
+
+    private func begin() {
+        guard phase == .pending, !reduceMotion else { return }
+        phase = .hidden
+
+        // `try?` rather than `try`: a cancelled sleep must still land the
+        // reveal. Bailing out of this task is what leaves content hidden.
+        Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            withAnimation(animation) { phase = .shown }
+        }
+    }
+
+    private func landFailSafe() async {
+        try? await Task.sleep(for: .seconds(2))
+        guard phase != .shown else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { phase = .shown }
+    }
+}
+
 extension View {
+    /// Staggered fade-in for arriving hero content. Safe on controls: if the
+    /// reveal never runs, the content is simply already there.
+    func introReveal(
+        delay: Duration = .zero,
+        animation: Animation = .easeOut(duration: 0.45)
+    ) -> some View {
+        modifier(IntroRevealModifier(delay: delay, animation: animation))
+    }
+
     /// Starts a looping ambient animation on appear, and does nothing at all
     /// when Reduce Motion is on — leaving the driven value at its resting state.
     func ambientLoop(

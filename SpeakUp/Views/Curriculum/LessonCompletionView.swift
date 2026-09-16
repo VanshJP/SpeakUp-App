@@ -8,8 +8,6 @@ struct LessonCompletionView: View {
 
     @State private var showConfetti = false
     @State private var trophyScale: CGFloat = 0.3
-    @State private var trophyOpacity: Double = 0
-    @State private var contentOpacity: Double = 0
 
     private var identity: LessonIdentity {
         LessonIdentity.forLesson(id: lesson.id)
@@ -30,7 +28,7 @@ struct LessonCompletionView: View {
                         LessonGlyphView(identity: identity, state: .completed)
                             .frame(width: 44, height: 44)
                             .scaleEffect(trophyScale)
-                            .opacity(trophyOpacity)
+                            .introReveal()
                     }
                     .shadow(color: identity.accent.opacity(0.35), radius: 12)
 
@@ -42,7 +40,7 @@ struct LessonCompletionView: View {
                             .font(.title3)
                             .foregroundStyle(.secondary)
                     }
-                    .opacity(contentOpacity)
+                    .introReveal(delay: .milliseconds(300))
 
                     GlassCard(tint: identity.accent.opacity(0.08)) {
                         VStack(alignment: .leading, spacing: 10) {
@@ -63,7 +61,7 @@ struct LessonCompletionView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .opacity(contentOpacity)
+                    .introReveal(delay: .milliseconds(300))
 
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {
@@ -90,7 +88,7 @@ struct LessonCompletionView: View {
                             }
                         }
                     }
-                    .opacity(contentOpacity)
+                    .introReveal(delay: .milliseconds(300))
 
                     if let nextLesson {
                         let nextIdentity = LessonIdentity.forLesson(id: nextLesson.id)
@@ -120,7 +118,7 @@ struct LessonCompletionView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .frame(maxWidth: .infinity)
-                        .opacity(contentOpacity)
+                        .introReveal(delay: .milliseconds(300))
                     }
 
                     VStack(spacing: 12) {
@@ -136,7 +134,7 @@ struct LessonCompletionView: View {
                             onBackToCurriculum()
                         }
                     }
-                    .opacity(contentOpacity)
+                    .introReveal(delay: .milliseconds(300))
 
                     Spacer().frame(height: 20)
                 }
@@ -149,21 +147,19 @@ struct LessonCompletionView: View {
                     .allowsHitTesting(false)
             }
         }
+        // The arrival is decoration; both exits ride `.introReveal`, which
+        // renders them at rest if the animation never runs. They used to share
+        // one `contentOpacity` raised inside `onAppear`, which is one missed
+        // callback away from a screen with no way off it.
         .onAppear {
             Haptics.success()
-
             withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                 trophyScale = 1.0
-                trophyOpacity = 1.0
             }
-
-            withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
-                contentOpacity = 1.0
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                showConfetti = true
-            }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(200))
+            showConfetti = true
         }
     }
 }

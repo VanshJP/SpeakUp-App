@@ -25,6 +25,12 @@ struct RecordingView: View {
     /// from the configure task so resolving it can never delay the countdown.
     @State private var focusPlan: CoachPlan?
 
+    /// Height of the coaching cue lane: one line of `.caption` plus the
+    /// capsule's 8pt vertical padding. Scaled, because a flat 34 is a one-line
+    /// lane at the default text size and a clipped one at accessibility sizes,
+    /// and the lane growing mid-take is the thing it exists to prevent.
+    @ScaledMetric(relativeTo: .caption) private var coachingCueLaneHeight: CGFloat = 34
+
     let prompt: Prompt?
     let duration: RecordingDuration
     var timerEndBehavior: TimerEndBehavior = .saveAndStop
@@ -364,6 +370,11 @@ struct RecordingView: View {
         .animation(AppMotion.settle, value: showingVocabStrip)
     }
 
+    /// Stand-in for the prompt card's focus line on a take with no prompt.
+    ///
+    /// Same column, same tint, same reading order as the version inside
+    /// `compactPromptCard`. Centred, it read as a chip dropped in the middle of
+    /// an empty screen with no relationship to the words strip under it.
     @ViewBuilder
     private func focusIntentPill(_ plan: CoachPlan) -> some View {
         HStack(spacing: 6) {
@@ -376,11 +387,13 @@ struct RecordingView: View {
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
         }
-        .foregroundStyle(.white.opacity(0.85))
+        .foregroundStyle(AppColors.primary)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(Capsule().fill(.ultraThinMaterial))
         .overlay { Capsule().stroke(AppColors.cardStroke, lineWidth: 0.5) }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .transition(.opacity)
         .accessibilityLabel("This take's focus: \(plan.focus.title). \(plan.focus.technique.name)")
     }
@@ -525,8 +538,12 @@ struct RecordingView: View {
             Text(cue.message)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
+                // One line, always. Every shipped cue is three to six words,
+                // and a cue that can wrap is a lane that can grow mid-take —
+                // the one thing the reserved lane exists to prevent. Scaling
+                // down a little beats moving the dial under the speaker.
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -538,11 +555,37 @@ struct RecordingView: View {
                         .strokeBorder(cue.tint.opacity(0.4), lineWidth: 0.5)
                 }
         }
-        // Ideal width only — an overlay proposes the full controls width, and
-        // without this a long cue can compress into a narrow wrapping column
-        // that sits on top of the record button.
-        .fixedSize(horizontal: true, vertical: false)
+        // The cue is its own row now, so it sizes to its own text rather than
+        // to the full controls width it used to be proposed as an overlay.
+        .fixedSize(horizontal: false, vertical: true)
         .allowsHitTesting(false)
+    }
+
+    /// Reserved lane for the coaching cue, directly above the controls.
+    ///
+    /// The cue used to be an overlay on the controls, pushed clear with an
+    /// alignment guide. It still landed on the record button. A row of its own
+    /// cannot overlap anything, and a floor on its height means the cue
+    /// appearing or clearing does not resize the dial underneath it.
+    ///
+    /// The lane exists only when haptic coaching is on. That setting is off by
+    /// default and `RecordingView`'s configure task reads it before the take
+    /// starts, so the reservation never costs the dial anything for a user who
+    /// will never see a cue, and never changes size mid-sentence for one who will.
+    @ViewBuilder
+    private func coachingCueLane(_ cue: CoachingCue?, isRecording: Bool) -> some View {
+        if viewModel.coachingService.isEnabled {
+            ZStack {
+                if let cue, isRecording {
+                    coachingCueView(cue)
+                        .transition(.opacity)
+                        .id(cue.message)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: coachingCueLaneHeight)
+            .motion(AppMotion.settle, value: cue?.message)
+        }
     }
 
 
@@ -553,51 +596,40 @@ struct RecordingView: View {
         let isRecording = viewModel.isRecording
         let level = viewModel.audioLevel
 
-        return VStack(spacing: 24) {
-            RecordButtonWaveformStack(
-                audioLevel: level,
-                waveformStyle: WaveformStyle(rawValue: userSettings.first?.waveformStyle ?? 0) ?? .rings,
-                buttonStyle: RecordButtonStyle(rawValue: userSettings.first?.recordButtonStyle ?? 0) ?? .classic,
-                isRecording: isRecording,
-                onTap: {
-                    Task {
-                        if viewModel.isRecording {
-                            if let recording = await viewModel.stopRecording() {
-                                handleRecordingCompletion(recording)
+        return VStack(spacing: 12) {
+            coachingCueLane(cue, isRecording: isRecording)
+
+            VStack(spacing: 24) {
+                RecordButtonWaveformStack(
+                    audioLevel: level,
+                    waveformStyle: WaveformStyle(rawValue: userSettings.first?.waveformStyle ?? 0) ?? .rings,
+                    buttonStyle: RecordButtonStyle(rawValue: userSettings.first?.recordButtonStyle ?? 0) ?? .classic,
+                    isRecording: isRecording,
+                    onTap: {
+                        Task {
+                            if viewModel.isRecording {
+                                if let recording = await viewModel.stopRecording() {
+                                    handleRecordingCompletion(recording)
+                                }
+                            } else {
+                                await viewModel.startRecording()
                             }
-                        } else {
-                            await viewModel.startRecording()
                         }
                     }
-                }
-            )
+                )
 
-            Text(isRecording ? "Tap to stop" : "Tap to start recording")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.75))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                }
-                .id(isRecording)
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .animation(.easeInOut(duration: 0.2), value: isRecording)
-        }
-        // Float the cue in the slack under the dial. `.top` alone parks the
-        // cue's *top* on the controls' top edge, so most of the capsule still
-        // covered the record button / waveform. Align the cue's *bottom*
-        // instead, with a small gap, so the whole chip clears the controls
-        // without growing this stack (growing it would resize the dial).
-        .overlay(alignment: .top) {
-            if let cue, isRecording {
-                coachingCueView(cue)
-                    .alignmentGuide(.top) { dimensions in
-                        dimensions[VerticalAlignment.bottom] + 12
+                Text(isRecording ? "Tap to stop" : "Tap to start recording")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
                     }
-                    .transition(.opacity)
-                    .id(cue.message)
+                    .id(isRecording)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .animation(.easeInOut(duration: 0.2), value: isRecording)
             }
         }
         .padding(.bottom, 8)
