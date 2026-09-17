@@ -83,8 +83,12 @@ be written in prose:
 8. **Effort and permissions only after value.** Calibration, the AI model
    download, and reminders stay out of the first run — they belong to
    `FirstRecordingSetupSheet`, which fires on Today *after* the first score.
-   Reminder consent means one daily nudge at the chosen time, never bundled
-   streak warnings or surprise re-engagement notifications.
+   Reminder consent covers the whole notification channel — daily nudge,
+   streak rescue, comeback ladder, milestones — and the consent screen
+   enumerates them rather than implying a narrower deal. Nothing is a
+   *surprise*: `FirstRecordingSetupSheet` turns the channel on, and
+   Settings → Reminders lists every class with its own toggle. Off means
+   silent. See `docs/features/retention.md`.
    The layout tour (`AppTourView.swift`) follows the same rule and the same
    gate: it runs once, on Today, only after a recording exists. The two are
    strictly sequential — `TodayView.checkFirstRunSurfaces()` shows the sheet

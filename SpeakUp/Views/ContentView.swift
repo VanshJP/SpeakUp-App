@@ -397,11 +397,9 @@ struct ContentView: View {
                     await settingsViewModel.loadSettings()
 
                     if result.reminderEnabled {
-                        let service = NotificationService()
-                        await service.checkPermission()
-                        await service.scheduleDailyReminder(
-                            hour: result.reminderHour,
-                            minute: result.reminderMinute
+                        await RetentionScheduler.refresh(
+                            context: modelContext,
+                            requestPermissionIfNeeded: true
                         )
                     }
 

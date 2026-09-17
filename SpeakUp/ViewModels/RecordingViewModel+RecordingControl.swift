@@ -116,6 +116,13 @@ extension RecordingViewModel {
                 }
             }
 
+            // A take just landed: tear down tonight's streak-rescue nudges and
+            // rebuild the ladder, so nobody who practised at 19:00 is told at
+            // 20:30 that their streak is about to end.
+            Task { @MainActor in
+                await RetentionScheduler.refresh(context: context, afterPractice: true)
+            }
+
             return recording
         } catch {
             // The m4a already materialized; drop the orphan so a failed save

@@ -23,6 +23,9 @@ class SettingsViewModel {
     // Local state - Reminders
     var dailyReminderEnabled: Bool = false
     var reminderTime: Date = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
+    var streakRemindersEnabled: Bool = true
+    var comebackRemindersEnabled: Bool = true
+    var milestoneNotificationsEnabled: Bool = true
     
     // Local state - Goals
     var weeklyGoalSessions: Int = 5
@@ -208,6 +211,9 @@ class SettingsViewModel {
         userName = settings.userName
         defaultDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
         dailyReminderEnabled = settings.dailyReminderEnabled
+        streakRemindersEnabled = settings.streakRemindersEnabled
+        comebackRemindersEnabled = settings.comebackRemindersEnabled
+        milestoneNotificationsEnabled = settings.milestoneNotificationsEnabled
 
         var components = DateComponents()
         components.hour = settings.dailyReminderHour
@@ -294,6 +300,9 @@ class SettingsViewModel {
         settings.userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.defaultDuration = defaultDuration.rawValue
         settings.dailyReminderEnabled = dailyReminderEnabled
+        settings.streakRemindersEnabled = streakRemindersEnabled
+        settings.comebackRemindersEnabled = comebackRemindersEnabled
+        settings.milestoneNotificationsEnabled = milestoneNotificationsEnabled
         
         let components = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         settings.dailyReminderHour = components.hour ?? 9
@@ -690,6 +699,12 @@ class SettingsViewModel {
         settings.dailyReminderEnabled = false
         settings.dailyReminderHour = 9
         settings.dailyReminderMinute = 0
+        settings.streakRemindersEnabled = true
+        settings.comebackRemindersEnabled = true
+        settings.milestoneNotificationsEnabled = true
+        settings.lastMilestoneNotified = 0
+        // Banked freezes are earned practice, not a preference — a settings
+        // reset must not confiscate them.
         settings.weeklyGoalSessions = 5
         settings.trackPauses = true
         settings.trackFillerWords = true
@@ -866,15 +881,16 @@ class SettingsViewModel {
 
     // MARK: - Notification Helpers
     
+    /// Settings already persisted the hour/minute by the time this runs, so the
+    /// scheduler reads them back rather than taking them as arguments — one
+    /// source of truth for the whole ladder.
     private func scheduleReminderNotification() async {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
-        let hour = components.hour ?? 9
-        let minute = components.minute ?? 0
-        await notificationService.scheduleDailyReminder(hour: hour, minute: minute)
+        guard let modelContext else { return }
+        await RetentionScheduler.refresh(context: modelContext, service: notificationService)
     }
 
     private func cancelReminderNotification() async {
-        await notificationService.cancelDailyReminder()
+        RetentionScheduler.disable(service: notificationService)
     }
     
     // MARK: - App Info
