@@ -195,9 +195,44 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The shared axis. A passage's source material is not why you'd pick it:
+    /// news copy trains holding a steady clip, literature trains expression,
+    /// and the precision material trains being understood. Your own passages
+    /// follow whatever you pasted in, so they sit under clarity — the reason
+    /// the feature scores word-by-word in the first place.
+    var focus: PracticeFocus {
+        switch self {
+        case .news: return .pace
+        case .literature: return .presence
+        case .technical, .tongueTwister, .minimalPairs, .custom: return .clarity
+        }
+    }
+
+    /// Why this kind of passage exists — the line a grouped section shows.
+    var purpose: String {
+        switch self {
+        case .news: return "Steady, even delivery at a news-reader's clip."
+        case .literature: return "Room for expression — pitch, stress, and timing."
+        case .technical: return "Dense terms that punish a swallowed ending."
+        case .tongueTwister: return "Deliberately awkward mouths of consonants."
+        case .minimalPairs: return "Word pairs that differ by a single sound."
+        case .custom: return "The words you actually have to say."
+        }
+    }
+
     /// Catalog filters — excludes freeform custom passages.
     static var catalogCases: [ReadAloudCategory] {
         allCases.filter { $0 != .custom }
+    }
+
+    /// Catalog categories under a focus, in declaration order.
+    static func catalogCases(for focus: PracticeFocus) -> [ReadAloudCategory] {
+        catalogCases.filter { $0.focus == focus }
+    }
+
+    /// The focuses the shipped catalog actually covers, in declaration order.
+    static var catalogFocuses: [PracticeFocus] {
+        PracticeFocus.allCases.filter { !catalogCases(for: $0).isEmpty }
     }
 }
 

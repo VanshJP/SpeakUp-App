@@ -3,9 +3,14 @@ import SwiftUI
 
 @Observable
 class WarmUpViewModel {
-    /// nil = all categories. The page opens unfiltered so the whole map of
-    /// warm-ups is visible; a category pill narrows from there.
-    var selectedCategory: WarmUpCategory?
+    /// nil = every focus. The page opens unfiltered so the whole map of
+    /// warm-ups is visible; a focus pill narrows from there.
+    ///
+    /// This filters on outcome rather than on `WarmUpCategory`, which named
+    /// the mechanism — "Tongue Twisters", "Articulation" — and left the reader
+    /// to work out that both of them are there to make you understood. The
+    /// category survives as the row's tag, where it belongs.
+    var selectedFocus: PracticeFocus?
     var currentExercise: WarmUpExercise?
     var currentStepIndex = 0
     var isRunning = false
@@ -17,8 +22,20 @@ class WarmUpViewModel {
     private var timer: Timer?
 
     var exercises: [WarmUpExercise] {
-        guard let selectedCategory else { return DefaultWarmUps.all }
-        return DefaultWarmUps.all.filter { $0.category == selectedCategory }
+        guard let selectedFocus else { return DefaultWarmUps.all }
+        return DefaultWarmUps.all.filter { $0.category.focus == selectedFocus }
+    }
+
+    /// The focuses the shipped warm-ups actually cover, in declaration order.
+    /// Derived, so adding an exercise cannot leave a pill behind.
+    var availableFocuses: [PracticeFocus] {
+        PracticeFocus.allCases.filter { focus in
+            DefaultWarmUps.all.contains { $0.category.focus == focus }
+        }
+    }
+
+    func exercises(for focus: PracticeFocus) -> [WarmUpExercise] {
+        exercises.filter { $0.category.focus == focus }
     }
 
     var currentStep: ExerciseStep? {

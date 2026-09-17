@@ -31,10 +31,74 @@ struct ToolTileLabel: View {
 
 // MARK: - Library Category Card
 
+/// The card face, without a gesture. Split out so a caller can wrap it in a
+/// `NavigationLink(value:)` — Library's practice cards push a value-based
+/// route, because the outcome browser pushes the same routes on top of itself.
+struct ToolCategoryCardLabel: View {
+    let icon: String
+    let title: String
+    let meta: String
+    /// Optional second line. Practice cards use it for the tool's *format* —
+    /// what the next few minutes cost and whether the mic opens — because the
+    /// format is the only thing that actually separates the four tools.
+    var detail: String? = nil
+    var tint: Color = AppColors.primary
+
+    var body: some View {
+        GlassCard(cornerRadius: 16, tint: tint.opacity(0.06), padding: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 28, height: 28)
+                    .background {
+                        Circle().fill(tint.opacity(0.18))
+                    }
+
+                Text(title)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text(meta)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.quaternary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Shared so a Button and a NavigationLink wrapping this face read the
+    /// same to VoiceOver.
+    static func accessibilityLabel(
+        title: String,
+        detail: String?,
+        meta: String,
+        secondary: String?
+    ) -> String {
+        [title, detail, meta, secondary]
+            .compactMap { $0 }
+            .joined(separator: ". ")
+    }
+}
+
+/// Tap-to-act variant, for cards that open a sheet rather than push.
 struct ToolCategoryCard: View {
     let icon: String
     let title: String
     let meta: String
+    var detail: String? = nil
     var tint: Color = AppColors.primary
     var accessibilityDetail: String? = nil
     let action: () -> Void
@@ -44,33 +108,23 @@ struct ToolCategoryCard: View {
             Haptics.medium()
             action()
         } label: {
-            GlassCard(cornerRadius: 16, tint: tint.opacity(0.06), padding: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .frame(width: 28, height: 28)
-                        .background {
-                            Circle().fill(tint.opacity(0.18))
-                        }
-
-                    Text(title)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-
-                    Text(meta)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            ToolCategoryCardLabel(
+                icon: icon,
+                title: title,
+                meta: meta,
+                detail: detail,
+                tint: tint
+            )
         }
         .buttonStyle(GlassPressStyle())
-        .accessibilityLabel(accessibilityDetail.map { "\(title). \($0). \(meta)" } ?? "\(title). \(meta)")
+        .accessibilityLabel(
+            ToolCategoryCardLabel.accessibilityLabel(
+                title: title,
+                detail: accessibilityDetail,
+                meta: meta,
+                secondary: detail
+            )
+        )
     }
 }
 

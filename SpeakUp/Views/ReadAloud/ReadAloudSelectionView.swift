@@ -22,6 +22,11 @@ struct ReadAloudSelectionView: View {
     /// straight away; the list underneath is where the user lands afterwards.
     var initialPracticeText: String?
 
+    /// Arrive pre-narrowed from the focus browser in Library → Tools.
+    var initialFocus: PracticeFocus?
+
+    @State private var didApplyInitialFocus = false
+
     private var longestPassageWords: Double {
         Double(viewModel.passages.map(\.wordCount).max() ?? 0)
     }
@@ -51,16 +56,25 @@ struct ReadAloudSelectionView: View {
     }
 
     var body: some View {
-        ToolPage(tool: .readAloud, presentation: presentation) {
-            customEntrySection
-
+        ToolPage(
+            tool: .readAloud,
+            presentation: presentation,
+            // Was a full-width glass card at the very top of the scroll view,
+            // above the catalog: a page for reading passages opened on a form
+            // for writing one, and the passages themselves started below the
+            // fold. Library already puts "add" in the chrome for Prompts and
+            // Stories; this is the pushed-page equivalent.
+            action: ToolPageAction(icon: "plus", label: "Add your own passage") {
+                presentComposer()
+            }
+        ) {
             savedSection
 
             Toggle(isOn: $shadowMode) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Shadow mode")
                         .font(.subheadline.weight(.semibold))
-                    Text("Hear the model line, then speak it back")
+                    Text("Hear the model line first, then speak it back")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -68,11 +82,32 @@ struct ReadAloudSelectionView: View {
             .tint(AppColors.toolReadAloud)
             .padding(.horizontal, 4)
 
-            GlassSectionHeader("Passage Library", icon: "books.vertical.fill")
-
             ToolFilterBar {
                 FilterPill(
                     title: "All",
+                    icon: "square.grid.2x2",
+                    isSelected: viewModel.selectedFocus == nil
+                ) {
+                    withAnimation(AppMotion.slide) { viewModel.selectedFocus = nil }
+                }
+
+                ForEach(viewModel.availableFocuses) { focus in
+                    FilterPill(
+                        title: focus.shortTitle,
+                        icon: focus.icon,
+                        isSelected: viewModel.selectedFocus == focus,
+                        color: focus.color
+                    ) {
+                        withAnimation(AppMotion.slide) {
+                            viewModel.selectedFocus = viewModel.selectedFocus == focus ? nil : focus
+                        }
+                    }
+                }
+            }
+
+            ToolFilterBar {
+                FilterPill(
+                    title: "Any length",
                     isSelected: viewModel.selectedDifficulty == nil
                 ) {
                     withAnimation(AppMotion.slide) { viewModel.selectedDifficulty = nil }
@@ -91,67 +126,13 @@ struct ReadAloudSelectionView: View {
                 }
             }
 
-            ToolFilterBar {
-                FilterPill(
-                    title: "All",
-                    icon: "square.grid.2x2",
-                    isSelected: viewModel.selectedCategory == nil
-                ) {
-                    withAnimation(AppMotion.slide) { viewModel.selectedCategory = nil }
-                }
-
-                ForEach(ReadAloudCategory.catalogCases) { category in
-                    FilterPill(
-                        title: category.displayName,
-                        icon: category.icon,
-                        isSelected: viewModel.selectedCategory == category
-                    ) {
-                        withAnimation(AppMotion.slide) {
-                            viewModel.selectedCategory = viewModel.selectedCategory == category ? nil : category
-                        }
-                    }
-                }
-            }
-
-            if viewModel.selectedDifficulty != nil || viewModel.selectedCategory != nil {
+            if viewModel.selectedDifficulty != nil || viewModel.selectedFocus != nil {
                 Text("\(viewModel.passages.count) of \(DefaultReadAloudPassages.all.count) passages")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
             }
 
-            LazyVStack(spacing: 12) {
-                if viewModel.passages.isEmpty {
-                    EmptyStateCard(
-                        icon: "text.book.closed",
-                        title: "Nothing here",
-                        message: "No passages match these filters. Try clearing one.",
-                        buttonTitle: "Show All",
-                        buttonAction: {
-                            withAnimation(AppMotion.slide) {
-                                viewModel.selectedDifficulty = nil
-                                viewModel.selectedCategory = nil
-                            }
-                        }
-                    )
-                } else {
-                    ForEach(viewModel.passages) { passage in
-                        PracticeItemRow(
-                            title: passage.title,
-                            subtitle: passage.text,
-                            icon: passage.category.icon,
-                            tint: AppColors.difficultyColor(passage.difficulty),
-                            durationFraction: PracticeItemRow.fraction(
-                                Double(passage.wordCount),
-                                longest: longestPassageWords
-                            ),
-                            durationLabel: Self.estimatedTime(passage.wordCount),
-                            tag: "\(passage.difficulty.displayName) · \(passage.wordCount) words"
-                        ) {
-                            practice(passage)
-                        }
-                    }
-                }
-            }
+            catalogContent
         }
         .fullScreenCover(isPresented: $showingSession) {
             if let passage = viewModel.selectedPassage {
@@ -159,6 +140,10 @@ struct ReadAloudSelectionView: View {
             }
         }
         .task {
+            if !didApplyInitialFocus, let initialFocus {
+                didApplyInitialFocus = true
+                viewModel.selectedFocus = initialFocus
+            }
             guard !didStartInitialPractice,
                   let initialPracticeText,
                   let passage = ReadAloudPassage.custom(from: initialPracticeText)
@@ -211,57 +196,18 @@ struct ReadAloudSelectionView: View {
         }
     }
 
-    // MARK: - Custom entry
-
-    private var customEntrySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader("Your Passages", icon: "person.text.rectangle")
-
-            Button {
-                presentComposer()
-            } label: {
-                GlassCard(padding: 13) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "doc.badge.plus")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(AppColors.toolReadAloud)
-                            .frame(width: 38, height: 38)
-                            .background {
-                                Circle().fill(AppColors.toolReadAloud.opacity(0.14))
-                            }
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Add Your Own Passage")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text("Paste, type, or import TXT, RTF, or PDF")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                        }
-
-                        Spacer(minLength: 4)
-
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(AppColors.toolReadAloud)
-                    }
-                }
-            }
-            .buttonStyle(GlassPressStyle())
-            .accessibilityLabel("Add your own passage. Paste, type, or import a document.")
-        }
-    }
-
     // MARK: - Yours
 
+    /// Only renders once there is something to show. An empty "Your passages"
+    /// heading above an invitation card was the page's first impression and
+    /// pushed the catalog off screen; the nav-bar `+` is the door now, and the
+    /// rail carries a second one for people who already have passages.
     @ViewBuilder
     private var savedSection: some View {
         let saved = savedPassages
         if !saved.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Saved", icon: "bookmark.fill") {
+                GlassSectionHeader("Your passages", icon: "bookmark.fill") {
                     Text("\(saved.count)")
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -273,11 +219,114 @@ struct ReadAloudSelectionView: View {
                             savedPassageCard(passage)
                                 .frame(width: 292)
                         }
+
+                        addPassageCard
+                            .frame(width: 132)
                     }
                     .padding(.vertical, 2)
                 }
                 .scrollClipDisabled()
             }
+        }
+    }
+
+    private var addPassageCard: some View {
+        Button {
+            presentComposer()
+        } label: {
+            GlassCard(padding: 13) {
+                VStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppColors.toolReadAloud)
+                        .frame(width: 38, height: 38)
+                        .background {
+                            Circle().fill(AppColors.toolReadAloud.opacity(0.14))
+                        }
+
+                    Text("Add your own")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, minHeight: 92)
+            }
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("Add your own passage. Paste, type, or import a document.")
+    }
+
+    // MARK: - Catalog
+
+    /// Grouped by what a passage trains, with the source material demoted to
+    /// the row's tag. "News" and "Literature" told you where the words came
+    /// from, which is not why anyone picks one.
+    @ViewBuilder
+    private var catalogContent: some View {
+        let focuses = viewModel.selectedFocus.map { [$0] } ?? viewModel.availableFocuses
+
+        if viewModel.passages.isEmpty {
+            EmptyStateCard(
+                icon: "text.book.closed",
+                title: "Nothing here",
+                message: "No passages match these filters. Try clearing one.",
+                buttonTitle: "Show All",
+                buttonAction: {
+                    withAnimation(AppMotion.slide) {
+                        viewModel.selectedDifficulty = nil
+                        viewModel.selectedFocus = nil
+                    }
+                }
+            )
+        } else {
+            VStack(spacing: 20) {
+                ForEach(focuses) { focus in
+                    catalogSection(focus)
+                }
+            }
+        }
+    }
+
+    private func catalogSection(_ focus: PracticeFocus) -> some View {
+        let items = viewModel.passages(for: focus)
+        guard !items.isEmpty else { return AnyView(EmptyView()) }
+
+        return AnyView(
+            VStack(alignment: .leading, spacing: 10) {
+                GlassSectionHeader(focus.title, icon: focus.icon) {
+                    Text("\(items.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(focus.promise)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVStack(spacing: 12) {
+                    ForEach(items) { passage in
+                        passageRow(passage)
+                    }
+                }
+            }
+        )
+    }
+
+    private func passageRow(_ passage: ReadAloudPassage) -> some View {
+        PracticeItemRow(
+            title: passage.title,
+            subtitle: passage.text,
+            icon: passage.category.icon,
+            tint: AppColors.difficultyColor(passage.difficulty),
+            durationFraction: PracticeItemRow.fraction(
+                Double(passage.wordCount),
+                longest: longestPassageWords
+            ),
+            durationLabel: Self.estimatedTime(passage.wordCount),
+            tag: "\(passage.category.displayName) · \(passage.wordCount) words"
+        ) {
+            practice(passage)
         }
     }
 

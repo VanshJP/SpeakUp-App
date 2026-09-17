@@ -1,18 +1,31 @@
 import SwiftUI
 
 struct ConfidenceToolsView: View {
-    @State private var selectedCategory: ConfidenceCategory?
+    @State private var selectedFocus: PracticeFocus?
     @State private var showingExercise: ConfidenceExercise?
 
     var presentation: ToolPresentation = .sheet
 
+    /// Arrive pre-narrowed from the focus browser in Library → Tools.
+    var initialFocus: PracticeFocus?
+
+    @State private var didApplyInitialFocus = false
+
     private var exercises: [ConfidenceExercise] {
-        guard let selectedCategory else { return DefaultConfidenceExercises.all }
-        return DefaultConfidenceExercises.all.filter { $0.category == selectedCategory }
+        guard let selectedFocus else { return DefaultConfidenceExercises.all }
+        return DefaultConfidenceExercises.all.filter { $0.category.focus == selectedFocus }
+    }
+
+    /// The focuses Calm actually covers, in declaration order. Derived, so
+    /// adding an exercise cannot leave a pill behind.
+    private var availableFocuses: [PracticeFocus] {
+        PracticeFocus.allCases.filter { focus in
+            DefaultConfidenceExercises.all.contains { $0.category.focus == focus }
+        }
     }
 
     private var longestExerciseMinutes: Double {
-        Double(exercises.map(\.durationMinutes).max() ?? 0)
+        Double(DefaultConfidenceExercises.all.map(\.durationMinutes).max() ?? 0)
     }
 
     var body: some View {
@@ -21,24 +34,31 @@ struct ConfidenceToolsView: View {
                 FilterPill(
                     title: "All",
                     icon: "square.grid.2x2",
-                    isSelected: selectedCategory == nil
+                    isSelected: selectedFocus == nil
                 ) {
-                    withAnimation(AppMotion.slide) { selectedCategory = nil }
+                    withAnimation(AppMotion.slide) { selectedFocus = nil }
                 }
 
-                ForEach(ConfidenceCategory.allCases) { category in
+                ForEach(availableFocuses) { focus in
                     FilterPill(
-                        title: category.displayName,
-                        icon: category.icon,
-                        isSelected: selectedCategory == category,
-                        color: category.color
+                        title: focus.shortTitle,
+                        icon: focus.icon,
+                        isSelected: selectedFocus == focus,
+                        color: focus.color
                     ) {
-                        withAnimation(AppMotion.slide) { selectedCategory = category }
+                        withAnimation(AppMotion.slide) {
+                            selectedFocus = selectedFocus == focus ? nil : focus
+                        }
                     }
                 }
             }
 
             exerciseContent
+        }
+        .task {
+            guard !didApplyInitialFocus, let initialFocus else { return }
+            didApplyInitialFocus = true
+            selectedFocus = initialFocus
         }
         .fullScreenCover(item: $showingExercise) { exercise in
             ConfidenceExerciseView(exercise: exercise)
@@ -47,46 +67,48 @@ struct ConfidenceToolsView: View {
 
     // MARK: - Exercise Content
 
+    /// Grouped by outcome, like every other tool page. Calm covers two: getting
+    /// the body quiet, and getting the story you tell yourself straight. The
+    /// technique — visualization, progressive exposure — is the row's tag.
     @ViewBuilder
     private var exerciseContent: some View {
-        if selectedCategory != nil {
-            if exercises.isEmpty {
-                EmptyStateCard(
-                    icon: "heart.circle",
-                    title: "Nothing here",
-                    message: "No exercises in this category yet. Try another one."
-                )
-            } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(exercises) { exercise in
-                        exerciseRow(exercise)
-                    }
+        let focuses = selectedFocus.map { [$0] } ?? availableFocuses
+
+        if exercises.isEmpty {
+            EmptyStateCard(
+                icon: "heart.circle",
+                title: "Nothing here",
+                message: "No exercises train that yet. Try another one.",
+                buttonTitle: "Show All",
+                buttonAction: {
+                    withAnimation(AppMotion.slide) { selectedFocus = nil }
                 }
-            }
+            )
         } else {
             VStack(spacing: 20) {
-                ForEach(ConfidenceCategory.allCases) { category in
-                    categorySection(category)
+                ForEach(focuses) { focus in
+                    focusSection(focus)
                 }
             }
         }
     }
 
-    private func categorySection(_ category: ConfidenceCategory) -> some View {
-        let items = exercises.filter { $0.category == category }
+    private func focusSection(_ focus: PracticeFocus) -> some View {
+        let items = exercises.filter { $0.category.focus == focus }
         guard !items.isEmpty else { return AnyView(EmptyView()) }
 
         return AnyView(
             VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(category.displayName, icon: category.icon) {
+                GlassSectionHeader(focus.title, icon: focus.icon) {
                     Text("\(items.count)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
 
-                Text(category.purpose)
+                Text(focus.promise)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 LazyVStack(spacing: 12) {
                     ForEach(items) { exercise in

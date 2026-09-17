@@ -6,7 +6,7 @@ struct DefaultConfidenceExercises {
             id: "grounding_54321",
             category: .calming,
             title: "5-4-3-2-1 Grounding",
-            description: "Use your senses to ground yourself in the present moment.",
+            description: "Names five things you can see, four you can hear, and so on — pulls attention out of the spiral and back into the room.",
             steps: [
                 "Notice 5 things you can see around you",
                 "Touch 4 different textures near you",
@@ -20,7 +20,7 @@ struct DefaultConfidenceExercises {
             id: "progressive_muscle",
             category: .calming,
             title: "Progressive Muscle Relaxation",
-            description: "Systematically tense and release muscle groups to reduce physical tension.",
+            description: "Tense then release each muscle group in turn. Shows you where you were bracing, and lets it go.",
             steps: [
                 "Clench your fists tight for 5 seconds, then release",
                 "Shrug your shoulders to your ears for 5 seconds, then drop",
@@ -35,7 +35,7 @@ struct DefaultConfidenceExercises {
             id: "visualize_success",
             category: .visualization,
             title: "Visualize Success",
-            description: "Mentally rehearse a successful speaking experience.",
+            description: "Walk through the talk going well, in detail. Rehearsed calm holds up better than talked-up confidence.",
             steps: [
                 "Close your eyes and take three deep breaths",
                 "Picture yourself walking up to speak, feeling calm",
@@ -50,7 +50,7 @@ struct DefaultConfidenceExercises {
             id: "safe_space",
             category: .visualization,
             title: "Safe Space",
-            description: "Create a mental refuge you can visit anytime you feel nervous.",
+            description: "Build one vivid place you can return to in seconds, so you have somewhere to go when nerves spike.",
             steps: [
                 "Close your eyes and breathe deeply",
                 "Imagine a place where you feel completely safe and relaxed",
@@ -64,7 +64,7 @@ struct DefaultConfidenceExercises {
             id: "progressive_exposure",
             category: .progressive,
             title: "Progressive Exposure",
-            description: "Build confidence step by step through gradually increasing challenges.",
+            description: "Work up through speaking situations in order of difficulty, so the big one isn't your first attempt.",
             steps: [
                 "Step 1: Record yourself speaking alone (just for you)",
                 "Step 2: Listen back to your own recording",
@@ -77,7 +77,7 @@ struct DefaultConfidenceExercises {
             id: "power_statements",
             category: .affirmation,
             title: "Power Statements",
-            description: "Repeat these affirmations before your next speaking session.",
+            description: "Short statements said out loud before you speak, to replace the running commentary about how it's going to go.",
             steps: [
                 "I am a confident speaker",
                 "My voice deserves to be heard",

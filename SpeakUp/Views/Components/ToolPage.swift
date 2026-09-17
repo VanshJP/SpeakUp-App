@@ -5,20 +5,44 @@ enum ToolPresentation: Equatable {
     case pushed
 }
 
+/// A single affordance a tool page may put in its nav bar.
+///
+/// It exists so "Add your own passage" can live in the chrome instead of
+/// taking the top of the scroll view, which is where Read Aloud used to put
+/// it — the first thing you saw on a page for reading passages was a form for
+/// writing one, and the catalog started below the fold. Library already solves
+/// this for Prompts and Stories with a FAB; a tool page is pushed and titled,
+/// so the nav bar is the equivalent spot.
+struct ToolPageAction {
+    let icon: String
+    /// Spoken label. Also the menu title if this ever grows a menu.
+    let label: String
+    let perform: () -> Void
+
+    init(icon: String, label: String, perform: @escaping () -> Void) {
+        self.icon = icon
+        self.label = label
+        self.perform = perform
+    }
+}
+
 struct ToolPage<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
 
     let tool: PracticeToolKind
     var presentation: ToolPresentation = .sheet
+    var action: ToolPageAction?
     @ViewBuilder var content: Content
 
     init(
         tool: PracticeToolKind,
         presentation: ToolPresentation = .sheet,
+        action: ToolPageAction? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.tool = tool
         self.presentation = presentation
+        self.action = action
         self.content = content()
     }
 
@@ -62,6 +86,21 @@ struct ToolPage<Content: View>: View {
                             .foregroundStyle(.white)
                     }
                     .accessibilityLabel("Close")
+                }
+            }
+
+            if let action {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.light()
+                        action.perform()
+                    } label: {
+                        Image(systemName: action.icon)
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityLabel(action.label)
                 }
             }
         }

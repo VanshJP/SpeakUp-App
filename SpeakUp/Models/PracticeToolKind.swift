@@ -38,12 +38,90 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
     /// What the user gets — the line that makes the tool worth tapping.
     var outcome: String {
         switch self {
-        case .warmUp: return "Open the voice before a scored take"
-        case .drills: return "Fix one weakness in under a minute"
-        case .readAloud: return "Train clarity on a passage, including your own text"
+        case .warmUp: return "Loosen the voice so your first sentence isn't the warm-up"
+        case .drills: return "Fix one habit in under a minute"
+        case .readAloud: return "Train clarity against a script — ours or your own"
         case .calm: return "Settle nerves so the take starts clean"
         case .learn: return "Follow a week-by-week speaking curriculum"
         }
+    }
+
+    /// *How* this tool works, in the terms that actually separate the four.
+    ///
+    /// Without this line they read as four arbitrary buckets — the obvious
+    /// question being why a tongue twister is a warm-up while filler
+    /// elimination is a drill, and whether Read Aloud is a drill too. It is
+    /// the format that differs, not the subject: two of these time you through
+    /// guided steps with the mic off, two open the mic and score you. What
+    /// each one *improves* is the shared `PracticeFocus` axis, and several of
+    /// them improve the same things on purpose.
+    var format: String {
+        switch self {
+        case .warmUp: return "Guided steps · mic off · 20–60s"
+        case .drills: return "Mic on · scored · 15–60s"
+        case .readAloud: return "Mic on · scored word by word"
+        case .calm: return "Guided steps · mic off · 2–5 min"
+        case .learn: return "Lessons, then activities"
+        }
+    }
+
+    /// Which focuses this tool has material for, derived from the catalogs so
+    /// it cannot drift as exercises are added.
+    var focuses: [PracticeFocus] {
+        switch self {
+        case .warmUp:
+            return PracticeFocus.allCases.filter { focus in
+                WarmUpCategory.allCases.contains { $0.focus == focus }
+            }
+        case .drills:
+            return PracticeFocus.allCases.filter { focus in
+                DrillMode.allCases.contains { $0.focus == focus }
+            }
+        case .readAloud:
+            return ReadAloudCategory.catalogFocuses
+        case .calm:
+            return PracticeFocus.allCases.filter { focus in
+                ConfidenceCategory.allCases.contains { $0.focus == focus }
+            }
+        case .learn:
+            return []
+        }
+    }
+
+    /// What one item of this tool is called, for "3 drills" / "5 passages".
+    var itemNoun: String {
+        switch self {
+        case .warmUp, .calm: return "exercise"
+        case .drills: return "drill"
+        case .readAloud: return "passage"
+        case .learn: return "lesson"
+        }
+    }
+
+    /// How much material this tool has for a focus. Counted from the seeds so
+    /// a cross-tool listing cannot promise rows that are not there.
+    func itemCount(for focus: PracticeFocus) -> Int {
+        switch self {
+        case .warmUp:
+            return DefaultWarmUps.all.filter { $0.category.focus == focus }.count
+        case .drills:
+            return DrillMode.allCases.filter { $0.focus == focus }.count
+        case .readAloud:
+            return DefaultReadAloudPassages.all.filter { $0.category.focus == focus }.count
+        case .calm:
+            return DefaultConfidenceExercises.all.filter { $0.category.focus == focus }.count
+        case .learn:
+            return 0
+        }
+    }
+
+    /// The practice tools, in the order the app presents them. `learn` is a
+    /// whole tab, not a tool page, so it is excluded.
+    static let practiceTools: [PracticeToolKind] = [.warmUp, .drills, .readAloud, .calm]
+
+    /// Every practice tool with material for a focus, in presentation order.
+    static func tools(for focus: PracticeFocus) -> [PracticeToolKind] {
+        practiceTools.filter { $0.focuses.contains(focus) }
     }
 
     /// When this tool is the right pick — shown on Library cards and sheet headers.

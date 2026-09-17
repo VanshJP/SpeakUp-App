@@ -9,12 +9,24 @@ enum ConfidenceCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Named for the outcome, not the technique. "Calming", "Visualization",
+    /// "Progressive" and "Affirmation" described what the exercise *is*; a
+    /// browsing user wants to know what it gets them.
     var displayName: String {
         switch self {
-        case .calming: return "Calming"
-        case .visualization: return "Visualization"
-        case .progressive: return "Progressive"
-        case .affirmation: return "Affirmation"
+        case .calming: return "Settle the body"
+        case .visualization: return "Rehearse it going well"
+        case .progressive: return "Face it in steps"
+        case .affirmation: return "Quiet the inner critic"
+        }
+    }
+
+    /// The shared axis. Calm covers the two composure outcomes: getting the
+    /// body quiet, and getting the story you tell yourself straight.
+    var focus: PracticeFocus {
+        switch self {
+        case .calming, .progressive: return .steadyNerves
+        case .visualization, .affirmation: return .mindset
         }
     }
 

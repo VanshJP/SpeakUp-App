@@ -44,7 +44,10 @@ class ReadAloudViewModel {
     var selectedDifficulty: ReadAloudDifficulty? {
         didSet { applyFilters() }
     }
-    var selectedCategory: ReadAloudCategory? {
+    /// Filters on outcome, not on source material. "News" and "Literature"
+    /// describe where a passage came from; what a reader wants to know is
+    /// whether it trains a steady clip or expression.
+    var selectedFocus: PracticeFocus? {
         didSet { applyFilters() }
     }
     var sessionState: ReadAloudSessionState = .idle
@@ -83,11 +86,18 @@ class ReadAloudViewModel {
             if let difficulty = selectedDifficulty, passage.difficulty != difficulty {
                 return false
             }
-            if let category = selectedCategory, passage.category != category {
+            if let selectedFocus, passage.category.focus != selectedFocus {
                 return false
             }
             return true
         }
+    }
+
+    /// Focuses the shipped catalog covers, in declaration order.
+    var availableFocuses: [PracticeFocus] { ReadAloudCategory.catalogFocuses }
+
+    func passages(for focus: PracticeFocus) -> [ReadAloudPassage] {
+        filteredPassages.filter { $0.category.focus == focus }
     }
 
     // MARK: - Session Control
