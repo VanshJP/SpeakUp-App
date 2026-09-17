@@ -7,6 +7,9 @@ final class UserSettings {
     var id: UUID = UUID()
     var defaultDuration: Int = 60
     var dailyReminderEnabled: Bool = false
+    /// Column default only. Nothing schedules until consent, and consent seeds
+    /// the slot from the practice rhythm (or from the moment of consent when
+    /// there is no history yet), so 9:00 should never actually fire.
     var dailyReminderHour: Int = 9
     var dailyReminderMinute: Int = 0
     var weeklyGoalSessions: Int = 5

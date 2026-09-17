@@ -301,6 +301,10 @@ class SettingsViewModel {
     func saveSettings() async {
         guard let settings, let context = modelContext else { return }
 
+        // Captured before the write: turning the channel on is the one moment
+        // worth seeding the slot from, and afterwards the old value is gone.
+        let consentingToReminders = dailyReminderEnabled && !settings.dailyReminderEnabled
+
         settings.userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.defaultDuration = defaultDuration.rawValue
         settings.dailyReminderEnabled = dailyReminderEnabled
@@ -318,6 +322,17 @@ class SettingsViewModel {
             let components = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
             settings.dailyReminderHour = components.hour ?? 9
             settings.dailyReminderMinute = components.minute ?? 0
+        } else if consentingToReminders,
+                  let seed = PracticeRhythm.suggestion(from: [Date()]) {
+            // Nothing to learn from yet, so the moment of consent is the best
+            // evidence there is: someone turning reminders on at 8pm is likelier
+            // an evening practiser than a 9am one, and 9:00 is a column default
+            // nobody chose. One take replaces this — `RetentionScheduler` runs
+            // straight after and overrides the seed the moment a real rhythm
+            // exists. Fed through `PracticeRhythm` so the 30-minute lead has
+            // exactly one definition.
+            settings.dailyReminderHour = seed.hour
+            settings.dailyReminderMinute = seed.minute
         }
         
         settings.weeklyGoalSessions = weeklyGoalSessions
