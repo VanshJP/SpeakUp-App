@@ -241,6 +241,9 @@ struct RecordingDetailView: View {
             if recording != nil, !coachMomentEvaluated {
                 runReadySetupIfNeeded()
             }
+            // Opening a take's breakdown is what "read the score" means; there
+            // is no separate review screen to wait for.
+            PracticeRoutineService.shared.complete(.review)
         }
         .onDisappear {
             isDetailActive = false

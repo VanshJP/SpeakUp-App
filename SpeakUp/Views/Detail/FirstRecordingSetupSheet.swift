@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+/// The handoff that fires on Today once the first score has landed.
+///
+/// Its whole job is to offer the three things onboarding deliberately withheld
+/// until the user had seen a number — and then get out of the way. It is not a
+/// settings page: session defaults live in Settings and the app tour, which
+/// starts the moment this dismisses, ends by pointing at them.
 struct FirstRecordingSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -9,14 +15,7 @@ struct FirstRecordingSetupSheet: View {
 
     private var settings: UserSettings? { userSettings.first }
 
-    @State private var selectedDuration: RecordingDuration = .sixty
-    @State private var selectedTimerBehavior: Int = 0
-    @State private var countdownSeconds: Int = 10
-    @State private var showFullSettings = false
-    @State private var showingDefaults = false
-
     @State private var reminderEnabled = false
-    @State private var reminderTime = Date()
     @State private var isRequestingReminder = false
     @State private var showingCalibration = false
     @State private var showingAISettings = false
@@ -27,15 +26,11 @@ struct FirstRecordingSetupSheet: View {
                 AppBackground(style: .subtle)
 
                 PageScrollView {
-                    VStack(spacing: 18) {
-                        headerSection
-                        finishSetupSection
-                        sessionDefaultsSection
-                        fullSettingsButton
+                    VStack(alignment: .leading, spacing: AppLayout.chapterSpacing) {
+                        header
+                        optionsCard
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .padding(.bottom, 20)
+                    .pageContentInsets()
                 }
                 .scrollIndicators(.hidden)
                 .safeAreaInset(edge: .bottom) { footer }
@@ -43,21 +38,207 @@ struct FirstRecordingSetupSheet: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $showFullSettings) {
-                SettingsView()
-            }
             .navigationDestination(isPresented: $showingAISettings) {
                 AIModelSettingsView()
             }
             .sheet(isPresented: $showingCalibration) {
                 NavigationStack {
-                    VoiceCalibrationView { profile in
-                        applyCalibration(profile)
-                    }
+                    VoiceCalibrationView(onComplete: applyCalibration)
                 }
             }
-            .onAppear(perform: loadCurrentSettings)
+            .onAppear {
+                reminderEnabled = settings?.dailyReminderEnabled ?? false
+            }
         }
+    }
+
+    // MARK: - Header
+
+    /// Type on the canvas rather than a card. A hero card here stacked a plate
+    /// on a plate and turned three optional extras into a checklist with a
+    /// progress meter, which read as homework standing between the user and
+    /// the practice they just proved they could do.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your first score is in")
+                .eyebrowStyle()
+
+            Text(greeting)
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+
+            Text("Three things we held back until you had a number. Take any of them, or none.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var greeting: String {
+        let name = settings?.userName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? "Nice work" : "Nice work, \(name)"
+    }
+
+    // MARK: - Options
+
+    private var optionsCard: some View {
+        GlassCard(padding: 4) {
+            VStack(spacing: 0) {
+                reminderRow
+
+                rowDivider
+
+                linkRow(
+                    icon: "waveform.and.person.filled",
+                    tint: AppColors.primary,
+                    title: "Calibrate your voice",
+                    detail: hasCalibratedVoice
+                        ? "Read again any time. Your profile also sharpens itself as you record."
+                        : "Twenty seconds of speech makes speaker separation and pace targets yours.",
+                    pill: hasCalibratedVoice ? "Saved" : nil
+                ) {
+                    AnalyticsService.shared.log(.onboardingStep("calibrate", action: "open"))
+                    showingCalibration = true
+                }
+
+                rowDivider
+
+                linkRow(
+                    icon: "sparkle",
+                    tint: AppColors.categoryBrandBright,
+                    title: "AI coherence feedback",
+                    detail: aiBackendLabel == nil
+                        ? "Optional. Uses Apple Intelligence, or a model you download."
+                        : "Scores how well your points hang together, on top of the usual metrics.",
+                    pill: aiBackendLabel
+                ) {
+                    AnalyticsService.shared.log(.onboardingStep("intelligence", action: "open"))
+                    showingAISettings = true
+                }
+            }
+        }
+    }
+
+    /// The reminder no longer asks for a time. `PracticeRhythm` learns when this
+    /// user practises and `RetentionScheduler` moves the slot to sit half an
+    /// hour ahead of it, so a picker here would only be a guess the app
+    /// overwrites within the week. See docs/features/retention.md.
+    private var reminderDetail: String {
+        reminderEnabled
+            ? "We watch when you practise and nudge you half an hour before. Change it in Settings."
+            : "One nudge a day, timed to when you actually practise. Nothing else."
+    }
+
+    /// A stored profile is the only durable signal that calibration happened;
+    /// `voiceProfileSampleCount` also climbs on its own as recordings are
+    /// analyzed, so it would report "done" for someone who never calibrated.
+    private var hasCalibratedVoice: Bool {
+        settings?.voiceProfileLastUpdated != nil
+    }
+
+    private var aiBackendLabel: String? {
+        switch llmService.activeBackend {
+        case .appleIntelligence: return "Apple Intelligence"
+        case .localLLM: return "On-device model"
+        case .none: return nil
+        }
+    }
+
+    // MARK: - Rows
+
+    /// Shared row shell: glyph, title (plus an optional "already done" pill),
+    /// one line of detail, and whatever control belongs on the trailing end.
+    private func rowShell<Accessory: View>(
+        icon: String,
+        tint: Color,
+        title: String,
+        detail: String,
+        pill: String? = nil,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        HStack(spacing: 12) {
+            OnboardingGlyph(icon: icon, tint: tint, size: 30)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+
+                    if let pill {
+                        StatusPill(text: pill, color: AppColors.success, glyph: .icon("checkmark"))
+                    }
+                }
+
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            accessory()
+        }
+        .frame(minHeight: AppLayout.minHitTarget)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    /// The switch is the ask, so the row itself is not tappable. `onChange`
+    /// lives on the row rather than the control so a programmatic revert after
+    /// a denied permission prompt does not re-enter the handler.
+    private var reminderRow: some View {
+        rowShell(
+            icon: "bell.badge",
+            tint: AppColors.categoryAmber,
+            title: "Daily reminder",
+            detail: reminderDetail
+        ) {
+            if isRequestingReminder {
+                ProgressView().tint(.white)
+            } else {
+                Toggle("Daily reminder", isOn: $reminderEnabled)
+                    .labelsHidden()
+                    .tint(AppColors.primary)
+            }
+        }
+        .motion(AppMotion.settle, value: reminderEnabled)
+        .onChange(of: reminderEnabled) { _, enabled in
+            Task { await applyReminderPreference(enabled) }
+        }
+    }
+
+    private func linkRow(
+        icon: String,
+        tint: Color,
+        title: String,
+        detail: String,
+        pill: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            Haptics.light()
+            action()
+        } label: {
+            rowShell(icon: icon, tint: tint, title: title, detail: detail, pill: pill) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var rowDivider: some View {
+        Divider()
+            .overlay(AppColors.cardStroke)
+            .padding(.leading, 54)
     }
 
     // MARK: - Footer
@@ -77,274 +258,12 @@ struct FirstRecordingSetupSheet: View {
             Haptics.medium()
             dismiss()
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
+        .padding(.horizontal, AppLayout.pageHorizontal)
+        .padding(.vertical, 10)
         .background(.ultraThinMaterial)
     }
 
-    // MARK: - Header
-
-    private var headerSection: some View {
-        FeaturedGlassCard(padding: 18) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [AppColors.primary, AppColors.categoryBrandBright],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Your first score is in")
-                            .eyebrowStyle()
-                        Text("Nice work")
-                            .font(.title3.bold())
-                            .foregroundStyle(.white)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                Text("Three optional extras sharpen the coaching. Set up what you want, skip the rest.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                setupProgress
-            }
-        }
-    }
-
-    private var setupProgress: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 8) {
-                Text(completedSetupSteps == Self.setupStepCount
-                     ? "All three set up"
-                     : "\(completedSetupSteps) of \(Self.setupStepCount) set up")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-
-                Spacer(minLength: 0)
-
-                if completedSetupSteps == Self.setupStepCount {
-                    StatusPill(text: "Done", color: AppColors.success, glyph: .icon("checkmark"))
-                }
-            }
-
-            TickMeter(
-                fraction: Double(completedSetupSteps) / Double(Self.setupStepCount),
-                color: AppColors.primary,
-                tickCount: Self.setupStepCount
-            )
-            .frame(height: 9)
-        }
-        .motion(AppMotion.settle, value: completedSetupSteps)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(completedSetupSteps) of \(Self.setupStepCount) extras set up")
-    }
-
-    // MARK: - Setup State
-
-    private static let setupStepCount = 3
-
-    /// A stored profile is the only durable signal that calibration happened;
-    /// `voiceProfileSampleCount` also climbs on its own as recordings are
-    /// analyzed, so it would report "done" for someone who never calibrated.
-    private var hasCalibratedVoice: Bool {
-        settings?.voiceProfileLastUpdated != nil
-    }
-
-    private var aiBackendLabel: String? {
-        switch llmService.activeBackend {
-        case .appleIntelligence: return "Apple Intelligence"
-        case .localLLM: return "On-device model"
-        case .none: return nil
-        }
-    }
-
-    private var completedSetupSteps: Int {
-        [reminderEnabled, hasCalibratedVoice, aiBackendLabel != nil]
-            .filter { $0 }
-            .count
-    }
-
-    // MARK: - Deferred Setup
-
-    private var finishSetupSection: some View {
-        VStack(spacing: 10) {
-            GlassSectionHeader("Make it yours", icon: "sparkles")
-
-            GlassCard(padding: 4) {
-                VStack(spacing: 0) {
-                    reminderRow
-
-                    rowDivider
-
-                    setupRow(
-                        icon: "waveform.and.person.filled",
-                        tint: AppColors.primary,
-                        title: "Calibrate your voice",
-                        detail: hasCalibratedVoice
-                            ? "Read again any time. Your profile also sharpens itself as you record."
-                            : "20 seconds of speech makes speaker separation and pace targets yours.",
-                        status: hasCalibratedVoice ? .done("Saved") : .todo,
-                        action: {
-                            AnalyticsService.shared.log(.onboardingStep("calibrate", action: "open"))
-                            showingCalibration = true
-                        }
-                    )
-
-                    rowDivider
-
-                    setupRow(
-                        icon: "sparkle",
-                        tint: AppColors.categoryBrandBright,
-                        title: "AI coherence feedback",
-                        detail: aiBackendLabel == nil
-                            ? "Optional. Uses Apple Intelligence, or a model you download."
-                            : "Scores how well your points hang together, on top of the usual metrics.",
-                        status: aiBackendLabel.map { RowStatus.done($0) } ?? .todo,
-                        action: {
-                            AnalyticsService.shared.log(.onboardingStep("intelligence", action: "open"))
-                            showingAISettings = true
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    /// The toggle owns the ask; the time row only exists once there is something
-    /// to schedule. `onChange` lives on the row rather than the controls so a
-    /// programmatic revert (permission denied) doesn't re-enter the handler.
-    private var reminderRow: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                OnboardingGlyph(icon: "bell.badge", tint: AppColors.categoryAmber, size: 30)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Daily reminder")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                    Text(reminderEnabled
-                         ? "One nudge a day. Nothing else."
-                         : "A nudge at the time you pick. Nothing else.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                if isRequestingReminder {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Toggle("Daily reminder", isOn: $reminderEnabled)
-                        .labelsHidden()
-                        .tint(AppColors.primary)
-                }
-            }
-            .frame(minHeight: 44)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-
-            if reminderEnabled {
-                HStack(spacing: 8) {
-                    Text("Remind me at")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Spacer(minLength: 0)
-
-                    DatePicker(
-                        "Reminder time",
-                        selection: $reminderTime,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
-                .transition(.opacity.combined(with: .offset(y: -4)))
-            }
-        }
-        .motion(AppMotion.settle, value: reminderEnabled)
-        .onChange(of: reminderEnabled) { _, enabled in
-            Task { await applyReminderPreference(enabled) }
-        }
-        .onChange(of: reminderTime) { _, _ in
-            guard reminderEnabled else { return }
-            Task { await applyReminderPreference(true) }
-        }
-    }
-
-    private enum RowStatus {
-        case todo
-        case done(String)
-    }
-
-    private func setupRow(
-        icon: String,
-        tint: Color,
-        title: String,
-        detail: String,
-        status: RowStatus,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            Haptics.light()
-            action()
-        } label: {
-            HStack(spacing: 12) {
-                OnboardingGlyph(icon: icon, tint: tint, size: 30)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-
-                        if case .done(let label) = status {
-                            StatusPill(text: label, color: AppColors.success, glyph: .icon("checkmark"))
-                        }
-                    }
-
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(minHeight: 44)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(GlassPressStyle())
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private var rowDivider: some View {
-        Divider()
-            .overlay(AppColors.cardStroke)
-            .padding(.leading, 54)
-    }
+    // MARK: - Actions
 
     private func applyReminderPreference(_ enabled: Bool) async {
         let service = NotificationService()
@@ -366,216 +285,16 @@ struct FirstRecordingSetupSheet: View {
             return
         }
 
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
-        let hour = comps.hour ?? 9
-        let minute = comps.minute ?? 0
-
         settings?.dailyReminderEnabled = true
-        settings?.dailyReminderHour = hour
-        settings?.dailyReminderMinute = minute
+        settings?.adaptiveReminderEnabled = true
         try? modelContext.save()
 
-        // After the save: the scheduler reads the persisted row, so the
-        // preference must already be committed.
+        // After the save: the scheduler reads the persisted row, and it is also
+        // what picks the hour — the first recording is already on disk, so the
+        // very first reminder lands near the time this user just practised.
         await RetentionScheduler.refresh(context: modelContext, service: service)
         AnalyticsService.shared.log(.onboardingStep("reminder", action: "complete"))
         Haptics.success()
-    }
-
-    // MARK: - Session Defaults
-
-    private var sessionDefaultsSection: some View {
-        VStack(spacing: 10) {
-            GlassSectionHeader("Session defaults", icon: "slider.horizontal.3")
-
-            GlassCard(padding: 4) {
-                VStack(spacing: 0) {
-                    Button {
-                        Haptics.light()
-                        showingDefaults.toggle()
-                    } label: {
-                        HStack(spacing: 12) {
-                            OnboardingGlyph(icon: "record.circle", tint: AppColors.primary, size: 30)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("What the record button does")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Text(defaultsSummary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            Spacer(minLength: 8)
-
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(showingDefaults ? 180 : 0))
-                        }
-                        .frame(minHeight: 44)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(GlassPressStyle())
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Session defaults. \(defaultsSummary)")
-                    .accessibilityHint(showingDefaults ? "Hides the options" : "Shows the options")
-                    .accessibilityAddTraits(.isButton)
-
-                    if showingDefaults {
-                        VStack(spacing: 14) {
-                            rowDivider
-                            durationPicker
-                            timerBehaviorPicker
-                            countdownPicker
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 12)
-                        .transition(.opacity)
-                    }
-                }
-            }
-        }
-        .motion(AppMotion.settle, value: showingDefaults)
-    }
-
-    private var defaultsSummary: String {
-        let behavior = TimerEndBehavior(rawValue: selectedTimerBehavior)?.displayName ?? "Save & Stop"
-        return "\(selectedDuration.displayName) · \(behavior) · \(countdownSeconds)s countdown"
-    }
-
-    private var durationPicker: some View {
-        pickerGroup(title: "Session length", icon: "clock") {
-            // Seven options do not fit one row on any iPhone width — a flexible
-            // grid wraps them instead of forcing the whole sheet wider than the
-            // screen, which is what made this page scroll sideways.
-            LazyVGrid(columns: durationColumns, spacing: 8) {
-                ForEach(RecordingDuration.allCases) { duration in
-                    selectionTile(
-                        text: duration.displayName,
-                        isSelected: selectedDuration == duration
-                    ) {
-                        Haptics.light()
-                        selectedDuration = duration
-                        persistDefaults()
-                    }
-                }
-            }
-        }
-    }
-
-    private var timerBehaviorPicker: some View {
-        pickerGroup(title: "When the timer ends", icon: "timer") {
-            HStack(spacing: 8) {
-                timerBehaviorOption(title: "Save & Stop", icon: "stop.circle", value: 0)
-                timerBehaviorOption(title: "Keep Going", icon: "play.circle", value: 1)
-            }
-        }
-    }
-
-    private var countdownPicker: some View {
-        pickerGroup(title: "Countdown before recording", icon: "hourglass") {
-            HStack(spacing: 8) {
-                ForEach([3, 5, 10, 15], id: \.self) { seconds in
-                    selectionTile(
-                        text: "\(seconds)s",
-                        isSelected: countdownSeconds == seconds
-                    ) {
-                        Haptics.light()
-                        countdownSeconds = seconds
-                        persistDefaults()
-                    }
-                }
-            }
-        }
-    }
-
-    private func pickerGroup<Content: View>(
-        title: String,
-        icon: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var durationColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-    }
-
-    private func timerBehaviorOption(title: String, icon: String, value: Int) -> some View {
-        Button {
-            Haptics.light()
-            selectedTimerBehavior = value
-            persistDefaults()
-        } label: {
-            let isSelected = selectedTimerBehavior == value
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.body)
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(isSelected ? .white : .secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? AppColors.primary.opacity(0.5) : .clear)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? AppColors.primary.opacity(0.6) : .white.opacity(0.08), lineWidth: 1)
-                    }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func selectionTile(text: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text)
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .foregroundStyle(isSelected ? .white : .secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isSelected ? AppColors.primary.opacity(0.5) : .clear)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(isSelected ? AppColors.primary.opacity(0.6) : .white.opacity(0.08), lineWidth: 1)
-                        }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var fullSettingsButton: some View {
-        GlassButton(
-            title: "All settings",
-            icon: "gearshape",
-            style: .secondary,
-            size: .small,
-            fullWidth: true
-        ) {
-            Haptics.light()
-            showFullSettings = true
-        }
-        .padding(.top, 2)
     }
 
     /// Matches `SettingsViewModel.saveCalibrationProfile`: a deliberate "this is
@@ -591,33 +310,6 @@ struct FirstRecordingSetupSheet: View {
         showingCalibration = false
         AnalyticsService.shared.log(.onboardingStep("calibrate", action: "complete"))
         Haptics.success()
-    }
-
-    // MARK: - Load / Save
-
-    private func loadCurrentSettings() {
-        guard let settings else { return }
-        selectedDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
-        selectedTimerBehavior = settings.timerEndBehavior
-        countdownSeconds = settings.countdownDuration
-        reminderEnabled = settings.dailyReminderEnabled
-        reminderTime = Calendar.current.date(
-            bySettingHour: settings.dailyReminderHour,
-            minute: settings.dailyReminderMinute,
-            second: 0,
-            of: Date()
-        ) ?? Date()
-    }
-
-    /// Written on every tap rather than on dismissal. A sheet with a drag
-    /// indicator gets closed by dragging it, and the old save-on-Done path threw
-    /// the user's picks away every time they did that.
-    private func persistDefaults() {
-        guard let settings else { return }
-        settings.defaultDuration = selectedDuration.rawValue
-        settings.timerEndBehavior = selectedTimerBehavior
-        settings.countdownDuration = countdownSeconds
-        try? modelContext.save()
     }
 }
 

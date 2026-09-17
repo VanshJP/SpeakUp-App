@@ -3,7 +3,6 @@ import os.log
 import SwiftUI
 import AVFoundation
 import Speech
-import UserNotifications
 import UIKit
 
 // MARK: - Step Machine
@@ -19,9 +18,6 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     case mic
     case baselineBriefing
     case baseline
-    case calibrate
-    case intelligence
-    case reminder
 
     var id: Int { rawValue }
 
@@ -46,25 +42,15 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// Steps that put a labelled decline action in their own footer
-    /// ("Skip and learn it as I record", "Not now"). The global Skip in the top
-    /// bar would be a second, vaguer copy of the same escape hatch.
-    var providesOwnSkip: Bool {
-        switch self {
-        case .calibrate, .intelligence, .reminder: return true
-        default: return false
-        }
-    }
-
-    /// Steps a first run walks. The flow ends inside the baseline recording —
-    /// the first guided take, its analysis, and its reveal — rather than
-    /// handing the user off to an unguided recorder after a recap screen.
+    /// The whole flow. It ends inside the baseline recording — the first
+    /// guided take, its analysis, and its reveal — rather than handing the user
+    /// off to an unguided recorder after a recap screen.
     ///
-    /// `calibrate`, `intelligence`, and `reminder` are deliberately absent.
-    /// Each one asks for effort, storage, or a system permission before the
-    /// user has seen a single score, and the score is the only thing that has
-    /// earned any of it. All three keep working and are offered again on
-    /// `FirstRecordingSetupSheet`, immediately after the first session.
+    /// Calibration, the AI model and reminder consent are deliberately absent.
+    /// Each asks for effort, storage, or a system permission before the user
+    /// has seen a single score, and the score is the only thing that earns any
+    /// of it. All three live on `FirstRecordingSetupSheet`, immediately after
+    /// the first session.
     static let firstRunSteps: [OnboardingStep] = [
         .welcome, .name, .goal, .level, .mic, .baselineBriefing, .baseline
     ]
@@ -81,9 +67,6 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         case .mic: return "mic"
         case .baselineBriefing: return "baseline_briefing"
         case .baseline: return "baseline"
-        case .calibrate: return "calibrate"
-        case .intelligence: return "intelligence"
-        case .reminder: return "reminder"
         }
     }
 }
@@ -100,18 +83,12 @@ struct OnboardingResult {
     let speakerLevel: SpeakerLevel
     let vocabWords: [String]
     let dictionaryWords: [String]
-    let reminderEnabled: Bool
-    let reminderHour: Int
-    let reminderMinute: Int
     /// The baseline recording captured inside onboarding. Nil when the user
     /// bailed before recording (mic denied, "explore first").
     let baselineRecordingID: UUID?
     /// True when the reveal's "See my full breakdown" was tapped — ContentView
     /// routes straight into the recording detail after dismissing.
     let reviewBaselineOnFinish: Bool
-    /// Baseline voice signature captured on the calibration step. Nil when the
-    /// user skipped it, in which case the profile is learned from recordings.
-    let voiceProfile: VoiceProfile?
 }
 
 // MARK: - View Model
@@ -146,28 +123,11 @@ final class OnboardingViewModel {
     private let audioService = AudioService()
     private var levelMonitorTask: Task<Void, Never>? = nil
 
-    // Voice calibration. The calibration sheet reuses `VoiceCalibrationView`,
-    // which returns the extracted profile; onboarding holds it until the
-    // result is applied to `UserSettings` so a cancelled flow writes nothing.
-    var voiceProfile: VoiceProfile?
-    var showingCalibration = false
-
-    var hasCalibratedVoice: Bool { voiceProfile != nil }
-
     // Speech recognition permission. Requested alongside the mic so the
     // Apple Speech fallback transcriber (used when WhisperKit is unavailable
     // or recovering) is pre-authorized. Denial is non-blocking, since WhisperKit
     // remains the primary transcriber and does not require this permission.
     var hasSpeechPermission = false
-
-    // Notification permission + reminder time
-    var hasNotificationPermission = false
-    var isRequestingNotificationPermission = false
-    /// Off until the user asks for it. The reminder step is no longer part of
-    /// the first run, so defaulting this on would fire a notification
-    /// permission prompt nobody agreed to.
-    var reminderEnabled = false
-    var reminderTime: Date = OnboardingViewModel.defaultReminderTime()
 
     // Vocab + dictionary seeds. Seeded silently from the level pick — the
     // editing page was homework mid-flow; the Word Bank in Settings is the
@@ -574,40 +534,6 @@ final class OnboardingViewModel {
         baselineNote = note
     }
 
-    // MARK: Voice Calibration
-
-    func startCalibration() {
-        Haptics.medium()
-        showingCalibration = true
-    }
-
-    /// Stores the baseline profile returned by `VoiceCalibrationView`. Written
-    /// to `UserSettings` only once onboarding completes.
-    func applyCalibration(_ profile: VoiceProfile) {
-        voiceProfile = profile
-    }
-
-    // MARK: Notification Permission
-
-    func checkNotificationPermission() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        hasNotificationPermission = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
-    }
-
-    func requestNotificationPermission() async {
-        isRequestingNotificationPermission = true
-        defer { isRequestingNotificationPermission = false }
-        let center = UNUserNotificationCenter.current()
-        do {
-            let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
-            hasNotificationPermission = granted
-            reminderEnabled = granted ? reminderEnabled : false
-            if granted { Haptics.success() }
-        } catch {
-            logger.error("Notification permission error: \(error.localizedDescription, privacy: .private(mask: .hash))")
-        }
-    }
-
     // MARK: Result
 
     func makeResult(baselineRecordingID: UUID? = nil, reviewBaseline: Bool = false) -> OnboardingResult {
@@ -621,7 +547,6 @@ final class OnboardingViewModel {
                 key: "activated"
             )
         }
-        let comps = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         // Always commit the current name into the dictation dictionary at
         // result time so renaming after the name step (back-nav, edit on a
         // later page) doesn't leave the dictionary out of sync.
@@ -638,19 +563,8 @@ final class OnboardingViewModel {
             speakerLevel: speakerLevel,
             vocabWords: vocabWords,
             dictionaryWords: finalDictionary,
-            reminderEnabled: reminderEnabled && hasNotificationPermission,
-            reminderHour: comps.hour ?? 9,
-            reminderMinute: comps.minute ?? 0,
             baselineRecordingID: baselineRecordingID,
-            reviewBaselineOnFinish: reviewBaseline,
-            voiceProfile: voiceProfile
+            reviewBaselineOnFinish: reviewBaseline
         )
-    }
-
-    private static func defaultReminderTime() -> Date {
-        var comps = DateComponents()
-        comps.hour = 9
-        comps.minute = 0
-        return Calendar.current.date(from: comps) ?? Date()
     }
 }

@@ -6,6 +6,7 @@ import Foundation
 nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, Codable {
     case rings
     case weeklyRecap
+    case routine
     case focus
     case session
     case tools
@@ -17,6 +18,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         switch self {
         case .rings: return "Weekly rings"
         case .weeklyRecap: return "Weekly recap"
+        case .routine: return "Your routine"
         case .focus: return "Coach focus"
         case .session: return "Today's session"
         case .tools: return "Prep tools"
@@ -28,6 +30,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         switch self {
         case .rings: return "Sessions, score, and improvement at a glance"
         case .weeklyRecap: return "What changed since last week (when there is news)"
+        case .routine: return "The chain of steps a session walks, and what is next"
         case .focus: return "The one thing to work on before you speak"
         case .session: return "Prompt, word workout, and start buttons. Always on."
         case .tools: return "Warm-up, drills, calm, and read-aloud"
@@ -39,6 +42,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         switch self {
         case .rings: return "circle.circle"
         case .weeklyRecap: return "chart.line.uptrend.xyaxis"
+        case .routine: return "list.bullet.indent"
         case .focus: return "scope"
         case .session: return "mic.fill"
         case .tools: return "wrench.and.screwdriver.fill"
@@ -50,9 +54,11 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
     var isPinned: Bool { self == .session }
 
     /// Factory default order and visibility. Learn is off until the user opts in
-    /// so Today stays a practice surface, not a second Learning Path tab.
+    /// so Today stays a practice surface, not a second Learning Path tab. Routine
+    /// sits above focus so the instructional focus→session pair stays adjacent:
+    /// the routine is the plan, focus is the note on it, session is the doing.
     static let defaultVisible: [TodayHomeModule] = [
-        .rings, .weeklyRecap, .focus, .session, .tools
+        .rings, .weeklyRecap, .routine, .focus, .session, .tools
     ]
 }
 

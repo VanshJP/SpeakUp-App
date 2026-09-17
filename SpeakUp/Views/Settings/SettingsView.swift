@@ -42,6 +42,15 @@ struct SettingsView: View {
             .tourAnchor(.settingsPresets)
 
             settingsLink(
+                icon: "list.bullet.indent",
+                iconColor: AppColors.categoryBrandBright,
+                title: "Routine",
+                subtitle: "Choose what a session walks you through"
+            ) {
+                RoutineSettingsView()
+            }
+
+            settingsLink(
                 icon: "waveform.badge.magnifyingglass",
                 iconColor: AppColors.categoryNeutralCool,
                 title: "Analysis",
@@ -169,7 +178,7 @@ struct SettingsView: View {
                 icon: "bell.fill",
                 iconColor: AppColors.categoryAmber,
                 title: "Reminders",
-                subtitle: viewModel.dailyReminderEnabled ? "Change your reminder time" : "Turn on a daily practice reminder"
+                subtitle: reminderSubtitle
             ) {
                 ReminderSettingsView(viewModel: viewModel)
             }
@@ -311,6 +320,13 @@ struct SettingsView: View {
         viewModel.userName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Set your name"
             : "Edit your name"
+    }
+
+    private var reminderSubtitle: String {
+        guard viewModel.dailyReminderEnabled else { return "Turn on a daily practice reminder" }
+        return viewModel.adaptiveReminderEnabled
+            ? "Timed to your own practice rhythm"
+            : "Change your reminder time"
     }
 
     private var aiModelSubtitle: String {

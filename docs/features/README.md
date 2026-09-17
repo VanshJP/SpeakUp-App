@@ -28,6 +28,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | Daily word workout | [vocab-challenge.md](./vocab-challenge.md) | `VocabChallengeService`, `Views/Today/VocabChallengeResultCard.swift` | — | — |
 | History / trajectory / readiness / journal | [history-progress.md](./history-progress.md) | `Views/History/`, `Views/Progress/`, `Views/Streak/`, `ScenarioReadinessEngine` | gotchas §2b, §3 | — |
 | Learn / curriculum | [curriculum.md](./curriculum.md) | Skill studio (`CurriculumView` list + modalities), `LessonIdentity`, `CurriculumService` | monetization.md · ui-design-system.md | — |
+| Practice routine / step chaining | [routine.md](./routine.md) | `Models/PracticeRoutine.swift`, `PracticeRoutineService`, `Views/Today/RoutineCard.swift` | today-library.md · practice-tools.md | — |
 | Warm-ups / drills / confidence | [practice-tools.md](./practice-tools.md) | `Views/WarmUp/`, `Drills/`, `Confidence/` · `DrillMode` (+ vocal/emphasis/Q&A) | — | — |
 | Onboarding / app tour | `/ONBOARDING_VISION.md` | `Views/Onboarding/`, `AppTourOverlay` | gotchas §10 | — |
 | Settings | [settings.md](./settings.md) | `Views/Settings/` | playbook | — |
@@ -35,7 +36,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | iCloud / CloudKit | [icloud.md](./icloud.md) | `ICloudStorageService` | gotchas §1 | `swiftdata-pro` |
 | Paywall / Lifetime / allowance | [monetization.md](./monetization.md) | `Models/Monetization.swift` | gotchas §5, playbook | `greenlight` (ship) |
 | Analytics / attribution / review | [analytics-review.md](./analytics-review.md) | `AnalyticsService`, `ReviewRequestService` | gotchas §7 | — |
-| Retention / notifications / streak freeze | [retention.md](./retention.md) | `RetentionScheduler`, `RetentionNotificationPlanner`, `NotificationService`, `StreakProtection` | settings.md · `/ONBOARDING_VISION.md` | — |
+| Retention / notifications / streak freeze | [retention.md](./retention.md) | `RetentionScheduler`, `RetentionNotificationPlanner`, `PracticeRhythm`, `NotificationService`, `StreakProtection` | settings.md · `/ONBOARDING_VISION.md` | — |
 | Theme / glass / components | [ui-design-system.md](./ui-design-system.md) | `Theme/`, `Views/Components/` | gotchas §11 | `swiftui-expert-skill` |
 | Achievements / goals | [achievements-goals.md](./achievements-goals.md) | `Views/Achievements/`, `Views/Goals/` | — | — |
 | Coach notes (rare asides) | [coach-moments.md](./coach-moments.md) | `Models/CoachMoment.swift`, `CoachMomentService`, `Views/CoachMoment/` | — | — |

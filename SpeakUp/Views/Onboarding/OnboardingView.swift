@@ -32,15 +32,9 @@ struct OnboardingView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $viewModel.showingCalibration) {
-            VoiceCalibrationView { profile in
-                viewModel.applyCalibration(profile)
-            }
-        }
         .onAppear {
             viewModel.checkMicPermission()
             viewModel.restoreFromDefaults()
-            Task { await viewModel.checkNotificationPermission() }
         }
         .onChange(of: viewModel.currentStep) { oldStep, newStep in
             UIApplication.shared.sendAction(
@@ -115,7 +109,7 @@ struct OnboardingView: View {
             .opacity(viewModel.currentStep.isHero ? 0 : 1)
             .motion(AppMotion.settle, value: viewModel.stepProgress)
 
-            if !viewModel.currentStep.isHero, !viewModel.currentStep.providesOwnSkip {
+            if !viewModel.currentStep.isHero {
                 Button("Skip") {
                     viewModel.skip()
                 }
@@ -192,44 +186,6 @@ struct OnboardingView: View {
                     ))
                 }
             )
-
-        case .calibrate:
-            OnboardingCalibrationStep(
-                counter: viewModel.stepCounterLabel,
-                hasMicPermission: viewModel.hasMicPermission,
-                isRequestingMic: viewModel.isRequestingMicPermission,
-                hasCalibrated: viewModel.hasCalibratedVoice,
-                onRequestMic: {
-                    Task { await viewModel.requestMicPermissionOnly() }
-                },
-                onCalibrate: viewModel.startCalibration,
-                onContinue: viewModel.advance,
-                onSkip: viewModel.skip
-            )
-
-        case .intelligence:
-            OnboardingIntelligenceStep(
-                counter: viewModel.stepCounterLabel,
-                onContinue: viewModel.advance
-            )
-
-        case .reminder:
-            OnboardingReminderStep(
-                counter: viewModel.stepCounterLabel,
-                hasPermission: viewModel.hasNotificationPermission,
-                isRequesting: viewModel.isRequestingNotificationPermission,
-                reminderEnabled: $viewModel.reminderEnabled,
-                reminderTime: $viewModel.reminderTime,
-                onEnable: {
-                    Task { await viewModel.requestNotificationPermission() }
-                },
-                onContinue: viewModel.advance,
-                onSkip: {
-                    viewModel.reminderEnabled = false
-                    viewModel.skip()
-                }
-            )
-
         }
     }
 }
