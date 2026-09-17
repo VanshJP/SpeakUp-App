@@ -55,12 +55,6 @@ class NotificationService {
         )
     }
 
-    func cancelDailyReminder() async {
-        center.removePendingNotificationRequests(
-            withIdentifiers: [RetentionNotificationPlanner.dailyReminderID]
-        )
-    }
-
     /// Clear the rescue notifications the moment a take lands, so someone who
     /// practised at 7pm never gets told at 8:30 that their streak is ending.
     func cancelStreakRescue() {

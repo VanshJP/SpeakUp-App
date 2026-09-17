@@ -316,10 +316,6 @@ final class UserSettings {
         savedReadAloudTexts = SavedReadAloudTexts.removing(text, from: savedReadAloudTexts)
     }
 
-    func hasSavedReadAloudText(_ text: String) -> Bool {
-        SavedReadAloudTexts.contains(text, in: savedReadAloudTexts)
-    }
-
     // MARK: - Dictation Dictionary Helpers
 
     func addDictationBiasWord(_ word: String) {

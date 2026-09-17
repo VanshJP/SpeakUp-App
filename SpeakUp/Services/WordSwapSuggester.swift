@@ -650,10 +650,6 @@ nonisolated enum WordSwapSuggester {
         return ranked.prefix(3).compactMap { byReplacement[$0] }
     }
 
-    static func dominantReplacements(in occurrences: [WordSwapOccurrence]) -> [String] {
-        dominantOptions(in: occurrences).map(\.replacement)
-    }
-
     /// The winning option itself, so its cue can render beside the chips.
     static func primaryOption(in occurrences: [WordSwapOccurrence]) -> WordSwapOption? {
         dominantOptions(in: occurrences).first
