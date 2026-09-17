@@ -23,6 +23,9 @@ class SettingsViewModel {
     // Local state - Reminders
     var dailyReminderEnabled: Bool = false
     var reminderTime: Date = Calendar.current.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
+    /// When on, `reminderTime` is a readout of what `PracticeRhythm` learned,
+    /// not an input. The picker is only editable once this is off.
+    var adaptiveReminderEnabled: Bool = true
     var streakRemindersEnabled: Bool = true
     var comebackRemindersEnabled: Bool = true
     var milestoneNotificationsEnabled: Bool = true
@@ -211,6 +214,7 @@ class SettingsViewModel {
         userName = settings.userName
         defaultDuration = RecordingDuration(rawValue: settings.defaultDuration) ?? .sixty
         dailyReminderEnabled = settings.dailyReminderEnabled
+        adaptiveReminderEnabled = settings.adaptiveReminderEnabled
         streakRemindersEnabled = settings.streakRemindersEnabled
         comebackRemindersEnabled = settings.comebackRemindersEnabled
         milestoneNotificationsEnabled = settings.milestoneNotificationsEnabled
@@ -297,16 +301,39 @@ class SettingsViewModel {
     func saveSettings() async {
         guard let settings, let context = modelContext else { return }
 
+        // Captured before the write: turning the channel on is the one moment
+        // worth seeding the slot from, and afterwards the old value is gone.
+        let consentingToReminders = dailyReminderEnabled && !settings.dailyReminderEnabled
+
         settings.userName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.defaultDuration = defaultDuration.rawValue
         settings.dailyReminderEnabled = dailyReminderEnabled
+        settings.adaptiveReminderEnabled = adaptiveReminderEnabled
         settings.streakRemindersEnabled = streakRemindersEnabled
         settings.comebackRemindersEnabled = comebackRemindersEnabled
         settings.milestoneNotificationsEnabled = milestoneNotificationsEnabled
         
-        let components = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
-        settings.dailyReminderHour = components.hour ?? 9
-        settings.dailyReminderMinute = components.minute ?? 0
+        // Only a hand-picked time is written back. In adaptive mode the stored
+        // hour belongs to `RetentionScheduler`, and `reminderTime` is a copy
+        // that goes stale the moment the rhythm moves — saving an unrelated
+        // toggle would otherwise drag the reminder back to whenever this screen
+        // last loaded.
+        if !adaptiveReminderEnabled {
+            let components = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
+            settings.dailyReminderHour = components.hour ?? 9
+            settings.dailyReminderMinute = components.minute ?? 0
+        } else if consentingToReminders,
+                  let seed = PracticeRhythm.suggestion(from: [Date()]) {
+            // Nothing to learn from yet, so the moment of consent is the best
+            // evidence there is: someone turning reminders on at 8pm is likelier
+            // an evening practiser than a 9am one, and 9:00 is a column default
+            // nobody chose. One take replaces this — `RetentionScheduler` runs
+            // straight after and overrides the seed the moment a real rhythm
+            // exists. Fed through `PracticeRhythm` so the 30-minute lead has
+            // exactly one definition.
+            settings.dailyReminderHour = seed.hour
+            settings.dailyReminderMinute = seed.minute
+        }
         
         settings.weeklyGoalSessions = weeklyGoalSessions
 
@@ -391,6 +418,10 @@ class SettingsViewModel {
             // Update notifications if needed
             if dailyReminderEnabled {
                 await scheduleReminderNotification()
+                // The scheduler owns the slot in adaptive mode and may have just
+                // moved it. Without this the Reminders screen would keep showing
+                // the time it loaded with, which is not the time that fires.
+                syncReminderTimeFromStore()
             } else {
                 await cancelReminderNotification()
             }
@@ -699,6 +730,11 @@ class SettingsViewModel {
         settings.dailyReminderEnabled = false
         settings.dailyReminderHour = 9
         settings.dailyReminderMinute = 0
+        settings.adaptiveReminderEnabled = true
+        // The routine is a preference, and its ticks belong to a day that a
+        // reset has just ended. Both go back to factory.
+        settings.routineStepsRaw = []
+        settings.apply(progress: .empty)
         settings.streakRemindersEnabled = true
         settings.comebackRemindersEnabled = true
         settings.milestoneNotificationsEnabled = true
@@ -887,6 +923,19 @@ class SettingsViewModel {
     private func scheduleReminderNotification() async {
         guard let modelContext else { return }
         await RetentionScheduler.refresh(context: modelContext, service: notificationService)
+    }
+
+    /// Pull the stored reminder hour back into the picker's value. Guarded on
+    /// equality so the view's `onChange(of: reminderTime)` cannot ping-pong
+    /// with this — one extra save at most, and only when the slot really moved.
+    private func syncReminderTimeFromStore() {
+        guard let settings else { return }
+        var components = DateComponents()
+        components.hour = settings.dailyReminderHour
+        components.minute = settings.dailyReminderMinute
+        guard let resolved = Calendar.current.date(from: components),
+              resolved != reminderTime else { return }
+        reminderTime = resolved
     }
 
     private func cancelReminderNotification() async {

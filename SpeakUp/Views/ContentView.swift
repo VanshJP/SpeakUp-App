@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var showOnboarding = false
     @State private var achievementService = AchievementService.shared
     @State private var coachMoments = CoachMomentService.shared
+    @State private var routine = PracticeRoutineService.shared
     /// Owned here because the tour crosses tabs: it drives `selectedTab` and
     /// draws over the tab bar, neither of which a single tab's root can do.
     @State private var appTour = AppTourModel()
@@ -239,12 +240,19 @@ struct ContentView: View {
                     .transition(.opacity)
                     .zIndex(5)
             }
+
+            routineHandoffOverlay
         }
+        .motion(AppMotion.settle, value: routine.handoff)
         .environment(\.appTour, appTour)
         .environment(\.glassAppearance, glassAppearance)
         .environment(\.appCanvas, appCanvas)
         .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .motion(AppMotion.settle, value: appTour.activeStep != nil)
+        .onChange(of: routine.pendingStep) { _, step in
+            guard step != nil else { return }
+            openPendingRoutineStep()
+        }
         .onChange(of: appTour.activeStep) { _, step in
             guard let step, selectedTab != step.tab else { return }
             selectedTab = step.tab
@@ -266,6 +274,7 @@ struct ContentView: View {
                 storyId: recordingStoryId,
                 sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
                 onSavedAndClosed: { recording in
+                    routine.complete(.session)
                     Task {
                         while RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
                             try? await Task.sleep(for: .milliseconds(500))
@@ -278,6 +287,7 @@ struct ContentView: View {
                     }
                 },
                 onComplete: { recording in
+                    routine.complete(.session)
                     pendingRecordingNavigation = recording.id.uuidString
                     freshResultRecordingId = recording.id.uuidString
                     selectedTab = .history
@@ -373,6 +383,7 @@ struct ContentView: View {
         .onAppear {
             settingsViewModel.configure(with: modelContext)
             storiesViewModel.configure(with: modelContext)
+            routine.configure(with: modelContext)
             evaluateOnboardingIfNeeded()
         }
         .onChange(of: userSettings.first?.hasCompletedOnboarding) { _, _ in
@@ -396,13 +407,6 @@ struct ContentView: View {
                 Task { @MainActor in
                     await settingsViewModel.loadSettings()
 
-                    if result.reminderEnabled {
-                        await RetentionScheduler.refresh(
-                            context: modelContext,
-                            requestPermissionIfNeeded: true
-                        )
-                    }
-
                     if result.baselineRecordingID != nil {
                         try? await Task.sleep(for: .milliseconds(700))
                         await achievementService.checkAchievements(context: modelContext)
@@ -424,19 +428,6 @@ struct ContentView: View {
         settings.userName = result.userName
         settings.onboardingGoalsRaw = result.goals.map(\.rawValue)
         settings.onboardingGoalRaw = (result.goals.first ?? .everydayConfidence).rawValue
-
-        // Persist reminder preference + time so SettingsView reflects it.
-        settings.dailyReminderEnabled = result.reminderEnabled
-        settings.dailyReminderHour = result.reminderHour
-        settings.dailyReminderMinute = result.reminderMinute
-
-
-        if let profile = result.voiceProfile {
-            settings.voiceProfileF0Hz = profile.f0Hz
-            settings.voiceProfileEnergyDb = profile.energyDb
-            settings.voiceProfileSampleCount = max(settings.voiceProfileSampleCount, 3)
-            settings.voiceProfileLastUpdated = Date()
-        }
 
         for word in result.vocabWords {
             settings.addVocabWord(word)
@@ -468,6 +459,61 @@ struct ContentView: View {
         AnalyticsService.shared.log(
             .onboardingStep("app_tour", action: completed ? "complete" : "skip")
         )
+    }
+
+    // MARK: - Routine
+
+    /// Sits above the tab bar rather than inside the screen that finished,
+    /// because that screen is a sheet on its way out — set while the sheet is
+    /// still up, the bar is simply already there when it goes. The tour
+    /// outranks it: a spotlight with a bar floating over it teaches nothing.
+    ///
+    /// Split out of `body` deliberately; the shell is already near the
+    /// type-checker's budget for one expression (gotchas §15).
+    @ViewBuilder
+    private var routineHandoffOverlay: some View {
+        if let handoff = routine.handoff, appTour.activeStep == nil {
+            RoutineHandoffBar(
+                handoff: handoff,
+                onTake: {
+                    routine.advance()
+                    openPendingRoutineStep()
+                },
+                onDismiss: routine.dismissHandoff
+            )
+            .padding(.horizontal, AppLayout.pageHorizontal)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .zIndex(4)
+        }
+    }
+
+    /// Opens whatever the routine is asking for. `.session` is deliberately left
+    /// set: Today owns the day's prompt and the duration pill, so it finishes
+    /// that case itself once the tab switch lands. Everything else opens here,
+    /// through the same sheets the Today tiles use.
+    private func openPendingRoutineStep() {
+        guard let step = routine.pendingStep else { return }
+        switch step {
+        case .calm:
+            routine.clearPendingStep()
+            showingConfidenceTools = true
+        case .warmUp:
+            routine.clearPendingStep()
+            showingWarmUps = true
+        case .drill:
+            routine.clearPendingStep()
+            showingDrills = true
+        case .readAloud:
+            routine.clearPendingStep()
+            showingReadAloud = true
+        case .review:
+            routine.clearPendingStep()
+            selectedTab = .history
+        case .session:
+            selectedTab = .today
+        }
     }
 
     // MARK: - Coach notes

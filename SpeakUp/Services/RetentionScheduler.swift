@@ -78,6 +78,21 @@ enum RetentionScheduler {
             frozenDays: resolution.frozenDays
         )
 
+        // MARK: Reminder time
+
+        // The daily nudge chases the user's own rhythm rather than a time the
+        // product picked, landing shortly before they usually practise. Written
+        // back to the stored hour/minute so Settings shows the truth and the
+        // planner keeps one source for the slot.
+        if settings.adaptiveReminderEnabled,
+           let learned = PracticeRhythm.suggestion(from: practiceDays),
+           learned.hour != settings.dailyReminderHour || learned.minute != settings.dailyReminderMinute {
+            settings.dailyReminderHour = learned.hour
+            settings.dailyReminderMinute = learned.minute
+            try? context.save()
+            logger.info("Reminder moved to \(learned.hour, privacy: .public):\(learned.minute, privacy: .public)")
+        }
+
         // MARK: Milestones
 
         if settings.milestoneNotificationsEnabled,

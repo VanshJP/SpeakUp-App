@@ -67,6 +67,7 @@ struct ReadAloudSessionView: View {
         .onChange(of: viewModel.sessionState) { _, newState in
             if newState == .finished {
                 showingResult = true
+                PracticeRoutineService.shared.complete(.readAloud)
             }
         }
         .fullScreenCover(isPresented: $showingResult) {

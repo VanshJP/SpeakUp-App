@@ -17,6 +17,8 @@ struct TodayView: View {
     @State private var arrived = false
     @State private var challengeStore = SharedChallengeStore.shared
     @State private var coachMoments = CoachMomentService.shared
+    @State private var routine = PracticeRoutineService.shared
+    @State private var showingRoutineSettings = false
 
     @State private var focusDrill: DrillMode?
     @State private var showingFocusWarmUp = false
@@ -114,6 +116,13 @@ struct TodayView: View {
         .onChange(of: isActiveTab) { _, active in
             guard active else { return }
             Task { await checkFirstRunSurfaces() }
+            // Also here, not only on the request: a handoff raised from another
+            // tab sets the step and *then* switches, so the request is already
+            // waiting by the time Today becomes active.
+            startPendingRoutineStepIfNeeded()
+        }
+        .onChange(of: routine.pendingStep) { _, _ in
+            startPendingRoutineStepIfNeeded()
         }
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading { playArrivalIfNeeded() }
@@ -126,6 +135,13 @@ struct TodayView: View {
         .sheet(item: $focusDrill) { mode in
             DrillSelectionView(initialMode: mode)
                 .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showingRoutineSettings) {
+            NavigationStack {
+                RoutineSettingsView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingFocusWarmUp) {
             WarmUpListView()
@@ -228,6 +244,9 @@ struct TodayView: View {
         case .focus:
             guard let plan = viewModel.coachPlan else { return false }
             return plan.sessionCount >= Self.focusMinimumSessions
+        case .routine:
+            // A chain of one is the session module wearing a second hat.
+            return routine.steps.count > 1
         }
     }
 
@@ -436,6 +455,8 @@ struct TodayView: View {
                 .tourAnchor(.todayStats)
         case .weeklyRecap:
             weeklyRecapSection
+        case .routine:
+            routineSection
         case .focus:
             focusSection
         case .session:
@@ -447,6 +468,40 @@ struct TodayView: View {
         case .learn:
             learnShortcutCard
         }
+    }
+
+    /// The routine block. Hidden at a chain of one, because a routine with
+    /// nothing but the take in it is the session module said twice.
+    @ViewBuilder
+    private var routineSection: some View {
+        let steps = routine.steps
+        if steps.count > 1 {
+            RoutineCard(
+                steps: steps,
+                completed: routine.progress.completed,
+                onStart: startRoutineStep,
+                onEdit: { showingRoutineSettings = true }
+            )
+        }
+    }
+
+    /// `.session` is handled here and nowhere else: the day's prompt and the
+    /// duration pill live on this screen, so this is the only place that can
+    /// start the take the routine means. Everything else bubbles to
+    /// `ContentView`, which owns the tool sheets.
+    private func startRoutineStep(_ step: RoutineStep) {
+        if step == .session {
+            onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+        } else {
+            routine.start(step)
+        }
+    }
+
+    /// Takes the `.session` request `ContentView` leaves standing for Today.
+    private func startPendingRoutineStepIfNeeded() {
+        guard routine.pendingStep == .session, isActiveTab else { return }
+        routine.clearPendingStep()
+        onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
     }
 
     /// The card owns the whole brief now — topic, length, words, and Start —
@@ -572,10 +627,16 @@ struct TodayView: View {
         let needsSetup = !settings.hasShownFirstRecordingSetup
         guard needsSetup || !settings.hasSeenAppTour else { return }
 
-        let count = (try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0
-        guard count >= 1 else { return }
+        let hasRecorded = ((try? modelContext.fetchCount(FetchDescriptor<Recording>())) ?? 0) >= 1
 
-        guard needsSetup else {
+        // Two ways to land here without the sheet. A user who skipped the
+        // baseline said they wanted to look around first, and the walkthrough is
+        // the answer to the question they actually asked — waiting for a take
+        // they may not make for days leaves them on a map-less home screen. And
+        // a user who has already seen the sheet gets straight to the tour.
+        // The sheet itself still waits for a score: every row on it is about a
+        // number, and before the first take there is none.
+        guard hasRecorded, needsSetup else {
             startTourIfNeeded()
             return
         }

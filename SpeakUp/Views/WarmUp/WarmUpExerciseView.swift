@@ -63,6 +63,10 @@ struct WarmUpExerciseView: View {
             }
             .padding()
         }
+        .onChange(of: viewModel.isComplete) { _, complete in
+            guard complete else { return }
+            PracticeRoutineService.shared.complete(.warmUp)
+        }
         .onChange(of: viewModel.currentStepIndex) { _, newIndex in
             guard !viewModel.isComplete, newIndex != announcedStepIndex,
                   let step = viewModel.currentStep else { return }

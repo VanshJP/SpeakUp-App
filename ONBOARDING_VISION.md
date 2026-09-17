@@ -5,7 +5,7 @@ changing anything under `Views/Onboarding/` or the onboarding paths in
 `ContentView`. The full research behind it (Mobbin case studies, UX audit of
 the old flow, screen-by-screen rationale) lives in `ONBOARDING_REDESIGN.md`;
 this file is the distilled contract, and it wins wherever the two disagree.
-Last updated: 2026-08-06.
+Last updated: 2026-09-17.
 
 Agent index for related surfaces: `docs/features/README.md` (Today tour, recording detail reveal, architecture deep links).
 
@@ -83,17 +83,33 @@ be written in prose:
 8. **Effort and permissions only after value.** Calibration, the AI model
    download, and reminders stay out of the first run — they belong to
    `FirstRecordingSetupSheet`, which fires on Today *after* the first score.
+   The onboarding step machine no longer carries them at all: `calibrate`,
+   `intelligence` and `reminder` were unreachable cases behind
+   `firstRunSteps` and are deleted, along with their screens and the
+   view-model state that fed them. Do not re-add a step the walk order does
+   not contain — a deferred screen nobody can reach is a screen nobody
+   maintains.
    Reminder consent covers the whole notification channel — daily nudge,
-   streak rescue, comeback ladder, milestones — and the consent screen
-   enumerates them rather than implying a narrower deal. Nothing is a
-   *surprise*: `FirstRecordingSetupSheet` turns the channel on, and
-   Settings → Reminders lists every class with its own toggle. Off means
-   silent. See `docs/features/retention.md`.
-   The layout tour (`AppTourView.swift`) follows the same rule and the same
-   gate: it runs once, on Today, only after a recording exists. The two are
-   strictly sequential — `TodayView.checkFirstRunSurfaces()` shows the sheet
-   first and starts the tour from its `onDismiss`, because the tour's
-   spotlight is a cutout in a dim layer that a presented sheet would cover.
+   streak rescue, comeback ladder, milestones — and the sheet enumerates them
+   rather than implying a narrower deal. It asks for **consent only, never a
+   time**: `PracticeRhythm` learns when this user practises and the scheduler
+   moves the reminder to half an hour ahead of it, so a picker in the first
+   run would be a guess the app overwrites within the week. Settings →
+   Reminders shows the learned time and is where it can be taken back. See
+   `docs/features/retention.md`.
+   The sheet itself is three rows and a footer — no progress meter, no
+   session-defaults pickers. Optional extras presented as a checklist with a
+   completion meter read as homework standing between the user and the
+   practice they had just proved they could do, and session defaults are both
+   a duplicate of Settings and the tour's own last stop.
+   The layout tour (`AppTourView.swift`) runs once, on Today. When a score
+   exists the two are strictly sequential — `TodayView.checkFirstRunSurfaces()`
+   shows the sheet first and starts the tour from its `onDismiss`, because the
+   tour's spotlight is a cutout in a dim layer that a presented sheet would
+   cover. **When the user skipped the baseline, the tour runs immediately**
+   and the sheet waits: "explore the app first" is a request for a map, and
+   every row of the sheet is about a number that does not exist yet. The sheet
+   still fires after their eventual first take.
    Today may mount before onboarding creates the baseline, so the check also
    runs when Today becomes the active, unobscured tab and after pull-to-refresh;
    it is not a once-per-view-lifetime task.
@@ -133,9 +149,9 @@ welcome → name → goal → level → mic (sound check) → baselineBriefing �
 - Steps: `OnboardingStep` in `ViewModels/OnboardingViewModel.swift`
   (`firstRunSteps` is the walk order; heroes hide ticks/skip).
 - Screens: `Views/Onboarding/OnboardingIntroSteps.swift` (cover, name, goal,
-  level), `OnboardingSetupSteps.swift` (sound check + deferred
-  calibrate/AI/reminder steps), `OnboardingBaselineSteps.swift` (briefing,
-  guided recorder, analyzing, reveal).
+  level), `OnboardingMicStep.swift` (the sound check),
+  `OnboardingBaselineSteps.swift` (briefing, guided recorder, analyzing,
+  reveal).
 - Persistence/processing: the baseline saves a real `Recording` row
   (title "My baseline") and runs through `RecordingProcessingCoordinator` —
   no special-cased pipeline.
@@ -183,6 +199,12 @@ from launch.
 
 - **"How It Works" / "What's Inside" explainer pages.** Feature inventories
   serve the builder's pride; the product teaches its own inventory.
+- **The deferred calibrate / AI / reminder steps.** They were already out of
+  `firstRunSteps` and therefore unreachable; the screens and their view-model
+  state are gone. `FirstRecordingSetupSheet` is where all three live.
+- **A reminder time picker anywhere in the first run.** The time is derived
+  (`docs/features/retention.md`), and asking for a value the app will replace
+  is worse than not asking.
 - **The vocab editing step.** Homework mid-flow. Seeds still apply silently
   from the level pick (`vocabSeeds(for:)`); Settings → Word Bank is the editor.
 - **The "Ready" recap + start-toggle.** The flow needs neither a receipt nor
@@ -214,7 +236,8 @@ from launch.
   who skipped the baseline, the first result's next action logs it instead.
 - Skipping the baseline lands on a zero-session Today state that reframes the
   existing prompt hero as **Set your starting line** and hides prompt-less
-  free talk. It does not add a competing card or a second recorder.
+  free talk, with the layout tour running straight away. It does not add a
+  competing card or a second recorder.
 - Watch: % of first takes ≥ 30s, retry distribution, swap-prompt share
   (if high, the default prompt is too scary — fix the prompt), % tapping
   "See my full breakdown", second session within 48h.

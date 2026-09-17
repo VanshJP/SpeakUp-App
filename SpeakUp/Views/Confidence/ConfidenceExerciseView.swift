@@ -135,6 +135,7 @@ struct ConfidenceExerciseView: View {
                                 ChirpPlayer.shared.play(.tick)
                             } else {
                                 isComplete = true
+                                PracticeRoutineService.shared.complete(.calm)
                                 ChirpPlayer.shared.play(.exhale)
                                 Haptics.success()
                             }

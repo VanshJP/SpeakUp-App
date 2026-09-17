@@ -42,6 +42,12 @@ struct DrillSessionView: View {
         .onChange(of: viewModel.isActive) { _, active in
             if active { ChirpPlayer.shared.play(.tick) }
         }
+        .onChange(of: viewModel.isComplete) { _, complete in
+            // A scored result, not merely opening the picker: a drill the user
+            // backed out of has not been done.
+            guard complete, viewModel.result != nil else { return }
+            PracticeRoutineService.shared.complete(.drill)
+        }
         .onChange(of: viewModel.timeRemaining) { _, remaining in
             if remaining <= 5 && remaining > 0 && viewModel.isActive {
                 ChirpPlayer.shared.play(.tick)

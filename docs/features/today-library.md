@@ -2,15 +2,16 @@
 
 ## Purpose
 
-**Today** — home: modular blocks (rings, focus, session, prep tools, optional learn), streak, word workout, weekly recap. Users customize which blocks show and in what order (Bevel-style).  
+**Today** — home: modular blocks (rings, routine, focus, session, prep tools, optional learn), streak, word workout, weekly recap. Users customize which blocks show and in what order (Bevel-style).  
 **Library** — unified browser: prompts, stories, tools (warm-ups, drills, read-aloud, calm).
 
 ## Key files — Today
 
 | Role | Path |
 |------|------|
-| Views | `SpeakUp/Views/Today/` — `TodayView` (hosts `InteractivePromptCard`, and its own layout edit mode), `SessionWordsRow`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard` |
+| Views | `SpeakUp/Views/Today/` — `TodayView` (hosts `InteractivePromptCard`, and its own layout edit mode), `SessionWordsRow`, `StoryPromptCard`, `WeeklyRecapCard`, `FriendChallengeCard`, `RoutineCard` |
 | Layout | `SpeakUp/Models/TodayHomeModule.swift` — `TodayHomeModule`, `TodayHomeLayout` |
+| Routine | `SpeakUp/Models/PracticeRoutine.swift`, `PracticeRoutineService` — see [routine.md](./routine.md) |
 | Tool catalog | `SpeakUp/Models/PracticeToolKind.swift` — shared titles / outcomes / best-for |
 | VM | `SpeakUp/ViewModels/TodayViewModel.swift` |
 | Services | `WeeklyProgressService`, `VocabChallengeService` |
@@ -29,7 +30,7 @@
 ## Invariants
 
 1. Fingerprint-gate `WidgetCenter.reloadAllTimelines()` from `TodayViewModel` — never reload unconditionally. Mechanism: `updateWidgetData()` joins a 12-component payload (streak, prompt text/category/id, last score, weekly count/goal/avg/minutes, improvement rate, readiness, last practice date), `WidgetDataProvider.todayPayloadChanged` SHA-256s it and stores the digest under `widgetStateFingerprint` in the App Group. Unchanged → skip **both** the App Group writes and the reload; `loadData` runs on every Today appearance and pull-to-refresh, so without this gate every visit burned a WidgetKit refresh.
-2. First-run after onboarding: `FirstRecordingSetupSheet` then `AppTourOverlay` (sequential; tour model on `ContentView`). `ContentView` passes `isActiveTab` only when Today is selected and onboarding is gone; the false→true edge re-runs `checkFirstRunSurfaces`, because Today can mount and perform its first `.task` before onboarding creates the baseline. Pull-to-refresh also rechecks after loading. Tour tools copy points Spin the Wheel to Library → Prompts (not Today).
+2. First-run after onboarding: `FirstRecordingSetupSheet` then `AppTourOverlay` (sequential; tour model on `ContentView`). **A skipped baseline inverts the gate**: with no recording, `checkFirstRunSurfaces` starts the tour straight away and holds the sheet back until the first take — someone who chose to look around first asked for the map, and every row on the sheet is about a score that does not exist yet. `ContentView` passes `isActiveTab` only when Today is selected and onboarding is gone; the false→true edge re-runs `checkFirstRunSurfaces`, because Today can mount and perform its first `.task` before onboarding creates the baseline. Pull-to-refresh also rechecks after loading. Tour tools copy points Spin the Wheel to Library → Prompts (not Today).
 3. **Library has no navigation bar** (`.toolbar(.hidden, for: .navigationBar)`, like every root tab). The `SectionPicker` is the one pinned row; **each section draws its own `InlineSearchField`** as the first thing in its content, with that section's control on the trailing end of it — Prompts' filter/import menu, Stories' sort menu, nothing for Tools. The hub owns the three search strings and passes a `Binding` down. Two things forced this shape: **a child of a bar-less root cannot own a `topBarTrailing` item** (it renders nowhere), and parking the control at the end of the chip row / folder bar instead let those horizontal rails scroll underneath it. Details: [ui-design-system.md](./ui-design-system.md) rule 9.
 4. Library sections: `.prompts` / `.stories` / `.tools`. Recording start callbacks bubble to `ContentView`. The Tools tab is a **category grid → in-place detail** (same grammar as Prompts): practice tools (`ToolCategoryCard`) **push** via `navigationDestination` (`ToolPresentation.pushed`); a **Review** grid underneath opens Compare / Listen back / Goals / Journal via the same `ContentView` sheets History uses (`ReviewToolKind`). Today still presents the four practice tools as a 2×2 of `ToolTileLabel` **sheets**. Names match across surfaces; do not fork tile labels per screen. The prompt wheel lives in Library → Prompts ("Spin the Wheel" card), not on Today.
 5. Prompt category gates for the wheel live in Settings (`PromptSettingsView`).
@@ -49,6 +50,8 @@
 
     **Things it got wrong, now pinned.** (a) Drop resolution lives in `TodayHomeLayout.reorder(_:moving:onto:)`, not the view: inserting at the target's index unconditionally meant a block dragged *down* landed above the block it was dropped on, so the last slot was unreachable and the drag read as broken. Down inserts after, up (and the tray, which has no origin) inserts before. `TodayHomeLayoutTests`. (b) The wiggle is **±0.3°** on a **0.9s** period, phase-staggered 0.09s per block, driven by `TimelineView` so a drop cannot restart the swing. A `@State` + `repeatForever` ease jumped back to the start of the curve on every reorder and made the page look like it was shaking. Scale still matters: ±0.5° at a 0.17s half-swing barely moves a 60pt Home-screen icon and shakes a 350pt card. If the motion draws the eye it is too much — it only has to say "draggable". Layout writes use `AppMotion.settle`, not `slide`. (c) **Nothing that is glass cross-fades on the edit-mode toggle.** Entering and leaving edit mode swaps each block's view identity, so under `withAnimation` SwiftUI fades one into the other — and a `glassEffect` card samples its backdrop wrong mid-fade, rendering as a dark plate while two `GlassCard` shadows stack: the block visibly turns into its own shadow for a beat. Every path through `moduleBody`, the editing chain, and the hidden tray carries `.transition(.identity)`. Chrome that is not glass (the hint line, the ⊖ badges, the solid-white Done bar) still animates. (d) **Done is always on screen** — a primary capsule via `safeAreaInset(edge: .bottom)` (above the tab bar), plus the navigation-bar confirmation action. The in-scroll control is Edit only. The long-press threshold is **0.9s**; 0.6s fired while the user was still reading. The hide badge's extra hit area hangs off the card (`offset -16,-16`) so a 44pt target does not eat the drag.
 
+13b. **The routine block is the "what now" surface.** `RoutineCard` renders the user's ordered chain (factory: warm up → today's take → read the score) as a ladder with one CTA on the link they are on, and `RoutineHandoffBar` — owned by `ContentView`, drawn over the tab surface — names the next link the moment one finishes. It sits above Coach focus in the factory layout so the focus→session instructional pair stays adjacent: routine is the plan, focus is the note on it, session is the doing. A chain of one renders nothing (it would be the session module said twice), which is what gives it the dashed dormant card in edit mode. `.session` is started by Today and nothing else, because the day's prompt and the duration pill live here. Full rules: [routine.md](./routine.md).
+
 14. **Prep tools strip** is four `ToolTileLabel` tiles — identity icon + short name only. Outcome copy belongs to the surfaces where you are still choosing (Library rows, the suggestion banner), not repeated under every tile. When a coach plan exists (or the user has not practiced today), a "Start with …" banner names the tool and its outcome and routes straight to it.
 
     **The color is in the icon chip, not the tile.** Tiles tinted the whole glass slab at 0.25, which put four saturated blocks under the prompt card and looked nothing like the same four tools in the Library. `ToolTileLabel` now matches `ToolCategoryCard`: 0.06 tint, icon at full tint inside a `tint.opacity(0.18)` circle. The "Start with …" banner sits one notch up at 0.10 because it is the featured row, and carries the tiles' shadow (0.16 / r6 / y3) so it does not sit flat above plates that float. See [ui-design-system.md](./ui-design-system.md) rule 12 — do not fork the recipe per surface.
@@ -65,7 +68,7 @@
 
 ## Cross-links
 
-[today-library.md](./today-library.md) · [stories.md](./stories.md) · [practice-tools.md](./practice-tools.md) · [widgets.md](./widgets.md) · [monetization.md](./monetization.md) · [vocab-challenge.md](./vocab-challenge.md) · `/ONBOARDING_VISION.md`
+[routine.md](./routine.md) · [stories.md](./stories.md) · [practice-tools.md](./practice-tools.md) · [widgets.md](./widgets.md) · [monetization.md](./monetization.md) · [vocab-challenge.md](./vocab-challenge.md) · `/ONBOARDING_VISION.md`
 
 ## Today's focus
 

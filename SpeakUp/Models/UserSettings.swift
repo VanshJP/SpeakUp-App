@@ -7,6 +7,9 @@ final class UserSettings {
     var id: UUID = UUID()
     var defaultDuration: Int = 60
     var dailyReminderEnabled: Bool = false
+    /// Column default only. Nothing schedules until consent, and consent seeds
+    /// the slot from the practice rhythm (or from the moment of consent when
+    /// there is no history yet), so 9:00 should never actually fire.
     var dailyReminderHour: Int = 9
     var dailyReminderMinute: Int = 0
     var weeklyGoalSessions: Int = 5
@@ -17,6 +20,11 @@ final class UserSettings {
     var streakRemindersEnabled: Bool = true
     var comebackRemindersEnabled: Bool = true
     var milestoneNotificationsEnabled: Bool = true
+
+    /// When true, `dailyReminderHour`/`Minute` are written by `PracticeRhythm`
+    /// from the times this user actually practises rather than picked by hand.
+    /// Setting a time in Settings turns it off; nothing else does.
+    var adaptiveReminderEnabled: Bool = true
 
     // Streak protection. The days a freeze covered is the *only* stored state —
     // the remaining balance is derived from practice-day count in
@@ -137,6 +145,15 @@ final class UserSettings {
 
     // Guided layout walkthrough, shown once after the first score lands.
     var hasSeenAppTour: Bool = false
+
+    // Practice routine — the ordered chain of steps a session walks, plus
+    // which of them are done today. Additive; empty order means the factory
+    // chain. The day stamp is what makes yesterday's ticks clear on read
+    // instead of needing a midnight event nobody is awake to fire.
+    // See docs/features/today-library.md.
+    var routineStepsRaw: [String] = []
+    var routineCompletedRaw: [String] = []
+    var routineProgressDay: Date? = nil
 
     // Today home layout — ordered raw values of visible `TodayHomeModule`s.
     // Empty means factory default (never customized). Session is always forced
@@ -267,6 +284,26 @@ final class UserSettings {
     /// Resolved Today modules in display order. Empty storage → factory default.
     var todayHomeModules: [TodayHomeModule] {
         TodayHomeLayout.resolve(todayHomeLayoutRaw)
+    }
+
+    /// The routine chain in running order. Empty storage → factory chain.
+    var practiceRoutine: [RoutineStep] {
+        PracticeRoutine.resolve(routineStepsRaw)
+    }
+
+    /// Today's ticks. Reading rolls a stale day's progress to empty, so callers
+    /// never have to ask what day the stamp is from.
+    var routineProgress: RoutineProgress {
+        RoutineProgress(raw: routineCompletedRaw, day: routineProgressDay).rolling()
+    }
+
+    func apply(routine: [RoutineStep]) {
+        routineStepsRaw = PracticeRoutine.encode(routine)
+    }
+
+    func apply(progress: RoutineProgress) {
+        routineCompletedRaw = progress.encoded
+        routineProgressDay = progress.day
     }
 
     /// Weekly celebration budget for coach notes. Empty week key rolls into a
