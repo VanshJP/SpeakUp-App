@@ -87,7 +87,7 @@ class AudioService: NSObject {
 
     func requestPermission() async -> Bool {
         do {
-            try configureRecordingSession()
+            try await configureRecordingSession()
             hasPermission = await AVAudioApplication.requestRecordPermission()
             return hasPermission
         } catch {
@@ -99,9 +99,21 @@ class AudioService: NSObject {
     /// Shared session config for capture. Matches recorder sample rate to the
     /// hardware IO rate — a hardcoded 44.1 kHz under `.voiceChat` / HFP (often
     /// 8–16 kHz) was producing silent or time-stretched m4a files.
-    private func configureRecordingSession() throws {
-        let session = recordingSession ?? AVAudioSession.sharedInstance()
-        recordingSession = session
+    ///
+    /// Hops off the main actor to do it. `setActive` blocks until the audio
+    /// server has the session up, and on the main thread that is a real stall
+    /// at the top of every practice screen — which is what the console has been
+    /// saying all along: *"AVAudioSession_iOS.mm … This method can lead to UI
+    /// unresponsiveness if called on the main thread."*
+    private func configureRecordingSession() async throws {
+        recordingSession = AVAudioSession.sharedInstance()
+        try await Task.detached(priority: .userInitiated) {
+            try Self.activateRecordingSession()
+        }.value
+    }
+
+    private nonisolated static func activateRecordingSession() throws {
+        let session = AVAudioSession.sharedInstance()
         // `.bluetoothHighQualityRecording` (iOS 26+) prefers AirPods HQ capture
         // when available; HFP remains for classic BT headsets.
         try session.setCategory(
@@ -112,6 +124,12 @@ class AudioService: NSObject {
         // Prefer a speech-friendly rate; hardware may still negotiate lower on HFP.
         try? session.setPreferredSampleRate(44_100)
         try? session.setPreferredIOBufferDuration(0.005)
+        try session.setActive(true)
+    }
+
+    private nonisolated static func activatePlaybackSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .default)
         try session.setActive(true)
     }
 
@@ -181,7 +199,7 @@ class AudioService: NSObject {
         let audioFilename = storageDir.appendingPathComponent("\(UUID().uuidString).m4a")
         
         do {
-            try configureRecordingSession()
+            try await configureRecordingSession()
             let session = recordingSession ?? AVAudioSession.sharedInstance()
             let settings = recorderSettings(matching: session)
 
@@ -330,8 +348,9 @@ class AudioService: NSObject {
     ///   plays from a timestamp far more often than from the top.
     func play(url: URL, startingAt startTime: TimeInterval = 0) async throws {
         do {
-            try recordingSession?.setCategory(.playback, mode: .default)
-            try recordingSession?.setActive(true)
+            try await Task.detached(priority: .userInitiated) {
+                try Self.activatePlaybackSession()
+            }.value
 
             // The same file is already loaded (playing or paused)? Seek the
             // live player instead of rebuilding it. Creating a new
@@ -506,10 +525,15 @@ class AudioService: NSObject {
             isRecording
         else { return }
         // Recorder keeps writing after route change; re-assert category so
-        // `.defaultToSpeaker` wins over a dead BT/HFP path.
-        try? configureRecordingSession()
-        if audioRecorder?.isRecording == false {
-            _ = audioRecorder?.record()
+        // `.defaultToSpeaker` wins over a dead BT/HFP path. Off the main actor
+        // for the same reason as every other activation here — a repair that
+        // lands a few milliseconds later still repairs.
+        Task { [weak self] in
+            guard let self else { return }
+            try? await self.configureRecordingSession()
+            if self.audioRecorder?.isRecording == false {
+                _ = self.audioRecorder?.record()
+            }
         }
     }
     

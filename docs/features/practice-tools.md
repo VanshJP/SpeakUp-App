@@ -101,7 +101,8 @@ steady nerves and mindset. Sheet title is **Calm** (matches Today / Library nami
     `.topBarTrailing` by `ToolPage`). Read Aloud uses it for "Add your own
     passage". An "add" affordance belongs there or on a rail — never as a
     full-width card above the catalog the page exists to show.
-21. **Countdown Cancel is immediate.** `CountdownOverlayView` ticks via a cancellable `.task` loop and sets `hasCompleted` on Cancel / Start Now so a stray tick cannot complete a dismissed countdown. Own the hit surface (`.contentShape` + full-screen frame) — a parent scroll used to eat the first taps.
+21. **A runner is presented on its subject, never on a flag.** `DrillSelectionView` hands the `DrillMode` to `fullScreenCover(item:)` and `DrillFlowView` owns the countdown → session phase as its own state. It used to be three `@State` values — a presentation flag, the mode the cover unwrapped, and the phase — with an `onDismiss` clearing the last two. SwiftUI runs `onDismiss` *after* the dismissal animation, so starting a second drill while the first was animating out opened the cover onto a mode that had just been nilled: blank screen, immediate self-dismiss, works on the second tap. `ConfidenceToolsView` and `ReadAloudSelectionView` present the same way. Gotcha §27.
+22. **Countdown Cancel is immediate.** `CountdownOverlayView` ticks via a cancellable `.task` loop and sets `hasCompleted` on Cancel / Start Now so a stray tick cannot complete a dismissed countdown. Own the hit surface (`.contentShape` + full-screen frame) — a parent scroll used to eat the first taps.
 
 ## Read-Aloud
 

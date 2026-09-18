@@ -2,11 +2,23 @@ import SwiftUI
 import SwiftData
 
 struct DrillSelectionView: View {
-    @Query private var userSettings: [UserSettings]
     @State private var viewModel = DrillViewModel()
-    @State private var showingDrillFlow = false
-    @State private var showingSession = false
-    @State private var selectedDrillMode: DrillMode?
+
+    /// The drill being run, and the only state the cover reads.
+    ///
+    /// This used to be three: a `showingDrillFlow` flag that presented the
+    /// cover, a `selectedDrillMode` the cover's content unwrapped, and a
+    /// `showingSession` phase — with an `onDismiss` that cleared the last two.
+    /// SwiftUI runs `onDismiss` *after* the dismissal animation, so starting a
+    /// second drill while the first was still animating out set the mode, then
+    /// had it cleared out from under the presentation: the cover opened on
+    /// nothing, drew a blank screen, and closed itself again. Tapping a second
+    /// time worked only because by then nothing was animating.
+    ///
+    /// `fullScreenCover(item:)` hands the mode to the content instead of
+    /// leaving it to be read back out of view state, so there is nothing left
+    /// to race and no "no mode" branch to render.
+    @State private var activeDrill: DrillMode?
 
     var presentation: ToolPresentation = .sheet
 
@@ -57,11 +69,8 @@ struct DrillSelectionView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showingDrillFlow, onDismiss: {
-            showingSession = false
-            selectedDrillMode = nil
-        }) {
-            drillFlowCover
+        .fullScreenCover(item: $activeDrill) { mode in
+            DrillFlowView(mode: mode, viewModel: viewModel)
         }
         .task {
             if !didApplyInitialFocus, let initialFocus {
@@ -69,9 +78,7 @@ struct DrillSelectionView: View {
                 selectedFocus = initialFocus
             }
             guard let initialMode else { return }
-            selectedDrillMode = initialMode
-            showingSession = false
-            showingDrillFlow = true
+            activeDrill = initialMode
         }
     }
 
@@ -94,17 +101,30 @@ struct DrillSelectionView: View {
             if mode.preparesPromptUpFront {
                 viewModel.preparePrompt(for: mode)
             }
-            selectedDrillMode = mode
-            showingSession = false
-            showingDrillFlow = true
+            activeDrill = mode
         }
     }
+}
 
-    @ViewBuilder
-    private var drillFlowCover: some View {
-        if showingSession {
+// MARK: - Drill Flow
+
+/// Countdown, then the drill itself, inside one cover.
+///
+/// The phase lives here — as this view's own state, created fresh with the
+/// presentation — rather than beside the flag that presents the cover. That
+/// pairing is what produced the blank screen; see `DrillSelectionView`.
+private struct DrillFlowView: View {
+    let mode: DrillMode
+    var viewModel: DrillViewModel
+
+    @Environment(\.dismiss) private var dismiss
+    @Query private var userSettings: [UserSettings]
+    @State private var isRunning = false
+
+    var body: some View {
+        if isRunning {
             DrillSessionView(viewModel: viewModel)
-        } else if let mode = selectedDrillMode {
+        } else {
             CountdownOverlayView(
                 prompt: nil,
                 duration: .thirty,
@@ -118,16 +138,13 @@ struct DrillSelectionView: View {
                     viewModel.targetWPM = userSettings.first.resolvedTargetWPM
                     viewModel.startDrill(mode: mode)
                     withAnimation(AppMotion.settle) {
-                        showingSession = true
+                        isRunning = true
                     }
                 },
                 onCancel: {
-                    showingDrillFlow = false
-                    selectedDrillMode = nil
+                    dismiss()
                 }
             )
-        } else {
-            Color.clear.onAppear { showingDrillFlow = false }
         }
     }
 }

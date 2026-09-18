@@ -6,7 +6,15 @@ struct ReadAloudSelectionView: View {
     @Query private var userSettings: [UserSettings]
 
     @State private var viewModel = ReadAloudViewModel()
-    @State private var showingSession = false
+
+    /// The passage being read, and the only state the session cover reads.
+    ///
+    /// It used to be a `showingSession` flag over `viewModel.selectedPassage`,
+    /// which `viewModel.reset()` nils — and Done calls `reset()` before
+    /// `dismiss()`, so the cover spent its whole exit animation drawing an
+    /// empty body. Presenting by value also removes the race the drill list
+    /// had: nothing can clear the cover's content out from under it.
+    @State private var sessionPassage: ReadAloudPassage?
     @State private var showingComposer = false
     @State private var composerInitialText = ""
     @State private var editingSavedText: String?
@@ -52,7 +60,7 @@ struct ReadAloudSelectionView: View {
         Haptics.medium()
         viewModel.isShadowMode = shadowMode
         viewModel.selectedPassage = passage
-        showingSession = true
+        sessionPassage = passage
     }
 
     var body: some View {
@@ -116,10 +124,8 @@ struct ReadAloudSelectionView: View {
 
             catalogContent
         }
-        .fullScreenCover(isPresented: $showingSession) {
-            if let passage = viewModel.selectedPassage {
-                ReadAloudSessionView(viewModel: viewModel, passage: passage)
-            }
+        .fullScreenCover(item: $sessionPassage) { passage in
+            ReadAloudSessionView(viewModel: viewModel, passage: passage)
         }
         .task {
             if !didApplyInitialFocus, let initialFocus {
@@ -134,7 +140,7 @@ struct ReadAloudSelectionView: View {
             didStartInitialPractice = true
             viewModel.isShadowMode = false
             viewModel.selectedPassage = passage
-            showingSession = true
+            sessionPassage = passage
         }
         .sheet(isPresented: $showingComposer, onDismiss: startPendingPractice) {
             ReadAloudComposerSheet(

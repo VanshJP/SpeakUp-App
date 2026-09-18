@@ -11,7 +11,10 @@ enum ReadAloudSessionState: Sendable {
 
 // MARK: - Read Aloud Result
 
-struct ReadAloudResult {
+struct ReadAloudResult: Identifiable {
+    /// Presentation identity, not data: the result screen is presented by
+    /// value so the cover can never outlive the result it is drawing.
+    let id = UUID()
     let passage: ReadAloudPassage
     let accuracy: Double
     let matchedWords: Int
@@ -217,15 +220,29 @@ class ReadAloudViewModel {
                 guard let self, let start = self.startTime else { continue }
                 self.elapsedTime = Date().timeIntervalSince(start)
 
-                // A recognizer that died mid-read ends the session now —
+                guard self.sessionState == .listening else { continue }
+
+                // A recognizer that died for good ends the session now —
                 // letting the clock run on produces a confident-looking zero.
-                if self.service.recognitionFailureMessage != nil && self.sessionState == .listening {
+                if self.service.recognitionFailureMessage != nil {
+                    self.stopSession()
+                    continue
+                }
+
+                // Backstop for a mic that went quiet without saying why.
+                // Recognition now survives its own request boundaries, so a
+                // service that is no longer listening mid-session has hit
+                // something none of us predicted — land on the result screen
+                // with the words that were matched rather than leaving a live
+                // clock over a dead microphone and a disabled Done button,
+                // which is what made a dropped read feel like a lost one.
+                if !self.service.isListening {
                     self.stopSession()
                     continue
                 }
 
                 // Auto-stop if service finished
-                if self.service.isComplete && self.sessionState == .listening {
+                if self.service.isComplete {
                     self.stopSession()
                 }
             }

@@ -5,7 +5,11 @@ struct ReadAloudSessionView: View {
     @Bindable var viewModel: ReadAloudViewModel
     let passage: ReadAloudPassage
     @Environment(\.dismiss) private var dismiss
-    @State private var showingResult = false
+    /// The finished read, and the only state its cover reads. A
+    /// `showingResult` flag over `viewModel.result` presented an empty cover
+    /// whenever the two disagreed — and Retry clears the result while the flag
+    /// is still coming down.
+    @State private var finishedRead: ReadAloudResult?
     @State private var showingExitConfirm = false
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
@@ -77,23 +81,20 @@ struct ReadAloudSessionView: View {
             }
         }
         .onChange(of: viewModel.sessionState) { _, newState in
-            if newState == .finished {
-                showingResult = true
-                PracticeRoutineService.shared.complete(.readAloud)
-            }
+            guard newState == .finished, let result = viewModel.result else { return }
+            finishedRead = result
+            PracticeRoutineService.shared.complete(.readAloud)
         }
-        .fullScreenCover(isPresented: $showingResult) {
-            if let result = viewModel.result {
-                ReadAloudResultView(result: result, onRetry: {
-                    showingResult = false
-                    lastAutoScrolledWordIndex = 0
-                    Task { await viewModel.retryPassage() }
-                }, onDone: {
-                    showingResult = false
-                    viewModel.reset()
-                    dismiss()
-                })
-            }
+        .fullScreenCover(item: $finishedRead) { result in
+            ReadAloudResultView(result: result, onRetry: {
+                finishedRead = nil
+                lastAutoScrolledWordIndex = 0
+                Task { await viewModel.retryPassage() }
+            }, onDone: {
+                finishedRead = nil
+                viewModel.reset()
+                dismiss()
+            })
         }
         .sheet(item: $selectedWord) { detail in
             WordDetailSheet(
