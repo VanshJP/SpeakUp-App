@@ -30,7 +30,8 @@ class StoriesViewModel {
         selectedTagFilter != nil || selectedTagValue != nil ||
         selectedStageFilter != nil || dateFilterStart != nil ||
         favoritesOnly || sortOrder != .updatedAt ||
-        selectedEntryTypeFilter != nil
+        selectedEntryTypeFilter != nil ||
+        folderSelection != .all
     }
 
     // MARK: - Pinned split
@@ -43,6 +44,22 @@ class StoriesViewModel {
         filteredStories.filter { !$0.isFavorite }
     }
 
+    /// One chip / Move destination per normalized name so unhealed CloudKit
+    /// duplicates cannot flood the UI. Same keeper rule as launch heal.
+    var foldersForDisplay: [StoryFolder] {
+        let snaps = folderSnapshots
+        let ids = StoryFolderHealing.displayFolderIDs(
+            folders: snaps,
+            storyFolderIDs: stories.compactMap(\.folderId)
+        )
+        let byID = Dictionary(folders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }
+    }
+
+    private var folderSnapshots: [StoryFolderHealing.FolderSnapshot] {
+        folders.map { StoryFolderHealing.FolderSnapshot(id: $0.id, name: $0.name) }
+    }
+
     private let taggingService = StoryTaggingService()
 
     private var modelContext: ModelContext?
@@ -50,15 +67,17 @@ class StoriesViewModel {
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var remoteChangeObservationTask: Task<Void, Never>?
     @ObservationIgnored private var remoteChangeRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var healObservationTask: Task<Void, Never>?
 
     func configure(with context: ModelContext) {
         if !hasConfigured {
             hasConfigured = true
             self.modelContext = context
             startRemoteChangeObservation()
+            startHealObservation()
         }
         Task {
-            loadStories()
+            await healAndReload()
         }
     }
 
@@ -80,10 +99,23 @@ class StoriesViewModel {
         do {
             stories = try context.fetch(descriptor)
             folders = try context.fetch(folderDescriptor)
+            if stories.isEmpty, folderSelection != .all {
+                folderSelection = .all
+            }
             recomputeFilteredStories()
         } catch {
             errorMessage = "Failed to load stories: \(error.localizedDescription)"
         }
+    }
+
+    func healAndReload() async {
+        guard let context = modelContext else { return }
+        do {
+            try StoryFolderSeedService.healIfNeeded(in: context)
+        } catch {
+            errorMessage = "Failed to heal story folders: \(error.localizedDescription)"
+        }
+        loadStories()
     }
 
     private func startRemoteChangeObservation() {
@@ -96,14 +128,24 @@ class StoriesViewModel {
         }
     }
 
+    private func startHealObservation() {
+        healObservationTask?.cancel()
+        healObservationTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: StoryFolderSeedService.didHealNotification) {
+                guard !Task.isCancelled, let self else { break }
+                self.loadStories()
+            }
+        }
+    }
+
     /// Debounce CloudKit notification bursts: each incoming notification resets
-    /// a 250ms timer and only the final trailing edge triggers a reload.
+    /// a 250ms timer and only the final trailing edge triggers a heal+reload.
     private func scheduleRemoteRefresh() {
         remoteChangeRefreshTask?.cancel()
         remoteChangeRefreshTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
-            self?.loadStories()
+            await self?.healAndReload()
         }
     }
 
@@ -118,6 +160,7 @@ class StoriesViewModel {
 
         do {
             try context.save()
+            StoryFolderSeedService.invalidateFingerprint()
             folders.append(folder)
             return folder
         } catch {
@@ -134,6 +177,7 @@ class StoriesViewModel {
 
         do {
             try context.save()
+            StoryFolderSeedService.invalidateFingerprint()
         } catch {
             errorMessage = "Failed to update folder: \(error.localizedDescription)"
         }
@@ -142,16 +186,22 @@ class StoriesViewModel {
     func deleteFolder(_ folder: StoryFolder) {
         guard let context = modelContext else { return }
 
-        let targetId = folder.id
-        for story in stories where story.folderId == targetId {
+        // Display chip = one normalized name; delete every sibling UUID or it resurrects.
+        let idsToDelete = StoryFolderHealing.siblingIDs(of: folder.id, folders: folderSnapshots)
+
+        for story in stories {
+            guard let fid = story.folderId, idsToDelete.contains(fid) else { continue }
             story.folderId = nil
         }
-        context.delete(folder)
+        for victim in folders where idsToDelete.contains(victim.id) {
+            context.delete(victim)
+        }
 
         do {
             try context.save()
-            folders.removeAll { $0.id == targetId }
-            if case .folder(let id) = folderSelection, id == targetId {
+            StoryFolderSeedService.invalidateFingerprint()
+            folders.removeAll { idsToDelete.contains($0.id) }
+            if case .folder(let id) = folderSelection, idsToDelete.contains(id) {
                 folderSelection = .all
             }
             recomputeFilteredStories()
@@ -180,12 +230,18 @@ class StoriesViewModel {
         case .pinned:
             return stories.filter { $0.isFavorite }.count
         case .folder(let id):
-            return stories.filter { $0.folderId == id }.count
+            return stories.filter { storyBelongs(toFolderID: id, storyFolderID: $0.folderId) }.count
         }
     }
 
+    /// Folder scope is a clearable filter: tapping the already-selected chip
+    /// returns to All so empty Personal/Work never traps the list.
     func setFolderSelection(_ selection: FolderSelection) {
-        folderSelection = selection
+        if selection != .all, folderSelection == selection {
+            folderSelection = .all
+        } else {
+            folderSelection = selection
+        }
         recomputeFilteredStories()
     }
 
@@ -217,7 +273,7 @@ class StoriesViewModel {
         case .pinned:
             result = result.filter { $0.isFavorite }
         case .folder(let id):
-            result = result.filter { $0.folderId == id }
+            result = result.filter { storyBelongs(toFolderID: id, storyFolderID: $0.folderId) }
         }
 
         if !searchText.isEmpty {
@@ -286,6 +342,7 @@ class StoriesViewModel {
         favoritesOnly = false
         sortOrder = .updatedAt
         selectedEntryTypeFilter = nil
+        folderSelection = .all
         recomputeFilteredStories()
     }
 
@@ -529,6 +586,13 @@ class StoriesViewModel {
         } catch {
             errorMessage = "Failed to save dictation words: \(error.localizedDescription)"
         }
+    }
+
+    /// Treat same-normalized-name folder rows as one scope until heal remaps them.
+    private func storyBelongs(toFolderID folderID: UUID, storyFolderID: UUID?) -> Bool {
+        guard let storyFolderID else { return false }
+        return StoryFolderHealing.siblingIDs(of: folderID, folders: folderSnapshots)
+            .contains(storyFolderID)
     }
 
 }

@@ -8,13 +8,13 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 
 | Role | Path |
 |------|------|
-| Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift` |
+| Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift`, `StoryFolderHealing.swift` (plan + `StoryFolderSeedService` apply) |
 | Views | `SpeakUp/Views/Stories/` — list, detail, editor, folder bar/sheet |
 | Today card | `SpeakUp/Views/Today/StoryPromptCard.swift` |
 | VM | `SpeakUp/ViewModels/StoriesViewModel.swift` |
 | Tagging | `SpeakUp/Services/StoryTaggingService.swift` (LLM when available; conservative) |
 | Editor bits | `Views/Components/RichTextEditor.swift`, `PersistentTextField`, `FlowLayout` |
-| Defaults | `StoryFolder.defaults` seeded at launch |
+| Defaults | `StoryFolder.defaults` healed + seeded via `StoryFolderSeedService.healIfNeeded` |
 
 ## Data shape
 
@@ -37,6 +37,20 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
    stays a dashed capsule because it is an action, not a filter. Do not fork the chip — change `FilterChip`
    (`Views/History/HistoryView.swift`) / `SelectedFilterChrome` (`FilterPill.swift`) and both tabs move together.
    Tool lists (`FilterPill` in Warm-Up / Read-Aloud / Calm) use the same selected-white / idle-glass chrome.
+7. **Folder seed heals CloudKit dupes by normalized name** (not stable ids — folders use random UUIDs;
+   prompts heal by string `id`). Collapse same-name rows (keep one, remap `Story.folderId` on **full** Story
+   fetches, delete extras), then insert any **missing** default names (`Personal` / `Work` / `Practice Ideas`).
+   Fingerprint `seededStoryFoldersFingerprint_v1` is a **name multiset** hash (not raw row count); it is only
+   written after a post-save verify plan is a no-op. Heal also runs from `StoriesViewModel` on configure /
+   remote change, and posts `SpeakUp.storyFoldersDidHeal` so open UIs reload after launch heal.
+   **Name collision is intentional:** a user folder renamed to `Personal` merges into the default on the next
+   heal. Folder create/rename/delete invalidates the fingerprint.
+8. **Empty Stories rail.** When there are zero stories, `StoryFolderBar` shows **All + New Folder** only
+   (hides Pinned and per-folder chips). Chips / Move sheet use `foldersForDisplay` (one per normalized name)
+   so ghosts cannot flood those surfaces before heal finishes. **Deleting a display chip** removes every
+   same-normalized-name `StoryFolder` (unfiles their stories) so siblings cannot resurrect the chip.
+   Folder scope is a clearable filter: re-tapping the selected chip returns to All; `hasActiveFilters` /
+   Clear Filters include `folderSelection != .all`.
 
 ## Cross-links
 

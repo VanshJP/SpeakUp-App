@@ -190,7 +190,7 @@ struct StoryMoveFolderSheet: View {
                         dismiss()
                     }
 
-                    ForEach(viewModel.folders) { folder in
+                    ForEach(viewModel.foldersForDisplay) { folder in
                         destinationRow(
                             title: folder.name,
                             symbol: folder.systemImage,

@@ -1,38 +1,47 @@
 import SwiftUI
 
 /// Stories' filter row — the same `FilterChip` the Prompts tab uses.
-/// where identity belongs. Do not fork the chip again: change `FilterChip` and
+/// Do not fork the chip: change `FilterChip` / `SelectedFilterChrome` and both
+/// Library halves move together.
 struct StoryFolderBar: View {
     @Bindable var viewModel: StoriesViewModel
     var onCreateFolder: () -> Void
     var onEditFolder: (StoryFolder) -> Void
+
+    /// Zero stories → All + New Folder only. Seeded Personal/Work/Practice Ideas
+    /// chips add noise and look like leftover filters when the list is empty.
+    private var showsFolderChips: Bool {
+        !viewModel.stories.isEmpty
+    }
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 chip(selection: .all, title: "All", symbol: "tray.full.fill", color: nil)
 
-                chip(selection: .pinned, title: "Pinned", symbol: "pin.fill", color: AppColors.warning)
+                if showsFolderChips {
+                    chip(selection: .pinned, title: "Pinned", symbol: "pin.fill", color: AppColors.warning)
 
-                ForEach(viewModel.folders) { folder in
-                    chip(
-                        selection: .folder(folder.id),
-                        title: folder.name,
-                        symbol: folder.systemImage,
-                        color: Color(hex: folder.colorHex)
-                    )
-                    .contextMenu {
-                        Button {
-                            onEditFolder(folder)
-                        } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
+                    ForEach(viewModel.foldersForDisplay) { folder in
+                        chip(
+                            selection: .folder(folder.id),
+                            title: folder.name,
+                            symbol: folder.systemImage,
+                            color: Color(hex: folder.colorHex)
+                        )
+                        .contextMenu {
+                            Button {
+                                onEditFolder(folder)
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
 
-                        Button(role: .destructive) {
-                            viewModel.deleteFolder(folder)
-                            Haptics.warning()
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                            Button(role: .destructive) {
+                                viewModel.deleteFolder(folder)
+                                Haptics.warning()
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }

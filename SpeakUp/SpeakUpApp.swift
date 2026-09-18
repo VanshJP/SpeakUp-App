@@ -98,7 +98,13 @@ struct SpeakUpApp: App {
                     async let p: () = seedPromptsIfNeeded()
                     async let a: () = seedAchievementsIfNeeded()
                     async let c: () = seedCurriculumIfNeeded()
-                    async let f: () = seedStoryFoldersIfNeeded()
+                    async let f: () = {
+                        do {
+                            try StoryFolderSeedService.healIfNeeded(in: sharedModelContainer.mainContext)
+                        } catch {
+                            Self.logger.error("Error seeding story folders: \(error.localizedDescription, privacy: .private(mask: .hash))")
+                        }
+                    }()
                     _ = await (p, a, c, f)
 
                     #if DEBUG
@@ -361,30 +367,6 @@ struct SpeakUpApp: App {
             UserDefaults.standard.set(true, forKey: urlMigrationFlagKey)
         } catch {
             Self.logger.error("Error migrating recording URLs: \(error.localizedDescription, privacy: .private(mask: .hash))")
-        }
-    }
-
-    @MainActor
-    private func seedStoryFoldersIfNeeded() async {
-        let context = sharedModelContainer.mainContext
-        let descriptor = FetchDescriptor<StoryFolder>()
-
-        do {
-            let existing = try context.fetch(descriptor)
-            guard existing.isEmpty else { return }
-
-            for (index, spec) in StoryFolder.defaults.enumerated() {
-                let folder = StoryFolder(
-                    name: spec.name,
-                    systemImage: spec.symbol,
-                    colorHex: spec.colorHex,
-                    sortOrder: index
-                )
-                context.insert(folder)
-            }
-            try context.save()
-        } catch {
-            Self.logger.error("Error seeding story folders: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }
     }
 
