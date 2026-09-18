@@ -209,7 +209,7 @@ struct PracticeHubView: View {
                             }
                             .buttonStyle(GlassPressStyle())
                             .accessibilityLabel(
-                                ToolCategoryCardLabel.accessibilityLabel(
+                                ToolCategoryCardLabel.voiceOverLabel(
                                     title: tool.title,
                                     detail: tool.outcome,
                                     meta: meta(for: tool),

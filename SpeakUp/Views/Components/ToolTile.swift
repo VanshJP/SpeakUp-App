@@ -81,7 +81,7 @@ struct ToolCategoryCardLabel: View {
 
     /// Shared so a Button and a NavigationLink wrapping this face read the
     /// same to VoiceOver.
-    static func accessibilityLabel(
+    static func voiceOverLabel(
         title: String,
         detail: String?,
         meta: String,
@@ -118,7 +118,7 @@ struct ToolCategoryCard: View {
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel(
-            ToolCategoryCardLabel.accessibilityLabel(
+            ToolCategoryCardLabel.voiceOverLabel(
                 title: title,
                 detail: accessibilityDetail,
                 meta: meta,

@@ -190,7 +190,11 @@ class ReadAloudService {
                 //    each retaining a result. That is the read that froze and
                 //    then died around the twenty-second mark. Latest-wins:
                 //    park the newest transcript, keep one drain in flight.
-                pendingTranscript.withLock { $0 = result.bestTranscription.formattedString }
+                // Hoisted out of the lock deliberately: `withLock` takes a
+                // `@Sendable` closure, and `SFSpeechRecognitionResult` is not
+                // `Sendable`, so it must not be what the closure captures.
+                let transcript = result.bestTranscription.formattedString
+                pendingTranscript.withLock { $0 = transcript }
                 let needsDrain = isDrainScheduled.withLock { scheduled -> Bool in
                     guard !scheduled else { return false }
                     scheduled = true
