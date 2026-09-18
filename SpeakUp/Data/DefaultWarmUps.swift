@@ -27,7 +27,7 @@ struct DefaultWarmUps {
             id: "478_technique",
             category: .breathing,
             title: "4-7-8 Technique",
-            instructions: "A long exhale is the part that settles you. Inhale 4, hold 7, out for 8 — the ratio does the work.",
+            instructions: "A long exhale is the part that settles you. Inhale 4, hold 7, out for 8 - the ratio does the work.",
             steps: [
                 ExerciseStep(label: "Breathe In", durationSeconds: 4, animation: .expand),
                 ExerciseStep(label: "Hold", durationSeconds: 7, animation: .hold),
@@ -88,7 +88,7 @@ struct DefaultWarmUps {
             id: "humming",
             category: .vocal,
             title: "Humming Warm-Up",
-            instructions: "Humming gets the vocal folds moving gently and finds the buzz in your face — that resonance is what carries a voice across a room.",
+            instructions: "Humming gets the vocal folds moving gently and finds the buzz in your face - that resonance is what carries a voice across a room.",
             steps: [
                 ExerciseStep(label: "Hum at low pitch", durationSeconds: 10, animation: .hold),
                 ExerciseStep(label: "Hum at medium pitch", durationSeconds: 10, animation: .hold),

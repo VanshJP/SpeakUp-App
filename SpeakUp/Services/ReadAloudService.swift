@@ -22,7 +22,7 @@ enum WordMatchState: Equatable {
         }
     }
 
-    /// Settled but not clean — the states worth colouring in a transcript.
+    /// Settled but not clean - the states worth colouring in a transcript.
     var needsAttention: Bool {
         switch self {
         case .mismatched, .skipped: return true
@@ -65,7 +65,7 @@ class ReadAloudService {
     var mismatchedWordCount: Int = 0
     var isListening = false
 
-    /// Set when recognition dies for good — missing on-device assets, or a
+    /// Set when recognition dies for good - missing on-device assets, or a
     /// capture graph that will not come back. The view model surfaces this as a
     /// result notice instead of letting the session end in a confident-looking
     /// zero.
@@ -108,7 +108,7 @@ class ReadAloudService {
 
     /// Newest transcript *per segment*, written on Apple's callback queue and
     /// read on the main actor. Latest-wins within a segment, so a slow frame
-    /// drops stale intermediate transcripts instead of queueing them — but a
+    /// drops stale intermediate transcripts instead of queueing them - but a
     /// retired segment's final result can never be clobbered by the live
     /// segment's next partial. See `drainPendingTranscripts()`.
     private let pendingTranscripts = OSAllocatedUnfairLock<[Int: String]>(initialState: [:])
@@ -116,7 +116,7 @@ class ReadAloudService {
     /// number of in-flight tasks to one no matter how fast partials arrive.
     private let isDrainScheduled = OSAllocatedUnfairLock<Bool>(initialState: false)
 
-    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    /// `removeTap` crashes if no tap is installed - track it explicitly.
     private var isTapInstalled = false
 
     /// When the live request was opened, and how many requests in a row have
@@ -129,8 +129,8 @@ class ReadAloudService {
     private static let maxUnproductiveSegments = 3
 
     /// Re-arm before a request reaches its own audio-duration ceiling (about a
-    /// minute). Swapping early is seamless — the tap appends the next buffer to
-    /// the new request — whereas letting the ceiling hit drops whatever was in
+    /// minute). Swapping early is seamless - the tap appends the next buffer to
+    /// the new request - whereas letting the ceiling hit drops whatever was in
     /// flight when the error arrives, which a reader sees as skipped words.
     private static let segmentRolloverInterval: TimeInterval = 45
     private var rolloverTask: Task<Void, Never>?
@@ -138,7 +138,7 @@ class ReadAloudService {
     /// True between an interruption beginning and ending. Cancelling the
     /// recognition task to get out of a call's way makes it report an error,
     /// and without this the graph-is-dead recovery would answer that by trying
-    /// to re-activate a session the call still owns — turning a survivable
+    /// to re-activate a session the call still owns - turning a survivable
     /// pause into a failed session.
     private var isInterrupted = false
 
@@ -151,7 +151,7 @@ class ReadAloudService {
     /// Recognition is down on purpose. Every recovery path checks this.
     private var isSuspended: Bool { isInterrupted || isPaused }
 
-    /// Tokens only — registered and removed on the main actor, and removed once
+    /// Tokens only - registered and removed on the main actor, and removed once
     /// more from `deinit`, which is nonisolated. Kept out of observation
     /// tracking so they never participate in change notifications.
     @ObservationIgnored nonisolated(unsafe) private var sessionObservers: [NSObjectProtocol] = []
@@ -208,7 +208,7 @@ class ReadAloudService {
 
         // Idempotent, same rule as LiveTranscriptionService: a Retry racing a
         // ghost start must not stack a second engine and tap on top of the
-        // first — tear the old graph down before building a new one.
+        // first - tear the old graph down before building a new one.
         if audioEngine != nil || isTapInstalled || recognitionTask != nil {
             stopInternal()
         }
@@ -242,7 +242,7 @@ class ReadAloudService {
     /// Once per engine, and **before** `engine.start()`. Installing a tap makes
     /// AVAudioEngine reset the input node's format, which reconfigures
     /// AURemoteIO's converter while its realtime IO thread sits inside the input
-    /// callback — re-installing one to re-arm recognition is what segfaulted
+    /// callback - re-installing one to re-arm recognition is what segfaulted
     /// LiveTranscriptionService about a minute into every session (gotcha §9).
     /// Re-arming swaps `requestBox` and leaves the tap alone.
     private func installTap(on engine: AVAudioEngine) throws {
@@ -310,8 +310,8 @@ class ReadAloudService {
                 //
                 // Updates coalesce. Partial results fire many times a second
                 // and each one used to spawn its own task. Once the main actor
-                // fell behind — and it did, see the layout cache in
-                // `WrappingHStack` — those tasks queued without bound, each
+                // fell behind - and it did, see the layout cache in
+                // `WrappingHStack` - those tasks queued without bound, each
                 // retaining a result. That is the read that froze and then died
                 // around the twenty-second mark. Latest-wins: park the newest
                 // transcript, keep one drain in flight.
@@ -352,7 +352,7 @@ class ReadAloudService {
     /// reaches its own audio-duration ceiling. A passage read at a natural pace
     /// triggers both, several times.
     ///
-    /// This used to tear the whole graph down — engine, tap and all — which is
+    /// This used to tear the whole graph down - engine, tap and all - which is
     /// what dropped the mic halfway through a read and forced a restart. Re-arm
     /// instead, keeping the engine, the tap, and every word already matched.
     private func handleSegmentEnd(segment segmentID: Int, failure: String?) {
@@ -385,7 +385,7 @@ class ReadAloudService {
         }
 
         guard let engine = audioEngine, engine.isRunning else {
-            // The graph went away under us — a route change, or media services
+            // The graph went away under us - a route change, or media services
             // resetting. Rebuilding is the same job as a configuration change.
             rebuildCaptureGraph(reason: "engine stopped")
             return
@@ -419,12 +419,12 @@ class ReadAloudService {
 
     /// The two ways a live capture graph dies without anyone asking it to.
     ///
-    /// **Configuration change** — AirPods connect, a headset is unplugged,
+    /// **Configuration change** - AirPods connect, a headset is unplugged,
     /// another app reshapes the shared session. AVAudioEngine stops itself and
     /// the tap's format goes stale. Nothing throws; the mic simply goes quiet
     /// for the rest of the read.
     ///
-    /// **Interruption** — a call, Siri, an alarm. The session is deactivated
+    /// **Interruption** - a call, Siri, an alarm. The session is deactivated
     /// under us and has to be re-activated before the engine will start again.
     private func observeSession(_ engine: AVAudioEngine) {
         removeSessionObservers()
@@ -496,8 +496,8 @@ class ReadAloudService {
     /// a toggle at the top of the catalog. It is a button inside the session
     /// now, usable at any point in a read, which only works if hearing the
     /// model does not cost you the words you have already matched. Same
-    /// teardown as an interruption — a live mic would score the synthesiser as
-    /// the reader — and the same rebuild on the way back, with
+    /// teardown as an interruption - a live mic would score the synthesiser as
+    /// the reader - and the same rebuild on the way back, with
     /// `segmentTranscripts` untouched.
     func pauseForModelPlayback() {
         guard isListening, !isSuspended else { return }
@@ -513,8 +513,8 @@ class ReadAloudService {
     }
 
     /// Rebuilds the capture graph in place and re-arms recognition on it,
-    /// keeping `segmentTranscripts` — and therefore the reader's place in the
-    /// passage — intact.
+    /// keeping `segmentTranscripts` - and therefore the reader's place in the
+    /// passage - intact.
     private func rebuildCaptureGraph(reason: String) {
         guard isListening, !isSuspended else { return }
         logger.info("Read Aloud rebuilding capture graph: \(reason, privacy: .public)")
@@ -560,7 +560,7 @@ class ReadAloudService {
 
     func stop() {
         // `stopInternal` flushes the live request through `teardownRecognition`
-        // — `endAudio()` must not be called twice on one request.
+        // - `endAudio()` must not be called twice on one request.
         stopInternal()
     }
 
@@ -607,7 +607,7 @@ class ReadAloudService {
 
     /// Applies the newest transcript each segment has produced, then clears the
     /// way for the next drain. Anything that arrived while this was queued is
-    /// already folded into `pendingTranscripts` — alignment re-runs over the
+    /// already folded into `pendingTranscripts` - alignment re-runs over the
     /// whole transcript every time, so skipping intermediate states loses
     /// nothing and saves the main actor the work.
     private func drainPendingTranscripts() {
@@ -700,7 +700,7 @@ class ReadAloudService {
     /// - **Skipped words** (reader drops a word): a spoken word that matches a
     ///   nearby *reference* word marks everything between as `.skipped`.
     /// - **Inserted words** (filler, stumble): a spoken word matching nothing
-    ///   is checked against what the *next* spoken word resolves to — if that
+    ///   is checked against what the *next* spoken word resolves to - if that
     ///   lands on the current or an upcoming reference word, the first word
     ///   was an insertion, not a miss. Single-word lookahead keeps skip vs
     ///   insert deterministic; deeper stumbles re-sync on the next partial
@@ -758,7 +758,7 @@ class ReadAloudService {
             }
 
             // Insertion path: if the NEXT spoken word resolves at or near the
-            // current position, this word was said in passing ("um") — drop it
+            // current position, this word was said in passing ("um") - drop it
             // without consuming a reference word or counting a miss.
             let nextIndex = spokenIndex + 1
             if nextIndex < spokenWords.count {
@@ -805,7 +805,7 @@ class ReadAloudService {
     // MARK: - Helpers
 
     /// Canonical form used for matching. Case, curly apostrophes, hyphens,
-    /// and punctuation all fold away — and spelled numbers collapse to digits,
+    /// and punctuation all fold away - and spelled numbers collapse to digits,
     /// because the page says "seventy-two" while the recognizer writes "72".
     nonisolated static func normalize(_ word: String) -> String {
         let lowered = word
@@ -823,9 +823,9 @@ class ReadAloudService {
 
     /// Parses tokens composed entirely of number words to their digit string.
     /// Handles both spaced ("one hundred") and fused ("onehundred",
-    /// "seventytwo" — hyphens were stripped upstream) forms by greedily
+    /// "seventytwo" - hyphens were stripped upstream) forms by greedily
     /// consuming the longest number-word prefix at each step. Returns nil for
-    /// anything containing a non-number word — including plain digits, which
+    /// anything containing a non-number word - including plain digits, which
     /// are already canonical.
     private nonisolated static func spelledNumberValue(_ token: String) -> String? {
         guard !token.isEmpty, token.contains(where: \.isLetter) else { return nil }

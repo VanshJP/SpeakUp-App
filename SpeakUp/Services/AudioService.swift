@@ -32,14 +32,14 @@ class AudioService: NSObject {
     // Permission
     var hasPermission = false
 
-    /// True while the mic is working — and, once it has been proven to work in
+    /// True while the mic is working - and, once it has been proven to work in
     /// this take, true for the rest of it.
     ///
     /// Two versions of this indicator have now been wrong in the same way. The
     /// first read the instantaneous level (`audioLevel > -40`) and strobed on
     /// every gap between words. The decaying peak below fixed the strobe but
     /// still dropped out on a long pause, which is the same false alarm
-    /// arriving more slowly — and a warning that comes and goes mid-sentence
+    /// arriving more slowly - and a warning that comes and goes mid-sentence
     /// reads as a broken app, not a broken mic.
     ///
     /// The question worth answering is "is this mic working", not "is sound
@@ -78,9 +78,9 @@ class AudioService: NSObject {
             NotificationCenter.default.removeObserver(observer)
         }
     }
-    
+
     // MARK: - Session Setup
-    
+
     private func setupSession() {
         recordingSession = AVAudioSession.sharedInstance()
     }
@@ -97,12 +97,12 @@ class AudioService: NSObject {
     }
 
     /// Shared session config for capture. Matches recorder sample rate to the
-    /// hardware IO rate — a hardcoded 44.1 kHz under `.voiceChat` / HFP (often
-    /// 8–16 kHz) was producing silent or time-stretched m4a files.
+    /// hardware IO rate - a hardcoded 44.1 kHz under `.voiceChat` / HFP (often
+    /// 8-16 kHz) was producing silent or time-stretched m4a files.
     ///
     /// Hops off the main actor to do it. `setActive` blocks until the audio
     /// server has the session up, and on the main thread that is a real stall
-    /// at the top of every practice screen — which is what the console has been
+    /// at the top of every practice screen - which is what the console has been
     /// saying all along: *"AVAudioSession_iOS.mm … This method can lead to UI
     /// unresponsiveness if called on the main thread."*
     private func configureRecordingSession() async throws {
@@ -144,16 +144,16 @@ class AudioService: NSObject {
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
     }
-    
+
     // MARK: - Recording
-    
+
     /// True while `stopRecording` is waiting on the recorder delegate.
-    /// Callers must not `cancelRecording` / `cleanup` in this window — that
+    /// Callers must not `cancelRecording` / `cleanup` in this window - that
     /// resumes the stop continuation as failure and deletes the m4a.
     var isFinalizingRecording: Bool { recordingCompletion != nil }
 
     func startRecording() async throws -> URL {
-        // Never start while a stop is finalizing — `recordingURL` still points
+        // Never start while a stop is finalizing - `recordingURL` still points
         // at the dying file and must not be returned to a new caller.
         guard recordingCompletion == nil else {
             throw AudioServiceError.recordingFailed(NSError(
@@ -184,7 +184,7 @@ class AudioService: NSObject {
             }
         }
 
-        // Re-check after the permission await — another start/stop may have won.
+        // Re-check after the permission await - another start/stop may have won.
         guard recordingCompletion == nil, !isRecording, audioRecorder == nil else {
             throw AudioServiceError.recordingFailed(NSError(
                 domain: "AudioService",
@@ -192,12 +192,12 @@ class AudioService: NSObject {
                 userInfo: [NSLocalizedDescriptionKey: "Recording already in progress"]
             ))
         }
-        
+
         // Always capture to local Documents. iCloud promotion happens after stop.
         let storageDir = ICloudStorageService.shared.recordingsDirectory
         try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
         let audioFilename = storageDir.appendingPathComponent("\(UUID().uuidString).m4a")
-        
+
         do {
             try await configureRecordingSession()
             let session = recordingSession ?? AVAudioSession.sharedInstance()
@@ -238,7 +238,7 @@ class AudioService: NSObject {
             throw AudioServiceError.recordingFailed(error)
         }
     }
-    
+
     func stopRecording() async -> URL? {
         recordingTimer?.invalidate()
         recordingTimer = nil
@@ -248,7 +248,7 @@ class AudioService: NSObject {
             return nil
         }
 
-        // A stop is already in flight — overwriting recordingCompletion would
+        // A stop is already in flight - overwriting recordingCompletion would
         // leak its continuation and hang the first caller forever.
         guard recordingCompletion == nil else { return nil }
 
@@ -279,19 +279,19 @@ class AudioService: NSObject {
         // Promote to iCloud only after the file is fully finalized locally.
         let url = localURL.map { ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: $0) }
 
-        // Duration comes from the finalized file, not recorder.currentTime —
+        // Duration comes from the finalized file, not recorder.currentTime -
         // the latter drifts under audio-session interruptions and sample-rate
         // mismatches (e.g. .voiceChat + HFP), occasionally by 60× or more.
         recordingDuration = url.flatMap { getAudioDuration(at: $0) } ?? 0
 
         return url
     }
-    
+
     func cancelRecording() {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Never abort an in-flight stop — that resumes the continuation false
+        // Never abort an in-flight stop - that resumes the continuation false
         // and deletes the file the stop path is trying to promote.
         guard recordingCompletion == nil else { return }
 
@@ -308,7 +308,7 @@ class AudioService: NSObject {
         recordingDuration = 0
         resetInputConfidence()
     }
-    
+
     func getAudioLevel() -> Float {
         audioRecorder?.updateMeters()
         let level = audioRecorder?.averagePower(forChannel: 0) ?? -160
@@ -333,18 +333,18 @@ class AudioService: NSObject {
         return level
     }
 
-    /// Back to "unproven, but give it a moment" — called at the top of every
+    /// Back to "unproven, but give it a moment" - called at the top of every
     /// take and whenever one ends, so the latch can never leak across sessions.
     private func resetInputConfidence() {
         inputPeak = 0
         hasConfirmedInput = false
         isHearingInput = true
     }
-    
+
     // MARK: - Playback
-    
+
     /// - Parameter startingAt: seconds to begin from. Set before `play()` so the
-    ///   audio never audibly starts at zero and jump-cuts — the coaching screen
+    ///   audio never audibly starts at zero and jump-cuts - the coaching screen
     ///   plays from a timestamp far more often than from the top.
     func play(url: URL, startingAt startTime: TimeInterval = 0) async throws {
         do {
@@ -355,7 +355,7 @@ class AudioService: NSObject {
             // The same file is already loaded (playing or paused)? Seek the
             // live player instead of rebuilding it. Creating a new
             // AVAudioPlayer tears down and re-primes the decoder, which lands
-            // on the ear as a jump-cut restart — exactly what tapping a word
+            // on the ear as a jump-cut restart - exactly what tapping a word
             // mid-playback used to feel like.
             if let player = audioPlayer, playerURL == url {
                 playbackDuration = player.duration
@@ -377,7 +377,7 @@ class AudioService: NSObject {
             playbackDuration = audioPlayer?.duration ?? 0
             seekPlayer(to: startTime)
             audioPlayer?.play()
-            
+
             isPlaying = true
 
             await MainActor.run {
@@ -414,14 +414,14 @@ class AudioService: NSObject {
         currentPlaybackTime = player.currentTime
     }
 
-    /// Absolute-time seek in seconds — what word taps and coaching stamps
+    /// Absolute-time seek in seconds - what word taps and coaching stamps
     /// arrive as. Clamps into the playable range; a request past the end
     /// lands just short of it rather than falling off.
     func seek(toTime time: TimeInterval) {
         seekPlayer(to: time)
     }
 
-    /// Shared seek core. The final tenth of a second is unusable — seeking
+    /// Shared seek core. The final tenth of a second is unusable - seeking
     /// there plays nothing and reports finished immediately.
     private func seekPlayer(to time: TimeInterval) {
         guard let player = audioPlayer, player.duration > 0 else { return }
@@ -499,7 +499,7 @@ class AudioService: NSObject {
     }
 
     /// Phone calls / Siri yank the session. Playback pauses here.
-    /// Recording has no pause UX — `RecordingViewModel` finalizes the take
+    /// Recording has no pause UX - `RecordingViewModel` finalizes the take
     /// on interruption so the timer and UI never lie about still capturing.
     private func handleSessionInterruption(_ notification: Notification) {
         guard
@@ -526,7 +526,7 @@ class AudioService: NSObject {
         else { return }
         // Recorder keeps writing after route change; re-assert category so
         // `.defaultToSpeaker` wins over a dead BT/HFP path. Off the main actor
-        // for the same reason as every other activation here — a repair that
+        // for the same reason as every other activation here - a repair that
         // lands a few milliseconds later still repairs.
         Task { [weak self] in
             guard let self else { return }
@@ -536,9 +536,9 @@ class AudioService: NSObject {
             }
         }
     }
-    
+
     // MARK: - File Management
-    
+
     func getAudioDuration(at url: URL) -> TimeInterval? {
         do {
             let player = try AVAudioPlayer(contentsOf: url)
@@ -547,12 +547,12 @@ class AudioService: NSObject {
             return nil
         }
     }
-    
+
     // MARK: - Cleanup
-    
+
     func cleanup() {
         stop()
-        // Leave an in-flight finalize alone — cancel would delete the take.
+        // Leave an in-flight finalize alone - cancel would delete the take.
         guard !isFinalizingRecording else { return }
         cancelRecording()
     }
@@ -589,7 +589,7 @@ extension AudioService: AVAudioPlayerDelegate {
             stopDisplayLink()
         }
     }
-    
+
     func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         if let error {
             logger.error("Playback decode error: \(error.localizedDescription, privacy: .private(mask: .hash))")
@@ -603,7 +603,7 @@ enum AudioServiceError: LocalizedError {
     case noPermission
     case recordingFailed(Error)
     case playbackFailed(Error)
-    
+
     var errorDescription: String? {
         switch self {
         case .noPermission:

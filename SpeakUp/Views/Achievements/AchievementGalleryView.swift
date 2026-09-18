@@ -83,7 +83,7 @@ struct AchievementGalleryView: View {
     private var achievementProgressHeader: some View {
         GlassCard(padding: 20) {
             HStack(spacing: 20) {
-                // Progress gauge — count lives inside the ring
+                // Progress gauge - count lives inside the ring
                 ZStack {
                     RingProgress(progress: progress, color: AppColors.warning, lineWidth: 9)
 
@@ -127,7 +127,7 @@ private struct AchievementCard: View {
     var body: some View {
         GlassCard(padding: 16) {
             VStack(spacing: 12) {
-                // Icon well — flat, unlocked earns the warm accent
+                // Icon well - flat, unlocked earns the warm accent
                 Image(systemName: achievement.icon)
                     .font(.title2)
                     .foregroundStyle(achievement.isUnlocked ? AppColors.warning : Color.white.opacity(0.25))

@@ -22,7 +22,7 @@ struct ReadAloudResult: Identifiable {
     let mismatchedWords: Int
     let timeTaken: TimeInterval
     let wordStates: [WordMatchState]
-    /// Set when the session ended without a fair measurement — the recognizer
+    /// Set when the session ended without a fair measurement - the recognizer
     /// died mid-read, or nothing was heard at all. The result screen shows it
     /// instead of letting a bare "0% · Complete" stand as a verdict.
     var notice: String?
@@ -41,7 +41,7 @@ class ReadAloudViewModel {
     /// Session-scoped audio service: owns mic permission and the
     /// record-capable session configuration. The read-aloud engine taps the
     /// input directly, but without this setup a fresh launch runs under
-    /// whatever ambient category lingers — silent buffers, cryptic failures.
+    /// whatever ambient category lingers - silent buffers, cryptic failures.
     private let audioService = AudioService()
 
     var sessionState: ReadAloudSessionState = .idle
@@ -72,7 +72,7 @@ class ReadAloudViewModel {
     /// Focuses the shipped catalog covers, in declaration order.
     ///
     /// The catalog is no longer filtered in software. It carried two filter
-    /// bars — outcome and length — over twenty passages whose rows already
+    /// bars - outcome and length - over twenty passages whose rows already
     /// print both, and a "12 of 20 passages" caption to explain what the bars
     /// had done. Grouping by outcome is the whole taxonomy now.
     var availableFocuses: [PracticeFocus] { PracticeToolKind.readAloud.focuses }
@@ -94,7 +94,7 @@ class ReadAloudViewModel {
 
         let authorized = await service.requestAuthorization()
         // The auto-start runs in the session view's `.task`, which cancels on
-        // disappear — bail rather than spin up an engine nobody will stop.
+        // disappear - bail rather than spin up an engine nobody will stop.
         guard !Task.isCancelled else { return }
         guard authorized else {
             errorMessage = ReadAloudError.authorizationDenied.errorDescription
@@ -186,7 +186,7 @@ class ReadAloudViewModel {
     ///
     /// It used to be a toggle at the top of the catalog that you had to flip
     /// *before* opening a passage, which meant the one moment you want to hear
-    /// the line — halfway through, having just fumbled it — was the one moment
+    /// the line - halfway through, having just fumbled it - was the one moment
     /// you could not. Holding the read costs nothing now: recognition comes
     /// back on the same transcript.
     func pauseForModel() {
@@ -235,7 +235,7 @@ class ReadAloudViewModel {
 
                 guard self.sessionState == .listening else { continue }
 
-                // A recognizer that died for good ends the session now —
+                // A recognizer that died for good ends the session now -
                 // letting the clock run on produces a confident-looking zero.
                 if self.service.recognitionFailureMessage != nil {
                     self.stopSession()
@@ -245,7 +245,7 @@ class ReadAloudViewModel {
                 // Backstop for a mic that went quiet without saying why.
                 // Recognition now survives its own request boundaries, so a
                 // service that is no longer listening mid-session has hit
-                // something none of us predicted — land on the result screen
+                // something none of us predicted - land on the result screen
                 // with the words that were matched rather than leaving a live
                 // clock over a dead microphone and a disabled Done button,
                 // which is what made a dropped read feel like a lost one.

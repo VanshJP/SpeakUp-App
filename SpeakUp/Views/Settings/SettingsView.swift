@@ -396,8 +396,8 @@ struct SettingsView: View {
 // MARK: - About Settings View
 
 struct AboutSettingsView: View {
-    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
-    private let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"
+    private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-"
+    private let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "-"
 
     var body: some View {
         ZStack {

@@ -28,7 +28,7 @@ nonisolated struct VoiceProfileUpdate: Sendable {
 /// Uses per-word acoustic similarity (pitch + energy) to the user's
 /// early-session voice profile and tags likely non-user words.
 ///
-/// Pure acoustics — called from `SpeechService` GCD workers, so it must stay
+/// Pure acoustics - called from `SpeechService` GCD workers, so it must stay
 /// `nonisolated` under MainActor default isolation.
 nonisolated enum ConversationIsolationService {
     static func labelPrimarySpeaker(
@@ -89,13 +89,13 @@ nonisolated enum ConversationIsolationService {
                 // and let other-speaker words through as primary.
                 f0Penalty = min(1.0, semitoneDistance / 4.0)
             } else {
-                // Unknown F0: moderate penalty (was 0.35 — too forgiving).
+                // Unknown F0: moderate penalty (was 0.35 - too forgiving).
                 // Unvoiced/noise segments should lean toward non-primary.
                 f0Penalty = 0.45
             }
 
             // Tighter energy tolerance: 12 dB gap = full penalty (was 16 dB).
-            // A 16 dB gap is enormous — that's about a 6x signal-level difference.
+            // A 16 dB gap is enormous - that's about a 6x signal-level difference.
             // 12 dB (~4x signal level) is a more realistic threshold for a different speaker.
             let energyPenalty = min(1.0, abs(feature.energyDb - profileEnergy) / 12.0)
             let penalty = f0Penalty * 0.75 + energyPenalty * 0.25
@@ -187,7 +187,7 @@ nonisolated enum ConversationIsolationService {
         // Conservative fallback: if separation confidence is poor, avoid excluding words.
         // Raised primary ratio lower bound from 0.40 to 0.50:
         // If fewer than half the words are attributed to the primary speaker, the isolation
-        // is unreliable — we'd be scoring on less than half the speech, which is worse than
+        // is unreliable - we'd be scoring on less than half the speech, which is worse than
         // scoring on everything. This prevents over-filtering in noisy conditions.
         let shouldApplyIsolation = confidence >= 52 && primaryRatio >= 0.50 && primaryRatio <= 0.93
         let conversationDetected = shouldApplyIsolation && filteredOut >= max(4, Int(Double(sortedWords.count) * 0.15)) && switchCount >= 2
@@ -306,13 +306,13 @@ nonisolated enum ConversationIsolationService {
             hi = min(samples.count, max(lo + 1, midpoint + half))
         }
 
-        // Energy from full-rate samples (cheap — single pass)
+        // Energy from full-rate samples (cheap - single pass)
         var sumSq: Float = 0
         for i in lo..<hi { sumSq += samples[i] * samples[i] }
         let rms = sqrt(max(1e-9, sumSq / Float(max(1, hi - lo))))
         let energyDb = 20.0 * log10(Double(rms))
 
-        // F0 from downsampled slice (expensive autocorrelation — reduce sample count)
+        // F0 from downsampled slice (expensive autocorrelation - reduce sample count)
         let f0 = estimateDominantF0(in: samples, range: lo..<hi, sampleRate: sampleRate)
         return WordAcousticFeatures(energyDb: energyDb, f0Hz: f0)
     }

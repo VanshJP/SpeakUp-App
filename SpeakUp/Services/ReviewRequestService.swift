@@ -26,7 +26,7 @@ final class ReviewRequestService {
     private var askedThisLaunch = false
 
     /// Set once the user has seen a finished analysis. Persisted, because it
-    /// describes something they have already done — held only in memory it
+    /// describes something they have already done - held only in memory it
     /// reset on every cold launch and silently disarmed every prompt.
     private(set) var hasCompletedFirstResult: Bool
 
@@ -47,7 +47,7 @@ final class ReviewRequestService {
     /// Raises the system review prompt when the moment and the throttles allow.
     ///
     /// `settings` carries the persisted throttle state, so the caller has to be
-    /// a surface that already owns a `UserSettings` — which every success
+    /// a surface that already owns a `UserSettings` - which every success
     /// trigger is. Returns whether the prompt was requested.
     @discardableResult
     func requestIfEligible(_ trigger: Trigger, settings: UserSettings?) -> Bool {

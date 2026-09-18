@@ -22,7 +22,7 @@ struct PracticeFocusTests {
     /// Every focus the app offers has something behind it.
     ///
     /// `tools(for:)` and `focuses` both derive from `itemCount(for:)`, so a
-    /// listed-but-empty tool is no longer expressible — what is still worth
+    /// listed-but-empty tool is no longer expressible - what is still worth
     /// asserting is the content side: adding a `PracticeFocus` case without
     /// giving it any exercises would leave a row in Library's Improve list
     /// that leads nowhere.

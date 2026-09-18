@@ -10,7 +10,7 @@ struct ReadAloudSelectionView: View {
     /// The passage being read, and the only state the session cover reads.
     ///
     /// It used to be a `showingSession` flag over `viewModel.selectedPassage`,
-    /// which `viewModel.reset()` nils — and Done calls `reset()` before
+    /// which `viewModel.reset()` nils - and Done calls `reset()` before
     /// `dismiss()`, so the cover spent its whole exit animation drawing an
     /// empty body. Presenting by value also removes the race the drill list
     /// had: nothing can clear the cover's content out from under it.
@@ -24,7 +24,7 @@ struct ReadAloudSelectionView: View {
 
     var presentation: ToolPresentation = .sheet
 
-    /// A line handed in by another screen to rehearse immediately — today,
+    /// A line handed in by another screen to rehearse immediately - today,
     /// a word-swap rewrite from the recording detail. The session opens
     /// straight away; the list underneath is where the user lands afterwards.
     var initialPracticeText: String?

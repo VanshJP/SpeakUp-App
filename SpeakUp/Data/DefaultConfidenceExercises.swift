@@ -6,7 +6,7 @@ struct DefaultConfidenceExercises {
             id: "grounding_54321",
             category: .calming,
             title: "5-4-3-2-1 Grounding",
-            description: "Names five things you can see, four you can hear, and so on — pulls attention out of the spiral and back into the room.",
+            description: "Names five things you can see, four you can hear, and so on - pulls attention out of the spiral and back into the room.",
             steps: [
                 "Notice 5 things you can see around you",
                 "Touch 4 different textures near you",

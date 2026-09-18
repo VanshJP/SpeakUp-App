@@ -78,29 +78,40 @@ struct LessonBoardHeader: View {
     var isReviewing: Bool = false
 
     var body: some View {
-        GlassCard(tint: identity.accent.opacity(0.08), padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 14) {
+        GlassCard(tint: identity.accent.opacity(0.10), padding: 18) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .center, spacing: 16) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(identity.accent.opacity(0.18))
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        identity.accent.opacity(0.28),
+                                        identity.accent.opacity(0.10)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                             .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(identity.accent.opacity(0.4), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(identity.accent.opacity(0.45), lineWidth: 1)
                             }
+
                         LessonGlyphView(
                             identity: identity,
                             state: isReviewing ? .completed : .current
                         )
-                        .frame(width: 32, height: 32)
+                        .frame(width: 36, height: 36)
                     }
-                    .frame(width: 60, height: 60)
+                    .frame(width: 68, height: 68)
+                    .shadow(color: identity.accent.opacity(0.25), radius: 12, y: 4)
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(isReviewing ? "Reviewing" : "Today's focus")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .textCase(.uppercase)
-                            .tracking(0.6)
+                            .tracking(0.8)
                             .foregroundStyle(identity.accent)
 
                         Text(lesson.title)
@@ -115,18 +126,65 @@ struct LessonBoardHeader: View {
                     }
                 }
 
-                Text(LessonTeachingCopy.roadmap(for: lesson))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("Lesson plan overview")
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "quote.opening")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(identity.accent.opacity(0.7))
+                        .padding(.top, 2)
+
+                    Text(LessonTeachingCopy.roadmap(for: lesson))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+                .accessibilityLabel("Lesson plan overview")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-/// Labeled step strip — Learn / Practice / Review — not anonymous capsules.
+/// Segmented lesson progress - Speak / Duolingo-style track above the step chips.
+struct LessonProgressTrack: View {
+    let total: Int
+    let currentIndex: Int
+    let completedIds: Set<String>
+    let activityIds: [String]
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<total, id: \.self) { index in
+                Capsule()
+                    .fill(fill(for: index))
+                    .frame(height: 4)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: currentIndex)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: completedIds)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Lesson progress")
+        .accessibilityValue("Step \(currentIndex + 1) of \(total)")
+    }
+
+    private func fill(for index: Int) -> Color {
+        let done = index < activityIds.count && completedIds.contains(activityIds[index])
+        if done { return AppColors.success }
+        if index == currentIndex { return accent }
+        if index < currentIndex { return accent.opacity(0.55) }
+        return Color.white.opacity(0.12)
+    }
+}
+
+/// Labeled step strip - Learn / Practice / Review. Icons always visible;
+/// completion is a corner badge, never a replacement for the role glyph.
 struct LessonPlanStrip: View {
     let lesson: CurriculumLesson
     let currentIndex: Int
@@ -135,18 +193,43 @@ struct LessonPlanStrip: View {
     let onSelect: (Int) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Lesson plan")
-                .font(.system(size: 10, weight: .semibold))
-                .textCase(.uppercase)
-                .tracking(0.6)
-                .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Lesson plan")
+                    .font(.system(size: 11, weight: .semibold))
+                    .textCase(.uppercase)
+                    .tracking(0.7)
+                    .foregroundStyle(.tertiary)
 
-            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+
+                Text("\(completedIds.intersection(Set(lesson.activities.map(\.id))).count)/\(lesson.activities.count)")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+
+            LessonProgressTrack(
+                total: lesson.activities.count,
+                currentIndex: currentIndex,
+                completedIds: completedIds,
+                activityIds: lesson.activities.map(\.id),
+                accent: accent
+            )
+
+            HStack(spacing: 10) {
                 ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
                     planChip(index: index, activity: activity)
                 }
             }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(AppColors.cardStroke, lineWidth: 1)
+                }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Lesson plan, step \(currentIndex + 1) of \(lesson.activities.count)")
@@ -163,29 +246,37 @@ struct LessonPlanStrip: View {
             Haptics.light()
             onSelect(index)
         } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+            VStack(spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(chipFill(isCompleted: isCompleted, isCurrent: isCurrent, color: color))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .stroke(
                                     chipStroke(isCompleted: isCompleted, isCurrent: isCurrent, color: color),
                                     lineWidth: isCurrent ? 1.5 : 1
                                 )
                         }
 
-                    if isCompleted && !isCurrent {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
+                    Image(systemName: activity.type.teacherIcon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isCurrent || isCompleted ? color : .white.opacity(0.45))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    if isCompleted {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(AppColors.success)
-                    } else {
-                        Image(systemName: activity.type.teacherIcon)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(isCurrent || isCompleted ? color : .white.opacity(0.45))
+                            .background(
+                                Circle()
+                                    .fill(Color.black.opacity(0.65))
+                                    .padding(-2)
+                            )
+                            .offset(x: 5, y: -5)
+                            .accessibilityHidden(true)
                     }
                 }
-                .frame(height: 40)
+                .frame(height: 44)
                 .shadow(
                     color: isCurrent ? accent.opacity(0.35) : .clear,
                     radius: isCurrent ? 8 : 0,
@@ -210,44 +301,47 @@ struct LessonPlanStrip: View {
 
     private func chipFill(isCompleted: Bool, isCurrent: Bool, color: Color) -> Color {
         if isCurrent { return color.opacity(0.22) }
-        if isCompleted { return AppColors.success.opacity(0.14) }
+        if isCompleted { return AppColors.success.opacity(0.12) }
         return Color.white.opacity(0.05)
     }
 
     private func chipStroke(isCompleted: Bool, isCurrent: Bool, color: Color) -> Color {
         if isCurrent { return color }
-        if isCompleted { return AppColors.success.opacity(0.45) }
+        if isCompleted { return AppColors.success.opacity(0.4) }
         return AppColors.cardStroke
     }
 }
 
-/// Coach line above the current activity card.
+/// Coach line above the current activity - cue only, no second title row.
 struct LessonCoachCue: View {
     let activity: CurriculumActivity
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: activity.type.teacherIcon)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(activity.type.teacherColor)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(activity.type.teacherColor.opacity(0.15)))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(activity.type.teacherRole)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(activity.type.teacherColor)
-                    .textCase(.uppercase)
-                    .tracking(0.4)
-
-                Text(activity.type.teacherCue)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(activity.type.teacherCue)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(activity.type.teacherColor.opacity(0.08))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(activity.type.teacherColor.opacity(0.18), lineWidth: 1)
+                }
+        }
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(activity.type.teacherRole). \(activity.type.teacherCue)")
     }
 }

@@ -19,7 +19,7 @@ struct ShareCardSheet: View {
     @State private var rendered: [String: UIImage] = [:]
     @State private var confirmation: String?
     /// A card needs a score. Reached by opening the sheet on a session that was
-    /// saved but never analyzed — without this the preview spins forever and
+    /// saved but never analyzed - without this the preview spins forever and
     /// the buttons do nothing.
     @State private var unavailable = false
 
@@ -27,7 +27,7 @@ struct ShareCardSheet: View {
     /// it keys the render cache and names the card in analytics.
     ///
     /// `nonisolated` because it is a pure value type nested in a MainActor
-    /// view — see `docs/AGENT_GOTCHAS.md`.
+    /// view - see `docs/AGENT_GOTCHAS.md`.
     nonisolated enum Variant: String, Hashable, Identifiable {
         case scores
         case challenge

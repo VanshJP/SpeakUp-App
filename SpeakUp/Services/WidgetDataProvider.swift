@@ -11,7 +11,7 @@ enum WidgetDataProvider {
     /// Nil outside a process that actually holds the App Group entitlement
     /// (Xcode Previews, unit-test hosts): touching the suite there is what
     /// makes cfprefsd log "kCFPreferencesAnyUser … detaching" and every write
-    /// would be lost anyway. Never fall back to `.standard` — that domain is
+    /// would be lost anyway. Never fall back to `.standard` - that domain is
     /// not shared with the widget.
     private static var defaults: UserDefaults? {
         guard FileManager.default.containerURL(

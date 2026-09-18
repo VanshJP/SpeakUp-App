@@ -36,7 +36,7 @@ struct ActivityStrip: View {
     // MARK: - Subviews
 
     /// `.fixedSize()` stops the picker's scroll view swallowing the whole row,
-    /// but it also means the row cannot shrink — at accessibility text sizes
+    /// but it also means the row cannot shrink - at accessibility text sizes
     /// the title and two pills together are wider than a phone. `ViewThatFits`
     /// drops to a stacked layout at that point instead of overflowing the page.
     private var header: some View {

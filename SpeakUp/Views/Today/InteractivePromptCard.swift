@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// Today's topic: the brief and its action in one object. Header, prompt text,
-/// words row, then the Start capsule as the footer — the button used to float
+/// words row, then the Start capsule as the footer - the button used to float
 /// between this card and the tools strip as a third island.
 struct InteractivePromptCard: View {
     let prompt: Prompt?
@@ -18,7 +18,7 @@ struct InteractivePromptCard: View {
     var body: some View {
         GlassCard(padding: 14, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: categoryIcon)
                             .font(.system(size: 10, weight: .semibold))
@@ -27,21 +27,23 @@ struct InteractivePromptCard: View {
                             .textCase(.uppercase)
                             .tracking(0.6)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                     }
                     .foregroundStyle(categoryColor)
+                    .layoutPriority(-1)
 
-                    Spacer(minLength: 4)
+                    Spacer(minLength: 8)
 
-                    if let difficulty = prompt?.difficulty {
-                        StatusPill.difficulty(difficulty)
+                    HStack(spacing: 8) {
+                        if let difficulty = prompt?.difficulty {
+                            StatusPill.difficulty(difficulty)
+                        }
+
+                        DurationPill(selectedDuration: $selectedDuration)
+
+                        SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
                     }
-
-                    DurationPill(selectedDuration: $selectedDuration)
-
-                    SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
-                        .padding(.trailing, -6)
-                        .padding(.vertical, -6)
+                    .fixedSize(horizontal: true, vertical: false)
                 }
                 .redacted(reason: redaction)
 

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Per-goal numbers from the background scan — plain values, so the main
+/// Per-goal numbers from the background scan - plain values, so the main
 /// context only applies diffs (pattern: `HistoryViewModel.RecordingSummary`).
 nonisolated struct GoalProgressOutcome: Sendable {
     let current: Int

@@ -382,7 +382,7 @@ nonisolated struct AudioIsolationMetrics: Codable, Equatable, Sendable {
 }
 
 nonisolated struct SpeakerIsolationMetrics: Codable, Equatable, Sendable {
-    var primarySpeakerWordRatio: Double // 0.0 - 1.0
+    var primarySpeakerWordRatio: Double // 0.0-1.0
     var filteredOutWordCount: Int
     var speakerSwitchCount: Int
     var separationConfidence: Int // 0-100
@@ -527,7 +527,7 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
 
         // SwiftData's internal decoder throws EXC_BREAKPOINT (uncatchable trap)
         // when decoding these nested optionals from older data, so that path
-        // still skips them entirely — attempting them there kills the process
+        // still skips them entirely - attempting them there kills the process
         // rather than throwing something catchable.
         //
         // The cost was that every advanced metric vanished the moment a
@@ -587,7 +587,7 @@ nonisolated struct SpeechAnalysis: Codable, Equatable {
     }
 
     /// Reads a mirror back with the advanced metrics intact. `nil` when the
-    /// blob predates a field rename or is otherwise unreadable — callers fall
+    /// blob predates a field rename or is otherwise unreadable - callers fall
     /// back to the SwiftData copy, which is lossy but never wrong.
     nonisolated static func decodedMirror(_ data: Data) -> SpeechAnalysis? {
         let decoder = JSONDecoder()

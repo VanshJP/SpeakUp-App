@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Named motion tokens.
 ///
-/// Every value below already existed in the app, retyped at each call site —
+/// Every value below already existed in the app, retyped at each call site - 
 /// `.spring(response: 0.3, dampingFraction: 0.7)` was written out independently
 /// in the button press style, the recording view, the prompt list, and
 /// onboarding. Naming them is what makes motion read as one system instead of
@@ -12,19 +12,19 @@ enum AppMotion {
     /// Press and selection feedback. The shortest motion that still reads as motion.
     static let snap = Animation.spring(response: 0.3, dampingFraction: 0.7)
 
-    /// Content arriving or rearranging — cards, sheet contents, list inserts.
+    /// Content arriving or rearranging - cards, sheet contents, list inserts.
     static let settle = Animation.spring(response: 0.4, dampingFraction: 0.85)
 
     /// Matched-geometry travel, e.g. the selected pill in `SectionPicker`.
     static let slide = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
-    /// A value drawing itself in — the score numeral, the radar wedges.
+    /// A value drawing itself in - the score numeral, the radar wedges.
     static let reveal = Animation.easeOut(duration: 0.9)
 
     /// Looping ambient motion.
     ///
     /// Never drive this through a bare `withAnimation`. Use `.ambientLoop`,
-    /// which skips the state change entirely under Reduce Motion — passing a
+    /// which skips the state change entirely under Reduce Motion - passing a
     /// nil animation instead would park the value at its animated extreme and
     /// leave a pulsing element permanently enlarged, which is worse than no
     /// animation at all.
@@ -66,8 +66,8 @@ private struct MotionModifier<V: Equatable>: ViewModifier {
 
 /// A fade-in that fails *visible*.
 ///
-/// The naive version of this — `@State opacity = 0`, raised inside `onAppear`
-/// — has bricked two screens now. A first install reported the welcome cover
+/// The naive version of this - `@State opacity = 0`, raised inside `onAppear`
+/// - has bricked two screens now. A first install reported the welcome cover
 /// as an orb on an empty background with no button to tap, because content the
 /// user cannot proceed without was parked at opacity 0 waiting on a callback
 /// and an animation clock. The lesson completion screen hid both of its exits
@@ -127,7 +127,7 @@ extension View {
     }
 
     /// Starts a looping ambient animation on appear, and does nothing at all
-    /// when Reduce Motion is on — leaving the driven value at its resting state.
+    /// when Reduce Motion is on - leaving the driven value at its resting state.
     func ambientLoop(
         _ animation: Animation = AppMotion.ambient,
         perform action: @escaping () -> Void

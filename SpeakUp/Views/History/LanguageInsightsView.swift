@@ -5,7 +5,7 @@ import Charts
 
 /// Supporting detail under scenario readiness: the cross-session lexicon
 /// profile plus the Word Bank practice words. This tab is deliberately the
-/// ONE language home on the Progress page — every section names what it
+/// ONE language home on the Progress page - every section names what it
 /// counts and why it matters, and suggestions read as sentences ("Try
 /// instead: …"), never as unlabeled chips.
 struct LanguageInsightsView: View {

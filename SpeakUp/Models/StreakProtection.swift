@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Streak Protection
 
 /// Streak freezes: the mechanic Duolingo's own retention team credits for the
-/// step change in long-run retention. The lever is *forgiveness*, not pressure —
+/// step change in long-run retention. The lever is *forgiveness*, not pressure - 
 /// one missed Tuesday resetting a 40-day habit to zero is what makes people quit
 /// for good, because the thing they were protecting is already gone.
 ///
@@ -66,7 +66,7 @@ nonisolated enum StreakProtection {
         let today = now.startOfDay
         let yesterday = today.adding(days: -1)
 
-        // Streak is alive on its own — nothing to rescue.
+        // Streak is alive on its own - nothing to rescue.
         guard !practice.contains(today), !practice.contains(yesterday) else {
             return unchanged
         }

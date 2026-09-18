@@ -44,7 +44,7 @@ struct WordBankView: View {
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
 
-                // Bottom input area — pinned outside scroll
+                // Bottom input area - pinned outside scroll
                 bottomInputBar
             }
         }

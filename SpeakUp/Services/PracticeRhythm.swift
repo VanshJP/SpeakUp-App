@@ -44,7 +44,7 @@ nonisolated enum PracticeRhythm {
     // MARK: - Suggestion
 
     struct Suggestion: Equatable {
-        /// When the reminder should fire — `typical` minus the lead.
+        /// When the reminder should fire - `typical` minus the lead.
         var hour: Int
         var minute: Int
         /// The learned practice time itself, for copy that has to explain the
@@ -60,8 +60,8 @@ nonisolated enum PracticeRhythm {
     /// history has nothing to say and the currently stored time should stand.
     ///
     /// - Parameters:
-    ///   - practiceDates: session timestamps, any order.
-    ///   - now: reference point for recency weighting.
+    /// - practiceDates: session timestamps, any order.
+    /// - now: reference point for recency weighting.
     static func suggestion(
         from practiceDates: [Date],
         now: Date = Date(),

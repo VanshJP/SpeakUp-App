@@ -17,7 +17,7 @@ struct RecordingView: View {
     @State private var hasNavigated = false
     @State private var showingDiscardConfirm = false
     @State private var revealRecording: Recording?
-    /// Snapshot for the reveal — never read `recording.analysis` from body.
+    /// Snapshot for the reveal - never read `recording.analysis` from body.
     @State private var revealAnalysis: SpeechAnalysis?
     @State private var revealBaselines = PersonalAverage.Baselines()
     @State private var revealTask: Task<Void, Never>?
@@ -96,7 +96,7 @@ struct RecordingView: View {
         .task {
             let container = modelContext.container
             let weights = ScoreWeights(from: userSettings.first)
-            // No session to exclude — this runs before one exists.
+            // No session to exclude - this runs before one exists.
             focusPlan = await PersonalAverage.snapshot(
                 excluding: UUID(),
                 container: container,
@@ -174,7 +174,7 @@ struct RecordingView: View {
         return feedbackEnabled && !feedbackQuestions.isEmpty && !isFirstAnalyzedSession(excluding: id)
     }
 
-    /// True when no *prior* take has a transcript yet — this session is the
+    /// True when no *prior* take has a transcript yet - this session is the
     /// activation moment. Counted on `transcriptionText` (never `#Predicate` on
     /// the analysis blob).
     private func isFirstAnalyzedSession(excluding recordingID: UUID) -> Bool {
@@ -216,7 +216,7 @@ struct RecordingView: View {
             )
         }
         .task(id: gateStateKey(for: recording)) {
-            // Feedback active: wait for user to submit — onFeedbackCompleted drives navigation
+            // Feedback active: wait for user to submit - onFeedbackCompleted drives navigation
             if feedbackGateActive { return }
 
             let stillProcessing =
@@ -265,7 +265,7 @@ struct RecordingView: View {
     private func finishAndNavigate(_ recording: Recording) {
         guard !hasNavigated, revealRecording == nil else { return }
 
-        // Snapshot once — body must not re-decode the Codable blob.
+        // Snapshot once - body must not re-decode the Codable blob.
         let analysis = recording.analysis
         guard analysis?.speechScore.overall != nil || recording.overallScore != nil else {
             navigate(to: recording)
@@ -539,7 +539,7 @@ struct RecordingView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.white)
                 // One line, always. Every shipped cue is three to six words,
-                // and a cue that can wrap is a lane that can grow mid-take —
+                // and a cue that can wrap is a lane that can grow mid-take - 
                 // the one thing the reserved lane exists to prevent. Scaling
                 // down a little beats moving the dial under the speaker.
                 .lineLimit(1)
@@ -735,7 +735,7 @@ struct CircularWaveformView: View {
 
         case .dots:
             for i in 0..<36 {
-                let angle = (Double(i) / 36.0) * 2 * .pi - .pi / 2
+                let angle = (Double(i) / 36.0) * 2 * .pi.pi / 2
                 let h = amplitude(i, time: time, level: level)
                 let distance = radius + maxLength * 0.5 * h
                 let dotRadius = (2 + 4 * h) * scale
@@ -752,12 +752,12 @@ struct CircularWaveformView: View {
             }
 
         case .ribbon:
-            // Two phase-offset closed curves — the trailing one reads as echo.
+            // Two phase-offset closed curves - the trailing one reads as echo.
             for pass in 0..<2 {
                 var path = Path()
                 let samples = 120
                 for i in 0...samples {
-                    let angle = (Double(i) / Double(samples)) * 2 * .pi - .pi / 2
+                    let angle = (Double(i) / Double(samples)) * 2 * .pi.pi / 2
                     let h = amplitude(i, time: time + Double(pass) * 0.45, level: level)
                     let r = radius + maxLength * 0.5 * (h - 0.4)
                     let point = CGPoint(x: center.x + CGFloat(cos(angle)) * r, y: center.y + CGFloat(sin(angle)) * r)
@@ -801,7 +801,7 @@ struct CircularWaveformView: View {
 
 // MARK: - Mic Level Pill
 
-/// Answers one question — is the mic hearing me? — and stays quiet otherwise.
+/// Answers one question - is the mic hearing me? - and stays quiet otherwise.
 /// take green, drops to the warning only if the first few seconds bring in
 struct MicLevelPill: View {
     let isHearing: Bool

@@ -9,7 +9,7 @@ enum ToolPresentation: Equatable {
 ///
 /// It exists so "Add your own passage" can live in the chrome instead of
 /// taking the top of the scroll view, which is where Read Aloud used to put
-/// it — the first thing you saw on a page for reading passages was a form for
+/// it - the first thing you saw on a page for reading passages was a form for
 /// writing one, and the catalog started below the fold. Library already solves
 /// this for Prompts and Stories with a FAB; a tool page is pushed and titled,
 /// so the nav bar is the equivalent spot.
@@ -35,7 +35,7 @@ struct ToolPage<Content: View>: View {
     /// Set when the page was opened from the outcome browser. The matching
     /// `FocusSection` is scrolled to rather than filtered to: arriving on
     /// "Cut filler words" should put you on that group, not hide the other
-    /// six. Map before mask, taken all the way — nothing masks any more.
+    /// six. Map before mask, taken all the way - nothing masks any more.
     var focus: PracticeFocus?
     @ViewBuilder var content: Content
 
@@ -134,7 +134,7 @@ struct ToolPage<Content: View>: View {
 
 // MARK: - Focus Section
 
-/// One outcome heading — title, icon, count, promise — over its items.
+/// One outcome heading - title, icon, count, promise - over its items.
 ///
 /// Generic over the item so each page supplies only its own row. The four
 /// copies this replaces each wrapped themselves in `AnyView` to satisfy an
@@ -143,7 +143,7 @@ struct ToolPage<Content: View>: View {
 ///
 /// **This heading is the tool page's only taxonomy.** It used to sit directly
 /// under a row of focus pills that said the same eight words in shorter form,
-/// so every page carried its grouping twice — once as a control, once as the
+/// so every page carried its grouping twice - once as a control, once as the
 /// thing the control acted on. With seven drills and a dozen warm-ups,
 /// scrolling past a group is cheaper than deciding to hide it, and a page that
 /// arrives pre-filtered hides material the reader never asked to lose. The
@@ -181,7 +181,7 @@ struct FocusSection<Item: Identifiable, Row: View>: View {
 
 // MARK: - Source Story Banner
 
-/// "Warming up for …" / "Drilling from …" — shown when a tool is opened from a
+/// "Warming up for …" / "Drilling from …" - shown when a tool is opened from a
 /// Story via Library send-to. One component because the two callers had
 /// hand-rolled the same card with different tints and corner treatments.
 struct SourceStoryBanner: View {

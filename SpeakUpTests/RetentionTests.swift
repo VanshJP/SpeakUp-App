@@ -49,13 +49,13 @@ struct StreakProtectionTests {
     }
 
     @Test func noFreezeBankedMeansNoRescue() {
-        // Only 3 practice days — under the 5 needed to earn one.
+        // Only 3 practice days - under the 5 needed to earn one.
         let days = (2...4).map { daysAgo($0) }
         let result = StreakProtection.resolve(practiceDays: days, frozenDays: [])
         #expect(!result.didConsumeFreeze)
     }
 
-    /// A freeze protects a slip, not an absence — two days gone is a comeback.
+    /// A freeze protects a slip, not an absence - two days gone is a comeback.
     @Test func twoDayAbsenceIsNotRescued() {
         let days = (3...9).map { daysAgo($0) }
         let result = StreakProtection.resolve(practiceDays: days, frozenDays: [])
@@ -95,7 +95,7 @@ struct FrozenStreakCalculationTests {
         #expect(Date.calculateStreak(from: practice, frozenDays: [daysAgo(2)]) == 4)
     }
 
-    /// A freeze holds the chain but must never inflate the number — the streak
+    /// A freeze holds the chain but must never inflate the number - the streak
     /// stays a count of days the user actually spoke.
     @Test func frozenDayDoesNotCountAsPractice() {
         let practice = [daysAgo(1), daysAgo(3)]
@@ -170,7 +170,7 @@ struct RetentionNotificationPlannerTests {
         #expect(ids(live).contains(RetentionNotificationPlanner.streakAtRiskID))
     }
 
-    /// Practising clears the rescue — nobody gets told their streak is ending
+    /// Practising clears the rescue - nobody gets told their streak is ending
     /// on a day they already saved it.
     @Test func practicingTodayCancelsTheRescue() {
         let plan = RetentionNotificationPlanner.plan(
@@ -216,7 +216,7 @@ struct RetentionNotificationPlannerTests {
         #expect(Set(RetentionNotificationPlanner.comebackIDs).isSubset(of: ids(lapsed)))
     }
 
-    /// The ladder stops. Day 7 is the last rung — past that it is noise, and
+    /// The ladder stops. Day 7 is the last rung - past that it is noise, and
     /// noise gets the app muted for good.
     @Test func comebackLadderStopsAtDaySeven() {
         let plan = RetentionNotificationPlanner.comebackLadder(

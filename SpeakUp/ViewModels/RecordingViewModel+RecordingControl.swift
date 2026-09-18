@@ -6,7 +6,7 @@ extension RecordingViewModel {
     // MARK: - Recording Control
 
     func startRecording() async {
-        // Block while a stop is still finalizing — VM clears `isRecording`
+        // Block while a stop is still finalizing - VM clears `isRecording`
         // before the service await returns.
         guard !isRecording, !isProcessing, !audioService.isFinalizingRecording else { return }
         do {
@@ -37,7 +37,7 @@ extension RecordingViewModel {
     }
 
     func stopRecording() async -> Recording? {
-        // Serializes the stop-button / timer-expiry / interruption races —
+        // Serializes the stop-button / timer-expiry / interruption races - 
         // everything below up to the first await runs synchronously on MainActor.
         guard isRecording else { return nil }
 
@@ -47,7 +47,7 @@ extension RecordingViewModel {
         liveTranscriptionService.stop()
         coachingService.reset()
 
-        // `isProcessing` blocks a new start until finalize finishes — clearing
+        // `isProcessing` blocks a new start until finalize finishes - clearing
         // `isRecording` alone used to let a double-tap start timers with no recorder.
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
@@ -111,7 +111,7 @@ extension RecordingViewModel {
                     story.lastPracticeDate = Date()
                     story.updatedAt = Date()
                     // bestScore updates in RecordingProcessingCoordinator once
-                    // analysis exists — it is always nil at this point.
+                    // analysis exists - it is always nil at this point.
                     try? context.save()
                 }
             }
@@ -150,7 +150,7 @@ extension RecordingViewModel {
 
     /// Reports the start of a session so the funnel can measure how many
     /// starts reach a score. Logged once the recorder is actually running, not
-    /// when the screen opens — an abandoned countdown is not a practice start.
+    /// when the screen opens - an abandoned countdown is not a practice start.
     private func logPracticeStart() {
         let useCase: String
         if sessionSource == SharedPromptLink.shareSource {

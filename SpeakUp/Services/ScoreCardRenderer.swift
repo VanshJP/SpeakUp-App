@@ -38,7 +38,7 @@ enum ScoreCardRenderer {
 // MARK: - Score Card Theme
 
 /// Backdrop of the shared card. Every theme stays dark so the hero body, the
-/// radar chart, and the white type inside it need no per-theme handling —
+/// radar chart, and the white type inside it need no per-theme handling - 
 /// only the canvas behind them changes.
 enum ScoreCardTheme: Int, Codable, CaseIterable, Identifiable {
     case midnight = 0

@@ -63,7 +63,7 @@ final class LocalLLMService {
     // MARK: - Configuration
 
     enum ModelProfile: String, CaseIterable, Identifiable {
-        /// Gemma 3 1B instruction-tuned — smallest viable profile. ~0.8 GB on
+        /// Gemma 3 1B instruction-tuned - smallest viable profile. ~0.8 GB on
         /// disk, ~1 GB resident. Fits inside the iOS app budget on every
         /// supported device (iPhone XR / SE 2nd gen onward) without the
         /// increased-memory entitlement. Uses the standard
@@ -114,7 +114,7 @@ final class LocalLLMService {
 
         /// Minimum *app-available* memory required to load this profile.
         ///
-        /// iOS does not let an app allocate the device's total RAM — `jetsam`
+        /// iOS does not let an app allocate the device's total RAM - `jetsam`
         /// will kill the app at a much lower threshold reported by
         /// `os_proc_available_memory()`. Even on an 8 GB iPhone 15 Pro a
         /// foreground app typically gets ~3 GB before being killed (more with
@@ -123,7 +123,7 @@ final class LocalLLMService {
         ///
         /// These values are tuned to the *real* app budget after the
         /// model weights, KV cache (Q8 quantized), activations and decode
-        /// buffers are accounted for — not the on-disk model size.
+        /// buffers are accounted for - not the on-disk model size.
         nonisolated var minimumRecommendedMemoryBytes: Int {
             switch self {
             case .gemma3_1B:
@@ -209,7 +209,7 @@ final class LocalLLMService {
 
     // MARK: - Private
 
-    // Sendable — reachable from the MainActor service and the off-main orphan sweep alike.
+    // Sendable - reachable from the MainActor service and the off-main orphan sweep alike.
     nonisolated private static let logger = Logger.app("LocalLLM")
     nonisolated private let engine = LLMInferenceEngine()
     @ObservationIgnored private var activeURLSessionTask: URLSessionDownloadTask?
@@ -241,8 +241,8 @@ final class LocalLLMService {
 
     /// Optional hook awaited just before the `LLMInferenceEngine` is created.
     /// Host code (typically `LLMService` at app startup) should set this to a
-    /// closure that unloads other heavy in-memory assets — primarily the
-    /// Whisper model — so the LLM can claim the RAM. When `nil`, the
+    /// closure that unloads other heavy in-memory assets - primarily the
+    /// Whisper model - so the LLM can claim the RAM. When `nil`, the
     /// `Notification.Name.localLLMWillLoad` notification is still posted so
     /// observers can react.
     @ObservationIgnored
@@ -285,7 +285,7 @@ final class LocalLLMService {
         }
 
         // Retired profiles (Qwen) leave multi-GB GGUFs behind that no UI can
-        // reach — `deleteModel()` only removes the *selected* profile's file.
+        // reach - `deleteModel()` only removes the *selected* profile's file.
         // Sweep off the main thread; the directory holds nothing but weights.
         let directory = Self.modelsDirectory
         let known = Set(ModelProfile.allCases.map(\.modelFileName))
@@ -328,7 +328,7 @@ final class LocalLLMService {
     /// Switches the active model profile.
     ///
     /// Returns `false` and leaves the active profile unchanged when a download
-    /// is in progress — silently interrupting a multi-GB transfer would be
+    /// is in progress - silently interrupting a multi-GB transfer would be
     /// hostile. Callers must surface this to the UI so the user can choose to
     /// invoke `cancelDownload()` explicitly.
     @discardableResult
@@ -357,7 +357,7 @@ final class LocalLLMService {
             modelState = .downloaded
             return
         }
-        // Guard against double-starts — the background session would happily
+        // Guard against double-starts - the background session would happily
         // launch a second copy of the same transfer.
         if case .downloading = modelState { return }
 
@@ -381,7 +381,7 @@ final class LocalLLMService {
             modelState = .notDownloaded
             downloadProgress = 0
         } catch {
-            // User-initiated cancels surface as NSURLErrorCancelled — treat as
+            // User-initiated cancels surface as NSURLErrorCancelled - treat as
             // a non-error reset rather than a failure state.
             if (error as NSError).code == NSURLErrorCancelled {
                 modelState = .notDownloaded
@@ -424,7 +424,7 @@ final class LocalLLMService {
         modelState = .loading
 
         // Aggressive memory release: tell observers (WhisperService, etc.) to
-        // unload before we claim multiple GB for llama context. Best-effort —
+        // unload before we claim multiple GB for llama context. Best-effort - 
         // a missing host hook is not fatal, just makes the next memory check
         // more likely to fail.
         NotificationCenter.default.post(name: .localLLMWillLoad, object: self)
@@ -467,7 +467,7 @@ final class LocalLLMService {
     }
 
     /// Requests the engine abort any in-flight `generate` call as quickly as
-    /// possible. Safe to call from any actor — does not block on the engine's
+    /// possible. Safe to call from any actor - does not block on the engine's
     /// inference lock. Intended for memory-pressure handlers so a long
     /// coaching-insight generation cannot keep the model resident past a
     /// `.warning` / `.critical` event and trip `jetsam`.
@@ -547,16 +547,16 @@ final class LocalLLMService {
             You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
 
             PENALIZE (drag the score down):
-            - Rambling: tangents, repetition without payoff, sentences that wander off the prompt
-            - Disjointed jumps between unrelated ideas with no signposting
-            - Speech that ignores or contradicts the prompt
-            - Run-on thoughts with no clear arc
+ - Rambling: tangents, repetition without payoff, sentences that wander off the prompt
+ - Disjointed jumps between unrelated ideas with no signposting
+ - Speech that ignores or contradicts the prompt
+ - Run-on thoughts with no clear arc
 
             REWARD (push the score up):
-            - Explicit logical transitions ("first", "however", "as a result", "to summarize")
-            - Clear opening → body → conclusion structure
-            - Tight, sustained relevance to the prompt
-            - Each sentence advancing the argument
+ - Explicit logical transitions ("first", "however", "as a result", "to summarize")
+ - Clear opening → body → conclusion structure
+ - Tight, sustained relevance to the prompt
+ - Each sentence advancing the argument
 
             Reply EXACTLY in this format, one line each, no extra text:
             SCORE: <0-100 integer>
@@ -578,16 +578,16 @@ final class LocalLLMService {
             You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
 
             PENALIZE (drag the score down):
-            - Rambling: tangents, repetition without payoff, sentences that drift between unrelated threads
-            - Disjointed jumps with no signposting
-            - Run-on thoughts that never resolve
-            - Filler-heavy delivery that obscures the point
+ - Rambling: tangents, repetition without payoff, sentences that drift between unrelated threads
+ - Disjointed jumps with no signposting
+ - Run-on thoughts that never resolve
+ - Filler-heavy delivery that obscures the point
 
             REWARD (push the score up):
-            - Explicit logical transitions ("first", "however", "as a result", "to summarize")
-            - One sustained thread or argument across the speech
-            - Each sentence advancing the previous one
-            - A discernible arc from opening to conclusion
+ - Explicit logical transitions ("first", "however", "as a result", "to summarize")
+ - One sustained thread or argument across the speech
+ - Each sentence advancing the previous one
+ - A discernible arc from opening to conclusion
 
             Reply EXACTLY in this format, one line each, no extra text:
             SCORE: <0-100 integer>
@@ -705,7 +705,7 @@ final class LocalLLMService {
     // MARK: - Chat Template
 
     private static func formatChatPrompt(systemPrompt: String, userPrompt: String, profile: ModelProfile) -> String {
-        // Gemma has no dedicated system role — system instructions are
+        // Gemma has no dedicated system role - system instructions are
         // prepended to the first user turn separated by a blank line. Turn
         // markers must match the official Gemma chat template exactly.
         // BOS is injected automatically by `llama_tokenize` with
@@ -847,7 +847,7 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
 /// runs on a background thread via the internal serial lock.
 nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
-    // Same category as the service logger — one stream for both layers.
+    // Same category as the service logger - one stream for both layers.
     nonisolated private static let logger = Logger.app("LocalLLM")
 
     private var model: OpaquePointer?                       // llama_model *
@@ -868,7 +868,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     /// Cancellation flag protected by a *separate* lock so callers can request
     /// abort without contending with the heavyweight inference lock held by
-    /// `generate`. Sharing the inference lock would defeat the purpose — the
+    /// `generate`. Sharing the inference lock would defeat the purpose - the
     /// flag would only become observable *after* generation returned.
     private let cancelLock = NSLock()
     private var _cancelled = false
@@ -881,8 +881,8 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
     // MARK: - Cancellation
 
-    /// Requests early exit from the in-flight `generate` call. Non-blocking —
-    /// only contends on a tiny dedicated lock, never the inference lock — so
+    /// Requests early exit from the in-flight `generate` call. Non-blocking - 
+    /// only contends on a tiny dedicated lock, never the inference lock - so
     /// it stays responsive even during multi-second token decode loops.
     func cancel() {
         cancelLock.lock()
@@ -907,7 +907,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
     /// Loads the model from `modelPath`. Throws a typed `LocalLLMError` so the
     /// caller can distinguish missing-file / OOM / llama-internal failures and
     /// surface the right recovery action. `contextSize` is the `n_ctx` value
-    /// to use for this profile — caller picks based on memory budget.
+    /// to use for this profile - caller picks based on memory budget.
     func load(modelPath: String, contextSize: Int) throws {
         lock.lock()
         defer { lock.unlock() }
@@ -923,8 +923,8 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         //
         // `n_gpu_layers = 0` forces the CPU backend even on Apple Silicon. On
         // iOS the Metal backend allocates a wired `MTLBuffer` for weight
-        // tensors — `ggml_metal_log_allocated_size: 3072 MiB ...` in the load
-        // log — and that buffer is non-pageable. Under the per-process budget
+        // tensors - `ggml_metal_log_allocated_size: 3072 MiB ...` in the load
+        // log - and that buffer is non-pageable. Under the per-process budget
         // (~4 GB on iPhone 14 Pro with the increased-memory entitlement),
         // that wired allocation alone trips `.warning` memory pressure. The
         // CPU backend serves weights from the mmap'd file, so iOS can evict
@@ -933,11 +933,11 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         // ≤300-token coaching insights.
         //
         // `check_tensors = false` skips a per-tensor integrity scan that
-        // touches every weight page during load — a guaranteed way to fault
+        // touches every weight page during load - a guaranteed way to fault
         // the entire 1.6 GB Q4_K_M E2B file into resident memory before
         // generation even starts. Disabling it lets mmap stay cold and keeps
         // the load-time RSS spike inside the iPhone 14 Pro budget.
-        // Leave `use_extra_bufts` at its default (true) — it enables the
+        // Leave `use_extra_bufts` at its default (true) - it enables the
         // ggml-cpu-aarch64 weight repacking that gives ~2-3× decode throughput
         // on Apple ARM CPUs. Disabling it stalls coaching generation long
         // enough to look like a UI hang on iPhone 14 Pro.
@@ -956,41 +956,41 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         model = loadedModel
 
         // Create context. Memory-saving tweaks for iOS:
-        //   • n_ctx                 — per-profile (1024 for E2B / 3 1B, 512
+        //   • n_ctx - per-profile (1024 for E2B / 3 1B, 512
         //                             for E4B); KV cache scales linearly.
-        //   • type_k/type_v = Q4_0  — quarter of F16 KV cache size; quality
+        //   • type_k/type_v = Q4_0 - quarter of F16 KV cache size; quality
         //                             cost is small at short contexts and is
         //                             essential to keep the larger Gemma 4
         //                             quants inside the iPhone 14 Pro process
         //                             budget. Requires flash_attn.
-        //   • flash_attn = ENABLED  — lower attention memory + faster decode.
-        //   • n_batch = 64          — bounds the logical decode-buffer
+        //   • flash_attn = ENABLED - lower attention memory + faster decode.
+        //   • n_batch = 64 - bounds the logical decode-buffer
         //                             allocation; we only ever submit chunks
         //                             of `promptDecodeChunkSize` (8) tokens,
         //                             so anything larger is wasted compute
         //                             scratch held resident for the whole run.
-        //   • n_ubatch = 16         — physical batch ≤ logical batch; 16 still
+        //   • n_ubatch = 16 - physical batch ≤ logical batch; 16 still
         //                             covers single chunks with 2× headroom.
-        //   • op_offload = false    — no device backend to offload to on the
+        //   • op_offload = false - no device backend to offload to on the
         //                             CPU path; suppresses an unused
         //                             scheduler allocation.
-        //   • swa_full = false      — Gemma 3 / 4 use a sliding-window cache;
+        //   • swa_full = false - Gemma 3 / 4 use a sliding-window cache;
         //                             this caps the KV buffer at the window
         //                             size instead of full `n_ctx`, saving
         //                             ~40-60% of KV memory on long contexts.
-        //   • kv_unified = true     — single-sequence inference, so the
+        //   • kv_unified = true - single-sequence inference, so the
         //                             unified buffer is both smaller and
         //                             faster than per-sequence allocation.
-        //   • no_perf = true        — skip llama's internal perf timers; we
+        //   • no_perf = true - skip llama's internal perf timers; we
         //                             don't surface them and they keep a
         //                             little extra state on the hot path.
-        //   • n_threads = 2         — Apple ARM generation is memory-bandwidth
+        //   • n_threads = 2 - Apple ARM generation is memory-bandwidth
         //                             bound; using both P-cores and E-cores
         //                             adds L2 pressure with little throughput
         //                             gain and accelerates thermal throttling
         //                             on the 10-30s coaching-insight runs.
         //                             Two P-core threads is the sweet spot.
-        //   • n_threads_batch = 4   — prompt processing is compute-bound;
+        //   • n_threads_batch = 4 - prompt processing is compute-bound;
         //                             give it the full P+E core budget.
         var cparams = llama_context_default_params()
         cparams.n_ctx = UInt32(contextTokenLimit)
@@ -1056,7 +1056,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         // 3. Decode prompt tokens. Reserve space for the generation window
         // plus a 16-token safety margin so the final assistant token never
         // overruns `n_ctx`. When the prompt is longer than the remaining
-        // budget, keep the most recent tail — the active user request and
+        // budget, keep the most recent tail - the active user request and
         // assistant tag survive truncation, which matters far more than the
         // leading system prompt for chat-template-formatted input.
         let reservedForGeneration = max(64, min(maxTokens, 320))

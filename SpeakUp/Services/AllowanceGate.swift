@@ -4,7 +4,7 @@ import SwiftData
 /// Reads and writes the free-tier allowance against `UserSettings`.
 ///
 /// Every rule lives in `PracticeAllowance`; this layer only fetches the row,
-/// hands over the state, and persists the result. It fails open — a missing or
+/// hands over the state, and persists the result. It fails open - a missing or
 /// unreadable settings row must never stop someone from practising.
 @MainActor
 enum AllowanceGate {

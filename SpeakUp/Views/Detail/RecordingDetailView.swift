@@ -62,13 +62,13 @@ struct RecordingDetailView: View {
     /// `transcriptionWords`, a Codable blob that must never decode in `body`.
     @State private var coachEvidence = CoachEvidence()
     @State private var coachCrutchLines: [String] = []
-    /// This session's analysis with the advanced metrics intact — see
+    /// This session's analysis with the advanced metrics intact - see
     /// `Recording.fullAnalysis`. Resolved once here because it decodes JSON;
     /// coaching is the one surface that reads the fields SwiftData drops.
     /// Doubles as the render-side analysis: every `recording.analysis` access
     /// in `body` re-decodes the blob, so nothing below reads it directly.
     @State private var coachAnalysis: SpeechAnalysis?
-    /// This session's timed words, resolved once beside the analysis — same
+    /// This session's timed words, resolved once beside the analysis - same
     /// blob rule as above, and the input to everything derived below.
     @State private var sessionWords: [TranscriptionWord]?
     @State private var speakerTurnsCache: [SpeakerTurn] = []
@@ -78,13 +78,13 @@ struct RecordingDetailView: View {
     /// a recording, so it is not shown attached to one it never applied to.
     @State private var showsFocusCard = false
     /// This take's word workout, scored against the words of its own day.
-    /// Resolved once on load — picking today's words reads *and writes*
+    /// Resolved once on load - picking today's words reads *and writes*
     /// UserDefaults, so running it from `body` re-picked and re-saved the day
     /// on every redraw. Recordings with no snapshot from an earlier day stay
     /// nil: their card hides rather than borrow today's list.
     @State private var vocabWorkout: (challenge: DailyVocabChallenge, evaluation: VocabChallengeEvaluation)?
 
-    // Next-step routing — the practice tool that targets this session's weakest area.
+    // Next-step routing - the practice tool that targets this session's weakest area.
     @State private var nextStepDrill: DrillMode?
     @State private var showingNextStepWarmUp = false
     @State private var showingNextStepReadAloud = false
@@ -451,7 +451,7 @@ struct RecordingDetailView: View {
             let words = recording.transcriptionWords
             sessionWords = words
             speakerTurnsCache = words.map(speakerTurns(from:)) ?? []
-            // Word swaps are hesitation/hedge habits — not structural frames.
+            // Word swaps are hesitation/hedge habits - not structural frames.
             crutchHits = CrutchSwapsCard.hits(from: words)
                 .filter { $0.category != .structural }
         }
@@ -574,7 +574,7 @@ struct RecordingDetailView: View {
     }
 
     private func enqueueProcessingIfNeeded(_ recording: Recording, force: Bool = false) {
-        // Never mark an already-analyzed recording as processing — doing so
+        // Never mark an already-analyzed recording as processing - doing so
         // before this guard used to strand the screen on AnalyzingView forever.
         // Cached copy: `recording.analysis` decodes the blob on every call.
         guard coachAnalysis == nil else { return }
@@ -632,7 +632,7 @@ struct RecordingDetailView: View {
 
     // MARK: - Context Strip
 
-    /// Layout lives in `DetailContextStrip` — the analyzing skeleton renders the
+    /// Layout lives in `DetailContextStrip` - the analyzing skeleton renders the
     /// same header, so it must not fork.
     @ViewBuilder
     private func contextStrip(_ recording: Recording) -> some View {
@@ -1295,7 +1295,7 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private func coachingTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
-        // AI Insights — available when Apple Intelligence or local LLM is ready
+        // AI Insights - available when Apple Intelligence or local LLM is ready
         if llmService.isAvailable {
             aiInsightsSection(recording)
         }
@@ -1608,7 +1608,7 @@ struct RecordingDetailView: View {
     }
 
     /// Transcript text for the LLM passes (coherence blend, coaching insight).
-    /// Narrowed to the primary speaker when isolation actually ran — the stored
+    /// Narrowed to the primary speaker when isolation actually ran - the stored
     /// `ConversationIsolationService` reports a ratio of 1.0 and no filtered
     private func resolvedTranscript(for recording: Recording) -> String {
         let metrics = coachAnalysis?.speakerIsolationMetrics
@@ -1713,7 +1713,7 @@ struct RecordingDetailView: View {
         let needsWaveform = waveformHeights.isEmpty
         let cachedPeaks = recording.waveformPeaks
 
-        // Use cached peaks synchronously — no file I/O needed.
+        // Use cached peaks synchronously - no file I/O needed.
         if needsWaveform, let cachedPeaks, !cachedPeaks.isEmpty {
             waveformHeights = AudioWaveformGenerator.heights(from: cachedPeaks)
         }
@@ -1773,7 +1773,7 @@ struct RecordingDetailView: View {
             // Counted on `transcriptionText`, not `analysis`: SwiftData stores
             // the Codable `analysis` as a composite attribute with no queryable
             // column, so a predicate touching it raises an ObjC exception during
-            // SQL generation that `try?` cannot catch — it terminates the app.
+            // SQL generation that `try?` cannot catch - it terminates the app.
             // Transcript and analysis are written in the same save, so the count
             // matches. Same reasoning in `RecordingProcessingCoordinator`.
             let analyzedCount = (try? modelContext.fetchCount(
@@ -1781,7 +1781,7 @@ struct RecordingDetailView: View {
             )) ?? 0
             isFirstAnalyzedSession = analyzedCount <= 1
 
-            // Reset stale isProcessing flag — if the app crashed mid-transcription,
+            // Reset stale isProcessing flag - if the app crashed mid-transcription,
             // this flag stays true in SwiftData but no task is actually running.
             // Clear it so the view doesn't get stuck on the AnalyzingView spinner.
             // enqueueProcessingIfNeeded() will re-process if analysis is still nil.
@@ -1793,7 +1793,7 @@ struct RecordingDetailView: View {
                 try? modelContext.save()
             }
 
-            // Resolve the blob-backed data before the first ready render —
+            // Resolve the blob-backed data before the first ready render - 
             // detailScreenState and readyContent read only the caches.
             if let loadedRecording = recording {
                 resolveSessionDataIfNeeded(for: loadedRecording)
@@ -1817,7 +1817,7 @@ struct RecordingDetailView: View {
         let durationSnapshot = recording.actualDuration
         let wpmData = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
-                // Pure pipeline static — never construct `SpeechService` off the
+                // Pure pipeline static - never construct `SpeechService` off the
                 // main actor (its init would spin up Whisper under MainActor default).
                 let data = SpeechAnalysisPipeline.computeWPMTimeSeries(
                     words: words,
@@ -1828,7 +1828,7 @@ struct RecordingDetailView: View {
         }
         guard !Task.isCancelled else { return }
 
-        // Re-fetch — the row may have been deleted while we computed.
+        // Re-fetch - the row may have been deleted while we computed.
         var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id == recordingID })
         descriptor.fetchLimit = 1
         guard let persisted = (try? modelContext.fetch(descriptor))?.first else { return }

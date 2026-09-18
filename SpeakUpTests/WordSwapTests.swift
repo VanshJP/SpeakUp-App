@@ -22,7 +22,7 @@ struct WordSwapTests {
         hits.first { $0.word == word }
     }
 
-    // MARK: Disambiguation — like
+    // MARK: Disambiguation - like
 
     @Test
     func likeBeforeNumberSuggestsAbout() {
@@ -75,7 +75,7 @@ struct WordSwapTests {
         #expect(like?.swaps.contains("cut it entirely") == true)
     }
 
-    // MARK: Disambiguation — confirmation markers
+    // MARK: Disambiguation - confirmation markers
 
     @Test
     func rightAtSentenceEndGetsConfirmationCheckOnce() {
@@ -154,7 +154,7 @@ struct WordSwapTests {
         #expect(aLot?.timestamps.count == 1)
         #expect(aLot?.primarySwap?.replacement == "\u{201C}often\u{201D}")
 
-        // The phrase consumed its own tokens — nothing double-counted.
+        // The phrase consumed its own tokens - nothing double-counted.
         #expect(hit(hits, "lot") == nil)
     }
 
@@ -319,7 +319,7 @@ struct WordSwapTests {
 
         let things = hit(LexiconInsightsEngine.sessionHits(from: words), "things")
 
-        // "name them: including planning" is coaching, not one substitution —
+        // "name them: including planning" is coaching, not one substitution - 
         // a wrong rewrite would be worse than none.
         #expect(things?.primarySwap?.edit.isMechanical == false)
         #expect(things?.occurrences.first?.rewritten == nil)
@@ -333,7 +333,7 @@ struct WordSwapTests {
 
         let just = hit(LexiconInsightsEngine.sessionHits(from: words), "just")
 
-        // The alternatives map offers "cut it" and "drop it entirely" — the
+        // The alternatives map offers "cut it" and "drop it entirely" - the
         // same edit twice. Only one survives.
         #expect(just?.swaps == ["cut it", "\u{201C}only\u{201D} when counting matters"])
         #expect(just?.swaps.contains("drop \u{201C}just\u{201D} entirely") == false)
@@ -400,7 +400,7 @@ struct WordSwapTests {
         let um = hit(LexiconInsightsEngine.sessionHits(from: words), "um")
 
         // Whisper emits zero starts often enough that tapping one jumps to the
-        // top of the take — the transcript drops those taps too.
+        // top of the take - the transcript drops those taps too.
         #expect(um?.occurrences.first?.isPlayable == false)
         #expect(um?.occurrences.dropFirst().allSatisfy(\.isPlayable) == true)
     }
@@ -413,7 +413,7 @@ struct WordSwapTests {
 
         let um = hit(LexiconInsightsEngine.sessionHits(from: words), "um")
 
-        // The previous sentence is not context — quoting into it reads as a
+        // The previous sentence is not context - quoting into it reads as a
         // glitch, and there is no leading ellipsis because nothing was cut.
         #expect(um?.exampleFragment?.map(\.text) == ["um", "the", "next", "thing", "landed"])
     }
@@ -521,7 +521,7 @@ struct WordSwapPracticeLineTests {
 
         let just = hit(LexiconInsightsEngine.sessionHits(from: words), "just")
 
-        // "we shipped" is a fragment — sending it to a pronunciation scorer
+        // "we shipped" is a fragment - sending it to a pronunciation scorer
         // would score nothing worth knowing.
         #expect(just?.occurrences.first?.rewritten != nil)
         #expect(just?.moments.first?.practiceLine == nil)
@@ -588,7 +588,7 @@ struct CrutchBaselineTests {
         #expect(baseline.direction(for: "just", count: 1, totalWords: 25) == .steady)
         // Twice the rate.
         #expect(baseline.direction(for: "just", count: 2, totalWords: 25) == .rising)
-        // Same raw count, twice the words — that is progress, not a wash.
+        // Same raw count, twice the words - that is progress, not a wash.
         #expect(baseline.direction(for: "just", count: 1, totalWords: 50) == .falling)
     }
 

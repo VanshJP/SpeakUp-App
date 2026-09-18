@@ -42,7 +42,7 @@ struct AppearanceSettingsTests {
     }
 
     @Test func darkGlassIsQuieterThanLight() {
-        // The tint lift is the only knob now — dark must lift less so plates sink.
+        // The tint lift is the only knob now - dark must lift less so plates sink.
         #expect(GlassAppearance.dark.tintLift < GlassAppearance.light.tintLift)
     }
 

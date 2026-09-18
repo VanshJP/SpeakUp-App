@@ -89,7 +89,7 @@ enum ScreenshotSeeder {
         for session in sessions {
             let text = session.story ? toastTranscript : interviewTranscript
             let recording = Recording(
-                date: .now.addingTimeInterval(-Double(session.daysAgo) * 86_400 - 3_600),
+                date: .now.addingTimeInterval(-Double(session.daysAgo) * 86_400-3_600),
                 targetDuration: 90,
                 actualDuration: session.story ? 94 : 71,
                 transcriptionText: text,
@@ -147,7 +147,7 @@ enum ScreenshotSeeder {
         )
     }
 
-    /// A visible arc rather than a flat line — a pace chart with no shape sells
+    /// A visible arc rather than a flat line - a pace chart with no shape sells
     /// nothing, which is the whole point of the slide it appears on.
     private static func wpmSeries(around wpm: Double) -> [WPMDataPoint] {
         let shape: [Double] = [-14, 9, 21, 4, -11, -19, 6, 17, 2, -8]

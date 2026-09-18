@@ -212,12 +212,12 @@ struct ProgressTrack: View {
 // MARK: - Dimension tints
 
 extension AppColors {
-    /// Category identity, not judgement — these name which area a tip is about,
+    /// Category identity, not judgement - these name which area a tip is about,
     /// so they come from the jewel/tool tones rather than the state colors.
     static func tint(for dimension: CoachDimension) -> Color {
         switch dimension {
         case .fillers: return AppColors.warning
-        // Not `categoryTeal` — it aliases `primary`, which `.clarity` holds.
+        // Not `categoryTeal` - it aliases `primary`, which `.clarity` holds.
         case .pace: return AppColors.categoryNeutralCool
         case .pauses: return AppColors.categoryPlum
         case .clarity: return AppColors.primary

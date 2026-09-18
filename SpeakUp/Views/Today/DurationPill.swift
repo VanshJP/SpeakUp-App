@@ -2,6 +2,8 @@ import SwiftUI
 
 // MARK: - Duration Pill Selector
 
+/// Compact duration control. Matches `StatusPill` / refresh visual height (28pt)
+/// while keeping a 44pt hit target.
 struct DurationPill: View {
     @Binding var selectedDuration: RecordingDuration
 
@@ -24,18 +26,18 @@ struct DurationPill: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "clock")
-                    .font(.caption2)
+                    .font(.system(size: 10, weight: .semibold))
                 Text(selectedDuration.displayName)
-                    .font(.caption.weight(.medium))
+                    .font(.caption2.weight(.semibold))
                 Image(systemName: "chevron.down")
-                    .font(.caption2)
+                    .font(.system(size: 8, weight: .bold))
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .frame(height: 28)
             .glassEffect(.regular.interactive(), in: .capsule)
         }
-        .frame(minHeight: 44)
+        .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityLabel("Recording length, \(selectedDuration.displayName)")
         .accessibilityHint("Opens recording length options")

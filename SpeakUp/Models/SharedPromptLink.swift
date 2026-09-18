@@ -3,7 +3,7 @@ import Foundation
 
 /// Everything a share link is allowed to carry so a friend can try the same
 /// prompt. Prompt *text* is opt-in at share time; scores on the card are not
-/// the same as scores in the URL — `beat` is only written when the sender
+/// the same as scores in the URL - `beat` is only written when the sender
 /// chose to include the prompt, because that is the challenge.
 ///
 /// Lives as a POD so tests and background URL parsing never hop to the UI.
@@ -205,7 +205,7 @@ nonisolated enum SharedPromptLink {
     /// see the prompt; friends with the app get a tappable link.
     ///
     /// Kept to a headline, the prompt, and the URL. Everything the old version
-    /// spelled out — that this is a score, that the link opens the same prompt —
+    /// spelled out - that this is a score, that the link opens the same prompt - 
     /// is already on the card or obvious from the link, and a caption people
     /// scroll past is a caption that shares nothing.
     static func message(

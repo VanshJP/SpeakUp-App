@@ -17,7 +17,7 @@ struct PracticeImproveRoute: Hashable {}
 /// The one row the outcome axis gets on the Library → Tools landing.
 ///
 /// It used to be the axis itself: a header, a caption, and eight full-width
-/// rows above the practice grid — two doors to the same forty exercises, and
+/// rows above the practice grid - two doors to the same forty exercises, and
 /// the longest screen in the app. The axis has not been demoted, it has been
 /// put where it is decided: every tool page still groups by it. This row is
 /// how you enter from the other end, when you know the problem and not the
@@ -159,8 +159,8 @@ struct PracticeFocusRow: View {
 ///
 /// This is the screen that answers "aren't warm-ups drills too?". They are
 /// both practice; they differ in how long they take and whether the mic is
-/// open. Listing them together under "Be understood" — tongue twisters,
-/// articulation warm-ups, and the precision read-aloud passages — makes the
+/// open. Listing them together under "Be understood" - tongue twisters,
+/// articulation warm-ups, and the precision read-aloud passages - makes the
 /// relationship visible instead of leaving it to be inferred from four
 /// separate tool pages.
 struct PracticeFocusDetailView: View {
@@ -228,7 +228,7 @@ struct PracticeFocusDetailView: View {
                             .foregroundStyle(.white)
 
                         // The format line, not the outcome line. On this page
-                        // the outcome is the heading — what differs between
+                        // the outcome is the heading - what differs between
                         // these four rows is what the next few minutes cost.
                         Text(tool.format)
                             .font(.caption)

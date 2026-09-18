@@ -169,7 +169,7 @@ private struct SessionDefaultsChangeModifiers: ViewModifier {
                 guard !viewModel.isSyncing else { return }
                 Task {
                     await viewModel.saveSettings()
-                    // Hear the pack you just picked — the whole point of the row.
+                    // Hear the pack you just picked - the whole point of the row.
                     ChirpPlayer.shared.pack = pack
                     ChirpPlayer.shared.play(.tick)
                 }

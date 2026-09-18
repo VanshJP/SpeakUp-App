@@ -23,28 +23,28 @@ enum AppColors {
     /// Matches `scoreLow` for the same reason `success` matches `scoreHigh`.
     static let error = Color(red: 0.961, green: 0.329, blue: 0.290) // #F5544A
 
-    /// Muted steel blue. Informational badges only — never a score band.
+    /// Muted steel blue. Informational badges only - never a score band.
     static let info = Color(red: 0.357, green: 0.529, blue: 0.761) // #5B87C2
 
     // MARK: - Recording Colors
 
-    /// Recording red is its own tone rather than an alias of `error` — it sits
+    /// Recording red is its own tone rather than an alias of `error` - it sits
     /// slightly deeper so it stays legible under the pulsing glow instead of
     /// blooming out, and so "live" never reads as "something went wrong".
     static let recording = Color(red: 0.851, green: 0.294, blue: 0.271) // #D94B45
 
     // MARK: - Score Colors
 
-    /// 0–39. Vivid coral red.
+    /// 0-39. Vivid coral red.
     static let scoreLow = Color(red: 0.961, green: 0.329, blue: 0.290) // #F5544A
 
-    /// 40–59. Bright orange.
+    /// 40-59. Bright orange.
     static let scoreMid = Color(red: 1.000, green: 0.565, blue: 0.212) // #FF9036
 
-    /// 60–79. Bright gold — reads as yellow without being `Color.yellow`.
+    /// 60-79. Bright gold - reads as yellow without being `Color.yellow`.
     static let scoreGood = Color(red: 0.961, green: 0.773, blue: 0.259) // #F5C542
 
-    /// 80–100. Vivid emerald.
+    /// 80-100. Vivid emerald.
     static let scoreHigh = Color(red: 0.220, green: 0.800, blue: 0.502) // #38CC80
 
     /// Neutral fill for an absent or not-yet-computed score.
@@ -112,18 +112,18 @@ enum AppColors {
     // Two layers:
     //
     // 1. Brand tonal tokens (`categoryBrandBright`, `categoryNeutral`,
-    //    `categoryNeutralCool`) — used widely as gradient companions and
+    //    `categoryNeutralCool`) - used widely as gradient companions and
     //    utility accents on glass surfaces.
     //
     // 2. Muted-jewel identity tones (`categoryTeal`, `categoryIndigo`,
     //    `categoryPlum`, `categoryAmber`, `categorySage`, `categoryCopper`)
-    //    — used by `PromptCategory.color`, `SpeakerLevel.color`,
+    // - used by `PromptCategory.color`, `SpeakerLevel.color`,
     //    `OnboardingGoal.color`, and the Today quick-action toolbar. All sit
-    //    at ~40–55% saturation and ~55–65% brightness so adjacent cards read
+    //    at ~40-55% saturation and ~55-65% brightness so adjacent cards read
     //    as distinct identities without screaming on the dark glass.
     //    Functional `success` / `warning` / `error` stay reserved for state.
 
-    /// Brighter teal-leaning tone — used widely as a gradient companion to `primary`.
+    /// Brighter teal-leaning tone - used widely as a gradient companion to `primary`.
     static let categoryBrandBright = Color(red: 0.169, green: 0.659, blue: 0.659)
 
     /// Muted accent gray for reflective utility surfaces (callouts, takeaways).

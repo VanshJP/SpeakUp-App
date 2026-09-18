@@ -5,7 +5,7 @@ import SwiftUI
 /// How untinted Liquid Glass reads on the navy canvas.
 ///
 /// Light is the post-brighten default (soft white lift). Dark drops the lift
-/// and softens the rim so cards sink into the canvas — the look before the
+/// and softens the rim so cards sink into the canvas - the look before the
 /// brighten pass, available as a user preference.
 ///
 /// Raw values are the SwiftData payload; do not reorder existing cases.
@@ -92,7 +92,7 @@ extension EnvironmentValues {
     ///
     /// Liquid Glass samples what is behind it, so a second `glassEffect` laid
     /// straight on a plate samples glass instead of the canvas and renders as a
-    /// murky grey band rather than a control — the shading that showed up on
+    /// murky grey band rather than a control - the shading that showed up on
     /// the Today focus card once its CTA became `GlassButton.secondary`.
     /// Nested glass surfaces read this and paint a fill instead.
     var isOnGlass: Bool {

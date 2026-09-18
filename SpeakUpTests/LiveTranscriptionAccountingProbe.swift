@@ -16,7 +16,7 @@ import Foundation
 //     Max-merge took max(request1, request2) per key and undercounted any
 //     filler spoken in both windows. Additive sums correctly.
 //   * Resetting the counts dict on restart would wipe session history every
-//     time SFSpeech auto-finalizes at a pause — display continuity loses to
+//     time SFSpeech auto-finalizes at a pause - display continuity loses to
 //     nothing here, because no replay exists to guard against.
 //
 // If the service drifts from this shape, re-run the audit before trusting

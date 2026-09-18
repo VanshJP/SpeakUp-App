@@ -13,7 +13,7 @@ nonisolated struct FillerWordConfig: Sendable {
 
 // MARK: - Filler Words List
 
-/// Pure word-list logic — consulted from nonisolated lexicon passes and
+/// Pure word-list logic - consulted from nonisolated lexicon passes and
 /// MainActor call sites alike.
 nonisolated struct FillerWordList {
     // Words that are ALWAYS fillers (hesitation sounds)
@@ -320,12 +320,12 @@ nonisolated struct FillerWordList {
 
     // MARK: - Config-Aware Detection
 
-    /// Simple check with user config — for context-dependent custom fillers, defaults to false (needs context).
+    /// Simple check with user config - for context-dependent custom fillers, defaults to false (needs context).
     static func isFillerWord(_ word: String, config: FillerWordConfig) -> Bool {
         let lowercased = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
         let collapsed = collapseRepeatedChars(lowercased)
 
-        // Removed by user — never match
+        // Removed by user - never match
         if config.removedDefaults.contains(lowercased) || config.removedDefaults.contains(collapsed) {
             return false
         }
@@ -340,7 +340,7 @@ nonisolated struct FillerWordList {
             return true
         }
 
-        // Custom context fillers — false without context (same as default context-dependent behavior)
+        // Custom context fillers - false without context (same as default context-dependent behavior)
         return false
     }
 
@@ -357,7 +357,7 @@ nonisolated struct FillerWordList {
         let w = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
         let collapsed = collapseRepeatedChars(w)
 
-        // Removed by user — never match
+        // Removed by user - never match
         if config.removedDefaults.contains(w) || config.removedDefaults.contains(collapsed) {
             return false
         }
@@ -372,7 +372,7 @@ nonisolated struct FillerWordList {
             return true
         }
 
-        // Custom context-dependent fillers — use simple pause rule
+        // Custom context-dependent fillers - use simple pause rule
         if config.customContextFillers.contains(w) || config.customContextFillers.contains(collapsed) {
             return pauseBefore && pauseAfter
         }

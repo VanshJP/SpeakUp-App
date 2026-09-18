@@ -3,6 +3,7 @@ import SwiftUI
 
 @Observable
 class WarmUpViewModel {
+
     var currentExercise: WarmUpExercise?
     var currentStepIndex = 0
     var isRunning = false
@@ -15,7 +16,7 @@ class WarmUpViewModel {
 
     /// The focuses the shipped warm-ups actually cover, in declaration order.
     /// Grouping is on outcome rather than on `WarmUpCategory`, which named the
-    /// mechanism — "Tongue Twisters", "Articulation" — and left the reader to
+    /// mechanism - "Tongue Twisters", "Articulation" - and left the reader to
     /// work out that both are there to make you understood. The category
     /// survives as the row's tag, where it belongs.
     var availableFocuses: [PracticeFocus] { PracticeToolKind.warmUp.focuses }
@@ -73,7 +74,7 @@ class WarmUpViewModel {
         currentStepIndex = 0
         isComplete = false
         // A runner left running by a mid-exercise ✕ must not present the next
-        // one pre-paused — the play button would need two taps to start.
+        // one pre-paused - the play button would need two taps to start.
         isRunning = false
         timeRemaining = steps.first?.durationSeconds ?? 0
     }
@@ -121,7 +122,7 @@ class WarmUpViewModel {
             timeRemaining -= 1
         } else {
             // Finish inside this tick. Waiting for a later tick displayed 0
-            // for a full second and stretched every labeled duration —
+            // for a full second and stretched every labeled duration -
             // 4-7-8 breathing actually ran 5-8-9.
             timeRemaining = 0
             advanceStep()

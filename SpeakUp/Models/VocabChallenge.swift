@@ -16,7 +16,7 @@ nonisolated struct VocabChallengePreferences: Sendable, Equatable {
     var extraBanned: [String]
     var userName: String
     var speakerLevelRaw: Int
-    /// Word-level control. 0 follows the speaker level; 1–3 force beginner,
+    /// Word-level control. 0 follows the speaker level; 1-3 force beginner,
     /// intermediate, or advanced regardless of it. Optional-style default so
     /// existing call sites and tests keep compiling.
     var levelOverrideRaw: Int = 0

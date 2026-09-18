@@ -8,7 +8,7 @@ struct DrillSelectionView: View {
     ///
     /// This used to be three: a `showingDrillFlow` flag that presented the
     /// cover, a `selectedDrillMode` the cover's content unwrapped, and a
-    /// `showingSession` phase — with an `onDismiss` that cleared the last two.
+    /// `showingSession` phase - with an `onDismiss` that cleared the last two.
     /// SwiftUI runs `onDismiss` *after* the dismissal animation, so starting a
     /// second drill while the first was still animating out set the mode, then
     /// had it cleared out from under the presentation: the cover opened on
@@ -53,7 +53,7 @@ struct DrillSelectionView: View {
                 )
             }
 
-            // Drills were already named for outcomes — they are just headed by
+            // Drills were already named for outcomes - they are just headed by
             // them now, in the same vocabulary the other three tools use, so a
             // reader can see that Emphasis and Vocal Variety are the same job.
             // Seven drills under five headings never needed a filter as well.
@@ -102,8 +102,8 @@ struct DrillSelectionView: View {
 
 /// Countdown, then the drill itself, inside one cover.
 ///
-/// The phase lives here — as this view's own state, created fresh with the
-/// presentation — rather than beside the flag that presents the cover. That
+/// The phase lives here - as this view's own state, created fresh with the
+/// presentation - rather than beside the flag that presents the cover. That
 /// pairing is what produced the blank screen; see `DrillSelectionView`.
 private struct DrillFlowView: View {
     let mode: DrillMode

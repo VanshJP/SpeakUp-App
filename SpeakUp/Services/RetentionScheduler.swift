@@ -5,8 +5,8 @@ import os.log
 /// The one place that turns "where does this user stand" into a scheduled
 /// notification ladder.
 ///
-/// Every entry point — app foreground, finished take, settings change, first-run
-/// setup — calls `refresh`. Keeping it single-entry is what stops the four call
+/// Every entry point - app foreground, finished take, settings change, first-run
+/// setup - calls `refresh`. Keeping it single-entry is what stops the four call
 /// sites from drifting into four slightly different ideas of the schedule, which
 /// is how the previous build ended up with orphaned identifiers.
 ///
@@ -18,11 +18,11 @@ enum RetentionScheduler {
     /// Recompute streak protection and reschedule everything.
     ///
     /// - Parameters:
-    ///   - afterPractice: pass `true` straight after a take so the evening
+    /// - afterPractice: pass `true` straight after a take so the evening
     ///     rescue notifications are torn down immediately rather than at the
     ///     next foreground.
-    ///   - requestPermissionIfNeeded: pass `true` only where the user just
-    ///     asked for reminders — that is the moment a system prompt is expected.
+    /// - requestPermissionIfNeeded: pass `true` only where the user just
+    ///     asked for reminders - that is the moment a system prompt is expected.
     ///     Background refreshes must never trigger it.
     @discardableResult
     static func refresh(
@@ -39,7 +39,7 @@ enum RetentionScheduler {
         }
 
         // The daily reminder toggle is the consent. With it off we hold no
-        // channel at all — no streak rescue, no comeback, nothing.
+        // channel at all - no streak rescue, no comeback, nothing.
         guard settings.dailyReminderEnabled else {
             notifications.cancelAll()
             return nil
@@ -102,7 +102,7 @@ enum RetentionScheduler {
             settings.lastMilestoneNotified = currentStreak
             try? context.save()
         } else if currentStreak == 0, settings.lastMilestoneNotified != 0 {
-            // Streak broke — re-arm so the next run celebrates again.
+            // Streak broke - re-arm so the next run celebrates again.
             settings.lastMilestoneNotified = 0
             try? context.save()
         }
@@ -135,7 +135,7 @@ enum RetentionScheduler {
 
     // MARK: - Helpers
 
-    /// Dates only — `propertiesToFetch` keeps this off the `analysis` blob,
+    /// Dates only - `propertiesToFetch` keeps this off the `analysis` blob,
     /// which is the expensive column and irrelevant to a streak.
     private static func practiceDates(in context: ModelContext) -> [Date] {
         var descriptor = FetchDescriptor<Recording>(

@@ -38,7 +38,7 @@ class HistoryViewModel {
 
     /// Vocab-word usage totals, the one derived stat the History screen still
     /// renders. Streak / average / per-day counts moved out with the stats
-    /// strip and contribution graph — no view read them any more.
+    /// strip and contribution graph - no view read them any more.
     var aggregatedVocab: [VocabCount] = []
 
     private var modelContext: ModelContext?
@@ -88,7 +88,7 @@ class HistoryViewModel {
 
                 // Bind once: each `r.analysis` access re-decodes the Codable blob.
                 // Prefer the denormalized `overallScore` projection when present
-                // (legacy rows stay nil — fall back to the blob; see gotchas §18).
+                // (legacy rows stay nil - fall back to the blob; see gotchas §18).
                 let analysis = r.analysis
                 let score = r.overallScore ?? analysis?.speechScore.overall
                 let wpm = analysis?.wordsPerMinute
@@ -97,7 +97,7 @@ class HistoryViewModel {
                 let promptText = r.prompt?.text ?? ""
                 let category = r.prompt?.category ?? ""
                 let storyTitle = r.storyTitle ?? ""
-                // Intentionally skip r.transcriptionText — decoding large transcript
+                // Intentionally skip r.transcriptionText - decoding large transcript
                 // blobs for every summary made History load O(total transcript size).
                 let searchable = "\(promptText) \(category) \(storyTitle)"
 
@@ -155,7 +155,7 @@ class HistoryViewModel {
 
         guard let recording = (try? context.fetch(descriptor))?.first else { return }
 
-        // Capture media locations before deleting — the row is invalid after save.
+        // Capture media locations before deleting - the row is invalid after save.
         let audioURL = recording.resolvedAudioURL
         let videoURL = recording.resolvedVideoURL
         let thumbnailURL = recording.resolvedThumbnailURL

@@ -105,7 +105,7 @@ struct RecordButton: View {
                 .frame(width: 26, height: 26)
 
         case (.orb, false):
-            // Nothing — the lit orb is the record dot.
+            // Nothing - the lit orb is the record dot.
             EmptyView()
 
         case (.minimal, true):

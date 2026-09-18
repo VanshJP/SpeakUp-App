@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Day streak, top-right of Today. Neutral glass — the flame is the only
+/// Day streak, top-right of Today. Neutral glass - the flame is the only
 /// colored thing on it.
 ///
 struct StreakChip: View {

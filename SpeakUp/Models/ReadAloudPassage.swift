@@ -168,7 +168,7 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
     case technical
     case tongueTwister
     case minimalPairs
-    /// Ephemeral user-typed practice — not shown in catalog filters.
+    /// Ephemeral user-typed practice - not shown in catalog filters.
     case custom
 
     var id: String { rawValue }
@@ -198,7 +198,7 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
     /// The shared axis. A passage's source material is not why you'd pick it:
     /// news copy trains holding a steady clip, literature trains expression,
     /// and the precision material trains being understood. Your own passages
-    /// follow whatever you pasted in, so they sit under clarity — the reason
+    /// follow whatever you pasted in, so they sit under clarity - the reason
     /// the feature scores word-by-word in the first place.
     var focus: PracticeFocus {
         switch self {
@@ -208,7 +208,7 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Catalog filters — excludes freeform custom passages.
+    /// Catalog filters - excludes freeform custom passages.
     static var catalogCases: [ReadAloudCategory] {
         allCases.filter { $0 != .custom }
     }

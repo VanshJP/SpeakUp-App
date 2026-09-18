@@ -467,7 +467,7 @@ struct AnalysisMirrorTests {
     }
 
     @Test func plainDecodeStillDropsThem() {
-        // The SwiftData path must keep skipping these — decoding them there
+        // The SwiftData path must keep skipping these - decoding them there
         // traps rather than throwing.
         guard let data = rich().encodedMirror(),
               let plain = try? JSONDecoder().decode(SpeechAnalysis.self, from: data) else {
@@ -596,11 +596,11 @@ struct CoachingInsightSanitizerTests {
     @Test func stripsBulletsDedupesAndCaps() {
         let raw = """
         Here are your tips:
-        - You used 9 fillers in 120 words, swap "um" for a closed mouth.
+ - You used 9 fillers in 120 words, swap "um" for a closed mouth.
         * You used 9 fillers in 120 words, swap "um" for a closed mouth!
         1. Pauses: only 2 were deliberate, land one after each claim.
-        - Random trailing thought
-        - Another trailing thought
+ - Random trailing thought
+ - Another trailing thought
         """
 
         let tips = CoachingInsightSanitizer.tips(from: raw)

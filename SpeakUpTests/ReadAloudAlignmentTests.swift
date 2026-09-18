@@ -145,7 +145,7 @@ struct ReadAloudAlignmentTests {
     /// SFSpeech closes a request after a pause in speech and again at its own
     /// audio-duration ceiling, both of which a reader triggers several times in
     /// one passage. The service re-arms instead of ending the session, and
-    /// stitches the requests' transcripts back together — these pin that the
+    /// stitches the requests' transcripts back together - these pin that the
     /// stitching is lossless.
 
     @Test func joinedSegmentsDropEmptiesAndSingleSpaceTheRest() {

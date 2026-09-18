@@ -90,7 +90,7 @@ nonisolated struct CrutchBaseline: Sendable, Hashable {
     var isUsable: Bool { takes >= 2 }
 
     /// Whether this take used `word` more or less than the window usually
-    /// does. Nil when no honest comparison exists — too little history, or
+    /// does. Nil when no honest comparison exists - too little history, or
     /// no prior use at all, where "more than usual" would invite the fair
     /// reply that there is no usual.
     func direction(for word: String, count: Int, totalWords: Int) -> UsageDirection? {
@@ -190,8 +190,8 @@ nonisolated struct LexiconProfile: Sendable {
 // MARK: - Session-level hits
 
 /// One crutch word inside a single recording: what it was, how often it
-/// landed, where it happened, and — when the timed transcription is available
-/// — what to say instead *in that sentence*, not in general.
+/// landed, where it happened, and - when the timed transcription is available
+/// - what to say instead *in that sentence*, not in general.
 nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
     let word: String
     let category: CrutchCategory
@@ -234,7 +234,7 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
         return Array(WordSwapSuggester.deduplicated(ranked).prefix(3))
     }
 
-    /// Swap labels only — the legacy shape callers and share copy still read.
+    /// Swap labels only - the legacy shape callers and share copy still read.
     /// Without occurrences this falls back to the alternatives map, then
     /// category advice.
     var swaps: [String] {
@@ -260,7 +260,7 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
     /// Distinct lessons inside this habit. Three occurrences sharing one fix
     /// are one moment with three play points; three occurrences in three
     /// different sentence patterns are three moments, each with its own
-    /// before/after. Never more than three — a card is not a report.
+    /// before/after. Never more than three - a card is not a report.
     var moments: [WordSwapMoment] {
         WordSwapSuggester.moments(in: occurrences)
     }
@@ -332,7 +332,7 @@ nonisolated enum LexiconInsightsEngine {
     /// Blast radius is exactly `contentWords`: by the time this check runs,
     /// fillers, hedges, intensifiers, vague nouns and impact verbs have each
     /// been counted and `continue`d, so nothing here can suppress a crutch or
-    /// an impact verb. The corollary is a trap — a word listed both here and
+    /// an impact verb. The corollary is a trap - a word listed both here and
     /// in `intensifierWords` / `vagueWords` / `powerVerbs` silently takes the
     /// earlier branch, so this list must stay disjoint from those.
     static let stopwords: Set<String> = [
@@ -358,7 +358,7 @@ nonisolated enum LexiconInsightsEngine {
         "who's", "let's", "isn't", "aren't", "wasn't", "weren't", "don't",
         "doesn't", "didn't", "can't", "cannot", "couldn't", "won't", "wouldn't",
         "shouldn't", "hasn't", "haven't", "hadn't", "ain't",
-        // Speech verbs that frame a topic without being one — "I *think* the
+        // Speech verbs that frame a topic without being one - "I *think* the
         // migration mattered" is about the migration. Deliberately narrow:
         // "make", "take" and "use" are NOT here, because "make films" and
         // "take deposits" are exactly the subjects this list must not eat.
@@ -781,7 +781,7 @@ nonisolated enum LexiconInsightsEngine {
         }
 
         // Structural repetition frames are coached via tip + plum transcript
-        // highlights — not as word-swap rows (a frame is not a crutch word).
+        // highlights - not as word-swap rows (a frame is not a crutch word).
 
         return counts.map { word, count -> SessionWordHit in
             let category = categories[word] ?? .filler

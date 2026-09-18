@@ -20,7 +20,7 @@ class TodayViewModel {
     var storyPracticeEnabled: Bool = false
     var todaysStory: Story?
     /// What the speaker is working on. Same engine as the session coaching
-    /// screen — Today used to run its own weaker version (lowest rolling
+    /// screen - Today used to run its own weaker version (lowest rolling
     /// subscore over ten sessions, zero-score captures included) and the two
     /// disagreed about which area to send the user after.
     var coachPlan: CoachPlan?
@@ -36,7 +36,7 @@ class TodayViewModel {
     /// enabled categories. Built once per settings load rather than per prompt,
     /// and the only place the category gate is applied now.
     private var promptMix: PromptMix = .uniform
-    /// `promptMix` blended with lexicon weakness boosts — the mix prompt
+    /// `promptMix` blended with lexicon weakness boosts - the mix prompt
     /// selection actually uses. Settings goals stay the base; adaptation only
     /// tilts categories the user demonstrably struggles in.
     private var effectivePromptMix: PromptMix = .uniform
@@ -102,7 +102,7 @@ class TodayViewModel {
         // Load active goals
         await loadActiveGoals(context: context)
 
-        // Coach notes — welcome-back / anniversary. Detail-surface notes are
+        // Coach notes - welcome-back / anniversary. Detail-surface notes are
         // owned by RecordingDetailView after a take.
         CoachMomentService.shared.evaluateToday(
             context: context,
@@ -134,7 +134,7 @@ class TodayViewModel {
                 ? Set(recordings.compactMap { $0.prompt?.id })
                 : []
 
-            // Stats — prefer denormalized `overallScore` so score-only passes
+            // Stats - prefer denormalized `overallScore` so score-only passes
             // skip Codable blob decode when the projection is populated.
             let totalRecordings = recordings.count
             let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
@@ -194,7 +194,7 @@ class TodayViewModel {
             var todayTranscripts: [String] = []
             var todayVocabUsages: [VocabWordUsage] = []
             for recording in recordings {
-                // Bind once — each `analysis` access re-decodes the blob.
+                // Bind once - each `analysis` access re-decodes the blob.
                 let analysis = recording.analysis
                 if let usage = analysis?.vocabWordsUsed {
                     for item in usage where item.count > 0 {
@@ -332,7 +332,7 @@ class TodayViewModel {
 
 
         // Track last practice date for streak-at-risk widget. Any recording
-        // counts — a session whose transcription failed is still practice.
+        // counts - a session whose transcription failed is still practice.
         if let lastPracticeDate {
             WidgetDataProvider.updateLastPracticeDate(lastPracticeDate)
         } else {
@@ -378,7 +378,7 @@ class TodayViewModel {
             }
 
             // If hiding answered prompts and current prompt was already
-            // answered, pick an unanswered one — still through the mix, so the
+            // answered, pick an unanswered one - still through the mix, so the
             // substitute leans the same way the day's prompt would have.
             if hideAnsweredPrompts, let current = todaysPrompt, answeredPromptIDs.contains(current.id) {
                 let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
@@ -581,7 +581,7 @@ nonisolated private struct TodayHeavyResult: Sendable {
     let todayTranscripts: [String]
     let todayVocabUsages: [VocabWordUsage]
     let readinessScore: Int
-    /// Settings mix after weakness adaptation — what selection consumes.
+    /// Settings mix after weakness adaptation - what selection consumes.
     let promptMix: PromptMix
     let lastPracticeDate: Date?
 }

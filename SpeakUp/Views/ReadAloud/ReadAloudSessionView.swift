@@ -7,7 +7,7 @@ struct ReadAloudSessionView: View {
     @Environment(\.dismiss) private var dismiss
     /// The finished read, and the only state its cover reads. A
     /// `showingResult` flag over `viewModel.result` presented an empty cover
-    /// whenever the two disagreed — and Retry clears the result while the flag
+    /// whenever the two disagreed - and Retry clears the result while the flag
     /// is still coming down.
     @State private var finishedRead: ReadAloudResult?
     @State private var showingExitConfirm = false
@@ -42,7 +42,7 @@ struct ReadAloudSessionView: View {
                     }
                     .onChange(of: viewModel.currentWordIndex) { _, newIndex in
                         // Re-centring every second word meant the passage slid
-                        // under the reader continuously — the other half of
+                        // under the reader continuously - the other half of
                         // "the words keep moving". One nudge per line's worth
                         // of reading, animated, so the page holds still while
                         // the highlight travels across it.
@@ -241,7 +241,7 @@ struct ReadAloudSessionView: View {
     /// The current word used to render `.bold` while its neighbours stayed
     /// `.regular`. Bold glyphs are wider, so each time the cursor advanced the
     /// word under it grew, the word behind it shrank, and every word after
-    /// them on the line re-flowed — the passage visibly squirmed as you read
+    /// them on the line re-flowed - the passage visibly squirmed as you read
     /// it. Position is carried by the highlight and the colour ramp instead,
     /// neither of which touches layout.
     private var passageText: some View {
@@ -304,7 +304,7 @@ struct ReadAloudSessionView: View {
 
     private var accuracyColor: Color {
         // Accuracy is a score, so it rides the score ramp rather than the
-        // state colors — a 70 is not a "warning".
+        // state colors - a 70 is not a "warning".
         AppColors.scoreColor(for: Int(viewModel.accuracyPercentage))
     }
 
@@ -316,8 +316,8 @@ struct ReadAloudSessionView: View {
     /// It was a toggle at the top of the catalog that had to be flipped before
     /// the passage opened, which put it furthest from the moment it is wanted:
     /// mid-read, having just fumbled a line. Here it is one button, live for
-    /// the whole session and on every passage. Pressing it holds the read —
-    /// the mic goes down so the recogniser cannot score the synthesiser — and
+    /// the whole session and on every passage. Pressing it holds the read -
+    /// the mic goes down so the recogniser cannot score the synthesiser - and
     /// the words already matched are still there when it comes back.
     ///
     /// Never disabled while the model plays: that is exactly when someone
@@ -405,7 +405,7 @@ struct ReadAloudSessionView: View {
 /// `sizeThatFits` and `placeSubviews` each used to re-measure every subview
 /// from scratch, and SwiftUI calls both on every pass. A 150-word passage
 /// therefore cost ~300 text measurements per pass, and a pass ran on every
-/// partial recognition result — several times a second, on the main actor,
+/// partial recognition result - several times a second, on the main actor,
 /// for the whole read. That is what pinned the main thread and let recognition
 /// tasks pile up behind it. Now the sizes and positions are computed once per
 /// (width, font size) and reused, so a state change that only repaints colour
@@ -426,7 +426,7 @@ struct WrappingHStack: Layout {
         var count: Int = 0
         /// Measured size of the first subview when the cache was filled. Cheap
         /// tripwire for anything that changes glyph metrics without changing
-        /// the subview count — a Dynamic Type change on a caller that does not
+        /// the subview count - a Dynamic Type change on a caller that does not
         /// pass a `metricsKey`, for instance.
         var probe: CGSize?
         var positions: [CGPoint] = []

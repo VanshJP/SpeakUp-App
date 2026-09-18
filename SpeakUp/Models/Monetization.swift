@@ -5,7 +5,7 @@ import Foundation
 /// Master switch for the public beta: everything unlocked, no paywall, no
 /// allowance accounting, no buy button anywhere in the app.
 ///
-/// StoreKit stays wired up underneath — a real purchase still verifies and
+/// StoreKit stays wired up underneath - a real purchase still verifies and
 /// still persists. Flipping this flag alone does not restore monetization:
 /// the paywall views and call sites were deleted with it. Follow
 /// docs/features/monetization.md as the restore guide before shipping paid.
@@ -15,7 +15,7 @@ nonisolated enum BetaAccess {
 
 // MARK: - Product
 
-/// The single paid SKU. One non-consumable, no tiers — the ownership offer is
+/// The single paid SKU. One non-consumable, no tiers - the ownership offer is
 /// meant to be a one-decision purchase.
 nonisolated enum LifetimeProduct {
     /// Must match the product identifier configured in App Store Connect and
@@ -36,7 +36,7 @@ nonisolated enum FoundingOffer {
 
     /// The price the offer says it reverts to. StoreKit cannot supply a price
     /// for a product it is not currently selling, so this literal is the one
-    /// unavoidable hardcoded price in the app — and it is only correct on the
+    /// unavoidable hardcoded price in the app - and it is only correct on the
     /// US storefront.
     static let standardDisplayPrice = "$99.99"
 
@@ -128,7 +128,7 @@ nonisolated enum PracticeTrial {
         return now < endsOn ? .active(endsOn: endsOn) : .expired
     }
 
-    /// Whole days left, rounded up — any time left is at least "1 day", because
+    /// Whole days left, rounded up - any time left is at least "1 day", because
     /// a countdown that reads 0 while the trial still works is a bug report.
     static func daysRemaining(until endsOn: Date, now: Date = Date()) -> Int {
         max(0, Int((endsOn.timeIntervalSince(now) / 86_400).rounded(.up)))
@@ -197,13 +197,13 @@ nonisolated struct AllowanceState: Sendable, Equatable {
 
 /// What the user is allowed to do right now.
 nonisolated enum AllowanceDecision: Sendable, Equatable {
-    /// Inside the free trial — unlimited and uncounted until `endsOn`.
+    /// Inside the free trial - unlimited and uncounted until `endsOn`.
     case trial(endsOn: Date)
     /// Part of the current monthly cycle.
     case cycle(remaining: Int, resetsOn: Date)
     /// Out of free analyses until `resetsOn`.
     case exhausted(resetsOn: Date)
-    /// Entitled — no accounting at all.
+    /// Entitled - no accounting at all.
     case unlimited
 
     var isAllowed: Bool {
@@ -252,7 +252,7 @@ nonisolated enum AllowanceDecision: Sendable, Equatable {
     }
 }
 
-/// Pure allowance arithmetic. No StoreKit, no SwiftData, no clock of its own —
+/// Pure allowance arithmetic. No StoreKit, no SwiftData, no clock of its own - 
 /// `now` is always injected so the rollover is testable.
 nonisolated enum PracticeAllowance {
     /// A month here is a rolling 30-day window from first paid-tier use, not a
@@ -289,7 +289,7 @@ nonisolated enum PracticeAllowance {
     }
 
     /// Records one consumed analysis. Only ever called after an analysis
-    /// actually succeeded — a failed transcription must not cost a credit.
+    /// actually succeeded - a failed transcription must not cost a credit.
     /// Nothing is counted while the trial is live.
     static func consume(
         state: AllowanceState,

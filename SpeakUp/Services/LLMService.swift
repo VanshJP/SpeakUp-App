@@ -64,7 +64,7 @@ enum LLMBackend: Equatable, Sendable {
 }
 
 /// Why the most recent optional-result pass came back empty. Diagnostics
-/// only: reason codes identify the failing stage — never prompt or
+/// only: reason codes identify the failing stage - never prompt or
 /// transcript content (logs/analytics carry no user text).
 struct LLMPassFailure: Equatable, Sendable {
     let pass: String
@@ -78,7 +78,7 @@ final class LLMService {
     var isGenerating = false
 
     /// Set whenever an optional-result pass returns `nil` despite attempting;
-    /// cleared at each attempt start. Reason codes only — no user content.
+    /// cleared at each attempt start. Reason codes only - no user content.
     private(set) var lastFailure: LLMPassFailure?
 
     /// Touched from the off-main memory-pressure handler, hence nonisolated.
@@ -128,7 +128,7 @@ final class LLMService {
             // (hackathon / on-device demo), large models intentionally sit
             // near the per-process budget. `.warning` fires routinely in that
             // band; treating it as a mandate to unload defeats the feature.
-            // Only react to `.critical` in that mode — iOS will jetsam the
+            // Only react to `.critical` in that mode - iOS will jetsam the
             // process anyway if real exhaustion follows.
             if preferLocal && !isCritical {
                 logger.debug("Memory pressure .warning ignored, preferLocalLLM is on")
@@ -137,7 +137,7 @@ final class LLMService {
             logger.debug("Memory pressure (\((isCritical ? "critical" : "warning"), privacy: .public)), unloading local LLM")
             // Abort any in-flight generation first. `unloadModel` schedules a
             // detached `engine.unload()` that has to take the inference lock,
-            // which `generate` holds for the full token-decode loop — without
+            // which `generate` holds for the full token-decode loop - without
             // a prior cancel, unload can sit blocked for 10+ seconds while
             // jetsam fires. `cancelInflight` is non-blocking and lets the
             // generate loop break at its next per-8-token cancellation poll.
@@ -190,7 +190,7 @@ final class LLMService {
     /// Loads the local model if it's downloaded but not yet loaded.
     func loadLocalModelIfNeeded() async {
         // Load when (a) Apple Intelligence is unavailable, OR (b) the user has
-        // opted to prefer the local model — in both cases the local engine
+        // opted to prefer the local model - in both cases the local engine
         // needs to be ready before the next inference call.
         let shouldLoad = (!appleIntelligenceAvailable || preferLocalLLM)
             && localLLM.isModelDownloaded
@@ -247,66 +247,66 @@ final class LLMService {
         and meaning intact. The goal is to make the raw transcript feel like a written entry.
 
         === CLEAN THE TEXT ===
-        - Add sentence punctuation (. ? !) and internal punctuation (, ; :, "…" ').
-        - Capitalize sentence starts, the pronoun "I", and proper nouns (names, places, brands, titles).
-        - Remove filler words with no meaning: "um", "uh", "er", "ah", "hmm", and filler uses of "like", "you know", "I mean", "sort of", "kind of", "basically", "literally".
-        - Remove false starts and stuttered repeats. "I, I went to" → "I went to". "so so yesterday" → "so yesterday".
-        - Collapse spoken self-corrections to the corrected version. "I went to the store, I mean the market" → "I went to the market".
-        - Fix clearly-wrong homophone/transcription slips only when unambiguous (e.g. "their" vs "there"). When in doubt, leave the words alone.
+ - Add sentence punctuation (. ? !) and internal punctuation (, ; :, "…" ').
+ - Capitalize sentence starts, the pronoun "I", and proper nouns (names, places, brands, titles).
+ - Remove filler words with no meaning: "um", "uh", "er", "ah", "hmm", and filler uses of "like", "you know", "I mean", "sort of", "kind of", "basically", "literally".
+ - Remove false starts and stuttered repeats. "I, I went to" → "I went to". "so so yesterday" → "so yesterday".
+ - Collapse spoken self-corrections to the corrected version. "I went to the store, I mean the market" → "I went to the market".
+ - Fix clearly-wrong homophone/transcription slips only when unambiguous (e.g. "their" vs "there"). When in doubt, leave the words alone.
 
         === APPLY MARKDOWN FORMATTING ===
         Use formatting SPARINGLY and only when the speaker's content actually calls for it. Default is plain paragraphs. Never format everything.
 
         Paragraphs:
-        - Separate paragraphs with a blank line (two newlines). Break whenever the topic, scene, time, place, or speaker shifts. Long dictation MUST become multiple paragraphs, never return one wall of text.
+ - Separate paragraphs with a blank line (two newlines). Break whenever the topic, scene, time, place, or speaker shifts. Long dictation MUST become multiple paragraphs, never return one wall of text.
 
         Headings (`# Title`, `## Subheading`):
-        - Only if the speaker explicitly announces a title or section header ("Chapter one: the beginning", "Part two", "Section titled Morning Routine"). Strip the announcer words and keep the title on its own heading line.
-        - Do NOT invent headings. Most entries will have zero headings.
+ - Only if the speaker explicitly announces a title or section header ("Chapter one: the beginning", "Part two", "Section titled Morning Routine"). Strip the announcer words and keep the title on its own heading line.
+ - Do NOT invent headings. Most entries will have zero headings.
 
         Bold (`**word**`):
-        - The input is a text transcript, so you cannot hear vocal tone. Infer emphasis from TEXTUAL cues only:
+ - The input is a text transcript, so you cannot hear vocal tone. Infer emphasis from TEXTUAL cues only:
           1. Repetition: "really really important" → "**really** important" (collapse the doubled word).
           2. Explicit intensifiers: "seriously", "literally" (when used for emphasis, not as filler), "I mean", "I want to emphasize", "the key point is", "the main thing is", bold the phrase they modify, not the intensifier itself.
           3. Exclamation sentences with a clear emphatic target: "That was **huge**!"
           4. Self-labeled takeaways: "the takeaway was **trust your team**", "the lesson is **start small**".
-        - Cap at roughly 1–3 short bolded phrases per entry. Never bold whole sentences, never bold every noun, never bold just for decoration.
+ - Cap at roughly 1-3 short bolded phrases per entry. Never bold whole sentences, never bold every noun, never bold just for decoration.
 
         Italic (`*word*`):
-        - Inner thoughts or self-talk: "I thought, *this can't be happening*", "in my head I was like, *just breathe*".
-        - Titles of books, movies, shows, songs, podcasts, albums: *The Great Gatsby*, *Inception*.
-        - Foreign words or phrases: *je ne sais quoi*.
-        - Do NOT italicize for generic emphasis, that's what bold is for.
+ - Inner thoughts or self-talk: "I thought, *this can't be happening*", "in my head I was like, *just breathe*".
+ - Titles of books, movies, shows, songs, podcasts, albums: *The Great Gatsby*, *Inception*.
+ - Foreign words or phrases: *je ne sais quoi*.
+ - Do NOT italicize for generic emphasis, that's what bold is for.
 
         Bullet list (`- item` per line):
-        - Only when the speaker verbally enumerates 2+ discrete items with no ordering ("I need to buy eggs, milk, and bread" → three bullets: `- eggs`, `- milk`, `- bread`). Keep each item short.
+ - Only when the speaker verbally enumerates 2+ discrete items with no ordering ("I need to buy eggs, milk, and bread" → three bullets: `- eggs`, `- milk`, `- bread`). Keep each item short.
 
         Numbered list (`1. item`, `2. item`):
-        - Use when the speaker announces an enumerated sequence with ANY of these spoken ordinal forms:
+ - Use when the speaker announces an enumerated sequence with ANY of these spoken ordinal forms:
           • Cardinal numbers: "one, ... two, ... three, ..."  → `1. ...`, `2. ...`, `3. ...`
           • Ordinal numbers: "first, ... second, ... third, ..."
           • Step form: "step one, ... step two, ..."
           • Number form: "number one, ... number two, ..."
-        - CRITICAL: strip the spoken ordinal word (and any trailing comma) from the item text. Do not leave it in.
-        - Worked example. Input: "one, I like to play guitar. two, I enjoy cooking. three, I read books."
+ - CRITICAL: strip the spoken ordinal word (and any trailing comma) from the item text. Do not leave it in.
+ - Worked example. Input: "one, I like to play guitar. two, I enjoy cooking. three, I read books."
           Output:
           1. I like to play guitar.
           2. I enjoy cooking.
           3. I read books.
-        - Worked example. Input: "first I woke up, then second I made coffee, and third I went for a walk."
+ - Worked example. Input: "first I woke up, then second I made coffee, and third I went for a walk."
           Output:
           1. I woke up.
           2. I made coffee.
           3. I went for a walk.
-        - Each numbered item goes on its own line with a single newline between items (no blank line between list items). Put a blank line BEFORE the list and AFTER the list to separate it from surrounding paragraphs.
+ - Each numbered item goes on its own line with a single newline between items (no blank line between list items). Put a blank line BEFORE the list and AFTER the list to separate it from surrounding paragraphs.
 
         === HARD RULES ===
-        - DO NOT paraphrase, rewrite, summarize, shorten, or "improve" the writing style.
-        - DO NOT add new sentences, facts, transitions, or commentary the speaker did not say.
-        - DO NOT change the speaker's tense, slang, informal phrasing, or point of view.
-        - DO NOT wrap the output in code fences, quotes, or a preface like "Here is".
-        - DO NOT use Markdown features not listed above (no links, images, tables, blockquotes, horizontal rules, inline code).
-        - Output ONLY the Markdown body. Nothing else.
+ - DO NOT paraphrase, rewrite, summarize, shorten, or "improve" the writing style.
+ - DO NOT add new sentences, facts, transitions, or commentary the speaker did not say.
+ - DO NOT change the speaker's tense, slang, informal phrasing, or point of view.
+ - DO NOT wrap the output in code fences, quotes, or a preface like "Here is".
+ - DO NOT use Markdown features not listed above (no links, images, tables, blockquotes, horizontal rules, inline code).
+ - Output ONLY the Markdown body. Nothing else.
         """
         let userPrompt = "Format this dictated text as Markdown:\n\n\(trimmed)"
 
@@ -327,7 +327,7 @@ final class LLMService {
             cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        // Sanity check: length must be in sensible range — otherwise model hallucinated.
+        // Sanity check: length must be in sensible range - otherwise model hallucinated.
         // Floor is loose (1/3) because filler/false-start removal can legitimately shrink text.
         // Ceiling is 2.5x because added Markdown punctuation (**, -, #) inflates character count.
         let inputLen = trimmed.count
@@ -385,7 +385,7 @@ final class LLMService {
             ) {
                 return sanitizeCoachingInsight(raw, analysis: analysis, transcript: transcript, context: context)
             }
-            // Apple Intelligence returned nil — try the local model rather than
+            // Apple Intelligence returned nil - try the local model rather than
             // surfacing nothing to the user.
         }
 
@@ -524,7 +524,7 @@ final class LLMService {
     /// Records a leg failure. When an earlier leg of the same pass already
     /// failed (the Apple leg), its reason is preserved and tagged rather than
     /// overwritten, so a fallback leg failing too cannot erase the primary
-    /// cause. Codes only — no user content.
+    /// cause. Codes only - no user content.
     private func recordFailure(pass: String, reason: String) {
         guard let previous = lastFailure else {
             lastFailure = LLMPassFailure(pass: pass, reason: reason)

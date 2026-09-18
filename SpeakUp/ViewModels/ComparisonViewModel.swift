@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 
-/// Value projection of one recording for the comparison screen — decoded once
+/// Value projection of one recording for the comparison screen - decoded once
 /// on a background context so picker redraws never touch an analysis blob.
 nonisolated struct ComparisonRecordingPoint: Identifiable {
     let id: UUID
@@ -28,7 +28,7 @@ class ComparisonViewModel {
         didSet { rebuildDerivedState() }
     }
 
-    /// Plain-value snapshots consumed directly in bodies — rebuilt only when a
+    /// Plain-value snapshots consumed directly in bodies - rebuilt only when a
     /// picker selection changes, never per redraw.
     private(set) var progressCard: ProgressCardData?
     private(set) var deltas: [Delta] = []
@@ -112,7 +112,7 @@ class ComparisonViewModel {
         }
     }
 
-    /// Rebuilds every body-facing value from cached points — pure arithmetic,
+    /// Rebuilds every body-facing value from cached points - pure arithmetic,
     /// no SwiftData, no blob decoding.
     private func rebuildDerivedState() {
         guard let a = point(for: selectionA), let b = point(for: selectionB),

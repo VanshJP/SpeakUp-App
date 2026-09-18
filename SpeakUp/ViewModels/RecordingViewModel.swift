@@ -54,7 +54,7 @@ class RecordingViewModel {
     var audioLevel: Float = -160
 
     // Audio level samples for volume analysis (collected every ~0.5s).
-    // @ObservationIgnored: never read by any view — only the view-model
+    // @ObservationIgnored: never read by any view - only the view-model
     // itself and SpeechService.analyze consume it. Keeping it observable
     // fires the observation registrar on every 0.5s append for no gain.
     @ObservationIgnored var audioLevelSamples: [Float] = []
@@ -81,12 +81,12 @@ class RecordingViewModel {
     var timer: Timer?
     var modelContext: ModelContext?
 
-    /// Call / Siri interruption — recording has no pause, so we save & stop.
+    /// Call / Siri interruption - recording has no pause, so we save & stop.
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
 
     /// Environment-injected analysis services, captured at configure time so
     /// the coordinator gets the same instances this session used (Whisper
-    /// model state, LLM availability). Not observable — no view reads them.
+    /// model state, LLM availability). Not observable - no view reads them.
     @ObservationIgnored var speechService: SpeechService?
     @ObservationIgnored var llmService: LLMService?
 
@@ -147,7 +147,7 @@ class RecordingViewModel {
         }
     }
 
-    /// No pause mode in this app — a phone call ends the take like Stop.
+    /// No pause mode in this app - a phone call ends the take like Stop.
     private func finalizeAfterInterruption() async {
         guard isRecording else { return }
         autoSavedRecording = await stopRecording()

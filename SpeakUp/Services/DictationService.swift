@@ -15,7 +15,7 @@ class DictationService {
     var lastAddedIndex = 0
 
     /// Why the last `start()` gave up, for the caller to display. Every failure
-    /// path here is silent otherwise — the mic button simply never lights up.
+    /// path here is silent otherwise - the mic button simply never lights up.
     var errorMessage: String?
 
     /// Current audio input level in dB (-160 silence … 0 max).
@@ -30,7 +30,7 @@ class DictationService {
     private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
 
-    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    /// `removeTap` crashes if no tap is installed - track it explicitly.
     private var isTapInstalled = false
 
     /// Thread-safe storage for the latest RMS level computed in the audio tap callback.
@@ -121,7 +121,7 @@ class DictationService {
 
         let inputNode = engine.inputNode
         // Prefer inputFormat; outputFormat can report 0 Hz before the graph
-        // is wired — starting then raises an uncaught NSException.
+        // is wired - starting then raises an uncaught NSException.
         var recordingFormat = inputNode.inputFormat(forBus: 0)
         if recordingFormat.sampleRate <= 0 {
             recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -191,7 +191,7 @@ class DictationService {
     /// rather than cancelled, so its last words still arrive.
     ///
     /// - Parameter flushRetired: false when the retired request has already
-    ///   finished on its own — `endAudio()` must not be called twice on one
+    ///   finished on its own - `endAudio()` must not be called twice on one
     ///   request.
     private func armRecognition(generation: Int, flushRetired: Bool = true) {
         guard let recognizer, recognizer.isAvailable else {
@@ -243,7 +243,7 @@ class DictationService {
     /// session down, so the mic button went dark mid-thought and every word
     /// after the pause was lost. Re-arm on the same engine instead.
     private func handleRecognitionEnd(generation: Int, hadError: Bool) {
-        // `stop()` cancels the task, which reports an error too — only an
+        // `stop()` cancels the task, which reports an error too - only an
         // unrequested failure is worth telling the user about.
         guard !isStopping else {
             cleanup()

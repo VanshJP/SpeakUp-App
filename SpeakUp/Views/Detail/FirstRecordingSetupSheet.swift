@@ -4,7 +4,7 @@ import SwiftData
 /// The handoff that fires on Today once the first score has landed.
 ///
 /// Its whole job is to offer the three things onboarding deliberately withheld
-/// until the user had seen a number — and then get out of the way. It is not a
+/// until the user had seen a number - and then get out of the way. It is not a
 /// settings page: session defaults live in Settings and the app tour, which
 /// starts the moment this dismisses, ends by pointing at them.
 struct FirstRecordingSetupSheet: View {
@@ -290,7 +290,7 @@ struct FirstRecordingSetupSheet: View {
         try? modelContext.save()
 
         // After the save: the scheduler reads the persisted row, and it is also
-        // what picks the hour — the first recording is already on disk, so the
+        // what picks the hour - the first recording is already on disk, so the
         // very first reminder lands near the time this user just practised.
         await RetentionScheduler.refresh(context: modelContext, service: service)
         AnalyticsService.shared.log(.onboardingStep("reminder", action: "complete"))

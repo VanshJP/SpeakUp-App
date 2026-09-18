@@ -2644,7 +2644,7 @@ enum DefaultPrompts {
     }
 
     /// Difficulty first (speaker level), category second (goal mix). Ordered
-    /// that way so a goal pick never overrides the level's difficulty ramp —
+    /// that way so a goal pick never overrides the level's difficulty ramp - 
     /// a beginner who picked Interviews still gets easy interview prompts.
     private static func pick(for level: SpeakerLevel, mix: PromptMix, seed: Int) -> PromptData {
         let target = pickDifficulty(for: level, seed: seed)
@@ -2660,7 +2660,7 @@ enum DefaultPrompts {
         return pool[abs(seed) % pool.count]
     }
 
-    /// Stable for the whole calendar day, and across launches — callers that
+    /// Stable for the whole calendar day, and across launches - callers that
     /// need a day-stable pick of their own (Today's answered-prompt substitute)
     /// share this rather than hashing a string, since String hashing is seeded
     /// per process and would reshuffle on every cold launch.

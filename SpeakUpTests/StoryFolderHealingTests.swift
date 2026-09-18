@@ -73,7 +73,7 @@ struct StoryFolderHealingTests {
         ]))
     }
 
-    /// Remap mutates `folderId` only — stands in for full-Story fetch+save wipe guard.
+    /// Remap mutates `folderId` only - stands in for full-Story fetch+save wipe guard.
     @Test func applyRemapsTouchesFolderIdOnly() {
         let drop = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
         let keeper = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!

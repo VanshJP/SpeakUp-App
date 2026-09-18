@@ -28,7 +28,7 @@ extension RoutineStep {
 ///
 /// Rendered as a labelled ladder rather than a checklist of equals. Everything
 /// before the current step is a tick, the current step carries the only action
-/// on the card, and everything after is a preview — so the card answers "what
+/// on the card, and everything after is a preview - so the card answers "what
 /// now" in one glance instead of offering five choices again.
 struct RoutineCard: View {
     let steps: [RoutineStep]

@@ -45,7 +45,7 @@ class PronunciationService: NSObject {
     static func canDefine(_ word: String) -> Bool {
         let cleaned = stripPunctuation(word)
         guard !cleaned.isEmpty else { return false }
-        // Dictionary lookup is for single tokens — not full sentences.
+        // Dictionary lookup is for single tokens - not full sentences.
         guard !cleaned.contains(where: { $0.isWhitespace }) else { return false }
         return UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: cleaned)
     }

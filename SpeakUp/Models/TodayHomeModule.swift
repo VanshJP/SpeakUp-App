@@ -1,7 +1,7 @@
 import Foundation
 
 /// Modular blocks on the Today home screen. Users reorder and hide these the
-/// way Bevel-style health dashboards do — session stays pinned because it is
+/// way Bevel-style health dashboards do - session stays pinned because it is
 /// the one action the screen exists to start.
 nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, Codable {
     case rings
@@ -50,7 +50,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         }
     }
 
-    /// Cannot be hidden or pushed out of the layout — the home screen's job.
+    /// Cannot be hidden or pushed out of the layout - the home screen's job.
     var isPinned: Bool { self == .session }
 
     /// Factory default order and visibility. Learn is off until the user opts in
@@ -63,7 +63,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
 }
 
 /// Resolves the persisted Today layout. Empty storage means "never customized"
-/// and returns the factory default — not an empty home.
+/// and returns the factory default - not an empty home.
 nonisolated enum TodayHomeLayout {
     static func resolve(_ raw: [String]) -> [TodayHomeModule] {
         guard !raw.isEmpty else { return TodayHomeModule.defaultVisible }
@@ -98,8 +98,8 @@ nonisolated enum TodayHomeLayout {
     /// Direction matters, which the first version missed: it always inserted at
     /// the target's index, so a block dragged *down* the page landed above the
     /// block it was dropped on and nothing could ever be moved into the last
-    /// slot. Dropping below inserts after; dropping above — or arriving from
-    /// the hidden tray, where there is no origin — inserts before.
+    /// slot. Dropping below inserts after; dropping above - or arriving from
+    /// the hidden tray, where there is no origin - inserts before.
     static func reorder(
         _ list: [TodayHomeModule],
         moving dragged: TodayHomeModule,

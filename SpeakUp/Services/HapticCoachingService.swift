@@ -190,7 +190,7 @@ class HapticCoachingService {
     // MARK: - Written Cue
 
     /// Presents a cue unless the cue cooldown is running. Returns whether it
-    /// actually displayed — callers gate one-shot state on the answer so a
+    /// actually displayed - callers gate one-shot state on the answer so a
     /// swallowed cue can fire later instead of being lost forever.
     @discardableResult
     private func showCue(_ cue: CoachingCue) -> Bool {

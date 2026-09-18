@@ -12,7 +12,7 @@ nonisolated enum MediaPath {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        // Collapse any directory prefix — only the last component may resolve.
+        // Collapse any directory prefix - only the last component may resolve.
         let base = (trimmed as NSString).lastPathComponent
         guard !base.isEmpty, base != ".", base != ".." else { return nil }
         guard !base.contains("\0") else { return nil }
@@ -23,8 +23,8 @@ nonisolated enum MediaPath {
     }
 
     /// True when `url` (after symlink resolution) sits under local Documents or
-    /// the app's iCloud container. Used to keep legacy absolute media URLs —
-    /// and in-root symlinks — from pointing at arbitrary sandbox files.
+    /// the app's iCloud container. Used to keep legacy absolute media URLs - 
+    /// and in-root symlinks - from pointing at arbitrary sandbox files.
     static func isUnderAllowedMediaRoot(_ url: URL, ubiquityContainer: URL? = nil) -> Bool {
         let standardized = url.resolvingSymlinksInPath().standardizedFileURL.path
         // Resolved here rather than via `ICloudStorageService.localDocumentsDirectory`

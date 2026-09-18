@@ -65,7 +65,7 @@ nonisolated struct GeneratedVocabStore: @unchecked Sendable {
         var ordered = Array(seen)
         if ordered.count > Self.seenCapacity {
             // The set loses insertion order; trimming arbitrary members is
-            // fine — the ring only exists to bound growth.
+            // fine - the ring only exists to bound growth.
             ordered.removeFirst(ordered.count - Self.seenCapacity)
         }
         defaults.set(ordered, forKey: seenKey)
@@ -137,7 +137,7 @@ nonisolated enum FreshWordSanitizer {
         return first.uppercased() + lowered.dropFirst()
     }
 
-    /// Single token, plain letters — no spaces, digits, hyphens, apostrophes.
+    /// Single token, plain letters - no spaces, digits, hyphens, apostrophes.
     /// The inflection matcher works best on simple stems, and multi-word
     /// "vocabulary" never highlights cleanly in a transcript.
     private static func isShapedLikeAWord(_ word: String) -> Bool {
@@ -149,7 +149,7 @@ nonisolated enum FreshWordSanitizer {
 
 /// Keeps the intro pool from running dry: asks the on-device model for novel
 /// words at the user's chosen difficulty and files the ones that survive
-/// validation. Every failure path degrades silently — the curated lexicon has
+/// validation. Every failure path degrades silently - the curated lexicon has
 /// always been the fallback and still is.
 @MainActor
 enum VocabFreshWordGenerator {

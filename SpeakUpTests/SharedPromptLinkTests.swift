@@ -98,7 +98,7 @@ struct SharedPromptLinkTests {
         #expect(message.contains(sampleText))
         #expect(message.contains(url.absoluteString))
         #expect(message.contains("Beat it?"))
-        // The caption is a headline, the prompt, and the link — nothing else.
+        // The caption is a headline, the prompt, and the link - nothing else.
         #expect(message.split(separator: "\n", omittingEmptySubsequences: true).count == 3)
     }
 

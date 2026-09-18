@@ -125,8 +125,8 @@ struct PracticeHubView: View {
     // MARK: - Tools
 
     /// Count only. The duration range moved into `PracticeToolKind.format`,
-    /// which the card prints underneath — printing it twice was how the old
-    /// meta line ended up saying "20s–1 min" next to "15–60s".
+    /// which the card prints underneath - printing it twice was how the old
+    /// meta line ended up saying "20s-1 min" next to "15-60s".
     private func meta(for tool: PracticeToolKind) -> String {
         let count: Int
         switch tool {
@@ -178,6 +178,7 @@ struct PracticeHubView: View {
                     message: "Nothing here matches \"\(query)\". Try a different search."
                 )
             } else {
+
                 if !visiblePractice.isEmpty {
                     toolGrid(title: "Practice") {
                         ForEach(visiblePractice) { tool in
@@ -208,7 +209,7 @@ struct PracticeHubView: View {
                 // eight rows it used to be. Both were doors to the same forty
                 // exercises and this was the longer one; the axis itself lives
                 // on inside every tool page, which groups by it. Searching is
-                // different — a query for "fillers" should land on the outcome,
+                // different - a query for "fillers" should land on the outcome,
                 // not on a row that promises to have one.
                 if query.isEmpty {
                     PracticeImproveEntryRow()
@@ -276,7 +277,7 @@ struct PracticeHubView: View {
         }
     }
 
-    /// A tool opens as a real push — the same navigation motion and the same
+    /// A tool opens as a real push - the same navigation motion and the same
     /// system Back button as a story or Compare. It used to slide in and out of
     /// the scroll view under `withAnimation`, behind a hand-rolled "All tools"
     /// pill, which is why entering a tool felt unlike entering anything else in

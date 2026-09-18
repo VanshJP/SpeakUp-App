@@ -35,7 +35,7 @@ struct WarmUpListView: View {
     // MARK: - Exercise Content
 
     /// Grouped by what the exercise improves, never by what it is. Every group
-    /// is always present — a dozen warm-ups is a scroll, not a search problem,
+    /// is always present - a dozen warm-ups is a scroll, not a search problem,
     /// and the pill row that used to sit above these headings said the same
     /// three words in shorter form.
     private var exerciseContent: some View {

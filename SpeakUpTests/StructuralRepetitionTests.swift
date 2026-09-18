@@ -132,7 +132,7 @@ struct StructuralRepetitionTests {
     }
 
     @Test func intentionalOrdinalListIsNotFlagged() {
-        // Curriculum-style First/Second/Third — craft, not a tic.
+        // Curriculum-style First/Second/Third - craft, not a tic.
         let transcript = words([
             "First", "we", "need", "alignment,",
             "Second", "we", "need", "budget,",
@@ -158,7 +158,7 @@ struct StructuralRepetitionTests {
     }
 
     @Test func fillerWordKindDecodesMissingAsFiller() throws {
-        // Old persisted analyses omit `kind` — must default to classic filler.
+        // Old persisted analyses omit `kind` - must default to classic filler.
         let data = Data(#"{"word":"um","count":2,"timestamps":[1.0,2.0]}"#.utf8)
         let decoded = try JSONDecoder().decode(FillerWord.self, from: data)
         #expect(decoded.kind == .filler)

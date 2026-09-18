@@ -109,7 +109,7 @@ struct WordView: View {
     let showFillerHighlight: Bool
     let showVocabHighlight: Bool
     var showStructuralHighlight: Bool = false
-    /// Only structural openings are tappable — whole-transcript tap was removed
+    /// Only structural openings are tappable - whole-transcript tap was removed
     /// because it felt like the recording playing itself while reading.
     var onPlay: (() -> Void)? = nil
 
@@ -117,7 +117,7 @@ struct WordView: View {
         showFillerHighlight || showVocabHighlight || showStructuralHighlight
     }
 
-    /// Tuned tones, not `.orange`/`.green` — the system colors are pitched for
+    /// Tuned tones, not `.orange`/`.green` - the system colors are pitched for
     /// light UI and go muddy over the navy canvas. Structural frames use plum
     /// so they never read as hesitation fillers.
     private var highlightColor: Color {

@@ -83,7 +83,7 @@ struct FeaturedGlassCard<Content: View>: View {
 
 // MARK: - Tick Meter
 
-/// Discrete segmented meter — a row of thin ticks filled up to `fraction`.
+/// Discrete segmented meter - a row of thin ticks filled up to `fraction`.
 /// Reads as measured data rather than a decorative progress bar.
 struct TickMeter: View {
     let fraction: Double
@@ -156,7 +156,7 @@ struct EmptyStateCard: View {
 
 // MARK: - Inline Empty State
 
-/// Empty state for a slot that already sits inside a card — a chart well, a
+/// Empty state for a slot that already sits inside a card - a chart well, a
 /// section body. `EmptyStateCard` would nest a `GlassCard` in a `GlassCard`.
 ///
 struct EmptyStateInline: View {

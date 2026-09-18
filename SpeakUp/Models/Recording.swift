@@ -36,14 +36,14 @@ final class Recording {
     var storyTitle: String?
     var waveformPeaks: [Float]?
     /// Denormalized projections maintained beside `setAnalysis`/insert for
-    /// cheap stats queries — never predicate on the Codable `analysis` blob.
+    /// cheap stats queries - never predicate on the Codable `analysis` blob.
     var overallScore: Int?
     var promptId: String?
     /// Persisted mirror of the live level samples (JSON-encoded `[Float]`), so
     /// resumed analyses keep real delivery metrics across relaunch.
     var audioLevelSamplesData: Data?
 
-    /// Live level samples over `audioLevelSamplesData`. Decodes JSON on access —
+    /// Live level samples over `audioLevelSamplesData`. Decodes JSON on access - 
     /// keep reads out of view bodies.
     var audioLevelSamples: [Float]? {
         get {
@@ -59,12 +59,12 @@ final class Recording {
     /// when this recording's analysis landed. Written once by
     /// `RecordingProcessingCoordinator`; the detail view scores this session
     /// against these words so an older take is judged by its own day's list,
-    /// never today's. Both optional — recordings analyzed before snapshots
+    /// never today's. Both optional - recordings analyzed before snapshots
     /// existed simply have none.
     var vocabChallengeDayStamp: String?
     var vocabChallengeWords: [VocabChallengeWord]?
     /// Set when the recording was saved but left unanalyzed because the free
-    /// allowance was spent. The audio is untouched — analysis runs the moment
+    /// allowance was spent. The audio is untouched - analysis runs the moment
     /// the allowance resets or Lifetime is purchased.
     var analysisBlockedByAllowance: Bool = false
 
@@ -118,7 +118,7 @@ final class Recording {
     /// Writes the analysis and its full-fidelity mirror together, refreshing
     /// the `overallScore` projection beside them.
     ///
-    /// Always use this rather than assigning `analysis` directly — a write that
+    /// Always use this rather than assigning `analysis` directly - a write that
     /// skips the mirror leaves the advanced metrics recoverable only until the
     /// next launch.
     func setAnalysis(_ analysis: SpeechAnalysis?) {
@@ -129,7 +129,7 @@ final class Recording {
 
     /// The analysis with its advanced metrics intact.
     ///
-    /// Decodes a JSON blob, so it must not be called from a view `body` — read
+    /// Decodes a JSON blob, so it must not be called from a view `body` - read
     /// it once into state. Falls back to the lossy SwiftData copy for
     /// recordings analyzed before the mirror existed.
     var fullAnalysis: SpeechAnalysis? {
@@ -171,7 +171,7 @@ final class Recording {
         if let relative = URL(string: filename) {
             return relative
         }
-        // Filenames with spaces/unsafe chars fail URL(string:) — percent-encode
+        // Filenames with spaces/unsafe chars fail URL(string:) - percent-encode
         // rather than trap. Falls back to the original absolute URL if all else
         // fails; resolveStoredURL handles the legacy-absolute branch.
         if let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
@@ -184,14 +184,14 @@ final class Recording {
     /// Resolves a stored URL: if it's already absolute and the file exists under an
     /// allowed media root, returns it as-is. If relative (just a filename), checks
     /// iCloud container first, then local Documents. Path components with `../`
-    /// or separators are rejected — see `MediaPath`.
+    /// or separators are rejected - see `MediaPath`.
     private static func resolveStoredURL(_ stored: URL?) -> URL? {
         guard let stored else { return nil }
 
         let filename: String
 
         if stored.path.hasPrefix("/") {
-            // Legacy absolute path — only honor it inside Documents / iCloud.
+            // Legacy absolute path - only honor it inside Documents / iCloud.
             if FileManager.default.fileExists(atPath: stored.path),
                MediaPath.isUnderAllowedMediaRoot(
                 stored,
@@ -199,7 +199,7 @@ final class Recording {
                ) {
                 return stored
             }
-            // File moved or outside the media root — extract basename and retry.
+            // File moved or outside the media root - extract basename and retry.
             guard let safe = MediaPath.sanitizedFilename(stored.lastPathComponent) else {
                 return nil
             }
