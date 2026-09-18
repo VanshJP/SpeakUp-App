@@ -35,8 +35,8 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
    the page and meant two tabs of the same screen filtered by two different-looking controls. Selection is the
    solid white pill everywhere; a folder's `colorHex` shows on the idle glyph via `FilterChip.tint`. "+ Folder"
    stays a dashed capsule because it is an action, not a filter. Do not fork the chip — change `FilterChip`
-   (`Views/History/HistoryView.swift`) / `SelectedFilterChrome` (`FilterPill.swift`) and both tabs move together.
-   Tool lists (`FilterPill` in Warm-Up / Read-Aloud / Calm) use the same selected-white / idle-glass chrome.
+   (`Views/History/HistoryView.swift`) and both tabs move together. Tool pages
+   have no filter chrome at all (practice-tools invariant 8).
 7. **Folder seed heals CloudKit dupes by normalized name** (not stable ids — folders use random UUIDs;
    prompts heal by string `id`). Collapse same-name rows (keep one, remap `Story.folderId` on **full** Story
    fetches, delete extras), then insert any **missing** default names (`Personal` / `Work` / `Practice Ideas`).

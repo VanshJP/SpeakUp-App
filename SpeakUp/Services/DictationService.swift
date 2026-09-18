@@ -47,6 +47,21 @@ class DictationService {
     /// callback cannot `cleanup()` the replacement session.
     private var sessionGeneration = 0
 
+    /// Words collected by the requests that have already been retired. Each
+    /// new request's transcript starts empty and `processResult` publishes the
+    /// whole list, so without this prefix a single pause would wipe everything
+    /// the user had dictated so far.
+    private var committedWords: [String] = []
+
+    /// When the live request was opened, and how many have died instantly with
+    /// nothing to show for it. A recognizer missing its on-device assets fails
+    /// that way immediately and forever; re-arming it in a tight loop would
+    /// spin the CPU behind a mic button that looks live.
+    private var segmentStartedAt = Date.distantPast
+    private var unproductiveSegments = 0
+    private static let unproductiveSegmentWindow: TimeInterval = 1.0
+    private static let maxUnproductiveSegments = 3
+
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
@@ -79,6 +94,8 @@ class DictationService {
         }
 
         recognizedWords = []
+        committedWords = []
+        unproductiveSegments = 0
         lastAddedIndex = 0
         audioLevel = -160
         errorMessage = nil
@@ -87,24 +104,20 @@ class DictationService {
         let engine = AVAudioEngine()
         self.audioEngine = engine
 
-        let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.record, mode: .measurement)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            // Off the main actor: `setActive` blocks until the audio server has
+            // the session up, and the console has been warning about that stall
+            // on every mic tap ("can lead to UI unresponsiveness").
+            try await Task.detached(priority: .userInitiated) {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record, mode: .measurement)
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
+            }.value
         } catch {
             logger.error("DictationService: audio session setup failed: \(error.localizedDescription, privacy: .private(mask: .hash))")
             errorMessage = "Couldn't start the microphone."
             return
         }
-
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        // Unconditional: on-device processing is a product guarantee, not a
-        // preference. Left unset, the recognizer is free to stream microphone
-        // audio to Apple's servers. If the on-device assets are not available
-        // the request fails, and failing is the correct outcome here.
-        request.requiresOnDeviceRecognition = true
-        requestBox.withLock { $0 = request }
 
         let inputNode = engine.inputNode
         // Prefer inputFormat; outputFormat can report 0 Hz before the graph
@@ -166,6 +179,44 @@ class DictationService {
             }
         }
 
+        armRecognition(generation: generation)
+    }
+
+    /// Opens a recognition request on the already-running engine and points the
+    /// tap at it.
+    ///
+    /// Re-arming swaps the request inside `requestBox` and leaves the tap
+    /// alone: re-installing a tap on a live engine reconfigures AURemoteIO
+    /// under its own IO thread (gotcha §9). The retired request is flushed
+    /// rather than cancelled, so its last words still arrive.
+    ///
+    /// - Parameter flushRetired: false when the retired request has already
+    ///   finished on its own - `endAudio()` must not be called twice on one
+    ///   request.
+    private func armRecognition(generation: Int, flushRetired: Bool = true) {
+        guard let recognizer, recognizer.isAvailable else {
+            errorMessage = "Speech recognition isn't available right now."
+            cleanup()
+            isListening = false
+            return
+        }
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        // Unconditional: on-device processing is a product guarantee, not a
+        // preference. Left unset, the recognizer is free to stream microphone
+        // audio to Apple's servers. If the on-device assets are not available
+        // the request fails, and failing is the correct outcome here.
+        request.requiresOnDeviceRecognition = true
+
+        let retired = requestBox.withLock { box -> SFSpeechAudioBufferRecognitionRequest? in
+            let previous = box
+            box = request
+            return previous
+        }
+        if flushRetired { retired?.endAudio() }
+
+        segmentStartedAt = Date()
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
 
@@ -177,21 +228,53 @@ class DictationService {
             }
 
             if error != nil || (result?.isFinal ?? false) {
+                let hadError = error != nil
                 Task { @MainActor in
                     guard self.sessionGeneration == generation else { return }
-                    // `stop()` cancels the task, which reports an error too - 
-                    // only an unrequested failure is worth telling the user
-                    // about. On-device recognition is required, so a device
-                    // whose assets are missing lands here rather than sending
-                    // the audio to a server.
-                    if error != nil, !self.isStopping {
-                        self.errorMessage = "On-device dictation isn't ready yet. Try again in a moment."
-                    }
-                    self.cleanup()
-                    self.isListening = false
+                    self.handleRecognitionEnd(generation: generation, hadError: hadError)
                 }
             }
         }
+    }
+
+    /// A recognition request ended. For dictation that is routine rather than
+    /// fatal: SFSpeech finalizes after a pause in speech, and someone picking
+    /// words out of their head pauses constantly. This used to tear the whole
+    /// session down, so the mic button went dark mid-thought and every word
+    /// after the pause was lost. Re-arm on the same engine instead.
+    private func handleRecognitionEnd(generation: Int, hadError: Bool) {
+        // `stop()` cancels the task, which reports an error too - only an
+        // unrequested failure is worth telling the user about.
+        guard !isStopping else {
+            cleanup()
+            isListening = false
+            return
+        }
+        guard isListening else { return }
+
+        let grew = recognizedWords.count > committedWords.count
+        let lifetime = Date().timeIntervalSince(segmentStartedAt)
+        committedWords = recognizedWords
+        if grew || lifetime >= Self.unproductiveSegmentWindow {
+            unproductiveSegments = 0
+        } else {
+            unproductiveSegments += 1
+        }
+
+        let engineIsLive = audioEngine?.isRunning == true
+        guard engineIsLive, unproductiveSegments < Self.maxUnproductiveSegments else {
+            // On-device recognition is required, so a device whose assets are
+            // missing lands here rather than sending the audio to a server.
+            if hadError {
+                errorMessage = "On-device dictation isn't ready yet. Try again in a moment."
+            }
+            cleanup()
+            isListening = false
+            return
+        }
+
+        // The request that just ended has already flushed itself.
+        armRecognition(generation: generation, flushRetired: false)
     }
 
     func stop() {
@@ -212,7 +295,10 @@ class DictationService {
 
         var seen = Set<String>()
         var unique: [String] = []
-        for word in words {
+        // `committedWords` first: the live request's transcript restarts at
+        // empty on every re-arm, so the prefix is what keeps a pause from
+        // wiping the list the user is building.
+        for word in committedWords + words {
             let key = word.lowercased()
             if !seen.contains(key) {
                 seen.insert(key)

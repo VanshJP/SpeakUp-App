@@ -78,16 +78,16 @@ class AudioService: NSObject {
             NotificationCenter.default.removeObserver(observer)
         }
     }
-    
+
     // MARK: - Session Setup
-    
+
     private func setupSession() {
         recordingSession = AVAudioSession.sharedInstance()
     }
 
     func requestPermission() async -> Bool {
         do {
-            try configureRecordingSession()
+            try await configureRecordingSession()
             hasPermission = await AVAudioApplication.requestRecordPermission()
             return hasPermission
         } catch {
@@ -99,9 +99,21 @@ class AudioService: NSObject {
     /// Shared session config for capture. Matches recorder sample rate to the
     /// hardware IO rate - a hardcoded 44.1 kHz under `.voiceChat` / HFP (often
     /// 8-16 kHz) was producing silent or time-stretched m4a files.
-    private func configureRecordingSession() throws {
-        let session = recordingSession ?? AVAudioSession.sharedInstance()
-        recordingSession = session
+    ///
+    /// Hops off the main actor to do it. `setActive` blocks until the audio
+    /// server has the session up, and on the main thread that is a real stall
+    /// at the top of every practice screen - which is what the console has been
+    /// saying all along: *"AVAudioSession_iOS.mm … This method can lead to UI
+    /// unresponsiveness if called on the main thread."*
+    private func configureRecordingSession() async throws {
+        recordingSession = AVAudioSession.sharedInstance()
+        try await Task.detached(priority: .userInitiated) {
+            try Self.activateRecordingSession()
+        }.value
+    }
+
+    private nonisolated static func activateRecordingSession() throws {
+        let session = AVAudioSession.sharedInstance()
         // `.bluetoothHighQualityRecording` (iOS 26+) prefers AirPods HQ capture
         // when available; HFP remains for classic BT headsets.
         try session.setCategory(
@@ -112,6 +124,12 @@ class AudioService: NSObject {
         // Prefer a speech-friendly rate; hardware may still negotiate lower on HFP.
         try? session.setPreferredSampleRate(44_100)
         try? session.setPreferredIOBufferDuration(0.005)
+        try session.setActive(true)
+    }
+
+    private nonisolated static func activatePlaybackSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .default)
         try session.setActive(true)
     }
 
@@ -126,9 +144,9 @@ class AudioService: NSObject {
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
     }
-    
+
     // MARK: - Recording
-    
+
     /// True while `stopRecording` is waiting on the recorder delegate.
     /// Callers must not `cancelRecording` / `cleanup` in this window - that
     /// resumes the stop continuation as failure and deletes the m4a.
@@ -174,14 +192,14 @@ class AudioService: NSObject {
                 userInfo: [NSLocalizedDescriptionKey: "Recording already in progress"]
             ))
         }
-        
+
         // Always capture to local Documents. iCloud promotion happens after stop.
         let storageDir = ICloudStorageService.shared.recordingsDirectory
         try? FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
         let audioFilename = storageDir.appendingPathComponent("\(UUID().uuidString).m4a")
-        
+
         do {
-            try configureRecordingSession()
+            try await configureRecordingSession()
             let session = recordingSession ?? AVAudioSession.sharedInstance()
             let settings = recorderSettings(matching: session)
 
@@ -220,7 +238,7 @@ class AudioService: NSObject {
             throw AudioServiceError.recordingFailed(error)
         }
     }
-    
+
     func stopRecording() async -> URL? {
         recordingTimer?.invalidate()
         recordingTimer = nil
@@ -261,14 +279,14 @@ class AudioService: NSObject {
         // Promote to iCloud only after the file is fully finalized locally.
         let url = localURL.map { ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: $0) }
 
-        // Duration comes from the finalized file, not recorder.currentTime - 
+        // Duration comes from the finalized file, not recorder.currentTime -
         // the latter drifts under audio-session interruptions and sample-rate
         // mismatches (e.g. .voiceChat + HFP), occasionally by 60× or more.
         recordingDuration = url.flatMap { getAudioDuration(at: $0) } ?? 0
 
         return url
     }
-    
+
     func cancelRecording() {
         recordingTimer?.invalidate()
         recordingTimer = nil
@@ -290,7 +308,7 @@ class AudioService: NSObject {
         recordingDuration = 0
         resetInputConfidence()
     }
-    
+
     func getAudioLevel() -> Float {
         audioRecorder?.updateMeters()
         let level = audioRecorder?.averagePower(forChannel: 0) ?? -160
@@ -322,16 +340,17 @@ class AudioService: NSObject {
         hasConfirmedInput = false
         isHearingInput = true
     }
-    
+
     // MARK: - Playback
-    
+
     /// - Parameter startingAt: seconds to begin from. Set before `play()` so the
     ///   audio never audibly starts at zero and jump-cuts - the coaching screen
     ///   plays from a timestamp far more often than from the top.
     func play(url: URL, startingAt startTime: TimeInterval = 0) async throws {
         do {
-            try recordingSession?.setCategory(.playback, mode: .default)
-            try recordingSession?.setActive(true)
+            try await Task.detached(priority: .userInitiated) {
+                try Self.activatePlaybackSession()
+            }.value
 
             // The same file is already loaded (playing or paused)? Seek the
             // live player instead of rebuilding it. Creating a new
@@ -358,7 +377,7 @@ class AudioService: NSObject {
             playbackDuration = audioPlayer?.duration ?? 0
             seekPlayer(to: startTime)
             audioPlayer?.play()
-            
+
             isPlaying = true
 
             await MainActor.run {
@@ -506,15 +525,20 @@ class AudioService: NSObject {
             isRecording
         else { return }
         // Recorder keeps writing after route change; re-assert category so
-        // `.defaultToSpeaker` wins over a dead BT/HFP path.
-        try? configureRecordingSession()
-        if audioRecorder?.isRecording == false {
-            _ = audioRecorder?.record()
+        // `.defaultToSpeaker` wins over a dead BT/HFP path. Off the main actor
+        // for the same reason as every other activation here - a repair that
+        // lands a few milliseconds later still repairs.
+        Task { [weak self] in
+            guard let self else { return }
+            try? await self.configureRecordingSession()
+            if self.audioRecorder?.isRecording == false {
+                _ = self.audioRecorder?.record()
+            }
         }
     }
-    
+
     // MARK: - File Management
-    
+
     func getAudioDuration(at url: URL) -> TimeInterval? {
         do {
             let player = try AVAudioPlayer(contentsOf: url)
@@ -523,9 +547,9 @@ class AudioService: NSObject {
             return nil
         }
     }
-    
+
     // MARK: - Cleanup
-    
+
     func cleanup() {
         stop()
         // Leave an in-flight finalize alone - cancel would delete the take.
@@ -565,7 +589,7 @@ extension AudioService: AVAudioPlayerDelegate {
             stopDisplayLink()
         }
     }
-    
+
     func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         if let error {
             logger.error("Playback decode error: \(error.localizedDescription, privacy: .private(mask: .hash))")
@@ -579,7 +603,7 @@ enum AudioServiceError: LocalizedError {
     case noPermission
     case recordingFailed(Error)
     case playbackFailed(Error)
-    
+
     var errorDescription: String? {
         switch self {
         case .noPermission:

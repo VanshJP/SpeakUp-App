@@ -139,4 +139,74 @@ struct ReadAloudAlignmentTests {
         #expect(ReadAloudService.normalize("elephant") == "elephant")
         #expect(ReadAloudService.normalize("") == "")
     }
+
+    // MARK: - Recognition request boundaries
+
+    /// SFSpeech closes a request after a pause in speech and again at its own
+    /// audio-duration ceiling, both of which a reader triggers several times in
+    /// one passage. The service re-arms instead of ending the session, and
+    /// stitches the requests' transcripts back together - these pin that the
+    /// stitching is lossless.
+
+    @Test func joinedSegmentsDropEmptiesAndSingleSpaceTheRest() {
+        #expect(ReadAloudService.joinTranscripts(["the quick", "brown fox"]) == "the quick brown fox")
+        #expect(ReadAloudService.joinTranscripts(["the quick", ""]) == "the quick")
+        #expect(ReadAloudService.joinTranscripts(["", "brown fox"]) == "brown fox")
+        #expect(ReadAloudService.joinTranscripts(["  the quick ", " brown fox"]) == "the quick brown fox")
+        #expect(ReadAloudService.joinTranscripts(["", "   ", ""]) == "")
+        #expect(ReadAloudService.joinTranscripts([]) == "")
+    }
+
+    @Test func aReadSplitAcrossRequestsScoresLikeOneContinuousRead() {
+        let reference = ["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"]
+        let normalized = reference.map(ReadAloudService.normalize)
+
+        let continuous = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: normalized,
+            spokenWords: reference
+        )
+
+        // Same words, cut into three requests the way a reader's pauses would.
+        let segments = ["The quick brown", "fox jumps over", "the lazy dog"]
+        let stitched = ReadAloudService.joinTranscripts(segments)
+            .components(separatedBy: " ")
+        let rearmed = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: normalized,
+            spokenWords: stitched
+        )
+
+        #expect(rearmed.matched == continuous.matched)
+        #expect(rearmed.mismatched == continuous.mismatched)
+        #expect(rearmed.refIndex == continuous.refIndex)
+        #expect(rearmed.states == continuous.states)
+    }
+
+    @Test func openingANewRequestDoesNotRewindTheReader() {
+        let reference = ["The", "quick", "brown", "fox", "jumps"]
+        let normalized = reference.map(ReadAloudService.normalize)
+
+        func progress(_ segments: [String]) -> Int {
+            let words = ReadAloudService.joinTranscripts(segments)
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+            return ReadAloudService.computeAlignment(
+                reference: reference,
+                normalizedReference: normalized,
+                spokenWords: words
+            ).refIndex
+        }
+
+        // Three words in, the recognizer closes the request and a fresh one
+        // opens empty. Without the committed prefix this is where the passage
+        // used to snap back to word one.
+        let beforeRearm = progress(["The quick brown"])
+        let atRearm = progress(["The quick brown", ""])
+        let afterRearm = progress(["The quick brown", "fox jumps"])
+
+        #expect(beforeRearm == 3)
+        #expect(atRearm == beforeRearm)
+        #expect(afterRearm == 5)
+    }
 }

@@ -2,7 +2,7 @@
 
 **Summary:** Practice reading scripted text with word-level accuracy scoring. Pick a catalog passage or a saved passage, or add personal text in a focused composer. The composer accepts typing, Clipboard paste, and TXT, RTF, RTFD, or PDF imports. Users can hear a TTS model, optionally open the system dictionary for a single word, then record and match against the source.
 
-Also supports **Shadow mode** (hear the TTS model, then speak it back) and **Minimal pairs** packs.
+Any passage can be **heard first** (TTS model line, then speak it back) from inside the session, and **Minimal pairs** packs score through the same engine.
 
 **Key symbols:** `ReadAloudPassage`, `ReadAloudCategory`, `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `ReadAloudService`, `PronunciationService`, `DictionaryView`
 
@@ -67,11 +67,16 @@ The scoring engine is designed for one focused section. If imported text exceeds
 `custom` → `.clarity`. "News" and "Literature" say where the words came from,
 which is not why anyone picks a passage; the category is now the row's tag.
 
-Two filter bars: a shared `FocusFilterBar` over `viewModel.availableFocuses`
-(= `PracticeToolKind.readAloud.focuses`, counted from the seed array so a pill
-can never filter to nothing), then length pills from `ReadAloudDifficulty`.
-Sections are the shared `FocusSection`; rows are `PracticeItemRow`.
-`initialFocus:` arrives from the Library outcome browser.
+**No filter bars.** Sections are the shared `FocusSection` over
+`viewModel.availableFocuses` (= `PracticeToolKind.readAloud.focuses`), rows are
+`PracticeItemRow`. This page carried the most chrome in the app — a Shadow-mode
+toggle, a focus pill bar, a length pill bar, and a "12 of 20 passages" caption
+to explain what the bars had done — above twenty passages whose rows already
+print difficulty and word count. All four are gone; the row tag carries
+`difficulty · N words`, which is what the length pills were for.
+`initialFocus:` still arrives from the Library outcome browser and now
+**scrolls** to that group rather than filtering to it. See practice-tools
+invariant 8.
 
 See [practice-tools.md](practice-tools.md) invariants 17–20 for the shared axis and its components.
 
@@ -119,10 +124,24 @@ Unchanged for custom vs catalog:
 3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` — matched / missed / extra.
 4. Show `ReadAloudResultView`, then reset on Done or run the same passage on Retry.
 
+The session auto-starts listening; there is no pre-roll state to tap through.
+
 Current code does **not** persist a SwiftData `Recording`; Read-Aloud results
 are session-local and therefore absent from History and longitudinal clarity
 charts. Successful matching still writes the curriculum activity signal. Treat
 History persistence as future product work, not as an implemented contract.
+
+**Recognition survives its own request boundaries.** `SFSpeechRecognizer`
+closes a request after a pause in speech and again at the request's own
+audio-duration ceiling; a reader working through a paragraph triggers both,
+several times. `ReadAloudService` re-arms on the same engine and tap
+(`armRecognition`) and keeps one transcript slot per request
+(`segmentTranscripts`, joined by the pure `joinTranscripts`), so alignment sees
+one continuous read and the reader never loses their place. It also rolls over
+proactively every 45 s, and rebuilds the whole capture graph on an
+`AVAudioEngineConfigurationChange` or after an interruption. Only a recognizer
+that fails three times in a row inside a second — a device missing its on-device
+assets — ends the session. See gotchas §9 and §26.
 
 Silence-is-not-a-score applies (see practice-tools invariant 14).
 
@@ -152,6 +171,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/Services/PronunciationService.swift` | TTS + define gate |
 | `SpeakUp/Services/ReadAloudService.swift` | Session listening + `computeAlignment` |
 | `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |
+| `SpeakUpTests/ReadAloudAlignmentTests.swift` | Alignment core + request-boundary stitching |
 | `SpeakUpTests/ReadAloudCustomPassageTests.swift` | Custom factory + define gate |
 | `SpeakUpTests/PracticeFocusTests.swift` | Focus axis + derived catalog listings |
 
@@ -162,9 +182,11 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Presented from Practice Hub **tools** section (pushed full page through `ToolPresentation.pushed` via `navigationDestination`), Today, and RecordingDetail next-steps as sheets, not its own tab.
 - Difficulty coloring uses `AppColors.difficultyColor`, not raw system colors.
 - Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`); kept ones persist on `UserSettings.savedReadAloudTexts`. Neither is appended to the seed array.
-- Shadow mode plays `PronunciationService.speak(text:rate:)` before `startSession`; copy must not claim accent therapy because the score remains alignment and clarity. **Neither shadow control may be disabled while the model line plays.** Both carried `.disabled(pronunciationService.isSpeaking)`, which is exactly when a user reaches for them — the only way past the voiceover was to sit through it. "Start speaking" stops the synthesiser and opens the mic ("Skip & speak" while audio plays); the secondary button becomes Stop.
+- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segmentTranscripts` and every matched word intact. Time spent hearing the model is subtracted from the take (`modelPlaybackSeconds`) so the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. Copy must not claim accent therapy; the score remains alignment and clarity.
 - Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy.
 - **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts; recognition failure sets `service.recognitionFailureMessage`, ends the session within 250 ms, and lands on the result screen as a warning notice, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
+- **A dead mic must never sit under a live clock.** `ReadAloudViewModel.startTimer` also ends the session when `service.isListening` goes false while the state still says `.listening`. Recognition now survives its own request boundaries, so that only fires for something unforeseen — and the old behaviour there (frozen passage, "Not listening", a disabled Done button, restart from the top) is precisely what a dropped read felt like.
+- **The session cover is presented on the passage, the result cover on the result** (`fullScreenCover(item:)`). Both used to be `isPresented:` flags over state that `viewModel.reset()` or Retry clears, which drew an empty cover for the length of a dismissal. Gotcha §27.
 - The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
 - Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
 - Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.

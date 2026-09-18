@@ -5,13 +5,16 @@ struct ReadAloudSessionView: View {
     @Bindable var viewModel: ReadAloudViewModel
     let passage: ReadAloudPassage
     @Environment(\.dismiss) private var dismiss
-    @State private var showingResult = false
+    /// The finished read, and the only state its cover reads. A
+    /// `showingResult` flag over `viewModel.result` presented an empty cover
+    /// whenever the two disagreed - and Retry clears the result while the flag
+    /// is still coming down.
+    @State private var finishedRead: ReadAloudResult?
     @State private var showingExitConfirm = false
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
     @State private var didAutoStartSession = false
-    @State private var awaitingShadowStart = false
 
     @ScaledMetric(relativeTo: .title2) private var passageFontSize: CGFloat = 22
 
@@ -62,38 +65,36 @@ struct ReadAloudSessionView: View {
         .task {
             guard !didAutoStartSession else { return }
             didAutoStartSession = true
-            if viewModel.isShadowMode {
-                awaitingShadowStart = true
-                pronunciationService.speak(text: passage.text, rate: 0.42)
-            } else {
-                await viewModel.startSession(passage: passage)
-                lastAutoScrolledWordIndex = 0
-            }
+            await viewModel.startSession(passage: passage)
+            lastAutoScrolledWordIndex = 0
+        }
+        .onChange(of: pronunciationService.isSpeaking) { wasSpeaking, isSpeaking in
+            // The model line ended, by finishing or by Stop. Either way the
+            // mic comes back on the transcript it left.
+            guard wasSpeaking, !isSpeaking else { return }
+            viewModel.resumeAfterModel()
         }
         .onDisappear {
-            pronunciationService.stop()
             if viewModel.sessionState == .listening {
                 viewModel.stopSession()
             }
+            pronunciationService.stop()
         }
         .onChange(of: viewModel.sessionState) { _, newState in
-            if newState == .finished {
-                showingResult = true
-                PracticeRoutineService.shared.complete(.readAloud)
-            }
+            guard newState == .finished, let result = viewModel.result else { return }
+            finishedRead = result
+            PracticeRoutineService.shared.complete(.readAloud)
         }
-        .fullScreenCover(isPresented: $showingResult) {
-            if let result = viewModel.result {
-                ReadAloudResultView(result: result, onRetry: {
-                    showingResult = false
-                    lastAutoScrolledWordIndex = 0
-                    Task { await viewModel.retryPassage() }
-                }, onDone: {
-                    showingResult = false
-                    viewModel.reset()
-                    dismiss()
-                })
-            }
+        .fullScreenCover(item: $finishedRead) { result in
+            ReadAloudResultView(result: result, onRetry: {
+                finishedRead = nil
+                lastAutoScrolledWordIndex = 0
+                Task { await viewModel.retryPassage() }
+            }, onDone: {
+                finishedRead = nil
+                viewModel.reset()
+                dismiss()
+            })
         }
         .sheet(item: $selectedWord) { detail in
             WordDetailSheet(
@@ -310,80 +311,75 @@ struct ReadAloudSessionView: View {
     // MARK: - Bottom Controls
 
 
-    /// Neither button may be disabled while the model line plays.
+    /// Shadow practice, as a control rather than a mode.
     ///
-    /// Both used to carry `.disabled(pronunciationService.isSpeaking)`, which
-    /// is precisely when someone wants them: the only way to skip the voiceover
-    /// was to sit through the voiceover. "Start speaking" now stops the
-    /// synthesiser and opens the mic immediately, and the secondary button
-    /// becomes Stop while audio is playing.
-    private var shadowControls: some View {
+    /// It was a toggle at the top of the catalog that had to be flipped before
+    /// the passage opened, which put it furthest from the moment it is wanted:
+    /// mid-read, having just fumbled a line. Here it is one button, live for
+    /// the whole session and on every passage. Pressing it holds the read -
+    /// the mic goes down so the recogniser cannot score the synthesiser - and
+    /// the words already matched are still there when it comes back.
+    ///
+    /// Never disabled while the model plays: that is exactly when someone
+    /// reaches for it, and the only way past the voiceover used to be sitting
+    /// through it. While speaking it reads Stop.
+    private var hearItButton: some View {
         let isSpeaking = pronunciationService.isSpeaking
 
-        return VStack(spacing: 10) {
-            Text(isSpeaking ? "Listen, then speak it back" : "Ready when you are")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.7))
-
-            HStack(spacing: 12) {
-                GlassButton(
-                    title: isSpeaking ? "Stop" : "Hear again",
-                    style: .secondary,
-                    size: .medium
-                ) {
-                    Haptics.light()
-                    if isSpeaking {
-                        pronunciationService.stop()
-                    } else {
-                        pronunciationService.speak(text: passage.text, rate: 0.42)
-                    }
+        return GlassButton(
+            title: isSpeaking ? "Stop" : "Hear it",
+            icon: isSpeaking ? "stop.fill" : "speaker.wave.2.fill",
+            style: .secondary,
+            size: .medium,
+            fullWidth: true
+        ) {
+            Haptics.light()
+            if isSpeaking {
+                pronunciationService.stop()
+            } else {
+                viewModel.pauseForModel()
+                pronunciationService.speak(text: passage.text, rate: 0.42)
+                // Nothing to wait for if the synthesiser declined the text.
+                if !pronunciationService.isSpeaking {
+                    viewModel.resumeAfterModel()
                 }
-                .accessibilityLabel(isSpeaking ? "Stop the model reading" : "Hear the model reading again")
-
-                GlassButton(
-                    title: isSpeaking ? "Skip & speak" : "Start speaking",
-                    style: .primary,
-                    size: .medium
-                ) {
-                    Haptics.medium()
-                    pronunciationService.stop()
-                    awaitingShadowStart = false
-                    Task {
-                        await viewModel.startSession(passage: passage)
-                        lastAutoScrolledWordIndex = 0
-                    }
-                }
-                .accessibilityLabel(
-                    isSpeaking
-                        ? "Skip the model reading and start speaking"
-                        : "Start speaking"
-                )
             }
         }
-        .padding(.bottom, 4)
-        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            isSpeaking
+                ? "Stop the model reading and go back to the mic"
+                : "Hear the passage read aloud. Your reading is held until it finishes."
+        )
+    }
+
+    private var micStatus: (label: String, color: Color) {
+        if viewModel.isHearingModel { return ("Hearing it", AppColors.toolReadAloud) }
+        if viewModel.isListening { return ("Listening...", AppColors.success) }
+        return ("Not listening", AppColors.scoreEmpty)
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 16) {
-            if awaitingShadowStart {
-                shadowControls
-            }
+        let status = micStatus
+
+        return VStack(spacing: 12) {
+            hearItButton
+                .disabled(!viewModel.isListening)
+                .opacity(viewModel.isListening ? 1 : 0.5)
 
             HStack(spacing: 20) {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(viewModel.isListening ? AppColors.success : AppColors.scoreEmpty)
+                        .fill(status.color)
                         .frame(width: 10, height: 10)
                         .accessibilityHidden(true)
-                    Text(viewModel.isListening ? "Listening..." : "Not listening")
+                    Text(status.label)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Microphone \(viewModel.isListening ? "listening" : "not listening")")
+                .accessibilityLabel("Microphone \(status.label)")
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 GlassButton(
                     title: "Done",
@@ -392,9 +388,10 @@ struct ReadAloudSessionView: View {
                     size: .medium
                 ) {
                     Haptics.medium()
+                    pronunciationService.stop()
                     viewModel.stopSession()
                 }
-                .disabled(!viewModel.isListening || awaitingShadowStart)
+                .disabled(!viewModel.isListening)
                 .opacity(viewModel.isListening ? 1 : 0.5)
             }
         }

@@ -42,6 +42,9 @@ class LiveTranscriptionService {
     /// notifications, and unsafe because NSObjectProtocol tokens are not
     /// Sendable but are only ever registered/removed from the main actor.
     @ObservationIgnored nonisolated(unsafe) private var interruptionObserver: NSObjectProtocol?
+    /// Same rules as `interruptionObserver`, but re-registered per engine: the
+    /// notification is only useful when it names the engine that raised it.
+    @ObservationIgnored nonisolated(unsafe) private var configurationObserver: NSObjectProtocol?
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -65,6 +68,9 @@ class LiveTranscriptionService {
     deinit {
         if let interruptionObserver {
             NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
         }
     }
 
@@ -135,6 +141,78 @@ class LiveTranscriptionService {
             stopInternal()
             return
         }
+
+        observeConfigurationChange(on: engine)
+    }
+
+    /// AirPods connecting, a headset unplugged, another app reshaping the
+    /// shared session: AVAudioEngine stops itself and the tap's format goes
+    /// stale. Nothing throws, so without this the live filler count simply
+    /// froze for the rest of the take while the recorder kept writing.
+    @MainActor
+    private func observeConfigurationChange(on engine: AVAudioEngine) {
+        removeConfigurationObserver()
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.rebuildEnginePreservingCounts()
+            }
+        }
+    }
+
+    @MainActor
+    private func removeConfigurationObserver() {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
+        configurationObserver = nil
+    }
+
+    /// Rebuilds the capture graph without touching the live counters, so a
+    /// route change costs the take a moment of recognition rather than the
+    /// rest of it. `AudioService` re-asserts the session itself on the same
+    /// route change; this only owns the engine that feeds the recognizer.
+    @MainActor
+    private func rebuildEnginePreservingCounts() {
+        guard isActive else { return }
+        logger.info("LiveTranscription: rebuilding capture graph after configuration change")
+
+        recognitionGeneration += 1
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        requestBox.withLock {
+            $0?.endAudio()
+            $0 = nil
+        }
+
+        // Stop before removing the tap (gotcha §9).
+        audioEngine?.stop()
+        removeTapIfNeeded()
+        removeConfigurationObserver()
+        audioEngine = nil
+
+        let engine = AVAudioEngine()
+        audioEngine = engine
+        segmentTimeOffset = max(segmentTimeOffset, lastSegmentEndTime)
+
+        guard attachRecognition(on: engine) else {
+            stopInternal()
+            return
+        }
+
+        do {
+            engine.prepare()
+            try engine.start()
+        } catch {
+            logger.error("LiveTranscription: engine failed to restart after configuration change: \(error.localizedDescription, privacy: .private(mask: .hash))")
+            stopInternal()
+            return
+        }
+
+        observeConfigurationChange(on: engine)
     }
 
     @MainActor
@@ -153,6 +231,7 @@ class LiveTranscriptionService {
 
         isActive = false
         recognitionGeneration += 1
+        removeConfigurationObserver()
 
         // Stop first: mutating the tap on a running engine reconfigures the
         // live AURemoteIO underneath its IO thread.
@@ -252,6 +331,12 @@ class LiveTranscriptionService {
     private func restartRecognitionPreservingEngine() {
         guard isActive, let engine = audioEngine else {
             stopInternal()
+            return
+        }
+        // A configuration change stops the engine without telling the request.
+        // Re-arming onto it would hand the recognizer a tap that never fires.
+        guard engine.isRunning else {
+            rebuildEnginePreservingCounts()
             return
         }
 

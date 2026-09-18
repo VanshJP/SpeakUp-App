@@ -34,6 +34,8 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | A button does nothing until an entrance animation finishes | 23 |
 | Layout jumps or insets are wrong on a non-key window | 24 |
 | Highlighted text drifts while it updates; long session freezes then the app dies | 25 |
+| Mic dies partway through a long session and the screen freezes on "Not listening" | 26 |
+| A sheet or cover opens blank, closes itself, and works on the second tap | 27 |
 
 ## Punch list
 
@@ -58,6 +60,8 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 18. Vary font weight, size, tracking or padding by live match state — metrics changes re-flow the whole run.
 19. A custom `Layout` with `cache: inout ()` over more than a handful of subviews.
 20. One `Task { @MainActor }` per speech-recognition callback — they queue without bound behind a busy main actor.
+21. Treat `isFinal` or an error from `SFSpeechRecognitionTask` as the end of the session — it is the end of one *request*, which a pause produces.
+22. Present a sheet or cover with `isPresented:` and read its content out of a second `@State` — especially with an `onDismiss` that clears that second one.
 
 ---
 
@@ -188,6 +192,10 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 **`DecodingOptions.noSpeechThreshold` is the silence trigger, not a sensitivity dial.** WhisperKit throws away an entire 30 s window — no error, no gap marker, seek jumps forward — when `noSpeechProb >` the threshold and the window also fails `logProbThreshold` (`SegmentSeeker.findSeekPointAndSegments`). **Lowering it drops more audio, not less.** 0.4 vs the 0.6 default deleted quiet stretches in the middle and back half of recordings. Same shape for `temperatureFallbackCount`: cutting it below default writes off marginal windows a retry would have decoded.
 
 **Never `installTap` / `removeTap` on a *running* `AVAudioEngine`.** Installing a tap makes AVAudioEngine set the input node's output format, which reconfigures `AURemoteIO`'s converter while its realtime IO thread is inside `AUHALOutputUnit_InputAvailableCallback` — callback pointer goes null, `EXC_BAD_ACCESS` on the audio thread, backtrace names no app code. `LiveTranscriptionService` hit this ~60 s into every session when SFSpeech auto-finalized and `restartRecognitionPreservingEngine` re-installed the tap. **Install the tap once, before `engine.start()`.** To re-arm recognition, swap the `SFSpeechAudioBufferRecognitionRequest` the tap block appends to (`requestBox`, `OSAllocatedUnfairLock`) and leave the tap alone. Teardown: `engine.stop()` *before* `removeTap`. Same rule for `DictationService` / `ReadAloudService`.
+
+**`isFinal` is the end of a *request*, not the end of the session.** SFSpeech closes a `SFSpeechAudioBufferRecognitionRequest` after a pause in speech, and again at the request's own audio-duration ceiling (~1 min). A passage read at a natural pace triggers both, repeatedly. Every live recognizer here therefore **re-arms**: swap `requestBox` for a fresh request, leave the engine and tap alone, and carry the transcript forward — `ReadAloudService.segmentTranscripts` (joined by `joinTranscripts`, pinned in `ReadAloudAlignmentTests`), `DictationService.committedWords`, `LiveTranscriptionService.segmentTimeOffset`. Each request's transcript restarts at empty, so publishing the live one alone rewinds the user to the first word. Bound the re-arm: `ReadAloudService` / `DictationService` give up after three requests in a row that die inside a second with nothing to show, which is how a device missing its on-device assets fails — otherwise a dead recognizer spins behind a screen that claims to be listening. `ReadAloudService` also rolls over proactively at 45 s, because swapping early loses nothing while hitting the ceiling drops whatever was in flight.
+
+**A live `AVAudioEngine` dies silently in two more ways, and neither throws.** `.AVAudioEngineConfigurationChange` (AirPods connect, headset unplugged, another app reshapes the session) stops the engine and leaves the tap's format stale. `AVAudioSession.interruptionNotification` (call, Siri, alarm) deactivates the session underneath it. Observe both for the lifetime of a capture graph and rebuild — stop, `removeTap`, new engine, install tap, start, re-arm — keeping the accumulated transcript. `ReadAloudService.rebuildCaptureGraph` and `LiveTranscriptionService.rebuildEnginePreservingCounts` are the two copies; a new engine owner needs its own.
 
 **`requiresOnDeviceRecognition` must be `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple. `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
 
@@ -394,3 +402,55 @@ out inside the callback — `SFSpeechRecognitionResult` and `any Error` are not
 
 Continuous auto-scroll is part of the same complaint: re-centring every second
 word slides the page under the reader. Advance roughly a line at a time.
+
+---
+
+## 26. A long session's mic dies partway through
+
+Every symptom of this is somewhere else. The user sees the read stop advancing
+halfway down the passage, the indicator flip to "Not listening", and the Done
+button go grey — so the only way out is to abandon the take and start over.
+
+Three independent causes, all covered in §9, all of which leave the app
+*looking* fine:
+
+1. **`isFinal` treated as the end of the session.** The dominant one. A reader
+   pauses between sentences, SFSpeech closes the request, and a service that
+   tears down its engine there has just turned the mic off mid-passage.
+2. **A configuration change** stopping `AVAudioEngine` under a tap that keeps
+   being asked for buffers it will never get.
+3. **An interruption** deactivating the session, with nothing listening for it
+   to end.
+
+Whatever the cause, the view model needs a backstop too: if the service is no
+longer listening while the session state still says it is, land on the result
+screen with the words that were matched. A live clock over a dead microphone
+behind a disabled Done button is what turns a dropped read into a lost one.
+`ReadAloudViewModel.startTimer` holds that check.
+
+---
+
+## 27. A cover that opens blank, closes itself, and works on the second tap
+
+`fullScreenCover(isPresented:)` / `sheet(isPresented:)` whose content unwraps a
+*second* piece of view state is a race, and an `onDismiss` that clears that
+second piece makes it a reliable one. SwiftUI runs `onDismiss` **after** the
+dismissal animation, so:
+
+```
+tap → item = mode, isPresented = true
+        ↘ previous dismissal finishes → onDismiss → item = nil
+              ↘ cover presents, unwraps nil, draws nothing, closes itself
+```
+
+Start a second drill while the first is still animating out and that is exactly
+what happens. Tapping again works only because nothing is animating by then.
+The same shape without an `onDismiss` still flashes blank whenever the content
+state is cleared before the dismissal lands — `viewModel.reset()` before
+`dismiss()` is the common one.
+
+**Use `sheet(item:)` / `fullScreenCover(item:)`.** The value is handed to the
+content builder, so there is nothing to race and no "nothing selected" branch to
+render. Phase inside a presentation (countdown → session) belongs to a view that
+the presentation creates, as its own `@State`, not to a flag beside the one that
+presents it — see `DrillFlowView` in `DrillSelectionView.swift`.

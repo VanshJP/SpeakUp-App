@@ -9,6 +9,100 @@ struct PracticeToolRoute: Hashable {
     var focus: PracticeFocus?
 }
 
+/// Pushing the outcome list itself.
+struct PracticeImproveRoute: Hashable {}
+
+// MARK: - Improve entry
+
+/// The one row the outcome axis gets on the Library → Tools landing.
+///
+/// It used to be the axis itself: a header, a caption, and eight full-width
+/// rows above the practice grid - two doors to the same forty exercises, and
+/// the longest screen in the app. The axis has not been demoted, it has been
+/// put where it is decided: every tool page still groups by it. This row is
+/// how you enter from the other end, when you know the problem and not the
+/// format.
+struct PracticeImproveEntryRow: View {
+    private var summary: String {
+        let focuses = PracticeToolKind.coveredFocuses
+        let total = focuses.reduce(0) { running, focus in
+            running + PracticeToolKind.tools(for: focus).reduce(0) { $0 + $1.itemCount(for: focus) }
+        }
+        return "\(focuses.count) outcomes · \(total) exercises"
+    }
+
+    var body: some View {
+        NavigationLink(value: PracticeImproveRoute()) {
+            GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.07), padding: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "target")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.primary)
+                        .frame(width: 36, height: 36)
+                        .background { Circle().fill(AppColors.primary.opacity(0.18)) }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Not sure which one?")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+
+                        Text("Start from what you want to change")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Text(summary)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.trailing)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel("Browse by what you want to improve. \(summary).")
+    }
+}
+
+// MARK: - Improve list
+
+/// The eight outcomes, on their own screen.
+struct PracticeImproveListView: View {
+    var body: some View {
+        ZStack {
+            AppBackground()
+
+            PageScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Pick what you want to change. Every exercise that trains it, in one place.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(spacing: 10) {
+                        ForEach(PracticeToolKind.coveredFocuses) { focus in
+                            PracticeFocusRow(focus: focus)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            .scrollIndicators(.hidden)
+        }
+        .navigationTitle("Improve")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
 // MARK: - Focus Row
 
 /// One outcome, as offered on the Library → Tools landing.
