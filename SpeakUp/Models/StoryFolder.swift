@@ -30,7 +30,9 @@ final class StoryFolder {
 // MARK: - Default Folders
 
 extension StoryFolder {
-    static let defaults: [(name: String, symbol: String, colorHex: String)] = [
+    /// Shipped default folders. `nonisolated` so launch heal/seed can read them
+    /// off the main actor without hopping (default isolation is MainActor).
+    nonisolated static let defaults: [(name: String, symbol: String, colorHex: String)] = [
         ("Personal", "heart.fill", "#EC4899"),
         ("Work", "briefcase.fill", "#0D8488"),
         ("Practice Ideas", "lightbulb.fill", "#F59E0B")

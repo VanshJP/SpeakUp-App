@@ -174,6 +174,7 @@ struct SpeakUpApp: App {
     }
 
     private static let seededPromptCountKey = "seededPromptFingerprint_v1"
+    private static let seededStoryFoldersKey = "seededStoryFoldersFingerprint_v1"
 
     @MainActor
     private func seedPromptsIfNeeded() async {
@@ -367,22 +368,63 @@ struct SpeakUpApp: App {
     @MainActor
     private func seedStoryFoldersIfNeeded() async {
         let context = sharedModelContainer.mainContext
-        let descriptor = FetchDescriptor<StoryFolder>()
 
         do {
-            let existing = try context.fetch(descriptor)
-            guard existing.isEmpty else { return }
+            // Cheap gate: skip when folder count + shipped-default count are
+            // unchanged since the last successful heal/seed. A CloudKit
+            // re-import that adds duplicate rows bumps the count and re-runs.
+            let currentCount = (try? context.fetchCount(FetchDescriptor<StoryFolder>())) ?? -1
+            let fingerprint = "\(currentCount)|\(StoryFolder.defaults.count)"
+            if currentCount > 0,
+               fingerprint == UserDefaults.standard.string(forKey: Self.seededStoryFoldersKey) {
+                return
+            }
 
-            for (index, spec) in StoryFolder.defaults.enumerated() {
+            let existing = try context.fetch(FetchDescriptor<StoryFolder>())
+            var storyDescriptor = FetchDescriptor<Story>()
+            storyDescriptor.propertiesToFetch = [\.folderId]
+            let stories = try context.fetch(storyDescriptor)
+
+            let plan = StoryFolderHealing.plan(
+                folders: existing.map {
+                    StoryFolderHealing.FolderSnapshot(
+                        id: $0.id,
+                        name: $0.name,
+                        sortOrder: $0.sortOrder,
+                        createdAt: $0.createdAt
+                    )
+                },
+                storyFolderIDs: stories.compactMap(\.folderId)
+            )
+
+            for story in stories {
+                guard let oldID = story.folderId, let keeperID = plan.remaps[oldID] else { continue }
+                story.folderId = keeperID
+            }
+
+            for folder in existing where plan.duplicateIDs.contains(folder.id) {
+                context.delete(folder)
+            }
+
+            for spec in plan.missingDefaults {
                 let folder = StoryFolder(
                     name: spec.name,
                     systemImage: spec.symbol,
                     colorHex: spec.colorHex,
-                    sortOrder: index
+                    sortOrder: spec.sortOrder
                 )
                 context.insert(folder)
             }
-            try context.save()
+
+            if plan.needsSave {
+                try context.save()
+            }
+
+            let finalCount = (try? context.fetchCount(FetchDescriptor<StoryFolder>())) ?? 0
+            UserDefaults.standard.set(
+                "\(finalCount)|\(StoryFolder.defaults.count)",
+                forKey: Self.seededStoryFoldersKey
+            )
         } catch {
             Self.logger.error("Error seeding story folders: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }

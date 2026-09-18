@@ -8,13 +8,13 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 
 | Role | Path |
 |------|------|
-| Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift` |
+| Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift`, `StoryFolderHealing.swift` |
 | Views | `SpeakUp/Views/Stories/` — list, detail, editor, folder bar/sheet |
 | Today card | `SpeakUp/Views/Today/StoryPromptCard.swift` |
 | VM | `SpeakUp/ViewModels/StoriesViewModel.swift` |
 | Tagging | `SpeakUp/Services/StoryTaggingService.swift` (LLM when available; conservative) |
 | Editor bits | `Views/Components/RichTextEditor.swift`, `PersistentTextField`, `FlowLayout` |
-| Defaults | `StoryFolder.defaults` seeded at launch |
+| Defaults | `StoryFolder.defaults` healed + seeded at launch (`seedStoryFoldersIfNeeded`) |
 
 ## Data shape
 
@@ -37,6 +37,13 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
    stays a dashed capsule because it is an action, not a filter. Do not fork the chip — change `FilterChip`
    (`Views/History/HistoryView.swift`) / `SelectedFilterChrome` (`FilterPill.swift`) and both tabs move together.
    Tool lists (`FilterPill` in Warm-Up / Read-Aloud / Calm) use the same selected-white / idle-glass chrome.
+7. **Folder seed heals CloudKit dupes.** Launch collapses `StoryFolder` rows by normalized name (keep one,
+   remap `Story.folderId`, delete extras), then inserts any **missing** default names (`Personal` / `Work` /
+   `Practice Ideas`) — not “seed only when the table is empty.” Fingerprint key:
+   `seededStoryFoldersFingerprint_v1`. Same class of heal as prompts (`seededPromptFingerprint_v1`).
+8. **Empty Stories rail.** When there are zero stories, `StoryFolderBar` shows **All + New Folder** only
+   (hides Pinned and per-folder chips). Folder scope is a clearable filter: re-tapping the selected chip
+   returns to All; `hasActiveFilters` / Clear Filters include `folderSelection != .all`.
 
 ## Cross-links
 

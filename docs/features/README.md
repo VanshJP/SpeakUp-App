@@ -22,7 +22,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | Recording session / audio | [recording.md](./recording.md) | `Views/Recording/`, `RecordingViewModel*`, `AudioService` | gotchas §4, §9 | `axiom-media` |
 | Transcription / scoring wiring | [speech-pipeline.md](./speech-pipeline.md) | `Services/*Speech*`, `RecordingProcessingCoordinator` | **`SPEECH.md`**, gotchas §2, §5, §9 | `axiom-media` |
 | Analyzing / detail / share | [recording-detail.md](./recording-detail.md) | `Views/Detail/`, `SharePresenter`, `SharedPromptLink` | gotchas §2b, §3, §7 | — |
-| Stories | [stories.md](./stories.md) | `Views/Stories/`, `Story*`, `StoryTaggingService` | — | — |
+| Stories | [stories.md](./stories.md) | `Views/Stories/`, `Story*`, `StoryFolderHealing`, `StoryTaggingService` | — | — |
 | Read-Aloud | [read-aloud.md](./read-aloud.md) | `Views/ReadAloud/`, `ReadAloudDocumentImporter`, `PronunciationService` · compact custom entry / paste + import / saved rail / catalog / shadow / minimal pairs | gotchas §9 | `axiom-media` |
 | Today / Practice Hub | [today-library.md](./today-library.md) | `Views/Today/`, `Views/Practice/`, `TodayHomeModule`, `PracticeToolKind` | — | — |
 | Daily word workout | [vocab-challenge.md](./vocab-challenge.md) | `VocabChallengeService`, `Views/Today/VocabChallengeResultCard.swift` | — | — |

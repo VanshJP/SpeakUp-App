@@ -30,7 +30,8 @@ class StoriesViewModel {
         selectedTagFilter != nil || selectedTagValue != nil ||
         selectedStageFilter != nil || dateFilterStart != nil ||
         favoritesOnly || sortOrder != .updatedAt ||
-        selectedEntryTypeFilter != nil
+        selectedEntryTypeFilter != nil ||
+        folderSelection != .all
     }
 
     // MARK: - Pinned split
@@ -80,6 +81,9 @@ class StoriesViewModel {
         do {
             stories = try context.fetch(descriptor)
             folders = try context.fetch(folderDescriptor)
+            if stories.isEmpty, folderSelection != .all {
+                folderSelection = .all
+            }
             recomputeFilteredStories()
         } catch {
             errorMessage = "Failed to load stories: \(error.localizedDescription)"
@@ -184,8 +188,14 @@ class StoriesViewModel {
         }
     }
 
+    /// Folder scope is a clearable filter: tapping the already-selected chip
+    /// returns to All so empty Personal/Work never traps the list.
     func setFolderSelection(_ selection: FolderSelection) {
-        folderSelection = selection
+        if selection != .all, folderSelection == selection {
+            folderSelection = .all
+        } else {
+            folderSelection = selection
+        }
         recomputeFilteredStories()
     }
 
@@ -286,6 +296,7 @@ class StoriesViewModel {
         favoritesOnly = false
         sortOrder = .updatedAt
         selectedEntryTypeFilter = nil
+        folderSelection = .all
         recomputeFilteredStories()
     }
 
