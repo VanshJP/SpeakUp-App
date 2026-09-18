@@ -189,17 +189,31 @@ class StoriesViewModel {
     func deleteFolder(_ folder: StoryFolder) {
         guard let context = modelContext else { return }
 
-        let targetId = folder.id
-        for story in stories where story.folderId == targetId {
+        // `foldersForDisplay` shows one chip per normalized name. Deleting that
+        // chip must remove every same-name sibling or the chip appears to survive.
+        let snapshots = folders.map {
+            StoryFolderHealing.FolderSnapshot(
+                id: $0.id,
+                name: $0.name,
+                sortOrder: $0.sortOrder,
+                createdAt: $0.createdAt
+            )
+        }
+        let idsToDelete = StoryFolderHealing.siblingIDs(of: folder.id, folders: snapshots)
+
+        for story in stories {
+            guard let fid = story.folderId, idsToDelete.contains(fid) else { continue }
             story.folderId = nil
         }
-        context.delete(folder)
+        for victim in folders where idsToDelete.contains(victim.id) {
+            context.delete(victim)
+        }
 
         do {
             try context.save()
             StoryFolderSeedService.invalidateFingerprint()
-            folders.removeAll { $0.id == targetId }
-            if case .folder(let id) = folderSelection, id == targetId {
+            folders.removeAll { idsToDelete.contains($0.id) }
+            if case .folder(let id) = folderSelection, idsToDelete.contains(id) {
                 folderSelection = .all
             }
             recomputeFilteredStories()

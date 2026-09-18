@@ -121,6 +121,24 @@ nonisolated enum StoryFolderHealing {
         }
     }
 
+    /// All folder ids that share the display chip's normalized name (including `folderID`).
+    /// Used so deleting a `foldersForDisplay` chip removes CloudKit siblings, not one UUID.
+    static func siblingIDs(
+        of folderID: UUID,
+        folders: [FolderSnapshot]
+    ) -> Set<UUID> {
+        guard let target = folders.first(where: { $0.id == folderID }) else {
+            return [folderID]
+        }
+        let key = normalizedName(target.name)
+        guard !key.isEmpty else { return [folderID] }
+        return Set(
+            folders
+                .filter { normalizedName($0.name) == key }
+                .map(\.id)
+        )
+    }
+
     /// One folder per normalized name for UI (chips / Move sheet) so ghosts
     /// cannot flood surfaces before heal finishes. Prefer higher story count,
     /// then smaller UUID — same rule as heal keepers.

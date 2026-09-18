@@ -48,8 +48,10 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
    heal. Folder create/rename/delete invalidates the fingerprint.
 8. **Empty Stories rail.** When there are zero stories, `StoryFolderBar` shows **All + New Folder** only
    (hides Pinned and per-folder chips). Chips / Move sheet use `foldersForDisplay` (one per normalized name)
-   so ghosts cannot flood those surfaces before heal finishes. Folder scope is a clearable filter: re-tapping
-   the selected chip returns to All; `hasActiveFilters` / Clear Filters include `folderSelection != .all`.
+   so ghosts cannot flood those surfaces before heal finishes. **Deleting a display chip** removes every
+   same-normalized-name `StoryFolder` (unfiles their stories) so siblings cannot resurrect the chip.
+   Folder scope is a clearable filter: re-tapping the selected chip returns to All; `hasActiveFilters` /
+   Clear Filters include `folderSelection != .all`.
 
 ## Cross-links
 

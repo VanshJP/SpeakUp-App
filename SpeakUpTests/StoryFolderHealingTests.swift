@@ -156,6 +156,29 @@ struct StoryFolderHealingTests {
         #expect(ids == [b, work])
     }
 
+    @Test func siblingIDsIncludeAllSameNormalizedNameFolders() {
+        let display = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
+        let ghost = UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!
+        let work = UUID(uuidString: "00000000-0000-0000-0000-0000000000CC")!
+        let folders = [
+            folder("Personal", id: display),
+            folder(" personal ", id: ghost),
+            folder("Work", id: work)
+        ]
+
+        let personalSiblings = StoryFolderHealing.siblingIDs(of: display, folders: folders)
+        #expect(personalSiblings == Set([display, ghost]))
+
+        // After a display-chip delete of those siblings, the name group is gone
+        // from the remaining store (Work alone) — chip cannot reappear from ghosts.
+        let remaining = folders.filter { !personalSiblings.contains($0.id) }
+        #expect(remaining.map(\.id) == [work])
+        #expect(
+            StoryFolderHealing.displayFolderIDs(folders: remaining, storyFolderIDs: [])
+                == [work]
+        )
+    }
+
     @Test func normalizedNameTrimsAndLowercases() {
         #expect(StoryFolderHealing.normalizedName("  Personal ") == "personal")
         #expect(StoryFolderHealing.normalizedName("WORK") == "work")
