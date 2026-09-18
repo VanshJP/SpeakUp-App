@@ -24,7 +24,7 @@ Library (`PracticeHubView`) → **Read Aloud** (`PracticeToolKind.readAloud`) �
 
 `ReadAloudSelectionView(initialPracticeText:)` opens a scored session immediately on an ephemeral `ReadAloudPassage.custom(from:)`, skipping the list and composer. Recording detail's word swaps use it to rehearse a rewritten line (see [recording-detail.md](./recording-detail.md)). Same auto-start shape as `DrillSelectionView(initialMode:)`: a `.task` on the selection view, so the cover presents after the sheet has settled.
 
-Hub outcome: *Train clarity on a passage, including your own text.*
+Hub outcome: *Train clarity against a script — ours or your own.* Format line (`PracticeToolKind.format`): *Mic on · scored word by word.*
 
 ---
 
@@ -32,9 +32,17 @@ Hub outcome: *Train clarity on a passage, including your own text.*
 
 ### Your passages
 
-The selection page starts with one compact **Add Your Own Passage** row. The editor is not inline, so catalog passages remain visible near the top of the page.
+**Adding lives in the nav bar** — a `ToolPageAction(icon: "plus")` handed to
+`ToolPage`, which renders it `.topBarTrailing` in both presentations. It used to
+be a full-width glass card pinned above the catalog, so a page for reading
+passages opened on a form for writing one and the passages started below the
+fold. Library already puts "add" in the chrome for Prompts and Stories; this is
+the pushed-page equivalent. Do not move it back into the column.
 
-Saved passages appear in a bounded horizontal rail. Tapping a card starts practice. Its visible actions menu supports edit and confirmed deletion without requiring a hidden context menu.
+The **Your passages** rail renders only when there is something saved, and ends
+with a compact "Add your own" card — a second door for people who already have
+passages. Tapping a card starts practice; its visible actions menu supports edit
+and confirmed deletion without requiring a hidden context menu.
 
 ### Passage composer
 
@@ -54,7 +62,18 @@ The scoring engine is designed for one focused section. If imported text exceeds
 
 ### Catalog
 
-Category chips from `ReadAloudCategory.catalogCases` (excludes `.custom`). Difficulty + category filter pills; rows are `PracticeItemRow`.
+**Grouped by `PracticeFocus`**, not by source material. `news` → `.pace`,
+`literature` → `.presence`, `technical` / `tongueTwister` / `minimalPairs` /
+`custom` → `.clarity`. "News" and "Literature" say where the words came from,
+which is not why anyone picks a passage; the category is now the row's tag.
+
+Two filter bars: a shared `FocusFilterBar` over `viewModel.availableFocuses`
+(= `PracticeToolKind.readAloud.focuses`, counted from the seed array so a pill
+can never filter to nothing), then length pills from `ReadAloudDifficulty`.
+Sections are the shared `FocusSection`; rows are `PracticeItemRow`.
+`initialFocus:` arrives from the Library outcome browser.
+
+See [practice-tools.md](practice-tools.md) invariants 17–20 for the shared axis and its components.
 
 ---
 
@@ -87,7 +106,7 @@ Not in `DefaultReadAloudPassages.all`. `isCustom` is `category == .custom`.
 
 The seed catalog is still static: saving writes to `UserSettings`, never to `DefaultReadAloudPassages.all`.
 
-`ReadAloudCategory.custom` is for typing only; filters use `catalogCases`.
+`ReadAloudCategory.custom` is for typing only; catalog listings use `catalogCases` / `catalogCases(for:)` and never `allCases`.
 
 ---
 
@@ -125,7 +144,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | Path | Role |
 |------|------|
 | `SpeakUp/Models/ReadAloudPassage.swift` | Catalog types + `custom(from:)` / `saved(from:)` + `SavedReadAloudTexts` |
-| `SpeakUp/Views/ReadAloud/ReadAloudSelectionView.swift` | Compact custom entry, saved rail, and catalog |
+| `SpeakUp/Views/ReadAloud/ReadAloudSelectionView.swift` | Toolbar add action, saved rail, focus-grouped catalog |
 | `SpeakUp/Views/ReadAloud/ReadAloudComposerSheet.swift` | Paste, import, edit, preview, save, and practice flow |
 | `SpeakUp/Views/ReadAloud/ReadAloudSessionView.swift` | Record + score |
 | `SpeakUp/Views/ReadAloud/DictionaryView.swift` | System dictionary sheet |
@@ -134,6 +153,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/Services/ReadAloudService.swift` | Session listening + `computeAlignment` |
 | `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |
 | `SpeakUpTests/ReadAloudCustomPassageTests.swift` | Custom factory + define gate |
+| `SpeakUpTests/PracticeFocusTests.swift` | Focus axis + derived catalog listings |
 
 ---
 
@@ -142,13 +162,16 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Presented from Practice Hub **tools** section (pushed full page through `ToolPresentation.pushed` via `navigationDestination`), Today, and RecordingDetail next-steps as sheets, not its own tab.
 - Difficulty coloring uses `AppColors.difficultyColor`, not raw system colors.
 - Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`); kept ones persist on `UserSettings.savedReadAloudTexts`. Neither is appended to the seed array.
-- Shadow mode plays `PronunciationService.speak(text:rate:)` before `startSession`; copy must not claim accent therapy because the score remains alignment and clarity.
+- Shadow mode plays `PronunciationService.speak(text:rate:)` before `startSession`; copy must not claim accent therapy because the score remains alignment and clarity. **Neither shadow control may be disabled while the model line plays.** Both carried `.disabled(pronunciationService.isSpeaking)`, which is exactly when a user reaches for them — the only way past the voiceover was to sit through it. "Start speaking" stops the synthesiser and opens the mic ("Skip & speak" while audio plays); the secondary button becomes Stop.
 - Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy.
 - **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts; recognition failure sets `service.recognitionFailureMessage`, ends the session within 250 ms, and lands on the result screen as a warning notice, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
 - The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
 - Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
 - Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.
 - Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
+- **Nothing about a word's match state may change its measured size.** The whole passage draws at one weight (`Self.passageWeight`); position is carried by the highlight fill and the colour ramp. The current word used to render `.bold` against `.regular` neighbours, and because bold glyphs are wider, every cursor advance re-flowed the rest of the line — the passage visibly squirmed while being read. Auto-scroll re-centres once per `scrollAdvanceWords` (8) rather than every second word, which was the other half of the same complaint.
+- `WrappingHStack` caches its measurement pass per (width, `metricsKey`), with a first-subview probe as a tripwire for callers that do not pass a key. Without the cache it re-measured every subview in **both** `sizeThatFits` and `placeSubviews`, so a 150-word passage cost ~300 text measurements per layout pass, on every partial recognition result. See gotchas §25.
+- Transcript updates **coalesce latest-wins** with at most one drain task in flight (`pendingTranscript` / `isDrainScheduled`), and the recognition callback lifts a `String` out before hopping actors — `SFSpeechRecognitionResult` and `any Error` are not `Sendable`.
 
 - Do **not** add a sixth `PracticeToolKind` for “pronounce word”. Extend Read Aloud.
 - Passages the user *types* stay ephemeral (UUID id). Passages the user *keeps* live on `UserSettings`, which is still not the static catalog. Never append to `DefaultReadAloudPassages.all`.

@@ -5,20 +5,44 @@ enum ToolPresentation: Equatable {
     case pushed
 }
 
+/// A single affordance a tool page may put in its nav bar.
+///
+/// It exists so "Add your own passage" can live in the chrome instead of
+/// taking the top of the scroll view, which is where Read Aloud used to put
+/// it — the first thing you saw on a page for reading passages was a form for
+/// writing one, and the catalog started below the fold. Library already solves
+/// this for Prompts and Stories with a FAB; a tool page is pushed and titled,
+/// so the nav bar is the equivalent spot.
+struct ToolPageAction {
+    let icon: String
+    /// Spoken label. Also the menu title if this ever grows a menu.
+    let label: String
+    let perform: () -> Void
+
+    init(icon: String, label: String, perform: @escaping () -> Void) {
+        self.icon = icon
+        self.label = label
+        self.perform = perform
+    }
+}
+
 struct ToolPage<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
 
     let tool: PracticeToolKind
     var presentation: ToolPresentation = .sheet
+    var action: ToolPageAction?
     @ViewBuilder var content: Content
 
     init(
         tool: PracticeToolKind,
         presentation: ToolPresentation = .sheet,
+        action: ToolPageAction? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.tool = tool
         self.presentation = presentation
+        self.action = action
         self.content = content()
     }
 
@@ -64,6 +88,21 @@ struct ToolPage<Content: View>: View {
                     .accessibilityLabel("Close")
                 }
             }
+
+            if let action {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Haptics.light()
+                        action.perform()
+                    } label: {
+                        Image(systemName: action.icon)
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityLabel(action.label)
+                }
+            }
         }
     }
 }
@@ -80,6 +119,85 @@ struct ToolFilterBar<Content: View>: View {
             }
         }
         .scrollClipDisabled()
+    }
+}
+
+// MARK: - Focus Filtering
+
+/// The "All" pill plus one pill per focus a tool has material for.
+///
+/// All four tool pages filter on `PracticeFocus` and had written this out
+/// individually — four copies of the same twenty-five lines, which is four
+/// chances for one page's pills to drift out of step with the others.
+struct FocusFilterBar: View {
+    let focuses: [PracticeFocus]
+    @Binding var selection: PracticeFocus?
+
+    var body: some View {
+        ToolFilterBar {
+            FilterPill(
+                title: "All",
+                icon: "square.grid.2x2",
+                isSelected: selection == nil
+            ) {
+                withAnimation(AppMotion.slide) { selection = nil }
+            }
+
+            ForEach(focuses) { focus in
+                FilterPill(
+                    title: focus.shortTitle,
+                    icon: focus.icon,
+                    isSelected: selection == focus,
+                    color: focus.color
+                ) {
+                    withAnimation(AppMotion.slide) {
+                        selection = selection == focus ? nil : focus
+                    }
+                }
+            }
+        }
+    }
+
+    /// The focuses to show, given a selection: one group when filtered, the
+    /// whole map when not. Every tool page derives its sections this way.
+    static func visible(_ focuses: [PracticeFocus], selection: PracticeFocus?) -> [PracticeFocus] {
+        guard let selection else { return focuses }
+        return focuses.contains(selection) ? [selection] : []
+    }
+}
+
+/// One outcome heading — title, icon, count, promise — over its items.
+///
+/// Generic over the item so each page supplies only its own row. The four
+/// copies this replaces each wrapped themselves in `AnyView` to satisfy an
+/// early `guard`; returning an empty `body` does the same job without the
+/// type erasure.
+struct FocusSection<Item: Identifiable, Row: View>: View {
+    let focus: PracticeFocus
+    let items: [Item]
+    @ViewBuilder var row: (Item) -> Row
+
+    var body: some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                GlassSectionHeader(focus.title, icon: focus.icon) {
+                    Text("\(items.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(focus.promise)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVStack(spacing: 12) {
+                    ForEach(items) { item in
+                        row(item)
+                    }
+                }
+            }
+        }
     }
 }
 

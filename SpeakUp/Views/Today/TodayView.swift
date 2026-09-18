@@ -893,18 +893,36 @@ struct TodayView: View {
         }
     }
 
-    private var recommendedPrepTool: PracticeToolKind? {
-        if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
-            return PracticeToolKind.recommended(for: plan.focus.practiceRoute)
+    /// A suggestion with the reason attached.
+    ///
+    /// The banner is personalised — it follows your coach plan, or falls back
+    /// to a warm-up on a day you have not practised — but it never said so,
+    /// so it read as a stray duplicate of the grid directly beneath it. The
+    /// reason is what makes it a recommendation rather than a fifth tile.
+    private struct PrepSuggestion {
+        let tool: PracticeToolKind
+        let reason: String
+    }
+
+    private var recommendedPrepTool: PrepSuggestion? {
+        if let plan = viewModel.coachPlan,
+           plan.sessionCount >= Self.focusMinimumSessions,
+           let tool = PracticeToolKind.recommended(for: plan.focus.practiceRoute) {
+            return PrepSuggestion(
+                tool: tool,
+                reason: "Your last \(plan.sessionCount) takes point at \(plan.focus.title.lowercased())"
+            )
         }
         if !viewModel.practicedToday {
-            return .warmUp
+            return PrepSuggestion(tool: .warmUp, reason: "You haven't practised yet today")
         }
         return nil
     }
 
-    private func recommendedToolBanner(_ tool: PracticeToolKind) -> some View {
-        Button {
+    private func recommendedToolBanner(_ suggestion: PrepSuggestion) -> some View {
+        let tool = suggestion.tool
+
+        return Button {
             Haptics.medium()
             openPrepTool(tool)
         } label: {
@@ -918,9 +936,17 @@ struct TodayView: View {
                     }
 
                 VStack(alignment: .leading, spacing: 2) {
+                    Text(suggestion.reason)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     Text("Start with \(tool.shortTitle)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
+
                     Text(tool.outcome)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -942,7 +968,9 @@ struct TodayView: View {
             .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
         }
         .buttonStyle(GlassPressStyle())
-        .accessibilityLabel("Start with \(tool.title). \(tool.outcome)")
+        .accessibilityLabel(
+            "Suggested: start with \(tool.title). \(suggestion.reason). \(tool.outcome)"
+        )
     }
 
     private func openPrepTool(_ tool: PracticeToolKind) {

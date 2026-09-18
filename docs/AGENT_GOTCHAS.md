@@ -31,6 +31,9 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | A root tab's toolbar item renders nowhere; a pushed page loses Back | 20 |
 | Chart fill bleeds out of its card; marks draw outside the plot | 21 |
 | A control inside a glass card reads as a grey band, not a button | 22 |
+| A button does nothing until an entrance animation finishes | 23 |
+| Layout jumps or insets are wrong on a non-key window | 24 |
+| Highlighted text drifts while it updates; long session freezes then the app dies | 25 |
 
 ## Punch list
 
@@ -52,6 +55,9 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 15. A `topBarTrailing` toolbar item on a root tab (or on any view inside one) — root tabs have no navigation bar.
 16. `AreaMark(x:y:)` on a chart whose y-domain does not start at 0 — the fill runs to zero in data space, outside the card.
 17. A `glassEffect` surface nested directly inside a `GlassCard`.
+18. Vary font weight, size, tracking or padding by live match state — metrics changes re-flow the whole run.
+19. A custom `Layout` with `cache: inout ()` over more than a handful of subviews.
+20. One `Task { @MainActor }` per speech-recognition callback — they queue without bound behind a busy main actor.
 
 ---
 
@@ -355,3 +361,36 @@ per `features/recording.md` → "Session screens respect the safe area".
 
 Symptom: a close button or header sits a notch too low, and moving to a
 different iPhone changes how wrong it is.
+
+## 25. Live-highlight text: state may not change metrics, and `Layout` must cache
+
+Read Aloud highlights the current word as speech recognition advances. Two
+traps, both of which look like "the app is slow" rather than like bugs.
+
+**Metrics.** The current word rendered `.bold` while its neighbours stayed
+`.regular`. Bold glyphs are wider, so every cursor advance grew one word,
+shrank another, and re-flowed everything after them on the line. The passage
+squirmed continuously while being read. Draw the whole run at one weight and
+carry position with a background fill and colour; never with weight, size,
+tracking, or padding that varies by state.
+
+**`Layout` caching.** `WrappingHStack` took `cache: inout ()` and re-measured
+every subview in *both* `sizeThatFits` and `placeSubviews`. SwiftUI calls both
+on every pass, so a 150-word passage cost ~300 text measurements per pass — and
+a pass ran on every partial recognition result, several times a second, on the
+main actor. Any `Layout` over a non-trivial number of subviews needs a real
+`makeCache` / `updateCache`, keyed on the proposed width plus whatever can
+change glyph metrics. A first-subview probe is a cheap tripwire for callers that
+do not pass an explicit key.
+
+**What it looked like.** Recognition callbacks each spawned their own
+`Task { @MainActor }`. Once the main actor was pinned by the layout thrash those
+tasks queued without bound, each retaining an `SFSpeechRecognitionResult`, and
+the app froze and was killed roughly twenty seconds into a read. Coalesce
+latest-wins with one drain in flight (`ReadAloudService.pendingTranscript` /
+`isDrainScheduled`) rather than one task per callback, and lift `String` values
+out inside the callback — `SFSpeechRecognitionResult` and `any Error` are not
+`Sendable`.
+
+Continuous auto-scroll is part of the same complaint: re-centring every second
+word slides the page under the reader. Advance roughly a line at a time.

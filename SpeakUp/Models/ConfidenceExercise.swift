@@ -9,12 +9,24 @@ enum ConfidenceCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Named for the outcome, not the technique. "Calming", "Visualization",
+    /// "Progressive" and "Affirmation" described what the exercise *is*; a
+    /// browsing user wants to know what it gets them.
     var displayName: String {
         switch self {
-        case .calming: return "Calming"
-        case .visualization: return "Visualization"
-        case .progressive: return "Progressive"
-        case .affirmation: return "Affirmation"
+        case .calming: return "Settle the body"
+        case .visualization: return "Rehearse it going well"
+        case .progressive: return "Face it in steps"
+        case .affirmation: return "Quiet the inner critic"
+        }
+    }
+
+    /// The shared axis. Calm covers the two composure outcomes: getting the
+    /// body quiet, and getting the story you tell yourself straight.
+    var focus: PracticeFocus {
+        switch self {
+        case .calming, .progressive: return .steadyNerves
+        case .visualization, .affirmation: return .mindset
         }
     }
 
@@ -33,17 +45,6 @@ enum ConfidenceCategory: String, CaseIterable, Identifiable {
         case .visualization: return AppColors.categoryIndigo
         case .progressive: return AppColors.categoryCopper
         case .affirmation: return AppColors.categoryAmber
-        }
-    }
-
-    /// What this category is *for* — the one line a section header shows so
-    /// someone browsing understands why the grouping exists.
-    var purpose: String {
-        switch self {
-        case .calming: return "Settle nerves in the moment."
-        case .visualization: return "Rehearse success before it's real."
-        case .progressive: return "Small steps past the fear."
-        case .affirmation: return "Reset the inner monologue."
         }
     }
 }

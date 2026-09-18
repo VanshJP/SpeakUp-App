@@ -37,6 +37,22 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// What this drill is filed under app-wide. Drills already spoke in
+    /// outcomes; this is the same idea promoted to a vocabulary that warm-ups,
+    /// Read Aloud and Calm share, so one question — what do you want to
+    /// improve — reaches every format.
+    var focus: PracticeFocus {
+        switch self {
+        case .fillerElimination: return .fillers
+        case .paceControl: return .pace
+        case .pausePractice: return .pauses
+        case .impromptuSprint: return .structure
+        case .vocalVariety: return .presence
+        case .emphasis: return .presence
+        case .qaSprint: return .structure
+        }
+    }
+
     /// Duration + mechanic — the cost line under the outcome.
     var description: String {
         switch self {

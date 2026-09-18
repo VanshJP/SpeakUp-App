@@ -141,7 +141,7 @@ struct VoiceCalibrationView: View {
 
     private var highlightedPassage: some View {
         ScrollViewReader { proxy in
-            WrappingHStack(alignment: .leading, spacing: 5, lineSpacing: 10) {
+            WrappingHStack(spacing: 5, lineSpacing: 10) {
                 ForEach(Array(passageWords.enumerated()), id: \.offset) { index, word in
                     wordView(word, at: index)
                         .id("cal_word_\(index)")

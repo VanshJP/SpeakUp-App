@@ -54,7 +54,6 @@ final class PracticeRoutineService {
     var progress: RoutineProgress { settings?.routineProgress ?? .empty }
 
     /// The link the routine is waiting on, or nil when today's chain is done.
-    var nextStep: RoutineStep? { progress.next(in: steps) }
 
     // MARK: - Completion
 

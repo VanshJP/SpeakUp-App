@@ -12,25 +12,10 @@ struct PracticeHubView: View {
     @State private var showingNewStory = false
     @State private var compareRoute: CompareRoute?
 
-    private enum LibraryTool: String, Identifiable, CaseIterable {
-        case warmUps
-        case drills
-        case readAloud
-        case confidence
-
-        var id: String { rawValue }
-
-        var kind: PracticeToolKind {
-            switch self {
-            case .warmUps: return .warmUp
-            case .drills: return .drills
-            case .readAloud: return .readAloud
-            case .confidence: return .calm
-            }
-        }
-    }
-
-    @State private var selectedTool: LibraryTool?
+    // `LibraryTool` used to sit here purely to map four cases onto four
+    // `PracticeToolKind` cases. `PracticeToolKind.practiceTools` is that list,
+    // and routes now carry an optional focus so the outcome browser can push a
+    // tool page already narrowed to what you picked.
 
     let onSelectPrompt: (Prompt) -> Void
     var onStartStoryPractice: ((Story, RecordingDuration) -> Void)? = nil
@@ -89,8 +74,12 @@ struct PracticeHubView: View {
         .onChange(of: storiesSearchText) { _, newValue in
             storiesViewModel.setSearch(newValue)
         }
-        .navigationDestination(item: $selectedTool) { tool in
-            toolDetail(tool)
+        .navigationDestination(for: PracticeToolRoute.self) { route in
+            toolDetail(route)
+                .restoresNavigationBar()
+        }
+        .navigationDestination(for: PracticeFocus.self) { focus in
+            PracticeFocusDetailView(focus: focus)
                 .restoresNavigationBar()
         }
         .navigationDestination(item: $selectedStory) { story in
@@ -131,56 +120,39 @@ struct PracticeHubView: View {
 
     // MARK: - Tools
 
-    /// "4 exercises · 1–3 min" — count plus the real time range, so a tile says
-    /// what it costs before you tap it. Computed from the seed data rather than
-    /// written down, so it can't drift when exercises are added.
-    private static func countMeta(_ count: Int, _ noun: String, seconds: [Int]) -> String {
-        let countText = "\(count) \(noun)\(count == 1 ? "" : "s")"
-        guard let low = seconds.min(), let high = seconds.max(), low > 0 else { return countText }
-
-        func format(_ value: Int) -> String {
-            value < 60 ? "\(value)s" : "\(Int((Double(value) / 60).rounded())) min"
-        }
-
-        let range = low == high ? format(low) : "\(format(low))–\(format(high))"
-        return "\(countText) · \(range)"
-    }
-
-    private func meta(for tool: LibraryTool) -> String {
+    /// Count only. The duration range moved into `PracticeToolKind.format`,
+    /// which the card prints underneath — printing it twice was how the old
+    /// meta line ended up saying "20s–1 min" next to "15–60s".
+    private func meta(for tool: PracticeToolKind) -> String {
+        let count: Int
         switch tool {
-        case .warmUps:
-            return Self.countMeta(
-                DefaultWarmUps.all.count,
-                "exercise",
-                seconds: DefaultWarmUps.all.map(\.durationSeconds)
-            )
-        case .drills:
-            return Self.countMeta(
-                DrillMode.allCases.count,
-                "mode",
-                seconds: DrillMode.allCases.map(\.defaultDurationSeconds)
-            )
-        case .readAloud:
-            return "\(DefaultReadAloudPassages.all.count) passages · scored"
-        case .confidence:
-            return Self.countMeta(
-                DefaultConfidenceExercises.all.count,
-                "exercise",
-                seconds: DefaultConfidenceExercises.all.map { $0.durationMinutes * 60 }
-            )
+        case .warmUp: count = DefaultWarmUps.all.count
+        case .drills: count = DrillMode.allCases.count
+        case .readAloud: count = DefaultReadAloudPassages.all.count
+        case .calm: count = DefaultConfidenceExercises.all.count
+        case .learn: count = 0
         }
+        return "\(count) \(tool.itemNoun)\(count == 1 ? "" : "s")"
     }
 
-    private var toolsCatalog: [LibraryTool] { LibraryTool.allCases }
+    private var toolsCatalog: [PracticeToolKind] { PracticeToolKind.practiceTools }
 
     private var toolsLanding: some View {
         let query = toolsSearchText.trimmingCharacters(in: .whitespaces)
         let visiblePractice = query.isEmpty
             ? toolsCatalog
             : toolsCatalog.filter {
-                $0.kind.title.localizedStandardContains(query)
-                    || $0.kind.outcome.localizedStandardContains(query)
-                    || $0.kind.bestFor.localizedStandardContains(query)
+                $0.title.localizedStandardContains(query)
+                    || $0.outcome.localizedStandardContains(query)
+                    || $0.bestFor.localizedStandardContains(query)
+                    || $0.format.localizedStandardContains(query)
+            }
+        let visibleFocuses = query.isEmpty
+            ? PracticeToolKind.coveredFocuses
+            : PracticeToolKind.coveredFocuses.filter {
+                $0.title.localizedStandardContains(query)
+                    || $0.shortTitle.localizedStandardContains(query)
+                    || $0.promise.localizedStandardContains(query)
             }
         let visibleReview = query.isEmpty
             ? ReviewToolKind.allCases
@@ -195,26 +167,56 @@ struct PracticeHubView: View {
                 EmptyView()
             }
 
-            if visiblePractice.isEmpty && visibleReview.isEmpty {
+            if visiblePractice.isEmpty && visibleReview.isEmpty && visibleFocuses.isEmpty {
                 EmptyStateCard(
                     icon: "magnifyingglass",
                     title: "No tools match",
                     message: "Nothing here matches \"\(query)\". Try a different search."
                 )
             } else {
+                // Outcome first. The four tools are formats, and which format
+                // you want is a second-order question — "I mumble" should not
+                // require knowing that mumbling is filed under Warm-Ups,
+                // Read Aloud, or both.
+                if !visibleFocuses.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        GlassSectionHeader("Improve", icon: "target")
+
+                        Text("Pick what you want to change. Every exercise that trains it, in one place.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        VStack(spacing: 10) {
+                            ForEach(visibleFocuses) { focus in
+                                PracticeFocusRow(focus: focus)
+                            }
+                        }
+                    }
+                }
+
                 if !visiblePractice.isEmpty {
                     toolGrid(title: "Practice") {
                         ForEach(visiblePractice) { tool in
-                            ToolCategoryCard(
-                                icon: tool.kind.icon,
-                                title: tool.kind.title,
-                                meta: meta(for: tool),
-                                tint: tool.kind.color,
-                                accessibilityDetail: tool.kind.outcome
-                            ) {
-                                selectedTool = tool
+                            NavigationLink(value: PracticeToolRoute(tool: tool)) {
+                                ToolCategoryCardLabel(
+                                    icon: tool.icon,
+                                    title: tool.title,
+                                    meta: meta(for: tool),
+                                    detail: tool.format,
+                                    tint: tool.color
+                                )
                             }
-                            .accessibilityHint(tool.kind.bestFor)
+                            .buttonStyle(GlassPressStyle())
+                            .accessibilityLabel(
+                                ToolCategoryCardLabel.voiceOverLabel(
+                                    title: tool.title,
+                                    detail: tool.outcome,
+                                    meta: meta(for: tool),
+                                    secondary: tool.format
+                                )
+                            )
+                            .accessibilityHint(tool.bestFor)
                         }
                     }
                 }
@@ -278,16 +280,19 @@ struct PracticeHubView: View {
     /// the app. `ToolPage(.pushed)` supplies the inline title and the outcome
     /// line the old wrapper drew by hand.
     @ViewBuilder
-    private func toolDetail(_ tool: LibraryTool) -> some View {
-        switch tool {
-        case .warmUps:
-            WarmUpListView(presentation: .pushed)
+    private func toolDetail(_ route: PracticeToolRoute) -> some View {
+        switch route.tool {
+        case .warmUp:
+            WarmUpListView(presentation: .pushed, initialFocus: route.focus)
         case .drills:
-            DrillSelectionView(presentation: .pushed)
+            DrillSelectionView(presentation: .pushed, initialFocus: route.focus)
         case .readAloud:
-            ReadAloudSelectionView(presentation: .pushed)
-        case .confidence:
-            ConfidenceToolsView(presentation: .pushed)
+            ReadAloudSelectionView(presentation: .pushed, initialFocus: route.focus)
+        case .calm:
+            ConfidenceToolsView(presentation: .pushed, initialFocus: route.focus)
+        case .learn:
+            // Learn is a tab, not a tool page. Unreachable via `practiceTools`.
+            EmptyView()
         }
     }
 
