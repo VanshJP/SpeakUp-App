@@ -65,27 +65,15 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Which focuses this tool has material for, derived from the catalogs so
-    /// it cannot drift as exercises are added.
+    /// Which focuses this tool has material for.
+    ///
+    /// Derived from `itemCount(for:)` rather than from the category enums, so
+    /// it cannot disagree with the counts the listings print. The earlier
+    /// version asked each catalog's *category* enum which focuses existed,
+    /// which would have listed a focus whose only category shipped no
+    /// exercises.
     var focuses: [PracticeFocus] {
-        switch self {
-        case .warmUp:
-            return PracticeFocus.allCases.filter { focus in
-                WarmUpCategory.allCases.contains { $0.focus == focus }
-            }
-        case .drills:
-            return PracticeFocus.allCases.filter { focus in
-                DrillMode.allCases.contains { $0.focus == focus }
-            }
-        case .readAloud:
-            return ReadAloudCategory.catalogFocuses
-        case .calm:
-            return PracticeFocus.allCases.filter { focus in
-                ConfidenceCategory.allCases.contains { $0.focus == focus }
-            }
-        case .learn:
-            return []
-        }
+        PracticeFocus.allCases.filter { itemCount(for: $0) > 0 }
     }
 
     /// What one item of this tool is called, for "3 drills" / "5 passages".
@@ -121,7 +109,14 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
 
     /// Every practice tool with material for a focus, in presentation order.
     static func tools(for focus: PracticeFocus) -> [PracticeToolKind] {
-        practiceTools.filter { $0.focuses.contains(focus) }
+        practiceTools.filter { $0.itemCount(for: focus) > 0 }
+    }
+
+    /// The focuses the app can actually offer today. The Improve list is built
+    /// from this, not from `PracticeFocus.allCases`, so a focus with nothing
+    /// behind it cannot render a row that leads to an empty page.
+    static var coveredFocuses: [PracticeFocus] {
+        PracticeFocus.allCases.filter { !tools(for: $0).isEmpty }
     }
 
     /// When this tool is the right pick — shown on Library cards and sheet headers.

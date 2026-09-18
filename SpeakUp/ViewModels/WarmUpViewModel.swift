@@ -27,12 +27,7 @@ class WarmUpViewModel {
     }
 
     /// The focuses the shipped warm-ups actually cover, in declaration order.
-    /// Derived, so adding an exercise cannot leave a pill behind.
-    var availableFocuses: [PracticeFocus] {
-        PracticeFocus.allCases.filter { focus in
-            DefaultWarmUps.all.contains { $0.category.focus == focus }
-        }
-    }
+    var availableFocuses: [PracticeFocus] { PracticeToolKind.warmUp.focuses }
 
     func exercises(for focus: PracticeFocus) -> [WarmUpExercise] {
         exercises.filter { $0.category.focus == focus }

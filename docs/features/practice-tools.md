@@ -11,7 +11,7 @@ Prep and targeted practice surfaces, optionally linked to a Story from Library s
 | **Shared outcome axis** | `SpeakUp/Models/PracticeFocus.swift` — 8 cases, every catalog maps onto it |
 | Shared copy / identity | `SpeakUp/Models/PracticeToolKind.swift` — adds `format`, `focuses`, `itemCount(for:)` |
 | Outcome browser | `SpeakUp/Views/Practice/PracticeFocusView.swift` — `PracticeFocusRow`, `PracticeFocusDetailView`, `PracticeToolRoute` |
-| Page skeleton | `SpeakUp/Views/Components/ToolPage.swift` — `ToolPage`, `ToolPresentation`, `ToolFilterBar`, `SourceStoryBanner` |
+| Page skeleton | `SpeakUp/Views/Components/ToolPage.swift` — `ToolPage`, `ToolPageAction`, `ToolPresentation`, `ToolFilterBar`, `FocusFilterBar`, `FocusSection`, `SourceStoryBanner` |
 | Item row | `SpeakUp/Views/Components/PracticeItemRow.swift` |
 | Shared tile | `SpeakUp/Views/Components/ToolTile.swift` — `ToolTileLabel` (Today strip + History Review grid), `ToolCategoryCard` (Library Tools grid) |
 | Review catalog | `SpeakUp/Models/ReviewToolKind.swift` — Compare / Listen back / Goals / Journal |
@@ -62,9 +62,9 @@ steady nerves and mindset. Sheet title is **Calm** (matches Today / Library nami
 5. **One page skeleton, not four.** All four tool pages are a `ToolPage`: it owns the background, the scroll, the column padding, the nav title (from `PracticeToolKind.title`, so "Quick Drills" can't drift from `Drills` again), the sheet ✕, and the single secondary header line (`PracticeToolKind.outcome`). Pushed and sheet presentations both get that chrome; only the ✕ differs. A page supplies its filters and its items and nothing else — that is what keeps a fifth dialect from appearing. Filters go in a `ToolFilterBar` so no page insets its pills inside the already-padded column; `sourceStory` uses the shared `SourceStoryBanner`.
 6. **One line of chrome, not three.** The nav bar already names the page, so an eyebrow label and a purpose card on top of it were the same sentence three times; `ToolPurposeBanner` was deleted, not relocated. `bestFor` is a browsing aid and stays in the Library rows only.
 7. Library → Tools leads with a one-line caption (not an intro card), then an
-    **Improve list** (`PracticeFocusRow`, one row per `PracticeFocus`), then a
+    **Improve list** (`PracticeFocusRow`, one row per `PracticeToolKind.coveredFocuses`), then a
     **practice 2×2** and a **Review 2×2** (same card recipe, copy from `ReviewToolKind`). A practice card pushes its tool; do not re-create the forward/back edges by hand — the navigation stack owns that motion now. Outcome and best-for stay on VoiceOver / the pushed page's header; the grid must stay scannable like Prompts categories.
-8. **Map before mask.** All four tool pages open unfiltered ("All" pill first), grouped into labeled sections — `PracticeFocus.title` + icon + count (`GlassSectionHeader`) + the focus's `promise` as the one-line caption. A filter pill collapses to the single matching group; it never hides the taxonomy on arrival. Filtered-empty states offer a "Show All" recovery button.
+8. **Map before mask.** All four tool pages open unfiltered ("All" pill first), grouped into labeled sections. The pills are a shared `FocusFilterBar` and each section a shared `FocusSection` (both in `ToolPage.swift`) — title + icon + count + the focus's `promise` — so one page's grouping cannot drift from the others'; `FocusFilterBar.visible(_:selection:)` is the one place that decides which groups a selection shows. A filter pill collapses to the single matching group; it never hides the taxonomy on arrival. Filtered-empty states offer a "Show All" recovery button.
 9. Runner controls use `GlassButton` (primary = forward/Done, secondary = Back) and `Font.displayNumeral` for the hero countdown — no hand-rolled white capsules. The warm-up transport trio (restart/play/skip) is round-icon, exempt from the capsule rule. Runners confirm before discarding an active session (warm-up ✕ mid-run asks, same as drills).
 10. `ConfidenceCategory.color` draws from the jewel set; exercise steps read via `step(safelyAt:)`, never a raw subscript. Step cards re-`.id` on the index so swaps animate; finishing fires `Haptics.success()` + the `.exhale` chirp, distinct from step ticks.
 11. **Explain once, at the surface where the choice is made.** The Library Tools tab renders a compact **category grid**, then pushes the chosen practice tool (`ToolPresentation.pushed`). Review tools open sheets / pushes via `ContentView` callbacks (same doors as History → Progress). Searchable across title/outcome/best-for, empty state on no match. Today's prep strip and History's Review grid both use the compact `ToolTileLabel`; Library uses the denser `ToolCategoryCard`. Two densities, shared catalogs (`PracticeToolKind` / `ReviewToolKind`) — do not hand-roll a third tile dialect.
@@ -83,12 +83,16 @@ steady nerves and mindset. Sheet title is **Calm** (matches Today / Library nami
     and none said what changed. They survive as row tags. Do **not** add a
     second grouping axis, and do not give a catalog a private outcome enum —
     extend `PracticeFocus`.
-18. **Focus listings are derived, never written down.** `focuses`,
-    `itemCount(for:)`, `tools(for:)`, `availableFocuses` and
-    `ReadAloudCategory.catalogFocuses` all count the seed arrays, so a new
-    exercise cannot leave a stale pill or an empty focus page behind.
-    `SpeakUpTests/PracticeFocusTests.swift` pins both directions: a listed tool
-    always has items, and a tool with items is always listed.
+18. **Focus listings are derived, never written down.** `itemCount(for:)`
+    counts the seed arrays and everything else is built on it — `focuses`,
+    `tools(for:)`, `coveredFocuses`, and each page's `availableFocuses`, which
+    simply forward to `PracticeToolKind.<tool>.focuses`. A listed-but-empty
+    tool is therefore not expressible, which is why the Improve list and the
+    focus page have no empty states. Do not reintroduce a second derivation
+    (one asking a category enum which focuses exist would list a focus whose
+    only category ships nothing). `SpeakUpTests/PracticeFocusTests.swift` pins
+    the content side: every `PracticeFocus` case must ship material somewhere,
+    and each tool's per-focus counts must sum to its whole catalog.
 19. **`PracticeFocus` is `nonisolated`, but `color` is `@MainActor`.** It has to
     be nonisolated so `allCases` stays reachable from `ReadAloudCategory`, which
     is nonisolated too (gotcha §1); `AppColors` is default-isolated, so only the

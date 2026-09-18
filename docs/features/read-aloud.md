@@ -67,12 +67,13 @@ The scoring engine is designed for one focused section. If imported text exceeds
 `custom` → `.clarity`. "News" and "Literature" say where the words came from,
 which is not why anyone picks a passage; the category is now the row's tag.
 
-Two filter bars: focus pills from `viewModel.availableFocuses`
-(= `ReadAloudCategory.catalogFocuses`, derived so a pill can never filter to
-nothing), then length pills from `ReadAloudDifficulty`. Rows are
-`PracticeItemRow`. `initialFocus:` arrives from the Library outcome browser.
+Two filter bars: a shared `FocusFilterBar` over `viewModel.availableFocuses`
+(= `PracticeToolKind.readAloud.focuses`, counted from the seed array so a pill
+can never filter to nothing), then length pills from `ReadAloudDifficulty`.
+Sections are the shared `FocusSection`; rows are `PracticeItemRow`.
+`initialFocus:` arrives from the Library outcome browser.
 
-See [practice-tools.md](practice-tools.md) invariants 17–20 for the shared axis.
+See [practice-tools.md](practice-tools.md) invariants 17–20 for the shared axis and its components.
 
 ---
 

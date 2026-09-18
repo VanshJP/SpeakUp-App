@@ -16,13 +16,8 @@ struct ConfidenceToolsView: View {
         return DefaultConfidenceExercises.all.filter { $0.category.focus == selectedFocus }
     }
 
-    /// The focuses Calm actually covers, in declaration order. Derived, so
-    /// adding an exercise cannot leave a pill behind.
-    private var availableFocuses: [PracticeFocus] {
-        PracticeFocus.allCases.filter { focus in
-            DefaultConfidenceExercises.all.contains { $0.category.focus == focus }
-        }
-    }
+    /// The focuses Calm actually covers, in declaration order.
+    private var availableFocuses: [PracticeFocus] { PracticeToolKind.calm.focuses }
 
     private var longestExerciseMinutes: Double {
         Double(DefaultConfidenceExercises.all.map(\.durationMinutes).max() ?? 0)
@@ -30,28 +25,7 @@ struct ConfidenceToolsView: View {
 
     var body: some View {
         ToolPage(tool: .calm, presentation: presentation) {
-            ToolFilterBar {
-                FilterPill(
-                    title: "All",
-                    icon: "square.grid.2x2",
-                    isSelected: selectedFocus == nil
-                ) {
-                    withAnimation(AppMotion.slide) { selectedFocus = nil }
-                }
-
-                ForEach(availableFocuses) { focus in
-                    FilterPill(
-                        title: focus.shortTitle,
-                        icon: focus.icon,
-                        isSelected: selectedFocus == focus,
-                        color: focus.color
-                    ) {
-                        withAnimation(AppMotion.slide) {
-                            selectedFocus = selectedFocus == focus ? nil : focus
-                        }
-                    }
-                }
-            }
+            FocusFilterBar(focuses: availableFocuses, selection: $selectedFocus)
 
             exerciseContent
         }
@@ -72,7 +46,7 @@ struct ConfidenceToolsView: View {
     /// technique — visualization, progressive exposure — is the row's tag.
     @ViewBuilder
     private var exerciseContent: some View {
-        let focuses = selectedFocus.map { [$0] } ?? availableFocuses
+        let focuses = FocusFilterBar.visible(availableFocuses, selection: selectedFocus)
 
         if exercises.isEmpty {
             EmptyStateCard(
@@ -87,36 +61,15 @@ struct ConfidenceToolsView: View {
         } else {
             VStack(spacing: 20) {
                 ForEach(focuses) { focus in
-                    focusSection(focus)
-                }
-            }
-        }
-    }
-
-    private func focusSection(_ focus: PracticeFocus) -> some View {
-        let items = exercises.filter { $0.category.focus == focus }
-        guard !items.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(focus.title, icon: focus.icon) {
-                    Text("\(items.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(focus.promise)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LazyVStack(spacing: 12) {
-                    ForEach(items) { exercise in
+                    FocusSection(
+                        focus: focus,
+                        items: exercises.filter { $0.category.focus == focus }
+                    ) { exercise in
                         exerciseRow(exercise)
                     }
                 }
             }
-        )
+        }
     }
 
     private func exerciseRow(_ exercise: ConfidenceExercise) -> some View {

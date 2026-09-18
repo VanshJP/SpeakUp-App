@@ -60,6 +60,9 @@ struct ReadAloudCustomPassageTests {
     @Test func catalogCasesOmitCustom() {
         #expect(!ReadAloudCategory.catalogCases.contains(.custom))
         #expect(ReadAloudCategory.allCases.contains(.custom))
+        // Freeform passages live on `UserSettings`, never in the seed array —
+        // a "Yours" pill beside News and Literature would filter to nothing.
+        #expect(!DefaultReadAloudPassages.all.contains { $0.category == .custom })
     }
 
     @Test func canDefineRejectsMultiWord() {

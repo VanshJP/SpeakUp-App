@@ -148,8 +148,8 @@ struct PracticeHubView: View {
                     || $0.format.localizedStandardContains(query)
             }
         let visibleFocuses = query.isEmpty
-            ? PracticeFocus.allCases
-            : PracticeFocus.allCases.filter {
+            ? PracticeToolKind.coveredFocuses
+            : PracticeToolKind.coveredFocuses.filter {
                 $0.title.localizedStandardContains(query)
                     || $0.shortTitle.localizedStandardContains(query)
                     || $0.promise.localizedStandardContains(query)

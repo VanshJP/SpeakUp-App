@@ -26,28 +26,10 @@ struct WarmUpListView: View {
                 )
             }
 
-            ToolFilterBar {
-                FilterPill(
-                    title: "All",
-                    icon: "square.grid.2x2",
-                    isSelected: viewModel.selectedFocus == nil
-                ) {
-                    withAnimation(AppMotion.slide) { viewModel.selectedFocus = nil }
-                }
-
-                ForEach(viewModel.availableFocuses) { focus in
-                    FilterPill(
-                        title: focus.shortTitle,
-                        icon: focus.icon,
-                        isSelected: viewModel.selectedFocus == focus,
-                        color: focus.color
-                    ) {
-                        withAnimation(AppMotion.slide) {
-                            viewModel.selectedFocus = viewModel.selectedFocus == focus ? nil : focus
-                        }
-                    }
-                }
-            }
+            FocusFilterBar(
+                focuses: viewModel.availableFocuses,
+                selection: $viewModel.selectedFocus
+            )
 
             exerciseContent
         }
@@ -69,7 +51,7 @@ struct WarmUpListView: View {
     /// that has lost its heading (invariant 8, map before mask).
     @ViewBuilder
     private var exerciseContent: some View {
-        let focuses = viewModel.selectedFocus.map { [$0] } ?? viewModel.availableFocuses
+        let focuses = FocusFilterBar.visible(viewModel.availableFocuses, selection: viewModel.selectedFocus)
 
         if viewModel.exercises.isEmpty {
             EmptyStateCard(
@@ -84,36 +66,12 @@ struct WarmUpListView: View {
         } else {
             VStack(spacing: 20) {
                 ForEach(focuses) { focus in
-                    focusSection(focus)
-                }
-            }
-        }
-    }
-
-    private func focusSection(_ focus: PracticeFocus) -> some View {
-        let items = viewModel.exercises(for: focus)
-        guard !items.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(focus.title, icon: focus.icon) {
-                    Text("\(items.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(focus.promise)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LazyVStack(spacing: 12) {
-                    ForEach(items) { exercise in
+                    FocusSection(focus: focus, items: viewModel.exercises(for: focus)) { exercise in
                         exerciseRow(exercise)
                     }
                 }
             }
-        )
+        }
     }
 
     private func exerciseRow(_ exercise: WarmUpExercise) -> some View {

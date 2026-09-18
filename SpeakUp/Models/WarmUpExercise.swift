@@ -46,17 +46,6 @@ enum WarmUpCategory: String, CaseIterable, Identifiable {
         case .vocal: return .presence
         }
     }
-
-    /// What this category is *for* — the one line a section header shows so
-    /// someone browsing understands why the grouping exists.
-    var purpose: String {
-        switch self {
-        case .breathing: return "Steady your nerves and breath support."
-        case .tonguetwister: return "Loosen up articulation, then add speed."
-        case .vocal: return "Wake up resonance and pitch range."
-        case .articulation: return "Crisper consonants, looser jaw."
-        }
-    }
 }
 
 enum StepAnimation: String, Codable {

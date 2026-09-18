@@ -247,12 +247,7 @@ struct ReadAloudSessionView: View {
         let words = passage.words
         let states = viewModel.wordStates
 
-        return WrappingHStack(
-            alignment: .leading,
-            spacing: 6,
-            lineSpacing: 12,
-            metricsKey: passageFontSize
-        ) {
+        return WrappingHStack(spacing: 6, lineSpacing: 12, metricsKey: passageFontSize) {
             ForEach(Array(words.enumerated()), id: \.offset) { index, word in
                 let state = index < states.count ? states[index] : WordMatchState.upcoming
                 Text(word)
@@ -419,7 +414,8 @@ struct ReadAloudSessionView: View {
 /// (width, font size) and reused, so a state change that only repaints colour
 /// costs no measurement at all.
 struct WrappingHStack: Layout {
-    var alignment: HorizontalAlignment = .leading
+    // No `alignment`: rows are packed from the leading edge, and the property
+    // that used to sit here was set by every call site and read by none.
     var spacing: CGFloat = 8
     var lineSpacing: CGFloat = 4
     /// Anything that changes a subview's measured size must change this, or

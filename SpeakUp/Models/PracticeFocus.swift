@@ -111,36 +111,4 @@ nonisolated enum PracticeFocus: String, CaseIterable, Identifiable, Sendable {
         case .structure: return AppColors.categoryCopper
         }
     }
-
-    /// The scored dimension this focus moves, where the app scores it at all.
-    ///
-    /// Composure work deliberately returns nil. There is no subscore that
-    /// means "nervous", and practice-tools invariant 1 says not to invent one —
-    /// so nerves and mindset are honest about training something the score
-    /// does not read directly.
-    var coachDimension: CoachDimension? {
-        switch self {
-        case .steadyNerves, .mindset: return nil
-        case .clarity: return .clarity
-        case .presence: return .vocalVariety
-        case .pace: return .pace
-        case .fillers: return .fillers
-        case .pauses: return .pauses
-        case .structure: return .structure
-        }
-    }
-
-    /// Route a weak subscore back to the focus that trains it. `structure`
-    /// absorbs the dimensions whose fix is the same shape — a coach note about
-    /// staying on point sends you to the same PREP work as one about structure.
-    static func matching(_ dimension: CoachDimension) -> PracticeFocus {
-        switch dimension {
-        case .fillers: return .fillers
-        case .pace: return .pace
-        case .pauses: return .pauses
-        case .clarity: return .clarity
-        case .delivery, .vocalVariety: return .presence
-        case .structure, .vocabulary, .relevance: return .structure
-        }
-    }
 }

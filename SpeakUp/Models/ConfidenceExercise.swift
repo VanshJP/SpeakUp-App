@@ -47,17 +47,6 @@ enum ConfidenceCategory: String, CaseIterable, Identifiable {
         case .affirmation: return AppColors.categoryAmber
         }
     }
-
-    /// What this category is *for* — the one line a section header shows so
-    /// someone browsing understands why the grouping exists.
-    var purpose: String {
-        switch self {
-        case .calming: return "Settle nerves in the moment."
-        case .visualization: return "Rehearse success before it's real."
-        case .progressive: return "Small steps past the fear."
-        case .affirmation: return "Reset the inner monologue."
-        }
-    }
 }
 
 struct ConfidenceExercise: Identifiable {

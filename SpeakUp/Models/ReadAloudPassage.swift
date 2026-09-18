@@ -208,31 +208,10 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Why this kind of passage exists — the line a grouped section shows.
-    var purpose: String {
-        switch self {
-        case .news: return "Steady, even delivery at a news-reader's clip."
-        case .literature: return "Room for expression — pitch, stress, and timing."
-        case .technical: return "Dense terms that punish a swallowed ending."
-        case .tongueTwister: return "Deliberately awkward mouths of consonants."
-        case .minimalPairs: return "Word pairs that differ by a single sound."
-        case .custom: return "The words you actually have to say."
-        }
-    }
-
     /// Catalog filters — excludes freeform custom passages.
     static var catalogCases: [ReadAloudCategory] {
         allCases.filter { $0 != .custom }
     }
 
-    /// Catalog categories under a focus, in declaration order.
-    static func catalogCases(for focus: PracticeFocus) -> [ReadAloudCategory] {
-        catalogCases.filter { $0.focus == focus }
-    }
-
-    /// The focuses the shipped catalog actually covers, in declaration order.
-    static var catalogFocuses: [PracticeFocus] {
-        PracticeFocus.allCases.filter { !catalogCases(for: $0).isEmpty }
-    }
 }
 

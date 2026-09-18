@@ -82,28 +82,10 @@ struct ReadAloudSelectionView: View {
             .tint(AppColors.toolReadAloud)
             .padding(.horizontal, 4)
 
-            ToolFilterBar {
-                FilterPill(
-                    title: "All",
-                    icon: "square.grid.2x2",
-                    isSelected: viewModel.selectedFocus == nil
-                ) {
-                    withAnimation(AppMotion.slide) { viewModel.selectedFocus = nil }
-                }
-
-                ForEach(viewModel.availableFocuses) { focus in
-                    FilterPill(
-                        title: focus.shortTitle,
-                        icon: focus.icon,
-                        isSelected: viewModel.selectedFocus == focus,
-                        color: focus.color
-                    ) {
-                        withAnimation(AppMotion.slide) {
-                            viewModel.selectedFocus = viewModel.selectedFocus == focus ? nil : focus
-                        }
-                    }
-                }
-            }
+            FocusFilterBar(
+                focuses: viewModel.availableFocuses,
+                selection: $viewModel.selectedFocus
+            )
 
             ToolFilterBar {
                 FilterPill(
@@ -263,7 +245,7 @@ struct ReadAloudSelectionView: View {
     /// from, which is not why anyone picks one.
     @ViewBuilder
     private var catalogContent: some View {
-        let focuses = viewModel.selectedFocus.map { [$0] } ?? viewModel.availableFocuses
+        let focuses = FocusFilterBar.visible(viewModel.availableFocuses, selection: viewModel.selectedFocus)
 
         if viewModel.passages.isEmpty {
             EmptyStateCard(
@@ -281,36 +263,12 @@ struct ReadAloudSelectionView: View {
         } else {
             VStack(spacing: 20) {
                 ForEach(focuses) { focus in
-                    catalogSection(focus)
-                }
-            }
-        }
-    }
-
-    private func catalogSection(_ focus: PracticeFocus) -> some View {
-        let items = viewModel.passages(for: focus)
-        guard !items.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(focus.title, icon: focus.icon) {
-                    Text("\(items.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(focus.promise)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LazyVStack(spacing: 12) {
-                    ForEach(items) { passage in
+                    FocusSection(focus: focus, items: viewModel.passages(for: focus)) { passage in
                         passageRow(passage)
                     }
                 }
             }
-        )
+        }
     }
 
     private func passageRow(_ passage: ReadAloudPassage) -> some View {

@@ -94,7 +94,7 @@ class ReadAloudViewModel {
     }
 
     /// Focuses the shipped catalog covers, in declaration order.
-    var availableFocuses: [PracticeFocus] { ReadAloudCategory.catalogFocuses }
+    var availableFocuses: [PracticeFocus] { PracticeToolKind.readAloud.focuses }
 
     func passages(for focus: PracticeFocus) -> [ReadAloudPassage] {
         filteredPassages.filter { $0.category.focus == focus }

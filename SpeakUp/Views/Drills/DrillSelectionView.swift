@@ -25,11 +25,7 @@ struct DrillSelectionView: View {
     }
 
     /// Focuses the shipped drill modes cover, in declaration order.
-    private var availableFocuses: [PracticeFocus] {
-        PracticeFocus.allCases.filter { focus in
-            DrillMode.allCases.contains { $0.focus == focus }
-        }
-    }
+    private var availableFocuses: [PracticeFocus] { PracticeToolKind.drills.focuses }
 
     /// Denominator for each row's arc, so 15s and 60s drills read as
     /// different sizes of commitment rather than four identical cards.
@@ -48,35 +44,16 @@ struct DrillSelectionView: View {
                 )
             }
 
-            ToolFilterBar {
-                FilterPill(
-                    title: "All",
-                    icon: "square.grid.2x2",
-                    isSelected: selectedFocus == nil
-                ) {
-                    withAnimation(AppMotion.slide) { selectedFocus = nil }
-                }
-
-                ForEach(availableFocuses) { focus in
-                    FilterPill(
-                        title: focus.shortTitle,
-                        icon: focus.icon,
-                        isSelected: selectedFocus == focus,
-                        color: focus.color
-                    ) {
-                        withAnimation(AppMotion.slide) {
-                            selectedFocus = selectedFocus == focus ? nil : focus
-                        }
-                    }
-                }
-            }
+            FocusFilterBar(focuses: availableFocuses, selection: $selectedFocus)
 
             // Drills were already named for outcomes — they are just headed by
             // them now, in the same vocabulary the other three tools use, so a
             // reader can see that Emphasis and Vocal Variety are the same job.
             VStack(spacing: 20) {
-                ForEach(selectedFocus.map { [$0] } ?? availableFocuses) { focus in
-                    focusSection(focus)
+                ForEach(FocusFilterBar.visible(availableFocuses, selection: selectedFocus)) { focus in
+                    FocusSection(focus: focus, items: visibleModes.filter { $0.focus == focus }) { mode in
+                        drillRow(mode)
+                    }
                 }
             }
         }
@@ -98,33 +75,7 @@ struct DrillSelectionView: View {
         }
     }
 
-    // MARK: - Sections
-
-    private func focusSection(_ focus: PracticeFocus) -> some View {
-        let modes = visibleModes.filter { $0.focus == focus }
-        guard !modes.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(focus.title, icon: focus.icon) {
-                    Text("\(modes.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(focus.promise)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LazyVStack(spacing: 12) {
-                    ForEach(modes) { mode in
-                        drillRow(mode)
-                    }
-                }
-            }
-        )
-    }
+    // MARK: - Rows
 
     private func drillRow(_ mode: DrillMode) -> some View {
         PracticeItemRow(

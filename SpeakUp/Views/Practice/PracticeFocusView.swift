@@ -15,9 +15,10 @@ struct PracticeToolRoute: Hashable {
 struct PracticeFocusRow: View {
     let focus: PracticeFocus
 
+    /// Rows are only built from `PracticeToolKind.coveredFocuses`, so there is
+    /// always at least one tool here.
     private var toolSummary: String {
         let tools = PracticeToolKind.tools(for: focus)
-        guard !tools.isEmpty else { return "Nothing yet" }
         let total = tools.reduce(0) { $0 + $1.itemCount(for: focus) }
         let names = tools.map(\.shortTitle).joined(separator: " · ")
         return "\(total) across \(names)"
@@ -83,17 +84,9 @@ struct PracticeFocusDetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     header
 
-                    if tools.isEmpty {
-                        EmptyStateCard(
-                            icon: focus.icon,
-                            title: "Nothing here yet",
-                            message: "No exercises train this one yet."
-                        )
-                    } else {
-                        VStack(spacing: 12) {
-                            ForEach(tools) { tool in
-                                toolCard(tool)
-                            }
+                    VStack(spacing: 12) {
+                        ForEach(tools) { tool in
+                            toolCard(tool)
                         }
                     }
                 }
