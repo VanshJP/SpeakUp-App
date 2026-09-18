@@ -82,6 +82,10 @@ struct PracticeHubView: View {
             PracticeFocusDetailView(focus: focus)
                 .restoresNavigationBar()
         }
+        .navigationDestination(for: PracticeImproveRoute.self) { _ in
+            PracticeImproveListView()
+                .restoresNavigationBar()
+        }
         .navigationDestination(item: $selectedStory) { story in
             StoryDetailView(
                 story: story,
@@ -174,27 +178,6 @@ struct PracticeHubView: View {
                     message: "Nothing here matches \"\(query)\". Try a different search."
                 )
             } else {
-                // Outcome first. The four tools are formats, and which format
-                // you want is a second-order question — "I mumble" should not
-                // require knowing that mumbling is filed under Warm-Ups,
-                // Read Aloud, or both.
-                if !visibleFocuses.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        GlassSectionHeader("Improve", icon: "target")
-
-                        Text("Pick what you want to change. Every exercise that trains it, in one place.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        VStack(spacing: 10) {
-                            ForEach(visibleFocuses) { focus in
-                                PracticeFocusRow(focus: focus)
-                            }
-                        }
-                    }
-                }
-
                 if !visiblePractice.isEmpty {
                     toolGrid(title: "Practice") {
                         ForEach(visiblePractice) { tool in
@@ -217,6 +200,26 @@ struct PracticeHubView: View {
                                 )
                             )
                             .accessibilityHint(tool.bestFor)
+                        }
+                    }
+                }
+
+                // The outcome axis, one row rather than the header, caption and
+                // eight rows it used to be. Both were doors to the same forty
+                // exercises and this was the longer one; the axis itself lives
+                // on inside every tool page, which groups by it. Searching is
+                // different — a query for "fillers" should land on the outcome,
+                // not on a row that promises to have one.
+                if query.isEmpty {
+                    PracticeImproveEntryRow()
+                } else if !visibleFocuses.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        GlassSectionHeader("Improve", icon: "target")
+
+                        VStack(spacing: 10) {
+                            ForEach(visibleFocuses) { focus in
+                                PracticeFocusRow(focus: focus)
+                            }
                         }
                     }
                 }

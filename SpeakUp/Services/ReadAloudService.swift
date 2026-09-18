@@ -142,6 +142,15 @@ class ReadAloudService {
     /// pause into a failed session.
     private var isInterrupted = false
 
+    /// True while the reader has asked to hear the model line. Same teardown
+    /// as an interruption and the same reason for a flag: the cancelled task
+    /// reports an error that must not be answered with a rebuild, because the
+    /// rebuild would re-open the mic straight into the synthesiser.
+    private(set) var isPaused = false
+
+    /// Recognition is down on purpose. Every recovery path checks this.
+    private var isSuspended: Bool { isInterrupted || isPaused }
+
     /// Tokens only — registered and removed on the main actor, and removed once
     /// more from `deinit`, which is nonisolated. Kept out of observation
     /// tracking so they never participate in change notifications.
@@ -347,7 +356,7 @@ class ReadAloudService {
     /// what dropped the mic halfway through a read and forced a restart. Re-arm
     /// instead, keeping the engine, the tap, and every word already matched.
     private func handleSegmentEnd(segment segmentID: Int, failure: String?) {
-        guard isListening, !isInterrupted else { return }
+        guard isListening, !isSuspended else { return }
         // A retired request delivering its own final is the expected shape of a
         // rollover, and a task cancelled by the previous session reports an
         // error long after its slots are gone; only the live request asks for
@@ -401,7 +410,7 @@ class ReadAloudService {
     }
 
     private func rollOverSegment() {
-        guard isListening, !isInterrupted, let engine = audioEngine, engine.isRunning else { return }
+        guard isListening, !isSuspended, let engine = audioEngine, engine.isRunning else { return }
         guard armRecognition(startNewSegment: true) else {
             fail(with: ReadAloudError.speechNotAvailable.errorDescription)
             return
@@ -481,11 +490,33 @@ class ReadAloudService {
         }
     }
 
+    /// Holds the read while the TTS model line plays.
+    ///
+    /// Shadow practice used to be a mode chosen before the passage opened, on
+    /// a toggle at the top of the catalog. It is a button inside the session
+    /// now, usable at any point in a read, which only works if hearing the
+    /// model does not cost you the words you have already matched. Same
+    /// teardown as an interruption — a live mic would score the synthesiser as
+    /// the reader — and the same rebuild on the way back, with
+    /// `segmentTranscripts` untouched.
+    func pauseForModelPlayback() {
+        guard isListening, !isSuspended else { return }
+        isPaused = true
+        teardownRecognition()
+        audioEngine?.stop()
+    }
+
+    func resumeAfterModelPlayback() {
+        guard isListening, isPaused else { return }
+        isPaused = false
+        rebuildCaptureGraph(reason: "model line finished")
+    }
+
     /// Rebuilds the capture graph in place and re-arms recognition on it,
     /// keeping `segmentTranscripts` — and therefore the reader's place in the
     /// passage — intact.
     private func rebuildCaptureGraph(reason: String) {
-        guard isListening, !isInterrupted else { return }
+        guard isListening, !isSuspended else { return }
         logger.info("Read Aloud rebuilding capture graph: \(reason, privacy: .public)")
 
         teardownRecognition()
@@ -538,6 +569,7 @@ class ReadAloudService {
         // on the way down.
         isListening = false
         isInterrupted = false
+        isPaused = false
 
         removeSessionObservers()
         teardownRecognition()

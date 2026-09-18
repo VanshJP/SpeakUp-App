@@ -32,17 +32,24 @@ struct ToolPage<Content: View>: View {
     let tool: PracticeToolKind
     var presentation: ToolPresentation = .sheet
     var action: ToolPageAction?
+    /// Set when the page was opened from the outcome browser. The matching
+    /// `FocusSection` is scrolled to rather than filtered to: arriving on
+    /// "Cut filler words" should put you on that group, not hide the other
+    /// six. Map before mask, taken all the way — nothing masks any more.
+    var focus: PracticeFocus?
     @ViewBuilder var content: Content
 
     init(
         tool: PracticeToolKind,
         presentation: ToolPresentation = .sheet,
         action: ToolPageAction? = nil,
+        focus: PracticeFocus? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.tool = tool
         self.presentation = presentation
         self.action = action
+        self.focus = focus
         self.content = content()
     }
 
@@ -59,19 +66,22 @@ struct ToolPage<Content: View>: View {
         ZStack {
             AppBackground()
 
-            PageScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(tool.outcome)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            ScrollViewReader { proxy in
+                PageScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(tool.outcome)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    content
+                        content
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+                .scrollIndicators(.hidden)
+                .task { await reveal(focus, with: proxy) }
             }
-            .scrollIndicators(.hidden)
         }
         .navigationTitle(tool.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -105,66 +115,24 @@ struct ToolPage<Content: View>: View {
             }
         }
     }
-}
 
-// MARK: - Filter Bar
-
-struct ToolFilterBar<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                content
-            }
-        }
-        .scrollClipDisabled()
-    }
-}
-
-// MARK: - Focus Filtering
-
-/// The "All" pill plus one pill per focus a tool has material for.
-///
-/// All four tool pages filter on `PracticeFocus` and had written this out
-/// individually — four copies of the same twenty-five lines, which is four
-/// chances for one page's pills to drift out of step with the others.
-struct FocusFilterBar: View {
-    let focuses: [PracticeFocus]
-    @Binding var selection: PracticeFocus?
-
-    var body: some View {
-        ToolFilterBar {
-            FilterPill(
-                title: "All",
-                icon: "square.grid.2x2",
-                isSelected: selection == nil
-            ) {
-                withAnimation(AppMotion.slide) { selection = nil }
-            }
-
-            ForEach(focuses) { focus in
-                FilterPill(
-                    title: focus.shortTitle,
-                    icon: focus.icon,
-                    isSelected: selection == focus,
-                    color: focus.color
-                ) {
-                    withAnimation(AppMotion.slide) {
-                        selection = selection == focus ? nil : focus
-                    }
-                }
-            }
+    /// Scrolls the arrival focus into view once the presentation has settled.
+    ///
+    /// A push or a sheet is still animating when `.task` first runs, and the
+    /// sections below have not been measured, so an immediate `scrollTo` lands
+    /// nowhere. One beat is enough, and being a `.task` it is cancelled if the
+    /// page goes away first.
+    private func reveal(_ focus: PracticeFocus?, with proxy: ScrollViewProxy) async {
+        guard let focus else { return }
+        try? await Task.sleep(for: .milliseconds(400))
+        guard !Task.isCancelled else { return }
+        withAnimation(AppMotion.settle) {
+            proxy.scrollTo(focus, anchor: .top)
         }
     }
-
-    /// The focuses to show, given a selection: one group when filtered, the
-    /// whole map when not. Every tool page derives its sections this way.
-    static func visible(_ focuses: [PracticeFocus], selection: PracticeFocus?) -> [PracticeFocus] {
-        guard let selection else { return focuses }
-        return focuses.contains(selection) ? [selection] : []
-    }
 }
+
+// MARK: - Focus Section
 
 /// One outcome heading — title, icon, count, promise — over its items.
 ///
@@ -172,6 +140,14 @@ struct FocusFilterBar: View {
 /// copies this replaces each wrapped themselves in `AnyView` to satisfy an
 /// early `guard`; returning an empty `body` does the same job without the
 /// type erasure.
+///
+/// **This heading is the tool page's only taxonomy.** It used to sit directly
+/// under a row of focus pills that said the same eight words in shorter form,
+/// so every page carried its grouping twice — once as a control, once as the
+/// thing the control acted on. With seven drills and a dozen warm-ups,
+/// scrolling past a group is cheaper than deciding to hide it, and a page that
+/// arrives pre-filtered hides material the reader never asked to lose. The
+/// pills are gone; `ToolPage(focus:)` scrolls here instead.
 struct FocusSection<Item: Identifiable, Row: View>: View {
     let focus: PracticeFocus
     let items: [Item]
@@ -182,7 +158,7 @@ struct FocusSection<Item: Identifiable, Row: View>: View {
             VStack(alignment: .leading, spacing: 10) {
                 GlassSectionHeader(focus.title, icon: focus.icon) {
                     Text("\(items.count)")
-                        .font(.caption.weight(.semibold))
+                        .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
 
@@ -197,6 +173,8 @@ struct FocusSection<Item: Identifiable, Row: View>: View {
                     }
                 }
             }
+            // Scroll anchor for `ToolPage(focus:)`.
+            .id(focus)
         }
     }
 }

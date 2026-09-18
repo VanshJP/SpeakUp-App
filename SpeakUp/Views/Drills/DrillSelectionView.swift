@@ -25,19 +25,16 @@ struct DrillSelectionView: View {
     var sourceStory: Story?
     var initialMode: DrillMode?
 
-    /// Arrive pre-narrowed from the focus browser in Library → Tools.
+    /// Arrive from the focus browser in Library → Tools. The page scrolls to
+    /// that group; it no longer hides the rest (see `FocusSection`).
     var initialFocus: PracticeFocus?
-
-    @State private var selectedFocus: PracticeFocus?
-    @State private var didApplyInitialFocus = false
-
-    private var visibleModes: [DrillMode] {
-        guard let selectedFocus else { return DrillMode.allCases }
-        return DrillMode.allCases.filter { $0.focus == selectedFocus }
-    }
 
     /// Focuses the shipped drill modes cover, in declaration order.
     private var availableFocuses: [PracticeFocus] { PracticeToolKind.drills.focuses }
+
+    private func modes(for focus: PracticeFocus) -> [DrillMode] {
+        DrillMode.allCases.filter { $0.focus == focus }
+    }
 
     /// Denominator for each row's arc, so 15s and 60s drills read as
     /// different sizes of commitment rather than four identical cards.
@@ -46,7 +43,7 @@ struct DrillSelectionView: View {
     }
 
     var body: some View {
-        ToolPage(tool: .drills, presentation: presentation) {
+        ToolPage(tool: .drills, presentation: presentation, focus: initialFocus) {
             if let story = sourceStory {
                 SourceStoryBanner(
                     eyebrow: "Drilling from",
@@ -56,14 +53,13 @@ struct DrillSelectionView: View {
                 )
             }
 
-            FocusFilterBar(focuses: availableFocuses, selection: $selectedFocus)
-
             // Drills were already named for outcomes — they are just headed by
             // them now, in the same vocabulary the other three tools use, so a
             // reader can see that Emphasis and Vocal Variety are the same job.
+            // Seven drills under five headings never needed a filter as well.
             VStack(spacing: 20) {
-                ForEach(FocusFilterBar.visible(availableFocuses, selection: selectedFocus)) { focus in
-                    FocusSection(focus: focus, items: visibleModes.filter { $0.focus == focus }) { mode in
+                ForEach(availableFocuses) { focus in
+                    FocusSection(focus: focus, items: modes(for: focus)) { mode in
                         drillRow(mode)
                     }
                 }
@@ -73,10 +69,6 @@ struct DrillSelectionView: View {
             DrillFlowView(mode: mode, viewModel: viewModel)
         }
         .task {
-            if !didApplyInitialFocus, let initialFocus {
-                didApplyInitialFocus = true
-                selectedFocus = initialFocus
-            }
             guard let initialMode else { return }
             activeDrill = initialMode
         }

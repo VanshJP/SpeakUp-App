@@ -20,7 +20,6 @@ struct ReadAloudSelectionView: View {
     @State private var editingSavedText: String?
     @State private var pendingPracticePassage: ReadAloudPassage?
     @State private var passagePendingDeletion: ReadAloudPassage?
-    @State private var shadowMode = false
     @State private var didStartInitialPractice = false
 
     var presentation: ToolPresentation = .sheet
@@ -30,13 +29,12 @@ struct ReadAloudSelectionView: View {
     /// straight away; the list underneath is where the user lands afterwards.
     var initialPracticeText: String?
 
-    /// Arrive pre-narrowed from the focus browser in Library → Tools.
+    /// Arrive from the focus browser in Library → Tools. The page scrolls to
+    /// that group; it no longer hides the rest (see `FocusSection`).
     var initialFocus: PracticeFocus?
 
-    @State private var didApplyInitialFocus = false
-
     private var longestPassageWords: Double {
-        Double(viewModel.passages.map(\.wordCount).max() ?? 0)
+        Double(DefaultReadAloudPassages.all.map(\.wordCount).max() ?? 0)
     }
 
     // MARK: - Saved passage state
@@ -58,7 +56,6 @@ struct ReadAloudSelectionView: View {
 
     private func practice(_ passage: ReadAloudPassage) {
         Haptics.medium()
-        viewModel.isShadowMode = shadowMode
         viewModel.selectedPassage = passage
         sessionPassage = passage
     }
@@ -78,67 +75,18 @@ struct ReadAloudSelectionView: View {
         ) {
             savedSection
 
-            Toggle(isOn: $shadowMode) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Shadow mode")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Hear the model line first, then speak it back")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .tint(AppColors.toolReadAloud)
-            .padding(.horizontal, 4)
-
-            FocusFilterBar(
-                focuses: viewModel.availableFocuses,
-                selection: $viewModel.selectedFocus
-            )
-
-            ToolFilterBar {
-                FilterPill(
-                    title: "Any length",
-                    isSelected: viewModel.selectedDifficulty == nil
-                ) {
-                    withAnimation(AppMotion.slide) { viewModel.selectedDifficulty = nil }
-                }
-
-                ForEach(ReadAloudDifficulty.allCases) { difficulty in
-                    FilterPill(
-                        title: difficulty.displayName,
-                        isSelected: viewModel.selectedDifficulty == difficulty,
-                        color: AppColors.difficultyColor(difficulty)
-                    ) {
-                        withAnimation(AppMotion.slide) {
-                            viewModel.selectedDifficulty = viewModel.selectedDifficulty == difficulty ? nil : difficulty
-                        }
-                    }
-                }
-            }
-
-            if viewModel.selectedDifficulty != nil || viewModel.selectedFocus != nil {
-                Text("\(viewModel.passages.count) of \(DefaultReadAloudPassages.all.count) passages")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-
             catalogContent
         }
         .fullScreenCover(item: $sessionPassage) { passage in
             ReadAloudSessionView(viewModel: viewModel, passage: passage)
         }
         .task {
-            if !didApplyInitialFocus, let initialFocus {
-                didApplyInitialFocus = true
-                viewModel.selectedFocus = initialFocus
-            }
             guard !didStartInitialPractice,
                   let initialPracticeText,
                   let passage = ReadAloudPassage.custom(from: initialPracticeText)
             else { return }
 
             didStartInitialPractice = true
-            viewModel.isShadowMode = false
             viewModel.selectedPassage = passage
             sessionPassage = passage
         }
@@ -249,29 +197,11 @@ struct ReadAloudSelectionView: View {
     /// Grouped by what a passage trains, with the source material demoted to
     /// the row's tag. "News" and "Literature" told you where the words came
     /// from, which is not why anyone picks one.
-    @ViewBuilder
     private var catalogContent: some View {
-        let focuses = FocusFilterBar.visible(viewModel.availableFocuses, selection: viewModel.selectedFocus)
-
-        if viewModel.passages.isEmpty {
-            EmptyStateCard(
-                icon: "text.book.closed",
-                title: "Nothing here",
-                message: "No passages match these filters. Try clearing one.",
-                buttonTitle: "Show All",
-                buttonAction: {
-                    withAnimation(AppMotion.slide) {
-                        viewModel.selectedDifficulty = nil
-                        viewModel.selectedFocus = nil
-                    }
-                }
-            )
-        } else {
-            VStack(spacing: 20) {
-                ForEach(focuses) { focus in
-                    FocusSection(focus: focus, items: viewModel.passages(for: focus)) { passage in
-                        passageRow(passage)
-                    }
+        VStack(spacing: 20) {
+            ForEach(viewModel.availableFocuses) { focus in
+                FocusSection(focus: focus, items: viewModel.passages(for: focus)) { passage in
+                    passageRow(passage)
                 }
             }
         }
@@ -288,7 +218,7 @@ struct ReadAloudSelectionView: View {
                 longest: longestPassageWords
             ),
             durationLabel: Self.estimatedTime(passage.wordCount),
-            tag: "\(passage.category.displayName) · \(passage.wordCount) words"
+            tag: "\(passage.difficulty.displayName) · \(passage.wordCount) words"
         ) {
             practice(passage)
         }

@@ -44,26 +44,19 @@ class ReadAloudViewModel {
     /// whatever ambient category lingers — silent buffers, cryptic failures.
     private let audioService = AudioService()
 
-    var selectedDifficulty: ReadAloudDifficulty? {
-        didSet { applyFilters() }
-    }
-    /// Filters on outcome, not on source material. "News" and "Literature"
-    /// describe where a passage came from; what a reader wants to know is
-    /// whether it trains a steady clip or expression.
-    var selectedFocus: PracticeFocus? {
-        didSet { applyFilters() }
-    }
     var sessionState: ReadAloudSessionState = .idle
     var selectedPassage: ReadAloudPassage?
     var result: ReadAloudResult?
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
-    /// When true, the session plays a TTS model pass before listening.
-    var isShadowMode = false
-    private(set) var filteredPassages: [ReadAloudPassage] = DefaultReadAloudPassages.all
 
     private var startTime: Date?
     private var timerTask: Task<Void, Never>?
+    /// Seconds spent listening to the model line. Subtracted from the take so
+    /// the result's words-per-minute is measured against time the reader was
+    /// actually reading.
+    private var modelPlaybackSeconds: TimeInterval = 0
+    private var modelPlaybackStarted: Date?
 
     /// Lifetime read-aloud count. In UserDefaults for the same reason as the
     /// drill counter: the view model is rebuilt per presentation, so anything
@@ -74,33 +67,18 @@ class ReadAloudViewModel {
         set { UserDefaults.standard.set(newValue, forKey: Self.startCountKey) }
     }
 
-    // MARK: - Filtered Passages
-
-    var passages: [ReadAloudPassage] {
-        filteredPassages
-    }
-
-    init() {
-        applyFilters()
-    }
-
-    private func applyFilters() {
-        filteredPassages = DefaultReadAloudPassages.all.filter { passage in
-            if let difficulty = selectedDifficulty, passage.difficulty != difficulty {
-                return false
-            }
-            if let selectedFocus, passage.category.focus != selectedFocus {
-                return false
-            }
-            return true
-        }
-    }
+    // MARK: - Catalog
 
     /// Focuses the shipped catalog covers, in declaration order.
+    ///
+    /// The catalog is no longer filtered in software. It carried two filter
+    /// bars — outcome and length — over twenty passages whose rows already
+    /// print both, and a "12 of 20 passages" caption to explain what the bars
+    /// had done. Grouping by outcome is the whole taxonomy now.
     var availableFocuses: [PracticeFocus] { PracticeToolKind.readAloud.focuses }
 
     func passages(for focus: PracticeFocus) -> [ReadAloudPassage] {
-        filteredPassages.filter { $0.category.focus == focus }
+        DefaultReadAloudPassages.all.filter { $0.category.focus == focus }
     }
 
     // MARK: - Session Control
@@ -111,6 +89,8 @@ class ReadAloudViewModel {
         errorMessage = nil
         result = nil
         elapsedTime = 0
+        modelPlaybackSeconds = 0
+        modelPlaybackStarted = nil
 
         let authorized = await service.requestAuthorization()
         // The auto-start runs in the session view's `.task`, which cancels on
@@ -148,7 +128,9 @@ class ReadAloudViewModel {
 
         guard let passage = selectedPassage else { return }
 
-        let timeTaken = startTime.map { Date().timeIntervalSince($0) } ?? 0
+        endModelPlaybackClock()
+        let elapsed = startTime.map { Date().timeIntervalSince($0) } ?? 0
+        let timeTaken = max(0, elapsed - modelPlaybackSeconds)
         let heardNothing = service.matchedWordCount == 0 && service.mismatchedWordCount == 0 && timeTaken > 3
 
         result = ReadAloudResult(
@@ -194,7 +176,35 @@ class ReadAloudViewModel {
         result = nil
         errorMessage = nil
         elapsedTime = 0
-        // Keep isShadowMode — user chose the mode for this sheet.
+        modelPlaybackSeconds = 0
+        modelPlaybackStarted = nil
+    }
+
+    // MARK: - Hear the model
+
+    /// Shadow practice, as a button rather than a mode.
+    ///
+    /// It used to be a toggle at the top of the catalog that you had to flip
+    /// *before* opening a passage, which meant the one moment you want to hear
+    /// the line — halfway through, having just fumbled it — was the one moment
+    /// you could not. Holding the read costs nothing now: recognition comes
+    /// back on the same transcript.
+    func pauseForModel() {
+        guard sessionState == .listening, !service.isPaused else { return }
+        modelPlaybackStarted = Date()
+        service.pauseForModelPlayback()
+    }
+
+    func resumeAfterModel() {
+        guard sessionState == .listening, service.isPaused else { return }
+        endModelPlaybackClock()
+        service.resumeAfterModelPlayback()
+    }
+
+    private func endModelPlaybackClock() {
+        guard let modelPlaybackStarted else { return }
+        modelPlaybackSeconds += Date().timeIntervalSince(modelPlaybackStarted)
+        self.modelPlaybackStarted = nil
     }
 
     func retryPassage() async {
@@ -209,6 +219,9 @@ class ReadAloudViewModel {
     var progressPercentage: Double { service.progressPercentage }
     var accuracyPercentage: Double { service.accuracyPercentage }
     var isListening: Bool { service.isListening }
+    /// Listening is held while the model line plays. The mic indicator says so
+    /// rather than claiming to be listening to a synthesiser.
+    var isHearingModel: Bool { service.isPaused }
 
     // MARK: - Timer
 

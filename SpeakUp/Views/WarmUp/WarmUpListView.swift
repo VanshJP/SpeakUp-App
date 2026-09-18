@@ -8,17 +8,16 @@ struct WarmUpListView: View {
 
     var sourceStory: Story?
 
-    /// Arrive pre-narrowed from the focus browser in Library → Tools.
+    /// Arrive from the focus browser in Library → Tools. The page scrolls to
+    /// that group; it no longer hides the rest (see `FocusSection`).
     var initialFocus: PracticeFocus?
-
-    @State private var didApplyInitialFocus = false
 
     private var longestExerciseSeconds: Double {
         Double(DefaultWarmUps.all.map(\.durationSeconds).max() ?? 0)
     }
 
     var body: some View {
-        ToolPage(tool: .warmUp, presentation: presentation) {
+        ToolPage(tool: .warmUp, presentation: presentation, focus: initialFocus) {
             if let story = sourceStory {
                 SourceStoryBanner(
                     eyebrow: "Warming up for",
@@ -26,17 +25,7 @@ struct WarmUpListView: View {
                 )
             }
 
-            FocusFilterBar(
-                focuses: viewModel.availableFocuses,
-                selection: $viewModel.selectedFocus
-            )
-
             exerciseContent
-        }
-        .task {
-            guard !didApplyInitialFocus, let initialFocus else { return }
-            didApplyInitialFocus = true
-            viewModel.selectedFocus = initialFocus
         }
         .fullScreenCover(isPresented: $showingExercise) {
             WarmUpExerciseView(viewModel: viewModel)
@@ -45,30 +34,15 @@ struct WarmUpListView: View {
 
     // MARK: - Exercise Content
 
-    /// Grouped by what the exercise improves, never by what it is. Both the
-    /// unfiltered map and a narrowed list use the same section, so a filter
-    /// collapses the page to one group rather than swapping it for a flat list
-    /// that has lost its heading (invariant 8, map before mask).
-    @ViewBuilder
+    /// Grouped by what the exercise improves, never by what it is. Every group
+    /// is always present — a dozen warm-ups is a scroll, not a search problem,
+    /// and the pill row that used to sit above these headings said the same
+    /// three words in shorter form.
     private var exerciseContent: some View {
-        let focuses = FocusFilterBar.visible(viewModel.availableFocuses, selection: viewModel.selectedFocus)
-
-        if viewModel.exercises.isEmpty {
-            EmptyStateCard(
-                icon: "wind",
-                title: "Nothing here",
-                message: "No warm-ups train that yet. Try another one.",
-                buttonTitle: "Show All",
-                buttonAction: {
-                    withAnimation(AppMotion.slide) { viewModel.selectedFocus = nil }
-                }
-            )
-        } else {
-            VStack(spacing: 20) {
-                ForEach(focuses) { focus in
-                    FocusSection(focus: focus, items: viewModel.exercises(for: focus)) { exercise in
-                        exerciseRow(exercise)
-                    }
+        VStack(spacing: 20) {
+            ForEach(viewModel.availableFocuses) { focus in
+                FocusSection(focus: focus, items: viewModel.exercises(for: focus)) { exercise in
+                    exerciseRow(exercise)
                 }
             }
         }

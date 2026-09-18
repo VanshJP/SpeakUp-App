@@ -339,7 +339,7 @@ struct FilterChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .modifier(SelectedFilterChrome(isSelected: isSelected))
-            // Hit target expands around the capsule — see FilterPill.
+            // Hit target expands around the capsule, which is smaller than 44pt.
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
         }
