@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Stories' filter row — the same `FilterChip` the Prompts tab uses.
-/// where identity belongs. Do not fork the chip again: change `FilterChip` and
+/// Do not fork the chip: change `FilterChip` / `SelectedFilterChrome` and both
+/// Library halves move together.
 struct StoryFolderBar: View {
     @Bindable var viewModel: StoriesViewModel
     var onCreateFolder: () -> Void
@@ -21,7 +22,7 @@ struct StoryFolderBar: View {
                 if showsFolderChips {
                     chip(selection: .pinned, title: "Pinned", symbol: "pin.fill", color: AppColors.warning)
 
-                    ForEach(viewModel.folders) { folder in
+                    ForEach(viewModel.foldersForDisplay) { folder in
                         chip(
                             selection: .folder(folder.id),
                             title: folder.name,
