@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// Two families, and the split is deliberate:
 ///
-/// **Numerals are fixed.** A hero score is a graphic element, not running text —
+/// **Numerals are fixed.** A hero score is a graphic element, not running text - 
 /// a 68pt numeral scaled to AX5 would be wider than the screen. These keep a
 /// fixed size and rely on the accessibility label for non-visual users, which is
 /// the pattern `ScoreHeroCard` already established.

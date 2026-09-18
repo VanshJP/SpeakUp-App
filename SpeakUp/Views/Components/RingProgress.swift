@@ -5,7 +5,7 @@ struct RingProgress: View {
     let color: Color
     let lineWidth: CGFloat
 
-    /// Some rings are indeterminate spinners rather than measurements — those
+    /// Some rings are indeterminate spinners rather than measurements - those
     /// pass a fixed trim and rotate the whole view instead.
     var trimStart: Double = 0
 

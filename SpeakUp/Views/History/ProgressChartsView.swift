@@ -88,12 +88,12 @@ struct ProgressChartsContent: View {
                 earlyState
             } else {
                 VStack(spacing: 20) {
-                    // Conclusion — where am I and which way am I moving.
+                    // Conclusion - where am I and which way am I moving.
                     heroBand
 
                     trendsSection
 
-                    // Guidance — which situation needs work.
+                    // Guidance - which situation needs work.
                     ScenarioReadinessSection(
                         cards: scenarioCards,
                         overallScore: lexiconProfile?.interviewReadiness?.score,

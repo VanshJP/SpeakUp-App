@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Inline coach note — Today and session-detail surfaces.
+/// Inline coach note - Today and session-detail surfaces.
 ///
 /// Same grammar as `FriendChallengeCard`: glass, one eyebrow, one body, one
 /// capsule CTA, easy dismiss. Never competes with Start Speaking.

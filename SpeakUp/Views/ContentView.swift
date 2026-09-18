@@ -387,7 +387,7 @@ struct ContentView: View {
             evaluateOnboardingIfNeeded()
         }
         .onChange(of: userSettings.first?.hasCompletedOnboarding) { _, _ in
-            // @Query may not be hydrated on first onAppear — re-evaluate once it lands
+            // @Query may not be hydrated on first onAppear - re-evaluate once it lands
             evaluateOnboardingIfNeeded()
         }
         .fullScreenCover(isPresented: $showOnboarding) {
@@ -464,7 +464,7 @@ struct ContentView: View {
     // MARK: - Routine
 
     /// Sits above the tab bar rather than inside the screen that finished,
-    /// because that screen is a sheet on its way out — set while the sheet is
+    /// because that screen is a sheet on its way out - set while the sheet is
     /// still up, the bar is simply already there when it goes. The tour
     /// outranks it: a spotlight with a bar floating over it teaches nothing.
     ///

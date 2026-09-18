@@ -41,7 +41,7 @@ struct AppearanceSettingsView: View {
     }
 
     /// Each option is a miniature page: the current canvas, a sample plate
-    /// using that glass, then the name. Selected is a ring — never a solid
+    /// using that glass, then the name. Selected is a ring - never a solid
     /// white fill that hides the thing you are choosing.
     private func glassOption(_ appearance: GlassAppearance) -> some View {
         let selected = viewModel.glassAppearance == appearance

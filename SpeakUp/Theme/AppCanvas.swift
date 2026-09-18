@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - App Canvas
 
-/// The app-wide background menu — Settings → App Look, painted behind every
+/// The app-wide background menu - Settings → App Look, painted behind every
 /// tab. A thin persisted list over the shared `CanvasLook` catalogue, which is
 /// where the art lives; `RecordingBackdrop` is the other menu over the same
 /// catalogue, so Aurora means the same Aurora on both screens.
@@ -84,7 +84,7 @@ struct AppCanvasView: View {
 
 /// The one view that paints a canvas. Both menus render through it, so the
 /// still-frame budget and freeze-for-thumbnails behaviour are written once.
-/// No `TimelineView` — motion behind tabs burned frames and restarted on
+/// No `TimelineView` - motion behind tabs burned frames and restarted on
 /// every switch.
 struct CanvasLookView: View {
     let look: CanvasLook

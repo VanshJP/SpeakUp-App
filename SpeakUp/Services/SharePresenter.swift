@@ -2,7 +2,7 @@ import UIKit
 
 /// One place that puts a rendered card into the system share sheet.
 ///
-/// Both share surfaces — the score card and the Then-vs-Now card — need the
+/// Both share surfaces - the score card and the Then-vs-Now card - need the
 /// same three things: a presenter, a completion that only counts a *finished*
 /// share, and the advocacy event. Duplicating that meant one of them would
 /// eventually stop logging.
@@ -12,7 +12,7 @@ enum SharePresenter {
     /// once the user completes it.
     ///
     /// `message` is the caption iMessage, Mail, and Notes attach under the
-    /// card — it should already contain the tappable URL when there is one.
+    /// card - it should already contain the tappable URL when there is one.
     /// Passing the URL as a separate activity item doubles the preview in
     /// some destinations, so the caption is the single carrier.
     ///
@@ -27,7 +27,7 @@ enum SharePresenter {
     ) -> Bool {
         guard let root = rootViewController else { return false }
 
-        // Refuse if a sheet is already up — or if the top controller *is* the
+        // Refuse if a sheet is already up - or if the top controller *is* the
         // share sheet (its presentedViewController is nil while active).
         guard canPresent(from: root) else { return false }
 
@@ -84,7 +84,7 @@ enum SharePresenter {
     }
 
     /// The *topmost* presented controller, not the window root. Callers now
-    /// include `ShareCardSheet`, which is itself a presented sheet — presenting
+    /// include `ShareCardSheet`, which is itself a presented sheet - presenting
     /// on the root while it is up throws "already presenting" and no share
     /// sheet ever appears.
     private static var rootViewController: UIViewController? {

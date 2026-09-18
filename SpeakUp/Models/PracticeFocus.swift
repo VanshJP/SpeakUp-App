@@ -4,7 +4,7 @@ import SwiftUI
 /// The one axis every practice surface is organised by: the thing about your
 /// speech that an exercise is trying to move.
 ///
-/// Warm-ups, drills, read-aloud passages and Calm exercises are *formats* —
+/// Warm-ups, drills, read-aloud passages and Calm exercises are *formats* - 
 /// how long you spend, whether a mic is open, whether you get scored. They are
 /// not four unrelated subjects, but the app used to present them as if they
 /// were, each carrying its own vocabulary of mechanisms: Breathing, Tongue
@@ -14,8 +14,8 @@ import SwiftUI
 /// drill, or why Read Aloud was neither.
 ///
 /// This enum is the shared answer. Pick what you want to improve and every
-/// format that trains it lines up underneath. The formats stay — they are real
-/// differences in commitment — but they stop being the top-level question.
+/// format that trains it lines up underneath. The formats stay - they are real
+/// differences in commitment - but they stop being the top-level question.
 nonisolated enum PracticeFocus: String, CaseIterable, Identifiable, Sendable {
     case steadyNerves
     case mindset
@@ -28,7 +28,7 @@ nonisolated enum PracticeFocus: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    /// Outcome-first and in second person. Never the name of a mechanism —
+    /// Outcome-first and in second person. Never the name of a mechanism - 
     /// "Be understood", not "Articulation".
     var title: String {
         switch self {
@@ -76,7 +76,7 @@ nonisolated enum PracticeFocus: String, CaseIterable, Identifiable, Sendable {
         case .pauses:
             return "Stop on purpose, so your best points have room to land."
         case .structure:
-            return "Reach for a shape — point, reason, example — under pressure."
+            return "Reach for a shape - point, reason, example - under pressure."
         }
     }
 
@@ -93,7 +93,7 @@ nonisolated enum PracticeFocus: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Explicitly main-actor because the enum itself is `nonisolated` — it has
+    /// Explicitly main-actor because the enum itself is `nonisolated` - it has
     /// to be, so `allCases` stays reachable from `ReadAloudCategory`, which is
     /// nonisolated too (gotcha §1). `AppColors` is default-isolated, and every
     /// caller of this is a view body, so pinning just this member keeps both

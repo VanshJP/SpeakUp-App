@@ -30,7 +30,7 @@ nonisolated struct SwapPracticeLine: Identifiable, Hashable, Sendable {
 /// The take's crutch habits as *rehearsable lines*, not a word tally.
 ///
 /// Every row is one habit; inside it, every distinct sentence pattern gets its
-/// own before/after — the sentence exactly as it was said, then the same
+/// own before/after - the sentence exactly as it was said, then the same
 /// sentence with the swap applied. That rewritten line is the product: naming
 /// a fix ("cut it") asks the user to do the edit in their head, while showing
 /// it hands them something they can read aloud.
@@ -40,7 +40,7 @@ nonisolated struct SwapPracticeLine: Identifiable, Hashable, Sendable {
 struct CrutchSwapsCard: View {
     let hits: [SessionWordHit]
     /// Denominator for the "more or less than usual" comparison. Whisper's
-    /// word count, where the baseline counts tokenizer words — the few
+    /// word count, where the baseline counts tokenizer words - the few
     /// percent of drift between them is far inside the comparison's own
     /// 25% band, so it cannot flip a verdict.
     let totalWords: Int
@@ -87,7 +87,7 @@ struct CrutchSwapsCard: View {
     // MARK: Habit row
 
     private func hitRow(_ hit: SessionWordHit) -> some View {
-        // Grouping is cheap but not free, and `body` runs it on every redraw —
+        // Grouping is cheap but not free, and `body` runs it on every redraw - 
         // resolve it once per row rather than once per sub-view that wants it.
         let moments = hit.moments
 
@@ -143,7 +143,7 @@ struct CrutchSwapsCard: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// Comparison pill plus, when collapsed, the fix itself — so a closed
+    /// Comparison pill plus, when collapsed, the fix itself - so a closed
     /// row still answers "so what do I do?".
     @ViewBuilder
     private func secondLine(_ hit: SessionWordHit, fix: String?) -> some View {
@@ -259,7 +259,7 @@ struct CrutchSwapsCard: View {
 
     /// Hear what you did on the left, rehearse what to do instead on the right.
     ///
-    /// Stamps stay playable but never print a clock time — Whisper word
+    /// Stamps stay playable but never print a clock time - Whisper word
     /// timings drift enough that a wrong "0:37" reads as a broken app while a
     /// wrong seek just plays nearby audio (recording-detail invariant 17).
     /// Unusable zero starts get no button at all (invariant 18).
@@ -328,7 +328,7 @@ struct CrutchSwapsCard: View {
     // MARK: Alternates
 
     /// Advice that did not win, rendered as flat text pills. They must not
-    /// borrow the filled-capsule look of the play buttons beside them — the
+    /// borrow the filled-capsule look of the play buttons beside them - the
     /// old card styled un-tappable suggestions exactly like tappable stamps.
     @ViewBuilder
     private func alternates(_ hit: SessionWordHit, moments: [WordSwapMoment]) -> some View {
@@ -419,7 +419,7 @@ struct CrutchSwapsCard: View {
         }
     }
 
-    /// Worst habit open, the rest collapsed — the card lands as one lesson
+    /// Worst habit open, the rest collapsed - the card lands as one lesson
     /// plus a list, not six essays.
     private func seedExpansion() {
         guard !didSeedExpansion, let first = hits.first else { return }
@@ -462,7 +462,7 @@ struct CrutchSwapsCard: View {
 
     /// The take's worst habits, ready to render: two-plus occurrences, ranked,
     /// capped at six rows. A one-off word is not a habit worth coaching.
-    /// Takes the already-resolved words — the caller's `transcriptionWords`
+    /// Takes the already-resolved words - the caller's `transcriptionWords`
     /// access decodes a blob, so it must happen once in setup, not per render.
     static func hits(from words: [TranscriptionWord]?) -> [SessionWordHit] {
         guard let words, !words.isEmpty else { return [] }

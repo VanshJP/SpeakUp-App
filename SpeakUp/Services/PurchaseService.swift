@@ -27,7 +27,7 @@ final class PurchaseService {
         case idle
         case purchasing
         case restoring
-        /// Ask to Buy or SCA — the transaction may land minutes later via
+        /// Ask to Buy or SCA - the transaction may land minutes later via
         /// `Transaction.updates`.
         case pendingApproval
         case purchased
@@ -65,7 +65,7 @@ final class PurchaseService {
     /// The storefront's currency, nil until the product loads. Used to decide
     /// whether a hardcoded comparison price can honestly be shown next to it.
     var currencyCode: String? {
-        // Prefer the locale attached to the price format — that is the
+        // Prefer the locale attached to the price format - that is the
         // storefront's currency, not the device's. Fall back to the format
         // style's own code when the locale has none.
         guard let style = product?.priceFormatStyle else { return nil }
@@ -215,7 +215,7 @@ final class PurchaseService {
 
     /// Applies one signed transaction. Returns whether it granted entitlement.
     ///
-    /// Unverified transactions are finished but never granted — leaving them
+    /// Unverified transactions are finished but never granted - leaving them
     /// unfinished would have StoreKit redeliver them on every launch forever.
     @discardableResult
     private func handle(

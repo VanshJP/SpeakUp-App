@@ -86,7 +86,7 @@ struct ProcessingChargePathTests {
         #expect(after.shouldDefer)
     }
 
-    /// A failed transcription releases the slot uncharged — the counters never
+    /// A failed transcription releases the slot uncharged - the counters never
     /// moved, so the retry sees the same allowance as the first attempt.
     @Test func failureReleasesUncharged() {
         let state = AllowanceState(cycleStart: t0, cycleUsed: 2)
@@ -144,7 +144,7 @@ struct MidQueuePurchaseTests {
         #expect(!result.holdsReservation)
 
         // The half the gate read cannot show: consuming while entitled is a
-        // no-op on persisted counters — the purchase must not burn the very
+        // no-op on persisted counters - the purchase must not burn the very
         // allowance it replaced.
         let state = AllowanceState(cycleStart: t0, cycleUsed: 2)
         let charged = PracticeAllowance.consume(state: state, isEntitled: true, trial: .expired, policy: .expired, now: t0)

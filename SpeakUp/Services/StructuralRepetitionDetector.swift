@@ -4,7 +4,7 @@ import Foundation
 /// frame repeated across consecutive or near-consecutive clauses.
 ///
 /// Distinct from classic fillers (`um`, `like`). Each clause can be clean yet
-/// the repeated frame still weakens delivery — e.g. "I'm going to get socks,
+/// the repeated frame still weakens delivery - e.g. "I'm going to get socks,
 /// I'm going to get tomatoes, I'm going to get eggs."
 ///
 /// Emits `[FillerWord]` with `kind == .structural` so the existing filler UI
@@ -32,7 +32,7 @@ nonisolated enum StructuralRepetitionDetector {
     static let clausePauseThreshold: TimeInterval = 0.4
 
     /// Openings that signal intentional list/rhetoric structure (curriculum
-    /// "First… Second… Third…"), not a tic — never flag these runs.
+    /// "First… Second… Third…"), not a tic - never flag these runs.
     static let intentionalListOpeners: Set<String> = [
         "first", "second", "third", "fourth", "fifth",
         "finally", "lastly", "next", "then",
@@ -76,7 +76,7 @@ nonisolated enum StructuralRepetitionDetector {
         }
     }
 
-    /// Word IDs that make up flagged opening frames — for plum transcript
+    /// Word IDs that make up flagged opening frames - for plum transcript
     /// highlights. One span per occurrence timestamp (surface length of the
     /// frame label), matched by start time like coach evidence.
     static func highlightedWordIDs(
@@ -135,7 +135,7 @@ nonisolated enum StructuralRepetitionDetector {
             let raw = word.word
             let stripped = stripTrailingPunctuation(raw).lowercased()
 
-            // Pause gap with no punctuation — Whisper often drops commas.
+            // Pause gap with no punctuation - Whisper often drops commas.
             if let previous = current.last,
                word.start - previous.end >= clausePauseThreshold {
                 flush()
@@ -201,7 +201,7 @@ nonisolated enum StructuralRepetitionDetector {
                 continue
             }
 
-            // Intentional list rhetoric — leave for craft, do not flag as tic.
+            // Intentional list rhetoric - leave for craft, do not flag as tic.
             if isIntentionalListOpening(seed) {
                 index += 1
                 continue

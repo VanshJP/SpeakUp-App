@@ -5,7 +5,7 @@ import WidgetKit
 import os
 
 /// Pure decisions behind the coordinator's monetization flow: what reserves,
-/// what defers, and how a resume pass walks the deferred backlog. No IO — the
+/// what defers, and how a resume pass walks the deferred backlog. No IO - the
 /// coordinator owns every fetch, save, and analytics event.
 ///
 /// The gate reads persisted counters and the charge lands minutes later, after
@@ -32,11 +32,11 @@ nonisolated enum ProcessingPolicy {
         for decision: AllowanceDecision,
         reservedAnalyses: Int
     ) -> Reservation {
-        // `remaining` is nil while entitled or inside the trial — nothing is
+        // `remaining` is nil while entitled or inside the trial - nothing is
         // being counted there, so nothing needs reserving. Exhausted defers
         // and must also stay reservation-free: its remaining == 0 is non-nil,
         // and a recording parked at the gate would otherwise pin a slot it
-        // never processes — leaking capacity from future callers' budgets.
+        // never processes - leaking capacity from future callers' budgets.
         let holdsReservation = decision.isAllowed && decision.remaining != nil
         let alreadyReserved = decision.remaining.map { $0 <= reservedAnalyses } ?? false
         return Reservation(
@@ -75,7 +75,7 @@ final class RecordingProcessingCoordinator {
     ///
     /// The gate reads persisted counters and the charge lands minutes later,
     /// after transcription. Nothing serialises two different recordings, so
-    /// without this both see the same `remaining` and both go through — a user
+    /// without this both see the same `remaining` and both go through - a user
     /// with one analysis left who stops two recordings in a row gets two.
     private var reservedAnalyses = 0
 
@@ -128,7 +128,7 @@ final class RecordingProcessingCoordinator {
     /// that promise before: a held-back recording was only retried if the user
     /// happened to reopen it. Called on foreground and on entitlement change.
     ///
-    /// Runs strictly one at a time — a batch of concurrent Whisper passes on a
+    /// Runs strictly one at a time - a batch of concurrent Whisper passes on a
     /// cold foreground would be a memory spike, not a feature.
     func resumeDeferredRecordings(
         modelContext: ModelContext,
@@ -352,7 +352,7 @@ final class RecordingProcessingCoordinator {
                     voiceProfile: voiceProfile
                 )
 
-                // Transcription can run for minutes — confirm the recording still exists
+                // Transcription can run for minutes - confirm the recording still exists
                 // before touching its properties (deleted SwiftData objects trap).
                 guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
 
@@ -389,12 +389,12 @@ final class RecordingProcessingCoordinator {
                 }
             }
 
-            // Re-fetch before writing — the user may have deleted the recording
+            // Re-fetch before writing - the user may have deleted the recording
             // while transcription/analysis ran (potentially minutes). Writing to a deleted
             // SwiftData object traps.
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             // `analyzeTranscript` is non-throwing; cancel during that await does
-            // not raise CancellationError — check before charging / persisting.
+            // not raise CancellationError - check before charging / persisting.
             if Task.isCancelled {
                 persisted.isProcessing = false
                 save(modelContext, context: "clearing processing flag after cancellation \(recordingID.uuidString)")
@@ -405,7 +405,7 @@ final class RecordingProcessingCoordinator {
             }
             persisted.transcriptionWords = computed.1
             persisted.setAnalysis(computed.0)
-            // Speaking a tracked word is its review — grade it here so the
+            // Speaking a tracked word is its review - grade it here so the
             // schedule stays right for users who never open the Today tab.
             VocabChallengeService.recordUsage(
                 computed.0.vocabWordsUsed,
@@ -424,7 +424,7 @@ final class RecordingProcessingCoordinator {
             persisted.lastProcessingError = nil
             persisted.analysisBlockedByAllowance = false
             updateStoryBestScore(for: persisted, modelContext: modelContext)
-            // Charged only on success — a failed transcription must not cost a
+            // Charged only on success - a failed transcription must not cost a
             // free analysis.
             AllowanceGate.consume(settings: settings)
             save(modelContext, context: "persisting analysis for \(recordingID.uuidString)")
@@ -435,7 +435,7 @@ final class RecordingProcessingCoordinator {
             )
             // Widgets render from the App Group snapshot, not SwiftData, so a
             // bare reload just re-rendered stale numbers. Write the two values
-            // an analysis actually changes, then drop the fingerprint — Today
+            // an analysis actually changes, then drop the fingerprint - Today
             // owns the rest of the payload and rewrites it wholesale on the
             // next visit once the change gate reports a diff.
             WidgetDataProvider.updateLastScore(computed.0.speechScore.overall)
@@ -443,7 +443,7 @@ final class RecordingProcessingCoordinator {
             WidgetDataProvider.resetTodayFingerprint()
             WidgetCenter.shared.reloadAllTimelines()
         } catch is CancellationError {
-            // Delete / dismiss cancelled the job — not a user-visible failure.
+            // Delete / dismiss cancelled the job - not a user-visible failure.
             guard let persisted = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
             persisted.isProcessing = false
             // Leave any prior error alone; never stamp a cancellation string.
@@ -478,7 +478,7 @@ final class RecordingProcessingCoordinator {
 
     /// Counted on `transcriptionText`: SwiftData stores the Codable `analysis`
     /// as a composite attribute with no queryable column, so a predicate on it
-    /// raises an ObjC exception inside CoreData's SQL generation — not a Swift
+    /// raises an ObjC exception inside CoreData's SQL generation - not a Swift
     /// error, so `try?` cannot catch it and the app terminates. Transcript and
     /// analysis persist in the same save, so the two counts agree.
     private func analyzedRecordingCount(_ modelContext: ModelContext) -> Int {
@@ -488,7 +488,7 @@ final class RecordingProcessingCoordinator {
         return (try? modelContext.fetchCount(descriptor)) ?? 0
     }
 
-    /// Coarse reason only — an error string can contain a file path.
+    /// Coarse reason only - an error string can contain a file path.
     private static func failureCategory(for error: Error) -> String {
         if error is CancellationError { return "cancelled" }
         let text = error.localizedDescription.lowercased()
@@ -501,7 +501,7 @@ final class RecordingProcessingCoordinator {
 
     /// Per-recording auto-calibration: every quality-gated session nudges the
     /// voice profile (speaker isolation) and the learned pace target. Runs only
-    /// on the fresh-transcription path — re-analyzing the same audio would
+    /// on the fresh-transcription path - re-analyzing the same audio would
     /// double-weight that session in the EMA. Persistence rides the analysis
     /// save that follows.
     private func applyAutoCalibration(
@@ -516,7 +516,7 @@ final class RecordingProcessingCoordinator {
         let conversationDetected = transcription.speakerIsolationMetrics?.conversationDetected ?? false
         let alpha = 0.3
 
-        // Voice profile (speaker isolation). Sourced from voiceProfileUpdate —
+        // Voice profile (speaker isolation). Sourced from voiceProfileUpdate - 
         // the same PCM-derived measurement chain its consumer compares against,
         // unlike whole-file pitchMetrics/volumeMetrics.
         if let update = transcription.voiceProfileUpdate,
@@ -535,7 +535,7 @@ final class RecordingProcessingCoordinator {
             settings.voiceProfileLastUpdated = Date()
         }
 
-        // Learned pace target — EMA of observed WPM, clamped to the coaching
+        // Learned pace target - EMA of observed WPM, clamped to the coaching
         // band so the target adapts to the speaker without endorsing racing or
         // crawling. Conversations skipped: elapsed-time WPM is distorted when
         // someone else holds the floor.

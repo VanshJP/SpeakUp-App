@@ -24,7 +24,7 @@ nonisolated enum SchemaV1: VersionedSchema {
     }
 }
 
-/// No custom stages yet — declared now so the container is wired for staged
+/// No custom stages yet - declared now so the container is wired for staged
 /// migrations when a heavy change eventually lands.
 nonisolated enum SpeakUpMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] { [SchemaV1.self] }

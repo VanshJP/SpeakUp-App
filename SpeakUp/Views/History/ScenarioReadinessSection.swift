@@ -4,7 +4,7 @@ import SwiftUI
 
 struct ScenarioReadinessSection: View {
     let cards: [ScenarioReadiness]
-    /// Composite over all analyzed sessions — reported in the card footer,
+    /// Composite over all analyzed sessions - reported in the card footer,
     /// never as a competing headline number.
     let overallScore: Int?
     let analyzedSessions: Int
@@ -50,7 +50,7 @@ struct ScenarioReadinessSection: View {
     }
 
     /// The former aggregate Interview Readiness survives as this quiet footer
-    /// line — present for anyone who wants the composite, never competing
+    /// line - present for anyone who wants the composite, never competing
     /// with the per-scenario verdicts above it.
     @ViewBuilder
     private var aggregateFooter: some View {
@@ -107,8 +107,8 @@ private enum ScenarioTint {
 // MARK: - Momentum presentation
 
 /// How a direction of travel looks, in one place. The Progress page renders
-/// this verdict twice — the hero's filled pill and this section's inline glyph
-/// — and each used to carry its own switch. They had already drifted: slipping
+/// this verdict twice - the hero's filled pill and this section's inline glyph
+/// - and each used to carry its own switch. They had already drifted: slipping
 extension ScenarioMomentum {
     var symbolName: String {
         switch self {

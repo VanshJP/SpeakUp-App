@@ -6,7 +6,7 @@ import os
 /// sink can be added later without touching a single call site.
 ///
 /// Requirements are `nonisolated` because the local sink owns a background
-/// queue — under the project's default MainActor isolation, plain protocol
+/// queue - under the project's default MainActor isolation, plain protocol
 /// requirements would force every implementation onto the main actor and
 /// break the file writes.
 protocol AnalyticsSink: AnyObject {
@@ -21,7 +21,7 @@ protocol AnalyticsSink: AnyObject {
 ///
 /// Events are buffered in memory and flushed to a JSON file inside the app's
 /// own container. Nothing is transmitted. That is enough to run the launch
-/// gates — activation rate, time to value, qualified paywall conversion — from
+/// gates - activation rate, time to value, qualified paywall conversion - from
 /// a TestFlight device, and it means adopting a hosted analytics vendor later
 /// is a sink swap rather than an instrumentation project.
 @MainActor
@@ -71,7 +71,7 @@ final class AnalyticsService {
     }
 
     /// Writes buffered events to disk immediately instead of waiting out the
-    /// debounce — called when the app backgrounds.
+    /// debounce - called when the app backgrounds.
     func flushNow() {
         sink.flushNow()
     }
@@ -176,7 +176,7 @@ nonisolated final class LocalAnalyticsSink: AnalyticsSink, @unchecked Sendable {
 // MARK: - Scorecard
 
 /// The launch metrics the plan governs stage gates with, derived from the
-/// local event log. Pure computation over a snapshot — no I/O.
+/// local event log. Pure computation over a snapshot - no I/O.
 nonisolated struct AnalyticsScorecard {
     let firstOpens: Int
     let activations: Int
@@ -209,7 +209,7 @@ nonisolated struct AnalyticsScorecard {
     }
 
     /// First completed analyses over first opens. On a single device this is
-    /// 0 or 1 — it becomes meaningful once beta logs are pooled by hand.
+    /// 0 or 1 - it becomes meaningful once beta logs are pooled by hand.
     var activationRate: Double? {
         guard firstOpens > 0 else { return nil }
         return Double(activations) / Double(firstOpens)
@@ -222,7 +222,7 @@ nonisolated struct AnalyticsScorecard {
 
     /// Sessions that reached a score over sessions that were started. A low
     /// number here means people are recording and then bailing before the
-    /// result — a different problem from never recording at all.
+    /// result - a different problem from never recording at all.
     var startToScoreRate: Double? {
         guard practiceStarts > 0 else { return nil }
         return Double(analysesCompleted) / Double(practiceStarts)

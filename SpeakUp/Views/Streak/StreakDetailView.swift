@@ -264,7 +264,7 @@ struct StreakDetailView: View {
 
         var id: Date { date }
 
-        // DateFormatter is expensive to allocate — shared per type, not per cell.
+        // DateFormatter is expensive to allocate - shared per type, not per cell.
         private static let weekdayFormatter: DateFormatter = {
             let f = DateFormatter()
             f.dateFormat = "EEEEE" // S, M, T, W, T, F, S

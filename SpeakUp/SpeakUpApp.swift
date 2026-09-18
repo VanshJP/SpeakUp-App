@@ -7,7 +7,7 @@ struct SpeakUpApp: App {
     // Property-initializer context (ModelContainer) runs before any instance exists.
     nonisolated private static let logger = Logger.app("AppLifecycle")
 
-    // Shared services – injected via .environment() so views don't recreate them
+    // Shared services - injected via .environment() so views don't recreate them
     @State private var speechService = SpeechService()
     @State private var audioService = AudioService()
     @State private var llmService = LLMService()
@@ -56,7 +56,7 @@ struct SpeakUpApp: App {
             } catch {
                 Self.logger.error("Local ModelContainer failed; falling back to IN-MEMORY store (data appears empty): \(error.localizedDescription, privacy: .private(mask: .hash))")
 
-                // Last resort: in-memory store – avoids silent data deletion
+                // Last resort: in-memory store - avoids silent data deletion
                 let fallbackConfig = ModelConfiguration(
                     schema: schema,
                     isStoredInMemoryOnly: true
@@ -94,7 +94,7 @@ struct SpeakUpApp: App {
 
                     startTrialForExistingInstallIfNeeded()
 
-                    // Seed remaining data concurrently — all independent of each other
+                    // Seed remaining data concurrently - all independent of each other
                     async let p: () = seedPromptsIfNeeded()
                     async let a: () = seedAchievementsIfNeeded()
                     async let c: () = seedCurriculumIfNeeded()
@@ -188,7 +188,7 @@ struct SpeakUpApp: App {
         do {
             // Cheap gate: the full pass below hydrates every prompt and walks
             // recording relationships. Skip it when nothing has drifted since
-            // the last successful pass — fingerprint covers the store row count
+            // the last successful pass - fingerprint covers the store row count
             // (CloudKit re-imports, user add/delete) and the shipped defaults
             // count (app update adding new prompts).
             let currentCount = (try? context.fetchCount(FetchDescriptor<Prompt>())) ?? -1
@@ -301,7 +301,7 @@ struct SpeakUpApp: App {
     }
 
     /// Existing installs get a fresh 14 days on first launch of the new build.
-    /// A store with no recordings is left alone — that clock starts at the first
+    /// A store with no recordings is left alone - that clock starts at the first
     /// score, in `AllowanceGate.consume`.
     @MainActor
     private func startTrialForExistingInstallIfNeeded() {
@@ -331,7 +331,7 @@ struct SpeakUpApp: App {
     private static func migrateRecordingURLsIfNeeded(container: ModelContainer) async {
         if UserDefaults.standard.bool(forKey: urlMigrationFlagKey) { return }
 
-        // Only fetch the URL fields — avoid hydrating transcript/analysis blobs.
+        // Only fetch the URL fields - avoid hydrating transcript/analysis blobs.
         var descriptor = FetchDescriptor<Recording>()
         descriptor.propertiesToFetch = [\.audioURL, \.videoURL, \.thumbnailURL]
 

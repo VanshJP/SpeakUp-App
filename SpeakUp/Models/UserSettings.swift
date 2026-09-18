@@ -14,7 +14,7 @@ final class UserSettings {
     var dailyReminderMinute: Int = 0
     var weeklyGoalSessions: Int = 5
 
-    // Retention notifications — additive, defaulted on. `dailyReminderEnabled`
+    // Retention notifications - additive, defaulted on. `dailyReminderEnabled`
     // above is the consent: with it off nothing here can send. These only shape
     // what arrives once the user has said yes. See docs/features/retention.md.
     var streakRemindersEnabled: Bool = true
@@ -26,7 +26,7 @@ final class UserSettings {
     /// Setting a time in Settings turns it off; nothing else does.
     var adaptiveReminderEnabled: Bool = true
 
-    // Streak protection. The days a freeze covered is the *only* stored state —
+    // Streak protection. The days a freeze covered is the *only* stored state - 
     // the remaining balance is derived from practice-day count in
     // `StreakProtection`, so recomputing converges instead of drifting.
     var streakFrozenDays: [Date] = []
@@ -60,15 +60,15 @@ final class UserSettings {
     // Timer End Behavior
     var timerEndBehavior: Int = 0 // 0 = save & stop, 1 = keep going
 
-    // Look & feel — cosmetic only, raw values of the enums named in comments
+    // Look & feel - cosmetic only, raw values of the enums named in comments
     var waveformStyle: Int = 0      // WaveformStyle
     var recordButtonStyle: Int = 0  // RecordButtonStyle
     var countdownLook: Int = 0      // TimerLook
-    var countdownBackdrop: Int = 0  // RecordingBackdrop — column name predates it covering the whole session
+    var countdownBackdrop: Int = 0  // RecordingBackdrop - column name predates it covering the whole session
     var soundPack: Int = 0          // SoundPack (ChirpPlayer.swift)
     var shareCardTheme: Int = 0     // ScoreCardTheme (ScoreCardRenderer.swift)
 
-    // App appearance — additive. Light glass + Classic canvas match the
+    // App appearance - additive. Light glass + Classic canvas match the
     // post-brighten default; Dark glass restores the deeper pre-brighten look.
     var glassAppearance: Int = 0    // GlassAppearance
     var appCanvas: Int = 0          // AppCanvas
@@ -77,7 +77,7 @@ final class UserSettings {
     var vocabWords: [String] = []
     var dictationBiasWords: [String] = []
 
-    // Read-Aloud — passages the user wrote and kept. Additive, defaulted, so
+    // Read-Aloud - passages the user wrote and kept. Additive, defaulted, so
     // existing rows read back as an empty list. Stored as the raw text: the
     // title, difficulty and id are all derived by `ReadAloudPassage.saved(from:)`,
     // and deriving beats storing four fields that can drift from the rules.
@@ -86,7 +86,7 @@ final class UserSettings {
     // Target Pace
     var targetWPM: Int = 150
 
-    // Auto Pace Calibration — learned from every quality-gated recording.
+    // Auto Pace Calibration - learned from every quality-gated recording.
     // calibratedWPM is an EMA of observed WPM, clamped to the coaching band.
     var autoPaceTarget: Bool = true
     var calibratedWPM: Double?
@@ -132,7 +132,7 @@ final class UserSettings {
     var vocabChallengeUseDictionary: Bool = true
     var vocabChallengeIntroduceNew: Bool = true
     var vocabChallengeSpacedReview: Bool = true
-    // Word-level control for fresh picks: 0 follows `speakerLevel`, 1–3 pin
+    // Word-level control for fresh picks: 0 follows `speakerLevel`, 1-3 pin
     // beginner / intermediate / advanced. Raw Int like every enum-backed knob
     // so lightweight migration stays automatic.
     var vocabChallengeLevelOverride: Int = 0
@@ -146,7 +146,7 @@ final class UserSettings {
     // Guided layout walkthrough, shown once after the first score lands.
     var hasSeenAppTour: Bool = false
 
-    // Practice routine — the ordered chain of steps a session walks, plus
+    // Practice routine - the ordered chain of steps a session walks, plus
     // which of them are done today. Additive; empty order means the factory
     // chain. The day stamp is what makes yesterday's ticks clear on read
     // instead of needing a midnight event nobody is awake to fire.
@@ -155,18 +155,18 @@ final class UserSettings {
     var routineCompletedRaw: [String] = []
     var routineProgressDay: Date? = nil
 
-    // Today home layout — ordered raw values of visible `TodayHomeModule`s.
+    // Today home layout - ordered raw values of visible `TodayHomeModule`s.
     // Empty means factory default (never customized). Session is always forced
     // visible by `TodayHomeLayout.resolve`. Additive; see today-library.md.
     var todayHomeLayoutRaw: [String] = []
 
-    // Coach notes — weekly celebration budget + delivery memory.
+    // Coach notes - weekly celebration budget + delivery memory.
     // Additive defaults: empty week key / zero used / empty lists mean "never
     // shown a celebration note yet". See docs/features/coach-moments.md.
     var coachMomentWeekKey: String = ""
     var coachMomentCelebrationsUsedThisWeek: Int = 0
     var coachMomentDeliveredIDs: [String] = []
-    /// `CoachDimension.rawValue`s that have cleared mastery at least once —
+    /// `CoachDimension.rawValue`s that have cleared mastery at least once - 
     /// drives the first-axis-win note so it fires once per dimension.
     var coachMomentClearedDimensionsRaw: [String] = []
 
@@ -206,7 +206,7 @@ final class UserSettings {
     var freeIntroAnalysesUsed: Int = 0
 
     // Free-tier analysis allowance, used once the trial has expired. Counters
-    // only — whether they are consulted at all is decided by
+    // only - whether they are consulted at all is decided by
     // `EntitlementStore.policy`.
     var freeCycleStart: Date?
     var freeCycleAnalysesUsed: Int = 0
@@ -324,7 +324,7 @@ final class UserSettings {
 
     // MARK: - Pace Target Resolution
 
-    /// The effective pace target for scoring AND charts — the single source of
+    /// The effective pace target for scoring AND charts - the single source of
     /// truth replacing scattered `targetWPM ?? 150` fallbacks. Auto mode uses
     /// the per-recording calibrated value once one exists.
     var resolvedTargetWPM: Int {
@@ -454,7 +454,7 @@ final class UserSettings {
 }
 
 extension Optional where Wrapped == UserSettings {
-    /// Settings may not exist yet (first launch, background contexts) — keep
+    /// Settings may not exist yet (first launch, background contexts) - keep
     /// the 150 WPM default in exactly one place.
     var resolvedTargetWPM: Int { self?.resolvedTargetWPM ?? 150 }
 }
@@ -667,7 +667,7 @@ enum CountdownStyle: Int, Codable, CaseIterable, Identifiable {
 
 // MARK: - Waveform Style
 
-/// Look of the live waveform ringing the record button. Form only — every
+/// Look of the live waveform ringing the record button. Form only - every
 /// style keeps the brand gradient so the recording screen stays one palette.
 enum WaveformStyle: Int, Codable, CaseIterable, Identifiable {
     case rings = 0

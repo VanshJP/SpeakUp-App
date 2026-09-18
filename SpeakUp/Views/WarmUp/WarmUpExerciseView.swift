@@ -6,7 +6,7 @@ struct WarmUpExerciseView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingExitConfirm = false
 
-    /// Announces each step change to VoiceOver — the countdown numeral and
+    /// Announces each step change to VoiceOver - the countdown numeral and
     /// the chirps are otherwise silent context for a non-visual reader.
     @State private var announcedStepIndex = -1
 

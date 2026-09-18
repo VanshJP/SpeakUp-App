@@ -33,7 +33,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
 
     // MARK: - Full Pipeline (returns TranscriptionWord array)
 
-    /// Tag fillers in the given word timings (no config — backward compat).
+    /// Tag fillers in the given word timings (no config - backward compat).
     static func tagFillers(in words: [RawWordTiming]) -> [TranscriptionWord] {
         tagFillers(in: words, config: .default)
     }
@@ -79,7 +79,7 @@ nonisolated enum FillerDetectionPipeline: Sendable {
 
     // MARK: - Lightweight Count-Only (for LiveTranscriptionService)
 
-    /// Count fillers without creating TranscriptionWord objects (no config — backward compat).
+    /// Count fillers without creating TranscriptionWord objects (no config - backward compat).
     static func countFillers(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) -> Int {
         countFillers(words: words, timestamps: timestamps, durations: durations, config: .default)
     }

@@ -278,7 +278,7 @@ class JournalExportService {
                 (trimmed as NSString).draw(in: CGRect(x: x, y: y, width: maxWidth, height: fullSize.height), withAttributes: attrs)
                 y += fullSize.height + 2
             } else {
-                // Text is taller than remaining page space — draw what fits, continue on next page
+                // Text is taller than remaining page space - draw what fits, continue on next page
                 let drawHeight = availableHeight
                 (trimmed as NSString).draw(in: CGRect(x: x, y: y, width: maxWidth, height: drawHeight), withAttributes: attrs)
                 y += drawHeight + 2

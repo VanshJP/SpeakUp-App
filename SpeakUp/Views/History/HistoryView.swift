@@ -181,7 +181,7 @@ struct HistoryView: View {
 
     // MARK: - Filter Menu
 
-    /// Filters ride on the search row, not in a chip row above the list —
+    /// Filters ride on the search row, not in a chip row above the list - 
     /// three options don't justify a scrolling row between you and your
     /// sessions, and they belong next to the other way of narrowing the list.
     private var filterMenu: some View {
@@ -339,7 +339,7 @@ struct FilterChip: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .modifier(SelectedFilterChrome(isSelected: isSelected))
-            // Hit target expands around the capsule — see FilterPill.
+            // Hit target expands around the capsule - see FilterPill.
             .frame(minHeight: AppLayout.minHitTarget)
             .contentShape(Capsule())
         }
@@ -409,7 +409,7 @@ struct RecordingRow: View {
 
                 Spacer(minLength: 8)
 
-                // Score gauge — the row's single colored element
+                // Score gauge - the row's single colored element
                 if let score = summary.overallScore {
                     ZStack {
                         RingProgress(

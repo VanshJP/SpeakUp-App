@@ -65,8 +65,8 @@ struct PracticeFocusRow: View {
 ///
 /// This is the screen that answers "aren't warm-ups drills too?". They are
 /// both practice; they differ in how long they take and whether the mic is
-/// open. Listing them together under "Be understood" — tongue twisters,
-/// articulation warm-ups, and the precision read-aloud passages — makes the
+/// open. Listing them together under "Be understood" - tongue twisters,
+/// articulation warm-ups, and the precision read-aloud passages - makes the
 /// relationship visible instead of leaving it to be inferred from four
 /// separate tool pages.
 struct PracticeFocusDetailView: View {
@@ -134,7 +134,7 @@ struct PracticeFocusDetailView: View {
                             .foregroundStyle(.white)
 
                         // The format line, not the outcome line. On this page
-                        // the outcome is the heading — what differs between
+                        // the outcome is the heading - what differs between
                         // these four rows is what the next few minutes cost.
                         Text(tool.format)
                             .font(.caption)

@@ -51,7 +51,7 @@ nonisolated enum RoutineStep: String, CaseIterable, Identifiable, Sendable, Coda
         }
     }
 
-    /// Icon only — identity colour comes from `PracticeToolKind` at the view
+    /// Icon only - identity colour comes from `PracticeToolKind` at the view
     /// layer (`RoutineStep.tool` / `.tint` in `RoutineCard.swift`). The catalog
     /// is MainActor-isolated and this type has to stay pure. See gotchas §7.
     var icon: String {
@@ -71,7 +71,7 @@ nonisolated enum RoutineStep: String, CaseIterable, Identifiable, Sendable, Coda
     var isPinned: Bool { self == .session }
 
     /// Factory chain: open the voice, take the scored rep, look at what it said.
-    /// Short on purpose — a routine that takes twenty minutes is one people skip
+    /// Short on purpose - a routine that takes twenty minutes is one people skip
     /// on the days they most need it.
     static let defaultSteps: [RoutineStep] = [.warmUp, .session, .review]
 }
@@ -96,7 +96,7 @@ nonisolated enum PracticeRoutine {
         }
 
         // The take is required. A stale or hand-edited payload that dropped it
-        // gets it back in canonical position — before the review, not after it,
+        // gets it back in canonical position - before the review, not after it,
         // which is the one place a repaired chain could still read as nonsense.
         return adding(.session, to: ordered)
     }
@@ -105,7 +105,7 @@ nonisolated enum PracticeRoutine {
         steps.map(\.rawValue)
     }
 
-    /// Insert `step` in canonical order — the order of `RoutineStep.allCases`,
+    /// Insert `step` in canonical order - the order of `RoutineStep.allCases`,
     /// which runs prep → take → review. Someone adding Read Aloud to a chain
     /// wants it before the take, not after the review.
     static func adding(_ step: RoutineStep, to steps: [RoutineStep]) -> [RoutineStep] {
@@ -185,7 +185,7 @@ nonisolated struct RoutineProgress: Equatable {
     }
 
     /// The next unfinished link, in routine order. Nil when the chain is done
-    /// for today — which is when the card should go quiet rather than invent
+    /// for today - which is when the card should go quiet rather than invent
     /// something else to ask for.
     func next(in steps: [RoutineStep], now: Date = Date()) -> RoutineStep? {
         let rolled = rolling(now: now)

@@ -19,7 +19,7 @@ struct ReadAloudResult {
     let mismatchedWords: Int
     let timeTaken: TimeInterval
     let wordStates: [WordMatchState]
-    /// Set when the session ended without a fair measurement — the recognizer
+    /// Set when the session ended without a fair measurement - the recognizer
     /// died mid-read, or nothing was heard at all. The result screen shows it
     /// instead of letting a bare "0% · Complete" stand as a verdict.
     var notice: String?
@@ -38,7 +38,7 @@ class ReadAloudViewModel {
     /// Session-scoped audio service: owns mic permission and the
     /// record-capable session configuration. The read-aloud engine taps the
     /// input directly, but without this setup a fresh launch runs under
-    /// whatever ambient category lingers — silent buffers, cryptic failures.
+    /// whatever ambient category lingers - silent buffers, cryptic failures.
     private let audioService = AudioService()
 
     var selectedDifficulty: ReadAloudDifficulty? {
@@ -111,7 +111,7 @@ class ReadAloudViewModel {
 
         let authorized = await service.requestAuthorization()
         // The auto-start runs in the session view's `.task`, which cancels on
-        // disappear — bail rather than spin up an engine nobody will stop.
+        // disappear - bail rather than spin up an engine nobody will stop.
         guard !Task.isCancelled else { return }
         guard authorized else {
             errorMessage = ReadAloudError.authorizationDenied.errorDescription
@@ -191,7 +191,7 @@ class ReadAloudViewModel {
         result = nil
         errorMessage = nil
         elapsedTime = 0
-        // Keep isShadowMode — user chose the mode for this sheet.
+        // Keep isShadowMode - user chose the mode for this sheet.
     }
 
     func retryPassage() async {
@@ -217,7 +217,7 @@ class ReadAloudViewModel {
                 guard let self, let start = self.startTime else { continue }
                 self.elapsedTime = Date().timeIntervalSince(start)
 
-                // A recognizer that died mid-read ends the session now —
+                // A recognizer that died mid-read ends the session now - 
                 // letting the clock run on produces a confident-looking zero.
                 if self.service.recognitionFailureMessage != nil && self.sessionState == .listening {
                     self.stopSession()

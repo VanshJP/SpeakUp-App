@@ -10,7 +10,7 @@ extension RecordingViewModel {
         // Brief pause so the user sees the full starting state
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self, self.isRecording else { return }
-            // A cancel→restart within the 0.5s window can queue a second block —
+            // A cancel→restart within the 0.5s window can queue a second block - 
             // invalidate any timer a previous block created so only one ever runs.
             self.timer?.invalidate()
             self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -40,24 +40,24 @@ extension RecordingViewModel {
                             let isQuiet = self.audioLevel < self.silenceDbThreshold
 
                             if !self.isWaitingForSentenceEnd {
-                                // Timer just expired — check if user is mid-sentence
+                                // Timer just expired - check if user is mid-sentence
                                 let isMidSentence = self.liveTranscriptionService.isActive
                                     && self.liveTranscriptionService.lastSegmentEndTime > 0
                                     && (timeSinceLastWord < self.sentenceSilenceThreshold || !isQuiet)
 
                                 if isMidSentence {
-                                    // User is still speaking — enter grace period
+                                    // User is still speaking - enter grace period
                                     self.isWaitingForSentenceEnd = true
                                     self.graceStartTime = self.recordingDuration
                                     Haptics.light()
                                 } else {
-                                    // Not mid-sentence — stop immediately
+                                    // Not mid-sentence - stop immediately
                                     self.timer?.invalidate()
                                     self.timer = nil
                                     self.autoSavedRecording = await self.stopRecording()
                                 }
                             } else {
-                                // Already in grace period — check for sentence end or timeout
+                                // Already in grace period - check for sentence end or timeout
                                 let graceElapsed = self.recordingDuration - (self.graceStartTime ?? self.recordingDuration)
 
                                 // Sentence ended = enough silence AND audio level is low

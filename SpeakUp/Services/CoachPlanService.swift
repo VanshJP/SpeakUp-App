@@ -101,9 +101,9 @@ nonisolated enum CoachDimension: String, CaseIterable, Sendable, Identifiable {
     /// your pitch range suggesting Pause Practice, a tip about articulation
     /// suggesting Pace Control. Articulation is mechanical and reading aloud
     /// trains the mouth; a flat voice belongs on Vocal Variety, and punchy
-    /// delivery belongs on Emphasis — both scored drills.
+    /// delivery belongs on Emphasis - both scored drills.
     ///
-    /// One definition, used by both the tip rows and `NextStep` — they used to
+    /// One definition, used by both the tip rows and `NextStep` - they used to
     /// carry separate mappings and had already disagreed.
     var practiceRoute: CoachPracticeRoute {
         switch self {
@@ -155,7 +155,7 @@ nonisolated enum CoachDimension: String, CaseIterable, Sendable, Identifiable {
 /// Where a dimension sends the speaker to train it.
 ///
 /// Lives beside `CoachDimension` rather than in the view layer so the tip
-/// service — which is `nonisolated` and knows nothing about SwiftUI — can name
+/// service - which is `nonisolated` and knows nothing about SwiftUI - can name
 /// a destination without reaching for `NextStep.Action`.
 nonisolated enum CoachPracticeRoute: Sendable, Equatable {
     /// A `DrillMode` raw value.
@@ -199,7 +199,7 @@ nonisolated struct CoachPlan: Sendable {
 
     /// The one dimension to work on now.
     let focus: CoachDimension
-    /// Rolling-window mean for `focus` — the number the plan is actually about.
+    /// Rolling-window mean for `focus` - the number the plan is actually about.
     let focusAverage: Int
     /// `focus` in the session being viewed. Diverges from the average on a
     /// standout or off day, which is worth saying out loud.
@@ -209,10 +209,10 @@ nonisolated struct CoachPlan: Sendable {
     let sessionCount: Int
     /// Dimensions already at or above the mastery bar across the window.
     let holding: [CoachDimension]
-    /// Score the focus has to reach — and hold — to graduate.
+    /// Score the focus has to reach - and hold - to graduate.
     let target: Int
     /// The user's most-repeated crutch word when the focus is fillers, else nil.
-    /// Turns "watch the filler words" into "cut 'like'" — a named target trains
+    /// Turns "watch the filler words" into "cut 'like'" - a named target trains
     /// faster than a category.
     let namedHabit: String?
 
@@ -247,7 +247,7 @@ nonisolated struct CoachPlan: Sendable {
     /// makes them come back.
     var graduationLine: String {
         // The focus is the largest deficit, so a focus at the bar means every
-        // dimension is at the bar. There is no next weakness to hand over to —
+        // dimension is at the bar. There is no next weakness to hand over to - 
         // the work stops being repair and starts being difficulty.
         isGraduating
             ? "Every dimension is at or above \(target). The next gains come from harder conditions, not fixes, longer takes, no prep, a real audience."
@@ -259,7 +259,7 @@ nonisolated struct CoachPlan: Sendable {
 
 nonisolated enum CoachPlanService {
     /// The bar a dimension has to clear to stop being the focus. Deliberately
-    /// above "fine" — 85 is where a dimension stops costing the speaker
+    /// above "fine" - 85 is where a dimension stops costing the speaker
     /// anything, and there is no point coaching toward mediocre.
     static let masteryTarget = 85
 
@@ -269,7 +269,7 @@ nonisolated enum CoachPlanService {
 
     /// Builds the plan from a newest-first window of analyses.
     ///
-    /// Pure and cheap — no persistence and no per-focus bookkeeping. Stickiness
+    /// Pure and cheap - no persistence and no per-focus bookkeeping. Stickiness
     /// comes from averaging the window instead of storing a chosen focus: an
     /// average moves slowly by construction, so the focus survives one good day
     /// without anyone having to remember it was picked.
@@ -278,7 +278,7 @@ nonisolated enum CoachPlanService {
         weights: ScoreWeights = .defaults,
         crutchHint: CrutchHint? = nil
     ) -> CoachPlan? {
-        // A zero overall means the zero-word gate fired — a failed capture, not
+        // A zero overall means the zero-word gate fired - a failed capture, not
         // a measurement of how the speaker speaks. Averaging those in would
         // invent weaknesses out of dead microphones.
         let scored = window.filter { $0.speechScore.overall > 0 }
@@ -291,7 +291,7 @@ nonisolated enum CoachPlanService {
         for dimension in CoachDimension.allCases {
             let values = subscores.compactMap { dimension.subscore(in: $0) }
             // A dimension the pipeline could not measure this window has no
-            // deficit to rank — better silent than guessed.
+            // deficit to rank - better silent than guessed.
             guard values.count >= max(1, scored.count / 2) else { continue }
             averages[dimension] = mean(values)
         }
@@ -317,7 +317,7 @@ nonisolated enum CoachPlanService {
             .filter { $0.average >= masteryTarget }
             .map(\.dimension)
 
-        // The named habit only exists when the plan is actually about fillers —
+        // The named habit only exists when the plan is actually about fillers - 
         // attaching "cut 'like'" to a pace focus would be noise.
         let namedHabit: String?
         if top.dimension == .fillers, let hint = crutchHint, hint.count >= CrutchHint.minimumCount {

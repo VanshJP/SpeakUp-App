@@ -14,8 +14,8 @@ struct PracticeRoutineOrderTests {
         #expect(resolved == [.warmUp, .session])
     }
 
-    /// The scored take is the point of the routine. A payload that lost it —
-    /// a hand edit, an older build — gets it back rather than leaving the user
+    /// The scored take is the point of the routine. A payload that lost it - 
+    /// a hand edit, an older build - gets it back rather than leaving the user
     /// with a chain of preparation for nothing.
     @Test func theTakeIsPutBackWhenAPayloadDroppedIt() {
         #expect(PracticeRoutine.resolve(["warmUp", "review"]) == [.warmUp, .session, .review])
@@ -27,7 +27,7 @@ struct PracticeRoutineOrderTests {
         #expect(PracticeRoutine.removing(.warmUp, from: steps) == [.session, .review])
     }
 
-    /// Adding lands in canonical order — prep before the take, review after —
+    /// Adding lands in canonical order - prep before the take, review after - 
     /// so a new link never appends itself behind the review.
     @Test func addedStepsLandInCanonicalOrder() {
         let withCalm = PracticeRoutine.adding(.calm, to: RoutineStep.defaultSteps)
@@ -90,7 +90,7 @@ struct RoutineProgressTests {
     }
 
     /// Marking after a rollover starts a fresh day rather than adding to a
-    /// stale set — otherwise the first tick of a new day would resurrect all of
+    /// stale set - otherwise the first tick of a new day would resurrect all of
     /// yesterday's.
     @Test func markingAfterARolloverStartsFresh() {
         let stale = RoutineProgress(completed: [.warmUp, .session], day: yesterday)

@@ -38,7 +38,7 @@ struct WPMChartView: View {
                     .foregroundStyle(AppColors.primary)
                     .lineStyle(StrokeStyle(lineWidth: 2))
 
-                    // Fills down to the domain floor, not to 0 — `chartYMin`
+                    // Fills down to the domain floor, not to 0 - `chartYMin`
                     // is usually well above zero, and an implicit-zero baseline
                     // drags the gradient below the plot and out of the card.
                     AreaMark(

@@ -7,17 +7,17 @@ import Foundation
 /// "Reduce your fillers" is advice anyone could give without listening. "Three
 /// of your seven ums landed between 0:38 and 0:52, right after you finished a
 /// sentence" is advice only something that actually heard the recording can
-/// give — and it is the difference between feedback the user believes and
+/// give - and it is the difference between feedback the user believes and
 /// feedback they scroll past. Every field here is derived from data the
 /// pipeline already produces; nothing new is computed at analysis time.
 nonisolated struct CoachEvidence: Sendable {
     /// The densest cluster of classic fillers: how many, and when.
     var fillerBurst: (count: Int, start: TimeInterval, end: TimeInterval, word: String)?
     /// Repeated clause-opening frame (anaphora-as-tic) with a quotable stretch
-    /// the speaker can scrub to — e.g. frame "i'm going to get", example
+    /// the speaker can scrub to - e.g. frame "i'm going to get", example
     /// "I'm going to get socks / …tomatoes / …eggs".
     var structuralRepetition: (frame: String, count: Int, start: TimeInterval, example: String)?
-    /// The speaker's actual first words — where hesitation is most audible and
+    /// The speaker's actual first words - where hesitation is most audible and
     /// most fixable.
     var opening: String?
     /// True when the opening begins on a filler or hedge.
@@ -76,7 +76,7 @@ nonisolated struct CoachEvidence: Sendable {
         return lines
     }
 
-    /// `m:ss` for coaching copy. Timestamps are what make feedback checkable —
+    /// `m:ss` for coaching copy. Timestamps are what make feedback checkable - 
     /// the user can scrub straight to the moment.
     static func stamp(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds.rounded()))
@@ -99,7 +99,7 @@ nonisolated enum CoachEvidenceService {
     ) -> CoachEvidence {
         var evidence = CoachEvidence()
 
-        // Classic hesitation fillers only — structural frames have their own field.
+        // Classic hesitation fillers only - structural frames have their own field.
         let classicFillers = analysis.fillerWords.filter { $0.kind == .filler }
         evidence.fillerBurst = densestFillerBurst(in: classicFillers)
 

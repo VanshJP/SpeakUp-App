@@ -24,7 +24,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// What this drill trains — shown on the selection card.
+    /// What this drill trains - shown on the selection card.
     var outcome: String {
         switch self {
         case .fillerElimination: return "Cut ums and likes in short bursts"
@@ -39,8 +39,8 @@ enum DrillMode: String, CaseIterable, Identifiable {
 
     /// What this drill is filed under app-wide. Drills already spoke in
     /// outcomes; this is the same idea promoted to a vocabulary that warm-ups,
-    /// Read Aloud and Calm share, so one question — what do you want to
-    /// improve — reaches every format.
+    /// Read Aloud and Calm share, so one question - what do you want to
+    /// improve - reaches every format.
     var focus: PracticeFocus {
         switch self {
         case .fillerElimination: return .fillers
@@ -53,7 +53,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Duration + mechanic — the cost line under the outcome.
+    /// Duration + mechanic - the cost line under the outcome.
     var description: String {
         switch self {
         case .fillerElimination: return "\(defaultDurationSeconds)s · goal: zero fillers"
@@ -102,7 +102,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// What the session actually shows while you run it — the concrete thing
+    /// What the session actually shows while you run it - the concrete thing
     /// a tile promises so the format is understood before committing.
     var liveFeedback: String {
         switch self {
@@ -124,7 +124,7 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Scores from the recording's pitch contour after stop — not from live ASR.
+    /// Scores from the recording's pitch contour after stop - not from live ASR.
     var usesPitchAnalysis: Bool {
         self == .vocalVariety
     }

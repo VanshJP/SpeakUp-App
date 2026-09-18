@@ -3,7 +3,7 @@ import Observation
 
 /// Single source of truth for "does this user own Lifetime".
 ///
-/// StoreKit is authoritative but not always reachable — first launch offline,
+/// StoreKit is authoritative but not always reachable - first launch offline,
 /// airplane-mode practice, a widget process that never talks to the App Store.
 /// The last verified answer is therefore mirrored into the shared App Group so
 /// every process can resolve entitlement synchronously at startup, and
@@ -38,7 +38,7 @@ final class EntitlementStore {
         return .standard
     }
 
-    /// What StoreKit last verified. Read `isLifetime` instead — during the
+    /// What StoreKit last verified. Read `isLifetime` instead - during the
     /// beta the two differ.
     private(set) var ownsLifetime: Bool
 
@@ -53,7 +53,7 @@ final class EntitlementStore {
     /// Lives in device defaults rather than SwiftData: every gate resolves
     /// entitlement synchronously from here, and a second copy in `UserSettings`
     /// would be a second thing to keep in sync. A reinstall therefore grants a
-    /// fresh 14 days — generous on purpose, and the alternative would need a
+    /// fresh 14 days - generous on purpose, and the alternative would need a
     /// CloudKit round-trip before anyone could practise.
     private(set) var trialStartedAt: Date?
 
@@ -80,7 +80,7 @@ final class EntitlementStore {
         PracticeTrial.state(startedAt: trialStartedAt)
     }
 
-    /// Starts the 14 days. Idempotent — the two callers (the first successful
+    /// Starts the 14 days. Idempotent - the two callers (the first successful
     /// analysis, and first launch of this build on an install that already has
     /// recordings) both funnel through here, and only the first one writes.
     func startTrialIfNeeded(now: Date = Date()) {

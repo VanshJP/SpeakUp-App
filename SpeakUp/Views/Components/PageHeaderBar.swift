@@ -3,13 +3,13 @@ import SwiftUI
 // MARK: - Root Tab Chrome
 
 extension View {
-    /// The trailing accessory on a section's search row — the filter/sort menu
+    /// The trailing accessory on a section's search row - the filter/sort menu
     /// on Prompts, Stories and History, and the Learn trophy.
     ///
     /// It is exactly `AppLayout.minHitTarget` square with the capsule radius
     /// `InlineSearchField` uses, so the icon is the same height as the field it
     /// sits beside instead of a smaller plate floating in a 44pt box. Sizing the
-    /// glass *is* the hit target here — there is no second `.frame` to pad out.
+    /// glass *is* the hit target here - there is no second `.frame` to pad out.
     func headerIconChrome() -> some View {
         self
             .font(.body.weight(.semibold))

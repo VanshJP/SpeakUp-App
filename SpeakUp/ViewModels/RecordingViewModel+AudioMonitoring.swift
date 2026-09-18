@@ -22,7 +22,7 @@ extension RecordingViewModel {
 
     /// Called once per 10 Hz timer tick from `startTimer()`. Reads the
     /// current level, writes it to `audioLevel` only when it changes by at
-    /// least 1 dB (perf-patterns §1 — avoid redundant `@Observable` writes),
+    /// least 1 dB (perf-patterns §1 - avoid redundant `@Observable` writes),
     /// and samples into `audioLevelSamples` / coaching services every 5th
     /// tick (~0.5 s).
     func sampleAudioLevelTick() {

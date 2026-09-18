@@ -15,7 +15,7 @@ class DictationService {
     var lastAddedIndex = 0
 
     /// Why the last `start()` gave up, for the caller to display. Every failure
-    /// path here is silent otherwise — the mic button simply never lights up.
+    /// path here is silent otherwise - the mic button simply never lights up.
     var errorMessage: String?
 
     /// Current audio input level in dB (-160 silence … 0 max).
@@ -30,7 +30,7 @@ class DictationService {
     private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
 
-    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    /// `removeTap` crashes if no tap is installed - track it explicitly.
     private var isTapInstalled = false
 
     /// Thread-safe storage for the latest RMS level computed in the audio tap callback.
@@ -108,7 +108,7 @@ class DictationService {
 
         let inputNode = engine.inputNode
         // Prefer inputFormat; outputFormat can report 0 Hz before the graph
-        // is wired — starting then raises an uncaught NSException.
+        // is wired - starting then raises an uncaught NSException.
         var recordingFormat = inputNode.inputFormat(forBus: 0)
         if recordingFormat.sampleRate <= 0 {
             recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -179,7 +179,7 @@ class DictationService {
             if error != nil || (result?.isFinal ?? false) {
                 Task { @MainActor in
                     guard self.sessionGeneration == generation else { return }
-                    // `stop()` cancels the task, which reports an error too —
+                    // `stop()` cancels the task, which reports an error too - 
                     // only an unrequested failure is worth telling the user
                     // about. On-device recognition is required, so a device
                     // whose assets are missing lands here rather than sending

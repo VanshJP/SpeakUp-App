@@ -46,7 +46,7 @@ struct DrillSelectionView: View {
 
             FocusFilterBar(focuses: availableFocuses, selection: $selectedFocus)
 
-            // Drills were already named for outcomes — they are just headed by
+            // Drills were already named for outcomes - they are just headed by
             // them now, in the same vocabulary the other three tools use, so a
             // reader can see that Emphasis and Vocal Variety are the same job.
             VStack(spacing: 20) {

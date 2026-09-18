@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Stories' filter row — the same `FilterChip` the Prompts tab uses.
+/// Stories' filter row - the same `FilterChip` the Prompts tab uses.
 /// Do not fork the chip: change `FilterChip` / `SelectedFilterChrome` and both
 /// Library halves move together.
 struct StoryFolderBar: View {
@@ -67,7 +67,7 @@ struct StoryFolderBar: View {
         }
     }
 
-    /// An action, not a filter — dashed so it never reads as a fifth folder.
+    /// An action, not a filter - dashed so it never reads as a fifth folder.
     private var newFolderChip: some View {
         Button {
             Haptics.medium()

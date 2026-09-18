@@ -30,8 +30,8 @@ struct StatusPill: View {
                 .font(.caption2.weight(.semibold))
         }
         .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .frame(height: 28)
         .background(Capsule().fill(color.opacity(fillOpacity)))
     }
 }

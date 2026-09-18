@@ -4,7 +4,7 @@ import SwiftData
 /// The baseline a session score is read against.
 /// Bounded to a rolling window rather than all-time: decoding every `analysis`
 /// blob would make the cost grow without limit, and a rolling baseline is the
-// Opt out of default MainActor isolation — baselines decode off-main in
+// Opt out of default MainActor isolation - baselines decode off-main in
 // `Task.detached`, so window / Baselines must be callable from any isolation.
 nonisolated enum PersonalAverage {
 
@@ -58,7 +58,7 @@ nonisolated enum PersonalAverage {
     }
 
     /// What a session was practising, as one comparable key.
-    /// `Prompt` by String — so they are normalised here rather than at the two
+    /// `Prompt` by String - so they are normalised here rather than at the two
     static func repeatSubject(of recording: Recording) -> String? {
         if let storyId = recording.storyId { return storyId.uuidString }
         guard let promptId = recording.prompt?.id, !promptId.isEmpty else { return nil }

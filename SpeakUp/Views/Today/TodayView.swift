@@ -12,7 +12,7 @@ struct TodayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingFirstRecordingSetup = false
 
-    // Arrival moment — fires once per calendar day, on the first open.
+    // Arrival moment - fires once per calendar day, on the first open.
     @AppStorage("lastArrivalDay") private var lastArrivalDay = ""
     @State private var arrived = false
     @State private var challengeStore = SharedChallengeStore.shared
@@ -47,7 +47,7 @@ struct TodayView: View {
         PageScrollView {
             VStack(spacing: AppLayout.chapterSpacing) {
 
-                // 1. Header — date + streak chip (customize lives at the bottom)
+                // 1. Header - date + streak chip (customize lives at the bottom)
                 topHeaderRow
                     .allowsHitTesting(!isEditingLayout)
 
@@ -400,7 +400,7 @@ struct TodayView: View {
     }
 
     /// Drop resolution lives in `TodayHomeLayout.reorder` so it can be pinned
-    /// by a test — dropping a block below another used to silently do nothing.
+    /// by a test - dropping a block below another used to silently do nothing.
     private func insertModule(_ dragged: TodayHomeModule, before target: TodayHomeModule) {
         let list = TodayHomeLayout.reorder(homeModules, moving: dragged, onto: target)
         guard list != homeModules else { return }
@@ -504,7 +504,7 @@ struct TodayView: View {
         onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
     }
 
-    /// The card owns the whole brief now — topic, length, words, and Start —
+    /// The card owns the whole brief now - topic, length, words, and Start - 
     /// so the module is just the header plus that one object. The header takes
     /// `promptSectionTitle` because a story day is not a prompt day.
     private var sessionModule: some View {
@@ -631,7 +631,7 @@ struct TodayView: View {
 
         // Two ways to land here without the sheet. A user who skipped the
         // baseline said they wanted to look around first, and the walkthrough is
-        // the answer to the question they actually asked — waiting for a take
+        // the answer to the question they actually asked - waiting for a take
         // they may not make for days leaves them on a map-less home screen. And
         // a user who has already seen the sheet gets straight to the tour.
         // The sheet itself still waits for a score: every row on it is about a
@@ -692,7 +692,7 @@ struct TodayView: View {
     }
 
     /// What the streak is actually worth right now. Never claims a day the
-    /// user has not earned — before today's session it names the stake.
+    /// user has not earned - before today's session it names the stake.
     private var arrivalLine: String? {
         let streak = viewModel.userStats.currentStreak
         guard arrived, streak >= 1 else { return nil }
@@ -808,7 +808,7 @@ struct TodayView: View {
     /// The one hero action on Today, handed to whichever brief card renders so
     /// button and subject are the same object. Twin capsules and a segmented
     /// picker both failed here; read `docs/features/today-library.md`
-    /// invariants 11–13 before changing it.
+    /// invariants 11-13 before changing it.
     private var sessionStartFooter: SessionStartFooter {
         SessionStartFooter(
             startTitle: isAwaitingStartingLine ? "Set My Starting Line" : "Start Speaking",
@@ -895,8 +895,8 @@ struct TodayView: View {
 
     /// A suggestion with the reason attached.
     ///
-    /// The banner is personalised — it follows your coach plan, or falls back
-    /// to a warm-up on a day you have not practised — but it never said so,
+    /// The banner is personalised - it follows your coach plan, or falls back
+    /// to a warm-up on a day you have not practised - but it never said so,
     /// so it read as a stray duplicate of the grid directly beneath it. The
     /// reason is what makes it a recommendation rather than a fifth tile.
     private struct PrepSuggestion {
@@ -962,7 +962,7 @@ struct TodayView: View {
             }
             .padding(12)
             .glassEffect(.regular.tint(tool.color.opacity(0.10)).interactive(), in: .rect(cornerRadius: 14))
-            // Same plate as the `ToolTileLabel` grid directly below it — same
+            // Same plate as the `ToolTileLabel` grid directly below it - same
             // radius, same shadow. Without this the banner sat flat while the
             // tiles it introduces floated.
             .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
@@ -1058,7 +1058,7 @@ private extension View {
 }
 
 /// Rocks ±0.3° on a 0.9s period. Driven by `TimelineView` so a drop or
-/// re-render cannot restart the swing — the old `@State` + `repeatForever`
+/// re-render cannot restart the swing - the old `@State` + `repeatForever`
 /// version jumped back to the start of the ease every time a block moved,
 private struct WiggleModifier: ViewModifier {
     let active: Bool

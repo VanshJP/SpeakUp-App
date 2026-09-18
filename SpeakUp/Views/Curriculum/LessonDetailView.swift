@@ -202,51 +202,55 @@ struct LessonDetailView: View {
 
     // MARK: - Lesson Content
 
+    private var resolvedCompletedIds: Set<String> {
+        completedActivityIds.union(
+            Set(lesson.activities.filter { viewModel.isActivityCompleted($0.id) }.map(\.id))
+        )
+    }
+
     private var lessonContent: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                PageScrollView {
-                    VStack(spacing: 16) {
-                        Color.clear
-                            .frame(height: 0)
-                            .id("scrollTop")
+        ScrollViewReader { proxy in
+            PageScrollView {
+                VStack(spacing: 20) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("scrollTop")
 
-                        LessonBoardHeader(
-                            lesson: lesson,
-                            identity: lessonIdentity,
-                            isReviewing: isRevisitingCompletedLesson
-                        )
+                    LessonBoardHeader(
+                        lesson: lesson,
+                        identity: lessonIdentity,
+                        isReviewing: isRevisitingCompletedLesson
+                    )
 
-                        LessonPlanStrip(
-                            lesson: lesson,
-                            currentIndex: currentStepIndex,
-                            completedIds: completedActivityIds.union(
-                                Set(lesson.activities.filter { viewModel.isActivityCompleted($0.id) }.map(\.id))
-                            ),
-                            accent: lessonIdentity.accent
-                        ) { index in
-                            practiceResult = nil
-                            confidenceExerciseOpened = false
-                            currentStepIndex = index
-                        }
-
-                        LessonCoachCue(activity: currentActivity)
-
-                        activityContent(for: currentActivity)
-
-                        Spacer().frame(height: 80)
+                    LessonPlanStrip(
+                        lesson: lesson,
+                        currentIndex: currentStepIndex,
+                        completedIds: resolvedCompletedIds,
+                        accent: lessonIdentity.accent
+                    ) { index in
+                        practiceResult = nil
+                        confidenceExerciseOpened = false
+                        currentStepIndex = index
                     }
-                    .padding(.horizontal, AppLayout.pageHorizontal)
-                    .padding(.top, 12)
+
+                    LessonCoachCue(activity: currentActivity)
+
+                    activityContent(for: currentActivity)
+
+                    Spacer().frame(height: 24)
                 }
-                .scrollIndicators(.hidden)
-                .onChange(of: currentStepIndex) {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo("scrollTop", anchor: .top)
-                    }
+                .padding(.horizontal, AppLayout.pageHorizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+            }
+            .scrollIndicators(.hidden)
+            .onChange(of: currentStepIndex) {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    proxy.scrollTo("scrollTop", anchor: .top)
                 }
             }
-
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
     }
@@ -600,31 +604,39 @@ struct LessonDetailView: View {
     // MARK: - Shared Subviews
 
     private func activityHeader(_ activity: CurriculumActivity, isCompleted: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: activity.type.teacherIcon)
-                .font(.subheadline)
+                .font(.body.weight(.semibold))
                 .foregroundStyle(activity.type.teacherColor)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(activity.type.teacherColor.opacity(0.15)))
+                .frame(width: 40, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(activity.type.teacherColor.opacity(0.15))
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(activity.type.teacherRole.uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(activity.type.teacherColor)
+
                 Text(activity.title)
-                    .font(.headline)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(activity.description)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Spacer(minLength: 8)
 
             if isCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(AppColors.success)
+                StatusPill(text: "Done", color: AppColors.success, glyph: .icon("checkmark"))
                     .transition(.scale.combined(with: .opacity))
             }
-
-            Spacer(minLength: 0)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isCompleted)
     }
@@ -677,25 +689,38 @@ struct LessonDetailView: View {
     // MARK: - Bottom Bar
 
     private var bottomBar: some View {
-        VStack(spacing: 0) {
-            Divider().opacity(0.2)
+        let doneCount = lesson.activities.filter { isActivityDone($0) }.count
 
-            VStack(spacing: 10) {
-                let doneCount = lesson.activities.filter { isActivityDone($0) }.count
+        return VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(0..<lesson.activities.count, id: \.self) { index in
+                    let activity = lesson.activities[index]
+                    Capsule()
+                        .fill(isActivityDone(activity) ? AppColors.success : Color.white.opacity(0.15))
+                        .frame(height: 3)
+                }
+            }
+            .accessibilityHidden(true)
+
+            HStack {
                 Text("\(doneCount) of \(lesson.activities.count) done")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
 
-                bottomBarActions
-            }
-            .padding(.horizontal, AppLayout.pageHorizontal)
-            .padding(.vertical, 12)
-            .background {
-                Color.clear
-                    .glassEffect(.regular)
-                    .ignoresSafeArea(edges: .bottom)
-            }
+            bottomBarActions
+        }
+        .padding(.horizontal, AppLayout.pageHorizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(alignment: .top) {
+                    Divider().opacity(0.35)
+                }
+                .ignoresSafeArea(edges: .bottom)
         }
     }
 

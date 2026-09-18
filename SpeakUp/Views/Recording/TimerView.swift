@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Shared dial for prepare countdown and recording clock. Geometry is against a
-/// 150pt dial scaled by `diameter` — settings thumbnails and session clocks share
+/// 150pt dial scaled by `diameter` - settings thumbnails and session clocks share
 /// one drawing. Session screens get diameter from `SessionDialSlot`, never a literal.
 struct TimerDial: View {
     let look: TimerLook
@@ -43,7 +43,7 @@ struct TimerDial: View {
                         )
                     )
                     .frame(width: 150 * s, height: 150 * s)
-                    // Orb is the progress read-out — shrinks as timer drains.
+                    // Orb is the progress read-out - shrinks as timer drains.
                     .scaleEffect(0.72 + 0.28 * progress)
                     .animation(.linear(duration: tick), value: progress)
 
@@ -114,7 +114,7 @@ struct TimerDial: View {
 
             captionText
         }
-        // Clamp the stack, not the number — caption at a11y size can be wider.
+        // Clamp the stack, not the number - caption at a11y size can be wider.
         .frame(maxWidth: maxWidth * s)
     }
 
@@ -134,7 +134,7 @@ struct TimerDial: View {
 
 // MARK: - Session Dial Slot
 
-/// Session dial sizing. Target from slot **width**, never height — countdown
+/// Session dial sizing. Target from slot **width**, never height - countdown
 /// slots are ~460pt tall, recording ~260pt (waveform). Height-derived diameter
 /// resized at the prepare→record hand-off. Height only shrinks via the ladder.
 nonisolated enum SessionDial {
@@ -166,7 +166,7 @@ struct SessionDialSlot<Content: View>: View {
         GeometryReader { geo in
             let rungs = SessionDial.ladder(from: SessionDial.diameter(fittingWidth: geo.size.width))
 
-            // Fixed arity, not ForEach — ViewThatFits measures subviews individually.
+            // Fixed arity, not ForEach - ViewThatFits measures subviews individually.
             ViewThatFits(in: .vertical) {
                 stack(rungs.0)
                 stack(rungs.1)

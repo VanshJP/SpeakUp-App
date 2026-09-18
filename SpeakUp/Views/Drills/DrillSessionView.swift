@@ -64,7 +64,7 @@ struct DrillSessionView: View {
             }
         }
         // A drill whose audio/recognition stack failed must not linger as a
-        // frozen timer — say why, then leave.
+        // frozen timer - say why, then leave.
         .alert(
             "Couldn't start the drill",
             isPresented: Binding(
@@ -221,7 +221,7 @@ struct DrillSessionView: View {
                     .contentTransition(.numericText())
                     .animation(.default, value: Int(viewModel.liveWPM))
 
-                Text("target 130–170")
+                Text("target 130-170")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.6))
             }

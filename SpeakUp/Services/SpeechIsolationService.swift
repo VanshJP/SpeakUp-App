@@ -4,7 +4,7 @@ import AVFoundation
 /// Speech-focused audio enhancement prior to ASR.
 /// Applies a light high-pass filter and adaptive noise gate to reduce
 /// stationary background noise while preserving near-field speech.
-/// Pure DSP — runs off the main actor inside `SpeechService.transcribe`'s
+/// Pure DSP - runs off the main actor inside `SpeechService.transcribe`'s
 /// GCD workers. Must stay `nonisolated` under MainActor default isolation.
 nonisolated enum SpeechIsolationService {
     nonisolated struct Result: Sendable {
@@ -43,13 +43,13 @@ nonisolated enum SpeechIsolationService {
         }
 
         // Adjusted suppression score formula to account for the new 22 dB skip threshold.
-        // Previously: (delta + 2.0) / 8.0 — a 6 dB improvement scored 100.
-        // Now: (delta + 1.5) / 10.0 — a 8.5 dB improvement scores 100.
+        // Previously: (delta + 2.0) / 8.0 - a 6 dB improvement scored 100.
+        // Now: (delta + 1.5) / 10.0 - a 8.5 dB improvement scores 100.
         // This gives a more honest score since we're now processing noisier audio.
         let suppressionScore = max(0, min(100, Int(((delta + 1.5) / 10.0) * 100.0)))
         // Adjusted residual noise score to match the new skip threshold.
-        // Previously: (improvedSNR + 5.0) / 20.0 — 15 dB output SNR scored 100.
-        // Now: (improvedSNR + 5.0) / 27.0 — 22 dB output SNR scores 100.
+        // Previously: (improvedSNR + 5.0) / 20.0-15 dB output SNR scored 100.
+        // Now: (improvedSNR + 5.0) / 27.0-22 dB output SNR scores 100.
         // This prevents inflated residualNoiseScore values from over-dampening reliability.
         let residualNoiseScore = max(0, min(100, Int(((improvedSNR + 5.0) / 27.0) * 100.0)))
 
@@ -69,7 +69,7 @@ nonisolated enum SpeechIsolationService {
 
     private static func applyHighPassFilter(to samples: [Float], alpha: Float = 0.99) -> [Float] {
         // alpha = 0.99 → cutoff ~(1-0.99)*sampleRate/(2π) ≈ 70 Hz at 44.1 kHz.
-        // The previous 0.97 (~210 Hz) sat inside the male fundamental band (85–180 Hz)
+        // The previous 0.97 (~210 Hz) sat inside the male fundamental band (85-180 Hz)
         // and, combined with the adaptive noise gate, could suppress near-field speech
         // enough that Whisper returned an empty transcript ("Silent").
         // 70 Hz still strips rumble / HVAC while leaving speech fundamentals intact.
@@ -98,7 +98,7 @@ nonisolated enum SpeechIsolationService {
         // The 20th percentile includes some low-energy speech frames (soft consonants, pauses).
         // The 15th percentile more accurately captures the true noise floor.
         let noiseFloor = percentile(frameRMS, p: 0.15)
-        // 2.0× noise floor — enough to separate stationary noise without
+        // 2.0× noise floor - enough to separate stationary noise without
         // gating soft consonants / quiet near-field speech into the floor.
         let threshold = max(noiseFloor * 2.0, 0.00012)
 

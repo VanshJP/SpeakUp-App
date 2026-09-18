@@ -361,7 +361,7 @@ struct LexicalSophisticationTests {
     @Test func sophisticatedVocabularyOutscoresEverydayVocabulary() {
         let everyday = ["good", "work", "people", "time", "make"]
         let fancy = ["quintessential", "serendipitous", "idiosyncratic", "ephemeral", "perspicacious"]
-        // Same MATTR handed to both — only word length and rarity differ.
+        // Same MATTR handed to both - only word length and rarity differ.
         #expect(score(fancy, mattr: 0.7) > score(everyday, mattr: 0.7))
     }
 

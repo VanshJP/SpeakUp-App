@@ -109,7 +109,7 @@ struct BeforeAfterReplayView: View {
         }
     }
 
-    /// The card carries scores, dates, and a session count — never a
+    /// The card carries scores, dates, and a session count - never a
     /// transcript, a prompt, or audio. Said out loud here so the user does not
     /// have to guess what they are about to post.
     private func shareSection(_ card: ProgressCardData) -> some View {

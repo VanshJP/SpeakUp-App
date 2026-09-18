@@ -336,7 +336,7 @@ struct VocabChallengeServiceTests {
 
         // The override must resolve to a tier the default speaker level (1)
         // isn't already on: pinning the tier you're effectively on is a no-op
-        // by design — the fingerprint keys on the resolved tier, so the day's
+        // by design - the fingerprint keys on the resolved tier, so the day's
         // pick survives it instead of reshuffling mid-day.
         _ = VocabChallengeService.todaysChallenge(
             preferences: prefs(count: 1, useBank: true, useDictionary: false, introduceNew: true, bank: [], dictionary: [], levelOverride: 3),

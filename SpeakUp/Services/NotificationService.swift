@@ -33,7 +33,7 @@ class NotificationService {
     ///
     /// Clears every id the planner owns first, so a plan is always the complete
     /// truth rather than a diff against whatever an older build left behind.
-    /// Called on foreground and after each take — cheap, and it keeps the streak
+    /// Called on foreground and after each take - cheap, and it keeps the streak
     /// numbers quoted in the copy fresh.
     func applyPlan(for snapshot: RetentionSnapshot) async {
         guard hasPermission else { return }
@@ -106,7 +106,7 @@ class NotificationService {
             content.badge = NSNumber(value: badge)
         }
         // `.timeSensitive` would suit the streak rescue, but it needs the
-        // com.apple.developer.usernotifications.time-sensitive entitlement —
+        // com.apple.developer.usernotifications.time-sensitive entitlement - 
         // adding that here would break signing until the capability is enabled
         // on the provisioning profile. relevanceScore still orders the summary.
         content.interruptionLevel = .active
@@ -114,7 +114,7 @@ class NotificationService {
         let resolved = resolve(notification.schedule)
         guard case let .fire(trigger) = resolved else { return }
 
-        // A nil trigger is not a failure — it is how UserNotifications spells
+        // A nil trigger is not a failure - it is how UserNotifications spells
         // "deliver immediately", which is what the milestone and freeze-used
         // moments want.
         let request = UNNotificationRequest(
@@ -133,7 +133,7 @@ class NotificationService {
     private enum TriggerResolution {
         /// Associated value `nil` means deliver immediately.
         case fire(UNNotificationTrigger?)
-        /// The slot has already passed today — send nothing.
+        /// The slot has already passed today - send nothing.
         case skip
     }
 
@@ -148,7 +148,7 @@ class NotificationService {
         case let .onceAt(hour, minute):
             // Must be pinned to *today*. A non-repeating calendar trigger rolls
             // a passed slot to tomorrow, which would deliver "your 10-day
-            // streak ends at midnight" the evening after it already ended —
+            // streak ends at midnight" the evening after it already ended - 
             // the notification would be a lie by the time it arrived.
             let now = Date()
             guard let fireDate = Calendar.current.date(
@@ -164,7 +164,7 @@ class NotificationService {
             )
 
         case let .afterDays(days):
-            // Zero days means "now" — a nil trigger delivers immediately.
+            // Zero days means "now" - a nil trigger delivers immediately.
             guard days > 0 else { return .fire(nil) }
             return .fire(
                 UNTimeIntervalNotificationTrigger(

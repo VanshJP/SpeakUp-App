@@ -177,7 +177,7 @@ struct OnboardingNameStep: View {
 // MARK: - Goal
 
 /// One question, up to three answers. Multi-select because the situations
-/// overlap in real life — interviews *and* everyday confidence is one person —
+/// overlap in real life - interviews *and* everyday confidence is one person - 
 /// and because the picks weight the prompt mix rather than choosing one lane.
 struct OnboardingGoalStep: View {
     let counter: String?
@@ -336,7 +336,7 @@ private extension OnboardingGoal {
 }
 
 private extension Array where Element == String {
-    /// "a", "a and b", "a, b, and c" — the goal step caps at three, so this
+    /// "a", "a and b", "a, b, and c" - the goal step caps at three, so this
     /// never has to reason about longer lists.
     func joinedNaturally() -> String {
         switch count {

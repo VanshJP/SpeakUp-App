@@ -31,7 +31,7 @@ enum Haptics {
         notificationGenerator.notificationOccurred(.success)
     }
 
-    /// Warning — timer running low, approaching limit
+    /// Warning - timer running low, approaching limit
     static func warning() {
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.warning)

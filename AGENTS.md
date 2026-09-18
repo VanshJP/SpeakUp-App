@@ -1,8 +1,8 @@
-# AGENTS.md — Big Talk (SpeakUp)
+# AGENTS.md - Big Talk (SpeakUp)
 
-Kernel only. `CLAUDE.md` → this file. Detail is on-demand — never ingest `docs/features/` wholesale.
+Kernel only. `CLAUDE.md` → this file. Detail is on-demand - never ingest `docs/features/` wholesale.
 
-**Product:** Big Talk — on-device speech practice (WhisperKit, multi-axis scoring, optional on-device LLM).  
+**Product:** Big Talk - on-device speech practice (WhisperKit, multi-axis scoring, optional on-device LLM).  
 **Code:** `SpeakUp*` / `SpeakUp/` · bundle `com.vansh.SpeakUpMore` · widget `com.vansh.SpeakUpMore.SpeakUpWidget`  
 **Stack:** iOS 26.0+ · SwiftUI · SwiftData · SPM · `@Observable` (never `ObservableObject`)
 
@@ -30,7 +30,7 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 4. `@StateObject` / `@ObservedObject`. ViewModels never take `ModelContext`. Views: `@Query` / `@Environment(\.modelContext)`.
 5. Raw `Color.blue` / opaque cards. UI = `AppColors` / `GlassStyles` / `AppBackground` / `GlassButton`. Sheets: `.appBackground(.subtle)`.
 6. Decode `Recording.analysis` on the main thread in `body`. Never `#Predicate` on Codable blob columns (process crash).
-7. New pure types without `nonisolated` — default isolation is MainActor (`SWIFT_DEFAULT_ACTOR_ISOLATION`). Background work breaks. See `docs/AGENT_GOTCHAS.md`.
+7. New pure types without `nonisolated` - default isolation is MainActor (`SWIFT_DEFAULT_ACTOR_ISOLATION`). Background work breaks. See `docs/AGENT_GOTCHAS.md`.
 8. Caveman in commits, PRs, or code comments. Chat may be caveman; persisted text is normal English.
 
 ---
@@ -47,7 +47,7 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 | Any SpeakUp product edit | skill `speakup` |
 | Vendor technique (SwiftUI, WidgetKit, a11y, ASO, …) | `.agents/skills/README.md` → one `SKILL.md` |
 
-Canonical skills: `.agents/skills/`. `.claude/skills/` and `agent/skills` are aliases. Load a skill **body** only on match — metadata is enough to decide.
+Canonical skills: `.agents/skills/`. `.claude/skills/` and `agent/skills` are aliases. Load a skill **body** only on match - metadata is enough to decide.
 
 System layout: `agent/README.md`.
 
@@ -65,7 +65,7 @@ View → ViewModel (@MainActor @Observable) → Service (@Observable) → SwiftD
 | Shell | `SpeakUp/Views/ContentView.swift` (5 tabs + global sheets / deep links) |
 | Models / Services / ViewModels | `SpeakUp/Models/` · `Services/` · `ViewModels/` |
 | Views / Theme / seeds | `SpeakUp/Views/<Feature>/` · `Theme/` · `Data/` |
-| Widget | `SpeakUpWidget/` — App Group only, no SwiftData |
+| Widget | `SpeakUpWidget/` - App Group only, no SwiftData |
 
 Tabs: Today → Library (`PracticeHubView`) → History → Learn (`CurriculumView`) → Settings.  
 Schema: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `CurriculumProgress`, `RecordingGroup`, `Story`, `StoryFolder`.
@@ -79,7 +79,7 @@ Schema: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `Curri
 - Media: store via `Recording.relativeURL`; read via `resolvedAudioURL` / `resolvedVideoURL`.
 - Env-injected: `SpeechService`, `AudioService`, `LLMService` only. Everything else `.shared`.
 - Shares: `SharePresenter` only. Widget reloads: fingerprint-gate in `TodayViewModel`. Prompt seed: `seededPromptFingerprint_v1`.
-- Paid: `FreeTierPolicy.trial` / `.expired`, not scattered `isLifetime`. **Beta:** `BetaAccess.allFeaturesFree` — read `docs/features/monetization.md` before adding a gate.
+- Paid: `FreeTierPolicy.trial` / `.expired`, not scattered `isLifetime`. **Beta:** `BetaAccess.allFeaturesFree` - read `docs/features/monetization.md` before adding a gate.
 
 ---
 
@@ -96,7 +96,7 @@ Probe once: `xcodebuild -version`.
 xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
 
-If that destination is gone, pick the first available iPhone from `xcrun simctl list devices available` — same as CI. StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`.
+If that destination is gone, pick the first available iPhone from `xcrun simctl list devices available` - same as CI. StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`.
 
 ---
 
@@ -109,4 +109,4 @@ Smart Caveman **full** (skill `caveman`). Pattern: `[thing] [action] [reason]. [
 
 ## Doc hygiene
 
-Reshape a feature → update `docs/features/<slug>.md` + the index row in the same PR. New silent trap → `docs/AGENT_GOTCHAS.md`. New recipe → `docs/AGENT_PLAYBOOK.md`. Do not grow this kernel — link out.
+Reshape a feature → update `docs/features/<slug>.md` + the index row in the same PR. New silent trap → `docs/AGENT_GOTCHAS.md`. New recipe → `docs/AGENT_PLAYBOOK.md`. Do not grow this kernel - link out.

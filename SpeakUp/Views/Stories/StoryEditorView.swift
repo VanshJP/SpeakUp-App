@@ -155,7 +155,7 @@ struct StoryEditorView: View {
         .onDisappear {
             autoSaveTask?.cancel()
             dictationTask?.cancel()
-            // Never cancel while stop is finalizing — that deletes the take.
+            // Never cancel while stop is finalizing - that deletes the take.
             if audioService.isRecording, !audioService.isFinalizingRecording {
                 audioService.cancelRecording()
             }
@@ -856,7 +856,7 @@ struct StoryEditorView: View {
                     plainText = mutable.string
                 }
             } catch is CancellationError {
-                // User cancelled — silently clean up
+                // User cancelled - silently clean up
             } catch {
                 errorMessage = "Transcription failed: \(error.localizedDescription)"
             }

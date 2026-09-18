@@ -1,6 +1,6 @@
 import Foundation
 
-/// How well the speaker recalled a word. There is no rating UI — saying the
+/// How well the speaker recalled a word. There is no rating UI - saying the
 /// word in a recording *is* the review, so the grade is inferred from how many
 /// times it showed up that day.
 nonisolated enum VocabGrade: Int, Sendable {
@@ -32,7 +32,7 @@ nonisolated struct VocabReviewState: Codable, Sendable, Equatable {
 /// FSRS-4.5 scheduler. Decides when a word should come back so it moves into
 /// active vocabulary instead of being spotlighted once and forgotten.
 nonisolated enum VocabScheduler {
-    /// Published FSRS-4.5 default weights. Not optimized per user — 1–3 reviews
+    /// Published FSRS-4.5 default weights. Not optimized per user - 1-3 reviews
     /// a day is nowhere near enough of a review log to train on.
     private static let w: [Double] = [
         0.4872, 1.4003, 3.7145, 13.8206, 5.1618, 1.2298, 0.8975, 0.031, 1.6474,
@@ -46,7 +46,7 @@ nonisolated enum VocabScheduler {
     /// asks to tune them.
     private static let desiredRetention = 0.9
     private static let maxIntervalDays = 90.0
-    /// D₀ for an easy first review — FSRS reverts difficulty toward this.
+    /// D₀ for an easy first review - FSRS reverts difficulty toward this.
     private static let reversionTarget = initialDifficulty(4)
 
     /// Probability the speaker still has the word available, 0…1.
