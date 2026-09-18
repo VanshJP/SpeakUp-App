@@ -138,7 +138,7 @@ struct ReadAloudResultView: View {
             .font(.caption)
 
             GlassCard {
-                WrappingHStack(alignment: .leading, spacing: 6, lineSpacing: 10) {
+                WrappingHStack(spacing: 6, lineSpacing: 10) {
                     ForEach(Array(result.passage.words.enumerated()), id: \.offset) { index, word in
                         let state = index < result.wordStates.count ? result.wordStates[index] : WordMatchState.upcoming
                         Text(word)

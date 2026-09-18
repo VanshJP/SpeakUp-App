@@ -15,6 +15,11 @@ struct ReadAloudSessionView: View {
 
     @ScaledMetric(relativeTo: .title2) private var passageFontSize: CGFloat = 22
 
+    /// One weight for the whole passage. See `passageText`.
+    private static let passageWeight: Font.Weight = .semibold
+    /// Roughly a line of reading before the scroll view re-centres.
+    private static let scrollAdvanceWords = 8
+
     var body: some View {
         ZStack {
             AppBackground(style: .recording)
@@ -33,9 +38,16 @@ struct ReadAloudSessionView: View {
                             .padding(.vertical, 24)
                     }
                     .onChange(of: viewModel.currentWordIndex) { _, newIndex in
-                        guard abs(newIndex - lastAutoScrolledWordIndex) >= 2 else { return }
-                        proxy.scrollTo("word_\(max(0, newIndex - 3))", anchor: .center)
+                        // Re-centring every second word meant the passage slid
+                        // under the reader continuously — the other half of
+                        // "the words keep moving". One nudge per line's worth
+                        // of reading, animated, so the page holds still while
+                        // the highlight travels across it.
+                        guard abs(newIndex - lastAutoScrolledWordIndex) >= Self.scrollAdvanceWords else { return }
                         lastAutoScrolledWordIndex = newIndex
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo("word_\(max(0, newIndex - 3))", anchor: .center)
+                        }
                     }
                 }
 
@@ -222,23 +234,32 @@ struct ReadAloudSessionView: View {
 
     // MARK: - Passage Text
 
+    /// Every word is drawn at one fixed weight, and nothing about a word's
+    /// state may change its measured size.
+    ///
+    /// The current word used to render `.bold` while its neighbours stayed
+    /// `.regular`. Bold glyphs are wider, so each time the cursor advanced the
+    /// word under it grew, the word behind it shrank, and every word after
+    /// them on the line re-flowed — the passage visibly squirmed as you read
+    /// it. Position is carried by the highlight and the colour ramp instead,
+    /// neither of which touches layout.
     private var passageText: some View {
         let words = passage.words
         let states = viewModel.wordStates
 
-        return WrappingHStack(alignment: .leading, spacing: 6, lineSpacing: 12) {
+        return WrappingHStack(spacing: 6, lineSpacing: 12, metricsKey: passageFontSize) {
             ForEach(Array(words.enumerated()), id: \.offset) { index, word in
                 let state = index < states.count ? states[index] : WordMatchState.upcoming
                 Text(word)
-                    .font(.system(size: passageFontSize, weight: wordWeight(for: index), design: .default))
-                    .foregroundStyle(wordColor(for: index, state: state))
+                    .font(.system(size: passageFontSize, weight: Self.passageWeight, design: .default))
+                    .foregroundStyle(wordColor(state))
                     .underline(state.needsAttention)
                     .padding(.vertical, 2)
                     .padding(.horizontal, 2)
                     .background {
-                        if index < states.count && states[index] == .current {
+                        if state == .current {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(AppColors.primary.opacity(0.2))
+                                .fill(AppColors.primary.opacity(0.28))
                         }
                     }
                     .onTapGesture {
@@ -269,15 +290,9 @@ struct ReadAloudSessionView: View {
         }
     }
 
-    private func wordWeight(for index: Int) -> Font.Weight {
-        let states = viewModel.wordStates
-        guard index < states.count else { return .regular }
-        return states[index] == .current ? .bold : .regular
-    }
-
-    private func wordColor(for index: Int, state: WordMatchState) -> Color {
+    private func wordColor(_ state: WordMatchState) -> Color {
         switch state {
-        case .upcoming: return .white.opacity(0.4)
+        case .upcoming: return .white.opacity(0.45)
         case .current: return .white
         case .matched: return AppColors.success
         case .mismatched: return AppColors.error
@@ -295,18 +310,42 @@ struct ReadAloudSessionView: View {
     // MARK: - Bottom Controls
 
 
+    /// Neither button may be disabled while the model line plays.
+    ///
+    /// Both used to carry `.disabled(pronunciationService.isSpeaking)`, which
+    /// is precisely when someone wants them: the only way to skip the voiceover
+    /// was to sit through the voiceover. "Start speaking" now stops the
+    /// synthesiser and opens the mic immediately, and the secondary button
+    /// becomes Stop while audio is playing.
     private var shadowControls: some View {
-        VStack(spacing: 10) {
-            Text("Shadow mode")
+        let isSpeaking = pronunciationService.isSpeaking
+
+        return VStack(spacing: 10) {
+            Text(isSpeaking ? "Listen, then speak it back" : "Ready when you are")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.7))
-            HStack(spacing: 12) {
-                GlassButton(title: pronunciationService.isSpeaking ? "Playing…" : "Hear again", style: .secondary, size: .medium) {
-                    pronunciationService.speak(text: passage.text, rate: 0.42)
-                }
-                .disabled(pronunciationService.isSpeaking)
 
-                GlassButton(title: "Start speaking", style: .primary, size: .medium) {
+            HStack(spacing: 12) {
+                GlassButton(
+                    title: isSpeaking ? "Stop" : "Hear again",
+                    style: .secondary,
+                    size: .medium
+                ) {
+                    Haptics.light()
+                    if isSpeaking {
+                        pronunciationService.stop()
+                    } else {
+                        pronunciationService.speak(text: passage.text, rate: 0.42)
+                    }
+                }
+                .accessibilityLabel(isSpeaking ? "Stop the model reading" : "Hear the model reading again")
+
+                GlassButton(
+                    title: isSpeaking ? "Skip & speak" : "Start speaking",
+                    style: .primary,
+                    size: .medium
+                ) {
+                    Haptics.medium()
                     pronunciationService.stop()
                     awaitingShadowStart = false
                     Task {
@@ -314,7 +353,11 @@ struct ReadAloudSessionView: View {
                         lastAutoScrolledWordIndex = 0
                     }
                 }
-                .disabled(pronunciationService.isSpeaking)
+                .accessibilityLabel(
+                    isSpeaking
+                        ? "Skip the model reading and start speaking"
+                        : "Start speaking"
+                )
             }
         }
         .padding(.bottom, 4)
@@ -360,28 +403,80 @@ struct ReadAloudSessionView: View {
 
 // MARK: - Wrapping HStack (Flow Layout)
 
+/// Flow layout for the passage. Caches its measurement pass.
+///
+/// `sizeThatFits` and `placeSubviews` each used to re-measure every subview
+/// from scratch, and SwiftUI calls both on every pass. A 150-word passage
+/// therefore cost ~300 text measurements per pass, and a pass ran on every
+/// partial recognition result — several times a second, on the main actor,
+/// for the whole read. That is what pinned the main thread and let recognition
+/// tasks pile up behind it. Now the sizes and positions are computed once per
+/// (width, font size) and reused, so a state change that only repaints colour
+/// costs no measurement at all.
 struct WrappingHStack: Layout {
-    var alignment: HorizontalAlignment = .leading
+    // No `alignment`: rows are packed from the leading edge, and the property
+    // that used to sit here was set by every call site and read by none.
     var spacing: CGFloat = 8
     var lineSpacing: CGFloat = 4
+    /// Anything that changes a subview's measured size must change this, or
+    /// the cache will hand back stale geometry. Today that is the Dynamic Type
+    /// scaled font size; the word states deliberately do not affect metrics.
+    var metricsKey: CGFloat = 0
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = layout(proposal: proposal, subviews: subviews)
-        return result.size
+    struct Cache {
+        var width: CGFloat?
+        var metricsKey: CGFloat?
+        var count: Int = 0
+        /// Measured size of the first subview when the cache was filled. Cheap
+        /// tripwire for anything that changes glyph metrics without changing
+        /// the subview count — a Dynamic Type change on a caller that does not
+        /// pass a `metricsKey`, for instance.
+        var probe: CGSize?
+        var positions: [CGPoint] = []
+        var size: CGSize = .zero
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = layout(proposal: proposal, subviews: subviews)
-        for (index, subview) in subviews.enumerated() {
-            guard index < result.positions.count else { break }
-            let position = result.positions[index]
-            subview.place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        // Only the things that move geometry invalidate. A repaint of the same
+        // words keeps the cached pass.
+        if cache.count != subviews.count || cache.metricsKey != metricsKey {
+            cache = Cache()
         }
     }
 
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        resolve(proposal: proposal, subviews: subviews, cache: &cache)
+        return cache.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        resolve(proposal: proposal, subviews: subviews, cache: &cache)
+        for (index, subview) in subviews.enumerated() {
+            guard index < cache.positions.count else { break }
+            let position = cache.positions[index]
+            subview.place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified
+            )
+        }
+    }
+
+    private func resolve(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         let maxWidth = proposal.width ?? .infinity
+
+        if cache.width == maxWidth,
+           cache.metricsKey == metricsKey,
+           cache.count == subviews.count,
+           let probe = cache.probe,
+           let first = subviews.first,
+           first.sizeThatFits(.unspecified) == probe {
+            return
+        }
+
         var positions: [CGPoint] = []
+        positions.reserveCapacity(subviews.count)
         var currentX: CGFloat = 0
         var currentY: CGFloat = 0
         var lineHeight: CGFloat = 0
@@ -402,6 +497,11 @@ struct WrappingHStack: Layout {
             maxX = max(maxX, currentX)
         }
 
-        return (CGSize(width: maxX, height: currentY + lineHeight), positions)
+        cache.width = maxWidth
+        cache.metricsKey = metricsKey
+        cache.count = subviews.count
+        cache.probe = subviews.first?.sizeThatFits(.unspecified)
+        cache.positions = positions
+        cache.size = CGSize(width: maxX, height: currentY + lineHeight)
     }
 }

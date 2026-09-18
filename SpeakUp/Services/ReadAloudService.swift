@@ -80,6 +80,15 @@ class ReadAloudService {
     private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
 
+    /// Newest transcript the recognizer has produced, written on Apple's
+    /// callback queue and read on the main actor. Latest-wins: a slow frame
+    /// drops stale intermediate transcripts instead of queueing them, which is
+    /// the whole point — see `drainPendingTranscript()`.
+    private let pendingTranscript = OSAllocatedUnfairLock<String?>(initialState: nil)
+    /// True while exactly one drain is queued on the main actor. Bounds the
+    /// number of in-flight tasks to one no matter how fast partials arrive.
+    private let isDrainScheduled = OSAllocatedUnfairLock<Bool>(initialState: false)
+
     /// `removeTap` crashes if no tap is installed — track it explicitly.
     private var isTapInstalled = false
 
@@ -109,6 +118,8 @@ class ReadAloudService {
         mismatchedWordCount = 0
         lastProcessedTranscript = ""
         recognitionFailureMessage = nil
+        pendingTranscript.withLock { $0 = nil }
+        isDrainScheduled.withLock { $0 = false }
     }
 
     // MARK: - Start Listening
@@ -162,26 +173,54 @@ class ReadAloudService {
 
         isListening = true
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
+        recognitionTask = recognizer.recognitionTask(with: request) {
+            [weak self, pendingTranscript, isDrainScheduled] result, error in
 
             if let result {
-                // Apple fires this callback on an internal queue; hop to the
-                // main actor before processResult touches observable state.
-                Task { @MainActor in
-                    self.processResult(result)
+                // Two things happen here and both matter on a long read.
+                //
+                // 1. The transcript is lifted out as a `String` inside the
+                //    callback. `SFSpeechRecognitionResult` is not `Sendable`,
+                //    and this used to hand the object itself to a `@MainActor`
+                //    task.
+                // 2. Updates coalesce. Partial results fire many times a
+                //    second and each one used to spawn its own task. Once the
+                //    main actor fell behind — and it did, see the layout cache
+                //    in `WrappingHStack` — those tasks queued without bound,
+                //    each retaining a result. That is the read that froze and
+                //    then died around the twenty-second mark. Latest-wins:
+                //    park the newest transcript, keep one drain in flight.
+                // Hoisted out of the lock deliberately: `withLock` takes a
+                // `@Sendable` closure, and `SFSpeechRecognitionResult` is not
+                // `Sendable`, so it must not be what the closure captures.
+                let transcript = result.bestTranscription.formattedString
+                pendingTranscript.withLock { $0 = transcript }
+                let needsDrain = isDrainScheduled.withLock { scheduled -> Bool in
+                    guard !scheduled else { return false }
+                    scheduled = true
+                    return true
+                }
+                if needsDrain {
+                    Task { @MainActor in
+                        self?.drainPendingTranscript()
+                    }
                 }
             }
 
             if error != nil || (result?.isFinal ?? false) {
+                // Resolve the message here too: `any Error` is not `Sendable`
+                // either, so only the string crosses over.
+                let failure: String? = error.flatMap {
+                    ReadAloudError.recognitionFailed($0.localizedDescription).errorDescription
+                }
                 Task { @MainActor in
                     // A dead recognizer must not leave the engine running with
                     // a hot mic behind a "Not listening" label — and it must
                     // not end as a silent zero either. Full teardown here, and
                     // the message travels out via recognitionFailureMessage.
-                    if let error, self.recognitionFailureMessage == nil {
-                        self.recognitionFailureMessage =
-                            ReadAloudError.recognitionFailed(error.localizedDescription).errorDescription
+                    guard let self else { return }
+                    if let failure, self.recognitionFailureMessage == nil {
+                        self.recognitionFailureMessage = failure
                     }
                     self.stopInternal()
                 }
@@ -212,13 +251,23 @@ class ReadAloudService {
 
     // MARK: - Process Recognition Result
 
-    private func processResult(_ result: SFSpeechRecognitionResult) {
+    /// Applies the newest transcript the recognizer has produced, then clears
+    /// the way for the next drain. Anything that arrived while this was queued
+    /// is already folded into `pendingTranscript` — alignment re-runs over the
+    /// whole transcript every time, so skipping intermediate states loses
+    /// nothing and saves the main actor the work.
+    private func drainPendingTranscript() {
+        isDrainScheduled.withLock { $0 = false }
+        guard let transcript = pendingTranscript.withLock({ $0 }) else { return }
+        processTranscript(transcript)
+    }
+
+    private func processTranscript(_ transcript: String) {
         // Use formattedString split into words instead of segments.
         // Segments can split words mid-utterance in partial results (e.g. "quantum"
         // appears as segment "quant" then later corrects). formattedString gives the
         // recognizer's best word-boundary output, and re-evaluating on every callback
         // lets earlier partial mis-splits self-correct as more audio arrives.
-        let transcript = result.bestTranscription.formattedString
         guard transcript != lastProcessedTranscript else { return }
         lastProcessedTranscript = transcript
 
@@ -228,24 +277,25 @@ class ReadAloudService {
 
         let computed = computeWordStates(from: spokenWords)
 
-        Task { @MainActor in
-            if self.wordStates != computed.states {
-                self.wordStates = computed.states
-            }
-            if self.currentWordIndex != computed.refIndex {
-                self.currentWordIndex = computed.refIndex
-            }
-            if self.matchedWordCount != computed.matched {
-                self.matchedWordCount = computed.matched
-            }
-            if self.mismatchedWordCount != computed.mismatched {
-                self.mismatchedWordCount = computed.mismatched
-            }
+        // Already on the main actor. The nested `Task { @MainActor }` this
+        // replaces only deferred the assignments by a turn, which split the
+        // compute and the publish across two separate view updates.
+        if wordStates != computed.states {
+            wordStates = computed.states
+        }
+        if currentWordIndex != computed.refIndex {
+            currentWordIndex = computed.refIndex
+        }
+        if matchedWordCount != computed.matched {
+            matchedWordCount = computed.matched
+        }
+        if mismatchedWordCount != computed.mismatched {
+            mismatchedWordCount = computed.mismatched
+        }
 
-            // Check if passage is complete
-            if computed.refIndex >= self.referenceWords.count {
-                self.stop()
-            }
+        // Check if passage is complete
+        if computed.refIndex >= referenceWords.count {
+            stop()
         }
     }
 

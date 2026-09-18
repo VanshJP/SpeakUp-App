@@ -195,9 +195,23 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The shared axis. A passage's source material is not why you'd pick it:
+    /// news copy trains holding a steady clip, literature trains expression,
+    /// and the precision material trains being understood. Your own passages
+    /// follow whatever you pasted in, so they sit under clarity — the reason
+    /// the feature scores word-by-word in the first place.
+    var focus: PracticeFocus {
+        switch self {
+        case .news: return .pace
+        case .literature: return .presence
+        case .technical, .tongueTwister, .minimalPairs, .custom: return .clarity
+        }
+    }
+
     /// Catalog filters — excludes freeform custom passages.
     static var catalogCases: [ReadAloudCategory] {
         allCases.filter { $0 != .custom }
     }
+
 }
 

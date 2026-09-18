@@ -8,8 +8,13 @@ struct WarmUpListView: View {
 
     var sourceStory: Story?
 
+    /// Arrive pre-narrowed from the focus browser in Library → Tools.
+    var initialFocus: PracticeFocus?
+
+    @State private var didApplyInitialFocus = false
+
     private var longestExerciseSeconds: Double {
-        Double(viewModel.exercises.map(\.durationSeconds).max() ?? 0)
+        Double(DefaultWarmUps.all.map(\.durationSeconds).max() ?? 0)
     }
 
     var body: some View {
@@ -21,28 +26,17 @@ struct WarmUpListView: View {
                 )
             }
 
-            ToolFilterBar {
-                FilterPill(
-                    title: "All",
-                    icon: "square.grid.2x2",
-                    isSelected: viewModel.selectedCategory == nil
-                ) {
-                    withAnimation(AppMotion.slide) { viewModel.selectedCategory = nil }
-                }
-
-                ForEach(WarmUpCategory.allCases) { category in
-                    FilterPill(
-                        title: category.displayName,
-                        icon: category.icon,
-                        isSelected: viewModel.selectedCategory == category,
-                        color: category.color
-                    ) {
-                        withAnimation(AppMotion.slide) { viewModel.selectedCategory = category }
-                    }
-                }
-            }
+            FocusFilterBar(
+                focuses: viewModel.availableFocuses,
+                selection: $viewModel.selectedFocus
+            )
 
             exerciseContent
+        }
+        .task {
+            guard !didApplyInitialFocus, let initialFocus else { return }
+            didApplyInitialFocus = true
+            viewModel.selectedFocus = initialFocus
         }
         .fullScreenCover(isPresented: $showingExercise) {
             WarmUpExerciseView(viewModel: viewModel)
@@ -51,60 +45,33 @@ struct WarmUpListView: View {
 
     // MARK: - Exercise Content
 
+    /// Grouped by what the exercise improves, never by what it is. Both the
+    /// unfiltered map and a narrowed list use the same section, so a filter
+    /// collapses the page to one group rather than swapping it for a flat list
+    /// that has lost its heading (invariant 8, map before mask).
     @ViewBuilder
     private var exerciseContent: some View {
-        if viewModel.selectedCategory != nil {
-            if viewModel.exercises.isEmpty {
-                EmptyStateCard(
-                    icon: "wind",
-                    title: "Nothing here",
-                    message: "No warm-ups in this category yet. Try another one.",
-                    buttonTitle: "Show All",
-                    buttonAction: {
-                        withAnimation(AppMotion.slide) {
-                            viewModel.selectedCategory = nil
-                        }
-                    }
-                )
-            } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(viewModel.exercises) { exercise in
-                        exerciseRow(exercise)
-                    }
+        let focuses = FocusFilterBar.visible(viewModel.availableFocuses, selection: viewModel.selectedFocus)
+
+        if viewModel.exercises.isEmpty {
+            EmptyStateCard(
+                icon: "wind",
+                title: "Nothing here",
+                message: "No warm-ups train that yet. Try another one.",
+                buttonTitle: "Show All",
+                buttonAction: {
+                    withAnimation(AppMotion.slide) { viewModel.selectedFocus = nil }
                 }
-            }
+            )
         } else {
             VStack(spacing: 20) {
-                ForEach(WarmUpCategory.allCases) { category in
-                    categorySection(category)
+                ForEach(focuses) { focus in
+                    FocusSection(focus: focus, items: viewModel.exercises(for: focus)) { exercise in
+                        exerciseRow(exercise)
+                    }
                 }
             }
         }
-    }
-
-    private func categorySection(_ category: WarmUpCategory) -> some View {
-        let items = viewModel.exercises.filter { $0.category == category }
-        guard !items.isEmpty else { return AnyView(EmptyView()) }
-
-        return AnyView(
-            VStack(alignment: .leading, spacing: 10) {
-                GlassSectionHeader(category.displayName, icon: category.icon) {
-                    Text("\(items.count)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(category.purpose)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                LazyVStack(spacing: 12) {
-                    ForEach(items) { exercise in
-                        exerciseRow(exercise)
-                    }
-                }
-            }
-        )
     }
 
     private func exerciseRow(_ exercise: WarmUpExercise) -> some View {
@@ -118,6 +85,9 @@ struct WarmUpListView: View {
                 longest: longestExerciseSeconds
             ),
             durationLabel: "\(exercise.durationSeconds)s",
+            // The mechanism moves here. It is useful once you have decided
+            // what you are training, and misleading as the thing you browse by.
+            tag: exercise.category.displayName,
             accessory: .play
         ) {
             viewModel.selectExercise(exercise)

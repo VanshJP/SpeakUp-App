@@ -8,8 +8,10 @@ Prep and targeted practice surfaces, optionally linked to a Story from Library s
 
 | Role | Path |
 |------|------|
-| Shared copy / identity | `SpeakUp/Models/PracticeToolKind.swift` |
-| Page skeleton | `SpeakUp/Views/Components/ToolPage.swift` — `ToolPage`, `ToolPresentation`, `ToolFilterBar`, `SourceStoryBanner` |
+| **Shared outcome axis** | `SpeakUp/Models/PracticeFocus.swift` — 8 cases, every catalog maps onto it |
+| Shared copy / identity | `SpeakUp/Models/PracticeToolKind.swift` — adds `format`, `focuses`, `itemCount(for:)` |
+| Outcome browser | `SpeakUp/Views/Practice/PracticeFocusView.swift` — `PracticeFocusRow`, `PracticeFocusDetailView`, `PracticeToolRoute` |
+| Page skeleton | `SpeakUp/Views/Components/ToolPage.swift` — `ToolPage`, `ToolPageAction`, `ToolPresentation`, `ToolFilterBar`, `FocusFilterBar`, `FocusSection`, `SourceStoryBanner` |
 | Item row | `SpeakUp/Views/Components/PracticeItemRow.swift` |
 | Shared tile | `SpeakUp/Views/Components/ToolTile.swift` — `ToolTileLabel` (Today strip + History Review grid), `ToolCategoryCard` (Library Tools grid) |
 | Review catalog | `SpeakUp/Models/ReviewToolKind.swift` — Compare / Listen back / Goals / Journal |
@@ -22,7 +24,9 @@ Prep and targeted practice surfaces, optionally linked to a Story from Library s
 | VM | `WarmUpViewModel` |
 | Model / data | `WarmUpExercise.swift`, `DefaultWarmUps.swift` |
 
-Categories: breathing / tongue twisters / vocal / articulation.
+Categories: breathing / tongue twisters / vocal / articulation. The page
+**groups and filters by `WarmUpCategory.focus`**, not by the category — the
+category is the row's tag. Covered focuses: steady nerves, clarity, presence.
 
 ## Drills
 
@@ -32,7 +36,7 @@ Categories: breathing / tongue twisters / vocal / articulation.
 | VM | `DrillViewModel` |
 | Model | `DrillMode.swift` — `outcome` + duration `description`, `AppColors` identity tones |
 
-Modes: filler elimination / pace control / pause practice / impromptu sprint (PREP cues) / vocal variety / emphasis / Q&A sprint.
+Modes: filler elimination / pace control / pause practice / impromptu sprint (PREP cues) / vocal variety / emphasis / Q&A sprint. Grouped by `DrillMode.focus`; `initialFocus` arrives from the outcome browser.
 
 `CoachDimension.vocalVariety` → `vocalVariety` drill; `delivery` → `emphasis`. Impromptu and Q&A show timed structure beats (PREP / CLEAR-lite). Vocal Variety scores post-stop via `PitchAnalysisService` on the discarded take.
 
@@ -43,7 +47,10 @@ Modes: filler elimination / pace control / pause practice / impromptu sprint (PR
 | Views | `SpeakUp/Views/Confidence/` — tools list, exercise |
 | Model / data | `ConfidenceExercise.swift`, `DefaultConfidenceExercises.swift` |
 
-Kinds: calming / visualization / progressive / affirmation. Sheet title is **Calm** (matches Today / Library naming).
+Kinds: calming / visualization / progressive / affirmation — displayed under
+outcome names ("Settle the body", "Rehearse it going well", "Face it in steps",
+"Quiet the inner critic"). Grouped by `ConfidenceCategory.focus`, which covers
+steady nerves and mindset. Sheet title is **Calm** (matches Today / Library naming).
 
 ## Invariants
 
@@ -54,8 +61,10 @@ Kinds: calming / visualization / progressive / affirmation. Sheet title is **Cal
 4. Seed arrays live under `Data/`.
 5. **One page skeleton, not four.** All four tool pages are a `ToolPage`: it owns the background, the scroll, the column padding, the nav title (from `PracticeToolKind.title`, so "Quick Drills" can't drift from `Drills` again), the sheet ✕, and the single secondary header line (`PracticeToolKind.outcome`). Pushed and sheet presentations both get that chrome; only the ✕ differs. A page supplies its filters and its items and nothing else — that is what keeps a fifth dialect from appearing. Filters go in a `ToolFilterBar` so no page insets its pills inside the already-padded column; `sourceStory` uses the shared `SourceStoryBanner`.
 6. **One line of chrome, not three.** The nav bar already names the page, so an eyebrow label and a purpose card on top of it were the same sentence three times; `ToolPurposeBanner` was deleted, not relocated. `bestFor` is a browsing aid and stays in the Library rows only.
-7. Library → Tools leads with a one-line caption (not an intro card), then a **practice 2×2** (`ToolCategoryCard`) and a **Review 2×2** (same card recipe, copy from `ReviewToolKind`). A practice card pushes its tool; do not re-create the forward/back edges by hand — the navigation stack owns that motion now. Outcome and best-for stay on VoiceOver / the pushed page's header; the grid must stay scannable like Prompts categories.
-8. **Map before mask.** Warm-Ups and Calm open unfiltered ("All" pill first), grouped into labeled sections — category name + icon + count (`GlassSectionHeader`) + a one-line `purpose` caption on the model. A filter pill collapses to the single matching group; it never hides the taxonomy on arrival. Filtered-empty states offer a "Show All" recovery button.
+7. Library → Tools leads with a one-line caption (not an intro card), then an
+    **Improve list** (`PracticeFocusRow`, one row per `PracticeToolKind.coveredFocuses`), then a
+    **practice 2×2** and a **Review 2×2** (same card recipe, copy from `ReviewToolKind`). A practice card pushes its tool; do not re-create the forward/back edges by hand — the navigation stack owns that motion now. Outcome and best-for stay on VoiceOver / the pushed page's header; the grid must stay scannable like Prompts categories.
+8. **Map before mask.** All four tool pages open unfiltered ("All" pill first), grouped into labeled sections. The pills are a shared `FocusFilterBar` and each section a shared `FocusSection` (both in `ToolPage.swift`) — title + icon + count + the focus's `promise` — so one page's grouping cannot drift from the others'; `FocusFilterBar.visible(_:selection:)` is the one place that decides which groups a selection shows. A filter pill collapses to the single matching group; it never hides the taxonomy on arrival. Filtered-empty states offer a "Show All" recovery button.
 9. Runner controls use `GlassButton` (primary = forward/Done, secondary = Back) and `Font.displayNumeral` for the hero countdown — no hand-rolled white capsules. The warm-up transport trio (restart/play/skip) is round-icon, exempt from the capsule rule. Runners confirm before discarding an active session (warm-up ✕ mid-run asks, same as drills).
 10. `ConfidenceCategory.color` draws from the jewel set; exercise steps read via `step(safelyAt:)`, never a raw subscript. Step cards re-`.id` on the index so swaps animate; finishing fires `Haptics.success()` + the `.exhale` chirp, distinct from step ticks.
 11. **Explain once, at the surface where the choice is made.** The Library Tools tab renders a compact **category grid**, then pushes the chosen practice tool (`ToolPresentation.pushed`). Review tools open sheets / pushes via `ContentView` callbacks (same doors as History → Progress). Searchable across title/outcome/best-for, empty state on no match. Today's prep strip and History's Review grid both use the compact `ToolTileLabel`; Library uses the denser `ToolCategoryCard`. Two densities, shared catalogs (`PracticeToolKind` / `ReviewToolKind`) — do not hand-roll a third tile dialect.
@@ -64,8 +73,49 @@ Kinds: calming / visualization / progressive / affirmation. Sheet title is **Cal
 14. **Silence is not a score.** A drill whose mic or speech recognition can't start sets `errorMessage` and exits via alert — it never awards a clean-run result for audio that was never heard. Pause Practice is exempt (it scores metering silence). Read Aloud carries the same doctrine as result notices (see [read-aloud.md](./read-aloud.md)).
 15. Pace-control drills score against `DrillViewModel.targetWPM` (from `UserSettings.resolvedTargetWPM`), not a fixed 130–170 band. Result copy names that target.
 16. Breathing circle scale is computed from accumulated phase time (`TimelineView`, paused when paused) — never `withAnimation`, which cannot be cancelled and desyncs from the clock.
-17. **Countdown Cancel is immediate.** `CountdownOverlayView` ticks via a cancellable `.task` loop and sets `hasCompleted` on Cancel / Start Now so a stray tick cannot complete a dismissed countdown. Own the hit surface (`.contentShape` + full-screen frame) — a parent scroll used to eat the first taps.
+17. **One axis: `PracticeFocus`.** The four tools are *formats* — how long
+    they take and whether the mic opens — and `PracticeToolKind.format` is the
+    line that says so. What they *improve* is `PracticeFocus`, and several of
+    them improve the same things on purpose. Every tool page groups and filters
+    by focus; the old per-tool taxonomies (Breathing / Tongue Twisters / Vocal /
+    Articulation, Calming / Visualization / Progressive / Affirmation, News /
+    Literature / Technical) named mechanisms, so twelve labels were on screen
+    and none said what changed. They survive as row tags. Do **not** add a
+    second grouping axis, and do not give a catalog a private outcome enum —
+    extend `PracticeFocus`.
+18. **Focus listings are derived, never written down.** `itemCount(for:)`
+    counts the seed arrays and everything else is built on it — `focuses`,
+    `tools(for:)`, `coveredFocuses`, and each page's `availableFocuses`, which
+    simply forward to `PracticeToolKind.<tool>.focuses`. A listed-but-empty
+    tool is therefore not expressible, which is why the Improve list and the
+    focus page have no empty states. Do not reintroduce a second derivation
+    (one asking a category enum which focuses exist would list a focus whose
+    only category ships nothing). `SpeakUpTests/PracticeFocusTests.swift` pins
+    the content side: every `PracticeFocus` case must ship material somewhere,
+    and each tool's per-focus counts must sum to its whole catalog.
+19. **`PracticeFocus` is `nonisolated`, but `color` is `@MainActor`.** It has to
+    be nonisolated so `allCases` stays reachable from `ReadAloudCategory`, which
+    is nonisolated too (gotcha §1); `AppColors` is default-isolated, so only the
+    colour member is pinned. Keep that split when adding members.
+20. **A tool page's nav bar can hold one action** (`ToolPageAction`, rendered
+    `.topBarTrailing` by `ToolPage`). Read Aloud uses it for "Add your own
+    passage". An "add" affordance belongs there or on a rail — never as a
+    full-width card above the catalog the page exists to show.
+21. **Countdown Cancel is immediate.** `CountdownOverlayView` ticks via a cancellable `.task` loop and sets `hasCompleted` on Cancel / Start Now so a stray tick cannot complete a dismissed countdown. Own the hit surface (`.contentShape` + full-screen frame) — a parent scroll used to eat the first taps.
 
 ## Read-Aloud
 
 Catalog passages plus **Practice anything** (type a word / sentence / paragraph, hear TTS, then score with the same alignment engine). See [read-aloud.md](./read-aloud.md).
+
+## Outcome browser
+
+Library → Tools → a `PracticeFocusRow` pushes `PracticeFocusDetailView`, which
+lists every tool with material for that focus and its item count, then pushes a
+`PracticeToolRoute` into that tool already narrowed (`initialFocus:`). This is
+the screen that answers "aren't warm-ups drills too?" — under *Be understood*
+you see tongue twisters, articulation warm-ups and the precision read-aloud
+passages side by side, distinguished by `format` rather than filed apart.
+
+Routing is value-based (`.navigationDestination(for:)`) so a focus page can
+push a tool page on top of itself; Library's practice cards use
+`NavigationLink(value:)` + `ToolCategoryCardLabel` for the same reason.

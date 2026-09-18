@@ -36,14 +36,14 @@ enum WarmUpCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// What this category is *for* — the one line a section header shows so
-    /// someone browsing understands why the grouping exists.
-    var purpose: String {
+    /// The shared axis. Warm-ups are a composure, clarity and presence tool;
+    /// the category stays as the *kind* of exercise, shown on the row, while
+    /// the focus is what the page groups by.
+    var focus: PracticeFocus {
         switch self {
-        case .breathing: return "Steady your nerves and breath support."
-        case .tonguetwister: return "Loosen up articulation, then add speed."
-        case .vocal: return "Wake up resonance and pitch range."
-        case .articulation: return "Crisper consonants, looser jaw."
+        case .breathing: return .steadyNerves
+        case .tonguetwister, .articulation: return .clarity
+        case .vocal: return .presence
         }
     }
 }
