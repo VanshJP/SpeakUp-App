@@ -547,16 +547,16 @@ final class LocalLLMService {
             You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
 
             PENALIZE (drag the score down):
- - Rambling: tangents, repetition without payoff, sentences that wander off the prompt
- - Disjointed jumps between unrelated ideas with no signposting
- - Speech that ignores or contradicts the prompt
- - Run-on thoughts with no clear arc
+            - Rambling: tangents, repetition without payoff, sentences that wander off the prompt
+            - Disjointed jumps between unrelated ideas with no signposting
+            - Speech that ignores or contradicts the prompt
+            - Run-on thoughts with no clear arc
 
             REWARD (push the score up):
- - Explicit logical transitions ("first", "however", "as a result", "to summarize")
- - Clear opening → body → conclusion structure
- - Tight, sustained relevance to the prompt
- - Each sentence advancing the argument
+            - Explicit logical transitions ("first", "however", "as a result", "to summarize")
+            - Clear opening → body → conclusion structure
+            - Tight, sustained relevance to the prompt
+            - Each sentence advancing the argument
 
             Reply EXACTLY in this format, one line each, no extra text:
             SCORE: <0-100 integer>
@@ -578,16 +578,16 @@ final class LocalLLMService {
             You are a strict speech evaluator. Score a spoken response 0-100 using this rubric.
 
             PENALIZE (drag the score down):
- - Rambling: tangents, repetition without payoff, sentences that drift between unrelated threads
- - Disjointed jumps with no signposting
- - Run-on thoughts that never resolve
- - Filler-heavy delivery that obscures the point
+            - Rambling: tangents, repetition without payoff, sentences that drift between unrelated threads
+            - Disjointed jumps with no signposting
+            - Run-on thoughts that never resolve
+            - Filler-heavy delivery that obscures the point
 
             REWARD (push the score up):
- - Explicit logical transitions ("first", "however", "as a result", "to summarize")
- - One sustained thread or argument across the speech
- - Each sentence advancing the previous one
- - A discernible arc from opening to conclusion
+            - Explicit logical transitions ("first", "however", "as a result", "to summarize")
+            - One sustained thread or argument across the speech
+            - Each sentence advancing the previous one
+            - A discernible arc from opening to conclusion
 
             Reply EXACTLY in this format, one line each, no extra text:
             SCORE: <0-100 integer>

@@ -596,11 +596,11 @@ struct CoachingInsightSanitizerTests {
     @Test func stripsBulletsDedupesAndCaps() {
         let raw = """
         Here are your tips:
- - You used 9 fillers in 120 words, swap "um" for a closed mouth.
+        - You used 9 fillers in 120 words, swap "um" for a closed mouth.
         * You used 9 fillers in 120 words, swap "um" for a closed mouth!
         1. Pauses: only 2 were deliberate, land one after each claim.
- - Random trailing thought
- - Another trailing thought
+        - Random trailing thought
+        - Another trailing thought
         """
 
         let tips = CoachingInsightSanitizer.tips(from: raw)
