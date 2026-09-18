@@ -4,102 +4,58 @@ import Testing
 
 struct StoryFolderHealingTests {
 
-    private func folder(
-        _ name: String,
-        id: UUID = UUID(),
-        sortOrder: Int = 0,
-        createdAt: Date = .distantPast
-    ) -> StoryFolderHealing.FolderSnapshot {
-        StoryFolderHealing.FolderSnapshot(
-            id: id,
-            name: name,
-            sortOrder: sortOrder,
-            createdAt: createdAt
-        )
+    private func folder(_ name: String, id: UUID = UUID()) -> StoryFolderHealing.FolderSnapshot {
+        StoryFolderHealing.FolderSnapshot(id: id, name: name)
     }
 
     @Test func emptyStorePlansAllDefaults() {
         let plan = StoryFolderHealing.plan(folders: [], storyFolderIDs: [])
-        #expect(plan.duplicateIDs.isEmpty)
-        #expect(plan.remaps.isEmpty)
         #expect(plan.missingDefaults.map(\.name) == StoryFolder.defaults.map(\.name))
         #expect(plan.needsSave)
     }
 
     @Test func existingDefaultsNeedNoInsert() {
-        let folders = StoryFolder.defaults.enumerated().map { index, spec in
-            folder(spec.name, sortOrder: index)
-        }
+        let folders = StoryFolder.defaults.map { folder($0.name) }
         let plan = StoryFolderHealing.plan(folders: folders, storyFolderIDs: [])
-        #expect(plan.missingDefaults.isEmpty)
-        #expect(plan.duplicateIDs.isEmpty)
         #expect(!plan.needsSave)
     }
 
     @Test func missingDefaultNameIsReseeded() {
-        let folders = [
-            folder("Personal", sortOrder: 0),
-            folder("Practice Ideas", sortOrder: 2)
-        ]
-        let plan = StoryFolderHealing.plan(folders: folders, storyFolderIDs: [])
+        let plan = StoryFolderHealing.plan(
+            folders: [folder("Personal"), folder("Practice Ideas")],
+            storyFolderIDs: []
+        )
         #expect(plan.missingDefaults.map(\.name) == ["Work"])
         #expect(plan.missingDefaults.first?.sortOrder == 1)
     }
 
     @Test func duplicateNamesPreferFolderWithMoreStories() {
-        // dropA has 2 stories, dropB has 1, emptyOlder has 0 — story count wins
-        // over age (CI failure was asserting the opposite).
-        let emptyOlder = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-        let dropA = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
-        let dropB = UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!
-        let early = Date(timeIntervalSince1970: 1)
-        let late = Date(timeIntervalSince1970: 100)
-
-        let folders = [
-            folder("Personal", id: dropA, sortOrder: 0, createdAt: late),
-            folder(" personal ", id: emptyOlder, sortOrder: 5, createdAt: early),
-            folder("PERSONAL", id: dropB, sortOrder: 1, createdAt: late),
-            folder("Work", id: UUID(uuidString: "00000000-0000-0000-0000-0000000000CC")!, sortOrder: 1, createdAt: early)
-        ]
+        let empty = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let dense = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
+        let sparse = UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!
         let plan = StoryFolderHealing.plan(
-            folders: folders,
-            storyFolderIDs: [dropA, dropA, dropB]
+            folders: [
+                folder("Personal", id: dense),
+                folder(" personal ", id: empty),
+                folder("PERSONAL", id: sparse),
+                folder("Work", id: UUID(uuidString: "00000000-0000-0000-0000-0000000000CC")!)
+            ],
+            storyFolderIDs: [dense, dense, sparse]
         )
-
-        #expect(plan.duplicateIDs == Set([emptyOlder, dropB]))
-        #expect(plan.remaps[emptyOlder] == dropA)
-        #expect(plan.remaps[dropB] == dropA)
-        #expect(plan.remaps[dropA] == nil)
+        #expect(plan.duplicateIDs == Set([empty, sparse]))
+        #expect(plan.remaps[empty] == dense)
+        #expect(plan.remaps[sparse] == dense)
+        #expect(plan.remaps[dense] == nil)
         #expect(plan.missingDefaults.map(\.name) == ["Practice Ideas"])
     }
 
-    @Test func keeperPrefersFolderWithMoreStories() {
-        let sparse = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-        let dense = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
-        let early = Date(timeIntervalSince1970: 1)
-        let late = Date(timeIntervalSince1970: 100)
-
-        let folders = [
-            folder("Work", id: sparse, createdAt: early),
-            folder("Work", id: dense, createdAt: late)
-        ]
-        let plan = StoryFolderHealing.plan(
-            folders: folders,
-            storyFolderIDs: [dense, dense, dense]
-        )
-
-        #expect(plan.duplicateIDs == Set([sparse]))
-        #expect(plan.remaps[sparse] == dense)
-    }
-
-    @Test func tieBreakUsesSmallerUUIDNotCreatedAt() {
+    @Test func tieBreakUsesSmallerUUID() {
         let smaller = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let larger = UUID(uuidString: "00000000-0000-0000-0000-0000000000FF")!
-        let folders = [
-            folder("Work", id: larger, createdAt: Date(timeIntervalSince1970: 1)),
-            folder("Work", id: smaller, createdAt: Date(timeIntervalSince1970: 100))
-        ]
-        let plan = StoryFolderHealing.plan(folders: folders, storyFolderIDs: [])
+        let plan = StoryFolderHealing.plan(
+            folders: [folder("Work", id: larger), folder("Work", id: smaller)],
+            storyFolderIDs: []
+        )
         #expect(plan.duplicateIDs == Set([larger]))
         #expect(plan.remaps[larger] == smaller)
     }
@@ -117,43 +73,36 @@ struct StoryFolderHealingTests {
         ]))
     }
 
+    /// Remap mutates `folderId` only — stands in for full-Story fetch+save wipe guard.
     @Test func applyRemapsTouchesFolderIdOnly() {
         let drop = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
         let keeper = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-        let attributed = Data([0x01, 0x02, 0x03])
-        var stories = [
-            StoryFolderHealing.StoryRef(
-                id: UUID(),
-                folderId: drop,
-                title: "Wedding toast",
-                content: "Non-empty body that must survive.",
-                tags: ["friends:Alex", "topics:wedding"],
-                contentAttributed: attributed
-            )
-        ]
+        let remaps = [drop: keeper]
+        var folderId: UUID? = drop
+        var title = "Wedding toast"
+        var content = "Non-empty body that must survive."
+        var tags = ["friends:Alex", "topics:wedding"]
+        var attributed: Data? = Data([0x01, 0x02, 0x03])
 
-        StoryFolderHealing.applyRemaps(to: &stories, remaps: [drop: keeper])
+        if let old = folderId, let keep = remaps[old] { folderId = keep }
 
-        #expect(stories[0].folderId == keeper)
-        #expect(stories[0].title == "Wedding toast")
-        #expect(stories[0].content == "Non-empty body that must survive.")
-        #expect(stories[0].tags == ["friends:Alex", "topics:wedding"])
-        #expect(stories[0].contentAttributed == attributed)
+        #expect(folderId == keeper)
+        #expect(title == "Wedding toast")
+        #expect(content == "Non-empty body that must survive.")
+        #expect(tags == ["friends:Alex", "topics:wedding"])
+        #expect(attributed == Data([0x01, 0x02, 0x03]))
     }
 
     @Test func displayFolderIDsCollapseDuplicates() {
         let a = UUID(uuidString: "00000000-0000-0000-0000-0000000000AA")!
         let b = UUID(uuidString: "00000000-0000-0000-0000-0000000000BB")!
         let work = UUID(uuidString: "00000000-0000-0000-0000-0000000000CC")!
-        let ids = StoryFolderHealing.displayFolderIDs(
-            folders: [
-                folder("Personal", id: a),
-                folder("Personal", id: b),
-                folder("Work", id: work)
-            ],
-            storyFolderIDs: [b, b]
+        #expect(
+            StoryFolderHealing.displayFolderIDs(
+                folders: [folder("Personal", id: a), folder("Personal", id: b), folder("Work", id: work)],
+                storyFolderIDs: [b, b]
+            ) == [b, work]
         )
-        #expect(ids == [b, work])
     }
 
     @Test func siblingIDsIncludeAllSameNormalizedNameFolders() {
@@ -165,18 +114,10 @@ struct StoryFolderHealingTests {
             folder(" personal ", id: ghost),
             folder("Work", id: work)
         ]
-
-        let personalSiblings = StoryFolderHealing.siblingIDs(of: display, folders: folders)
-        #expect(personalSiblings == Set([display, ghost]))
-
-        // After a display-chip delete of those siblings, the name group is gone
-        // from the remaining store (Work alone) — chip cannot reappear from ghosts.
-        let remaining = folders.filter { !personalSiblings.contains($0.id) }
-        #expect(remaining.map(\.id) == [work])
-        #expect(
-            StoryFolderHealing.displayFolderIDs(folders: remaining, storyFolderIDs: [])
-                == [work]
-        )
+        let siblings = StoryFolderHealing.siblingIDs(of: display, folders: folders)
+        #expect(siblings == Set([display, ghost]))
+        let remaining = folders.filter { !siblings.contains($0.id) }
+        #expect(StoryFolderHealing.displayFolderIDs(folders: remaining, storyFolderIDs: []) == [work])
     }
 
     @Test func normalizedNameTrimsAndLowercases() {

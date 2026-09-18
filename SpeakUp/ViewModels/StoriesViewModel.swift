@@ -47,19 +47,17 @@ class StoriesViewModel {
     /// One chip / Move destination per normalized name so unhealed CloudKit
     /// duplicates cannot flood the UI. Same keeper rule as launch heal.
     var foldersForDisplay: [StoryFolder] {
+        let snaps = folderSnapshots
         let ids = StoryFolderHealing.displayFolderIDs(
-            folders: folders.map {
-                StoryFolderHealing.FolderSnapshot(
-                    id: $0.id,
-                    name: $0.name,
-                    sortOrder: $0.sortOrder,
-                    createdAt: $0.createdAt
-                )
-            },
+            folders: snaps,
             storyFolderIDs: stories.compactMap(\.folderId)
         )
-        let byID = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
+        let byID = Dictionary(folders.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return ids.compactMap { byID[$0] }
+    }
+
+    private var folderSnapshots: [StoryFolderHealing.FolderSnapshot] {
+        folders.map { StoryFolderHealing.FolderSnapshot(id: $0.id, name: $0.name) }
     }
 
     private let taggingService = StoryTaggingService()
@@ -110,11 +108,10 @@ class StoriesViewModel {
         }
     }
 
-    /// Heal first (local or CloudKit drift), then refresh in-memory arrays.
     func healAndReload() async {
         guard let context = modelContext else { return }
         do {
-            _ = try StoryFolderSeedService.healIfNeeded(in: context)
+            try StoryFolderSeedService.healIfNeeded(in: context)
         } catch {
             errorMessage = "Failed to heal story folders: \(error.localizedDescription)"
         }
@@ -189,17 +186,8 @@ class StoriesViewModel {
     func deleteFolder(_ folder: StoryFolder) {
         guard let context = modelContext else { return }
 
-        // `foldersForDisplay` shows one chip per normalized name. Deleting that
-        // chip must remove every same-name sibling or the chip appears to survive.
-        let snapshots = folders.map {
-            StoryFolderHealing.FolderSnapshot(
-                id: $0.id,
-                name: $0.name,
-                sortOrder: $0.sortOrder,
-                createdAt: $0.createdAt
-            )
-        }
-        let idsToDelete = StoryFolderHealing.siblingIDs(of: folder.id, folders: snapshots)
+        // Display chip = one normalized name; delete every sibling UUID or it resurrects.
+        let idsToDelete = StoryFolderHealing.siblingIDs(of: folder.id, folders: folderSnapshots)
 
         for story in stories {
             guard let fid = story.folderId, idsToDelete.contains(fid) else { continue }
@@ -603,13 +591,8 @@ class StoriesViewModel {
     /// Treat same-normalized-name folder rows as one scope until heal remaps them.
     private func storyBelongs(toFolderID folderID: UUID, storyFolderID: UUID?) -> Bool {
         guard let storyFolderID else { return false }
-        if storyFolderID == folderID { return true }
-        guard let selected = folders.first(where: { $0.id == folderID }) else { return false }
-        let key = StoryFolderHealing.normalizedName(selected.name)
-        guard !key.isEmpty else { return false }
-        return folders.contains {
-            $0.id == storyFolderID && StoryFolderHealing.normalizedName($0.name) == key
-        }
+        return StoryFolderHealing.siblingIDs(of: folderID, folders: folderSnapshots)
+            .contains(storyFolderID)
     }
 
 }

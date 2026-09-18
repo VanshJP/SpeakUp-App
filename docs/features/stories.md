@@ -8,14 +8,13 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 
 | Role | Path |
 |------|------|
-| Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift`, `StoryFolderHealing.swift` |
-| Seed / heal | `SpeakUp/Services/StoryFolderSeedService.swift` (launch + Stories VM) |
+| Models | `SpeakUp/Models/Story.swift`, `StoryFolder.swift`, `StoryFolderHealing.swift` (plan + `StoryFolderSeedService` apply) |
 | Views | `SpeakUp/Views/Stories/` — list, detail, editor, folder bar/sheet |
 | Today card | `SpeakUp/Views/Today/StoryPromptCard.swift` |
 | VM | `SpeakUp/ViewModels/StoriesViewModel.swift` |
 | Tagging | `SpeakUp/Services/StoryTaggingService.swift` (LLM when available; conservative) |
 | Editor bits | `Views/Components/RichTextEditor.swift`, `PersistentTextField`, `FlowLayout` |
-| Defaults | `StoryFolder.defaults` healed + seeded via `StoryFolderSeedService` |
+| Defaults | `StoryFolder.defaults` healed + seeded via `StoryFolderSeedService.healIfNeeded` |
 
 ## Data shape
 
