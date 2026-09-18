@@ -24,7 +24,7 @@ nonisolated enum PromptRelevanceService {
             // Full 3-signal scoring
             raw = keywordOverlap * 0.25 + wordSem * 0.35 + sentAlign * 0.40
         } else if let wordSem = wordSemantic {
-            // Fallback: no sentence embedding — weight word semantics more heavily
+            // Fallback: no sentence embedding - weight word semantics more heavily
             raw = keywordOverlap * 0.35 + wordSem * 0.65
         } else {
             raw = keywordOverlap
@@ -103,19 +103,19 @@ nonisolated enum PromptRelevanceService {
             return min(30, Int(avgSentenceWordCount * 10))
         }
 
-        // Signal 1: Entity continuity (25%) — do sentences reference the same subjects?
+        // Signal 1: Entity continuity (25%) - do sentences reference the same subjects?
         let entityScore = computeEntityContinuity(sentences: sentences)
 
-        // Signal 2: Adjacent sentence semantic similarity (20%) — with stricter thresholds
+        // Signal 2: Adjacent sentence semantic similarity (20%) - with stricter thresholds
         let sentenceFlowScore = computeSentenceFlowScore(sentences: sentences)
 
-        // Signal 3: Sliding window topic drift (20%) — catches mid-speech tangents
+        // Signal 3: Sliding window topic drift (20%) - catches mid-speech tangents
         let topicDriftScore = computeSlidingWindowDrift(sentences: sentences)
 
-        // Signal 4: Weighted discourse markers (15%) — quality over quantity
+        // Signal 4: Weighted discourse markers (15%) - quality over quantity
         let connectiveScore = computeWeightedConnectives(sentences: sentences)
 
-        // Signal 5: Structural progression (20%) — intro/body/conclusion arc
+        // Signal 5: Structural progression (20%) - intro/body/conclusion arc
         let progressionScore = computeStructuralProgression(sentences: sentences)
 
         let raw = entityScore * 0.25 +

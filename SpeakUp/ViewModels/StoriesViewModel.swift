@@ -11,7 +11,7 @@ class StoriesViewModel {
     var isLoading = false
     var errorMessage: String?
 
-    // MARK: - Filters (no per-property didSet — use setFilter/clearAllFilters)
+    // MARK: - Filters (no per-property didSet - use setFilter/clearAllFilters)
 
     private(set) var searchText = ""
     private(set) var selectedTagFilter: StoryTagType?
@@ -245,7 +245,7 @@ class StoriesViewModel {
         recomputeFilteredStories()
     }
 
-    // MARK: - Filter Setters (batched — single recompute per call)
+    // MARK: - Filter Setters (batched - single recompute per call)
 
     func setSearch(_ text: String) {
         searchText = text

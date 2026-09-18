@@ -315,7 +315,7 @@ struct OnboardingBaselineStep: View {
 
     /// One control for every phase. The button never moves, never changes size,
     /// and never swaps places with a different button between "ready" and
-    /// "recording" — the screen the user is looking at when they press record is
+    /// "recording" - the screen the user is looking at when they press record is
     /// the same screen they're looking at while they talk.
     private var takeFooter: some View {
         VStack(spacing: 8) {
@@ -432,9 +432,9 @@ struct OnboardingBaselineStep: View {
     }
 
     /// Quality retake: the take analyzed to nothing (silence, gibberish), so
-    /// the row and its audio go — the user starts clean, never re-judged.
+    /// the row and its audio go - the user starts clean, never re-judged.
     private func retake(deleting recording: Recording) {
-        // Stop observing before deleting — a body re-evaluation against a
+        // Stop observing before deleting - a body re-evaluation against a
         // deleted SwiftData object traps.
         savedRecording = nil
         if let url = recording.resolvedAudioURL {
@@ -459,8 +459,8 @@ struct OnboardingBaselineStep: View {
     }
 }
 
-/// The app's recorder anatomy — radial waveform ring wrapped around a record
-/// button — reused verbatim rather than restyled. The baseline take is the
+/// The app's recorder anatomy - radial waveform ring wrapped around a record
+/// button - reused verbatim rather than restyled. The baseline take is the
 /// user's first sight of the screen they'll open from Today every day after
 /// this, so it is that screen, not a page that happens to record.
 private struct BaselineRecordControl: View {
@@ -522,7 +522,7 @@ private struct BaselineWaveformRing: View {
     let viewModel: OnboardingViewModel
 
     var body: some View {
-        CircularWaveformView(audioLevel: viewModel.micLevel * 60 - 60)
+        CircularWaveformView(audioLevel: viewModel.micLevel * 60-60)
     }
 }
 
@@ -543,7 +543,7 @@ private struct ElapsedClock: View {
 
 /// Owns everything after the take is saved: the staged analyzing theater, the
 /// couldn't-hear coaching, the failure path, and the reveal. Observes the
-/// `Recording` row directly — the coordinator writes transcript + analysis to
+/// `Recording` row directly - the coordinator writes transcript + analysis to
 /// it on MainActor.
 private struct OnboardingBaselineResultView: View {
     let recording: Recording
@@ -713,7 +713,7 @@ private struct OnboardingBaselineResultView: View {
 
 /// The payoff: starting line, not report card. One score, two metrics, one
 /// coaching insight, and the promise that every later session compares back
-/// to this. A low first score never leads with the number — first-session
+/// to this. A low first score never leads with the number - first-session
 private struct OnboardingBaselineRevealView: View {
     let analysis: SpeechAnalysis
     let userName: String

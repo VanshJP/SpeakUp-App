@@ -21,7 +21,7 @@ enum WordMatchState: Equatable {
         }
     }
 
-    /// Settled but not clean — the states worth colouring in a transcript.
+    /// Settled but not clean - the states worth colouring in a transcript.
     var needsAttention: Bool {
         switch self {
         case .mismatched, .skipped: return true
@@ -83,13 +83,13 @@ class ReadAloudService {
     /// Newest transcript the recognizer has produced, written on Apple's
     /// callback queue and read on the main actor. Latest-wins: a slow frame
     /// drops stale intermediate transcripts instead of queueing them, which is
-    /// the whole point — see `drainPendingTranscript()`.
+    /// the whole point - see `drainPendingTranscript()`.
     private let pendingTranscript = OSAllocatedUnfairLock<String?>(initialState: nil)
     /// True while exactly one drain is queued on the main actor. Bounds the
     /// number of in-flight tasks to one no matter how fast partials arrive.
     private let isDrainScheduled = OSAllocatedUnfairLock<Bool>(initialState: false)
 
-    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    /// `removeTap` crashes if no tap is installed - track it explicitly.
     private var isTapInstalled = false
 
 
@@ -131,7 +131,7 @@ class ReadAloudService {
 
         // Idempotent, same rule as LiveTranscriptionService: a Retry racing a
         // ghost start must not stack a second engine and tap on top of the
-        // first — tear the old graph down before building a new one.
+        // first - tear the old graph down before building a new one.
         if audioEngine != nil || isTapInstalled || recognitionTask != nil {
             stopInternal()
         }
@@ -185,8 +185,8 @@ class ReadAloudService {
                 //    task.
                 // 2. Updates coalesce. Partial results fire many times a
                 //    second and each one used to spawn its own task. Once the
-                //    main actor fell behind — and it did, see the layout cache
-                //    in `WrappingHStack` — those tasks queued without bound,
+                //    main actor fell behind - and it did, see the layout cache
+                //    in `WrappingHStack` - those tasks queued without bound,
                 //    each retaining a result. That is the read that froze and
                 //    then died around the twenty-second mark. Latest-wins:
                 //    park the newest transcript, keep one drain in flight.
@@ -215,7 +215,7 @@ class ReadAloudService {
                 }
                 Task { @MainActor in
                     // A dead recognizer must not leave the engine running with
-                    // a hot mic behind a "Not listening" label — and it must
+                    // a hot mic behind a "Not listening" label - and it must
                     // not end as a silent zero either. Full teardown here, and
                     // the message travels out via recognitionFailureMessage.
                     guard let self else { return }
@@ -253,7 +253,7 @@ class ReadAloudService {
 
     /// Applies the newest transcript the recognizer has produced, then clears
     /// the way for the next drain. Anything that arrived while this was queued
-    /// is already folded into `pendingTranscript` — alignment re-runs over the
+    /// is already folded into `pendingTranscript` - alignment re-runs over the
     /// whole transcript every time, so skipping intermediate states loses
     /// nothing and saves the main actor the work.
     private func drainPendingTranscript() {
@@ -316,7 +316,7 @@ class ReadAloudService {
     /// - **Skipped words** (reader drops a word): a spoken word that matches a
     ///   nearby *reference* word marks everything between as `.skipped`.
     /// - **Inserted words** (filler, stumble): a spoken word matching nothing
-    ///   is checked against what the *next* spoken word resolves to — if that
+    ///   is checked against what the *next* spoken word resolves to - if that
     ///   lands on the current or an upcoming reference word, the first word
     ///   was an insertion, not a miss. Single-word lookahead keeps skip vs
     ///   insert deterministic; deeper stumbles re-sync on the next partial
@@ -374,7 +374,7 @@ class ReadAloudService {
             }
 
             // Insertion path: if the NEXT spoken word resolves at or near the
-            // current position, this word was said in passing ("um") — drop it
+            // current position, this word was said in passing ("um") - drop it
             // without consuming a reference word or counting a miss.
             let nextIndex = spokenIndex + 1
             if nextIndex < spokenWords.count {
@@ -421,7 +421,7 @@ class ReadAloudService {
     // MARK: - Helpers
 
     /// Canonical form used for matching. Case, curly apostrophes, hyphens,
-    /// and punctuation all fold away — and spelled numbers collapse to digits,
+    /// and punctuation all fold away - and spelled numbers collapse to digits,
     /// because the page says "seventy-two" while the recognizer writes "72".
     nonisolated static func normalize(_ word: String) -> String {
         let lowered = word
@@ -439,9 +439,9 @@ class ReadAloudService {
 
     /// Parses tokens composed entirely of number words to their digit string.
     /// Handles both spaced ("one hundred") and fused ("onehundred",
-    /// "seventytwo" — hyphens were stripped upstream) forms by greedily
+    /// "seventytwo" - hyphens were stripped upstream) forms by greedily
     /// consuming the longest number-word prefix at each step. Returns nil for
-    /// anything containing a non-number word — including plain digits, which
+    /// anything containing a non-number word - including plain digits, which
     /// are already canonical.
     private nonisolated static func spelledNumberValue(_ token: String) -> String? {
         guard !token.isEmpty, token.contains(where: \.isLetter) else { return nil }

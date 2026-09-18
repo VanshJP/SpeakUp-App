@@ -6,7 +6,7 @@ import Observation
 /// A campaign link carries `source`, `campaign`, and `page` as query
 /// parameters; the first launch stores them and every later monetization event
 /// reports the same coarse strings. No device identifier, no IDFA, no
-/// AdServices token, no network call — the plan's measurement requirements are
+/// AdServices token, no network call - the plan's measurement requirements are
 /// met by attributing the *install*, not the person.
 @MainActor
 @Observable

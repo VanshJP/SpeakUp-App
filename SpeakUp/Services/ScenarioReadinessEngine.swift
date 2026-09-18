@@ -28,7 +28,7 @@ nonisolated enum PracticeScenario: String, CaseIterable, Sendable, Hashable, Ide
         }
     }
 
-    /// One line under the title on an invitation row — what practicing here builds.
+    /// One line under the title on an invitation row - what practicing here builds.
     var blurb: String {
         switch self {
         case .interviews: return "Behavioral answers, case questions, career stories."
@@ -53,7 +53,7 @@ nonisolated enum ScenarioMomentum: Sendable, Hashable {
 
 // MARK: - Readiness model
 
-/// One scenario's verdict: a 0–100 composite reused from the interview-readiness
+/// One scenario's verdict: a 0-100 composite reused from the interview-readiness
 /// weights, an honest thin-data flag, the direction of travel, and the habit
 /// most responsible for whatever is holding it back.
 nonisolated struct ScenarioReadiness: Identifiable, Sendable, Hashable {
@@ -177,7 +177,7 @@ nonisolated enum ScenarioReadinessEngine {
         return scenario(for: category)
     }
 
-    /// One readiness card per practiced scenario, weakest first — after the
+    /// One readiness card per practiced scenario, weakest first - after the
     /// hero band answers trajectory, attention goes to the highest-leverage gap.
     /// Unpracticed core scenarios are omitted; callers render invitations.
     static func readiness(from sessions: [LexiconSessionInput]) -> [ScenarioReadiness] {

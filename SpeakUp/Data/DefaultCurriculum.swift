@@ -10,7 +10,7 @@ struct DefaultCurriculum {
     static let phases: [CurriculumPhase] = [
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 1 — AWARENESS                                        ║
+        // ║  WEEK 1 - AWARENESS                                        ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -105,7 +105,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 2 — FUNDAMENTALS                                      ║
+        // ║  WEEK 2 - FUNDAMENTALS                                      ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -205,7 +205,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 3 — STRUCTURE                                         ║
+        // ║  WEEK 3 - STRUCTURE                                         ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -306,7 +306,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 4 — CONFIDENCE                                        ║
+        // ║  WEEK 4 - CONFIDENCE                                        ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -406,7 +406,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 5 — VOCAL MASTERY                                     ║
+        // ║  WEEK 5 - VOCAL MASTERY                                     ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -508,7 +508,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 6 — ADVANCED FRAMEWORKS                               ║
+        // ║  WEEK 6 - ADVANCED FRAMEWORKS                               ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -608,7 +608,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 7 — STORYTELLING & ENGAGEMENT                         ║
+        // ║  WEEK 7 - STORYTELLING & ENGAGEMENT                         ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -710,7 +710,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 8 — REAL-WORLD MASTERY                                ║
+        // ║  WEEK 8 - REAL-WORLD MASTERY                                ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(
@@ -812,7 +812,7 @@ struct DefaultCurriculum {
         ),
 
         // ╔══════════════════════════════════════════════════════════════╗
-        // ║  WEEK 9 — CONVERSATION SKILLS                              ║
+        // ║  WEEK 9 - CONVERSATION SKILLS                              ║
         // ╚══════════════════════════════════════════════════════════════╝
 
         CurriculumPhase(

@@ -122,7 +122,7 @@ extension AnalyticsEvent {
         ])
     }
 
-    /// A recipient opened a friend-challenge link. No prompt text, no score —
+    /// A recipient opened a friend-challenge link. No prompt text, no score - 
     /// only that the loop closed.
     static func sharedPromptOpened() -> AnalyticsEvent {
         AnalyticsEvent("shared_prompt_opened", funnel: .acquisition, dimensions: [
@@ -139,7 +139,7 @@ extension AnalyticsEvent {
     /// Only ever logged for a paywall shown *after* a complete first result,
     /// which is what makes the qualified-conversion metric meaningful.
     /// Producer is deleted during beta (paywall UI removed); kept as the
-    /// restore seam — see docs/features/monetization.md.
+    /// restore seam - see docs/features/monetization.md.
     static func paywallQualified(trigger: String, source: String?) -> AnalyticsEvent {
         AnalyticsEvent("paywall_qualified", funnel: .monetization, dimensions: [
             "trigger": trigger,
@@ -178,7 +178,7 @@ extension AnalyticsEvent {
     ///
     /// Only the shape of the answer is recorded. Feedback questions can be
     /// user-authored, so neither the question text nor its identifier is safe
-    /// to log — a custom question is free-text the user wrote themselves.
+    /// to log - a custom question is free-text the user wrote themselves.
     static func sessionFeedback(sentiment: String) -> AnalyticsEvent {
         AnalyticsEvent("session_feedback", funnel: .quality, dimensions: ["sentiment": sentiment])
     }
@@ -223,7 +223,7 @@ nonisolated enum AnalyticsBucket {
         }
     }
 
-    /// Coarse self-assessment. A 1–5 scale and a yes/no question both collapse
+    /// Coarse self-assessment. A 1-5 scale and a yes/no question both collapse
     /// to the same three buckets so the quality trend survives the question set
     /// being edited.
     static func sentiment(scale value: Int) -> String {

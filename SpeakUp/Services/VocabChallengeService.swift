@@ -93,7 +93,7 @@ nonisolated enum VocabChallengeService {
     ) -> DailyVocabChallenge? {
         let stamp = dayStamp(now, calendar: calendar)
         // The rebuild below drops skipped words from the cached day on its own,
-        // so the cache is only read here — for where the word was sitting.
+        // so the cache is only read here - for where the word was sitting.
         var previous: [VocabChallengeWord] = []
         if let cached = store.cached(), cached.dayStamp == stamp {
             previous = cached.words
@@ -231,7 +231,7 @@ nonisolated enum VocabChallengeService {
             .union(existing.map { $0.text.lowercased() })
             .union(bannedKeys(preferences))
         // Words spotlighted recently, scheduled or not. Only fresh picks
-        // respect this — a due review is spaced repetition doing its job.
+        // respect this - a due review is spaced repetition doing its job.
         let recent = recentlySpotlighted(reviews: reviews, now: now)
 
         let spaced = preferences.spacedReviewEnabled
@@ -301,7 +301,7 @@ nonisolated enum VocabChallengeService {
     }
 
     /// Grades every word from a previous day's pick that was never spoken.
-    /// Missing it is the "again" review — FSRS pulls it back in tomorrow.
+    /// Missing it is the "again" review - FSRS pulls it back in tomorrow.
     private static func settleUnusedWords(
         before today: String,
         now: Date,
@@ -309,7 +309,7 @@ nonisolated enum VocabChallengeService {
         calendar: Calendar
     ) {
         guard let cached = store.cached(), cached.dayStamp != today else { return }
-        // Graded on the day it was missed, not today — otherwise a word skipped
+        // Graded on the day it was missed, not today - otherwise a word skipped
         // on Monday would not resurface until the day after the user next opens
         // the app, and a week away would cost only one lapse-day.
         let missedOn = date(fromDayStamp: cached.dayStamp, calendar: calendar) ?? now
@@ -418,7 +418,7 @@ nonisolated enum VocabChallengeService {
         // A word the workout taught is scheduled too, even when the user never
         // tapped Add. Without this a new word is spotlighted once and only ever
         // returns by chance, which is the opposite of what spacing is for.
-        // Generated words get schedules on the same terms — they are first-class.
+        // Generated words get schedules on the same terms - they are first-class.
         if preferences.spacedReviewEnabled, preferences.introduceNew {
             var known = Set(pool.map(\.id))
             for (key, state) in reviews where state.due <= now && !known.contains(key) {
@@ -452,7 +452,7 @@ nonisolated enum VocabChallengeService {
         // Most overdue first: the word closest to being forgotten is the one
         // worth spending a slot on. A word missed several days running has
         // stopped being a review and started being a nag, so it gives up the
-        // lead — otherwise ignoring the workout pins the same words on screen
+        // lead - otherwise ignoring the workout pins the same words on screen
         // forever.
         func leads(_ word: VocabChallengeWord) -> Bool {
             guard let state = reviews[word.id] else { return false }

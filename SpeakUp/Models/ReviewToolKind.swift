@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Catalog for review / reflection tools — Compare, Listen back, Goals,
+/// Catalog for review / reflection tools - Compare, Listen back, Goals,
 /// Journal. Lives beside `PracticeToolKind` so Library → Tools and History →
 /// Progress never invent different names or tints for the same door.
 enum ReviewToolKind: String, CaseIterable, Identifiable {

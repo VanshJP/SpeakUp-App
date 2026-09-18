@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The moment the app exists for: you stopped talking, here is how it went.
-///   and never congratulatory — a low score met with confetti reads as sarcasm.
+///   and never congratulatory - a low score met with confetti reads as sarcasm.
 struct ScoreRevealView: View {
     let score: Int
     let baselines: PersonalAverage.Baselines

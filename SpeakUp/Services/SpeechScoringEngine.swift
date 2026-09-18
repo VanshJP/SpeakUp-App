@@ -11,7 +11,7 @@ import NaturalLanguage
 //     Profound, lengthy speech should score very high (80-100).
 //
 //  2. FLUENCY METRICS: Uses Phonation Time Ratio (PTR), Mean Length of Run (MLR),
-//     and articulation rate — the three most predictive fluency features in academic literature.
+//     and articulation rate - the three most predictive fluency features in academic literature.
 //
 //  3. LEXICAL RICHNESS: Uses MATTR (Moving Average Type-Token Ratio) over a 50-word
 //     sliding window, which is length-invariant unlike simple TTR.
@@ -19,7 +19,7 @@ import NaturalLanguage
 //  4. MULTI-SIGNAL GIBBERISH DETECTION: Combines ASR confidence variance, NL lexical
 //     class recognition ratio, sentence length distribution, and repetition density.
 //
-//  5. CONTENT SUBSTANCE: Rewards informational density — unique content words per minute,
+//  5. CONTENT SUBSTANCE: Rewards informational density - unique content words per minute,
 //     sentence complexity, and topic development.
 //
 //  6. MULTIPLICATIVE SUBSTANCE GATE: Short/empty/gibberish speech cannot score well
@@ -57,7 +57,7 @@ nonisolated enum SpeechScoringEngine {
 
         // ── Articulation Rate ────────────────────────────────────────────────────────
         // Words per minute during VOICED time only (excludes pauses).
-        // This separates fluency from pace — a speaker can be slow but fluent.
+        // This separates fluency from pace - a speaker can be slow but fluent.
         // Research benchmark: 160-220 syllables/min is natural English speech.
         // We approximate syllables as words * 1.5 (average English word ≈ 1.5 syllables).
         let articulationRate = totalVoicedTime > 0
@@ -71,7 +71,7 @@ nonisolated enum SpeechScoringEngine {
 
         // ── MATTR (Moving Average Type-Token Ratio) ──────────────────────────────────
         // Lexical diversity measure that is length-invariant (unlike simple TTR).
-        // Uses a 50-word sliding window. Score range: 0.0 - 1.0.
+        // Uses a 50-word sliding window. Score range: 0.0-1.0.
         // Research benchmark: 0.70+ is rich vocabulary; 0.50 is repetitive.
         let mattr = computeMATTR(words: nonFillerWords, windowSize: 50)
 
@@ -232,7 +232,7 @@ nonisolated enum SpeechScoringEngine {
     // MARK: - Fluency Score
 
     /// Computes a 0-100 fluency score based on PTR, MLR, and articulation rate.
-    /// This is separate from pace (WPM) — a speaker can be slow but fluent.
+    /// This is separate from pace (WPM) - a speaker can be slow but fluent.
     /// Wider ideal zones ensure beginners can still score well on fluency.
     static func computeFluencyScore(
         phonationTimeRatio: Double,
@@ -310,7 +310,7 @@ nonisolated enum SpeechScoringEngine {
 
         var score = 0.0
 
-        // MATTR component (0-50 points) — primary signal
+        // MATTR component (0-50 points) - primary signal
         let mattrComponent = min(50, mattr * 62.5)  // 0.80 MATTR → 50pts
         score += mattrComponent
 
@@ -376,11 +376,11 @@ nonisolated enum SpeechScoringEngine {
 
     // MARK: - Mean Length of Run
 
-    /// Computes the Mean Length of Run — average number of words between pauses.
+    /// Computes the Mean Length of Run - average number of words between pauses.
     /// This is a key fluency metric used in PRAAT and academic speech analysis.
     /// Runs are detected from word timing gaps (> 0.4 s) rather than from the
     /// pipeline's `PauseInfo` list, which is coarser. The function used to take
-    /// a `pauseMetadata:` argument "for API consistency" and discard it — an
+    /// a `pauseMetadata:` argument "for API consistency" and discard it - an
     /// unused parameter that reads like an input.
     static func computeMeanLengthOfRun(words: [TranscriptionWord]) -> Double {
         guard !words.isEmpty else { return 0 }
@@ -401,7 +401,7 @@ nonisolated enum SpeechScoringEngine {
             // Check if there's a pause after this word using safe index access
             let isLastWord = i == sorted.count - 1
             if isLastWord {
-                // End of transcript — close the final run
+                // End of transcript - close the final run
                 if currentRun > 0 { runs.append(currentRun) }
                 currentRun = 0
             } else {
@@ -492,7 +492,7 @@ nonisolated enum SpeechScoringEngine {
             let stddev = sqrt(variance)
 
             if avgConf < 0.25 {
-                failedChecks += 2  // Strong signal — very low confidence
+                failedChecks += 2  // Strong signal - very low confidence
                 reasons.append("very low ASR confidence (\(String(format: "%.2f", avgConf)))")
             } else if avgConf < 0.40 {
                 failedChecks += 1
@@ -566,7 +566,7 @@ nonisolated enum SpeechScoringEngine {
             let repetitionRatio = Double(maxFreq) / Double(wordList.count)
 
             if repetitionRatio > 0.45 {
-                failedChecks += 2  // Strong signal — one word dominates
+                failedChecks += 2  // Strong signal - one word dominates
                 reasons.append("extreme word repetition (single word = \(String(format: "%.0f", repetitionRatio * 100))% of transcript)")
             } else if repetitionRatio > 0.30 {
                 failedChecks += 1
@@ -681,13 +681,13 @@ nonisolated enum SpeechScoringEngine {
     /// Graduated gibberish confidence gate.
     static func applyGibberishGate(score: Int, gibberishConfidence: Double) -> Int {
         if gibberishConfidence >= 0.85 {
-            // Definitely gibberish — score collapses to ≤8
+            // Definitely gibberish - score collapses to ≤8
             return min(score, 8)
         } else if gibberishConfidence >= 0.65 {
-            // Very likely gibberish — cap at 15
+            // Very likely gibberish - cap at 15
             return min(score, 15)
         } else if gibberishConfidence >= 0.45 {
-            // Suspicious — cap at 30
+            // Suspicious - cap at 30
             return min(score, 30)
         }
         return score

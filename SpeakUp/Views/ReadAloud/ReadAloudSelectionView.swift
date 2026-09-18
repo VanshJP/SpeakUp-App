@@ -17,7 +17,7 @@ struct ReadAloudSelectionView: View {
 
     var presentation: ToolPresentation = .sheet
 
-    /// A line handed in by another screen to rehearse immediately — today,
+    /// A line handed in by another screen to rehearse immediately - today,
     /// a word-swap rewrite from the recording detail. The session opens
     /// straight away; the list underneath is where the user lands afterwards.
     var initialPracticeText: String?

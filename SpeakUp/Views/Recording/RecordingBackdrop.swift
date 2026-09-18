@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Recording Backdrop
 
-/// The session background menu — Recording Look, painted behind the prepare
+/// The session background menu - Recording Look, painted behind the prepare
 /// countdown and the take itself, so the look a speaker picked does not vanish
 /// the moment they start talking.
 nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Sendable {
@@ -34,7 +34,7 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
         }
     }
 
-    /// The art this entry paints. `base` is always Classic at recording tone —
+    /// The art this entry paints. `base` is always Classic at recording tone - 
     /// never the user's app-wide canvas. Recording Look owns session mood
     /// separately from Settings → Appearance.
     var look: CanvasLook {
@@ -57,7 +57,7 @@ nonisolated enum RecordingBackdrop: Int, Codable, CaseIterable, Identifiable, Se
 
 // MARK: - View
 
-/// Full-bleed session canvas. Every look is a still — because every look
+/// Full-bleed session canvas. Every look is a still - because every look
 /// normalises against the view's diagonal, the 76pt picker tile, the preview
 /// card and the live session all show the same composition at different scales.
 struct RecordingBackdropView: View {

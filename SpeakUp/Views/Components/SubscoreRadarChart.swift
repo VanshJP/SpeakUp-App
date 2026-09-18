@@ -70,7 +70,7 @@ struct SubscoreRadarChart: View {
         .aspectRatio(1, contentMode: .fit)
         .onAppear {
             guard animate else { return }
-            // One intro per chart identity — reopening detail must not bounce
+            // One intro per chart identity - reopening detail must not bounce
             // the center score from 0 every time.
             guard !hasPlayedIntro else {
                 drawProgress = 1
@@ -191,7 +191,7 @@ struct SubscoreRadarChart: View {
         let axisID: String
     }
 
-    /// Static, animation-independent hit targets — one shape per axis. These
+    /// Static, animation-independent hit targets - one shape per axis. These
     /// don't observe `drawProgress` so they don't rebuild during the
     /// draw-in animation.
     @ViewBuilder

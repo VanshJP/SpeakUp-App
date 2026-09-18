@@ -95,7 +95,7 @@ struct PracticeHistoryChart: View {
 
 // MARK: - Practice Recording Summary
 
-/// Value projection of one practice take — decoded once at load time so
+/// Value projection of one practice take - decoded once at load time so
 /// chart and metric bodies never touch a `Recording.analysis` blob.
 nonisolated struct PracticeRecordingSummary: Identifiable {
     let id: UUID
@@ -107,7 +107,7 @@ nonisolated struct PracticeRecordingSummary: Identifiable {
 
     static func from(recordings: [Recording]) -> [PracticeRecordingSummary] {
         recordings.map { recording in
-            // Bind once — each `analysis` access re-decodes the Codable blob.
+            // Bind once - each `analysis` access re-decodes the Codable blob.
             let analysis = recording.analysis
             return PracticeRecordingSummary(
                 id: recording.id,

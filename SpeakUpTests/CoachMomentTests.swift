@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import SpeakUp
 
-// Coach notes are pure policy over a snapshot — no SwiftData, injected clock.
+// Coach notes are pure policy over a snapshot - no SwiftData, injected clock.
 // What matters: signals fire for the right facts, celebrations spend the
 // weekly budget, and care notes (welcome-back / soft landing) never do.
 
@@ -68,7 +68,7 @@ struct CoachMomentSignalTests {
             surface: .today
         )
         #expect(moment?.signal == .returnFromLapse)
-        // Absences are not narrated as a tally — "today's prompt" is fine.
+        // Absences are not narrated as a tally - "today's prompt" is fine.
         #expect(moment?.body.contains("8") == false)
         #expect(moment?.body.localizedCaseInsensitiveContains("days") == false)
         #expect(moment?.body.localizedCaseInsensitiveContains("been") == false)

@@ -10,7 +10,7 @@ struct StoryPromptCard: View {
     var body: some View {
         GlassCard(padding: 14, elevated: true) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: "book.pages")
                             .font(.system(size: 10, weight: .semibold))
@@ -20,20 +20,25 @@ struct StoryPromptCard: View {
                             .tracking(0.6)
                     }
                     .foregroundStyle(AppColors.primary)
+                    .layoutPriority(-1)
 
-                    Spacer(minLength: 4)
+                    Spacer(minLength: 8)
 
-                    if story.practiceCount > 0 {
-                        Text("\(story.practiceCount) practice\(story.practiceCount == 1 ? "" : "s")")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        if story.practiceCount > 0 {
+                            Text("\(story.practiceCount) practice\(story.practiceCount == 1 ? "" : "s")")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .frame(height: 28)
+                                .background(Capsule().fill(Color.white.opacity(0.06)))
+                        }
+
+                        DurationPill(selectedDuration: $selectedDuration)
+
+                        SmallIconButton(icon: "arrow.clockwise", label: "Different story", action: onRefresh)
                     }
-
-                    DurationPill(selectedDuration: $selectedDuration)
-
-                    SmallIconButton(icon: "arrow.clockwise", label: "Different story", action: onRefresh)
-                        .padding(.trailing, -6)
-                        .padding(.vertical, -6)
+                    .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Text(story.title.isEmpty ? "Untitled Story" : story.title)

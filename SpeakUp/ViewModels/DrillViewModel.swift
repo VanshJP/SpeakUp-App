@@ -17,7 +17,7 @@ class DrillViewModel {
     /// Pace-control target from the user's settings (default 150).
     var targetWPM: Int = 150
     /// Set when the audio/recognition stack can't run (mic denied, speech
-    /// recognition off, dead engine). The session view surfaces it and exits —
+    /// recognition off, dead engine). The session view surfaces it and exits - 
     /// a drill that can't hear must not end as a confident clean run.
     var errorMessage: String?
 
@@ -215,7 +215,7 @@ class DrillViewModel {
     private func startAudio() async -> Bool {
         do {
             // Start the recorder so the audio session is active. Throws on
-            // mic-permission denial — surfaced, never swallowed.
+            // mic-permission denial - surfaced, never swallowed.
             _ = try await audioService.startRecording()
         } catch {
             errorMessage = "Microphone unavailable: \(error.localizedDescription). Check Settings → Privacy → Microphone."
@@ -264,7 +264,7 @@ class DrillViewModel {
         guard isActive else { return }
 
         // Recognition dying mid-drill (interruption, recognizer loss) must end
-        // the scoring window now — letting the clock run on produces silent
+        // the scoring window now - letting the clock run on produces silent
         // zeros for every mode that scores from transcription.
         if transcriptionLive, selectedMode?.allowsMeteringOnly != true,
            !liveTranscriptionService.isActive {
@@ -341,7 +341,7 @@ class DrillViewModel {
         }
     }
 
-    /// Peak-minus-median of recent dB samples — a crude live stand-in for
+    /// Peak-minus-median of recent dB samples - a crude live stand-in for
     /// "are you actually changing energy," not a final score.
     private static func energySwing(in samples: [Float]) -> Double {
         let voiced = samples.filter { $0 > -50 }
@@ -361,7 +361,7 @@ class DrillViewModel {
     // MARK: - Finish Drill
 
     func finishDrill(endedEarly: Bool = false) {
-        // Only the live session may finish — pitch analysis re-entry must not
+        // Only the live session may finish - pitch analysis re-entry must not
         // stopRecording twice or publish a duplicate result.
         guard isActive else { return }
         isActive = false
@@ -388,7 +388,7 @@ class DrillViewModel {
             return
         }
 
-        audioService.cancelRecording() // discard — drills don't keep takes
+        audioService.cancelRecording() // discard - drills don't keep takes
         publishResult(mode: mode, endedEarly: endedEarly, pitch: nil)
     }
 
@@ -408,7 +408,7 @@ class DrillViewModel {
             }.value
         }
 
-        // Silence is not a score — no voiced frames → honest failure notice.
+        // Silence is not a score - no voiced frames → honest failure notice.
         if pitch == nil || (pitch?.voicedFrameRatio ?? 0) < 0.05 {
             result = DrillResult(
                 mode: mode,
@@ -485,7 +485,7 @@ class DrillViewModel {
 
         case .emphasis:
             let swing = Self.energySwing(in: levelSamples)
-            // ~8–20 dB of peak-vs-median swing reads as intentional stress.
+            // ~8-20 dB of peak-vs-median swing reads as intentional stress.
             let swingScore = min(100, Int(swing * 6))
             let saidSomething = liveWordCount >= 4
             drillScore = saidSomething ? max(20, swingScore) : 0

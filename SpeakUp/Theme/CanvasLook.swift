@@ -7,9 +7,9 @@ import SwiftUI
 /// (Recording Look, behind the countdown and the take).
 ///
 /// Aurora means the same Aurora on both screens because there is exactly one
-/// painter per look. The two menus used to carry private copies — an
+/// painter per look. The two menus used to carry private copies - an
 /// `AppAuroraCanvas` and an `AuroraCanvas`, an `AppEmberCanvas` and an
-/// `EmberCanvas`, an `AppHorizonCanvas` and a `VoidCanvas` — which drifted
+/// `EmberCanvas`, an `AppHorizonCanvas` and a `VoidCanvas` - which drifted
 /// apart the moment either was touched.
 ///
 /// **Not persisted.** The two menus own the stored raw values; this is a
@@ -80,7 +80,7 @@ extension CanvasLook {
     /// Everything here goes through the primitives at the bottom of this file,
     /// so a background is never a stack of `RadialGradient` views flattened by
     /// `.drawingGroup`. That flattening cost an offscreen texture allocation
-    /// on every screen appearance — the beat of empty canvas on a push — plus
+    /// on every screen appearance - the beat of empty canvas on a push - plus
     /// a re-rasterization every tick, once per screen still alive in the
     /// navigation stack. A `Canvas` already *is* the flattened layer Liquid
     /// Glass samples.
@@ -126,7 +126,7 @@ private struct CanvasFrame {
     let size: CGSize
     let mood: CanvasMood
 
-    /// Diagonal — the unit every radius is expressed in.
+    /// Diagonal - the unit every radius is expressed in.
     var d: CGFloat { hypot(size.width, size.height) }
 
     /// Pixel scale, so a 1pt star on a 76pt tile is not a 1pt star on a phone.
@@ -149,7 +149,7 @@ private struct CanvasFrame {
 // MARK: Classic
 
 /// The default: deep navy, teal high light, quiet blue counterweight. Tone
-/// only nudges the wash — `.subtle` sits a hair above `.primary` so a pushed
+/// only nudges the wash - `.subtle` sits a hair above `.primary` so a pushed
 /// detail view does not pop, `.recording` drops darker and pushes the teal.
 /// Keep this composition stable; other looks are free to experiment.
 private func paintClassic(_ g: inout GraphicsContext, _ f: CanvasFrame, _ tone: AppBackground.Style) {
@@ -170,7 +170,7 @@ private func paintClassic(_ g: inout GraphicsContext, _ f: CanvasFrame, _ tone: 
     g.blendMode = .plusLighter
     canvasGlow(&g, AppColors.categoryBrandBright, at: f.at(0.88, 0.06),
                radius: f.d * 0.46, intensity: 0.30 * teal, stretch: 1.25, angle: .degrees(-18))
-    // Quiet navy-blue counterweight — not the bright violet that used to sit here.
+    // Quiet navy-blue counterweight - not the bright violet that used to sit here.
     canvasGlow(&g, canvasQuietBlue, at: f.at(0.08, 0.88),
                radius: f.d * 0.42, intensity: 0.14, stretch: 1.3, angle: .degrees(14))
     canvasGlow(&g, AppColors.primary, at: f.at(0.52, 0.44),
@@ -243,7 +243,7 @@ private func paintMist(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 // MARK: Aurora
 
 /// Polar sky: a dark wash, a glowing oval on the horizon, then vertical
-/// shafts of light leaning a few degrees off true — the photograph, not a
+/// shafts of light leaning a few degrees off true - the photograph, not a
 /// cartoon sine ribbon with a hard rim.
 private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
@@ -255,7 +255,7 @@ private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     g.blendMode = .plusLighter
     canvasStars(&g, count: f.count(70), f, heightFraction: 0.78, brightness: 0.72)
 
-    // Horizon oval — the glow the shafts are born from.
+    // Horizon oval - the glow the shafts are born from.
     canvasGlow(&g, auroraGreen, at: f.at(0.48, 0.62),
                radius: f.d * 0.58, intensity: f.gain(0.22), stretch: 2.4)
     canvasGlow(&g, canvasViolet, at: f.at(0.68, 0.58),
@@ -298,7 +298,7 @@ private func paintAurora(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Ember
 
-/// Warm on purpose — every other look lives in teal and cool tones, so this
+/// Warm on purpose - every other look lives in teal and cool tones, so this
 /// one is the odd heat. A three-stage well at the bottom, sparks above it,
 /// and a single teal counterweight so it does not read as an alert.
 private func paintEmber(_ g: inout GraphicsContext, _ f: CanvasFrame) {
@@ -374,7 +374,7 @@ private func paintVoid(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Prism
 
-/// Angled beams. A rotated, stretched glow is soft on both axes in one fill —
+/// Angled beams. A rotated, stretched glow is soft on both axes in one fill - 
 /// no hard polygons, no `.blur` view modifier.
 private func paintPrism(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
@@ -428,7 +428,7 @@ private func paintDepth(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasGlow(&g, canvasQuietBlue, at: f.at(0.5, 0.86),
                radius: f.d * 0.40, intensity: f.gain(0.14), stretch: 1.6)
 
-    // Nested wells, not 1pt ellipse strokes — those read as a target graphic.
+    // Nested wells, not 1pt ellipse strokes - those read as a target graphic.
     for ring in 0..<5 {
         let span = 0.16 + Double(ring) * 0.11
         let fade = 1 - Double(ring) / 5.4
@@ -443,7 +443,7 @@ private func paintDepth(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 // MARK: Hyperspace
 
 /// Warp streaks from a vanishing point. Depth is hashed per streak so the
-/// field stays a still — no clock, no recycle.
+/// field stays a still - no clock, no recycle.
 private func paintHyperspace(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     let center = f.at(0.5, 0.42)
     let maxR = f.d * 0.62
@@ -496,7 +496,7 @@ private func paintHyperspace(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 /// Soft colour clouds, two hot cores, a dark dust lane cutting across them,
 /// and star layers front and back. The dust lane is the only *subtractive*
-/// mark on any canvas — without it this reads as overlapping orbs.
+/// mark on any canvas - without it this reads as overlapping orbs.
 private func paintNebula(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.052, green: 0.024, blue: 0.078),
@@ -544,7 +544,7 @@ private func paintNebula(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Tide
 
-/// Layered teal bands stacked from the bottom — water reading as depth, not
+/// Layered teal bands stacked from the bottom - water reading as depth, not
 /// as motion. Distinct from Depth's rings and Horizon's single line.
 private func paintTide(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
@@ -585,7 +585,7 @@ private func paintTide(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Dusk
 
-/// Warm amber in the upper third meeting cool teal below — a sunset split
+/// Warm amber in the upper third meeting cool teal below - a sunset split
 /// that stays readable under glass cards. Not Ember's bottom well.
 private func paintDusk(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
@@ -617,7 +617,7 @@ private func paintDusk(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 
 // MARK: Signal
 
-/// Soft waveform ribbons — on-brand for a speech app without competing with
+/// Soft waveform ribbons - on-brand for a speech app without competing with
 /// real meters on the recording screen.
 private func paintSignal(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
@@ -658,7 +658,7 @@ private func paintSignal(_ g: inout GraphicsContext, _ f: CanvasFrame) {
 // MARK: Noir
 
 /// Near-black with one decisive teal slash. Maximum calm, maximum contrast
-/// for glass — the anti-nebula.
+/// for glass - the anti-nebula.
 private func paintNoir(_ g: inout GraphicsContext, _ f: CanvasFrame) {
     canvasWash(&g, f.size, [
         Color(red: 0.012, green: 0.014, blue: 0.028),
@@ -724,7 +724,7 @@ private func canvasGround(_ g: inout GraphicsContext, _ f: CanvasFrame, y: CGFlo
     )
 }
 
-/// Soft sine ribbon used by Signal. One fat glow-stroke, no white hairline —
+/// Soft sine ribbon used by Signal. One fat glow-stroke, no white hairline - 
 /// that inner stroke made it look like a chart overlay.
 private func canvasWaveRibbon(
     _ g: inout GraphicsContext,
@@ -771,7 +771,7 @@ private func canvasWaveRibbon(
 private let canvasViolet = Color(red: 0.46, green: 0.28, blue: 0.90)
 private let canvasMint = Color(red: 0.30, green: 0.92, blue: 0.78)
 private let canvasDeepTeal = Color(red: 0.08, green: 0.26, blue: 0.40)
-/// Quiet navy-blue counterweight for Classic / Midnight — deliberately not purple.
+/// Quiet navy-blue counterweight for Classic / Midnight - deliberately not purple.
 private let canvasQuietBlue = Color(red: 0.20, green: 0.28, blue: 0.52)
 private let auroraGreen = Color(red: 0.38, green: 0.96, blue: 0.62)
 private let auroraMagenta = Color(red: 0.78, green: 0.34, blue: 0.94)
@@ -796,7 +796,7 @@ private func canvasWash(
     )
 }
 
-/// Soft light blob — the workhorse. `stretch` and `angle` turn it into a fog
+/// Soft light blob - the workhorse. `stretch` and `angle` turn it into a fog
 /// bank, a beam, a horizon bloom or a dust lane without a second draw.
 private func canvasGlow(
     _ g: inout GraphicsContext,
@@ -852,7 +852,7 @@ private func canvasStars(
     }
 }
 
-/// Embers frozen above a well. Life is hashed, not timed — same scatter every
+/// Embers frozen above a well. Life is hashed, not timed - same scatter every
 /// paint.
 private func canvasSparks(
     _ g: inout GraphicsContext,
@@ -880,7 +880,7 @@ private func canvasSparks(
 }
 
 /// Vertical aurora column. Rotate a wide glow onto its side so the shaft is
-/// soft on every edge — no polygon, no rim stroke.
+/// soft on every edge - no polygon, no rim stroke.
 private func canvasAuroraShaft(
     _ g: inout GraphicsContext,
     _ f: CanvasFrame,

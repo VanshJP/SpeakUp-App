@@ -35,12 +35,12 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         }
     }
 
-    /// What the user gets — the line that makes the tool worth tapping.
+    /// What the user gets - the line that makes the tool worth tapping.
     var outcome: String {
         switch self {
         case .warmUp: return "Loosen the voice so your first sentence isn't the warm-up"
         case .drills: return "Fix one habit in under a minute"
-        case .readAloud: return "Train clarity against a script — ours or your own"
+        case .readAloud: return "Train clarity against a script - ours or your own"
         case .calm: return "Settle nerves so the take starts clean"
         case .learn: return "Follow a week-by-week speaking curriculum"
         }
@@ -48,7 +48,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
 
     /// *How* this tool works, in the terms that actually separate the four.
     ///
-    /// Without this line they read as four arbitrary buckets — the obvious
+    /// Without this line they read as four arbitrary buckets - the obvious
     /// question being why a tongue twister is a warm-up while filler
     /// elimination is a drill, and whether Read Aloud is a drill too. It is
     /// the format that differs, not the subject: two of these time you through
@@ -57,10 +57,10 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
     /// them improve the same things on purpose.
     var format: String {
         switch self {
-        case .warmUp: return "Guided steps · mic off · 20–60s"
-        case .drills: return "Mic on · scored · 15–60s"
+        case .warmUp: return "Guided steps · mic off · 20-60s"
+        case .drills: return "Mic on · scored · 15-60s"
         case .readAloud: return "Mic on · scored word by word"
-        case .calm: return "Guided steps · mic off · 2–5 min"
+        case .calm: return "Guided steps · mic off · 2-5 min"
         case .learn: return "Lessons, then activities"
         }
     }
@@ -119,7 +119,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
         PracticeFocus.allCases.filter { !tools(for: $0).isEmpty }
     }
 
-    /// When this tool is the right pick — shown on Library cards and sheet headers.
+    /// When this tool is the right pick - shown on Library cards and sheet headers.
     var bestFor: String {
         switch self {
         case .warmUp: return "Best before interviews, presentations, or a cold start"
@@ -151,7 +151,7 @@ enum PracticeToolKind: String, CaseIterable, Identifiable {
     }
 
     /// Tools that appear on Today's prep strip by default. The Prompt Wheel
-    /// is deliberately absent — it lives in Library → Prompts, where you pick
+    /// is deliberately absent - it lives in Library → Prompts, where you pick
     /// what to say, not in the strip that gets your voice ready.
     static let todayStripDefaults: [PracticeToolKind] = [.warmUp, .drills, .calm, .readAloud]
 

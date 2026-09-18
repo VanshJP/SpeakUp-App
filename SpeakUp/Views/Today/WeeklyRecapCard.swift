@@ -17,7 +17,7 @@ struct WeeklyRecapCard: View {
     private struct Metric: Identifiable {
         let label: String
         let value: String
-        /// Sign of the change. Direction only — `deltaText` carries the number.
+        /// Sign of the change. Direction only - `deltaText` carries the number.
         let delta: Int
         let higherIsBetter: Bool
         let deltaText: String

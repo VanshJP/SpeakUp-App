@@ -14,7 +14,7 @@ nonisolated struct FragmentPiece: Hashable, Sendable {
 ///
 /// `.advice` is the honest escape hatch: "quantify instead" has no single
 /// substitution, so no rewrite is offered rather than a wrong one. `.pause`
-/// rewrites identically to `.delete` but stays distinct — "replace it with
+/// rewrites identically to `.delete` but stays distinct - "replace it with
 /// silence" and "just cut it" are the same edit and different coaching.
 nonisolated struct SwapEdit: Hashable, Sendable {
     nonisolated enum Kind: Hashable, Sendable {
@@ -27,7 +27,7 @@ nonisolated struct SwapEdit: Hashable, Sendable {
     let kind: Kind
     /// Replacement text for `.replace`; empty otherwise.
     let text: String
-    /// Tokens consumed *after* the crutch span — "really good" → "excellent"
+    /// Tokens consumed *after* the crutch span - "really good" → "excellent"
     /// eats the adjective too, so the rewrite is not "excellent good".
     let extraTokens: Int
 
@@ -112,7 +112,7 @@ nonisolated struct WordSwapOption: Hashable, Sendable {
 nonisolated struct WordSwapOccurrence: Identifiable, Hashable, Sendable {
     let timestamp: TimeInterval
     let fragment: [FragmentPiece]
-    /// The same sentence with the winning swap applied — nil when the advice
+    /// The same sentence with the winning swap applied - nil when the advice
     /// has no single mechanical edit ("quantify instead").
     let rewritten: [FragmentPiece]?
     let options: [WordSwapOption]
@@ -156,7 +156,7 @@ nonisolated struct WordSwapMoment: Identifiable, Hashable, Sendable {
     /// the user can rehearse it instead of only reading it.
     ///
     /// Nil when there is no rewrite, or when the line is too short to be worth
-    /// scoring — "I want" is a fragment, not a rep. Ellipses are dropped:
+    /// scoring - "I want" is a fragment, not a rep. Ellipses are dropped:
     /// they mark where the quote was cut, and nobody says them out loud.
     var practiceLine: String? {
         guard let pieces = example?.rewritten else { return nil }
@@ -196,7 +196,7 @@ nonisolated struct SwapToken: Hashable, Sendable {
 
 /// Pure, deterministic, on-device swap suggestions. For one occurrence of a
 /// crutch word inside its token stream, produce ONE primary replacement plus
-/// up to two alternates — chosen from what actually surrounds the word
+/// up to two alternates - chosen from what actually surrounds the word
 /// (numbers, proper nouns, sentence position), not from a flat list.
 ///
 /// Rules are ordered most-specific-first per word; the first match wins, so
@@ -307,7 +307,7 @@ nonisolated enum WordSwapSuggester {
     }
 
     /// Two options that edit the sentence identically are one option wearing
-    /// two hats. Keeps the first — rules are ordered most-specific-first, so
+    /// two hats. Keeps the first - rules are ordered most-specific-first, so
     /// the survivor is always the better-explained one.
     static func deduplicated(_ options: [WordSwapOption]) -> [WordSwapOption] {
         var seenEdits: Set<String> = []
@@ -333,12 +333,12 @@ nonisolated enum WordSwapSuggester {
         let next = token(index + 1, in: tokens)
         let previous = token(index - 1, in: tokens)
 
-        // "would like", "I like" — genuine verb, not a crutch.
+        // "would like", "I like" - genuine verb, not a crutch.
         if matches(previous, in: verbalPreceders) {
             return hedgePause()
         }
 
-        // "in like three weeks" — approximating a number.
+        // "in like three weeks" - approximating a number.
         if isNumeric(next) {
             return [
                 option("\u{201C}about\u{201D}", cue: "before numbers", edit: .replace("about")),
@@ -347,7 +347,7 @@ nonisolated enum WordSwapSuggester {
             ]
         }
 
-        // "it feels like we rushed" — hedged comparison after a perception verb.
+        // "it feels like we rushed" - hedged comparison after a perception verb.
         if matches(previous, in: perceptionVerbs), !isSentenceEnd(index, tokens) {
             return [
                 option("\u{201C}as if\u{201D}", cue: "after feel / look / seem", edit: .replace("as if")),
@@ -356,7 +356,7 @@ nonisolated enum WordSwapSuggester {
             ]
         }
 
-        // Sentence-opening "Like, ..." — pure throat-clearing.
+        // Sentence-opening "Like, ..." - pure throat-clearing.
         if isSentenceStart(index, tokens) {
             return [
                 option("cut it. Start straight in", cue: "sentence opener", edit: .delete),
@@ -364,7 +364,7 @@ nonisolated enum WordSwapSuggester {
             ]
         }
 
-        // "platforms like Figma" — introducing an example noun phrase.
+        // "platforms like Figma" - introducing an example noun phrase.
         if startsNounPhrase(after: index, in: tokens) {
             return [
                 option("\u{201C}such as\u{201D}", cue: "introducing an example", edit: .replace("such as")),
@@ -408,7 +408,7 @@ nonisolated enum WordSwapSuggester {
     private static func justOptions(at index: Int, _ tokens: [SwapToken]) -> [WordSwapOption] {
         let next = token(index + 1, in: tokens)
 
-        // "I just want..." — the hedge shrinks your own ask; delete it.
+        // "I just want..." - the hedge shrinks your own ask; delete it.
         if let next, desireVerbs.contains(next) {
             return [
                 option("\u{201C}I \(next)\u{201D}", cue: "drop \u{201C}just\u{201D} and state the ask", edit: .delete),
@@ -416,7 +416,7 @@ nonisolated enum WordSwapSuggester {
             ]
         }
 
-        // "just three people" — counting sense has a real word.
+        // "just three people" - counting sense has a real word.
         if isNumeric(next) {
             return [
                 option("\u{201C}only\u{201D}", cue: "counting sense", edit: .replace("only")),
@@ -478,7 +478,7 @@ nonisolated enum WordSwapSuggester {
             ]
         }
         return [
-            option("cut it", cue: "the listener does not know — tell them", edit: .delete),
+            option("cut it", cue: "the listener does not know - tell them", edit: .delete),
             option("a silent pause", edit: .pause)
         ]
     }
@@ -500,7 +500,7 @@ nonisolated enum WordSwapSuggester {
     }
 
     /// "I think / I guess" in front of a claim halves it. Opening a sentence
-    /// with one is the costly case — that is the position of authority.
+    /// with one is the costly case - that is the position of authority.
     private static func selfHedgeOptions(_ word: String, at index: Int, _ tokens: [SwapToken]) -> [WordSwapOption] {
         if isSentenceStart(index, tokens) {
             return [
@@ -535,7 +535,7 @@ nonisolated enum WordSwapSuggester {
     }
 
     private static func vagueNounOptions(_ word: String, at index: Int, _ tokens: [SwapToken]) -> [WordSwapOption] {
-        // "things like planning" — the example is already in reach; name it.
+        // "things like planning" - the example is already in reach; name it.
         if token(index + 1, in: tokens) == "like",
            let referent = token(index + 2, in: tokens),
            referent.count <= 12 {
@@ -795,7 +795,7 @@ nonisolated enum WordSwapSuggester {
 
         guard !body.isEmpty else { return nil }
 
-        // A deleted word took its comma or full stop with it — give the
+        // A deleted word took its comma or full stop with it - give the
         // punctuation back so the rewritten line is still a sentence.
         if edit.kind != .replace, let carried {
             if let last = body.lastIndex(where: { !$0.isTarget }),

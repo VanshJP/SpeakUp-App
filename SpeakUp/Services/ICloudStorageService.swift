@@ -73,7 +73,7 @@ final class ICloudStorageService {
 
     /// Directory for active AVAudioRecorder captures.
     ///
-    /// Always local Documents — never the ubiquity container. Writing an open
+    /// Always local Documents - never the ubiquity container. Writing an open
     /// recorder directly into iCloud Drive races the daemon and can finalize
     /// empty / silent m4a files that later transcribe as "Silent". Sync happens
     /// after stop via `promoteToICloudIfNeeded(localURL:)` / migration.
@@ -113,7 +113,7 @@ final class ICloudStorageService {
                 return iCloudPath
             }
 
-            // File might exist but not be downloaded yet — check for .icloud placeholder
+            // File might exist but not be downloaded yet - check for .icloud placeholder
             let iCloudPlaceholder = iCloudPath
                 .deletingLastPathComponent()
                 .appendingPathComponent(".\(filename).icloud")
@@ -196,7 +196,7 @@ final class ICloudStorageService {
             if let status = resources.ubiquitousItemDownloadingStatus {
                 return status == .current
             }
-            // Not an iCloud file — it's local, so it's "downloaded"
+            // Not an iCloud file - it's local, so it's "downloaded"
             return true
         } catch {
             return FileManager.default.fileExists(atPath: url.path)

@@ -35,9 +35,9 @@ class LiveTranscriptionService {
     /// Bumped on every restart/stop so cancelled-task error callbacks cannot
     /// re-enter `restartRecognitionPreservingEngine` in a tight loop.
     private var recognitionGeneration = 0
-    /// `removeTap` crashes if no tap is installed — track it explicitly.
+    /// `removeTap` crashes if no tap is installed - track it explicitly.
     private var isTapInstalled = false
-    /// Token only — touched from `deinit` (nonisolated) and init. Kept out of
+    /// Token only - touched from `deinit` (nonisolated) and init. Kept out of
     /// observation tracking so the token never participates in change
     /// notifications, and unsafe because NSObjectProtocol tokens are not
     /// Sendable but are only ever registered/removed from the main actor.
@@ -83,7 +83,7 @@ class LiveTranscriptionService {
     /// Wire input + tap *before* `engine.start()`. Starting an empty graph
     /// while AVAudioRecorder already owns the mic (common on "Start Now"
     /// during countdown) makes `AVAudioEngineGraph::Initialize` raise an
-    /// NSException that Swift `do/catch` cannot catch — abort.
+    /// NSException that Swift `do/catch` cannot catch - abort.
     @MainActor
     func start() {
         guard let recognizer, recognizer.isAvailable else { return }
@@ -146,7 +146,7 @@ class LiveTranscriptionService {
     @MainActor
     private func stopInternal() {
         // Idempotent across explicit stop() + cancelled-task callbacks.
-        // Cleanup runs whenever an engine or request is still held — including
+        // Cleanup runs whenever an engine or request is still held - including
         // the orphaned-engine case after a failed recognition re-arm.
         let hasWork = isActive || audioEngine != nil || requestBox.withLock({ $0 != nil })
         guard hasWork else { return }
@@ -183,7 +183,7 @@ class LiveTranscriptionService {
         guard let recognizer, recognizer.isAvailable else { return false }
 
         let inputNode = engine.inputNode
-        // Prefer inputFormat — outputFormat can report 0 Hz before the graph
+        // Prefer inputFormat - outputFormat can report 0 Hz before the graph
         // is fully wired even after engine.start().
         var format = inputNode.inputFormat(forBus: 0)
         if format.sampleRate <= 0 {
@@ -198,7 +198,7 @@ class LiveTranscriptionService {
         request.shouldReportPartialResults = true
         // Unconditional: on-device processing is a product guarantee, not a
         // preference, and `supportsOnDeviceRecognition` can read false while
-        // assets are still installing — which used to hand that session's
+        // assets are still installing - which used to hand that session's
         // microphone audio to Apple's servers. It also keeps latency low and
         // avoids network pauses that force early isFinal → restart cycles.
         request.requiresOnDeviceRecognition = true
@@ -210,7 +210,7 @@ class LiveTranscriptionService {
         // The tap outlives individual recognition requests. Installing one on a
         // running engine makes AVAudioEngine reset the input node's format,
         // which reconfigures AURemoteIO's converter while its IO thread is
-        // inside the input callback — that raced into a null callback pointer
+        // inside the input callback - that raced into a null callback pointer
         // and segfaulted about a minute into every session, at the first
         // recognition restart. Install once, before `engine.start()`, and swap
         // the request underneath it.
@@ -236,7 +236,7 @@ class LiveTranscriptionService {
                 // SFSpeech auto-finalizes after a pause. Previously we tore
                 // down AVAudioEngine here, which yanked the shared input graph
                 // out from under AVAudioRecorder mid-take and left the rest of
-                // the m4a silent — Whisper then scored the session as Silent.
+                // the m4a silent - Whisper then scored the session as Silent.
                 // Keep the engine running and open a fresh recognition request.
                 if hadError || isFinal {
                     self.restartRecognitionPreservingEngine()
@@ -270,7 +270,7 @@ class LiveTranscriptionService {
         }
 
         guard attachRecognition(on: engine) else {
-            // Leave the audio graph alone for AVAudioRecorder — only drop
+            // Leave the audio graph alone for AVAudioRecorder - only drop
             // live-transcription state so metering / capture keep working.
             isActive = false
             recognitionTask = nil
@@ -284,7 +284,7 @@ class LiveTranscriptionService {
         let segments = result.bestTranscription.segments
         let wordCount = segments.count
         guard wordCount > 0 else {
-            // Preserve the counter through transient empty partials — the
+            // Preserve the counter through transient empty partials - the
             // recognizer occasionally emits zero-segment revisions between
             // utterances and we don't want the UI to flash back to 0.
             return
@@ -332,7 +332,7 @@ class LiveTranscriptionService {
     /// Per-word tallies from the same pause-aware pipeline that drives the
     /// headline count, so the repeated-filler cue names exactly what was said.
     /// Receives only the segments added since the last partial and accumulates
-    /// additively — each segment index is counted exactly once per recognition
+    /// additively - each segment index is counted exactly once per recognition
     /// request, and `lastProcessedSegmentCount` resets to 0 on every restart so
     /// the next request's segments continue the tallies instead of colliding.
     @MainActor

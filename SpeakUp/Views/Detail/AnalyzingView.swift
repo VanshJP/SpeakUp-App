@@ -47,7 +47,7 @@ struct AnalyzingView: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var progressStage = 0
 
-    // Feedback state — typed dictionaries for proper Equatable tracking
+    // Feedback state - typed dictionaries for proper Equatable tracking
     @State private var scaleAnswers: [UUID: Int] = [:]
     @State private var boolAnswers: [UUID: Bool] = [:]
     @State private var feedbackSubmitted = false
@@ -109,7 +109,7 @@ struct AnalyzingView: View {
                     Spacer()
                 }
                 // Plain 8pt. Nothing in this screen's chain ignores the safe
-                // area — both hosts (`RecordingView`'s cover, the detail
+                // area - both hosts (`RecordingView`'s cover, the detail
                 // screen's `NavigationStack`) inset their content already, so
                 // the `keyWindow.safeAreaInsets.top` this used to add was
                 // counted twice. That error scaled with the device: +20pt on
@@ -153,7 +153,7 @@ struct AnalyzingView: View {
     }
 
     private var feedbackContent: some View {
-        // Always scroll — two default questions plus the status orb already
+        // Always scroll - two default questions plus the status orb already
         // overflow a small phone once Dynamic Type climbs, and a non-scrolling
         // stack was compressing the Yes/No row onto its polarity labels.
         PageScrollView {
@@ -264,7 +264,7 @@ struct AnalyzingView: View {
             Divider()
                 .overlay(Color.white.opacity(0.06))
 
-            // Vertical stack — the old HStack put "Skip to Results" beside
+            // Vertical stack - the old HStack put "Skip to Results" beside
             // "Answer any you'd like, or skip to results" and the two collided
             // at accessibility text sizes / narrow widths.
             VStack(spacing: 6) {
@@ -469,7 +469,7 @@ private struct ScaleInput: View {
                 }
             }
 
-            // Progress track — centered between first and last circle
+            // Progress track - centered between first and last circle
             scaleTrack
         }
     }
@@ -715,7 +715,7 @@ private struct DetailSkeletonView: View {
 
     private var statusHeader: some View {
         VStack(spacing: 10) {
-            // Duration lives in the context strip below — it was printed twice.
+            // Duration lives in the context strip below - it was printed twice.
             HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.mini)
@@ -847,7 +847,7 @@ private struct SkeletonDonut: View {
                     .frame(width: 52)
 
                 ForEach(0..<axisCount, id: \.self) { i in
-                    let angle = (Double(i) / Double(axisCount)) * 2 * .pi - .pi / 2
+                    let angle = (Double(i) / Double(axisCount)) * 2 * .pi.pi / 2
                     SkeletonBar(width: 36, height: 8)
                         .frame(width: 36)
                         .position(

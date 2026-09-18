@@ -16,7 +16,7 @@ struct GlassCardModifier: ViewModifier {
         content
             .environment(\.isOnGlass, true)
             .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
-            // Matches `GlassCard`'s unelevated shadow — same name, same plate.
+            // Matches `GlassCard`'s unelevated shadow - same name, same plate.
             .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
     }
 }
@@ -75,7 +75,7 @@ extension GlassSectionHeader where Accessory == EmptyView {
 
 // MARK: - Glass Card Title
 
-/// Card-level title row — the quieter sibling of `GlassSectionHeader`: same
+/// Card-level title row - the quieter sibling of `GlassSectionHeader`: same
 /// anatomy (icon, name, trailing accessory), one register down in size.
 /// Chart cards and multi-card sections use it so card headers stop being
 /// hand-rolled `Label`s with drifting fonts, while section headers keep the

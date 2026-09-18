@@ -32,14 +32,14 @@ struct ToolTileLabel: View {
 // MARK: - Library Category Card
 
 /// The card face, without a gesture. Split out so a caller can wrap it in a
-/// `NavigationLink(value:)` — Library's practice cards push a value-based
+/// `NavigationLink(value:)` - Library's practice cards push a value-based
 /// route, because the outcome browser pushes the same routes on top of itself.
 struct ToolCategoryCardLabel: View {
     let icon: String
     let title: String
     let meta: String
-    /// Optional second line. Practice cards use it for the tool's *format* —
-    /// what the next few minutes cost and whether the mic opens — because the
+    /// Optional second line. Practice cards use it for the tool's *format* - 
+    /// what the next few minutes cost and whether the mic opens - because the
     /// format is the only thing that actually separates the four tools.
     var detail: String? = nil
     var tint: Color = AppColors.primary

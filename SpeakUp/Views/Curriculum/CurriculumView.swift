@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Learn tab — skill studio of capability chapters. Detail: `LessonDetailView`.
+/// Learn tab - skill studio of capability chapters. Detail: `LessonDetailView`.
 ///
 /// Not a Duolingo-style path. Speaking gains come from proving one skill with your
 /// voice, so the page surfaces outcomes and modalities (learn / drill / speak),
@@ -47,7 +47,7 @@ struct CurriculumView: View {
         .alert("Lesson Locked", isPresented: $showingLockedInfo) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Finish the earlier lessons first — each skill builds on the last.")
+            Text("Finish the earlier lessons first - each skill builds on the last.")
         }
     }
 
@@ -170,7 +170,7 @@ struct CurriculumView: View {
 
     // MARK: - Reinforce
 
-    /// Prior completed lesson — keep review in the first viewport.
+    /// Prior completed lesson - keep review in the first viewport.
     private func suggestedReviewLesson(before current: CurriculumLesson) -> CurriculumLesson? {
         let ordered = viewModel.phases.flatMap(\.lessons)
         guard let index = ordered.firstIndex(where: { $0.id == current.id }), index > 0 else {
@@ -191,10 +191,18 @@ struct CurriculumView: View {
                     ZStack {
                         Circle()
                             .fill(identity.accent.opacity(0.18))
-                        LessonGlyphView(identity: identity, state: .completed, showsCheckBadge: true)
+                        LessonGlyphView(identity: identity, state: .completed)
                             .frame(width: 22, height: 22)
                     }
                     .frame(width: 44, height: 44)
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(AppColors.success)
+                            .background(Circle().fill(Color.black.opacity(0.55)).padding(-2))
+                            .offset(x: 2, y: -2)
+                            .accessibilityHidden(true)
+                    }
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Prove it again")
@@ -413,15 +421,21 @@ struct CurriculumView: View {
                         .foregroundStyle(identity.accent)
                 }
             } else {
-                LessonGlyphView(
-                    identity: identity,
-                    state: state,
-                    showsCheckBadge: state == .completed
-                )
-                .frame(width: 22, height: 22)
+                LessonGlyphView(identity: identity, state: state)
+                    .frame(width: 22, height: 22)
             }
         }
         .frame(width: 48, height: 48)
+        .overlay(alignment: .topTrailing) {
+            if state == .completed {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppColors.success)
+                    .background(Circle().fill(Color.black.opacity(0.55)).padding(-2))
+                    .offset(x: 2, y: -2)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     private func statusChip(for state: LessonNodeState) -> some View {
@@ -500,7 +514,7 @@ struct CurriculumView: View {
 
 // MARK: - Modality Strip
 
-/// Ordered unique activity roles for a lesson — the interactive plan at a glance.
+/// Ordered unique activity roles for a lesson - the interactive plan at a glance.
 struct LessonModalityStrip: View {
     let types: [CurriculumActivityType]
     var compact: Bool = false

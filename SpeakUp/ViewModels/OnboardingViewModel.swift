@@ -42,8 +42,8 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
         }
     }
 
-    /// The whole flow. It ends inside the baseline recording — the first
-    /// guided take, its analysis, and its reveal — rather than handing the user
+    /// The whole flow. It ends inside the baseline recording - the first
+    /// guided take, its analysis, and its reveal - rather than handing the user
     /// off to an unguided recorder after a recap screen.
     ///
     /// Calibration, the AI model and reminder consent are deliberately absent.
@@ -86,7 +86,7 @@ struct OnboardingResult {
     /// The baseline recording captured inside onboarding. Nil when the user
     /// bailed before recording (mic denied, "explore first").
     let baselineRecordingID: UUID?
-    /// True when the reveal's "See my full breakdown" was tapped — ContentView
+    /// True when the reveal's "See my full breakdown" was tapped - ContentView
     /// routes straight into the recording detail after dismissing.
     let reviewBaselineOnFinish: Bool
 }
@@ -107,7 +107,7 @@ final class OnboardingViewModel {
     // wants everyday confidence is one user, not two, and the prompt mix can
     // weight both. Ordered so the first pick stays the primary goal.
     var selectedGoals: [OnboardingGoal] = []
-    /// Ceiling on picks. Past three the weighting stops meaning anything —
+    /// Ceiling on picks. Past three the weighting stops meaning anything - 
     /// every category ends up favored, which is the same as none of them.
     static let maxGoals = 3
     var speakerLevel: SpeakerLevel = .intermediate
@@ -118,7 +118,7 @@ final class OnboardingViewModel {
     // Mic permission + live test
     var hasMicPermission = false
     var isRequestingMicPermission = false
-    var micLevel: Float = 0  // 0–1, smoothed for waveform
+    var micLevel: Float = 0  // 0-1, smoothed for waveform
     var hasHeardVoice = false
     private let audioService = AudioService()
     private var levelMonitorTask: Task<Void, Never>? = nil
@@ -129,7 +129,7 @@ final class OnboardingViewModel {
     // remains the primary transcriber and does not require this permission.
     var hasSpeechPermission = false
 
-    // Vocab + dictionary seeds. Seeded silently from the level pick — the
+    // Vocab + dictionary seeds. Seeded silently from the level pick - the
     // editing page was homework mid-flow; the Word Bank in Settings is the
     // editor now.
     var vocabWords: [String] = OnboardingViewModel.vocabSeeds(for: .intermediate)
@@ -142,7 +142,7 @@ final class OnboardingViewModel {
     /// model context.
     enum BaselinePhase {
         /// `saving` covers the gap between the user pressing Done and the
-        /// `Recording` row existing — stopping the file takes long enough to
+        /// `Recording` row existing - stopping the file takes long enough to
         /// see. Without it the take screen fell back to `ready` for a few
         /// frames and the pre-record UI flashed back over a finished take.
         case ready, countdown, recording, saving
@@ -150,7 +150,7 @@ final class OnboardingViewModel {
 
     var baselinePhase: BaselinePhase = .ready
     var baselineCountdownValue = 3
-    /// Whole seconds only — the recorder UI is 1 Hz, so writing fractional
+    /// Whole seconds only - the recorder UI is 1 Hz, so writing fractional
     /// elapsed would re-diff the page 16 times a second for nothing.
     var baselineElapsed: Int = 0
     /// One-line status shown on the ready state after a discarded or failed
@@ -178,7 +178,7 @@ final class OnboardingViewModel {
 
     // v8 keys: the goal draft is a list now, not one Int. Reading a v7 scalar
     // into it would silently restore a single goal and lose the shape, so the
-    // bump invalidates the old drafts instead — same reason v7 existed.
+    // bump invalidates the old drafts instead - same reason v7 existed.
     private static let resumeStepKey = "onboarding.lastReachedStep.v8"
     private static let resumeNameKey = "onboarding.draftName.v8"
     private static let resumeGoalsKey = "onboarding.draftGoals.v8"
@@ -196,7 +196,7 @@ final class OnboardingViewModel {
 
     var canAdvanceFromName: Bool { !trimmedName.isEmpty }
 
-    /// At the cap, unpicked goals stop responding — `toggleGoal` refuses and
+    /// At the cap, unpicked goals stop responding - `toggleGoal` refuses and
     /// the step dims them, rather than silently dropping an earlier pick.
     var hasReachedGoalLimit: Bool { selectedGoals.count >= Self.maxGoals }
 
@@ -205,7 +205,7 @@ final class OnboardingViewModel {
     var steps: [OnboardingStep] { OnboardingStep.firstRunSteps }
 
     /// The steps that carry a counter and a tick: the four questions between
-    /// the cover and the baseline. The hero bookends aren't counted — the
+    /// the cover and the baseline. The hero bookends aren't counted - the
     /// baseline is the destination, not a step among steps.
     private var countedSteps: [OnboardingStep] { steps.filter { !$0.isHero } }
 
@@ -240,7 +240,7 @@ final class OnboardingViewModel {
         if let raw = defaults.object(forKey: Self.resumeStepKey) as? Int,
            let step = OnboardingStep(rawValue: raw),
            steps.contains(step) {
-            // Never resume cold onto the live recorder — the briefing carries
+            // Never resume cold onto the live recorder - the briefing carries
             // the context that makes the recorder make sense.
             currentStep = step == .baseline ? .baselineBriefing : step
         }
@@ -288,7 +288,7 @@ final class OnboardingViewModel {
     }
 
     /// Leaving a step without doing what it asked. Separate from `advance` so
-    /// the funnel can tell "answered and moved on" from "escaped" — a step
+    /// the funnel can tell "answered and moved on" from "escaped" - a step
     /// everyone skips is a step that should not be in the first run.
     func skip() {
         move(by: 1, action: "skip")
@@ -316,7 +316,7 @@ final class OnboardingViewModel {
     /// you, and made a second pick a race against the timer.
     ///
     /// Deselecting the last remaining goal is refused rather than allowed and
-    /// then blocked at the CTA — leaving the step un-answerable after it was
+    /// then blocked at the CTA - leaving the step un-answerable after it was
     /// answered is a worse state than a tap that declines to do anything.
     func toggleGoal(_ goal: OnboardingGoal) {
         if let index = selectedGoals.firstIndex(of: goal) {
@@ -458,7 +458,7 @@ final class OnboardingViewModel {
 
     /// 3-2-1 in the record button, then the take starts. The countdown lives
     /// here (not in `CountdownOverlayView`) so the prompt card never leaves
-    /// the screen — the take begins on a page the user is already reading.
+    /// the screen - the take begins on a page the user is already reading.
     func beginBaselineCountdown() {
         guard baselinePhase == .ready else { return }
         baselineNote = nil
@@ -514,7 +514,7 @@ final class OnboardingViewModel {
             baselineNote = "That take didn't save. Give it another go."
             return nil
         }
-        // Stays `.saving` on success — the caller swaps the whole page to the
+        // Stays `.saving` on success - the caller swaps the whole page to the
         // analyzing view, so returning to `ready` would only flash the recorder.
         return (url, duration, baselineLevelSamples)
     }

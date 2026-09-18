@@ -3,7 +3,7 @@ import Foundation
 /// Translates a campaign web link into the `speakup://` URL the router already
 /// understands.
 ///
-/// Partner and campaign links in the launch plan are ordinary `https://` URLs —
+/// Partner and campaign links in the launch plan are ordinary `https://` URLs - 
 /// they have to survive being pasted into a newsletter, a bio, or a QR code,
 /// which a custom scheme does not. Rather than growing a second router for the
 /// web form, a universal link is normalised into its custom-scheme equivalent
@@ -24,7 +24,7 @@ nonisolated enum UniversalLink {
     ///
     /// Must stay identical to the host in the `associated-domains` entitlement.
     /// Both read the `BT_UNIVERSAL_LINK_DOMAIN` build setting so they cannot
-    /// disagree — see `RELEASE_CHECKLIST.md`.
+    /// disagree - see `RELEASE_CHECKLIST.md`.
     static var domain: String? {
         guard let raw = Bundle.main.object(forInfoDictionaryKey: infoPlistKey) as? String else {
             return nil

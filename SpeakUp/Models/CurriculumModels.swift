@@ -49,7 +49,7 @@ struct CurriculumLesson: Identifiable, Codable {
     let activities: [CurriculumActivity]
     var isCompleted: Bool = false
 
-    /// Unique activity roles in lesson order — the interactive plan at a glance.
+    /// Unique activity roles in lesson order - the interactive plan at a glance.
     var studioPlan: [CurriculumActivityType] {
         var seen = Set<CurriculumActivityType>()
         var ordered: [CurriculumActivityType] = []

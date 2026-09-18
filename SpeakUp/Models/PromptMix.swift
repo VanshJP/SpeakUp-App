@@ -37,10 +37,10 @@ extension OnboardingGoal {
 ///    picked Interviews should mostly get interview-shaped prompts without the
 ///    prompt pool silently shrinking to one drawer.
 ///
-/// Pure value type — no SwiftData, no `Prompt` rows — so the distribution is
+/// Pure value type - no SwiftData, no `Prompt` rows - so the distribution is
 /// testable on its own and callers can build one per load instead of querying
 /// settings per prompt.
-/// Pure value type — mixed into nonisolated selection passes and MainActor
+/// Pure value type - mixed into nonisolated selection passes and MainActor
 /// call sites alike.
 nonisolated struct PromptMix: Equatable, Sendable {
     /// Multiplier applied to categories the user's goals lean on. Three means a
@@ -62,8 +62,8 @@ nonisolated struct PromptMix: Equatable, Sendable {
     }
 
     /// - Parameters:
-    ///   - goals: Goals picked during onboarding. Empty means no bias.
-    ///   - enabledCategoryNames: The user's Settings gate. Empty means "no
+    /// - goals: Goals picked during onboarding. Empty means no bias.
+    /// - enabledCategoryNames: The user's Settings gate. Empty means "no
     ///     gate recorded" (fresh install, or a settings row that predates the
     ///     field), which is treated as everything enabled rather than nothing.
     init(goals: [OnboardingGoal], enabledCategoryNames: Set<String>) {
@@ -113,7 +113,7 @@ nonisolated struct PromptMix: Equatable, Sendable {
     ///
     /// Rules, in order:
     /// 1. **The Settings gate still wins.** A disabled category stays at 0 no
-    ///    matter how badly the user speaks in it — steering, not overriding.
+    ///    matter how badly the user speaks in it - steering, not overriding.
     /// 2. **Evidence first.** Fewer than `adaptiveMinimumSessions` sessions of
     ///    a type is too thin to steer by.
     /// 3. **Proportional, capped at 2×.** The boost ramps in above the
@@ -150,7 +150,7 @@ nonisolated struct PromptMix: Equatable, Sendable {
     /// keeps the daily prompt stable across re-fetches.
     ///
     /// Returns nil only when `candidates` is empty or every candidate is gated
-    /// out — the caller decides what to fall back to, since it knows whether it
+    /// out - the caller decides what to fall back to, since it knows whether it
     /// is picking a daily prompt or a reroll.
     func pick<T>(from candidates: [T], seed: Int, category: (T) -> String) -> T? {
         guard !candidates.isEmpty else { return nil }

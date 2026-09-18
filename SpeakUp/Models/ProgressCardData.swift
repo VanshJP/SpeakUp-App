@@ -35,7 +35,7 @@ nonisolated struct ProgressCardData: Equatable, Sendable {
     }
 
     /// The one line the card leads with. Progress is stated plainly and a
-    /// flat or negative delta is not dressed up as a win — a share card that
+    /// flat or negative delta is not dressed up as a win - a share card that
     /// lies is worth less than no share card.
     var headline: String {
         if delta > 0 { return "+\(delta) points" }

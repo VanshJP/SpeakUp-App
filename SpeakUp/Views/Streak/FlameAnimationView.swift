@@ -64,7 +64,7 @@ struct FlameAnimationView: View {
                     .blur(radius: 0.6)
                     .shadow(color: Color(red: 1.0, green: 0.85, blue: 0.4).opacity(0.85), radius: 8)
 
-                // A faint dark base touch — sells the "sitting on something" feel
+                // A faint dark base touch - sells the "sitting on something" feel
                 Ellipse()
                     .fill(
                         RadialGradient(
@@ -97,7 +97,7 @@ struct FlameAnimationView: View {
                 .offset(y: size * 0.10)
                 .blur(radius: 0.6)
 
-            // Faint dark base touch — same as lit version, sells the candle base
+            // Faint dark base touch - same as lit version, sells the candle base
             Ellipse()
                 .fill(
                     RadialGradient(
@@ -161,10 +161,10 @@ struct FlameAnimationView: View {
     private var outerGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 1.0, green: 0.78, blue: 0.32),   // tip — warm yellow-orange
-                Color(red: 1.0, green: 0.55, blue: 0.15),   // upper body — orange
-                Color(red: 0.95, green: 0.30, blue: 0.05),  // bulge — deep orange-red
-                Color(red: 0.55, green: 0.10, blue: 0.04)   // base — dim red
+                Color(red: 1.0, green: 0.78, blue: 0.32),   // tip - warm yellow-orange
+                Color(red: 1.0, green: 0.55, blue: 0.15),   // upper body - orange
+                Color(red: 0.95, green: 0.30, blue: 0.05),  // bulge - deep orange-red
+                Color(red: 0.55, green: 0.10, blue: 0.04)   // base - dim red
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -174,9 +174,9 @@ struct FlameAnimationView: View {
     private var innerGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 1.0, green: 0.97, blue: 0.78),   // tip — pale yellow / near white
-                Color(red: 1.0, green: 0.88, blue: 0.40),   // body — bright yellow
-                Color(red: 1.0, green: 0.65, blue: 0.18)    // base — yellow-orange
+                Color(red: 1.0, green: 0.97, blue: 0.78),   // tip - pale yellow / near white
+                Color(red: 1.0, green: 0.88, blue: 0.40),   // body - bright yellow
+                Color(red: 1.0, green: 0.65, blue: 0.18)    // base - yellow-orange
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -186,10 +186,10 @@ struct FlameAnimationView: View {
     private var extinguishedOuterGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.55, green: 0.58, blue: 0.64),  // tip — light cool gray
+                Color(red: 0.55, green: 0.58, blue: 0.64),  // tip - light cool gray
                 Color(red: 0.42, green: 0.45, blue: 0.52),  // upper body
-                Color(red: 0.28, green: 0.31, blue: 0.38),  // bulge — slate
-                Color(red: 0.16, green: 0.18, blue: 0.24)   // base — near charcoal
+                Color(red: 0.28, green: 0.31, blue: 0.38),  // bulge - slate
+                Color(red: 0.16, green: 0.18, blue: 0.24)   // base - near charcoal
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -199,7 +199,7 @@ struct FlameAnimationView: View {
     private var extinguishedInnerGradient: LinearGradient {
         LinearGradient(
             colors: [
-                Color(red: 0.70, green: 0.72, blue: 0.78),  // tip — pale gray
+                Color(red: 0.70, green: 0.72, blue: 0.78),  // tip - pale gray
                 Color(red: 0.52, green: 0.55, blue: 0.62),  // body
                 Color(red: 0.36, green: 0.39, blue: 0.46)   // base
             ],
@@ -230,28 +230,28 @@ struct FlameTeardropShape: Shape {
 
         path.move(to: tip)
 
-        // Right shoulder — tip down to the widest point on the right.
+        // Right shoulder - tip down to the widest point on the right.
         path.addCurve(
             to: rightWidest,
             control1: CGPoint(x: cx + w * 0.18, y: h * 0.12),
             control2: CGPoint(x: rect.maxX, y: h * 0.42)
         )
 
-        // Bottom-right quarter circle — rightWidest → bottomCenter.
+        // Bottom-right quarter circle - rightWidest → bottomCenter.
         path.addCurve(
             to: bottomCenter,
             control1: CGPoint(x: rect.maxX, y: widestY + kr),
             control2: CGPoint(x: cx + kr, y: rect.maxY)
         )
 
-        // Bottom-left quarter circle — bottomCenter → leftWidest.
+        // Bottom-left quarter circle - bottomCenter → leftWidest.
         path.addCurve(
             to: leftWidest,
             control1: CGPoint(x: cx - kr, y: rect.maxY),
             control2: CGPoint(x: rect.minX, y: widestY + kr)
         )
 
-        // Left shoulder — leftWidest → tip.
+        // Left shoulder - leftWidest → tip.
         path.addCurve(
             to: tip,
             control1: CGPoint(x: rect.minX, y: h * 0.42),

@@ -15,10 +15,10 @@ final class ChirpPlayer {
     private init() {}
 
     enum Chirp {
-        case inhale    // high tone — breathe in
-        case hold      // quiet mid tone — hold breath
-        case exhale    // lower tone — breathe out
-        case tick      // quick neutral cue — step advance or drill event
+        case inhale    // high tone - breathe in
+        case hold      // quiet mid tone - hold breath
+        case exhale    // lower tone - breathe out
+        case tick      // quick neutral cue - step advance or drill event
 
         var frequency: Float {
             switch self {
@@ -63,7 +63,7 @@ final class ChirpPlayer {
             player = try AVAudioPlayer(data: data)
             player?.play()
         } catch {
-            // Silently fail — chirps are non-critical
+            // Silently fail - chirps are non-critical
         }
     }
 
@@ -88,7 +88,7 @@ final class ChirpPlayer {
         data.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
         appendUInt32(&data, UInt32(dataSize))               // data size
 
-        // Generate samples — the pack decides the harmonic stack and envelope,
+        // Generate samples - the pack decides the harmonic stack and envelope,
         // which is the whole difference between a beep and a marimba.
         let harmonics = pack.harmonics
         let gainSum = harmonics.reduce(Float(0)) { $0 + $1.gain }
@@ -128,7 +128,7 @@ final class ChirpPlayer {
 
 // MARK: - Sound Pack
 
-/// Timbre of the practice cues. A pack is three numbers and an envelope —
+/// Timbre of the practice cues. A pack is three numbers and an envelope - 
 /// no audio files, so adding one costs nothing at build or download time.
 enum SoundPack: Int, Codable, CaseIterable, Identifiable {
     case soft = 0
@@ -160,7 +160,7 @@ enum SoundPack: Int, Codable, CaseIterable, Identifiable {
             // The 4th partial is what makes a struck bar sound like wood.
             return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 4, gain: 0.3), Harmonic(multiple: 9.2, gain: 0.08)]
         case .beep:
-            // Odd harmonics only — an approximated square wave.
+            // Odd harmonics only - an approximated square wave.
             return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 3, gain: 0.33), Harmonic(multiple: 5, gain: 0.2)]
         case .chime:
             return [Harmonic(multiple: 1, gain: 1), Harmonic(multiple: 2, gain: 0.45), Harmonic(multiple: 3, gain: 0.18)]

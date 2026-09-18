@@ -14,7 +14,7 @@ class WhisperService {
     var isModelLoaded = false
     /// True while `loadModel` is in flight (local load or Hub download).
     private(set) var isLoadingModel = false
-    /// True only while a Hub download is in flight — not a local cache load.
+    /// True only while a Hub download is in flight - not a local cache load.
     /// Analyzing UI uses this so a failed first download does not keep saying
     /// "Downloading…" through the Apple Speech fallback.
     private(set) var isDownloadingModel = false
@@ -26,13 +26,13 @@ class WhisperService {
     private var whisperKit: WhisperKit?
 
     /// Serializes loadModel / transcribe / unloadModel. WhisperKit is not
-    /// reentrant — two recordings processed concurrently (coordinator jobs for
+    /// reentrant - two recordings processed concurrently (coordinator jobs for
     /// different recordingIDs) would race one shared instance: torn-down model
     /// under live inference, double model loads.
     ///
     /// Release ordering stays safe because the signal fires only after
     /// transcribe's task group has awaited every child, and it is the
-    /// heartbeat's abort flag — not cancellation — that actually stops
+    /// heartbeat's abort flag - not cancellation - that actually stops
     /// WhisperKit's internal decode first. See `DecodeHeartbeat`.
     private let semaphore = AsyncSemaphore(value: 1)
 
@@ -52,8 +52,8 @@ class WhisperService {
 
     /// Ceiling on a single word's length. Whisper occasionally emits a word whose end
     /// timestamp overshoots by minutes; left alone it drags the reported duration past
-    /// the end of the file and hands every consumer of word timings — playback
-    /// highlighting, pause detection, per-word acoustics — a window of silence.
+    /// the end of the file and hands every consumer of word timings - playback
+    /// highlighting, pause detection, per-word acoustics - a window of silence.
     nonisolated private static let maxWordDuration: TimeInterval = 3.0
 
     /// Longest gap between decoded tokens before the decoder counts as hung.
@@ -67,7 +67,7 @@ class WhisperService {
 
     /// Backstop for the one failure the stall detector cannot see: a decoder
     /// that keeps emitting tokens while the seek point never advances through
-    /// the file. Deliberately loose — the stall detector handles every ordinary
+    /// the file. Deliberately loose - the stall detector handles every ordinary
     /// hang long before this fires.
     private static func decodeCeiling(for audioURL: URL) -> TimeInterval {
         let audioDuration = (try? AVAudioFile(forReading: audioURL)).map {
@@ -118,7 +118,7 @@ class WhisperService {
 
             // Prefer a fully local load whenever the Core ML bundle is already
             // on disk. WhisperKitConfig(download: true) hits Hugging Face
-            // *before* it looks at the cache — on spotty Wi‑Fi that hangs
+            // *before* it looks at the cache - on spotty Wi‑Fi that hangs
             // processing even though the model never needed the network.
             // Once cached, transcription must work in airplane mode.
             let config = Self.makeConfig(variantName: variantName)
@@ -171,7 +171,7 @@ class WhisperService {
 
     // MARK: - Offline-first config
 
-    /// Documents/huggingface — same default HubApi uses, so a prior download
+    /// Documents/huggingface - same default HubApi uses, so a prior download
     /// lands where we look for it on the next launch.
     private static var hubDownloadBase: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -187,7 +187,7 @@ class WhisperService {
             .appendingPathComponent(variantName, isDirectory: true)
 
         // Require encoder + decoder. An interrupted Hub download can leave
-        // AudioEncoder alone on disk — treating that as offline-ready would
+        // AudioEncoder alone on disk - treating that as offline-ready would
         // permanently skip re-download and fail every load with download:false.
         let encoderCandidates = ["AudioEncoder.mlmodelc", "AudioEncoder.mlpackage"]
         let decoderCandidates = ["TextDecoder.mlmodelc", "TextDecoder.mlpackage"]
@@ -204,7 +204,7 @@ class WhisperService {
         if let localFolder = cachedModelFolder(variantName: variantName) {
             // Point at the on-disk bundle and refuse Hub contact. Tokenizer
             // also resolves under hubDownloadBase once the first download
-            // finished — pass it so loadTokenizer skips the network too.
+            // finished - pass it so loadTokenizer skips the network too.
             return WhisperKitConfig(
                 modelFolder: localFolder.path,
                 tokenizerFolder: hubDownloadBase,
@@ -290,7 +290,7 @@ class WhisperService {
         do {
             // Tokenize prompt to condition the model toward fillers + user dictionary words.
             // Whisper's prompt context is capped (~224 tokens). If the encoded prompt exceeds
-            // the cap, the decoder can hang indefinitely on inference — cap both the source
+            // the cap, the decoder can hang indefinitely on inference - cap both the source
             // term list and the final token count to stay safely under the limit.
             let biasPrompt = buildBiasPrompt(preferredTerms: preferredTerms)
             let encoded = whisperKit.tokenizer?.encode(text: biasPrompt).filter { $0 < 51865 } ?? []
@@ -309,7 +309,7 @@ class WhisperService {
                 // paid only on windows that are already failing.
                 temperatureFallbackCount: 5,
                 usePrefillPrompt: true,
-                // Inert while `promptTokens` is set — WhisperKit skips the KV
+                // Inert while `promptTokens` is set - WhisperKit skips the KV
                 // cache prefill in that case (TextDecoder: "currently breaks if
                 // it starts at non-zero index"). Left true for the day the
                 // prompt goes away.
@@ -324,8 +324,8 @@ class WhisperService {
                 logProbThreshold: -1.0,
                 firstTokenLogProbThreshold: -1.5,
                 // This is the *silence* trigger, not a speech-sensitivity dial.
-                // WhisperKit discards an entire 30 s window — no error, no gap
-                // marker — when `noSpeechProb > noSpeechThreshold` and the
+                // WhisperKit discards an entire 30 s window - no error, no gap
+                // marker - when `noSpeechProb > noSpeechThreshold` and the
                 // window also fails `logProbThreshold`
                 // (SegmentSeeker.findSeekPointAndSegments). Lowering it drops
                 // *more* audio, so the old 0.4 (against a 0.6 default) was
@@ -336,7 +336,7 @@ class WhisperService {
 
             // WhisperKit's decoder can hang indefinitely under certain conditions
             // (degenerate audio, prompt edge-cases), so a watchdog runs alongside
-            // it. The watchdog measures decode *progress*, not elapsed time — see
+            // it. The watchdog measures decode *progress*, not elapsed time - see
             // `decodeStallTimeout`. Only one result is ever returned here: without
             // a `chunkingStrategy` WhisperKit decodes the whole file in a single
             // task, so `.first` is the complete transcript, not the first chunk.
@@ -365,7 +365,7 @@ class WhisperService {
                         try await Task.sleep(for: .seconds(5))
                         guard heartbeat.secondsSinceLastBeat < WhisperService.decodeStallTimeout,
                               Date() < deadline else {
-                            // Stop the decode BEFORE bailing — once this error
+                            // Stop the decode BEFORE bailing - once this error
                             // unwinds, the semaphore hands the shared instance
                             // to the next caller and a still-running decode
                             // would race it.
@@ -383,7 +383,7 @@ class WhisperService {
 
             // Process the WhisperKit result into our format. Detached because
             // the word-timing walk over a long transcript is pure CPU that has
-            // no business on the main actor — this used to run inline and
+            // no business on the main actor - this used to run inline and
             // stalled any sheet presentation racing it (e.g. tapping Calm
             // right after a take finishes).
             return await Task.detached(priority: .userInitiated) {
@@ -392,7 +392,7 @@ class WhisperService {
 
         } catch is CancellationError {
             // External cancellation (job cancelled, app backgrounding): same
-            // zombie risk as the watchdog — stop the decode before unwinding.
+            // zombie risk as the watchdog - stop the decode before unwinding.
             heartbeat.requestAbort()
             throw CancellationError()
         } catch {
@@ -414,7 +414,7 @@ class WhisperService {
 
     /// Process WhisperKit result into our SpeechTranscriptionResult format with filler detection.
     /// `nonisolated`: runs detached off the main actor, so it can touch no
-    /// actor-isolated state — pure value math over POD timings.
+    /// actor-isolated state - pure value math over POD timings.
     nonisolated private static func processWhisperResult(_ result: WhisperTranscriptionResult) -> SpeechTranscriptionResult {
         // Collect all word timings from all segments
         var rawTimings: [RawWordTiming] = []
@@ -518,7 +518,7 @@ class WhisperService {
 /// task, once per decoded token, so this must be thread-safe and must not touch
 /// actor-isolated state. The watchdog reads `secondsSinceLastBeat` to tell a
 /// slow recording (beating steadily) from a hung decoder (silent), and flips
-/// `shouldAbort` to make the callback stop the decode — cancelling the await
+/// `shouldAbort` to make the callback stop the decode - cancelling the await
 /// alone never reaches WhisperKit's internals, which would leave a zombie
 /// decode running while the semaphore lets the next caller in.
 nonisolated private final class DecodeHeartbeat: @unchecked Sendable {
@@ -555,7 +555,7 @@ nonisolated private final class DecodeHeartbeat: @unchecked Sendable {
 
 /// Minimal counting semaphore for async critical sections.
 /// Synchronous `signal()` so it is safe to call from `defer`.
-/// Locking stays inside non-async closures — NSLock is unavailable from
+/// Locking stays inside non-async closures - NSLock is unavailable from
 /// asynchronous contexts under Swift 6.
 nonisolated private final class AsyncSemaphore: @unchecked Sendable {
     private var permits: Int

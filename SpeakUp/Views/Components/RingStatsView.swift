@@ -28,7 +28,7 @@ struct RingStatsView: View {
     var body: some View {
         GlassCard(padding: 20) {
             VStack(spacing: 18) {
-                // Three standalone gauges — value inside, label beneath.
+                // Three standalone gauges - value inside, label beneath.
                 HStack(spacing: 0) {
                     GaugeItem(
                         progress: Double(score) / 100,

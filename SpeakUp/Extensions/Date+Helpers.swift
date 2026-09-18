@@ -77,7 +77,7 @@ nonisolated extension Date {
         let isCovered: (Date) -> Bool = { practice.contains($0) || frozen.contains($0) }
 
         // Anchor: the chain is alive if today or yesterday is covered. Today
-        // being empty is not a break yet — the day is not over.
+        // being empty is not a break yet - the day is not over.
         var cursor = today
         if !isCovered(cursor) {
             cursor = today.adding(days: -1)

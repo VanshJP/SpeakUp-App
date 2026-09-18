@@ -5,7 +5,7 @@ struct ScoreWeightsView: View {
     @State private var showingResetConfirmation = false
     @State private var didSave = false
 
-    // Draft weights — not persisted until the user taps Save
+    // Draft weights - not persisted until the user taps Save
     @State private var draftClarity: Double = 0.12
     @State private var draftPace: Double = 0.12
     @State private var draftFiller: Double = 0.12
@@ -359,7 +359,7 @@ struct ScoreWeightsView: View {
     }
 
     /// Identity tones, not judgement. These distinguish nine weights from one
-    /// another — they must never be read as good/bad, which is why they come
+    /// another - they must never be read as good/bad, which is why they come
     /// from the muted jewel set rather than the score ramp. The previous
     /// mapping used seven raw system hues and rendered as a rainbow.
     private var weightItems: [WeightItem] {

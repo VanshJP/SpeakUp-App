@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Signal
 
-/// Practice facts that earn a rare coach note — never a form, never transcript
+/// Practice facts that earn a rare coach note - never a form, never transcript
 /// mining. Scores and dates only.
 nonisolated enum CoachMomentSignal: String, CaseIterable, Sendable, Identifiable {
     case returnFromLapse
@@ -51,7 +51,7 @@ nonisolated enum CoachMomentSurface: String, Sendable {
 
 // MARK: - Moment
 
-/// One coach note — short copy, one optional action, rarity class.
+/// One coach note - short copy, one optional action, rarity class.
 nonisolated struct CoachMoment: Sendable, Identifiable, Equatable {
     let id: String
     let signal: CoachMomentSignal
@@ -139,7 +139,7 @@ nonisolated enum CoachMomentEngine {
     /// Quiet days before a welcome-back note. Higher than a single missed day
     /// so the card does not nag after a busy weekend.
     static let lapseThresholdDays = 5
-    /// Soft-landing overall ceiling — below this, offer a gentle retry first.
+    /// Soft-landing overall ceiling - below this, offer a gentle retry first.
     static let softLandingOverallCeiling = 45
     /// Anniversary milestones (days since first practice).
     static let anniversaryDays: [Int] = [30, 100, 365]
@@ -241,7 +241,7 @@ nonisolated enum CoachMomentEngine {
 
         switch signal {
         case .returnFromLapse:
-            // No day-count — counting absences reads as surveillance.
+            // No day-count - counting absences reads as surveillance.
             guard let lastPracticeDate = snapshot.lastPracticeDate else { return nil }
             return CoachMoment(
                 id: "return-since-\(CoachMomentEngine.dayKey(for: lastPracticeDate, calendar: calendar))",

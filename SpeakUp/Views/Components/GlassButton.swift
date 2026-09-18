@@ -89,7 +89,7 @@ private struct GlassButtonChrome: ViewModifier {
             // Glass on glass samples glass, not the canvas, and comes out a
             // murky band instead of a button. On a plate the secondary CTA is
             // a painted capsule at the same volume. Branching on an
-            // environment value, never on animated state — see rule 14.
+            // environment value, never on animated state - see rule 14.
             content
                 .background { Capsule().fill(Color.white.opacity(0.10)) }
                 .overlay {
@@ -197,7 +197,7 @@ struct GlassButton: View {
 
 // MARK: - Press Style
 
-/// Shared pressed-state feedback for glass controls — a subtle scale + dim,
+/// Shared pressed-state feedback for glass controls - a subtle scale + dim,
 /// spring-animated. Keeps taps feeling physical without any layout shift.
 ///
 struct GlassPressStyle: ButtonStyle {

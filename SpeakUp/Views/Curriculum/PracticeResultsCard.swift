@@ -7,7 +7,7 @@ struct PracticeResultsCard: View {
 
     @Query private var userSettings: [UserSettings]
     @State private var appeared = false
-    /// Resolved once — `recording.analysis` re-decodes the Codable blob on
+    /// Resolved once - `recording.analysis` re-decodes the Codable blob on
     /// every access, and `primaryTip` / encouragement both read it from body.
     @State private var analysis: SpeechAnalysis?
     @State private var primaryTip: CoachingTip?

@@ -9,7 +9,7 @@ enum ToolPresentation: Equatable {
 ///
 /// It exists so "Add your own passage" can live in the chrome instead of
 /// taking the top of the scroll view, which is where Read Aloud used to put
-/// it — the first thing you saw on a page for reading passages was a form for
+/// it - the first thing you saw on a page for reading passages was a form for
 /// writing one, and the catalog started below the fold. Library already solves
 /// this for Prompts and Stories with a FAB; a tool page is pushed and titled,
 /// so the nav bar is the equivalent spot.
@@ -127,7 +127,7 @@ struct ToolFilterBar<Content: View>: View {
 /// The "All" pill plus one pill per focus a tool has material for.
 ///
 /// All four tool pages filter on `PracticeFocus` and had written this out
-/// individually — four copies of the same twenty-five lines, which is four
+/// individually - four copies of the same twenty-five lines, which is four
 /// chances for one page's pills to drift out of step with the others.
 struct FocusFilterBar: View {
     let focuses: [PracticeFocus]
@@ -166,7 +166,7 @@ struct FocusFilterBar: View {
     }
 }
 
-/// One outcome heading — title, icon, count, promise — over its items.
+/// One outcome heading - title, icon, count, promise - over its items.
 ///
 /// Generic over the item so each page supplies only its own row. The four
 /// copies this replaces each wrapped themselves in `AnyView` to satisfy an
@@ -203,7 +203,7 @@ struct FocusSection<Item: Identifiable, Row: View>: View {
 
 // MARK: - Source Story Banner
 
-/// "Warming up for …" / "Drilling from …" — shown when a tool is opened from a
+/// "Warming up for …" / "Drilling from …" - shown when a tool is opened from a
 /// Story via Library send-to. One component because the two callers had
 /// hand-rolled the same card with different tints and corner treatments.
 struct SourceStoryBanner: View {

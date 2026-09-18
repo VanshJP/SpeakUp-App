@@ -7,7 +7,7 @@ import os.log
 ///
 /// The handoff is the whole point. Every one of these steps already existed as
 /// a door on Today or in the Library; what was missing was the sentence that
-/// says which door is next, at the only moment it is useful — the second the
+/// says which door is next, at the only moment it is useful - the second the
 /// last thing finished. Finishing a warm-up and being returned to a home screen
 /// of eight equally weighted choices is where a routine dies.
 ///
@@ -22,7 +22,7 @@ final class PracticeRoutineService {
     private var modelContext: ModelContext?
 
     /// A finished step and the one that follows it. Set by `complete`, and
-    /// rendered by `ContentView` as a bar over the tab surface — which is why
+    /// rendered by `ContentView` as a bar over the tab surface - which is why
     /// it survives the sheet that set it closing.
     struct Handoff: Equatable {
         var finished: RoutineStep
@@ -73,7 +73,7 @@ final class PracticeRoutineService {
         logger.info("Routine step complete: \(step.rawValue, privacy: .public)")
 
         // The user took the bar's suggestion. Leaving it up would have it
-        // pointing at the screen they are already on — a take routed straight
+        // pointing at the screen they are already on - a take routed straight
         // into its own breakdown does exactly this.
         if handoff?.next == step { handoff = nil }
 
@@ -98,7 +98,7 @@ final class PracticeRoutineService {
         handoff = nil
     }
 
-    /// Start a step directly — the routine card's own controls, which are not a
+    /// Start a step directly - the routine card's own controls, which are not a
     /// handoff and should not clear one that is showing.
     func start(_ step: RoutineStep) {
         pendingStep = step

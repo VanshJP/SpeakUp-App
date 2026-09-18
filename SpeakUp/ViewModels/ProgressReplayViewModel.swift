@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Value snapshot of one side of the comparison — decoded once at load so
+/// Value snapshot of one side of the comparison - decoded once at load so
 /// card bodies never read a `Recording.analysis` blob.
 nonisolated struct ReplaySessionSnapshot {
     let date: Date

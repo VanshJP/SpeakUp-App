@@ -3,7 +3,7 @@ import Accelerate
 
 /// On-device pitch (F0) analysis using autocorrelation via Apple's Accelerate framework.
 /// Extracts fundamental frequency contour, variation metrics, and prosody scores from recorded audio.
-/// Zero external dependencies — operates on `MonoPCM` with vDSP only.
+/// Zero external dependencies - operates on `MonoPCM` with vDSP only.
 nonisolated enum PitchAnalysisService {
 
     // MARK: - Configuration
@@ -136,7 +136,7 @@ nonisolated enum PitchAnalysisService {
         var bestLag = minLag
         var bestCorr: Float = -1
 
-        // Zero-copy pointer offsets per lag — same operand lengths as the
+        // Zero-copy pointer offsets per lag - same operand lengths as the
         // previous Array-slice copies, so dot products are unchanged.
         windowed.withUnsafeBufferPointer { buf in
             guard let base = buf.baseAddress else { return }

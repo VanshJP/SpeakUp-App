@@ -4,7 +4,7 @@ nonisolated struct WeeklyProgressData: Sendable {
     let sessionsThisWeek: Int
     let totalMinutes: Double
 
-    // Recap vs the previous week — nil when a week has no analyzed sessions.
+    // Recap vs the previous week - nil when a week has no analyzed sessions.
     let sessionsLastWeek: Int
     let avgScoreThisWeek: Int?
     let avgScoreLastWeek: Int?

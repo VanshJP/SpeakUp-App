@@ -263,7 +263,7 @@ class CurriculumService {
 
 /// Everything auto-completion infers from practice history, projected in one
 /// pass. `Recording.analysis` is a Codable blob that re-decodes on every
-/// access — reading it per activity made a refresh O(activities × sessions).
+/// access - reading it per activity made a refresh O(activities × sessions).
 nonisolated struct CurriculumSessionSignals {
     private(set) var recordingCount = 0
     private(set) var analyzedCount = 0
@@ -272,7 +272,7 @@ nonisolated struct CurriculumSessionSignals {
     private(set) var hasPositivePace = false
     /// A take with at least 25 words and at most 2 fillers.
     private(set) var hasFocusedTake = false
-    /// A take with at least 30 words at 130–170 wpm.
+    /// A take with at least 30 words at 130-170 wpm.
     private(set) var hasOnPaceTake = false
     private(set) var hasPrepFramework = false
     private(set) var hasStarFramework = false

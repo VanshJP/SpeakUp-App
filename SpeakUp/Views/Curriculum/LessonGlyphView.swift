@@ -1,28 +1,18 @@
 import SwiftUI
 
 /// Custom path art for a curriculum lesson. Prefer this over SF Symbols on the Learn path.
+/// Completion is signaled by ink color (`.completed`) and by the parent plate - never by
+/// a badge drawn on top of the Canvas, which covers the motif.
 struct LessonGlyphView: View {
     let identity: LessonIdentity
     var state: LessonNodeState = .available
-    var showsCheckBadge: Bool = false
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Canvas { context, size in
-                let ink = inkColor
-                LessonGlyphArt.draw(identity.motif, in: context, size: size, ink: ink)
-            }
-            .opacity(state == .locked ? 0.45 : 1)
-
-            if showsCheckBadge {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(AppColors.success)
-                    .background(Circle().fill(Color.black.opacity(0.55)).padding(-2))
-                    .offset(x: 4, y: 4)
-                    .accessibilityHidden(true)
-            }
+        Canvas { context, size in
+            let ink = inkColor
+            LessonGlyphArt.draw(identity.motif, in: context, size: size, ink: ink)
         }
+        .opacity(state == .locked ? 0.45 : 1)
         .accessibilityHidden(true)
     }
 
@@ -36,7 +26,7 @@ struct LessonGlyphView: View {
     }
 }
 
-/// Dense draw helpers — one Canvas pass per glyph.
+/// Dense draw helpers - one Canvas pass per glyph.
 enum LessonGlyphArt {
     static func draw(_ motif: LessonMotif, in context: GraphicsContext, size: CGSize, ink: Color) {
         let s = min(size.width, size.height)
@@ -84,7 +74,7 @@ enum LessonGlyphArt {
         }
     }
 
-    // MARK: - Motifs (−12…12 space)
+    // MARK: - Motifs (-12...12 space)
 
     private static func drawBaseline(_ c: inout GraphicsContext, ink: Color) {
         var line = Path()
@@ -95,7 +85,6 @@ enum LessonGlyphArt {
         line.addLine(to: CGPoint(x: 8, y: -6))
         c.stroke(line, with: .color(ink), style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
         c.fill(Circle().path(in: CGRect(x: 6.5, y: -7.5, width: 3, height: 3)), with: .color(ink))
-        // mic stem
         var mic = Path()
         mic.addRoundedRect(in: CGRect(x: -2, y: -8, width: 4, height: 6), cornerSize: CGSize(width: 2, height: 2))
         c.stroke(mic, with: .color(ink.opacity(0.85)), lineWidth: 1.2)
@@ -110,7 +99,6 @@ enum LessonGlyphArt {
         tail.addLine(to: CGPoint(x: -6, y: 7))
         tail.addLine(to: CGPoint(x: -1, y: 3))
         c.fill(tail, with: .color(ink.opacity(0.7)))
-        // strike
         var strike = Path()
         strike.move(to: CGPoint(x: -5, y: -1))
         strike.addLine(to: CGPoint(x: 2, y: -1))

@@ -52,7 +52,7 @@ class SettingsViewModel {
     var vocabChallengeEnabled: Bool = true
     var vocabChallengeWordCount: Int = 2
     var vocabChallengeIntroduceNew: Bool = true
-    /// 0 follows the speaker level; 1–3 pin beginner / intermediate / advanced.
+    /// 0 follows the speaker level; 1-3 pin beginner / intermediate / advanced.
     var vocabChallengeLevelOverride: Int = 0
 
     // Local state - Speaker Level
@@ -315,7 +315,7 @@ class SettingsViewModel {
         
         // Only a hand-picked time is written back. In adaptive mode the stored
         // hour belongs to `RetentionScheduler`, and `reminderTime` is a copy
-        // that goes stale the moment the rhythm moves — saving an unrelated
+        // that goes stale the moment the rhythm moves - saving an unrelated
         // toggle would otherwise drag the reminder back to whenever this screen
         // last loaded.
         if !adaptiveReminderEnabled {
@@ -327,7 +327,7 @@ class SettingsViewModel {
             // Nothing to learn from yet, so the moment of consent is the best
             // evidence there is: someone turning reminders on at 8pm is likelier
             // an evening practiser than a 9am one, and 9:00 is a column default
-            // nobody chose. One take replaces this — `RetentionScheduler` runs
+            // nobody chose. One take replaces this - `RetentionScheduler` runs
             // straight after and overrides the seed the moment a real rhythm
             // exists. Fed through `PracticeRhythm` so the 30-minute lead has
             // exactly one definition.
@@ -351,7 +351,7 @@ class SettingsViewModel {
         settings.vocabChallengeEnabled = vocabChallengeEnabled
         settings.vocabChallengeWordCount = min(3, max(1, vocabChallengeWordCount))
         settings.vocabChallengeLevelOverride = min(3, max(0, vocabChallengeLevelOverride))
-        // ponytail: sources and spacing are no longer knobs — the picker keeps
+        // ponytail: sources and spacing are no longer knobs - the picker keeps
         // the flags so it stays testable, the UI just never turns them off.
         settings.vocabChallengeUseBank = true
         settings.vocabChallengeUseDictionary = true
@@ -653,7 +653,7 @@ class SettingsViewModel {
         } else if customContextFillerWords.contains(lowered) {
             customContextFillerWords.removeAll { $0 == lowered }
         } else {
-            // Default filler — add to removed list
+            // Default filler - add to removed list
             if !removedDefaultFillers.contains(lowered) {
                 removedDefaultFillers.append(lowered)
             }
@@ -739,7 +739,7 @@ class SettingsViewModel {
         settings.comebackRemindersEnabled = true
         settings.milestoneNotificationsEnabled = true
         settings.lastMilestoneNotified = 0
-        // Banked freezes are earned practice, not a preference — a settings
+        // Banked freezes are earned practice, not a preference - a settings
         // reset must not confiscate them.
         settings.weeklyGoalSessions = 5
         settings.trackPauses = true
@@ -874,7 +874,7 @@ class SettingsViewModel {
 
     // MARK: - Pace Target
 
-    /// Effective target shown in UI — learned value in auto mode, slider value otherwise.
+    /// Effective target shown in UI - learned value in auto mode, slider value otherwise.
     var displayTargetWPM: Int {
         settings.resolvedTargetWPM
     }
@@ -908,7 +908,7 @@ class SettingsViewModel {
         guard let settings, let context = modelContext else { return }
         settings.voiceProfileF0Hz = profile.f0Hz
         settings.voiceProfileEnergyDb = profile.energyDb
-        // Manual calibration is a deliberate "this is my voice" — grant full
+        // Manual calibration is a deliberate "this is my voice" - grant full
         // blend trust (3 = 0.7 weight) instead of resetting accumulated trust.
         settings.voiceProfileSampleCount = max(settings.voiceProfileSampleCount, 3)
         settings.voiceProfileLastUpdated = Date()
@@ -918,7 +918,7 @@ class SettingsViewModel {
     // MARK: - Notification Helpers
     
     /// Settings already persisted the hour/minute by the time this runs, so the
-    /// scheduler reads them back rather than taking them as arguments — one
+    /// scheduler reads them back rather than taking them as arguments - one
     /// source of truth for the whole ladder.
     private func scheduleReminderNotification() async {
         guard let modelContext else { return }
@@ -927,7 +927,7 @@ class SettingsViewModel {
 
     /// Pull the stored reminder hour back into the picker's value. Guarded on
     /// equality so the view's `onChange(of: reminderTime)` cannot ping-pong
-    /// with this — one extra save at most, and only when the slot really moved.
+    /// with this - one extra save at most, and only when the slot really moved.
     private func syncReminderTimeFromStore() {
         guard let settings else { return }
         var components = DateComponents()

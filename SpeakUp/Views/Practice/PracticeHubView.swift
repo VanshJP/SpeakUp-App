@@ -121,8 +121,8 @@ struct PracticeHubView: View {
     // MARK: - Tools
 
     /// Count only. The duration range moved into `PracticeToolKind.format`,
-    /// which the card prints underneath — printing it twice was how the old
-    /// meta line ended up saying "20s–1 min" next to "15–60s".
+    /// which the card prints underneath - printing it twice was how the old
+    /// meta line ended up saying "20s-1 min" next to "15-60s".
     private func meta(for tool: PracticeToolKind) -> String {
         let count: Int
         switch tool {
@@ -175,7 +175,7 @@ struct PracticeHubView: View {
                 )
             } else {
                 // Outcome first. The four tools are formats, and which format
-                // you want is a second-order question — "I mumble" should not
+                // you want is a second-order question - "I mumble" should not
                 // require knowing that mumbling is filed under Warm-Ups,
                 // Read Aloud, or both.
                 if !visibleFocuses.isEmpty {
@@ -273,7 +273,7 @@ struct PracticeHubView: View {
         }
     }
 
-    /// A tool opens as a real push — the same navigation motion and the same
+    /// A tool opens as a real push - the same navigation motion and the same
     /// system Back button as a story or Compare. It used to slide in and out of
     /// the scroll view under `withAnimation`, behind a hand-rolled "All tools"
     /// pill, which is why entering a tool felt unlike entering anything else in

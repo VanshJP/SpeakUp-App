@@ -73,7 +73,7 @@ nonisolated struct PlannedNotification: Equatable, Identifiable {
     var body: String
     var schedule: Schedule
     /// Drives ordering inside iOS's notification summary. Streak rescue
-    /// outranks the routine nudge — it is the one with something at stake.
+    /// outranks the routine nudge - it is the one with something at stake.
     var relevance: Double
     var badge: Int?
 }
@@ -89,7 +89,7 @@ nonisolated struct PlannedNotification: Equatable, Identifiable {
 ///    template and copy freely but could not add notification *quantity*
 ///    without CEO sign-off. The wins came from relevance, not frequency.
 ///    This ladder sends at most three in a day, and only to someone with a
-///    7-day-plus streak who has not practised — everyone else gets one or two.
+///    7-day-plus streak who has not practised - everyone else gets one or two.
 /// 2. **Anchor to the user's own rhythm.** Their practice reminder lands ~23.5h
 ///    after the last session, which quietly converges on the time that person
 ///    actually practises rather than a time the product picked.
@@ -97,7 +97,7 @@ nonisolated struct PlannedNotification: Equatable, Identifiable {
 ///    neutral one. Non-committal copy ("only if you want to") gives the reader
 ///    permission to skip, which is exactly what they do.
 /// 4. **Stop nagging eventually.** The comeback ladder runs day 2, 4 and 7 and
-///    then goes quiet. Past that it is noise, and noise gets the app muted —
+///    then goes quiet. Past that it is noise, and noise gets the app muted - 
 ///    which costs the channel permanently.
 nonisolated enum RetentionNotificationPlanner {
     // Identifiers, so scheduling and cancellation can never drift apart.
@@ -131,7 +131,7 @@ nonisolated enum RetentionNotificationPlanner {
     static func plan(for snapshot: RetentionSnapshot) -> [PlannedNotification] {
         // The daily reminder toggle is the consent for the whole channel, not
         // just for one notification. With it off nothing ships, whatever the
-        // sub-toggles say — enforced here as well as in `RetentionScheduler`,
+        // sub-toggles say - enforced here as well as in `RetentionScheduler`,
         // so the contract cannot be bypassed by calling the planner directly.
         guard snapshot.dailyReminderEnabled else { return [] }
 
@@ -179,7 +179,7 @@ nonisolated enum RetentionNotificationPlanner {
             body = "\(remaining) more \(remaining == 1 ? "day" : "days") to a full week. One take today."
         default:
             title = "\(streak) days straight"
-            body = "You have practised \(streak) days. Keep it that way — one take, right now."
+            body = "You have practised \(streak) days. Keep it that way - one take, right now."
         }
 
         return PlannedNotification(
@@ -296,12 +296,12 @@ nonisolated enum RetentionNotificationPlanner {
     /// cost of the next miss.
     static func freezeUsed(rescuedStreak: Int, freezesRemaining: Int) -> PlannedNotification {
         let remainder = freezesRemaining == 0
-            ? "That was your last one — today's take rebuilds your balance."
+            ? "That was your last one - today's take rebuilds your balance."
             : "\(freezesRemaining) left. Practise today to start earning another."
 
         return PlannedNotification(
             id: freezeUsedID,
-            title: "Streak freeze used — your \(rescuedStreak)-day streak survived",
+            title: "Streak freeze used - your \(rescuedStreak)-day streak survived",
             body: "You missed yesterday, so a banked freeze covered it. \(remainder)",
             schedule: .afterDays(0),
             relevance: 0.85,

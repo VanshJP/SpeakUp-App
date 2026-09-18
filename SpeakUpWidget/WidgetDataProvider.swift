@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Score ramp mirroring the app's `AppColors.scoreColor(for:)`. The widget
-/// target cannot import app types, so the hex values are duplicated here —
+/// target cannot import app types, so the hex values are duplicated here - 
 /// keep in sync with AppColors (scoreHigh #38CC80, scoreGood #F5C542,
 /// scoreMid #FF9036, scoreLow #F5544A).
 func widgetScoreColor(for score: Int) -> Color {

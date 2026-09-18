@@ -43,7 +43,7 @@ struct ConfidenceToolsView: View {
 
     /// Grouped by outcome, like every other tool page. Calm covers two: getting
     /// the body quiet, and getting the story you tell yourself straight. The
-    /// technique — visualization, progressive exposure — is the row's tag.
+    /// technique - visualization, progressive exposure - is the row's tag.
     @ViewBuilder
     private var exerciseContent: some View {
         let focuses = FocusFilterBar.visible(availableFocuses, selection: selectedFocus)
