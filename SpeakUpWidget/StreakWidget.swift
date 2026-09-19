@@ -5,6 +5,16 @@ struct StreakEntry: TimelineEntry {
     let date: Date
     let streak: Int
     let hasPracticedToday: Bool
+
+    /// Today's session is still open - an invitation, never a warning.
+    /// See docs/features/widgets.md invariant 8.
+    var isOpenToday: Bool {
+        streak > 0 && !hasPracticedToday
+    }
+
+    var relevance: TimelineEntryRelevance? {
+        TimelineEntryRelevance(score: isOpenToday ? 60 : 20)
+    }
 }
 
 struct StreakProvider: TimelineProvider {
@@ -13,7 +23,7 @@ struct StreakProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (StreakEntry) -> Void) {
-        completion(entry(at: .now))
+        completion(context.isPreview ? placeholder(in: context) : entry(at: .now))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<StreakEntry>) -> Void) {
@@ -44,51 +54,117 @@ struct StreakProvider: TimelineProvider {
 
 struct StreakWidgetView: View {
     let entry: StreakEntry
-
-    private var isOpenToday: Bool {
-        entry.streak > 0 && !entry.hasPracticedToday
-    }
-
-    private var accentColor: Color {
-        Color(red: 0.961, green: 0.663, blue: 0.235)
-    }
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(accentColor.opacity(isOpenToday ? 0.25 : 0.15))
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: "flame.fill")
-                        .font(.title2)
-                        .foregroundStyle(accentColor)
-                }
-
-                Text("\(entry.streak)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-
-                if isOpenToday {
-                    Text("Still open today")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(accentColor)
-                        .lineLimit(1)
-                } else {
-                    Text(entry.streak == 0 ? "Tap to practice" : "day streak")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(accentColor.opacity(0.8))
-                }
+        Group {
+            switch family {
+            case .accessoryCircular:
+                circularLayout
+            case .accessoryRectangular:
+                rectangularLayout
+            case .accessoryInline:
+                Label(inlineText, systemImage: "flame.fill")
+            default:
+                smallLayout
             }
         }
         .widgetURL(URL(string: "speakup://record"))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            entry.streak == 0
-                ? "No streak yet. Tap to practice."
-                : "\(entry.streak) day streak.\(isOpenToday ? " Practice when you're ready." : "")"
-        )
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    // MARK: - Home Screen
+
+    private var smallLayout: some View {
+        VStack(spacing: 6) {
+            Spacer(minLength: 0)
+
+            WidgetGlyphOrb(systemName: "flame.fill", tint: WidgetPalette.ember, diameter: 52)
+
+            VStack(spacing: 0) {
+                Text("\(entry.streak)")
+                    .font(WidgetType.numeralLarge)
+                    .foregroundStyle(WidgetPalette.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .contentTransition(.numericText())
+
+                Text("day streak")
+                    .font(WidgetType.caption)
+                    .foregroundStyle(WidgetPalette.textTertiary)
+                    .textCase(.uppercase)
+                    .kerning(0.4)
+            }
+
+            Spacer(minLength: 0)
+
+            Text(statusLine)
+                .font(WidgetType.caption.weight(.semibold))
+                .foregroundStyle(WidgetPalette.ember)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .widgetAccentable()
+        }
+    }
+
+    // MARK: - Lock Screen
+
+    private var circularLayout: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+
+            VStack(spacing: -1) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 12, weight: .semibold))
+
+                Text("\(entry.streak)")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+            }
+        }
+    }
+
+    private var rectangularLayout: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .widgetAccentable()
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.streak == 0 ? "No streak yet" : "\(entry.streak) day streak")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Text(statusLine)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Copy
+    //
+    // Invitational only: no countdown, no "last chance", no red panic state.
+
+    private var statusLine: String {
+        if entry.streak == 0 { return "Tap to practice" }
+        return entry.isOpenToday ? "Still open today" : "Logged today"
+    }
+
+    private var inlineText: String {
+        entry.streak == 0 ? "Tap to practice" : "\(entry.streak) day streak"
+    }
+
+    private var accessibilityLabel: String {
+        if entry.streak == 0 { return "No streak yet. Tap to practice." }
+        return "\(entry.streak) day streak.\(entry.isOpenToday ? " Practice when you're ready." : "")"
     }
 }
 
@@ -100,18 +176,35 @@ struct StreakWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: StreakProvider()) { entry in
             StreakWidgetView(entry: entry)
-                .environment(\.colorScheme, .dark)
-                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
+                .bigTalkCanvas()
         }
         .configurationDisplayName("Streak")
         .description("Your current practice streak.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([
+            .systemSmall,
+            .accessoryCircular,
+            .accessoryRectangular,
+            .accessoryInline
+        ])
     }
 }
 
-#Preview("Open Today", as: .systemSmall) {
+#Preview("Small", as: .systemSmall) {
+    StreakWidget()
+} timeline: {
+    StreakEntry(date: .now, streak: 7, hasPracticedToday: false)
+    StreakEntry(date: .now, streak: 128, hasPracticedToday: true)
+    StreakEntry(date: .now, streak: 0, hasPracticedToday: false)
+}
+
+#Preview("Circular", as: .accessoryCircular) {
     StreakWidget()
 } timeline: {
     StreakEntry(date: .now, streak: 7, hasPracticedToday: false)
 }
 
+#Preview("Rectangular", as: .accessoryRectangular) {
+    StreakWidget()
+} timeline: {
+    StreakEntry(date: .now, streak: 7, hasPracticedToday: false)
+}

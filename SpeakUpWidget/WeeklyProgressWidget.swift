@@ -8,27 +8,41 @@ struct WeeklyProgressEntry: TimelineEntry {
     let averageScore: Int
     let practiceMinutes: Int
     let readiness: Int
+
+    var goalFraction: Double {
+        Double(sessionCount) / Double(max(goalSessions, 1))
+    }
+
+    var goalPercent: Int {
+        Int((goalFraction * 100).rounded())
+    }
 }
 
 struct WeeklyProgressProvider: TimelineProvider {
     func placeholder(in context: Context) -> WeeklyProgressEntry {
-        WeeklyProgressEntry(date: .now, sessionCount: 3, goalSessions: 5, averageScore: 75, practiceMinutes: 12, readiness: 78)
+        WeeklyProgressEntry(
+            date: .now,
+            sessionCount: 3,
+            goalSessions: 5,
+            averageScore: 75,
+            practiceMinutes: 12,
+            readiness: 78
+        )
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WeeklyProgressEntry) -> Void) {
-        let entry = WeeklyProgressEntry(
-            date: .now,
-            sessionCount: WidgetDataProvider.weeklySessionCount,
-            goalSessions: WidgetDataProvider.weeklyGoalSessions,
-            averageScore: WidgetDataProvider.weeklyAverageScore,
-            practiceMinutes: WidgetDataProvider.weeklyPracticeMinutes,
-            readiness: WidgetDataProvider.interviewReadinessScore
-        )
-        completion(entry)
+        completion(context.isPreview ? placeholder(in: context) : currentEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WeeklyProgressEntry>) -> Void) {
-        let entry = WeeklyProgressEntry(
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        completion(Timeline(entries: [currentEntry()], policy: .after(nextUpdate)))
+    }
+
+    // MARK: - Private
+
+    private func currentEntry() -> WeeklyProgressEntry {
+        WeeklyProgressEntry(
             date: .now,
             sessionCount: WidgetDataProvider.weeklySessionCount,
             goalSessions: WidgetDataProvider.weeklyGoalSessions,
@@ -36,94 +50,100 @@ struct WeeklyProgressProvider: TimelineProvider {
             practiceMinutes: WidgetDataProvider.weeklyPracticeMinutes,
             readiness: WidgetDataProvider.interviewReadinessScore
         )
-        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
     }
 }
+
+// MARK: - Widget View
 
 struct WeeklyProgressWidgetView: View {
     let entry: WeeklyProgressEntry
 
+    /// One column per metric. Built as a list so the optional readiness column
+    /// can be absent without a conditional `Spacer` shifting the other two.
+    private struct Column {
+        let label: String
+        let value: String
+        let tint: Color
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.caption)
-                    .foregroundStyle(.teal)
-                Text("Weekly Progress")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.teal)
-                Spacer()
+            WidgetHeader(icon: "chart.line.uptrend.xyaxis", title: "This Week") {
+                WidgetChip(text: "\(entry.goalPercent)%")
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("\(entry.sessionCount) / \(entry.goalSessions) sessions")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    Text("\(Int(Double(entry.sessionCount) / Double(max(entry.goalSessions, 1)) * 100))%")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.teal)
-                }
-                
-                ProgressView(value: Double(entry.sessionCount), total: Double(max(entry.goalSessions, 1)))
-                    .tint(.teal)
-                    .scaleEffect(x: 1, y: 1.5, anchor: .center)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("\(entry.sessionCount) of \(entry.goalSessions) sessions")
+                    .font(WidgetType.value)
+                    .foregroundStyle(WidgetPalette.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                WidgetMeter(progress: entry.goalFraction, tint: WidgetPalette.brandBright)
             }
 
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Avg Score")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                    Text("\(entry.averageScore)")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(scoreColor(for: entry.averageScore))
-                }
+            Spacer(minLength: 0)
 
-                Spacer()
-
-                if entry.readiness > 0 {
-                    VStack(spacing: 2) {
-                        Text("Interview")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                        Text("\(entry.readiness)")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(scoreColor(for: entry.readiness))
-                    }
-
-                    Spacer()
-                }
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Practice")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                    Text("\(entry.practiceMinutes) min")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(columns, id: \.label) { column in
+                    WidgetMetric(
+                        label: column.label,
+                        value: column.value,
+                        tint: column.tint,
+                        alignment: .leading
+                    )
                 }
             }
         }
-        .padding()
         .widgetURL(URL(string: "speakup://record"))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Weekly progress: \(entry.sessionCount) of \(entry.goalSessions) sessions, average score \(entry.averageScore), "
-            + (entry.readiness > 0 ? "interview readiness \(entry.readiness), " : "")
-            + "\(entry.practiceMinutes) practice minutes."
-        )
+        .accessibilityLabel(accessibilityLabel)
     }
 
-    private func scoreColor(for score: Int) -> Color {
-        widgetScoreColor(for: score)
+    // MARK: - Helpers
+
+    private var columns: [Column] {
+        var result: [Column] = [
+            Column(
+                label: "Avg Score",
+                value: entry.averageScore > 0 ? "\(entry.averageScore)" : "—",
+                tint: entry.averageScore > 0
+                    ? WidgetPalette.score(for: entry.averageScore)
+                    : WidgetPalette.textTertiary
+            )
+        ]
+
+        // `0` means no analyzed history, not a real readiness of zero.
+        if entry.readiness > 0 {
+            result.append(
+                Column(
+                    label: "Interview",
+                    value: "\(entry.readiness)",
+                    tint: WidgetPalette.score(for: entry.readiness)
+                )
+            )
+        }
+
+        result.append(
+            Column(
+                label: "Practice",
+                value: "\(entry.practiceMinutes) min",
+                tint: WidgetPalette.textPrimary
+            )
+        )
+
+        return result
+    }
+
+    private var accessibilityLabel: String {
+        "Weekly progress: \(entry.sessionCount) of \(entry.goalSessions) sessions, "
+            + (entry.averageScore > 0 ? "average score \(entry.averageScore), " : "")
+            + (entry.readiness > 0 ? "interview readiness \(entry.readiness), " : "")
+            + "\(entry.practiceMinutes) practice minutes."
     }
 }
+
+// MARK: - Widget Configuration
 
 struct WeeklyProgressWidget: Widget {
     let kind = "WeeklyProgressWidget"
@@ -131,11 +151,17 @@ struct WeeklyProgressWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: WeeklyProgressProvider()) { entry in
             WeeklyProgressWidgetView(entry: entry)
-                .environment(\.colorScheme, .dark)
-                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
+                .bigTalkCanvas()
         }
         .configurationDisplayName("Weekly Progress")
         .description("Track your weekly practice sessions and scores.")
         .supportedFamilies([.systemMedium])
     }
+}
+
+#Preview("Medium", as: .systemMedium) {
+    WeeklyProgressWidget()
+} timeline: {
+    WeeklyProgressEntry(date: .now, sessionCount: 3, goalSessions: 5, averageScore: 75, practiceMinutes: 12, readiness: 78)
+    WeeklyProgressEntry(date: .now, sessionCount: 0, goalSessions: 5, averageScore: 0, practiceMinutes: 0, readiness: 0)
 }

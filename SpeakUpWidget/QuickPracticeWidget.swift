@@ -4,6 +4,10 @@ import SwiftUI
 struct QuickPracticeEntry: TimelineEntry {
     let date: Date
     let lastScore: Int
+
+    var hasScore: Bool {
+        lastScore > 0
+    }
 }
 
 struct QuickPracticeProvider: TimelineProvider {
@@ -12,60 +16,92 @@ struct QuickPracticeProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (QuickPracticeEntry) -> Void) {
-        completion(QuickPracticeEntry(date: .now, lastScore: WidgetDataProvider.lastScore))
+        completion(context.isPreview ? placeholder(in: context) : currentEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<QuickPracticeEntry>) -> Void) {
-        let entry = QuickPracticeEntry(date: .now, lastScore: WidgetDataProvider.lastScore)
         let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+        completion(Timeline(entries: [currentEntry()], policy: .after(nextUpdate)))
+    }
+
+    // MARK: - Private
+
+    private func currentEntry() -> QuickPracticeEntry {
+        QuickPracticeEntry(date: .now, lastScore: WidgetDataProvider.lastScore)
     }
 }
+
+// MARK: - Widget View
 
 struct QuickPracticeWidgetView: View {
     let entry: QuickPracticeEntry
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack(alignment: .topTrailing) {
-                ZStack {
-                    Circle()
-                        .fill(.teal.opacity(0.15))
-                        .frame(width: 64, height: 64)
-
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.teal)
-                }
-
-                if entry.lastScore > 0 {
-                    Text("\(entry.lastScore)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(scoreColor(for: entry.lastScore), in: Capsule())
-                        .offset(x: 10, y: -4)
-                }
+        Group {
+            switch family {
+            case .accessoryCircular:
+                circularLayout
+            default:
+                smallLayout
             }
-
-            Text("Practice Now")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
         }
         .widgetURL(URL(string: "speakup://record"))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            entry.lastScore > 0
-                ? "Practice now. Last score \(entry.lastScore)."
-                : "Practice now."
-        )
+        .accessibilityLabel(accessibilityLabel)
     }
 
-    private func scoreColor(for score: Int) -> Color {
-        widgetScoreColor(for: score)
+    // MARK: - Home Screen
+
+    private var smallLayout: some View {
+        VStack(spacing: 10) {
+            Spacer(minLength: 0)
+
+            WidgetGlyphOrb(systemName: "mic.fill", diameter: 62)
+
+            VStack(spacing: 5) {
+                Text("Practice Now")
+                    .font(WidgetType.value)
+                    .foregroundStyle(WidgetPalette.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                // The last score sits under the label rather than pinned to the
+                // orb: a badge hung off the corner clipped the widget's edge at
+                // three digits.
+                if entry.hasScore {
+                    WidgetChip(
+                        text: "Last \(entry.lastScore)",
+                        tint: WidgetPalette.score(for: entry.lastScore)
+                    )
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Lock Screen
+
+    private var circularLayout: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+
+            Image(systemName: "mic.fill")
+                .font(.system(size: 22, weight: .medium))
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var accessibilityLabel: String {
+        entry.hasScore
+            ? "Practice now. Last score \(entry.lastScore)."
+            : "Practice now."
     }
 }
+
+// MARK: - Widget Configuration
 
 struct QuickPracticeWidget: Widget {
     let kind = "QuickPracticeWidget"
@@ -73,11 +109,23 @@ struct QuickPracticeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuickPracticeProvider()) { entry in
             QuickPracticeWidgetView(entry: entry)
-                .environment(\.colorScheme, .dark)
-                .containerBackground(Color(red: 0.051, green: 0.071, blue: 0.165), for: .widget)
+                .bigTalkCanvas()
         }
         .configurationDisplayName("Quick Practice")
         .description("Jump straight into a practice session.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([.systemSmall, .accessoryCircular])
     }
+}
+
+#Preview("Small", as: .systemSmall) {
+    QuickPracticeWidget()
+} timeline: {
+    QuickPracticeEntry(date: .now, lastScore: 82)
+    QuickPracticeEntry(date: .now, lastScore: 0)
+}
+
+#Preview("Circular", as: .accessoryCircular) {
+    QuickPracticeWidget()
+} timeline: {
+    QuickPracticeEntry(date: .now, lastScore: 82)
 }

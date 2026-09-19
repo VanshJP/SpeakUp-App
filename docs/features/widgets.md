@@ -10,9 +10,22 @@ Home Screen glanceables + deep links. Hydrate from App Group — widget process 
 |------|------|
 | Bundle | `SpeakUpWidget/SpeakUpWidgetBundle.swift` |
 | Widgets | `DailyPromptWidget`, `QuickPracticeWidget`, `QuickStoryWidget`, `StatsRingWidget`, `StreakWidget`, `WeeklyProgressWidget` |
+| Design tokens | `SpeakUpWidget/WidgetTheme.swift` - `WidgetPalette`, `WidgetType`, `.bigTalkCanvas()` |
+| Shared views | `SpeakUpWidget/WidgetComponents.swift` - header, ring, meter, chip, metric, glyph orb |
 | Widget read API | `SpeakUpWidget/WidgetDataProvider.swift` |
 | App write API | `SpeakUp/Services/WidgetDataProvider.swift` |
 | Entitlements | `SpeakUpWidget/SpeakUpWidgetExtension.entitlements` |
+
+## Families
+
+| Widget | Families |
+|--------|----------|
+| `DailyPromptWidget` | `.systemMedium`, `.accessoryRectangular` |
+| `StreakWidget` | `.systemSmall`, `.accessoryCircular`, `.accessoryRectangular`, `.accessoryInline` |
+| `QuickPracticeWidget` | `.systemSmall`, `.accessoryCircular` |
+| `StatsRingWidget` | `.systemSmall`, `.systemMedium`, `.accessoryCircular`, `.accessoryRectangular` |
+| `WeeklyProgressWidget` | `.systemMedium` |
+| `QuickStoryWidget` | `.systemSmall`, `.systemMedium` |
 
 **App Group suite:** `group.com.speakup.shared` (also used by `EntitlementStore` cache).
 
@@ -26,6 +39,10 @@ Home Screen glanceables + deep links. Hydrate from App Group — widget process 
 6. **Coordinator contract:** after each successful analysis, `RecordingProcessingCoordinator` writes the two values an analysis actually changes (`lastScore`, `lastPracticeDate`) directly to the App Group — widgets render from that snapshot, not SwiftData, so a bare reload would re-render stale numbers — then calls `WidgetDataProvider.resetTodayFingerprint()` so the change gate reports a diff on Today's next visit and the full payload is rewritten wholesale, then reloads timelines.
 7. **Refresh cadence:** `StreakWidget` uses one calm state ("Still open today"), never an escalating urgency ladder, and refreshes every two hours or at midnight, whichever comes first. `DailyPromptWidget` schedules `.after(nextMidnight)` — intraday payload changes arrive via fingerprint-gated app reloads, not widget polling.
 8. Streak copy is invitational, not a loss warning. No red panic state, countdown language, "last chance", or "don't lose it".
+9. **Background is `.bigTalkCanvas()`, never a literal color.** It paints the navy gradient plus the brand glow only in `.fullColor`, returns `Color.clear` for `.accented` / `.vibrant` so the system's tint survives, and stays transparent for accessory families. It also scopes the forced dark `colorScheme` to full color - forcing dark unconditionally is what made tinted Home Screens and StandBy render as a dead slab.
+10. **Color never carries meaning alone.** Tinted and Lock Screen renders discard hue, so hierarchy comes from the `WidgetPalette` white tiers (`textPrimary` / `textSecondary` / `textTertiary`), and `.widgetAccentable()` marks what belongs in the accent group - headers, ring fills, meter fills, key glyphs.
+11. **Widget color lives in `WidgetPalette`, not in the data layer.** `WidgetPalette.score(for:)` mirrors `AppColors.scoreColor(for:)`; the widget target cannot import app types, so the hex values are duplicated and must be kept in sync. Do not reach for `Color.teal` / `.orange` / `.green` - they are off-brand against `AppColors`.
+12. `todaysPromptText` reads back empty when the app has never written a prompt. Widgets own the empty-state copy; the data layer does not return instructional text dressed as a prompt.
 
 ## Cross-links
 
