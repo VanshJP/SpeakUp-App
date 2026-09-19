@@ -139,4 +139,16 @@ extension View {
     func motion<V: Equatable>(_ animation: Animation, value: V) -> some View {
         modifier(MotionModifier(animation: animation, value: value))
     }
+
+    /// Marks a control as the origin of a zoom presentation when the host
+    /// hands one down. Views that are also built in previews or in contexts
+    /// with no presentation pass nil and render untouched.
+    @ViewBuilder
+    func zoomSource(_ id: String, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
 }

@@ -410,9 +410,17 @@ struct AnalyzingView: View {
 
 // MARK: - Scale Input (extracted subview)
 
+/// Five faces you can tap — or scrub. A drag across the row moves the
+/// selection under the finger with a detent tick per notch, and a glow in the
+/// face's colour follows it. The in-flight value stays local and commits once
+/// on release: the host debounces an auto-submit off `onSelect`, and reporting
+/// every notch would have submitted the card while the thumb was still moving.
 private struct ScaleInput: View {
     let selected: Int?
     let onSelect: (Int) -> Void
+
+    @State private var scrubValue: Int?
+    @State private var rowWidth: CGFloat = 0
 
     private let options: [(label: String, icon: String)] = [
         ("Rough", "face.dashed"),
@@ -422,56 +430,114 @@ private struct ScaleInput: View {
         ("Great", "star.fill")
     ]
 
+    private let faceSize: CGFloat = 40
+    private let glowSize: CGFloat = 96
+
+    private var shown: Int? { scrubValue ?? selected }
+
     var body: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 0) {
-                ForEach(1...5, id: \.self) { value in
-                    let isSelected = selected == value
-                    let option = options[value - 1]
-                    let scoreColor = AppColors.scoreColor(for: value * 20)
+            ZStack(alignment: .topLeading) {
+                if let shown {
+                    glow(for: shown)
+                }
 
-                    Button { onSelect(value) } label: {
-                        VStack(spacing: 8) {
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected
-                                          ? scoreColor.opacity(0.2)
-                                          : Color.white.opacity(0.06))
-                                    .overlay {
-                                        Circle()
-                                            .strokeBorder(
-                                                isSelected ? scoreColor.opacity(0.6) : Color.white.opacity(0.1),
-                                                lineWidth: isSelected ? 2 : 1
-                                            )
-                                    }
-
-                                Image(systemName: option.icon)
-                                    .font(.system(size: isSelected ? 18 : 14))
-                                    .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
-                            }
-                            .frame(width: 40, height: 40)
-                            .scaleEffect(isSelected ? 1.1 : 1.0)
-
-                            Text(option.label)
-                                .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
-                                .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 0) {
+                    ForEach(1...5, id: \.self) { value in
+                        face(value)
                     }
-                    .buttonStyle(.plain)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-                    .accessibilityLabel("\(option.label), \(value) of 5")
-                    .accessibilityAddTraits(
-                        isSelected ? [.isButton, .isSelected] : .isButton
-                    )
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+            .simultaneousGesture(scrub)
+            .sensoryFeedback(.selection, trigger: scrubValue) { _, new in new != nil }
 
             // Progress track — centered between first and last circle
             scaleTrack
         }
+    }
+
+    private func face(_ value: Int) -> some View {
+        let isSelected = shown == value
+        let option = options[value - 1]
+        let scoreColor = AppColors.scoreColor(for: value * 20)
+
+        return Button { onSelect(value) } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected
+                              ? scoreColor.opacity(0.22)
+                              : Color.white.opacity(0.06))
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    isSelected ? scoreColor.opacity(0.7) : Color.white.opacity(0.1),
+                                    lineWidth: isSelected ? 2 : 1
+                                )
+                        }
+
+                    Image(systemName: option.icon)
+                        .font(.system(size: isSelected ? 18 : 14))
+                        .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
+                }
+                .frame(width: faceSize, height: faceSize)
+                .scaleEffect(isSelected ? 1.18 : 1.0)
+
+                Text(option.label)
+                    .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? scoreColor : .white.opacity(0.4))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .animation(AppMotion.snap, value: isSelected)
+        .accessibilityLabel("\(option.label), \(value) of 5")
+        .accessibilityAddTraits(
+            isSelected ? [.isButton, .isSelected] : .isButton
+        )
+    }
+
+    /// A radial wash behind the chosen face — no `.blur`, which would cost an
+    /// offscreen pass on every notch; the gradient alone reads as a glow.
+    private func glow(for value: Int) -> some View {
+        let color = AppColors.scoreColor(for: value * 20)
+        let segment = rowWidth / 5
+
+        return Circle()
+            .fill(
+                RadialGradient(
+                    colors: [color.opacity(0.42), color.opacity(0.12), .clear],
+                    center: .center,
+                    startRadius: 4,
+                    endRadius: glowSize / 2
+                )
+            )
+            .frame(width: glowSize, height: glowSize)
+            // Centred on the face at the top of its column, not on the row.
+            .offset(
+                x: segment * (CGFloat(value) - 0.5) - glowSize / 2,
+                y: faceSize / 2 - glowSize / 2
+            )
+            .motion(AppMotion.slide, value: value)
+            .allowsHitTesting(false)
+    }
+
+    private var scrub: some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { drag in
+                guard rowWidth > 0 else { return }
+                let index = Int(drag.location.x / (rowWidth / 5))
+                scrubValue = min(5, max(1, index + 1))
+            }
+            .onEnded { _ in
+                if let scrubValue, scrubValue != selected {
+                    onSelect(scrubValue)
+                }
+                scrubValue = nil
+            }
     }
 
     private var scaleTrack: some View {
@@ -486,7 +552,7 @@ private struct ScaleInput: View {
                     .fill(Color.white.opacity(0.08))
                     .frame(width: trackWidth, height: 3)
 
-                if let sel = selected, sel > 1 {
+                if let sel = shown, sel > 1 {
                     let fraction = CGFloat(sel - 1) / 4.0
                     Capsule()
                         .fill(

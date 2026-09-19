@@ -5,7 +5,21 @@ struct PromptWheelView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = PromptWheelViewModel()
-    
+
+    // Finger-on-wheel tracking. Angle is degrees around the wheel's centre;
+    // velocity is a lightly smoothed degrees-per-second read from the last
+    // few samples, handed to the view model on release.
+    @State private var dragLastAngle: Double?
+    @State private var dragLastTime: Date = .distantPast
+    @State private var angularVelocity: Double = 0
+
+    // One tick per segment edge passing the pointer — during a drag and
+    // through every frame of a spin. Drives the haptic and the pointer's nod.
+    @State private var detentTick = 0
+    @State private var detentKick: Double = 14
+
+    private let wheelSize: CGFloat = 280
+
     let onSelectPrompt: (Prompt) -> Void
     
     var body: some View {
@@ -83,15 +97,63 @@ struct PromptWheelView: View {
                 colors: segmentColors,
                 rotation: viewModel.rotation
             )
-            .frame(width: 280, height: 280)
+            .frame(width: wheelSize, height: wheelSize)
+            .contentShape(Circle())
+            .highPriorityGesture(wheelDrag)
+            .modifier(DetentTracker(rotation: viewModel.rotation, segments: viewModel.categories.count) { direction in
+                detentKick = direction * 14
+                detentTick += 1
+            })
+            .accessibilityLabel("Prompt wheel")
+            .accessibilityHint("Flick to spin")
 
             centerHub
 
             WheelPointer(isLanded: viewModel.selectedPrompt != nil && !viewModel.isSpinning)
+                // The tip gets kicked by each passing edge and springs back.
+                .keyframeAnimator(initialValue: 0.0, trigger: detentTick) { pointer, angle in
+                    pointer.rotationEffect(.degrees(angle), anchor: .top)
+                } keyframes: { _ in
+                    CubicKeyframe(detentKick, duration: 0.05)
+                    SpringKeyframe(0, duration: 0.3, spring: .bouncy)
+                }
                 .offset(y: -150)
         }
         .frame(maxWidth: .infinity)
         .sensoryFeedback(.impact(weight: .medium), trigger: viewModel.isSpinning)
+        .sensoryFeedback(.selection, trigger: detentTick)
+    }
+
+    private var wheelDrag: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { drag in
+                let angle = Self.angle(of: drag.location, in: wheelSize)
+                defer {
+                    dragLastAngle = angle
+                    dragLastTime = drag.time
+                }
+                guard let last = dragLastAngle else { return }
+
+                let delta = PromptWheelViewModel.signedDelta(angle - last)
+                viewModel.drag(by: delta)
+
+                let dt = drag.time.timeIntervalSince(dragLastTime)
+                if dt > 0.001 {
+                    angularVelocity = angularVelocity * 0.5 + (delta / dt) * 0.5
+                }
+            }
+            .onEnded { _ in
+                viewModel.release(angularVelocity: angularVelocity)
+                dragLastAngle = nil
+                angularVelocity = 0
+            }
+    }
+
+    /// Degrees around the wheel's centre, clockwise from 3 o'clock — the same
+    /// sense as `rotationEffect`, so a delta applies to the wheel directly.
+    private static func angle(of point: CGPoint, in size: CGFloat) -> Double {
+        let centre = size / 2
+        return atan2(point.y - centre, point.x - centre) * 180 / .pi
     }
 
     private var centerHub: some View {
@@ -207,6 +269,34 @@ struct PromptWheelView: View {
         }
         .disabled(viewModel.isSpinning)
         .opacity(viewModel.isSpinning ? 0.7 : 1)
+    }
+}
+
+// MARK: - Detent Tracker
+
+/// Reports each segment edge passing the pointer. `Animatable` is what lets
+/// it see the interpolated angle on every frame of a spin rather than only
+/// the end value; the work per frame is one integer compare.
+private struct DetentTracker: ViewModifier, Animatable {
+    var rotation: Double
+    let segments: Int
+    /// +1 when the wheel turns clockwise, -1 otherwise.
+    let onCross: (Double) -> Void
+
+    var animatableData: Double {
+        get { rotation }
+        set { rotation = newValue }
+    }
+
+    private var index: Int {
+        guard segments > 0 else { return 0 }
+        return Int((rotation / (360 / Double(segments))).rounded(.down))
+    }
+
+    func body(content: Content) -> some View {
+        content.onChange(of: index) { old, new in
+            onCross(new > old ? 1 : -1)
+        }
     }
 }
 

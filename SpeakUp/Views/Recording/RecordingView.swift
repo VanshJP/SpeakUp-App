@@ -45,16 +45,26 @@ struct RecordingView: View {
 
     var body: some View {
         ZStack {
+            // The session canvas stays put for the whole act. Each stage used
+            // to paint its own background, so every handoff crossfaded two
+            // full-screen canvases along with the content — that is what made
+            // stop → analyzing → score read as three screens instead of one.
+            audioBackground
+
             if let revealRecording {
                 scoreReveal(for: revealRecording)
-                    .transition(.opacity)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
                     .zIndex(10)
             } else if let completedRecording {
                 feedbackGateContent(for: completedRecording)
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 1.04).combined(with: .opacity),
+                        removal: .scale(scale: 0.96).combined(with: .opacity)
+                    ))
                     .zIndex(5)
             } else {
                 recordingContent
+                    .transition(.scale(scale: 0.94).combined(with: .opacity))
             }
         }
         .animation(AppMotion.settle, value: completedRecording?.id)
@@ -143,17 +153,13 @@ struct RecordingView: View {
     // MARK: - Recording Content
 
     private var recordingContent: some View {
-        ZStack {
-            audioBackground
-
-            VStack(spacing: 0) {
-                topBar
-                sessionStage
-                bottomControls
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+        VStack(spacing: 0) {
+            topBar
+            sessionStage
+            bottomControls
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Feedback Gate (pre-navigation)
@@ -190,8 +196,6 @@ struct RecordingView: View {
     @ViewBuilder
     private func feedbackGateContent(for recording: Recording) -> some View {
         ZStack {
-            AppBackground(style: .subtle)
-
             AnalyzingView(
                 recording: recording,
                 isModelLoading: speechService.isLoadingModel,
@@ -696,6 +700,8 @@ struct CircularWaveformView: View {
         let minLength = 8 * scale
         let maxLength = 44 * scale
 
+        drawVoiceGlow(in: &graphics, center: center, radius: radius, level: level)
+
         switch style {
         case .rings, .bars, .spark:
             let barCount = style == .spark ? 80 : (style == .bars ? 40 : 54)
@@ -797,6 +803,30 @@ struct CircularWaveformView: View {
             break  // body never builds the canvas for this one
         }
     }
+
+    /// The button breathes with the speaker: a soft disc under it that swells
+    /// from just past the button's edge at rest to the foot of the bars when
+    /// the voice is loud. The button's material shell samples it, so the
+    /// button itself brightens. Same smoothed level as the bars, same canvas
+    /// pass — no extra node, state, or timeline.
+    private func drawVoiceGlow(in graphics: inout GraphicsContext, center: CGPoint, radius: CGFloat, level: CGFloat) {
+        let reach = radius * (0.62 + 0.38 * level)
+        var glow = graphics
+        glow.blendMode = .plusLighter
+        glow.fill(
+            Path(ellipseIn: CGRect(x: center.x - reach, y: center.y - reach, width: reach * 2, height: reach * 2)),
+            with: .radialGradient(
+                Gradient(colors: [
+                    AppColors.primary.opacity(0.28 + 0.32 * Double(level)),
+                    AppColors.primary.opacity(0.06),
+                    .clear
+                ]),
+                center: center,
+                startRadius: reach * 0.35,
+                endRadius: reach
+            )
+        )
+    }
 }
 
 // MARK: - Mic Level Pill
@@ -847,10 +877,12 @@ private struct RecordButtonWaveformStack: View {
         ZStack {
             if isRecording {
                 CircularWaveformView(audioLevel: audioLevel, style: waveformStyle)
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
             }
 
             RecordButton(isRecording: isRecording, style: buttonStyle, onTap: onTap)
         }
+        .animation(AppMotion.settle, value: isRecording)
     }
 }
 

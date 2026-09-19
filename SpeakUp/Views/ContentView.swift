@@ -11,6 +11,10 @@ struct ContentView: View {
     @State private var selectedTab: AppTab = .today
     @State private var showingCountdown = false
     @State private var showingRecording = false
+    /// One cover hosts the countdown and then the take, so the session zooms
+    /// out of the button that started it and the canvas never slides.
+    @Namespace private var sessionZoom
+    @State private var sessionZoomSource: String?
     @State private var showingReadAloud = false
     @State private var showingGoals = false
     @State private var selectedRecordingId: String?
@@ -112,7 +116,9 @@ struct ContentView: View {
                     recordingDuration = duration
                     recordingChallenge = nil
                     showingCountdown = true
-                }
+                },
+                sessionZoomSource: $sessionZoomSource,
+                zoomNamespace: sessionZoom
             )
         case .library:
             PracticeHubView(
@@ -208,32 +214,6 @@ struct ContentView: View {
             .environment(\.symbolVariants, .none)
             .tint(.white)
             
-            if showingCountdown {
-                CountdownOverlayView(
-                    prompt: recordingPrompt,
-                    duration: recordingDuration,
-                    countdownDuration: countdownDuration,
-                    countdownStyle: countdownStyle,
-                    look: countdownLook,
-                    backdrop: recordingBackdrop,
-                    selectedGoalId: $recordingGoalId,
-                    challenge: recordingChallenge,
-                    onComplete: {
-                        showingCountdown = false
-                        showingRecording = true
-                    },
-                    onCancel: {
-                        showingCountdown = false
-                        recordingPrompt = nil
-                        recordingStoryId = nil
-                        recordingGoalId = nil
-                        recordingChallenge = nil
-                    }
-                )
-                .transition(.opacity.combined(with: .scale(scale: 1.05)))
-                .zIndex(1)
-                .allowsHitTesting(true)
-            }
 
             if appTour.activeStep != nil {
                 AppTourOverlay(tour: appTour, onFinish: finishTour)
@@ -247,7 +227,6 @@ struct ContentView: View {
         .environment(\.appTour, appTour)
         .environment(\.glassAppearance, glassAppearance)
         .environment(\.appCanvas, appCanvas)
-        .animation(.easeInOut(duration: 0.3), value: showingCountdown)
         .motion(AppMotion.settle, value: appTour.activeStep != nil)
         .onChange(of: routine.pendingStep) { _, step in
             guard step != nil else { return }
@@ -257,50 +236,16 @@ struct ContentView: View {
             guard let step, selectedTab != step.tab else { return }
             selectedTab = step.tab
         }
-        .fullScreenCover(isPresented: $showingRecording, onDismiss: {
+        .fullScreenCover(isPresented: isShowingSession, onDismiss: {
             recordingStoryId = nil
             recordingChallenge = nil
+            sessionZoomSource = nil
             if let id = pendingRecordingNavigation {
                 selectedRecordingId = id
                 pendingRecordingNavigation = nil
             }
         }) {
-            RecordingView(
-                prompt: recordingPrompt,
-                duration: recordingDuration,
-                timerEndBehavior: timerEndBehavior,
-                countdownStyle: countdownStyle,
-                goalId: recordingGoalId,
-                storyId: recordingStoryId,
-                sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
-                onSavedAndClosed: { recording in
-                    routine.complete(.session)
-                    Task {
-                        while RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
-                            try? await Task.sleep(for: .milliseconds(500))
-                            guard !Task.isCancelled else { return }
-                        }
-                        await achievementService.checkAchievements(context: modelContext)
-                        // Save & close means no replacement interruption. Keep
-                        // unlock state, but do not surface an overlay now.
-                        achievementService.clearNewlyUnlocked()
-                    }
-                },
-                onComplete: { recording in
-                    routine.complete(.session)
-                    pendingRecordingNavigation = recording.id.uuidString
-                    freshResultRecordingId = recording.id.uuidString
-                    selectedTab = .history
-                    showingRecording = false
-                    SharedChallengeStore.shared.dismiss()
-                    Task {
-                        await achievementService.checkAchievements(context: modelContext)
-                    }
-                },
-                onCancel: {
-                    showingRecording = false
-                }
-            )
+            sessionCover
         }
         .sheet(isPresented: $showingReadAloud) {
             ReadAloudSelectionView()
@@ -541,6 +486,109 @@ struct ContentView: View {
         if !settings.hasCompletedOnboarding {
             showOnboarding = true
         }
+    }
+
+    // MARK: - Session cover
+
+    private var isShowingSession: Binding<Bool> {
+        Binding(
+            get: { showingCountdown || showingRecording },
+            set: { presented in
+                guard !presented else { return }
+                showingCountdown = false
+                showingRecording = false
+            }
+        )
+    }
+
+    /// Countdown, then the take, in one presentation. The countdown used to be
+    /// an overlay on the tab shell and the take a cover sliding up over it —
+    /// two entrances for one act. Now the cover zooms out of the button that
+    /// started it (when the launcher named one) and the countdown crossfades
+    /// into the recorder on the same canvas.
+    @ViewBuilder
+    private var sessionCover: some View {
+        if let sessionZoomSource {
+            sessionStage
+                .navigationTransition(.zoom(sourceID: sessionZoomSource, in: sessionZoom))
+        } else {
+            sessionStage
+        }
+    }
+
+    private var sessionStage: some View {
+        ZStack {
+            if showingRecording {
+                recordingSession
+                    .transition(.opacity)
+            } else {
+                CountdownOverlayView(
+                    prompt: recordingPrompt,
+                    duration: recordingDuration,
+                    countdownDuration: countdownDuration,
+                    countdownStyle: countdownStyle,
+                    look: countdownLook,
+                    backdrop: recordingBackdrop,
+                    selectedGoalId: $recordingGoalId,
+                    challenge: recordingChallenge,
+                    onComplete: {
+                        showingCountdown = false
+                        showingRecording = true
+                    },
+                    onCancel: {
+                        showingCountdown = false
+                        recordingPrompt = nil
+                        recordingStoryId = nil
+                        recordingGoalId = nil
+                        recordingChallenge = nil
+                    }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(AppMotion.settle, value: showingRecording)
+        // A zoom presentation can be dragged or pinched away. Mid-take that
+        // would discard the recording, so the only exits are the ones on screen.
+        .interactiveDismissDisabled()
+    }
+
+    private var recordingSession: some View {
+        RecordingView(
+            prompt: recordingPrompt,
+            duration: recordingDuration,
+            timerEndBehavior: timerEndBehavior,
+            countdownStyle: countdownStyle,
+            goalId: recordingGoalId,
+            storyId: recordingStoryId,
+            sessionSource: recordingChallenge != nil ? SharedPromptLink.shareSource : nil,
+            onSavedAndClosed: { recording in
+                routine.complete(.session)
+                Task {
+                    while RecordingProcessingCoordinator.shared.isProcessing(recording.id) {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        guard !Task.isCancelled else { return }
+                    }
+                    await achievementService.checkAchievements(context: modelContext)
+                    // Save & close means no replacement interruption. Keep
+                    // unlock state, but do not surface an overlay now.
+                    achievementService.clearNewlyUnlocked()
+                }
+            },
+            onComplete: { recording in
+                routine.complete(.session)
+                pendingRecordingNavigation = recording.id.uuidString
+                freshResultRecordingId = recording.id.uuidString
+                selectedTab = .history
+                showingRecording = false
+                SharedChallengeStore.shared.dismiss()
+                Task {
+                    await achievementService.checkAchievements(context: modelContext)
+                }
+            },
+            onCancel: {
+                showingRecording = false
+            }
+        )
     }
 
     // MARK: - Deep Links
