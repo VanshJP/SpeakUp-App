@@ -39,9 +39,9 @@ struct ScoreRevealView: View {
     }
 
     var body: some View {
+        // No background of its own: `RecordingView` keeps the session canvas
+        // under the whole act, so the score lands on the stage the take used.
         ZStack {
-            AppBackground(style: .recording)
-
             if showConfetti {
                 ConfettiView()
                     .allowsHitTesting(false)
@@ -69,6 +69,9 @@ struct ScoreRevealView: View {
             }
             .padding(.horizontal, 32)
         }
+        // The canvas used to size this; without it the tap-anywhere surface
+        // would shrink to the text column.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { onDismiss() }
         .task { await choreograph() }
@@ -222,6 +225,7 @@ struct ScoreRevealView: View {
         weakestAxisLabel: nil,
         onDismiss: {}
     )
+    .background { AppBackground(style: .recording) }
 }
 
 #Preview("Solid") {
@@ -231,6 +235,7 @@ struct ScoreRevealView: View {
         weakestAxisLabel: nil,
         onDismiss: {}
     )
+    .background { AppBackground(style: .recording) }
 }
 
 #Preview("Building") {
@@ -240,6 +245,7 @@ struct ScoreRevealView: View {
         weakestAxisLabel: "Fillers",
         onDismiss: {}
     )
+    .background { AppBackground(style: .recording) }
 }
 
 #Preview("First session") {
@@ -249,4 +255,5 @@ struct ScoreRevealView: View {
         weakestAxisLabel: nil,
         onDismiss: {}
     )
+    .background { AppBackground(style: .recording) }
 }

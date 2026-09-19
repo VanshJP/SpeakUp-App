@@ -9,6 +9,11 @@ struct SessionStartFooter: View {
     let freeHint: String
     let onStart: () -> Void
     let onFreeTalk: () -> Void
+    /// The session cover zooms out of this button (`ContentView` owns the
+    /// namespace); nil in previews.
+    var zoomNamespace: Namespace.ID? = nil
+
+    static let startZoomID = "today-start"
 
     var body: some View {
         VStack(spacing: 6) {
@@ -22,6 +27,7 @@ struct SessionStartFooter: View {
                 Haptics.medium()
                 onStart()
             }
+            .zoomSource(Self.startZoomID, in: zoomNamespace)
             .accessibilityHint(startHint)
 
             if showFreeTalk {

@@ -38,6 +38,12 @@ struct TodayView: View {
     var onShowConfidence: () -> Void
     var onShowCurriculum: () -> Void
     var onStartStoryPractice: ((Story, RecordingDuration) -> Void)?
+    /// Set to the hero button's source id right before it starts a take, so
+    /// the session cover zooms out of the button that was tapped and nothing
+    /// else. Every other start on this page leaves it nil and gets the
+    /// standard presentation.
+    var sessionZoomSource: Binding<String?>? = nil
+    var zoomNamespace: Namespace.ID? = nil
 
     private var homeModules: [TodayHomeModule] {
         userSettings.first?.todayHomeModules ?? TodayHomeModule.defaultVisible
@@ -818,6 +824,7 @@ struct TodayView: View {
                 : "Records a \(viewModel.selectedDuration.displayName) take on the topic above",
             freeHint: "Records a \(viewModel.selectedDuration.displayName) take with no topic",
             onStart: {
+                sessionZoomSource?.wrappedValue = SessionStartFooter.startZoomID
                 if viewModel.storyPracticeEnabled, let story = viewModel.todaysStory {
                     onStartStoryPractice?(story, viewModel.selectedDuration)
                 } else {
@@ -826,7 +833,8 @@ struct TodayView: View {
             },
             onFreeTalk: {
                 onStartRecording(nil, viewModel.selectedDuration)
-            }
+            },
+            zoomNamespace: zoomNamespace
         )
     }
 

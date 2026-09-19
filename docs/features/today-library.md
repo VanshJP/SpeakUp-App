@@ -25,7 +25,7 @@
 | Hub | `SpeakUp/Views/Practice/PracticeHubView.swift` (`PracticeSection`) |
 | Prompts | `Views/Prompts/` - all / add / batch CSV |
 | CSV | `PromptCSVService`, `Data/DefaultPrompts.swift` |
-| Wheel | `Views/PromptWheel/PromptWheelView.swift`, `PromptWheelViewModel` |
+| Wheel | `Views/PromptWheel/PromptWheelView.swift`, `PromptWheelViewModel` — flick to spin (`highPriorityGesture` drag → `release(angularVelocity:)`, 1–6 turns by speed; a slow release settles) or tap Spin. `landing(rotation:amount:segments:)` nudges every spin so the pointer rests inside a segment, never on an edge (`PromptWheelLandingTests`). `DetentTracker` (`Animatable`) ticks a selection haptic and nods the pointer per segment edge, through drags and every frame of a spin. |
 
 ## Invariants
 

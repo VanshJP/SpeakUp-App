@@ -38,7 +38,7 @@ Concurrency / isolation traps: `/docs/AGENT_GOTCHAS.md`.
 | Learn | `book` / `book.fill` | `CurriculumView` |
 | Settings | `gearshape` / `gearshape.fill` | `SettingsView` |
 
-Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentView`: countdown, recording, onboarding, goals, warm-ups/drills (optional `sourceStory`), confidence, before/after, journal, read-aloud, story editor, achievement unlock, app tour (`AppTourOverlay` / `AppTourModel`). Paywall UI is deleted for beta. Prompt wheel is a sheet on `AllPromptsView` (Library → Prompts), not on `ContentView`.
+Achievements are a **sheet**, not a tab. Global covers/sheets owned by `ContentView`: session (one cover: countdown → recording, zoom-presented from Today's start button — see recording.md), onboarding, goals, warm-ups/drills (optional `sourceStory`), confidence, before/after, journal, read-aloud, story editor, achievement unlock, app tour (`AppTourOverlay` / `AppTourModel`). Paywall UI is deleted for beta. Prompt wheel is a sheet on `AllPromptsView` (Library → Prompts), not on `ContentView`.
 
 ## Deep links
 
