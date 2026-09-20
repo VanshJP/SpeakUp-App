@@ -348,6 +348,37 @@ struct FilterChip: View {
     }
 }
 
+/// Selected matches `SectionPicker` (solid white). Idle is quiet glass.
+/// The chrome swap itself never animates. Call sites wrap selection in
+/// their own animation.
+///
+/// This used to live beside `FilterPill` in `Components/FilterPill.swift`.
+/// That file was deleted with the tool pages' filter bars, but `FilterChip`
+/// (History + Stories' folder bar) still wears the chrome, so it moved here,
+/// next to its only remaining caller.
+struct SelectedFilterChrome: ViewModifier {
+    let isSelected: Bool
+
+    @Environment(\.glassAppearance) private var glassAppearance
+
+    func body(content: Content) -> some View {
+        Group {
+            if isSelected {
+                content
+                    .background { Capsule().fill(Color.white.opacity(0.92)) }
+                    .clipShape(Capsule())
+            } else {
+                content
+                    .glassEffect(
+                        .regular.tint(glassAppearance.glassTint).interactive(),
+                        in: .capsule
+                    )
+            }
+        }
+        .transaction { $0.animation = nil }
+    }
+}
+
 // MARK: - Recording Row
 
 struct RecordingRow: View {
