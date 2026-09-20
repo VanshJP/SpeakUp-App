@@ -237,10 +237,23 @@ struct ContentView: View {
             selectedTab = step.tab
         }
         .fullScreenCover(isPresented: isShowingSession, onDismiss: {
+            // A tap that starts a new session while this one is still
+            // animating out (gotcha #27) has already flipped showingCountdown
+            // / showingRecording back on by the time this fires. Clearing
+            // state here would wipe the new session's zoom source and could
+            // fire a stale navigation underneath it, so only the session that
+            // actually just closed gets cleaned up.
+            guard !showingCountdown, !showingRecording else { return }
             recordingStoryId = nil
             recordingChallenge = nil
             sessionZoomSource = nil
             if let id = pendingRecordingNavigation {
+                // Switching tabs only once the cover has fully dismissed keeps
+                // Today on screen (and the zoom-out button in place) for the
+                // whole dismiss animation. Flipping it from inside onComplete
+                // used to move the destination out from under the zoom while
+                // it was still animating back into the button that started it.
+                selectedTab = .history
                 selectedRecordingId = id
                 pendingRecordingNavigation = nil
             }
@@ -578,7 +591,9 @@ struct ContentView: View {
                 routine.complete(.session)
                 pendingRecordingNavigation = recording.id.uuidString
                 freshResultRecordingId = recording.id.uuidString
-                selectedTab = .history
+                // Tab switch happens in the cover's onDismiss, once the
+                // zoom-out animation has actually finished — see the comment
+                // there.
                 showingRecording = false
                 SharedChallengeStore.shared.dismiss()
                 Task {

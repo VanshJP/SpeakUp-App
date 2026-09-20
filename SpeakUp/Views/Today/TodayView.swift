@@ -691,7 +691,7 @@ struct TodayView: View {
                     .scaleEffect(arrived ? 1 : 0.6)
                     .opacity(arrived ? 1 : 0)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GlassPressStyle())
             .simultaneousGesture(TapGesture().onEnded { Haptics.light() })
         }
         .padding(.top, 4)
@@ -798,7 +798,7 @@ struct TodayView: View {
                 improvement: viewModel.userStats.improvementRate
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .simultaneousGesture(TapGesture().onEnded { Haptics.medium() })
     }
 
