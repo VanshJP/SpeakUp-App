@@ -243,7 +243,14 @@ struct ContentView: View {
             // state here would wipe the new session's zoom source and could
             // fire a stale navigation underneath it, so only the session that
             // actually just closed gets cleaned up.
-            guard !showingCountdown, !showingRecording else { return }
+            guard !showingCountdown, !showingRecording else {
+                // The finished take's destination belongs to a session the
+                // user has already left behind. Dropping it here keeps it from
+                // firing under the new session when *that* cover dismisses.
+                pendingRecordingNavigation = nil
+                freshResultRecordingId = nil
+                return
+            }
             recordingStoryId = nil
             recordingChallenge = nil
             sessionZoomSource = nil
