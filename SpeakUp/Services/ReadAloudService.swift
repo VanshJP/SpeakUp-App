@@ -394,6 +394,7 @@ class ReadAloudService {
         // The request that just ended has already flushed itself.
         guard armRecognition(startNewSegment: true, flushRetired: false) else {
             fail(with: failure ?? ReadAloudError.speechNotAvailable.errorDescription)
+            return
         }
     }
 
