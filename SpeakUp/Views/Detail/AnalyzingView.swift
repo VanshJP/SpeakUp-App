@@ -913,7 +913,7 @@ private struct SkeletonDonut: View {
                     .frame(width: 52)
 
                 ForEach(0..<axisCount, id: \.self) { i in
-                    let angle = (Double(i) / Double(axisCount)) * 2 * .pi.pi / 2
+                    let angle = (Double(i) / Double(axisCount)) * 2 * .pi - .pi / 2
                     SkeletonBar(width: 36, height: 8)
                         .frame(width: 36)
                         .position(

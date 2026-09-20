@@ -741,7 +741,7 @@ struct CircularWaveformView: View {
 
         case .dots:
             for i in 0..<36 {
-                let angle = (Double(i) / 36.0) * 2 * .pi.pi / 2
+                let angle = (Double(i) / 36.0) * 2 * .pi - .pi / 2
                 let h = amplitude(i, time: time, level: level)
                 let distance = radius + maxLength * 0.5 * h
                 let dotRadius = (2 + 4 * h) * scale
@@ -763,7 +763,7 @@ struct CircularWaveformView: View {
                 var path = Path()
                 let samples = 120
                 for i in 0...samples {
-                    let angle = (Double(i) / Double(samples)) * 2 * .pi.pi / 2
+                    let angle = (Double(i) / Double(samples)) * 2 * .pi - .pi / 2
                     let h = amplitude(i, time: time + Double(pass) * 0.45, level: level)
                     let r = radius + maxLength * 0.5 * (h - 0.4)
                     let point = CGPoint(x: center.x + CGFloat(cos(angle)) * r, y: center.y + CGFloat(sin(angle)) * r)

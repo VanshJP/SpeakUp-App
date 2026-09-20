@@ -1085,7 +1085,7 @@ nonisolated enum SpeechAnalysisPipeline {
             let asrConfidenceScore: Double
             if hasConfidence {
                 let averageConfidence = confidences.reduce(0, +) / Double(confidences.count)
-                asrConfidenceScore = min(100, max(0, averageConfidence * 120-10))
+                asrConfidenceScore = min(100, max(0, averageConfidence * 120 - 10))
             } else {
                 asrConfidenceScore = 70
             }

@@ -48,8 +48,8 @@ nonisolated enum SpeechIsolationService {
         // This gives a more honest score since we're now processing noisier audio.
         let suppressionScore = max(0, min(100, Int(((delta + 1.5) / 10.0) * 100.0)))
         // Adjusted residual noise score to match the new skip threshold.
-        // Previously: (improvedSNR + 5.0) / 20.0-15 dB output SNR scored 100.
-        // Now: (improvedSNR + 5.0) / 27.0-22 dB output SNR scores 100.
+        // Previously: (improvedSNR + 5.0) / 20.0 - 15 dB output SNR scored 100.
+        // Now: (improvedSNR + 5.0) / 27.0 - 22 dB output SNR scores 100.
         // This prevents inflated residualNoiseScore values from over-dampening reliability.
         let residualNoiseScore = max(0, min(100, Int(((improvedSNR + 5.0) / 27.0) * 100.0)))
 

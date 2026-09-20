@@ -236,15 +236,7 @@ struct ContentView: View {
             guard let step, selectedTab != step.tab else { return }
             selectedTab = step.tab
         }
-        .fullScreenCover(isPresented: isShowingSession, onDismiss: {
-            recordingStoryId = nil
-            recordingChallenge = nil
-            sessionZoomSource = nil
-            if let id = pendingRecordingNavigation {
-                selectedRecordingId = id
-                pendingRecordingNavigation = nil
-            }
-        }) {
+        .fullScreenCover(isPresented: isShowingSession, onDismiss: endSession) {
             sessionCover
         }
         .sheet(isPresented: $showingReadAloud) {
@@ -501,6 +493,36 @@ struct ContentView: View {
         )
     }
 
+    /// Closes out the take the cover just dismissed. This runs *after* the
+    /// dismissal animation, which is the only safe moment to open the take's
+    /// destination: `selectedTab` has to stay on Today for the whole zoom-out
+    /// or the button the cover is zooming back into leaves the screen
+    /// mid-animation. `recordingSession.onComplete` therefore only stages the
+    /// destination in `pendingRecordingNavigation` and leaves the rest here.
+    ///
+    /// A tap that starts the next session while this one is still animating
+    /// out (gotcha #27) has already flipped the flags back on by the time this
+    /// fires, so the screen now belongs to that session, not this one:
+    /// clearing would wipe its zoom source, and the staged destination would
+    /// fire underneath it when *its* cover dismisses. Drop the abandoned
+    /// take's destination and leave everything the new session owns alone.
+    private func endSession() {
+        guard !showingCountdown, !showingRecording else {
+            pendingRecordingNavigation = nil
+            freshResultRecordingId = nil
+            return
+        }
+
+        recordingStoryId = nil
+        recordingChallenge = nil
+        sessionZoomSource = nil
+
+        guard let id = pendingRecordingNavigation else { return }
+        selectedTab = .history
+        selectedRecordingId = id
+        pendingRecordingNavigation = nil
+    }
+
     /// Countdown, then the take, in one presentation. The countdown used to be
     /// an overlay on the tab shell and the take a cover sliding up over it —
     /// two entrances for one act. Now the cover zooms out of the button that
@@ -578,7 +600,8 @@ struct ContentView: View {
                 routine.complete(.session)
                 pendingRecordingNavigation = recording.id.uuidString
                 freshResultRecordingId = recording.id.uuidString
-                selectedTab = .history
+                // The tab switch waits for the cover's dismissal to finish.
+                // See `endSession()`.
                 showingRecording = false
                 SharedChallengeStore.shared.dismiss()
                 Task {
