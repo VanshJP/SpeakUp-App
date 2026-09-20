@@ -522,7 +522,7 @@ private struct BaselineWaveformRing: View {
     let viewModel: OnboardingViewModel
 
     var body: some View {
-        CircularWaveformView(audioLevel: viewModel.micLevel * 60-60)
+        CircularWaveformView(audioLevel: viewModel.micLevel * 60 - 60)
     }
 }
 

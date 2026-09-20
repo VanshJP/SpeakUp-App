@@ -89,7 +89,7 @@ enum ScreenshotSeeder {
         for session in sessions {
             let text = session.story ? toastTranscript : interviewTranscript
             let recording = Recording(
-                date: .now.addingTimeInterval(-Double(session.daysAgo) * 86_400-3_600),
+                date: .now.addingTimeInterval(-Double(session.daysAgo) * 86_400 - 3_600),
                 targetDuration: 90,
                 actualDuration: session.story ? 94 : 71,
                 transcriptionText: text,
