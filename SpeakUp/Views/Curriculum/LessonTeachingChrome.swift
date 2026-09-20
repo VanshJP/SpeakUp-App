@@ -72,82 +72,121 @@ enum LessonTeachingCopy {
 }
 
 /// Hero board: glyph + today's focus + objective + roadmap sentence.
+///
+/// Past the first step it shrinks to a name plate. The board states what the
+/// lesson is; once you are inside an activity the activity is the subject, and
+/// repeating the objective and the roadmap above every card was pushing the
+/// actual teaching below the fold.
 struct LessonBoardHeader: View {
     let lesson: CurriculumLesson
     let identity: LessonIdentity
     var isReviewing: Bool = false
+    var isCompact: Bool = false
 
     var body: some View {
-        GlassCard(tint: identity.accent.opacity(0.10), padding: 18) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .center, spacing: 16) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        identity.accent.opacity(0.28),
-                                        identity.accent.opacity(0.10)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(identity.accent.opacity(0.45), lineWidth: 1)
-                            }
+        GlassCard(tint: identity.accent.opacity(0.10), padding: isCompact ? 12 : 18) {
+            if isCompact {
+                compactBody
+            } else {
+                fullBody
+            }
+        }
+    }
 
-                        LessonGlyphView(
-                            identity: identity,
-                            state: isReviewing ? .completed : .current
-                        )
-                        .frame(width: 36, height: 36)
-                    }
-                    .frame(width: 68, height: 68)
-                    .shadow(color: identity.accent.opacity(0.25), radius: 12, y: 4)
+    // MARK: Compact
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(isReviewing ? "Reviewing" : "Today's focus")
-                            .font(.system(size: 11, weight: .semibold))
-                            .textCase(.uppercase)
-                            .tracking(0.8)
-                            .foregroundStyle(identity.accent)
+    private var compactBody: some View {
+        HStack(spacing: 12) {
+            glyphPlate(size: 40, glyph: 22, cornerRadius: 12)
 
-                        Text(lesson.title)
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(.white)
-                            .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(lesson.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
-                        Text(lesson.objective)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                Text(lesson.objective)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
 
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "quote.opening")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(identity.accent.opacity(0.7))
-                        .padding(.top, 2)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(lesson.title). \(lesson.objective)")
+    }
 
-                    Text(LessonTeachingCopy.roadmap(for: lesson))
-                        .font(.callout)
+    // MARK: Full
+
+    private var fullBody: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                glyphPlate(size: 60, glyph: 32, cornerRadius: 16)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(isReviewing ? "Reviewing" : "Today's focus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                        .foregroundStyle(identity.accent)
+
+                    Text(lesson.title)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(lesson.objective)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
-                )
-                .accessibilityLabel("Lesson plan overview")
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "quote.opening")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(identity.accent.opacity(0.7))
+                    .padding(.top, 2)
+
+                Text(LessonTeachingCopy.roadmap(for: lesson))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel("Lesson plan overview")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func glyphPlate(size: CGFloat, glyph: CGFloat, cornerRadius: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            identity.accent.opacity(0.28),
+                            identity.accent.opacity(0.10)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(identity.accent.opacity(0.45), lineWidth: 1)
+                }
+
+            LessonGlyphView(
+                identity: identity,
+                state: isReviewing ? .completed : .current
+            )
+            .frame(width: glyph, height: glyph)
+        }
+        .frame(width: size, height: size)
     }
 }
 
@@ -185,6 +224,11 @@ struct LessonProgressTrack: View {
 
 /// Labeled step strip - Learn / Practice / Review. Icons always visible;
 /// completion is a corner badge, never a replacement for the role glyph.
+///
+/// The chips *are* the track: they already carry current, done and locked per
+/// step, so an eyebrow count and a segmented bar above them were the same
+/// three facts drawn three times. The thin bar survives in the sticky bottom
+/// bar, where it is the only progress on screen once this scrolls away.
 struct LessonPlanStrip: View {
     let lesson: CurriculumLesson
     let currentIndex: Int
@@ -193,36 +237,12 @@ struct LessonPlanStrip: View {
     let onSelect: (Int) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Lesson plan")
-                    .font(.system(size: 11, weight: .semibold))
-                    .textCase(.uppercase)
-                    .tracking(0.7)
-                    .foregroundStyle(.tertiary)
-
-                Spacer(minLength: 0)
-
-                Text("\(completedIds.intersection(Set(lesson.activities.map(\.id))).count)/\(lesson.activities.count)")
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
-
-            LessonProgressTrack(
-                total: lesson.activities.count,
-                currentIndex: currentIndex,
-                completedIds: completedIds,
-                activityIds: lesson.activities.map(\.id),
-                accent: accent
-            )
-
-            HStack(spacing: 10) {
-                ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
-                    planChip(index: index, activity: activity)
-                }
+        HStack(spacing: 8) {
+            ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
+                planChip(index: index, activity: activity)
             }
         }
-        .padding(14)
+        .padding(10)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.white.opacity(0.04))
@@ -313,33 +333,28 @@ struct LessonPlanStrip: View {
 }
 
 /// Coach line above the current activity - cue only, no second title row.
+/// Kept to one quiet line: it frames the card under it, it is not a card.
 struct LessonCoachCue: View {
     let activity: CurriculumActivity
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "sparkles")
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(activity.type.teacherColor)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(activity.type.teacherColor.opacity(0.15)))
 
             Text(activity.type.teacherCue)
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.vertical, 9)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(activity.type.teacherColor.opacity(0.08))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(activity.type.teacherColor.opacity(0.18), lineWidth: 1)
-                }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(activity.type.teacherRole). \(activity.type.teacherCue)")

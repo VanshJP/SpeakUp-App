@@ -41,6 +41,10 @@ struct PracticeImproveEntryRow: View {
                         .frame(width: 36, height: 36)
                         .background { Circle().fill(AppColors.primary.opacity(0.18)) }
 
+                    // The count sits under the copy rather than beside it.
+                    // Sharing the row's width with the title wrapped both -
+                    // "8 outcomes · 41 exercises" broke across two lines and
+                    // squeezed the sentence it was meant to annotate.
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Not sure which one?")
                             .font(.subheadline.weight(.semibold))
@@ -51,14 +55,16 @@ struct PracticeImproveEntryRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
+
+                        Text(summary)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .padding(.top, 1)
                     }
 
-                    Spacer(minLength: 0)
-
-                    Text(summary)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.trailing)
+                    Spacer(minLength: 8)
 
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))

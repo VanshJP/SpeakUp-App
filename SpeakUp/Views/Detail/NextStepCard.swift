@@ -11,6 +11,11 @@ struct NextStep {
     let area: String
     let areaSlug: String
     let score: Int
+    /// The named move, when there is one. Nil on the branches that have no
+    /// technique to hand over - a clean session, or no scored subscore at all.
+    let technique: String?
+    /// One instruction. The reasoning behind it lives on the Coaching tab,
+    /// where there is room for it.
     let coaching: String
     let actionTitle: String
     let action: Action
@@ -24,6 +29,7 @@ struct NextStep {
                 area: plan.focus.title,
                 areaSlug: plan.focus.analyticsSlug,
                 score: plan.focus.subscore(in: subscores) ?? plan.focusAverage,
+                technique: plan.focus.technique.name,
                 coaching: plan.focus.technique.how,
                 actionTitle: route.title,
                 action: route.action
@@ -38,6 +44,7 @@ struct NextStep {
                 area: "Practice",
                 areaSlug: "none",
                 score: 100,
+                technique: nil,
                 coaching: "Bank another rep while it's working.",
                 actionTitle: "Practice Again",
                 action: .practiceAgain
@@ -49,6 +56,7 @@ struct NextStep {
                 area: weakest.0.title,
                 areaSlug: weakest.0.analyticsSlug,
                 score: weakest.1,
+                technique: nil,
                 coaching: plan?.headline ?? "Nothing scored below 75 this session. Bank another rep while it's working.",
                 actionTitle: "Practice Again",
                 action: .practiceAgain
@@ -60,6 +68,7 @@ struct NextStep {
             area: weakest.0.title,
             areaSlug: weakest.0.analyticsSlug,
             score: weakest.1,
+            technique: weakest.0.technique.name,
             coaching: weakest.0.technique.how,
             actionTitle: route.title,
             action: route.action
@@ -107,6 +116,24 @@ struct NextStepCard: View {
                         Text("\(step.score)")
                             .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(AppColors.scoreColor(for: step.score))
+
+                        // Said out loud because the Coaching tab prints the
+                        // same dimension against its rolling average. Two
+                        // different numbers under one word read as a bug.
+                        Text("this take")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+
+                        Spacer(minLength: 8)
+
+                        if let technique = step.technique {
+                            Text(technique)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .accessibilityLabel("Technique: \(technique)")
+                        }
                     }
                 }
 

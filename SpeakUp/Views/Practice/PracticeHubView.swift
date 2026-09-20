@@ -86,6 +86,10 @@ struct PracticeHubView: View {
             PracticeImproveListView()
                 .restoresNavigationBar()
         }
+        .navigationDestination(for: WordLibraryRoute.self) { _ in
+            WordLibraryView()
+                .restoresNavigationBar()
+        }
         .navigationDestination(item: $selectedStory) { story in
             StoryDetailView(
                 story: story,
@@ -165,13 +169,17 @@ struct PracticeHubView: View {
                     || $0.outcome.localizedStandardContains(query)
                     || $0.bestFor.localizedStandardContains(query)
             }
+        // Two characters minimum: a one-letter query matches "words" and
+        // every other row on the page, which is not a search result.
+        let matchesWordLibrary = query.count >= 2
+            && "words dictionary vocabulary definitions lexicon".localizedStandardContains(query)
 
         return VStack(alignment: .leading, spacing: 20) {
             InlineSearchField(text: $toolsSearchText, prompt: "Search tools…") {
                 EmptyView()
             }
 
-            if visiblePractice.isEmpty && visibleReview.isEmpty && visibleFocuses.isEmpty {
+            if visiblePractice.isEmpty && visibleReview.isEmpty && visibleFocuses.isEmpty && !matchesWordLibrary {
                 EmptyStateCard(
                     icon: "magnifyingglass",
                     title: "No tools match",
@@ -213,6 +221,7 @@ struct PracticeHubView: View {
                 // not on a row that promises to have one.
                 if query.isEmpty {
                     PracticeImproveEntryRow()
+                    WordLibraryEntryRow()
                 } else if !visibleFocuses.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         GlassSectionHeader("Improve", icon: "target")
@@ -225,15 +234,22 @@ struct PracticeHubView: View {
                     }
                 }
 
+                if matchesWordLibrary {
+                    WordLibraryEntryRow()
+                }
+
                 if !visibleReview.isEmpty {
                     toolGrid(title: "Review") {
                         ForEach(visibleReview) { tool in
+                            // `outcome` fills the same slot the practice
+                            // cards give to `format`, so both grids are one
+                            // matrix instead of two card shapes.
                             ToolCategoryCard(
                                 icon: tool.icon,
                                 title: tool.title,
                                 meta: tool.meta,
-                                tint: tool.color,
-                                accessibilityDetail: tool.outcome
+                                detail: tool.outcome,
+                                tint: tool.color
                             ) {
                                 openReviewTool(tool)
                             }

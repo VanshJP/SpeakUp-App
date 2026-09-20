@@ -50,36 +50,58 @@ nonisolated enum CoachDimension: String, CaseIterable, Sendable, Identifiable {
     /// The named technique the speaker drills for this dimension. Coaching that
     /// says "be clearer" changes nothing; a technique with a name and a rep
     /// count is something you can actually go do.
-    var technique: (name: String, how: String) {
+    ///
+    /// `how` and `why` are split because they are read in different places.
+    /// The instruction is what a card asks for in the second before you speak;
+    /// the reasoning is what earns it, and it belongs behind a disclosure. Run
+    /// together they made the next-step card a four-line paragraph nobody
+    /// finishes. `fullTechnique` re-joins them where the long form is wanted.
+    var technique: (name: String, how: String, why: String) {
         switch self {
         case .fillers:
             return ("The silent swap",
-                    "The instant you feel a filler coming, close your mouth and hold it for one beat. The pause buys the same thinking time the filler did, it just reads as control instead of hesitation.")
+                    "The instant you feel a filler coming, close your mouth and hold it for one beat.",
+                    "The pause buys the same thinking time the filler did, it just reads as control instead of hesitation.")
         case .pace:
             return ("One idea, one breath",
-                    "Take a breath at the end of each idea, not in the middle of one. Breathing on the idea boundary sets your speed automatically and stops the runaway sentence before it starts.")
+                    "Take a breath at the end of each idea, not in the middle of one.",
+                    "Breathing on the idea boundary sets your speed automatically and stops the runaway sentence before it starts.")
         case .pauses:
             return ("Land it and count two",
-                    "After your strongest sentence, stop and count two full beats before the next word. It feels far longer to you than it does to a listener, that gap is where the point sinks in.")
+                    "After your strongest sentence, stop and count two full beats before the next word.",
+                    "It feels far longer to you than it does to a listener, that gap is where the point sinks in.")
         case .clarity:
             return ("Finish the consonant",
-                    "Over-pronounce the last consonant of every word for one full session, the T in 'about', the D in 'would'. Dropped word endings, not volume, are what makes speech read as mumbled.")
+                    "Over-pronounce the last consonant of every word, the T in 'about', the D in 'would'.",
+                    "Dropped word endings, not volume, are what makes speech read as mumbled.")
         case .structure:
             return ("PREP",
-                    "Point, Reason, Example, Point. Say your claim first, give one reason, give one concrete example, then restate the claim. Four sentences, in that order, every time until it is automatic.")
+                    "Point, Reason, Example, Point. Claim first, one reason, one concrete example, then the claim again.",
+                    "Four sentences, in that order, every time until it is automatic.")
         case .delivery:
             return ("Pick the one word",
-                    "Choose a single word per sentence to hit, slightly louder, slightly slower. One emphasised word per sentence is the whole difference between reading and speaking.")
+                    "Choose a single word per sentence to hit, slightly louder, slightly slower.",
+                    "One emphasised word per sentence is the whole difference between reading and speaking.")
         case .vocalVariety:
             return ("Three keys",
-                    "Deliver a sentence low, then mid, then high in pitch, and notice how differently each lands. Rotating deliberately through your range in practice widens the range you reach for unconsciously.")
+                    "Deliver a sentence low, then mid, then high in pitch, and notice how differently each lands.",
+                    "Rotating deliberately through your range in practice widens the range you reach for unconsciously.")
         case .vocabulary:
             return ("Upgrade one word",
-                    "Each time you catch yourself reaching for 'good', 'thing', or 'stuff', stop and swap in the precise word. One upgrade per answer, not ten, the reach is what builds the habit.")
+                    "When you catch yourself reaching for 'good', 'thing', or 'stuff', swap in the precise word.",
+                    "One upgrade per answer, not ten, the reach is what builds the habit.")
         case .relevance:
             return ("Answer in sentence one",
-                    "Give the direct answer in your first sentence, then support it. Warming up on the listener before you commit to a position is what reads as rambling.")
+                    "Give the direct answer in your first sentence, then support it.",
+                    "Warming up on the listener before you commit to a position is what reads as rambling.")
         }
+    }
+
+    /// Name, instruction and reasoning as one block - for teaching points and
+    /// the LLM prompt, where there is room to say all three.
+    var fullTechnique: String {
+        let t = technique
+        return "\(t.name): \(t.how) \(t.why)"
     }
 
     /// Stable identifier reported to the outcome funnel. Deliberately separate
@@ -219,8 +241,12 @@ nonisolated struct CoachPlan: Sendable {
     /// True once the focus has cleared the bar: time to move the user on.
     var isGraduating: Bool { focusAverage >= target }
 
-    /// One line naming the work, the number, and the direction. This is the
-    /// headline the whole coaching screen is built around.
+    /// One line naming the work, the number, and the direction, for readers
+    /// that have none of it on screen already: the LLM prompt, and the
+    /// next-step card on a session where nothing scored low enough to coach.
+    /// The focus card uses `focusNote` - it draws the name, the number, the
+    /// window and the trend as chrome, so a sentence repeating all four is
+    /// the same fact five times.
     var headline: String {
         let base: String
         switch trend {
@@ -250,8 +276,32 @@ nonisolated struct CoachPlan: Sendable {
         // dimension is at the bar. There is no next weakness to hand over to - 
         // the work stops being repair and starts being difficulty.
         isGraduating
-            ? "Every dimension is at or above \(target). The next gains come from harder conditions, not fixes, longer takes, no prep, a real audience."
-            : "Get \(focus.title.lowercased()) to \(target) and hold it for three sessions to move on."
+            ? "Everything is at \(target) or above. Next gains come from harder conditions: longer takes, no prep, a real audience."
+            : "Three sessions at \(target) to move on."
+    }
+
+    /// The coaching half of `headline`, for the focus card - what the number
+    /// means and what to do about it, with the name, the score and the arrow
+    /// left to the card that already draws them.
+    var focusNote: String {
+        let base: String
+        switch trend {
+        case .new:
+            base = "Your biggest lever right now."
+        case .improving:
+            base = "Climbing. Same approach, more reps."
+        case .flat:
+            base = "Held flat for a while. Try one small technique change."
+        case .slipping:
+            base = "Slipped lately. Worth a focused rep before your next take."
+        case .holding:
+            base = "Keeping it there is the work now."
+        }
+
+        if let namedHabit {
+            return base + " Most common right now: \u{201C}\(namedHabit)\u{201D}."
+        }
+        return base
     }
 }
 

@@ -27,6 +27,19 @@ nonisolated enum RoutineStep: String, CaseIterable, Identifiable, Sendable, Coda
         }
     }
 
+    /// Rail label. The full title does not survive a six-wide chain, and the
+    /// chain is where the user reads the step, not a list row.
+    var shortTitle: String {
+        switch self {
+        case .calm: return "Calm"
+        case .warmUp: return "Warm-up"
+        case .drill: return "Drill"
+        case .readAloud: return "Read"
+        case .session: return "Take"
+        case .review: return "Score"
+        }
+    }
+
     /// Why the link is in the chain. One line, coach voice.
     var detail: String {
         switch self {

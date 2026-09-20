@@ -25,7 +25,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 | Stories | [stories.md](./stories.md) | `Views/Stories/`, `Story*`, `StoryFolderHealing` (+ `StoryFolderSeedService`), `StoryTaggingService` | — | — |
 | Read-Aloud | [read-aloud.md](./read-aloud.md) | `Views/ReadAloud/`, `ReadAloudDocumentImporter`, `PronunciationService` · toolbar add action / paste + import / saved rail / focus-grouped catalog / hear-it / minimal pairs | gotchas §9, §25 | `axiom-media` |
 | Today / Practice Hub | [today-library.md](./today-library.md) | `Views/Today/`, `Views/Practice/`, `TodayHomeModule`, `PracticeToolKind` | — | — |
-| Daily word workout | [vocab-challenge.md](./vocab-challenge.md) | `VocabChallengeService`, `Views/Today/VocabChallengeResultCard.swift` | — | — |
+| Daily word workout / word library | [vocab-challenge.md](./vocab-challenge.md) | `VocabChallengeService`, `Views/Today/VocabChallengeResultCard.swift`, `Views/Words/WordLibraryView.swift` | — | — |
 | History / trajectory / readiness / journal | [history-progress.md](./history-progress.md) | `Views/History/`, `Views/Progress/`, `Views/Streak/`, `ScenarioReadinessEngine` | gotchas §2b, §3 | — |
 | Learn / curriculum | [curriculum.md](./curriculum.md) | Skill studio (`CurriculumView` list + modalities), `LessonIdentity`, `CurriculumService` | monetization.md · ui-design-system.md | — |
 | Practice routine / step chaining | [routine.md](./routine.md) | `Models/PracticeRoutine.swift`, `PracticeRoutineService`, `Views/Today/RoutineCard.swift` | today-library.md · practice-tools.md | — |
