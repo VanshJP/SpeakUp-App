@@ -45,9 +45,6 @@ enum WidgetPalette {
     /// lifted slightly because widgets are viewed small and at a glance.
     static let meterTrack = Color.white.opacity(0.11)
 
-    /// Hairline around inner surfaces. Mirrors `AppColors.cardStroke`.
-    static let hairline = Color.white.opacity(0.08)
-
     // MARK: Score ramp
 
     /// Score ramp mirroring the app's `AppColors.scoreColor(for:)`.
@@ -84,7 +81,6 @@ enum WidgetType {
 
     /// Prose. Prompts and story titles.
     static let body = Font.system(size: 15, weight: .medium)
-    static let bodyCompact = Font.system(size: 13, weight: .medium)
 }
 
 // MARK: - Canvas

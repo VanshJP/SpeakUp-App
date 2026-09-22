@@ -4,8 +4,6 @@ import SwiftUI
 /// App shell: 5 tabs + global sheets + deep links. Tab roots in `tabRoot(for:)`.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(SpeechService.self) private var speechService
-    @Environment(LLMService.self) private var llmService
     @Query private var userSettings: [UserSettings]
 
     @State private var selectedTab: AppTab = .today

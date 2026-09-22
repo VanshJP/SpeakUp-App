@@ -188,7 +188,7 @@ struct WordSwapTests {
 
         #expect(like?.count == 2)
         #expect(like?.swaps == ["\u{201C}about\u{201D}", "\u{201C}such as\u{201D}", "\u{201C}roughly\u{201D}"])
-        #expect(like?.exampleFragment?.contains(where: \.isTarget) == true)
+        #expect(like?.occurrences.first?.fragment.contains(where: \.isTarget) == true)
     }
 
     @Test
@@ -227,7 +227,7 @@ struct WordSwapTests {
         let words = timedWords(text, fillers: ["um"])
 
         let um = hit(LexiconInsightsEngine.sessionHits(from: words), "um")
-        let fragment = um?.exampleFragment
+        let fragment = um?.occurrences.first?.fragment
 
         #expect(fragment?.first?.text == "\u{2026}")
         #expect(fragment?.last?.text == "\u{2026}")
@@ -245,8 +245,8 @@ struct WordSwapTests {
         let um = hit(LexiconInsightsEngine.sessionHits(from: words), "um")
 
         // ±6 words spans the whole take, so nothing is truncated away.
-        #expect(um?.exampleFragment?.map(\.text) == ["um", "well", "done", "everyone"])
-        #expect(um?.exampleFragment?.first?.isTarget == true)
+        #expect(um?.occurrences.first?.fragment.map(\.text) == ["um", "well", "done", "everyone"])
+        #expect(um?.occurrences.first?.fragment.first?.isTarget == true)
     }
 
     // MARK: Degenerate input and compatibility
@@ -381,16 +381,6 @@ struct WordSwapTests {
         #expect(like?.moments.allSatisfy { $0.count == 1 } == true)
     }
 
-    @Test
-    func alternatesNeverRepeatAMomentsOwnFix() {
-        let words = timedWords("the demo was really good overall folks")
-
-        let really = hit(LexiconInsightsEngine.sessionHits(from: words), "really")
-        let primaries = Set(really?.moments.map(\.option.replacement) ?? [])
-
-        #expect(really?.alternateOptions.contains { primaries.contains($0.replacement) } == false)
-    }
-
     // MARK: Playability
 
     @Test
@@ -415,7 +405,7 @@ struct WordSwapTests {
 
         // The previous sentence is not context - quoting into it reads as a
         // glitch, and there is no leading ellipsis because nothing was cut.
-        #expect(um?.exampleFragment?.map(\.text) == ["um", "the", "next", "thing", "landed"])
+        #expect(um?.occurrences.first?.fragment.map(\.text) == ["um", "the", "next", "thing", "landed"])
     }
 
     // MARK: Newly disambiguated words
@@ -458,7 +448,7 @@ struct WordSwapTests {
         let unmappedVague = SessionWordHit(word: "zzzunmapped", category: .vague, count: 4, timestamps: [])
         #expect(unmappedVague.swaps == ["name the specifics"])
         #expect(unmappedVague.primarySwap == nil)
-        #expect(unmappedVague.exampleFragment == nil)
+        #expect(unmappedVague.occurrences.isEmpty)
 
         let mappedFiller = SessionWordHit(word: "very", category: .intensifier, count: 2, timestamps: [])
         #expect(mappedFiller.swaps.count >= 3)

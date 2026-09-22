@@ -57,11 +57,11 @@ struct ReadAloudCustomPassageTests {
         #expect(excerpt.hasSuffix("finish."))
     }
 
-    @Test func catalogCasesOmitCustom() {
-        #expect(!ReadAloudCategory.catalogCases.contains(.custom))
+    @Test func seedCatalogNeverShipsCustomPassages() {
         #expect(ReadAloudCategory.allCases.contains(.custom))
-        // Freeform passages live on `UserSettings`, never in the seed array - 
-        // a "Yours" pill beside News and Literature would filter to nothing.
+        // Freeform passages live on `UserSettings`, never in the seed array -
+        // the catalog groups by focus, and a custom seed would surface as a
+        // passage nobody wrote.
         #expect(!DefaultReadAloudPassages.all.contains { $0.category == .custom })
     }
 

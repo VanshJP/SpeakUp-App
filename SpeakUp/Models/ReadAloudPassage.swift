@@ -207,11 +207,5 @@ nonisolated enum ReadAloudCategory: String, CaseIterable, Identifiable {
         case .technical, .tongueTwister, .minimalPairs, .custom: return .clarity
         }
     }
-
-    /// Catalog filters - excludes freeform custom passages.
-    static var catalogCases: [ReadAloudCategory] {
-        allCases.filter { $0 != .custom }
-    }
-
 }
 

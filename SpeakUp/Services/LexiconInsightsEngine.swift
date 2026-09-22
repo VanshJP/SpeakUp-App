@@ -264,19 +264,6 @@ nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
     var moments: [WordSwapMoment] {
         WordSwapSuggester.moments(in: occurrences)
     }
-
-    /// Alternates worth printing under the primary fix, deduped against it.
-    var alternateOptions: [WordSwapOption] {
-        let primaries = Set(moments.map(\.option.replacement))
-        return swapOptions.filter { !primaries.contains($0.replacement) }
-    }
-
-    /// Sentence fragment around the occurrence whose suggestion won.
-    var exampleFragment: [FragmentPiece]? {
-        guard let primarySwap else { return occurrences.first?.fragment }
-        return (occurrences.first(where: { $0.best?.replacement == primarySwap.replacement })
-                ?? occurrences.first)?.fragment
-    }
 }
 
 // MARK: - Engine
