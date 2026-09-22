@@ -26,6 +26,27 @@ nonisolated enum StreakProtection {
         return min(maxBankedFreezes, max(0, earned - frozenDayCount))
     }
 
+    /// Live streak plus banked freezes, from practice timestamps and the days
+    /// already covered by spent freezes.
+    static func liveSnapshot(
+        practiceDays: [Date],
+        frozenDays: [Date],
+        now: Date = Date()
+    ) -> (currentStreak: Int, freezesAvailable: Int, frozenDays: [Date]) {
+        let practice = Set(practiceDays.map(\.startOfDay))
+        let frozen = Set(frozenDays.map(\.startOfDay)).subtracting(practice)
+        let streak = Date.calculateStreak(
+            from: practiceDays,
+            frozenDays: frozen.map { $0 },
+            now: now
+        )
+        let freezes = freezesAvailable(
+            practiceDayCount: practice.count,
+            frozenDayCount: frozen.count
+        )
+        return (streak, freezes, frozen.sorted(by: >))
+    }
+
     struct Resolution: Equatable {
         /// Frozen days after this pass, including any newly consumed one.
         var frozenDays: [Date]

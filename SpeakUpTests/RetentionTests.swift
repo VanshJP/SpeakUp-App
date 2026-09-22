@@ -117,6 +117,26 @@ struct FrozenStreakCalculationTests {
         let practice = [daysAgo(0), daysAgo(1), daysAgo(2)]
         #expect(Date.calculateStreak(from: practice, frozenDays: []) == 3)
     }
+
+    @Test func liveSnapshotMatchesStreakAndFreezeBalance() {
+        let practice = (0...9).map { daysAgo($0) }
+        let snapshot = StreakProtection.liveSnapshot(
+            practiceDays: practice,
+            frozenDays: []
+        )
+        #expect(snapshot.currentStreak == 10)
+        #expect(snapshot.freezesAvailable == StreakProtection.maxBankedFreezes)
+    }
+
+    @Test func liveSnapshotSurfacesSpentFreezeDays() {
+        let practice = [daysAgo(0), daysAgo(1), daysAgo(4)]
+        let frozen = [daysAgo(2)]
+        let snapshot = StreakProtection.liveSnapshot(
+            practiceDays: practice,
+            frozenDays: frozen
+        )
+        #expect(snapshot.frozenDays.contains(daysAgo(2).startOfDay))
+    }
 }
 
 // MARK: - Notification ladder

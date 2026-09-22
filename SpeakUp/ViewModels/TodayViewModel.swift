@@ -139,7 +139,11 @@ class TodayViewModel {
             let totalRecordings = recordings.count
             let totalPracticeTime = recordings.reduce(0) { $0 + $1.actualDuration }
             let recordingDates = recordings.map(\.date)
-            let currentStreak = Date.calculateStreak(from: recordingDates)
+            let frozenDays = (try? context.fetch(FetchDescriptor<UserSettings>()).first?.streakFrozenDays) ?? []
+            let currentStreak = StreakProtection.liveSnapshot(
+                practiceDays: recordingDates,
+                frozenDays: frozenDays
+            ).currentStreak
 
             let scoresWithAnalysis = recordings.compactMap { Self.projectedOverallScore(for: $0) }
             let averageScore: Double = scoresWithAnalysis.isEmpty
