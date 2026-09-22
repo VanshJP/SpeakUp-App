@@ -11,6 +11,8 @@ struct InteractivePromptCard: View {
     let footer: SessionStartFooter
     let onRefresh: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var redaction: RedactionReasons {
         prompt == nil ? .placeholder : []
     }
@@ -21,15 +23,11 @@ struct InteractivePromptCard: View {
                 HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: categoryIcon)
-                            .font(.system(size: 10, weight: .semibold))
                         Text(prompt?.category ?? "Loading...")
-                            .font(.system(size: 11, weight: .semibold))
-                            .textCase(.uppercase)
-                            .tracking(0.6)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
-                    .foregroundStyle(categoryColor)
+                    .eyebrowStyle(categoryColor)
                     .layoutPriority(-1)
 
                     Spacer(minLength: 8)
@@ -42,19 +40,26 @@ struct InteractivePromptCard: View {
                         DurationPill(selectedDuration: $selectedDuration)
 
                         SmallIconButton(icon: "arrow.clockwise", label: "Different prompt", action: onRefresh)
+                            .symbolEffect(.rotate, value: reduceMotion ? nil : prompt?.id)
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }
                 .redacted(reason: redaction)
 
-                Text(prompt?.text ?? "Loading today's prompt...")
-                    .font(.system(size: 18, weight: .semibold))
-                    .lineSpacing(2)
-                    .foregroundStyle(prompt == nil ? .secondary : .primary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .redacted(reason: redaction)
+                // A new prompt blurs in over the old one instead of the text
+                // snapping. ZStack so both share one slot mid-transition.
+                ZStack(alignment: .topLeading) {
+                    Text(prompt?.text ?? "Loading today's prompt...")
+                        .font(.system(size: 18, weight: .semibold))
+                        .lineSpacing(2)
+                        .foregroundStyle(prompt == nil ? .secondary : .primary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .redacted(reason: redaction)
+                        .id(prompt?.id)
+                        .transition(reduceMotion ? .opacity : AnyTransition(.blurReplace(.downUp)))
+                }
 
                 words
                     .redacted(reason: redaction)

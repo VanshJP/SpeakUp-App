@@ -517,12 +517,8 @@ class DrillViewModel {
         score = drillScore
         isComplete = true
         CurriculumActivitySignalStore.markDrillCompleted(mode.rawValue)
-
-        if passed {
-            Haptics.success()
-        } else {
-            Haptics.warning()
-        }
+        // No haptic here: `DrillResultView` lands one with its count-up, and
+        // firing both buzzed twice for a single result.
     }
 
     func cleanup() {

@@ -131,7 +131,7 @@ struct ScoreWeightsView: View {
     private var introCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Label("How Your Score Works", systemImage: "function")
+                Label("How your score works", systemImage: "function")
                     .font(.headline)
 
                 Text("Your overall score is built in two stages. First, 9 subscores are combined using your weights. Then a Substance Gate multiplies the result based on speech length and content depth, so short or empty responses always score low regardless of weights.")
@@ -311,7 +311,7 @@ struct ScoreWeightsView: View {
 
     private var saveButton: some View {
         VStack(spacing: 6) {
-            GlassButton(title: "Save Weights", icon: "checkmark.circle", style: .primary) {
+            GlassButton(title: "Save weights", icon: "checkmark.circle", style: .primary) {
                 Haptics.success()
                 saveDraftToViewModel()
                 didSave = true
@@ -341,7 +341,7 @@ struct ScoreWeightsView: View {
     // MARK: - Reset
 
     private var resetButton: some View {
-        GlassButton(title: "Reset to Defaults", icon: "arrow.counterclockwise", style: .outline) {
+        GlassButton(title: "Reset to defaults", icon: "arrow.counterclockwise", style: .outline) {
             Haptics.warning()
             showingResetConfirmation = true
         }

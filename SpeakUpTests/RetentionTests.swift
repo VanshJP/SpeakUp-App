@@ -78,6 +78,29 @@ struct StreakProtectionTests {
         #expect(!twice.didConsumeFreeze)
         #expect(twice.frozenDays.count == once.frozenDays.count)
     }
+
+    /// The reveal's "Day N" beat belongs to the first take of the day only.
+    @Test func firstTakeOfTheDayEarnsTheStreakDay() {
+        let take = Self.today.addingTimeInterval(9 * 3600)
+        #expect(StreakProtection.dayStarted(byTakeOn: take, otherPracticeDays: [], frozenDays: []) == 1)
+        #expect(StreakProtection.dayStarted(
+            byTakeOn: take,
+            otherPracticeDays: [daysAgo(1), daysAgo(2)],
+            frozenDays: []
+        ) == 3)
+        // Today was already practised: this take moved nothing.
+        #expect(StreakProtection.dayStarted(
+            byTakeOn: take,
+            otherPracticeDays: [Self.today.addingTimeInterval(3600), daysAgo(1)],
+            frozenDays: []
+        ) == nil)
+        // A frozen yesterday still carries the chain into today's take.
+        #expect(StreakProtection.dayStarted(
+            byTakeOn: take,
+            otherPracticeDays: [daysAgo(2)],
+            frozenDays: [daysAgo(1)]
+        ) == 2)
+    }
 }
 
 // MARK: - Streak counting with freezes

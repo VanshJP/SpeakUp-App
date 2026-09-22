@@ -34,21 +34,24 @@ struct RingStatsView: View {
                         progress: Double(score) / 100,
                         color: AppColors.scoreColor(for: score),
                         value: score > 0 ? "\(score)" : "-",
-                        label: "Avg Score"
+                        label: "Avg Score",
+                        sweepDelay: 0
                     )
 
                     GaugeItem(
                         progress: Double(min(sessions, sessionsGoal)) / Double(max(sessionsGoal, 1)),
                         color: AppColors.primary,
                         value: "\(sessions)/\(sessionsGoal)",
-                        label: "This Week"
+                        label: "This Week",
+                        sweepDelay: 0.08
                     )
 
                     GaugeItem(
                         progress: improvementRingProgress,
                         color: improvementColor,
                         value: improvementText,
-                        label: "Trend"
+                        label: "Trend",
+                        sweepDelay: 0.16
                     )
                 }
 
@@ -73,6 +76,7 @@ struct RingStatsView: View {
                             .font(.statValue)
                             .foregroundStyle(.white)
                             .contentTransition(.numericText(value: Double(bestScore)))
+                            .motion(AppMotion.settle, value: bestScore)
                     }
                 }
             }
@@ -90,12 +94,18 @@ private struct GaugeItem: View {
     let color: Color
     let value: String
     let label: String
+    /// Stagger, so the three rings sweep left to right like one gesture.
+    var sweepDelay: Double = 0
 
     var body: some View {
         VStack(spacing: 10) {
             ZStack {
+                // Stats land a beat after Today mounts, so the first load reads
+                // as the rings sweeping up from empty; a take that moves a
+                // number later sweeps it from the old value to the new one.
                 RingProgress(progress: progress, color: color, lineWidth: 8)
                     .frame(width: 78, height: 78)
+                    .motion(.spring(duration: 1.1, bounce: 0.12).delay(sweepDelay), value: progress)
 
                 Text(value)
                     .font(.statValue)
@@ -103,6 +113,8 @@ private struct GaugeItem: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .padding(.horizontal, 12)
+                    .contentTransition(.numericText())
+                    .motion(AppMotion.settle, value: value)
             }
 
             Text(label).eyebrowStyle()

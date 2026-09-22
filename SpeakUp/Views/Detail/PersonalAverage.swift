@@ -18,6 +18,9 @@ nonisolated enum PersonalAverage {
         var totalWords: Int?
         var best: Int?
         var priorSessionCount: Int = 0
+        /// True when the window reached back past the first recording, so
+        /// `best` is the all-time best and "Your best yet" is a fact.
+        var seenAllHistory = false
 
         // Phrasing lives here so every tile words the comparison identically.
         var paceLabel: String? { Self.format(wordsPerMinute) }
@@ -27,7 +30,10 @@ nonisolated enum PersonalAverage {
 
         func personalBestLabel(for score: Int) -> String? {
             guard let best, score > best else { return nil }
-            return priorSessionCount < window ? "Your best yet" : "Best in \(window) sessions"
+            // Not `priorSessionCount < window`: unscored takes in the window
+            // pulled that count under 20 while older, unseen takes might
+            // still hold a higher score, and the pill claimed an all-time best.
+            return seenAllHistory ? "Your best yet" : "Best in \(window) sessions"
         }
 
         private static func format(_ value: Int?) -> String? {
@@ -122,6 +128,10 @@ nonisolated enum PersonalAverage {
             guard let recent = try? context.fetch(descriptor) else { return Snapshot() }
 
             let live = recent.filter { !$0.isDeleted }
+            // Fewer rows than asked for means the fetch reached the first
+            // recording; the window must also hold every one of them.
+            let seenAllHistory = recent.count < (descriptor.fetchLimit ?? .max)
+                && live.filter { $0.id != currentID }.count <= window
             let planWindow = live.prefix(window)
             // Transcript text, not the timed-word blob: the crutch baseline
             // only needs words in order, and this keeps the window at one
@@ -177,7 +187,8 @@ nonisolated enum PersonalAverage {
                     pauseCount: mean(analyses.map { Double($0.pauseCount) }),
                     totalWords: mean(analyses.map { Double($0.totalWords) }),
                     best: scores.max(),
-                    priorSessionCount: analyses.count
+                    priorSessionCount: analyses.count,
+                    seenAllHistory: seenAllHistory
                 ),
                 plan: plan,
                 previousTake: previousTake,

@@ -110,7 +110,7 @@ struct WeeklyRecapCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Text("This Week vs Last")
+            Text("This week vs last")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(2)
@@ -119,27 +119,7 @@ struct WeeklyRecapCard: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                Haptics.light()
-                onDismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background {
-                        Circle()
-                            .fill(.white.opacity(0.06))
-                            .overlay { Circle().stroke(AppColors.cardStroke, lineWidth: 0.5) }
-                    }
-            }
-            // 28pt of chrome in a 44pt hit box, trailing-aligned so the glyph
-            // still sits on the card's inset. No fixed row height: the title
-            // has to be free to wrap at accessibility sizes.
-            .frame(width: AppLayout.minHitTarget, height: AppLayout.minHitTarget, alignment: .trailing)
-            .contentShape(Rectangle())
-            .buttonStyle(GlassPressStyle())
-            .accessibilityLabel("Dismiss weekly recap")
+            DismissButton(label: "Dismiss weekly recap", action: onDismiss)
         }
     }
 

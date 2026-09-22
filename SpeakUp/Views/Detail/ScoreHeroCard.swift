@@ -116,10 +116,7 @@ struct ScoreHeroBody: View {
     private var eyebrow: some View {
         HStack {
             Text("Session score")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .tracking(0.7)
+                .eyebrowStyle()
 
             Spacer()
 

@@ -18,6 +18,8 @@ struct CountdownOverlayView: View {
     @Query(filter: #Predicate<UserGoal> { !$0.isCompleted })
     private var activeGoals: [UserGoal]
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var elapsedSeconds: Int = 0
     @State private var isPulsing: Bool = false
     @State private var hasCompleted: Bool = false
@@ -35,6 +37,11 @@ struct CountdownOverlayView: View {
 
     private var remainingSeconds: Int {
         max(0, totalSeconds - elapsedSeconds)
+    }
+
+    /// Changes only across the final three seconds, so only those beats kick.
+    private var finalBeat: Int {
+        reduceMotion || remainingSeconds > 3 ? 0 : remainingSeconds
     }
 
     init(
@@ -108,6 +115,16 @@ struct CountdownOverlayView: View {
                         isPulsing: isPulsing,
                         diameter: diameter
                     )
+                    // The last three seconds land as beats: the dial kicks
+                    // on the same tick as the heavy haptic.
+                    .keyframeAnimator(initialValue: 1.0, trigger: finalBeat) { dial, scale in
+                        dial.scaleEffect(scale)
+                    } keyframes: { _ in
+                        KeyframeTrack {
+                            SpringKeyframe(1.1, duration: 0.12, spring: .snappy)
+                            SpringKeyframe(1.0, duration: 0.4, spring: .bouncy)
+                        }
+                    }
                 }
 
                 HStack(spacing: 12) {
@@ -150,27 +167,30 @@ struct CountdownOverlayView: View {
 
     // MARK: - Countdown loop
 
+    /// Finishes on the tick that reaches the end. It used to wait one more
+    /// full second parked on "0" before starting, so every countdown ran a
+    /// second longer than the setting said - the drift the warm-up timer
+    /// already fixed for itself.
     @MainActor
     private func runCountdown() async {
-        while !Task.isCancelled {
+        while !Task.isCancelled, elapsedSeconds < totalSeconds {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled, !hasCompleted else { return }
 
-            if elapsedSeconds < totalSeconds {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    elapsedSeconds += 1
-                }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                elapsedSeconds += 1
+            }
 
-                if remainingSeconds <= 3 && remainingSeconds > 0 {
-                    Haptics.heavy()
-                } else {
-                    Haptics.light()
-                }
+            if remainingSeconds == 0 {
+                break
+            } else if remainingSeconds <= 3 {
+                Haptics.heavy()
             } else {
-                finishCountdown()
-                return
+                Haptics.light()
             }
         }
+        guard !Task.isCancelled else { return }
+        finishCountdown()
     }
 
     // MARK: - Actions
@@ -203,10 +223,7 @@ struct CountdownOverlayView: View {
             VStack(spacing: 16) {
                 if challenge != nil {
                     Text("Friend challenge")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .textCase(.uppercase)
-                        .tracking(0.8)
+                        .eyebrowStyle(AppColors.primary)
                         .frame(maxWidth: .infinity)
                 }
 

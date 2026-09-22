@@ -857,7 +857,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func wpmChartSection(_ wpmData: [WPMDataPoint]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Pace Over Time", icon: "chart.line.uptrend.xyaxis")
+            GlassSectionHeader("Pace over time", icon: "chart.line.uptrend.xyaxis")
 
             GlassCard {
                 WPMChartView(
@@ -876,7 +876,7 @@ struct RecordingDetailView: View {
     /// user can do nothing with. The chips turn it into seven things they can
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Filler Words Used", icon: "exclamationmark.bubble.fill")
+            GlassSectionHeader("Filler words used", icon: "exclamationmark.bubble.fill")
 
             GlassCard {
                 VStack(spacing: 14) {
@@ -1228,11 +1228,7 @@ struct RecordingDetailView: View {
         } label: {
             GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.08), padding: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .frame(width: 32, height: 32)
-                        .background { Circle().fill(AppColors.primary.opacity(0.18)) }
+                    IconChip(icon: "square.and.arrow.up", size: 32)
 
                     Text(title)
                         .font(.subheadline.weight(.medium))
@@ -1329,7 +1325,7 @@ struct RecordingDetailView: View {
 
         if !crutchHits.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Word Swaps", icon: "arrow.triangle.swap")
+                GlassSectionHeader("Word swaps", icon: "arrow.triangle.swap")
 
                 CrutchSwapsCard(
                     hits: crutchHits,
@@ -1450,7 +1446,7 @@ struct RecordingDetailView: View {
                     }
                 }
             } else {
-                GlassButton(title: "Generate AI Coaching", icon: "sparkles", style: .secondary, fullWidth: true) {
+                GlassButton(title: "Generate AI coaching", icon: "sparkles", style: .secondary, fullWidth: true) {
                     Haptics.medium()
                     Task {
                         guard let analysis = coachAnalysis else { return }
@@ -1487,7 +1483,7 @@ struct RecordingDetailView: View {
                     Spacer(minLength: 0)
                 }
 
-                GlassButton(title: "Answer Quick Questions", icon: "pencil.line", style: .primary, fullWidth: true) {
+                GlassButton(title: "Answer quick questions", icon: "pencil.line", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     if case .ready(let recording) = detailScreenState {
                         SessionFeedbackGateStore.reopen(recording.id)
@@ -1542,7 +1538,7 @@ struct RecordingDetailView: View {
                                 .fill(.ultraThinMaterial)
                         }
 
-                    GlassButton(title: "Save to Journal", icon: "text.book.closed", style: .primary, size: .small) {
+                    GlassButton(title: "Save to journal", icon: "text.book.closed", style: .primary, size: .small) {
                         saveReflectionToJournal(recording)
                     }
                     .disabled(journalReflectionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -1610,7 +1606,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func selfAssessmentSection(_ feedback: SessionFeedback) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            GlassSectionHeader("Self-Assessment", icon: "checkmark.message")
+            GlassSectionHeader("Self-assessment", icon: "checkmark.message")
 
             GlassCard {
                 VStack(alignment: .leading, spacing: 14) {

@@ -40,8 +40,16 @@ extension View {
     /// combination was written out identically in `ScoreHeroCard` and
     /// `RingStatsView` before it had a name.
     func eyebrowStyle() -> some View {
+        eyebrowStyle(.secondary)
+    }
+
+    /// The same label in a colour of its own - a category, a coach tint, a
+    /// pass or fail. Size, weight, and tracking stay put: hand-rolled copies
+    /// had drifted to 9, 10, and 11pt with four different trackings, and none
+    /// of them scaled with Dynamic Type.
+    func eyebrowStyle<S: ShapeStyle>(_ style: S) -> some View {
         self.font(.eyebrow)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(style)
             .textCase(.uppercase)
             .tracking(0.7)
     }

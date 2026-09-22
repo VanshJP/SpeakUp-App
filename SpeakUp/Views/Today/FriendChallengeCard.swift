@@ -10,25 +10,11 @@ struct FriendChallengeCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
                     Text("Friend challenge")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .textCase(.uppercase)
-                        .tracking(0.7)
+                        .eyebrowStyle(AppColors.primary)
 
                     Spacer(minLength: 0)
 
-                    Button("Dismiss", systemImage: "xmark") {
-                        Haptics.light()
-                        onDismiss()
-                    }
-                    .labelStyle(.iconOnly)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                    .buttonStyle(GlassPressStyle())
-                    .accessibilityLabel("Dismiss friend challenge")
+                    DismissButton(label: "Dismiss friend challenge", action: onDismiss)
                 }
 
                 Text(challenge.promptText)

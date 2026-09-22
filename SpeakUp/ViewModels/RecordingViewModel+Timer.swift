@@ -21,13 +21,17 @@ extension RecordingViewModel {
                     // keep the main-actor task rate at 10/s (not 20/s).
                     self.sampleAudioLevelTick()
 
+                    let before = self.remainingTime
                     self.remainingTime -= 0.1
                     self.recordingDuration = TimeInterval(self.targetDuration.seconds) - self.remainingTime
 
-                    // Haptic pulse at 10s and 5s remaining
-                    if abs(self.remainingTime - 10.0) < 0.1 {
+                    // Haptic pulse on crossing 10s and 5s remaining. The old
+                    // `abs(remaining - 10) < 0.1` test matched two consecutive
+                    // ticks once 0.1 steps had drifted in floating point, so
+                    // every take buzzed twice at each mark.
+                    if before > 10, self.remainingTime <= 10 {
                         Haptics.warning()
-                    } else if abs(self.remainingTime - 5.0) < 0.1 {
+                    } else if before > 5, self.remainingTime <= 5 {
                         Haptics.heavy()
                     }
 

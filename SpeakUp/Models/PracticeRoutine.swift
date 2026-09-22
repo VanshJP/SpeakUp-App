@@ -27,19 +27,6 @@ nonisolated enum RoutineStep: String, CaseIterable, Identifiable, Sendable, Coda
         }
     }
 
-    /// Rail label. The full title does not survive a six-wide chain, and the
-    /// chain is where the user reads the step, not a list row.
-    var shortTitle: String {
-        switch self {
-        case .calm: return "Calm"
-        case .warmUp: return "Warm-up"
-        case .drill: return "Drill"
-        case .readAloud: return "Read"
-        case .session: return "Take"
-        case .review: return "Score"
-        }
-    }
-
     /// Why the link is in the chain. One line, coach voice.
     var detail: String {
         switch self {
@@ -75,6 +62,18 @@ nonisolated enum RoutineStep: String, CaseIterable, Identifiable, Sendable, Coda
         case .readAloud: return "text.book.closed"
         case .session: return "mic.fill"
         case .review: return "chart.line.uptrend.xyaxis"
+        }
+    }
+
+    /// Rough minutes the step costs, for the card's time line. The take is the
+    /// user's own chosen length plus ~40s of countdown, scoring and reveal;
+    /// the rest are what the tools typically run (warm-ups 50-115s, drills
+    /// under a minute). Rounded up so the promise is kept rather than beaten.
+    func estimatedMinutes(takeSeconds: Int) -> Int {
+        switch self {
+        case .calm, .warmUp, .readAloud: return 2
+        case .drill, .review: return 1
+        case .session: return (takeSeconds + 40 + 59) / 60
         }
     }
 
@@ -219,5 +218,20 @@ nonisolated struct RoutineProgress: Equatable {
 
     func isDone(in steps: [RoutineStep], now: Date = Date()) -> Bool {
         next(in: steps, now: now) == nil
+    }
+
+    /// The link the Today card deals: the first unfinished one after the
+    /// furthest the user has got.
+    ///
+    /// The card shows one step at a time, so a link skipped on the way is
+    /// passed, not outstanding - dealing a warm-up after the take is done
+    /// would be dealing nonsense. The take itself is never passed: opening an
+    /// old breakdown from History ticks the review without a take today.
+    /// `completed` must already be rolled to today.
+    static func upNext(in steps: [RoutineStep], completed: Set<RoutineStep>) -> RoutineStep? {
+        let furthest = steps.lastIndex { completed.contains($0) } ?? -1
+        return steps.indices
+            .first { !completed.contains(steps[$0]) && ($0 > furthest || steps[$0].isPinned) }
+            .map { steps[$0] }
     }
 }

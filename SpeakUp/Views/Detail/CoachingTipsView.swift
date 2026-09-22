@@ -54,10 +54,7 @@ private struct CoachingTipRow: View {
                         VStack(alignment: .leading, spacing: 4) {
                             if let eyebrow {
                                 Text(eyebrow)
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(tintColor)
-                                    .textCase(.uppercase)
-                                    .tracking(0.6)
+                                    .eyebrowStyle(tintColor)
                             }
 
                             Text(tip.title)

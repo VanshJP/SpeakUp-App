@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Session Start Footer
 
 struct SessionStartFooter: View {
-    var startTitle = "Start Speaking"
+    var startTitle = "Start speaking"
     var showFreeTalk = true
     let startHint: String
     let freeHint: String

@@ -7,19 +7,24 @@ struct StreakChip: View {
     let streak: Int
 
     @Environment(\.glassAppearance) private var glassAppearance
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isActive: Bool { streak >= 1 }
 
     var body: some View {
         HStack(spacing: 6) {
+            // The flame hops and the number rolls whenever the streak moves -
+            // the day a take earns is visible the next time Today is.
             Image(systemName: "flame.fill")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(isActive ? AppColors.warning : Color.white.opacity(0.35))
+                .symbolEffect(.bounce, value: reduceMotion ? 0 : streak)
 
             Text("\(streak)")
                 .font(.subheadline.weight(.bold).monospacedDigit())
                 .foregroundStyle(.white)
                 .contentTransition(.numericText(value: Double(streak)))
+                .motion(AppMotion.snap, value: streak)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .bold))

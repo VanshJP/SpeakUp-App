@@ -47,6 +47,25 @@ nonisolated enum StreakProtection {
         return (streak, freezes, frozen.sorted(by: >))
     }
 
+    /// The streak day a take just earned, or nil when it earned none because
+    /// the day was already practised. Drives the score reveal's "Day N" beat,
+    /// so it only fires on the take that actually moved the number.
+    static func dayStarted(
+        byTakeOn takeDate: Date,
+        otherPracticeDays: [Date],
+        frozenDays: [Date],
+        now: Date = Date()
+    ) -> Int? {
+        let day = takeDate.startOfDay
+        guard !otherPracticeDays.contains(where: { $0.startOfDay == day }) else { return nil }
+        let streak = liveSnapshot(
+            practiceDays: otherPracticeDays + [takeDate],
+            frozenDays: frozenDays,
+            now: now
+        ).currentStreak
+        return streak > 0 ? streak : nil
+    }
+
     struct Resolution: Equatable {
         /// Frozen days after this pass, including any newly consumed one.
         var frozenDays: [Date]

@@ -70,53 +70,43 @@ struct RecordButton: View {
 
     // MARK: - Inner
 
-    @ViewBuilder
+    /// One shape whose size and corner radius animate, so the dot morphs into
+    /// the stop square the way Camera's shutter does. Separate `Circle` and
+    /// `RoundedRectangle` branches could only cross-fade.
     private var inner: some View {
+        let spec = innerSpec
+        return RoundedRectangle(cornerRadius: spec.radius, style: .circular)
+            .fill(spec.fill)
+            .frame(width: spec.side, height: spec.side)
+            .motion(.spring(duration: 0.38, bounce: 0.3), value: isRecording)
+    }
+
+    private var innerSpec: (side: CGFloat, radius: CGFloat, fill: AnyShapeStyle) {
+        let red = AnyShapeStyle(AppColors.recording)
         switch (style, isRecording) {
         case (.classic, true):
-            RoundedRectangle(cornerRadius: 8)
-                .fill(AppColors.recording)
-                .frame(width: 28, height: 28)
-
+            return (28, 8, red)
         case (.classic, false):
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [AppColors.recording.opacity(0.9), AppColors.recording],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+            return (innerSize, innerSize / 2, AnyShapeStyle(
+                LinearGradient(
+                    colors: [AppColors.recording.opacity(0.9), AppColors.recording],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-                .frame(width: innerSize, height: innerSize)
-
+            ))
         case (.ring, true):
-            RoundedRectangle(cornerRadius: 6)
-                .fill(AppColors.recording)
-                .frame(width: 26, height: 26)
-
+            return (26, 6, red)
         case (.ring, false):
-            Circle()
-                .fill(AppColors.recording)
-                .frame(width: 46, height: 46)
-
+            return (46, 23, red)
         case (.orb, true):
-            RoundedRectangle(cornerRadius: 7)
-                .fill(.white)
-                .frame(width: 26, height: 26)
-
+            return (26, 7, AnyShapeStyle(.white))
         case (.orb, false):
             // Nothing - the lit orb is the record dot.
-            EmptyView()
-
+            return (0, 0, AnyShapeStyle(.white))
         case (.minimal, true):
-            RoundedRectangle(cornerRadius: 4)
-                .fill(AppColors.recording)
-                .frame(width: 20, height: 20)
-
+            return (20, 4, red)
         case (.minimal, false):
-            Circle()
-                .fill(AppColors.recording)
-                .frame(width: 26, height: 26)
+            return (26, 13, red)
         }
     }
 }

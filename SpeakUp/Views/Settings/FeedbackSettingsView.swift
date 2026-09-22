@@ -129,7 +129,7 @@ struct FeedbackSettingsView: View {
                         }
                     }
 
-                    GlassButton(title: "Add Question", icon: "plus", style: .primary) {
+                    GlassButton(title: "Add question", icon: "plus", style: .primary) {
                         viewModel.addFeedbackQuestion()
                     }
                     .disabled(viewModel.newFeedbackQuestionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

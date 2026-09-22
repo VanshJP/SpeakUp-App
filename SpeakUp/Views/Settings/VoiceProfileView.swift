@@ -89,7 +89,7 @@ struct VoiceProfileView: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
-                                    GlassButton(title: "Calibrate Voice", icon: "mic.badge.plus", style: .primary, size: .medium) {
+                                    GlassButton(title: "Calibrate voice", icon: "mic.badge.plus", style: .primary, size: .medium) {
                                         Haptics.medium()
                                         viewModel.showingVoiceCalibration = true
                                     }

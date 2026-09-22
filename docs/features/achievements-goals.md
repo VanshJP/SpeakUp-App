@@ -15,6 +15,8 @@ Unlockable achievements (gallery + confetti sheet) and user-defined goals with p
 
 Presented as sheets from Today / `ContentView` — **not** a tab.
 
+**Unlock moment:** `AchievementUnlockedView` is a medal, not a card with an icon: gold angular rim, graphite face, gilded glyph, flipping in edge-first (`rotation3DEffect`) and landing with the success haptic, then one band of light sweeps the face. Confetti is full-screen from behind the medal. The card and its button ride `.introReveal()` so the only exit never waits on the flip (gotcha §23). Celebration surface - exempt from the no-glow rule.
+
 **Gotchas:** CloudKit can duplicate Achievement rows — service dedupes by id. Celebrations are in-app only: no milestone notification and no review ask. New definition cases are inserted on launch (`SpeakUpApp`) and again in `evaluateAll` if a row is missing; existing rows refresh title/description/icon from `AchievementDefinition` without touching unlock state.
 
 `AchievementService.shared` is the app-wide observable instance used by

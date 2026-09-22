@@ -397,12 +397,17 @@ struct AnalyzingView: View {
         }
     }
 
+    /// Walks the stages once and holds on the last. It used to wrap back to
+    /// "Transcribing" after "Scoring", which read as the analysis restarting.
+    /// The pipeline reports no real stage, so the pace scales with the take:
+    /// a ten-minute take transcribes far longer than a thirty-second one.
     private func cycleStages() async {
-        while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(2.5))
+        let interval = max(2.5, recording.actualDuration / 15)
+        while progressStage < stages.count - 1 {
+            try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.3)) {
-                progressStage = (progressStage + 1) % stages.count
+                progressStage += 1
             }
         }
     }
@@ -658,18 +663,22 @@ private struct WaveformOrb: View {
                 )
                 .frame(width: 140, height: 140)
 
-            ForEach(0..<24, id: \.self) { i in
-                let angle = Double(i) * (360.0 / 24.0)
-                let base: CGFloat = 8
-                let wave = sin(phase + Double(i) * 0.5) * 12
-                let barHeight = max(base, base + CGFloat(wave))
+            // The ring turns rather than the bars growing: `phase` animates
+            // 0 → 2π, and bar heights keyed on sin(phase) land exactly where
+            // they started, so the old per-bar wave never visibly moved.
+            ZStack {
+                ForEach(0..<24, id: \.self) { i in
+                    let angle = Double(i) * (360.0 / 24.0)
+                    let barHeight = 8 + 12 * max(0, CGFloat(sin(Double(i) * 0.5)))
 
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(AppColors.primary.opacity(0.6 + Double(i % 3) * 0.15))
-                    .frame(width: 3, height: barHeight)
-                    .offset(y: -45)
-                    .rotationEffect(.degrees(angle))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(AppColors.primary.opacity(0.6 + Double(i % 3) * 0.15))
+                        .frame(width: 3, height: barHeight)
+                        .offset(y: -45)
+                        .rotationEffect(.degrees(angle))
+                }
             }
+            .rotationEffect(.radians(phase))
 
             Image(systemName: showCheckmark ? "checkmark" : "waveform")
                 .font(.system(size: 28, weight: .medium))
@@ -753,6 +762,10 @@ private struct DetailSkeletonView: View {
     let currentTipIndex: Int
     let tipVisible: Bool
 
+    /// The take's own loudness shape, decoded once - `audioLevelSamples`
+    /// parses JSON on every access, so it never runs from `body`.
+    @State private var takeShape: [CGFloat] = []
+
     var body: some View {
         PageScrollView {
             ShimmerHost {
@@ -775,6 +788,9 @@ private struct DetailSkeletonView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDisabled(true)
+        .task {
+            takeShape = TakeScanView.bars(from: recording.audioLevelSamples ?? [])
+        }
     }
 
     // MARK: - Status Header
@@ -796,6 +812,13 @@ private struct DetailSkeletonView: View {
                 Capsule().fill(.ultraThinMaterial)
             }
 
+            if !takeShape.isEmpty {
+                TakeScanView(bars: takeShape)
+                    .frame(height: 56)
+                    .padding(.horizontal, 8)
+                    .transition(.opacity)
+            }
+
             VStack(spacing: 2) {
                 Text(statusTitle)
                     .font(.subheadline.weight(.semibold))
@@ -811,6 +834,7 @@ private struct DetailSkeletonView: View {
 
             AnalyzingProgressDots(stage: stage)
         }
+        .motion(AppMotion.settle, value: takeShape.isEmpty)
     }
 
     // MARK: - Skeleton Sections
@@ -873,6 +897,98 @@ private struct DetailSkeletonView: View {
                     SkeletonMetricRow(labelWidth: [46, 52, 58, 62][i])
                 }
             }
+        }
+    }
+}
+
+// MARK: - Take Scan
+
+/// The take you just gave, drawn as its loudness over time, with a scan line
+/// sweeping across it while the pipeline works. The wait shows *your* speech
+/// being read instead of a spinner that could belong to any app.
+///
+/// The sweep loops on purpose: nothing reports real progress, and a scanner
+/// that restarts reads as "still looking", where stage text that restarts
+/// reads as "started over".
+private struct TakeScanView: View {
+    let bars: [CGFloat]
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let sweep: Double = 2.6
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let scan = reduceMotion ? -1 : (t / Self.sweep).truncatingRemainder(dividingBy: 1)
+            Canvas { context, size in
+                draw(in: context, size: size, scan: CGFloat(scan))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func draw(in context: GraphicsContext, size: CGSize, scan: CGFloat) {
+        let count = bars.count
+        guard count > 0 else { return }
+        let slot = size.width / CGFloat(count)
+        let barWidth = max(1.5, slot * 0.55)
+        let scanX = scan * size.width
+
+        for (index, level) in bars.enumerated() {
+            let x = (CGFloat(index) + 0.5) * slot
+            let height = max(3, level * size.height)
+            let rect = CGRect(x: x - barWidth / 2, y: (size.height - height) / 2, width: barWidth, height: height)
+
+            // Lit where the line is, settled teal where it has been this
+            // sweep, dim ahead of it.
+            let distance = abs(x - scanX)
+            let glow = max(0, 1 - distance / (size.width * 0.12))
+            let color: Color
+            let opacity: Double
+            if scan < 0 {
+                color = AppColors.primary
+                opacity = 0.6
+            } else if glow > 0 {
+                color = AppColors.categoryBrandBright
+                opacity = 0.45 + 0.55 * Double(glow)
+            } else if x < scanX {
+                color = AppColors.primary
+                opacity = 0.7
+            } else {
+                color = .white
+                opacity = 0.16
+            }
+            context.fill(
+                Path(roundedRect: rect, cornerRadius: barWidth / 2),
+                with: .color(color.opacity(opacity))
+            )
+        }
+
+        guard scan >= 0 else { return }
+        var line = context
+        line.blendMode = .plusLighter
+        line.fill(
+            Path(CGRect(x: scanX - 1, y: 0, width: 2, height: size.height)),
+            with: .linearGradient(
+                Gradient(colors: [.clear, AppColors.categoryBrandBright.opacity(0.9), .clear]),
+                startPoint: CGPoint(x: scanX, y: 0),
+                endPoint: CGPoint(x: scanX, y: size.height)
+            )
+        )
+    }
+
+    /// Level samples (dB) → `count` bar heights in 0...1. Averages each
+    /// bucket so a single spike cannot dominate, and floors silence so a
+    /// pause still draws as a quiet stub rather than a gap.
+    static func bars(from samples: [Float], count: Int = 56) -> [CGFloat] {
+        guard samples.count >= 4 else { return [] }
+        let bucket = max(1, samples.count / count)
+        return stride(from: 0, to: samples.count, by: bucket).prefix(count).map { start in
+            let slice = samples[start..<min(start + bucket, samples.count)]
+            let mean = slice.reduce(0, +) / Float(slice.count)
+            let unit = CGFloat(min(1, max(0, (mean + 55) / 50)))
+            return 0.1 + 0.9 * pow(unit, 1.3)
         }
     }
 }

@@ -139,11 +139,7 @@ struct WordLibraryView: View {
         } label: {
             GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.08), padding: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .frame(width: 32, height: 32)
-                        .background { Circle().fill(AppColors.primary.opacity(0.18)) }
+                    IconChip(icon: "magnifyingglass", size: 32)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Look up \u{201C}\(word)\u{201D}")
@@ -521,11 +517,7 @@ struct WordLibraryEntryRow: View {
         NavigationLink(value: WordLibraryRoute()) {
             GlassCard(cornerRadius: 16, tint: AppColors.categorySage.opacity(0.07), padding: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "character.book.closed.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.categorySage)
-                        .frame(width: 36, height: 36)
-                        .background { Circle().fill(AppColors.categorySage.opacity(0.18)) }
+                    IconChip(icon: "character.book.closed.fill", tint: AppColors.categorySage, size: 36)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Words")

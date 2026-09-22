@@ -113,13 +113,13 @@ struct SubscoreRadarChart: View {
     /// Draws every wedge in a single Canvas pass rather than one SwiftUI Shape
     /// per ring, so the view count stays flat during the draw-in animation.
     ///
+    /// The pass lives in `RadarWedges`, an `Animatable` view: a `Canvas` alone
+    /// cannot interpolate `drawProgress`, so the draw-in used to jump straight
+    /// to full and the wedges never grew.
     private func wedgeCanvas(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
         let count = max(axes.count, 1)
         let step = 2 * Double.pi / Double(count)
         let angularGap: Double = step * 0.04
-        let gridRings = 4
-        let progress = drawProgress
-        let selectedID = selectedAxis?.id
 
         let table: [WedgeGeometry] = axes.enumerated().map { index, axis in
             let mid = -.pi / 2 + step * Double(index)
@@ -133,52 +133,13 @@ struct SubscoreRadarChart: View {
             )
         }
 
-        return Canvas(rendersAsynchronously: true) { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-
-            for wedge in table {
-                let isSelected = selectedID == wedge.axisID
-                let bump: CGFloat = isSelected ? 4 : 0
-                let outer = outerRadius + bump
-                let fullSpan = outer - innerRadius
-
-                context.fill(
-                    AnnularWedge.makePath(
-                        center: center,
-                        innerRadius: innerRadius,
-                        outerRadius: outer,
-                        startAngle: wedge.start,
-                        endAngle: wedge.end
-                    ),
-                    with: .color(Color.white.opacity(isSelected ? 0.09 : 0.05))
-                )
-
-                let filledSpan = fullSpan * wedge.fraction * progress
-                guard filledSpan > 0.5 else { continue }
-
-                let opacity = 0.40 + 0.50 * Double(wedge.fraction) + (isSelected ? 0.10 : 0)
-                context.fill(
-                    AnnularWedge.makePath(
-                        center: center,
-                        innerRadius: innerRadius,
-                        outerRadius: innerRadius + filledSpan,
-                        startAngle: wedge.start,
-                        endAngle: wedge.end
-                    ),
-                    with: .color(Self.wedgeHue.opacity(min(1.0, opacity)))
-                )
-            }
-
-            for ring in 1..<gridRings {
-                let r = innerRadius + (outerRadius - innerRadius) * CGFloat(ring) / CGFloat(gridRings)
-                let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
-                context.stroke(
-                    Path(ellipseIn: rect),
-                    with: .color(Color.black.opacity(0.28)),
-                    lineWidth: 1
-                )
-            }
-        }
+        return RadarWedges(
+            progress: drawProgress,
+            table: table,
+            selectedID: selectedAxis?.id,
+            outerRadius: outerRadius,
+            innerRadius: innerRadius
+        )
         .allowsHitTesting(false)
     }
 
@@ -189,6 +150,76 @@ struct SubscoreRadarChart: View {
         let end: Angle
         let fraction: CGFloat
         let axisID: String
+    }
+
+    /// The wedge pass, redrawn every frame of the draw-in. Wedges bloom in
+    /// turn around the dial rather than all at once.
+    private struct RadarWedges: View, Animatable {
+        var progress: CGFloat
+        let table: [WedgeGeometry]
+        let selectedID: String?
+        let outerRadius: CGFloat
+        let innerRadius: CGFloat
+
+        var animatableData: CGFloat {
+            get { progress }
+            set { progress = newValue }
+        }
+
+        /// Each wedge starts this much later than the one before it.
+        private let stagger: CGFloat = 0.06
+        private let gridRings = 4
+
+        var body: some View {
+            Canvas(rendersAsynchronously: true) { context, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let span = max(0.01, 1 - stagger * CGFloat(max(table.count - 1, 0)))
+
+                for (index, wedge) in table.enumerated() {
+                    let isSelected = selectedID == wedge.axisID
+                    let bump: CGFloat = isSelected ? 4 : 0
+                    let outer = outerRadius + bump
+                    let fullSpan = outer - innerRadius
+                    let local = min(1, max(0, (progress - stagger * CGFloat(index)) / span))
+
+                    context.fill(
+                        AnnularWedge.makePath(
+                            center: center,
+                            innerRadius: innerRadius,
+                            outerRadius: outer,
+                            startAngle: wedge.start,
+                            endAngle: wedge.end
+                        ),
+                        with: .color(Color.white.opacity(isSelected ? 0.09 : 0.05))
+                    )
+
+                    let filledSpan = fullSpan * wedge.fraction * local
+                    guard filledSpan > 0.5 else { continue }
+
+                    let opacity = 0.40 + 0.50 * Double(wedge.fraction) + (isSelected ? 0.10 : 0)
+                    context.fill(
+                        AnnularWedge.makePath(
+                            center: center,
+                            innerRadius: innerRadius,
+                            outerRadius: innerRadius + filledSpan,
+                            startAngle: wedge.start,
+                            endAngle: wedge.end
+                        ),
+                        with: .color(SubscoreRadarChart.wedgeHue.opacity(min(1.0, opacity)))
+                    )
+                }
+
+                for ring in 1..<gridRings {
+                    let r = innerRadius + (outerRadius - innerRadius) * CGFloat(ring) / CGFloat(gridRings)
+                    let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+                    context.stroke(
+                        Path(ellipseIn: rect),
+                        with: .color(Color.black.opacity(0.28)),
+                        lineWidth: 1
+                    )
+                }
+            }
+        }
     }
 
     /// Static, animation-independent hit targets - one shape per axis. These
@@ -265,19 +296,14 @@ struct SubscoreRadarChart: View {
         .fixedSize()
     }
 
+    /// Counts up with the wedges - `CountUpText` is `Animatable`, so it
+    /// interpolates the same `drawProgress` the wedge pass does.
     private var centerScore: some View {
-        let color = AppColors.scoreColor(for: overallScore)
-        let clamped = min(1.0, max(0.0, drawProgress))
-        let displayed = Int((Double(overallScore) * Double(clamped)).rounded())
-        return VStack(spacing: 0) {
-            Text("\(displayed)")
-                .font(.system(size: 46, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(color)
-                .contentTransition(.numericText())
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.5))
-                .tracking(0.5)
-        }
+        CountUpText(
+            value: Double(overallScore) * Double(min(1.0, max(0.0, drawProgress))),
+            font: .system(size: 46, weight: .bold, design: .rounded),
+            color: AppColors.scoreColor(for: overallScore)
+        )
         .allowsHitTesting(false)
     }
 

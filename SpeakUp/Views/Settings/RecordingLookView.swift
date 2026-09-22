@@ -190,10 +190,7 @@ struct RecordingLookView: View {
     private func heroPiece<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.5))
-                .textCase(.uppercase)
-                .tracking(1.0)
+                .eyebrowStyle()
 
             content()
         }

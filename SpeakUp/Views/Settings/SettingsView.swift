@@ -162,7 +162,7 @@ struct SettingsView: View {
 
     private var accountSection: some View {
         VStack(spacing: 12) {
-            GlassSectionHeader("Account & Data", icon: "person.crop.circle")
+            GlassSectionHeader("Account & data", icon: "person.crop.circle")
                 .padding(.top, 4)
 
             settingsLink(
@@ -247,11 +247,7 @@ struct SettingsView: View {
         GlassCard(padding: 14) {
             VStack(spacing: 12) {
                 HStack(spacing: 14) {
-                    Image(systemName: "icloud.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.categoryBrandBright)
-                        .frame(width: 32, height: 32)
-                        .background { Circle().fill(AppColors.categoryBrandBright.opacity(0.15)) }
+                    IconChip(icon: "icloud.fill", tint: AppColors.categoryBrandBright, size: 32)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("iCloud Sync")
@@ -354,11 +350,7 @@ struct SettingsView: View {
         } label: {
             GlassCard(padding: 14) {
                 HStack(spacing: 14) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(iconColor)
-                        .frame(width: 32, height: 32)
-                        .background { Circle().fill(iconColor.opacity(0.15)) }
+                    IconChip(icon: icon, tint: iconColor, size: 32)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)

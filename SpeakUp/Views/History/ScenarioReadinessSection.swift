@@ -14,7 +14,7 @@ struct ScenarioReadinessSection: View {
             if analyzedSessions < 2 || cards.isEmpty {
                 quietState
             } else {
-                GlassSectionHeader("Where to Improve", icon: "scope") {
+                GlassSectionHeader("Where to improve", icon: "scope") {
                     Text("weakest first")
                         .font(.caption)
                         .foregroundStyle(.secondary)

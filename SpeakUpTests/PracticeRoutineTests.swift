@@ -49,6 +49,20 @@ struct PracticeRoutineOrderTests {
         #expect(PracticeRoutine.moving(.review, by: 1, in: steps) == steps)
     }
 
+    /// The card's time line: the take counts at the user's chosen length plus
+    /// its countdown and scoring, rounded up, so "about 5 min" is a promise
+    /// the chain keeps.
+    @Test func estimatesCountTheTakeAtItsChosenLength() {
+        let minutes = { (seconds: Int) in
+            RoutineStep.defaultSteps.reduce(0) { $0 + $1.estimatedMinutes(takeSeconds: seconds) }
+        }
+        #expect(minutes(30) == 5)
+        #expect(minutes(60) == 5)
+        #expect(minutes(90) == 6)
+        #expect(minutes(300) == 9)
+        #expect(RoutineStep.session.estimatedMinutes(takeSeconds: 0) == 1)
+    }
+
     @Test func encodeRoundTrips() {
         let steps: [RoutineStep] = [.calm, .warmUp, .session, .review]
         #expect(PracticeRoutine.resolve(PracticeRoutine.encode(steps)) == steps)
@@ -111,8 +125,26 @@ struct RoutineProgressTests {
     @Test func theHandoffLooksForwardFromTheFinishedStep() {
         let progress = RoutineProgress.empty.marking(.session, now: now)
         #expect(progress.nextAfter(.session, in: steps, now: now) == .review)
-        // The card still counts the skipped link as outstanding.
+        // `next` still counts the skipped link as outstanding.
         #expect(progress.next(in: steps, now: now) == .warmUp)
+    }
+
+    /// The Today card deals one step at a time and never deals backwards:
+    /// after the take, the review is on top, not the skipped warm-up, and
+    /// once the review is done the routine is done.
+    @Test func theCardDealsForwardPastASkippedLink() {
+        #expect(RoutineProgress.upNext(in: steps, completed: []) == .warmUp)
+        #expect(RoutineProgress.upNext(in: steps, completed: [.warmUp]) == .session)
+        #expect(RoutineProgress.upNext(in: steps, completed: [.session]) == .review)
+        #expect(RoutineProgress.upNext(in: steps, completed: [.session, .review]) == nil)
+    }
+
+    /// Opening an old breakdown ticks the review without a take today. The
+    /// take is what the routine is for, so it is never passed.
+    @Test func theCardNeverPassesTheTake() {
+        #expect(RoutineProgress.upNext(in: steps, completed: [.warmUp, .review]) == .session)
+        let long: [RoutineStep] = [.calm, .warmUp, .drill, .session, .review]
+        #expect(RoutineProgress.upNext(in: long, completed: [.drill]) == .session)
     }
 
     @Test func theLastLinkHandsOffToNothing() {

@@ -19,7 +19,7 @@ struct PrivacyDataView: View {
                     questionsCard
 
                     if !Self.legalRows.isEmpty {
-                        GlassSectionHeader("Legal & Support", icon: "link")
+                        GlassSectionHeader("Legal & support", icon: "link")
                             .padding(.top, 4)
 
                         legalCard

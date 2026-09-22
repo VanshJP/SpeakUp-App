@@ -824,9 +824,11 @@ private struct OnboardingBaselineRevealView: View {
                 )
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 2) {
-                Text("\(score)")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                // Rides the ring's own animation, so the number climbs with it.
+                CountUpText(
+                    value: ringProgress * 100,
+                    font: .system(size: 44, weight: .bold, design: .rounded)
+                )
                 Text(AppColors.scoreVerdict(for: score))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(AppColors.scoreColor(for: score))
@@ -864,18 +866,18 @@ private struct OnboardingBaselineRevealView: View {
         withAnimation(AppMotion.reveal.delay(0.2)) {
             ringProgress = target
         }
-        Task {
-            for _ in 0..<5 {
-                try? await Task.sleep(for: .milliseconds(180))
-                Haptics.light()
+        if !supportive {
+            // A tick each time the climbing number passes a ten - the same
+            // odometer the score reveal plays after every later take.
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                await Haptics.playCountUp(to: score, duration: 0.9)
             }
         }
         if !supportive {
+            // No hide timer: the burst tears itself down once the last piece
+            // has faded, and hiding it early cut pieces off mid-air.
             showConfetti = true
-            Task {
-                try? await Task.sleep(for: .seconds(2.5))
-                showConfetti = false
-            }
         }
     }
 }

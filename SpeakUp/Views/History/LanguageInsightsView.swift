@@ -52,7 +52,7 @@ struct LanguageInsightsView: View {
     private func wordPrintHero(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Your Language Print", icon: "character.magnify") {
+                GlassCardTitle("Your language print", icon: "character.magnify") {
                     Text("\(profile.totalWords) words tracked")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -130,7 +130,7 @@ struct LanguageInsightsView: View {
     private func crutchWordsCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Crutch Words", icon: "exclamationmark.bubble.fill") {
+                GlassCardTitle("Crutch words", icon: "exclamationmark.bubble.fill") {
                     Text("lower is better")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -233,7 +233,7 @@ struct LanguageInsightsView: View {
     private func wordMixCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Word Mix", icon: "square.grid.2x2")
+                GlassCardTitle("Word mix", icon: "square.grid.2x2")
 
                 if !profile.powerVerbs.isEmpty {
                     wordGroup(
@@ -293,7 +293,7 @@ struct LanguageInsightsView: View {
 
         return GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                GlassCardTitle("Word Bank in Practice", icon: "character.book.closed") {
+                GlassCardTitle("Word bank in practice", icon: "character.book.closed") {
                     Text("\(totalUses) uses")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -317,7 +317,7 @@ struct LanguageInsightsView: View {
     private func trendCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Language Over Time", icon: "chart.line.uptrend.xyaxis") {
+                GlassCardTitle("Language over time", icon: "chart.line.uptrend.xyaxis") {
                     HStack(spacing: 10) {
                         legendDot(color: AppColors.categoryAmber, label: "Weak")
                         legendDot(color: AppColors.success, label: "Impact")
@@ -388,7 +388,7 @@ struct LanguageInsightsView: View {
     private func suggestionsCard(_ profile: LexiconProfile) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Coach Notes", icon: "lightbulb.fill")
+                GlassCardTitle("Coach notes", icon: "lightbulb.fill")
 
                 Text("What your numbers on this page add up to. At most four at a time.")
                     .font(.caption2)

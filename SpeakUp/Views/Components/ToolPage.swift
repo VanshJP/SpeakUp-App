@@ -198,9 +198,7 @@ struct SourceStoryBanner: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(eyebrow)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+                    .eyebrowStyle()
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)

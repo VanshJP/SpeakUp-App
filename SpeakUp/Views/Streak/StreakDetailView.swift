@@ -168,7 +168,7 @@ struct StreakDetailView: View {
     private var freezeProtectionCard: some View {
         GlassCard(tint: AppColors.primary.opacity(0.06)) {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Streak Freezes", systemImage: "snowflake")
+                Label("Streak freezes", systemImage: "snowflake")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
 
@@ -201,7 +201,7 @@ struct StreakDetailView: View {
 
     private var freezeProtectionCopy: String {
         if freezesAvailable > 0 {
-            return "Freezes spend automatically when you miss one day with a live streak. There is nothing to tap — open Big Talk and take counts as saving it the normal way."
+            return "A freeze spends itself when you miss a single day with a live streak. There's nothing to tap: open Big Talk the next day and your streak is still standing."
         }
         return "Bank one freeze for every five practice days, up to two. If you miss a single day while a streak is live, the next app open spends a freeze for you."
     }
@@ -222,7 +222,7 @@ struct StreakDetailView: View {
             GlassCard(tint: AppColors.warning.opacity(0.06)) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
-                        Label("Next Milestone", systemImage: "target")
+                        Label("Next milestone", systemImage: "target")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                         Spacer()
@@ -291,7 +291,7 @@ struct StreakDetailView: View {
     private var calendarCard: some View {
         GlassCard(tint: AppColors.primary.opacity(0.05)) {
             VStack(alignment: .leading, spacing: 14) {
-                Label("Last 14 Days", systemImage: "calendar")
+                Label("Last 14 days", systemImage: "calendar")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
 

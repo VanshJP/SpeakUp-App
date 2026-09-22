@@ -96,6 +96,12 @@ struct StoryEditorView: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 if let story = draftStory ?? existingStory {
+                    // Drop the draft first: dismissing runs `finalSave()` from
+                    // `onDisappear`, which wrote the editor's fields back into
+                    // the story it had just deleted - a write to a deleted
+                    // SwiftData object.
+                    autoSaveTask?.cancel()
+                    draftStory = nil
                     viewModel.deleteStory(story)
                     Haptics.warning()
                     dismiss()

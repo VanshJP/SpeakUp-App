@@ -19,13 +19,84 @@ struct StoryDetailView: View {
     @State private var showingMoveSheet = false
     @State private var showingEditor = false
     @State private var toastMessage: String?
+    @State private var isDeleted = false
 
     private var settings: UserSettings? { settingsList.first }
+
+    /// Deleted from this page or from the editor sheet on top of it. Once
+    /// true, nothing here reads the story again: its attributes went with the
+    /// row, and the page still renders through the pop animation - the same
+    /// guard `RecordingDetailView.deleteRecording` keeps. `isDeleted` and
+    /// `modelContext` are safe to read on a deleted model; attributes are not.
+    private var storyIsGone: Bool {
+        isDeleted || story.isDeleted || story.modelContext == nil
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             AppBackground(style: .subtle)
 
+            if !storyIsGone {
+                liveContent
+            }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            if !storyIsGone {
+                ToolbarItem(placement: .topBarTrailing) {
+                    detailMenu
+                }
+            }
+        }
+        .sheet(isPresented: $showingMoveSheet) {
+            NavigationStack {
+                StoryMoveFolderSheet(viewModel: viewModel, story: story)
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingEditor, onDismiss: {
+            // The editor can delete the story. Leaving this page up would
+            // show a story that no longer exists, one tap from a crash.
+            if storyIsGone {
+                dismiss()
+            } else {
+                reloadRecordings()
+            }
+        }) {
+            NavigationStack {
+                StoryEditorView(
+                    viewModel: viewModel,
+                    existingStory: story,
+                    onStartPractice: onStartPractice,
+                    onSendToWarmUp: onSendToWarmUp,
+                    onSendToDrill: onSendToDrill
+                )
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .alert("Delete Story?", isPresented: $showingDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                isDeleted = true
+                Haptics.warning()
+                dismiss()
+                viewModel.deleteStory(story)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This story will be permanently deleted.")
+        }
+        .onAppear {
+            guard !storyIsGone else { return }
+            reloadRecordings()
+        }
+    }
+
+    private var liveContent: some View {
+        ZStack(alignment: .top) {
             PageScrollView {
                 VStack(spacing: 20) {
                     heroHeader
@@ -57,49 +128,6 @@ struct StoryDetailView: View {
                     .padding(.top, 12)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                detailMenu
-            }
-        }
-        .sheet(isPresented: $showingMoveSheet) {
-            NavigationStack {
-                StoryMoveFolderSheet(viewModel: viewModel, story: story)
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingEditor, onDismiss: {
-            reloadRecordings()
-        }) {
-            NavigationStack {
-                StoryEditorView(
-                    viewModel: viewModel,
-                    existingStory: story,
-                    onStartPractice: onStartPractice,
-                    onSendToWarmUp: onSendToWarmUp,
-                    onSendToDrill: onSendToDrill
-                )
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-        .alert("Delete Story?", isPresented: $showingDeleteAlert) {
-            Button("Delete", role: .destructive) {
-                viewModel.deleteStory(story)
-                Haptics.warning()
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This story will be permanently deleted.")
-        }
-        .onAppear {
-            reloadRecordings()
         }
     }
 
@@ -239,7 +267,7 @@ struct StoryDetailView: View {
     private var practiceChartSection: some View {
         if !chartPoints.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Practice Progress", icon: "chart.line.uptrend.xyaxis")
+                GlassSectionHeader("Practice progress", icon: "chart.line.uptrend.xyaxis")
                 PracticeHistoryChart(
                     dataPoints: chartPoints,
                     accentColor: AppColors.primary
@@ -407,7 +435,7 @@ struct StoryDetailView: View {
         if !recordingSummaries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    GlassSectionHeader("Practice History", icon: "waveform")
+                    GlassSectionHeader("Practice history", icon: "waveform")
                     Spacer()
                     if let avgScore = averageScore {
                         Text("Avg \(avgScore)")

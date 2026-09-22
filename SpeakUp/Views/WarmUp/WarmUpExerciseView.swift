@@ -263,7 +263,7 @@ struct WarmUpExerciseView: View {
                     dismiss()
                 }
 
-                GlassButton(title: "Go Again", icon: "arrow.clockwise", style: .secondary, fullWidth: true) {
+                GlassButton(title: "Go again", icon: "arrow.clockwise", style: .secondary, fullWidth: true) {
                     viewModel.goAgain()
                 }
             }

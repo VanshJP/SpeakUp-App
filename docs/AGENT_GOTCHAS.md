@@ -36,6 +36,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | Highlighted text drifts while it updates; long session freezes then the app dies | 25 |
 | Mic dies partway through a long session and the screen freezes on "Not listening" | 26 |
 | A sheet or cover opens blank, closes itself, and works on the second tap | 27 |
+| An animation that never plays: confetti invisible, chart draw-in pops | 28 |
 
 ## Punch list
 
@@ -454,3 +455,29 @@ content builder, so there is nothing to race and no "nothing selected" branch to
 render. Phase inside a presentation (countdown → session) belongs to a view that
 the presentation creates, as its own `@State`, not to a flag beside the one that
 presents it — see `DrillFlowView` in `DrillSelectionView.swift`.
+
+---
+
+## 28. `withAnimation` cannot animate what a `Canvas` draws
+
+A `Canvas` renderer is a closure; SwiftUI has nothing to interpolate. Raise a
+`@State` inside `withAnimation` and read it in the closure, and the canvas
+simply redraws once at the final value. Nothing errors, nothing warns, and the
+animation that was designed never plays. Three shipped this way at once:
+
+- `ConfettiView` animated start → end positions and opacity 1 → 0. Every piece
+  jumped straight to its faded end state, so all five "celebration" screens
+  showed no confetti at all.
+- `SubscoreRadarChart`'s draw-in: wedges popped to full while only the
+  centre number rolled.
+- `AnalyzingView`'s orb keyed bar heights on `sin(phase)` and animated `phase`
+  0 → 2π, which lands exactly where it started.
+
+**Two fixes, pick by shape.** Continuous motion that is a function of time
+(particles, scanners) runs in a `TimelineView` and computes positions from
+`timeline.date` - `ConfettiView`, `TakeScanView`. A one-shot draw-in wraps the
+canvas in a small `View, Animatable` whose `animatableData` is the progress
+value, so SwiftUI calls `body` every frame with the interpolated value -
+`SubscoreRadarChart.RadarWedges`, same trick as `CountUpText`. And prefer
+animating a transform (`rotationEffect`, `scaleEffect`) over state the canvas
+reads whenever the whole drawing moves as one.

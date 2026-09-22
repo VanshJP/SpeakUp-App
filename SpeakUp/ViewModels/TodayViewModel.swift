@@ -8,7 +8,16 @@ import os
 class TodayViewModel {
     private let logger = Logger.app("Today")
 
-    var todaysPrompt: Prompt?
+    /// Reads through a liveness check. A custom prompt can be today's pick
+    /// (reroll and the unanswered substitute both draw from every prompt) and
+    /// then be deleted in the Library; the dead row used to stay pinned here -
+    /// the reroll guard only asked for non-nil - and was rendered and recorded
+    /// against. It now reads as "not loaded" until the next load picks another.
+    var todaysPrompt: Prompt? {
+        get { pickedPrompt.flatMap { $0.isDeleted || $0.modelContext == nil ? nil : $0 } }
+        set { pickedPrompt = newValue }
+    }
+    private var pickedPrompt: Prompt?
     var userStats: UserStats = UserStats()
     var activeGoals: [UserGoal] = []
     var selectedDuration: RecordingDuration = .sixty

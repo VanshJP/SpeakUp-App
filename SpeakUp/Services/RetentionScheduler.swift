@@ -32,10 +32,27 @@ enum RetentionScheduler {
         requestPermissionIfNeeded: Bool = false
     ) async -> RetentionSnapshot? {
         let notifications = service ?? NotificationService()
-        await notifications.checkPermission()
 
         guard let settings = try? context.fetch(FetchDescriptor<UserSettings>()).first else {
             return nil
+        }
+
+        let practiceDays = practiceDates(in: context)
+
+        // MARK: Streak protection
+
+        // Before any notification gate: a freeze is a promise about the
+        // streak, not about reminders. Behind the reminder toggle - which is
+        // off by default - a banked freeze was never spent for most users, so
+        // one missed day zeroed a streak the streak sheet said was protected.
+        let resolution = StreakProtection.resolve(
+            practiceDays: practiceDays,
+            frozenDays: settings.streakFrozenDays
+        )
+        if resolution.didConsumeFreeze {
+            settings.streakFrozenDays = resolution.frozenDays
+            try? context.save()
+            logger.info("Streak freeze consumed, streak held at \(resolution.rescuedStreak, privacy: .public)")
         }
 
         // The daily reminder toggle is the consent. With it off we hold no
@@ -44,6 +61,9 @@ enum RetentionScheduler {
             notifications.cancelAll()
             return nil
         }
+        // Checked after the freeze pass on purpose: no await ahead of it, so
+        // the spend lands before Today's first load reads the streak.
+        await notifications.checkPermission()
         if !notifications.hasPermission, requestPermissionIfNeeded {
             _ = await notifications.requestPermission()
         }
@@ -53,24 +73,11 @@ enum RetentionScheduler {
             notifications.cancelStreakRescue()
         }
 
-        let practiceDays = practiceDates(in: context)
-
-        // MARK: Streak protection
-
-        let resolution = StreakProtection.resolve(
-            practiceDays: practiceDays,
-            frozenDays: settings.streakFrozenDays
-        )
-        if resolution.didConsumeFreeze {
-            settings.streakFrozenDays = resolution.frozenDays
-            try? context.save()
-            logger.info("Streak freeze consumed, streak held at \(resolution.rescuedStreak, privacy: .public)")
-            if settings.streakRemindersEnabled {
-                await notifications.sendFreezeUsed(
-                    rescuedStreak: resolution.rescuedStreak,
-                    freezesRemaining: resolution.freezesRemaining
-                )
-            }
+        if resolution.didConsumeFreeze, settings.streakRemindersEnabled {
+            await notifications.sendFreezeUsed(
+                rescuedStreak: resolution.rescuedStreak,
+                freezesRemaining: resolution.freezesRemaining
+            )
         }
 
         let currentStreak = Date.calculateStreak(

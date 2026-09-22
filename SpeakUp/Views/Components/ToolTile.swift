@@ -10,11 +10,7 @@ struct ToolTileLabel: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background { Circle().fill(tint.opacity(0.18)) }
+            IconChip(icon: icon, tint: tint, size: 30)
 
             Text(title)
                 .font(.caption.weight(.medium))
@@ -54,13 +50,7 @@ struct ToolCategoryCardLabel: View {
     var body: some View {
         GlassCard(cornerRadius: 16, tint: tint.opacity(0.06), padding: 14) {
             VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 32, height: 32)
-                    .background {
-                        Circle().fill(tint.opacity(0.18))
-                    }
+                IconChip(icon: icon, tint: tint, size: 32)
 
                 Spacer(minLength: 12)
 
