@@ -202,6 +202,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |
 | `SpeakUpTests/ReadAloudAlignmentTests.swift` | Alignment core + request-boundary stitching |
 | `SpeakUpTests/RecognitionContinuityTests.swift` | In-request restarts, blank finals, end-to-end "never snaps back" |
+| `SpeakUpTests/PracticeToolProgressTests.swift` | `missedPhrases` (with drill ladder and catalog checks) |
 | `SpeakUpTests/ReadAloudCustomPassageTests.swift` | Custom factory + define gate |
 | `SpeakUpTests/PracticeFocusTests.swift` | Focus axis + derived catalog listings |
 

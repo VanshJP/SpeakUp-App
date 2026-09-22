@@ -73,22 +73,45 @@ struct DefaultConfidenceExercises {
             ],
             durationMinutes: 5
         ),
+        // Kept under its original id so lesson w4_l1_a2 and anyone's
+        // completion record still find it. It used to be ten generic
+        // affirmations ("I am a confident speaker"), which is the one version
+        // of self-talk with evidence against it: repeating positive
+        // self-statements made people with low self-esteem feel worse (Wood,
+        // Perunovic & Lee, 2009) - the very people opening a Calm tool before
+        // they speak. Reappraising arousal as excitement is the version that
+        // held up on stage (Brooks, 2014).
         ConfidenceExercise(
             id: "power_statements",
             category: .affirmation,
-            title: "Power Statements",
-            description: "Short statements said out loud before you speak, to replace the running commentary about how it's going to go.",
+            title: "Reframe the Nerves",
+            description: "A pounding heart and quick breath are also what excitement feels like. People who said \"I'm excited\" out loud before a speech felt more excited and were rated better than people who tried to calm down.",
             steps: [
-                "I am a confident speaker",
-                "My voice deserves to be heard",
-                "I am improving every time I practice",
-                "Mistakes are how I learn and grow",
-                "I bring unique value to every conversation",
-                "My ideas matter and I express them well",
-                "I am brave for practicing my voice",
-                "Each session makes me stronger",
-                "I am proud of my progress",
-                "I speak with clarity and purpose"
+                "Notice what your body is doing: heartbeat, breath, hands",
+                "Those are the same signals as excitement. Nothing needs fixing",
+                "Say it out loud: \"I'm excited\"",
+                "Now say what you're excited to share with them",
+                "Picture one person in the room getting something from it",
+                "Keep the energy. Walk in excited, not calm"
+            ],
+            durationMinutes: 2
+        ),
+        // Self-distanced self-talk (Kross et al., 2014): preparing a speech by
+        // talking to yourself in the second person and by name cut distress
+        // and rumination afterward, and outside raters scored those speeches
+        // higher.
+        ConfidenceExercise(
+            id: "self_distanced_talk",
+            category: .affirmation,
+            title: "Coach Yourself by Name",
+            description: "Talk to yourself the way you'd talk to a friend: by name, as \"you\". People who prepared a speech this way were less anxious, dwelt on it less afterward, and were rated as better speakers.",
+            steps: [
+                "Picture the first ten seconds of your talk",
+                "Using your own name, ask yourself what you're worried about",
+                "Answer like a coach would, to \"you\", not \"I\"",
+                "Remind yourself, by name, that you've prepared for this",
+                "Give yourself one instruction for the opening, like \"Take your time on the first sentence\"",
+                "Say that instruction once more, out loud"
             ],
             durationMinutes: 3
         ),

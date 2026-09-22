@@ -39,6 +39,22 @@ struct DrillResultView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
+            // Drills used to forget every run the moment this screen closed,
+            // so there was never anything to beat.
+            if let milestone = result.milestone {
+                Label(milestone, systemImage: "arrow.up.right.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.success)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppColors.success.opacity(0.14))
+                    }
+                    .padding(.horizontal)
+            }
+
             Spacer()
 
             VStack(spacing: 12) {

@@ -63,4 +63,12 @@ struct ConfidenceExercise: Identifiable {
         guard steps.indices.contains(index) else { return "" }
         return steps[index]
     }
+
+    /// How long guided mode holds on a step after reading it aloud: the
+    /// exercise's advertised length shared across its steps, less the few
+    /// seconds the line itself takes, kept between a breath and half a minute.
+    var guidedHoldSeconds: Int {
+        let share = durationMinutes * 60 / max(1, steps.count)
+        return min(30, max(6, share - 4))
+    }
 }

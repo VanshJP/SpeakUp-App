@@ -20,6 +20,10 @@ struct DrillSelectionView: View {
     /// to race and no "no mode" branch to render.
     @State private var activeDrill: DrillMode?
 
+    /// Best score, runs and level per drill, re-read whenever a drill closes.
+    /// They live in `UserDefaults`, which nothing observes.
+    @State private var records: [DrillMode: DrillRecord] = [:]
+
     var presentation: ToolPresentation = .sheet
 
     var sourceStory: Story?
@@ -39,7 +43,7 @@ struct DrillSelectionView: View {
     /// Denominator for each row's arc, so 15s and 60s drills read as
     /// different sizes of commitment rather than four identical cards.
     private var longestDrillSeconds: Double {
-        Double(DrillMode.allCases.map(\.defaultDurationSeconds).max() ?? 0)
+        Double(DrillMode.allCases.compactMap(\.durationLadder.last).max() ?? 0)
     }
 
     var body: some View {
@@ -65,36 +69,55 @@ struct DrillSelectionView: View {
                 }
             }
         }
-        .fullScreenCover(item: $activeDrill) { mode in
+        .fullScreenCover(item: $activeDrill, onDismiss: loadRecords) { mode in
             DrillFlowView(mode: mode, viewModel: viewModel)
         }
+        .onAppear(perform: loadRecords)
         .task {
             guard let initialMode else { return }
+            viewModel.preparePrompt(for: initialMode)
             activeDrill = initialMode
         }
+    }
+
+    private func loadRecords() {
+        var loaded: [DrillMode: DrillRecord] = [:]
+        for mode in DrillMode.allCases {
+            loaded[mode] = DrillProgressStore.record(for: mode)
+        }
+        records = loaded
     }
 
     // MARK: - Rows
 
     private func drillRow(_ mode: DrillMode) -> some View {
-        PracticeItemRow(
+        let record = records[mode]
+        let seconds = mode.durationSeconds(atLevel: record?.level ?? 0)
+        return PracticeItemRow(
             title: mode.title,
             subtitle: mode.outcome,
             icon: mode.icon,
             tint: mode.color,
             durationFraction: PracticeItemRow.fraction(
-                Double(mode.defaultDurationSeconds),
+                Double(seconds),
                 longest: longestDrillSeconds
             ),
-            durationLabel: "\(mode.defaultDurationSeconds)s",
-            tag: mode.liveFeedback
+            durationLabel: "\(seconds)s",
+            tag: progressTag(for: mode, record: record)
         ) {
             Haptics.medium()
-            if mode.preparesPromptUpFront {
-                viewModel.preparePrompt(for: mode)
-            }
+            viewModel.preparePrompt(for: mode)
             activeDrill = mode
         }
+    }
+
+    /// What the drill shows while you run it until you have run it, then the
+    /// number to beat - and, on a laddered drill, which rung you are on.
+    private func progressTag(for mode: DrillMode, record: DrillRecord?) -> String {
+        guard let record, record.runs > 0 else { return mode.liveFeedback }
+        let best = "Best \(record.best)"
+        guard mode.durationLadder.count > 1 else { return best }
+        return "Level \(record.level + 1) of \(mode.durationLadder.count) · \(best)"
     }
 }
 
@@ -125,7 +148,7 @@ private struct DrillFlowView: View {
                 look: TimerLook(rawValue: userSettings.first?.countdownLook ?? 0) ?? .ring,
                 backdrop: RecordingBackdrop(rawValue: userSettings.first?.countdownBackdrop ?? 0) ?? .base,
                 prepTitle: mode.title,
-                prepSubtitle: mode.preparesPromptUpFront ? viewModel.impromptuPrompt : mode.description,
+                prepSubtitle: viewModel.impromptuPrompt.isEmpty ? mode.description : viewModel.impromptuPrompt,
                 onComplete: {
                     viewModel.targetWPM = userSettings.first.resolvedTargetWPM
                     viewModel.startDrill(mode: mode)

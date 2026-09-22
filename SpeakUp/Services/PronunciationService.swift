@@ -42,6 +42,31 @@ class PronunciationService: NSObject {
         isSpeaking = false
     }
 
+    // MARK: - Spoken guidance
+
+    /// Spoken-audio playback for a guided exercise, so the voice is heard with
+    /// the ring switch off. The synthesiser otherwise inherits whatever the
+    /// last practice screen left behind - often the ambient category the cue
+    /// chirps use, which the ring switch silences. Mixes with the user's own
+    /// audio rather than stopping it. Off the main actor because `setActive`
+    /// blocks until the audio server answers.
+    func prepareForGuidance() async {
+        try? await Task.detached(priority: .userInitiated) {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+            try session.setActive(true)
+        }.value
+    }
+
+    /// Hands the session back to the ambient category the cue chirps expect,
+    /// so they respect the ring switch again after a guided exercise.
+    func endGuidance() {
+        stop()
+        Task.detached(priority: .utility) {
+            try? AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
+        }
+    }
+
     static func canDefine(_ word: String) -> Bool {
         let cleaned = stripPunctuation(word)
         guard !cleaned.isEmpty else { return false }

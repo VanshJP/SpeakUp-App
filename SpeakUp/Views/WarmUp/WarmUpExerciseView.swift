@@ -63,6 +63,9 @@ struct WarmUpExerciseView: View {
             }
             .padding()
         }
+        // Breathing rounds and hums are hands-off by design; Auto-Lock used to
+        // dim the screen partway through a round.
+        .keepsScreenAwake(viewModel.isRunning)
         .onChange(of: viewModel.isComplete) { _, complete in
             guard complete else { return }
             PracticeRoutineService.shared.complete(.warmUp)
