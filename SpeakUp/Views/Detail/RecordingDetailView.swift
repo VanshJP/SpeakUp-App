@@ -873,7 +873,13 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     /// Filler counts, each occurrence a tappable moment.
+    ///
+    /// A count on its own is trivia: "you said um seven times" is a fact the
     /// user can do nothing with. The chips turn it into seven things they can
+    /// go listen to, which is the only version that changes behaviour. The
+    /// printed clock times came off: Whisper's stamps drift enough that the
+    /// number was often wrong, and a wrong number reads as a broken app while
+    /// a wrong seek just plays nearby audio.
     private func fillerWordsSection(_ fillerWords: [FillerWord]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader("Filler words used", icon: "exclamationmark.bubble.fill")
@@ -1255,6 +1261,9 @@ struct RecordingDetailView: View {
     /// Evidence for the score that the hero card does not already show: the
     /// headline numbers, pace over time, and goal progress.
     ///
+    /// The subscore radar lives in the hero card now, and the old pause /
+    /// vocal-variety / advanced-metrics stack under this tab restated axes the
+    /// radar already labels: duplicated detail nobody opened.
     @ViewBuilder
     private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
         statsGrid(analysis)
@@ -1667,8 +1676,12 @@ struct RecordingDetailView: View {
     }
 
     /// Transcript text for the LLM passes (coherence blend, coaching insight).
-    /// Narrowed to the primary speaker when isolation actually ran - the stored
+    ///
+    /// Narrowed to the primary speaker when isolation actually ran. The stored
+    /// transcript keeps every word so the displayed transcript matches the audio,
+    /// but coaching the user on a second person's sentences is not useful.
     /// `ConversationIsolationService` reports a ratio of 1.0 and no filtered
+    /// words when it decided not to separate, so this is inert on solo takes.
     private func resolvedTranscript(for recording: Recording) -> String {
         let metrics = coachAnalysis?.speakerIsolationMetrics
         let isolationApplied = (metrics?.primarySpeakerWordRatio ?? 1.0) < 1.0
@@ -1860,6 +1873,9 @@ struct RecordingDetailView: View {
     /// Backfills the pace-over-time series for takes analyzed before it
     /// existed.
     ///
+    /// Reads and writes through `fullAnalysis`/`setAnalysis`: the series is an
+    /// advanced metric the lossy SwiftData copy drops, so patching that copy
+    /// (the old approach) lost the series again on the next analysis rewrite.
     private func populateWPMTimeSeriesIfNeeded(recordingID: UUID) async {
         guard let recording,
               recording.id == recordingID,

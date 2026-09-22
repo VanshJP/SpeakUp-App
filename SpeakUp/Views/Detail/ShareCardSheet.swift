@@ -7,6 +7,11 @@ import UniformTypeIdentifiers
 /// The share surface for a scored session: pick which card leaves the app, see
 /// it before it does, then save, copy, or send it.
 ///
+/// This replaced a confirmation dialog with two buttons and a paragraph
+/// explaining what each one would reveal. Nobody reads a paragraph about what a
+/// picture contains when the picture can be shown instead, and the preview is
+/// the privacy control, because the prompt is either visibly on the card or it
+/// is not.
 struct ShareCardSheet: View {
     let recording: Recording
     var onShared: (() -> Void)? = nil

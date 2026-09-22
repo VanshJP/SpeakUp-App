@@ -3,6 +3,15 @@ import SwiftUI
 /// Recording Look picker: one live preview of the session on top, every option
 /// laid out in grids underneath.
 ///
+/// It used to be four tabbed sections, each a horizontal filter strip, and the
+/// preview changed meaning depending on which tab you were in: sometimes a
+/// countdown, sometimes a recording. With twenty options across four groups,
+/// most of them sat off-screen and the preview never said which screen you were
+/// looking at. Now nothing hides behind a swipe, and the preview shows both
+/// halves of a real session at once, on the backdrop you picked.
+///
+/// The preview is the real components (`CircularWaveformView`, `RecordButton`,
+/// `TimerDial`, `RecordingBackdropView`), not stand-ins.
 struct RecordingLookView: View {
     @Bindable var viewModel: SettingsViewModel
 

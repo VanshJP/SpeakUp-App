@@ -200,6 +200,9 @@ struct GlassButton: View {
 /// Shared pressed-state feedback for glass controls - a subtle scale + dim,
 /// spring-animated. Keeps taps feeling physical without any layout shift.
 ///
+/// Press scale is exactly `0.96` (anything below ~0.95 feels exaggerated).
+/// Under Reduce Motion the scale is skipped so state still dims without a
+/// transform the user asked not to see.
 struct GlassPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

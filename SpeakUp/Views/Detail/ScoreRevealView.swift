@@ -2,9 +2,17 @@ import SwiftUI
 
 /// The moment the app exists for: you stopped talking, here is how it went.
 ///
-/// Honest before it is festive: the verdict names the band, and confetti is
-/// kept for takes that earned it - a low score met with confetti reads as
-/// sarcasm.
+/// The reveal is scaled to the band so the app's reaction matches the result:
+///
+/// - **Strong (80+)**: confetti, success haptic, the score is the celebration.
+/// - **Solid (60-79)**: the number climbs and lands. Confetti only for a
+///   personal best; a good session doesn't need a parade, and spending
+///   confetti on every solid take would make it worthless at 90.
+/// - **Building (<60)**: no celebration language at all. The verdict, then one
+///   forward-looking line naming what held it back. A personal best still
+///   gets its pill and its haptic, just not the party. Honest, not a failure
+///   state, and never congratulatory: a low score met with confetti reads
+///   as sarcasm.
 struct ScoreRevealView: View {
     let score: Int
     let baselines: PersonalAverage.Baselines

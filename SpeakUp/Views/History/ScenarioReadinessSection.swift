@@ -107,8 +107,12 @@ private enum ScenarioTint {
 // MARK: - Momentum presentation
 
 /// How a direction of travel looks, in one place. The Progress page renders
-/// this verdict twice - the hero's filled pill and this section's inline glyph
-/// - and each used to carry its own switch. They had already drifted: slipping
+/// this verdict twice (the hero's filled pill and this section's inline glyph),
+/// and each used to carry its own switch. They had already drifted: slipping
+/// was red in the hero and amber here, and steady disagreed on its opacity, on
+/// the same screen. Presentation lives in the view layer because the engine
+/// that emits `ScenarioMomentum` is `nonisolated` and Foundation-only; this
+/// mirrors `CrutchCategory.badgeColor` in `CrutchSwapsCard`.
 extension ScenarioMomentum {
     var symbolName: String {
         switch self {

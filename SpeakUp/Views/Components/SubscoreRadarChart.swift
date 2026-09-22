@@ -116,6 +116,13 @@ struct SubscoreRadarChart: View {
     /// The pass lives in `RadarWedges`, an `Animatable` view: a `Canvas` alone
     /// cannot interpolate `drawProgress`, so the draw-in used to jump straight
     /// to full and the wedges never grew.
+    ///
+    /// Radius encodes the value continuously. It used to quantize into six
+    /// buckets aligned to the score bands, which meant everything from 60 to 79
+    /// drew an identical shape. Five different subscores rendering the same
+    /// made the chart decorative rather than informative. The concentric rings
+    /// survive as a *scale grid* drawn across the full annulus: they are
+    /// graph paper now, not the encoding.
     private func wedgeCanvas(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
         let count = max(axes.count, 1)
         let step = 2 * Double.pi / Double(count)

@@ -190,8 +190,8 @@ nonisolated struct LexiconProfile: Sendable {
 // MARK: - Session-level hits
 
 /// One crutch word inside a single recording: what it was, how often it
-/// landed, where it happened, and - when the timed transcription is available
-/// - what to say instead *in that sentence*, not in general.
+/// landed, where it happened, and (when the timed transcription is available)
+/// what to say instead *in that sentence*, not in general.
 nonisolated struct SessionWordHit: Identifiable, Hashable, Sendable {
     let word: String
     let category: CrutchCategory

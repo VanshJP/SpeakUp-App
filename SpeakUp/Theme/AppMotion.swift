@@ -66,8 +66,8 @@ private struct MotionModifier<V: Equatable>: ViewModifier {
 
 /// A fade-in that fails *visible*.
 ///
-/// The naive version of this - `@State opacity = 0`, raised inside `onAppear`
-/// - has bricked two screens now. A first install reported the welcome cover
+/// The naive version of this (`@State opacity = 0`, raised inside `onAppear`)
+/// has bricked two screens now. A first install reported the welcome cover
 /// as an orb on an empty background with no button to tap, because content the
 /// user cannot proceed without was parked at opacity 0 waiting on a callback
 /// and an animation clock. The lesson completion screen hid both of its exits

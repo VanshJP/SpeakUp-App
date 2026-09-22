@@ -80,6 +80,9 @@ private struct LiveMicWaveform: View {
 /// Live input meter. Centre bars react hardest so the shape reads as a voice
 /// rather than a level bar.
 ///
+/// Drawn as one `Canvas` on a `TimelineView` clock. It used to be 28 sibling
+/// views, each holding its own `@State` phase on a `repeatForever` animation:
+/// 28 view bodies re-evaluating every frame for what is a single picture.
 struct OnboardingWaveform: View {
     let level: Float
 

@@ -713,7 +713,8 @@ private struct OnboardingBaselineResultView: View {
 
 /// The payoff: starting line, not report card. One score, two metrics, one
 /// coaching insight, and the promise that every later session compares back
-/// to this. A low first score never leads with the number - first-session
+/// to this. A low first score never leads with the number: first-session
+/// churn is not worth numeric purity.
 private struct OnboardingBaselineRevealView: View {
     let analysis: SpeechAnalysis
     let userName: String

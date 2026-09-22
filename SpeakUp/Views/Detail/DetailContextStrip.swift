@@ -1,6 +1,10 @@
 import SwiftUI
 
 /// What you were doing, in two lines and no card.
+///
+/// This is metadata, not content: giving it a glass surface of its own made it
+/// compete with the score for the top of the page. Category, date, time,
+/// duration, and difficulty collapse into one caption line; the prompt itself
 /// stays legible because it is the only thing here the user actually re-reads.
 struct DetailContextStrip: View {
     let recording: Recording

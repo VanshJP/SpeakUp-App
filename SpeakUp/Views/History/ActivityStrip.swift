@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// About four months of practice as a dot grid, with a switchable metric.
+///
+/// Derived entirely from the `RecordingSummary` array History already holds, so
 /// it costs no extra fetch and never touches a `Recording` blob.
 struct ActivityStrip: View {
     let summaries: [RecordingSummary]

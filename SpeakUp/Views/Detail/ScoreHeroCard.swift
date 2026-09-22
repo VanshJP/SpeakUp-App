@@ -1,7 +1,11 @@
 import SwiftUI
 
 /// The answer to the question the user opened this screen to ask.
-/// and the strongest/weakest callouts live on the chart itself rather than as a
+///
+/// The full subscore breakdown rides along as a radar with the number at its
+/// center: seeing every axis at once is what makes the composite score
+/// legible, and the strongest/weakest callouts live on the chart itself rather
+/// than as a separate labeled row.
 struct ScoreHeroCard: View {
     let score: Int
     let personalAverage: Int?
