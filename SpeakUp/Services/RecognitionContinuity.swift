@@ -31,6 +31,9 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
     /// that loses more than this many words is not a revision.
     static let revisionSlack = 2
 
+    /// How many words past the common prefix `sharedWordCount` compares.
+    static let comparisonWindow = 64
+
     /// Classifies `next` against the utterance currently held.
     ///
     /// - Parameters:
@@ -70,7 +73,10 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
 
         // About the same length but diverging early. A rewrite keeps most of
         // the held words in order; new speech keeps almost none of them.
-        return sharedWordCount(previous, next) * 2 >= previous.count ? .revision : .restart
+        // Judged over the span actually compared, so a long take revised near
+        // its start is not mistaken for new speech and counted twice.
+        let compared = prefix + min(previous.count - prefix, comparisonWindow)
+        return sharedWordCount(previous, next) * 2 >= compared ? .revision : .restart
     }
 
     // MARK: - Comparison form
@@ -112,7 +118,7 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
     /// longest common subsequence of what follows it, over at most `window`
     /// words of each. Enough to tell a rewrite from new speech without going
     /// quadratic over a long take.
-    static func sharedWordCount(_ a: [String], _ b: [String], window: Int = 64) -> Int {
+    static func sharedWordCount(_ a: [String], _ b: [String], window: Int = RecognitionContinuity.comparisonWindow) -> Int {
         let prefix = commonPrefixLength(a, b)
         let tailA = Array(a[prefix...].prefix(window))
         let tailB = Array(b[prefix...].prefix(window))

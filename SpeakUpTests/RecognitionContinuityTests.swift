@@ -43,6 +43,18 @@ struct RecognitionContinuityTests {
         #expect(classify("I scream", "ice cream") == .revision)
     }
 
+    /// A long take revised near its start still shares almost every word;
+    /// only the first `comparisonWindow` of them are compared, so the share
+    /// has to be judged against those, not against the whole take.
+    @Test func aLongTakeRevisedNearItsStartIsStillARevision() {
+        let long = (0..<150).map { "word\($0)" }
+        var revised = long
+        revised[1] = "changed"
+
+        #expect(RecognitionContinuity.classify(previous: long, next: revised, previousClosed: false) == .revision)
+        #expect(RecognitionContinuity.classify(previous: long, next: ["new", "speech"], previousClosed: false) == .restart)
+    }
+
     // MARK: - Restarts
 
     @Test func newSpeechAfterAPauseIsARestartNotARevision() {
