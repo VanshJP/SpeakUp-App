@@ -54,6 +54,8 @@ struct RecordingDetailView: View {
     /// Coalesced post-load work (WPM / baselines / LLM). Cancelled on disappear
     /// so a deleted row is never written from a zombie Task.
     @State private var readySetupTask: Task<Void, Never>?
+    @State private var sessionDataTask: Task<Void, Never>?
+    @State private var isResolvingSessionData = false
     @State private var pendingShareRecording: Recording?
     @State private var isFirstAnalyzedSession = false
     @State private var baselines = PersonalAverage.Baselines()
@@ -247,6 +249,7 @@ struct RecordingDetailView: View {
         }
         .onDisappear {
             isDetailActive = false
+            sessionDataTask?.cancel()
             readySetupTask?.cancel()
             audioService.stop()
             if allowsCoachMoments, let moment = coachMoments.pendingDetail {
@@ -354,7 +357,18 @@ struct RecordingDetailView: View {
                     // Held back by the free allowance, not broken.
                     analysisDeferredCard(recording)
                 } else if recording.overallScore != nil {
-                    EmptyView()
+                    if isResolvingSessionData {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                            Text("Loading your breakdown…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 48)
+                    } else {
+                        analysisUnavailableCard(recording)
+                    }
                 } else {
                     analysisUnavailableCard(recording)
                     transcriptTabContent(recording)
@@ -383,26 +397,30 @@ struct RecordingDetailView: View {
 
     private func runReadySetupIfNeeded() {
         guard case .ready(let recording) = detailScreenState else { return }
-        // Everything behind a blob decode lands first, synchronously: every
-        // step below reads it, and `body` reads nothing but these caches.
-        resolveSessionDataIfNeeded(for: recording)
-        if coachAnalysis != nil {
-            ReviewRequestService.shared.markFirstResultSeen()
-        }
-        playableMediaAvailable = hasPlayableMedia(recording)
-        resolveVocabWorkoutIfNeeded(for: recording)
-        prepareDetailAssets(for: recording)
-        configurePlaybackState(for: recording)
 
-        readySetupTask?.cancel()
+        sessionDataTask?.cancel()
         let recordingID = recording.id
-        readySetupTask = Task {
-            await populateWPMTimeSeriesIfNeeded(recordingID: recordingID)
+        sessionDataTask = Task {
+            await resolveSessionDataIfNeeded(for: recording)
             guard !Task.isCancelled else { return }
-            await loadPersonalAverageIfNeeded(excluding: recordingID)
-            guard !Task.isCancelled else { return }
-            evaluateCoachMomentIfNeeded(for: recording)
-            await enhanceCoherenceIfNeeded(recordingID: recordingID)
+
+            if coachAnalysis != nil {
+                ReviewRequestService.shared.markFirstResultSeen()
+            }
+            playableMediaAvailable = hasPlayableMedia(recording)
+            resolveVocabWorkoutIfNeeded(for: recording)
+            prepareDetailAssets(for: recording)
+            configurePlaybackState(for: recording)
+
+            readySetupTask?.cancel()
+            readySetupTask = Task {
+                await populateWPMTimeSeriesIfNeeded(recordingID: recordingID)
+                guard !Task.isCancelled else { return }
+                await loadPersonalAverageIfNeeded(excluding: recordingID)
+                guard !Task.isCancelled else { return }
+                evaluateCoachMomentIfNeeded(for: recording)
+                await enhanceCoherenceIfNeeded(recordingID: recordingID)
+            }
         }
     }
 
@@ -446,16 +464,45 @@ struct RecordingDetailView: View {
     }
 
     /// Pulls everything the ready screen renders out of the JSON blobs, once.
-    private func resolveSessionDataIfNeeded(for recording: Recording) {
-        if sessionWords == nil {
-            let words = recording.transcriptionWords
+    /// Decodes off the main actor — `fullAnalysis` and `transcriptionWords`
+    /// are Codable columns and can stall or blank the UI if read synchronously
+    /// from `body` or `.task`.
+    private func resolveSessionDataIfNeeded(for recording: Recording) async {
+        guard sessionWords == nil || coachAnalysis == nil else { return }
+
+        let needsHydration = recording.overallScore != nil || recording.transcriptionText != nil
+        guard needsHydration else { return }
+
+        isResolvingSessionData = true
+        defer { isResolvingSessionData = false }
+
+        let recordingID = recording.id
+        let container = modelContext.container
+        let payload = await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            var descriptor = FetchDescriptor<Recording>(
+                predicate: #Predicate { $0.id == recordingID }
+            )
+            descriptor.fetchLimit = 1
+            guard let row = (try? context.fetch(descriptor))?.first else {
+                return ResolvedSessionData(words: nil, analysis: nil)
+            }
+            return ResolvedSessionData(
+                words: row.transcriptionWords,
+                analysis: row.fullAnalysis
+            )
+        }.value
+
+        guard !Task.isCancelled, self.recording?.id == recordingID else { return }
+
+        if sessionWords == nil, let words = payload.words {
             sessionWords = words
-            speakerTurnsCache = words.map(speakerTurns(from:)) ?? []
-            // Word swaps are hesitation/hedge habits - not structural frames.
+            speakerTurnsCache = speakerTurns(from: words)
             crutchHits = CrutchSwapsCard.hits(from: words)
                 .filter { $0.category != .structural }
         }
-        guard coachAnalysis == nil, let analysis = recording.fullAnalysis else { return }
+
+        guard coachAnalysis == nil, let analysis = payload.analysis else { return }
         coachAnalysis = analysis
         coachEvidence = CoachEvidenceService.evidence(
             for: analysis,
@@ -470,6 +517,11 @@ struct RecordingDetailView: View {
         coachCrutchLines = crutchHits
             .prefix(2)
             .map { "\"\($0.word)\" x\($0.count)" }
+    }
+
+    private struct ResolvedSessionData: Sendable {
+        let words: [TranscriptionWord]?
+        let analysis: SpeechAnalysis?
     }
 
     /// A new personal best or a top-band score is the only moment on this
@@ -1793,11 +1845,6 @@ struct RecordingDetailView: View {
                 try? modelContext.save()
             }
 
-            // Resolve the blob-backed data before the first ready render - 
-            // detailScreenState and readyContent read only the caches.
-            if let loadedRecording = recording {
-                resolveSessionDataIfNeeded(for: loadedRecording)
-            }
         } catch {
             recording = nil
         }

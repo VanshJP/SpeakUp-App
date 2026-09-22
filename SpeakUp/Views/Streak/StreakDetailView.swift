@@ -4,8 +4,10 @@ import SwiftData
 struct StreakDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var achievements: [Achievement]
+    @Query private var userSettings: [UserSettings]
 
     @State private var recordingDates: [Date] = []
+    @State private var frozenDays: [Date] = []
 
     private var streakAchievements: [Achievement] {
         achievements.filter { $0.id.hasPrefix("streak_") }
@@ -15,8 +17,27 @@ struct StreakDetailView: View {
         streakAchievements.filter(\.isUnlocked).count
     }
 
+    private var streakSnapshot: (currentStreak: Int, freezesAvailable: Int, frozenDays: [Date]) {
+        StreakProtection.liveSnapshot(
+            practiceDays: recordingDates,
+            frozenDays: frozenDays
+        )
+    }
+
     private var currentStreak: Int {
-        Date.calculateStreak(from: recordingDates)
+        streakSnapshot.currentStreak
+    }
+
+    private var freezesAvailable: Int {
+        streakSnapshot.freezesAvailable
+    }
+
+    private var effectiveFrozenDays: Set<Date> {
+        Set(streakSnapshot.frozenDays.map { Calendar.current.startOfDay(for: $0) })
+    }
+
+    private var uniquePracticeDays: Int {
+        Set(recordingDates.map { Calendar.current.startOfDay(for: $0) }).count
     }
 
     private var longestStreak: Int {
@@ -29,11 +50,14 @@ struct StreakDetailView: View {
         let practiced: Set<Date> = Set(
             recordingDates.map { calendar.startOfDay(for: $0) }
         )
+        let frozen = effectiveFrozenDays
         return (0..<14).reversed().map { offset in
             let date = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
+            let day = calendar.startOfDay(for: date)
             return DayCell(
                 date: date,
-                practiced: practiced.contains(date),
+                practiced: practiced.contains(day),
+                frozen: !practiced.contains(day) && frozen.contains(day),
                 isToday: calendar.isDateInToday(date)
             )
         }
@@ -59,6 +83,7 @@ struct StreakDetailView: View {
         PageScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 heroFlame
+                freezeProtectionCard
                 milestoneCard
                 calendarCard
             }
@@ -74,13 +99,19 @@ struct StreakDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .task {
             let container = modelContext.container
-            recordingDates = await Task.detached(priority: .userInitiated) {
+            let payload = await Task.detached(priority: .userInitiated) {
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<Recording>()
                 descriptor.propertiesToFetch = [\.date]
                 let recordings = (try? context.fetch(descriptor)) ?? []
-                return recordings.map(\.date)
+                let frozen = (try? context.fetch(FetchDescriptor<UserSettings>()).first?.streakFrozenDays) ?? []
+                return (recordings.map(\.date), frozen)
             }.value
+            recordingDates = payload.0
+            frozenDays = payload.1
+        }
+        .onChange(of: userSettings.first?.streakFrozenDays ?? []) { _, days in
+            frozenDays = days
         }
     }
 
@@ -131,6 +162,56 @@ struct StreakDetailView: View {
         .padding(.top, 12)
     }
 
+
+    // MARK: - Freeze protection
+
+    private var freezeProtectionCard: some View {
+        GlassCard(tint: AppColors.primary.opacity(0.06)) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Streak Freezes", systemImage: "snowflake")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(freezesAvailable)")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText(value: Double(freezesAvailable)))
+
+                    Text("freezes banked")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+
+                Text(freezeProtectionCopy)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                let daysToNext = daysUntilNextFreeze
+                if let daysToNext {
+                    Divider().overlay(Color.white.opacity(0.08))
+                    Text("\(daysToNext) more practice day\(daysToNext == 1 ? "" : "s") to earn the next freeze.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+        }
+    }
+
+    private var freezeProtectionCopy: String {
+        if freezesAvailable > 0 {
+            return "Freezes spend automatically when you miss one day with a live streak. There is nothing to tap — open Big Talk and take counts as saving it the normal way."
+        }
+        return "Bank one freeze for every five practice days, up to two. If you miss a single day while a streak is live, the next app open spends a freeze for you."
+    }
+
+    private var daysUntilNextFreeze: Int? {
+        guard freezesAvailable < StreakProtection.maxBankedFreezes else { return nil }
+        let remainder = uniquePracticeDays % StreakProtection.daysPerEarnedFreeze
+        guard remainder != 0 else { return StreakProtection.daysPerEarnedFreeze }
+        return StreakProtection.daysPerEarnedFreeze - remainder
+    }
 
     // MARK: - Milestone
 
@@ -223,18 +304,20 @@ struct StreakDetailView: View {
 
                             ZStack {
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(day.practiced
-                                          ? AppColors.warning.opacity(0.85)
-                                          : Color.white.opacity(0.06))
+                                    .fill(dayCellFill(for: day))
                                     .frame(height: 28)
                                     .overlay {
                                         if day.practiced {
                                             Image(systemName: "flame.fill")
                                                 .font(.system(size: 11, weight: .bold))
                                                 .foregroundStyle(.white)
+                                        } else if day.frozen {
+                                            Image(systemName: "snowflake")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundStyle(AppColors.primary.opacity(0.95))
                                         }
                                     }
-                                    .shadow(color: day.practiced ? AppColors.warning.opacity(0.4) : .clear, radius: 4, y: 1)
+                                    .shadow(color: day.practiced ? AppColors.warning.opacity(0.4) : (day.frozen ? AppColors.primary.opacity(0.25) : .clear), radius: 4, y: 1)
 
                                 if day.isToday {
                                     RoundedRectangle(cornerRadius: 6)
@@ -257,9 +340,16 @@ struct StreakDetailView: View {
 
     // MARK: - Helpers
 
+    private func dayCellFill(for day: DayCell) -> Color {
+        if day.practiced { return AppColors.warning.opacity(0.85) }
+        if day.frozen { return AppColors.primary.opacity(0.22) }
+        return Color.white.opacity(0.06)
+    }
+
     private struct DayCell: Identifiable {
         let date: Date
         let practiced: Bool
+        let frozen: Bool
         let isToday: Bool
 
         var id: Date { date }
