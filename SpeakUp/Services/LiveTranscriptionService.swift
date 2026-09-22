@@ -28,7 +28,30 @@ class LiveTranscriptionService {
     /// state. The critical section is one `append`.
     private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
     private var recognitionTask: SFSpeechRecognitionTask?
+    /// How many of the live utterance's segments have been tagged for fillers.
     private var lastProcessedSegmentCount = 0
+
+    /// Words and fillers from utterances the recognizer has finished with -
+    /// earlier requests, and earlier utterances inside the live one.
+    ///
+    /// The headline counts used to be `max(count, this request's count)`,
+    /// which is only right if one request heard the whole take. It never does:
+    /// SFSpeech closes a request after a pause, and on device it can also
+    /// start a request's transcript over from empty after one. Every word and
+    /// filler after the first pause went uncounted until the new stretch
+    /// outgrew the old - pace drills scored slow, and Filler Elimination
+    /// could call a run with fillers in it clean.
+    private var committedWordCount = 0
+    private var committedFillerCount = 0
+    /// The utterance the recognizer is still revising, in the comparison form
+    /// `RecognitionContinuity` reads, and whether it has been marked finished.
+    private var utteranceWords: [String] = []
+    private var utteranceIsClosed = false
+    /// Monotonic within the live utterance, like the counts used to be within
+    /// a request: a partial that revises a filler away must not flicker the
+    /// display back down.
+    private var utteranceWordCount = 0
+    private var utteranceFillerCount = 0
     /// Cumulative offset so `lastSegmentEndTime` stays monotonic across
     /// recognition restarts (SFSpeech resets timestamps per request).
     private var segmentTimeOffset: TimeInterval = 0
@@ -109,8 +132,10 @@ class LiveTranscriptionService {
         liveWordCount = 0
         liveFillerWordCounts = [:]
         lastSegmentEndTime = 0
-        lastProcessedSegmentCount = 0
         segmentTimeOffset = 0
+        committedWordCount = 0
+        committedFillerCount = 0
+        resetUtterance()
         isActive = true
 
         // Touch inputNode so the graph negotiates a hardware format before
@@ -282,7 +307,9 @@ class LiveTranscriptionService {
         // avoids network pauses that force early isFinal → restart cycles.
         request.requiresOnDeviceRecognition = true
         requestBox.withLock { $0 = request }
-        lastProcessedSegmentCount = 0
+        // A new request starts its transcript empty. Whatever the last one
+        // heard is finished; bank it rather than let the next result replace it.
+        commitUtterance()
         recognitionGeneration += 1
         let generation = recognitionGeneration
 
@@ -367,6 +394,29 @@ class LiveTranscriptionService {
     @MainActor
     private func processPartialResult(_ result: SFSpeechRecognitionResult) {
         let segments = result.bestTranscription.segments
+        let heard = RecognitionContinuity.words(in: segments.map(\.substring).joined(separator: " "))
+        let endsUtterance = result.speechRecognitionMetadata != nil
+
+        // Same rules as Read Aloud: a result that starts over after a pause is
+        // a new utterance, not a revision of the old one, and a blank or
+        // shrunken final is not allowed to take anything back.
+        switch RecognitionContinuity.classify(
+            previous: utteranceWords,
+            next: heard,
+            previousClosed: utteranceIsClosed
+        ) {
+        case .ignore:
+            utteranceIsClosed = utteranceIsClosed || endsUtterance
+            return
+        case .restart:
+            commitUtterance()
+            utteranceIsClosed = endsUtterance
+        case .revision:
+            let grew = heard.count > utteranceWords.count
+            utteranceIsClosed = endsUtterance || (utteranceIsClosed && !grew)
+        }
+        utteranceWords = heard
+
         let wordCount = segments.count
         guard wordCount > 0 else {
             // Preserve the counter through transient empty partials - the
@@ -395,13 +445,16 @@ class LiveTranscriptionService {
 
         let endTime = segments.last.map { $0.timestamp + $0.duration } ?? 0
 
-        // Monotonic during a single recognition session: partial revisions
-        // routinely reinterpret a word that was tagged as a filler into a
-        // non-filler (or vice versa) once more context arrives. Letting the
-        // display regress mid-utterance produces a flicker. Post-recording
+        // Monotonic within an utterance: partial revisions routinely
+        // reinterpret a word that was tagged as a filler into a non-filler (or
+        // vice versa) once more context arrives, and letting the display
+        // regress mid-utterance produces a flicker. Across utterances the
+        // counts add, because each one heard different audio. Post-recording
         // analysis computes the authoritative count.
-        liveFillerCount = max(liveFillerCount, fillerCount)
-        liveWordCount = max(liveWordCount, wordCount)
+        utteranceFillerCount = max(utteranceFillerCount, fillerCount)
+        utteranceWordCount = max(utteranceWordCount, wordCount)
+        liveFillerCount = committedFillerCount + utteranceFillerCount
+        liveWordCount = committedWordCount + utteranceWordCount
         lastSegmentEndTime = max(lastSegmentEndTime, segmentTimeOffset + endTime)
 
         // Tag only the segments this revision added. Re-running the tagger
@@ -414,12 +467,31 @@ class LiveTranscriptionService {
         )
     }
 
+    /// Banks the live utterance's counts and starts the next one from zero.
+    @MainActor
+    private func commitUtterance() {
+        committedWordCount += utteranceWordCount
+        committedFillerCount += utteranceFillerCount
+        resetUtterance()
+    }
+
+    @MainActor
+    private func resetUtterance() {
+        utteranceWords = []
+        utteranceIsClosed = false
+        utteranceWordCount = 0
+        utteranceFillerCount = 0
+        lastProcessedSegmentCount = 0
+    }
+
     /// Per-word tallies from the same pause-aware pipeline that drives the
     /// headline count, so the repeated-filler cue names exactly what was said.
     /// Receives only the segments added since the last partial and accumulates
-    /// additively - each segment index is counted exactly once per recognition
-    /// request, and `lastProcessedSegmentCount` resets to 0 on every restart so
-    /// the next request's segments continue the tallies instead of colliding.
+    /// additively - each segment index is counted exactly once per utterance,
+    /// and `lastProcessedSegmentCount` resets to 0 whenever an utterance is
+    /// committed (a new request, or the recognizer starting over inside one)
+    /// so the next utterance's segments continue the tallies instead of
+    /// colliding.
     @MainActor
     private func updateFillerWordCounts(words: [String], timestamps: [TimeInterval], durations: [TimeInterval]) {
         guard words.count == timestamps.count, words.count == durations.count else { return }

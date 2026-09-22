@@ -47,11 +47,18 @@ class DictationService {
     /// callback cannot `cleanup()` the replacement session.
     private var sessionGeneration = 0
 
-    /// Words collected by the requests that have already been retired. Each
-    /// new request's transcript starts empty and `processResult` publishes the
-    /// whole list, so without this prefix a single pause would wipe everything
-    /// the user had dictated so far.
+    /// Words collected by the requests - and the utterances inside the live
+    /// request - that have already been retired. Each new request's transcript
+    /// starts empty, and on device the recognizer can also start a request's
+    /// transcript over after a pause; `processResult` publishes the whole
+    /// list, so without this prefix a single pause would wipe everything the
+    /// user had dictated so far.
     private var committedWords: [String] = []
+
+    /// The utterance the recognizer is still revising, in the comparison form
+    /// `RecognitionContinuity` reads, and whether it has been marked finished.
+    private var utteranceWords: [String] = []
+    private var utteranceIsClosed = false
 
     /// When the live request was opened, and how many have died instantly with
     /// nothing to show for it. A recognizer missing its on-device assets fails
@@ -95,6 +102,8 @@ class DictationService {
 
         recognizedWords = []
         committedWords = []
+        utteranceWords = []
+        utteranceIsClosed = false
         unproductiveSegments = 0
         lastAddedIndex = 0
         audioLevel = -160
@@ -255,6 +264,8 @@ class DictationService {
         let grew = recognizedWords.count > committedWords.count
         let lifetime = Date().timeIntervalSince(segmentStartedAt)
         committedWords = recognizedWords
+        utteranceWords = []
+        utteranceIsClosed = false
         if grew || lifetime >= Self.unproductiveSegmentWindow {
             unproductiveSegments = 0
         } else {
@@ -288,6 +299,29 @@ class DictationService {
     // MARK: - Result Processing
 
     private func processResult(_ result: SFSpeechRecognitionResult) {
+        let heard = RecognitionContinuity.words(in: result.bestTranscription.formattedString)
+        let endsUtterance = result.speechRecognitionMetadata != nil
+
+        // A result that starts over after a pause is a new utterance: bank the
+        // list as it stands before publishing the new one on top of it. A
+        // blank or shrunken final changes nothing.
+        switch RecognitionContinuity.classify(
+            previous: utteranceWords,
+            next: heard,
+            previousClosed: utteranceIsClosed
+        ) {
+        case .ignore:
+            utteranceIsClosed = utteranceIsClosed || endsUtterance
+            return
+        case .restart:
+            committedWords = recognizedWords
+            utteranceIsClosed = endsUtterance
+        case .revision:
+            let grew = heard.count > utteranceWords.count
+            utteranceIsClosed = endsUtterance || (utteranceIsClosed && !grew)
+        }
+        utteranceWords = heard
+
         let segments = result.bestTranscription.segments
         let words = segments.map { $0.substring }
             .filter { $0.count >= 2 }
@@ -295,9 +329,9 @@ class DictationService {
 
         var seen = Set<String>()
         var unique: [String] = []
-        // `committedWords` first: the live request's transcript restarts at
-        // empty on every re-arm, so the prefix is what keeps a pause from
-        // wiping the list the user is building.
+        // `committedWords` first: the live transcript restarts at empty on
+        // every re-arm and after an in-request restart, so the prefix is what
+        // keeps a pause from wiping the list the user is building.
         for word in committedWords + words {
             let key = word.lowercased()
             if !seen.contains(key) {

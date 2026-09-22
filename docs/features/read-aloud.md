@@ -111,7 +111,7 @@ Not in `DefaultReadAloudPassages.all`. `isCustom` is `category == .custom`.
 
 The seed catalog is still static: saving writes to `UserSettings`, never to `DefaultReadAloudPassages.all`.
 
-`ReadAloudCategory.custom` is for typing only; catalog listings use `catalogCases` / `catalogCases(for:)` and never `allCases`.
+`ReadAloudCategory.custom` is for typing only and never appears in `DefaultReadAloudPassages.all`; the catalog lists passages grouped by focus, so no category listing is needed.
 
 ---
 
@@ -119,10 +119,10 @@ The seed catalog is still static: saving writes to `UserSettings`, never to `Def
 
 Unchanged for custom vs catalog:
 
-1. Show source text; record via `AudioService`.
-2. Transcribe (`SpeechService`).
+1. Show source text; capture on a live `AVAudioEngine` tap feeding on-device `SFSpeech` recognition (`AudioService` only supplies the permission and record-capable session).
+2. Stitch every recognition result into one transcript (`RequestTranscript` per request, see below).
 3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` — matched / missed / extra.
-4. Show `ReadAloudResultView`, then reset on Done or run the same passage on Retry.
+4. Show `ReadAloudResultView`, then reset on Done, run the same passage on Retry, or run **Drill what you missed** (below).
 
 The session auto-starts listening; there is no pre-roll state to tap through.
 
@@ -135,13 +135,40 @@ History persistence as future product work, not as an implemented contract.
 closes a request after a pause in speech and again at the request's own
 audio-duration ceiling; a reader working through a paragraph triggers both,
 several times. `ReadAloudService` re-arms on the same engine and tap
-(`armRecognition`) and keeps one transcript slot per request
-(`segmentTranscripts`, joined by the pure `joinTranscripts`), so alignment sees
-one continuous read and the reader never loses their place. It also rolls over
-proactively every 45 s, and rebuilds the whole capture graph on an
-`AVAudioEngineConfigurationChange` or after an interruption. Only a recognizer
-that fails three times in a row inside a second — a device missing its on-device
-assets — ends the session. See gotchas §9 and §26.
+(`armRecognition`) and keeps one `RequestTranscript` per request (`segments`,
+joined by the pure `joinTranscripts`), so alignment sees one continuous read and
+the reader never loses their place. It also rolls over proactively every 45 s,
+waiting up to 10 s for a gap between words so no word is cut in half.
+
+**…and the recognizer restarting inside a request.** On device, SFSpeech can
+start a request's transcript over from empty after a pause of a second or two —
+`isFinal` still false — and can deliver a blank final. Storing each request's
+newest transcript as-is erased everything before the pause, and alignment put
+the reader back near word one: the "read restarts from zero" report. Every
+result now goes through `RequestTranscript.apply`, which asks the pure
+`RecognitionContinuity.classify` whether it is a revision, a new utterance
+(commit the old one), or a blank / shrunken copy (ignore it). A result carrying
+`speechRecognitionMetadata` marks the end of an utterance and is never coalesced
+away (`PendingResults.closed`). Pinned in `SpeakUpTests/RecognitionContinuityTests.swift`.
+
+**The mic is held, never lost.** Every way capture can go down is a *hold* on
+the read, not the end of it — hearing the model line (`isPaused`), a call or
+Siri (`isInterrupted`), the app leaving the foreground (`isBackgrounded`), and
+automatic recovery failing (`isStalled`). Holds keep `segments` and every
+matched word; `rebuildCaptureGraph` brings capture back on `didBecomeActive`, an
+interruption's `.ended`, or the reader's **Resume reading**. A stall gets one
+automatic retry after 1.5 s, then waits for the reader; it used to end the
+session, which left Retry — the passage from the top — as the only way on.
+Held time (`heldDuration(until:)`) is subtracted from the clock and from wpm.
+The session keeps the screen awake (`keepsScreenAwake`): a read is minutes of
+speaking without a touch, and Auto-Lock used to lock the phone mid-passage.
+See gotchas §9 and §26.
+
+**Drill what you missed.** When a take has missed or skipped words, the result
+screen offers a short passage made of each miss with two words of context either
+side, overlapping stretches merged (`ReadAloudResult.missedPhrases`). It runs in
+the same cover (`ReadAloudSessionView.drilledPassage`), so the next rep is spent
+only on what went wrong instead of re-reading clean sentences.
 
 Silence-is-not-a-score applies (see practice-tools invariant 14).
 
@@ -169,9 +196,12 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/Views/ReadAloud/DictionaryView.swift` | System dictionary sheet |
 | `SpeakUp/Services/ReadAloudDocumentImporter.swift` | On-device TXT, rich text, and PDF extraction |
 | `SpeakUp/Services/PronunciationService.swift` | TTS + define gate |
-| `SpeakUp/Services/ReadAloudService.swift` | Session listening + `computeAlignment` |
+| `SpeakUp/Services/ReadAloudService.swift` | Session listening, holds / stalls + `computeAlignment` |
+| `SpeakUp/Services/RecognitionContinuity.swift` | `RecognitionContinuity` + `RequestTranscript`: in-request restart handling, shared with live transcription and dictation |
+| `SpeakUp/Extensions/View+KeepsScreenAwake.swift` | Idle-timer hold for every timed practice screen |
 | `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |
 | `SpeakUpTests/ReadAloudAlignmentTests.swift` | Alignment core + request-boundary stitching |
+| `SpeakUpTests/RecognitionContinuityTests.swift` | In-request restarts, blank finals, end-to-end "never snaps back" |
 | `SpeakUpTests/ReadAloudCustomPassageTests.swift` | Custom factory + define gate |
 | `SpeakUpTests/PracticeFocusTests.swift` | Focus axis + derived catalog listings |
 
@@ -182,10 +212,10 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Presented from Practice Hub **tools** section (pushed full page through `ToolPresentation.pushed` via `navigationDestination`), Today, and RecordingDetail next-steps as sheets, not its own tab.
 - Difficulty coloring uses `AppColors.difficultyColor`, not raw system colors.
 - Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`); kept ones persist on `UserSettings.savedReadAloudTexts`. Neither is appended to the seed array.
-- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segmentTranscripts` and every matched word intact. Time spent hearing the model is subtracted from the take (`modelPlaybackSeconds`) so the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. Copy must not claim accent therapy; the score remains alignment and clarity.
+- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segments` and every matched word intact. It is one of the service's holds, so the clock stops while the model plays and the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. Copy must not claim accent therapy; the score remains alignment and clarity.
 - Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy.
-- **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts; recognition failure sets `service.recognitionFailureMessage`, ends the session within 250 ms, and lands on the result screen as a warning notice, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
-- **A dead mic must never sit under a live clock.** `ReadAloudViewModel.startTimer` also ends the session when `service.isListening` goes false while the state still says `.listening`. Recognition now survives its own request boundaries, so that only fires for something unforeseen — and the old behaviour there (frozen passage, "Not listening", a disabled Done button, restart from the top) is precisely what a dropped read felt like.
+- **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts. A recognizer that stops for good sets `service.recognitionFailureMessage` and **stalls** the read (clock stopped, "Mic stopped", **Resume reading**); finishing from there lands on the result screen with a warning notice that says only the part heard was scored, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
+- **A dead mic must never sit under a live clock.** `ReadAloudViewModel.startTimer` also ends the session when `service.isListening` goes false while the state still says `.listening`. Every known way to lose the mic is a hold now, so that only fires for something unforeseen — and the old behaviour there (frozen passage, "Not listening", a disabled Done button, restart from the top) is precisely what a dropped read felt like.
 - **The session cover is presented on the passage, the result cover on the result** (`fullScreenCover(item:)`). Both used to be `isPresented:` flags over state that `viewModel.reset()` or Retry clears, which drew an empty cover for the length of a dismissal. Gotcha §27.
 - The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
 - Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
@@ -198,4 +228,3 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Do **not** add a sixth `PracticeToolKind` for “pronounce word”. Extend Read Aloud.
 - Passages the user *types* stay ephemeral (UUID id). Passages the user *keeps* live on `UserSettings`, which is still not the static catalog. Never append to `DefaultReadAloudPassages.all`.
 - `canDefine` must stay single-word; sentences use Hear + Practice only.
-- Filter chips: `catalogCases`, never `allCases` (would show a useless Custom chip).

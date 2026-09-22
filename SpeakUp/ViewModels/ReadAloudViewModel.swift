@@ -30,6 +30,40 @@ struct ReadAloudResult: Identifiable {
     var score: Int {
         Int(accuracy.rounded())
     }
+
+    /// The stretches the reader stumbled on, as one short passage to run next.
+    /// Nil when nothing needs another pass.
+    var missedPhrasesText: String? {
+        Self.missedPhrases(in: passage.words, states: wordStates)
+    }
+
+    /// Each missed or skipped word with `context` words either side - a word
+    /// is practised the way its sentence says it, not on its own - with
+    /// overlapping stretches merged, joined as sentences.
+    ///
+    /// Retry replays the whole passage, which spends most of the next take on
+    /// words that were already clean. This is the deliberate-practice version:
+    /// only the parts that went wrong, straight away.
+    static func missedPhrases(in words: [String], states: [WordMatchState], context: Int = 2) -> String? {
+        let missed = words.indices.filter { $0 < states.count && states[$0].needsAttention }
+        guard !missed.isEmpty else { return nil }
+
+        var stretches: [ClosedRange<Int>] = []
+        for index in missed {
+            let stretch = max(0, index - context)...min(words.count - 1, index + context)
+            if let last = stretches.last, stretch.lowerBound <= last.upperBound + 1 {
+                stretches[stretches.count - 1] = last.lowerBound...max(last.upperBound, stretch.upperBound)
+            } else {
+                stretches.append(stretch)
+            }
+        }
+
+        let text = stretches
+            .map { words[$0].joined(separator: " ").trimmingCharacters(in: .punctuationCharacters) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ". ")
+        return ReadAloudPassage.normalizedCustomText(text)
+    }
 }
 
 // MARK: - Read Aloud View Model
@@ -52,11 +86,6 @@ class ReadAloudViewModel {
 
     private var startTime: Date?
     private var timerTask: Task<Void, Never>?
-    /// Seconds spent listening to the model line. Subtracted from the take so
-    /// the result's words-per-minute is measured against time the reader was
-    /// actually reading.
-    private var modelPlaybackSeconds: TimeInterval = 0
-    private var modelPlaybackStarted: Date?
 
     /// Lifetime read-aloud count. In UserDefaults for the same reason as the
     /// drill counter: the view model is rebuilt per presentation, so anything
@@ -89,8 +118,6 @@ class ReadAloudViewModel {
         errorMessage = nil
         result = nil
         elapsedTime = 0
-        modelPlaybackSeconds = 0
-        modelPlaybackStarted = nil
 
         let authorized = await service.requestAuthorization()
         // The auto-start runs in the session view's `.task`, which cancels on
@@ -128,9 +155,7 @@ class ReadAloudViewModel {
 
         guard let passage = selectedPassage else { return }
 
-        endModelPlaybackClock()
-        let elapsed = startTime.map { Date().timeIntervalSince($0) } ?? 0
-        let timeTaken = max(0, elapsed - modelPlaybackSeconds)
+        let timeTaken = readingTime()
         let heardNothing = service.matchedWordCount == 0 && service.mismatchedWordCount == 0 && timeTaken > 3
 
         result = ReadAloudResult(
@@ -157,10 +182,11 @@ class ReadAloudViewModel {
     }
 
     /// A degraded session says so on its result screen instead of standing as
-    /// a verdict: recognition died mid-read, or the mic never picked up a word.
+    /// a verdict: the reader finished while the mic was stalled, or the mic
+    /// never picked up a word.
     private func notice(for timeTaken: TimeInterval, heardNothing: Bool) -> String? {
         if let failure = service.recognitionFailureMessage {
-            return failure
+            return "The mic stopped before you finished, so this scores the part we heard. \(failure)"
         }
         if heardNothing {
             return "We didn't catch any words. Try speaking up, or move somewhere quieter."
@@ -176,8 +202,6 @@ class ReadAloudViewModel {
         result = nil
         errorMessage = nil
         elapsedTime = 0
-        modelPlaybackSeconds = 0
-        modelPlaybackStarted = nil
     }
 
     // MARK: - Hear the model
@@ -188,23 +212,30 @@ class ReadAloudViewModel {
     /// *before* opening a passage, which meant the one moment you want to hear
     /// the line - halfway through, having just fumbled it - was the one moment
     /// you could not. Holding the read costs nothing now: recognition comes
-    /// back on the same transcript.
+    /// back on the same transcript, and the service stops the clock while the
+    /// model plays.
     func pauseForModel() {
         guard sessionState == .listening, !service.isPaused else { return }
-        modelPlaybackStarted = Date()
         service.pauseForModelPlayback()
     }
 
     func resumeAfterModel() {
         guard sessionState == .listening, service.isPaused else { return }
-        endModelPlaybackClock()
         service.resumeAfterModelPlayback()
     }
 
-    private func endModelPlaybackClock() {
-        guard let modelPlaybackStarted else { return }
-        modelPlaybackSeconds += Date().timeIntervalSince(modelPlaybackStarted)
-        self.modelPlaybackStarted = nil
+    /// The mic stalled and the reader wants it back. Their place is kept.
+    func resumeListening() {
+        guard sessionState == .listening else { return }
+        service.resumeListening()
+    }
+
+    /// Wall-clock time since the read started, less every second it spent
+    /// held - hearing the model, through a call, in the background, or
+    /// stalled. What the clock shows and what words per minute divides by.
+    private func readingTime(at date: Date = Date()) -> TimeInterval {
+        guard let startTime else { return 0 }
+        return max(0, date.timeIntervalSince(startTime) - service.heldDuration(until: date))
     }
 
     func retryPassage() async {
@@ -222,6 +253,17 @@ class ReadAloudViewModel {
     /// Listening is held while the model line plays. The mic indicator says so
     /// rather than claiming to be listening to a synthesiser.
     var isHearingModel: Bool { service.isPaused }
+    /// A call, Siri or leaving the app has the mic. The read picks up again on
+    /// its own when the app is back.
+    var isHeldBySystem: Bool { service.isHeldBySystem }
+    /// The mic stopped and automatic recovery gave up. Resume or Done.
+    var isStalled: Bool { service.isStalled }
+    /// The recognizer is actually hearing the room. A word's pronunciation can
+    /// only play when it is not, or the reader would be scored on the
+    /// synthesiser.
+    var isMicOpen: Bool {
+        service.isListening && !service.isPaused && !service.isHeldBySystem && !service.isStalled
+    }
 
     // MARK: - Timer
 
@@ -230,25 +272,24 @@ class ReadAloudViewModel {
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                guard let self, let start = self.startTime else { continue }
-                self.elapsedTime = Date().timeIntervalSince(start)
+                guard let self, self.startTime != nil else { continue }
+                self.elapsedTime = self.readingTime()
 
                 guard self.sessionState == .listening else { continue }
 
-                // A recognizer that died for good ends the session now -
-                // letting the clock run on produces a confident-looking zero.
-                if self.service.recognitionFailureMessage != nil {
-                    self.stopSession()
-                    continue
-                }
+                // A recognizer that stops for good no longer ends the session:
+                // the service holds the read as stalled, the clock stops with
+                // it, and the reader chooses Resume or Done. Ending it here is
+                // what used to turn a dropped mic into a read that started
+                // again from the first word.
 
                 // Backstop for a mic that went quiet without saying why.
-                // Recognition now survives its own request boundaries, so a
-                // service that is no longer listening mid-session has hit
-                // something none of us predicted - land on the result screen
-                // with the words that were matched rather than leaving a live
-                // clock over a dead microphone and a disabled Done button,
-                // which is what made a dropped read feel like a lost one.
+                // Recognition survives its own request boundaries and every
+                // hold the service knows about, so a service that is no longer
+                // listening mid-session has hit something none of us
+                // predicted - land on the result screen with the words that
+                // were matched rather than leaving a live clock over a dead
+                // microphone and a disabled Done button.
                 if !self.service.isListening {
                     self.stopSession()
                     continue

@@ -4,6 +4,8 @@ struct ReadAloudResultView: View {
     let result: ReadAloudResult
     let onRetry: () -> Void
     let onDone: () -> Void
+    /// Runs a short passage built from the stumbles. Nil hides the button.
+    var onPracticeMisses: ((String) -> Void)?
 
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
@@ -93,6 +95,14 @@ struct ReadAloudResultView: View {
                         GlassButton(title: "Try again", icon: "arrow.clockwise", style: .primary) {
                             Haptics.medium()
                             onRetry()
+                        }
+
+                        if let misses = result.missedPhrasesText, let onPracticeMisses {
+                            GlassButton(title: "Drill what you missed", icon: "target", style: .secondary) {
+                                Haptics.medium()
+                                onPracticeMisses(misses)
+                            }
+                            .accessibilityHint("Reads only the phrases you missed or skipped")
                         }
 
                         GlassButton(title: "Done", icon: "checkmark", style: .secondary) {

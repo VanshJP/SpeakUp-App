@@ -15,6 +15,11 @@ struct ReadAloudSessionView: View {
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
     @State private var didAutoStartSession = false
+    /// The short passage "Drill what you missed" swaps in, run in this same
+    /// cover. Nil while reading the passage the session opened on.
+    @State private var drilledPassage: ReadAloudPassage?
+
+    private var currentPassage: ReadAloudPassage { drilledPassage ?? passage }
 
     @ScaledMetric(relativeTo: .title2) private var passageFontSize: CGFloat = 22
 
@@ -62,6 +67,9 @@ struct ReadAloudSessionView: View {
             }
         }
         .ignoresSafeArea()
+        // A read is minutes of speaking without touching the glass - exactly
+        // what Auto-Lock waits for. Locking mid-passage took the mic with it.
+        .keepsScreenAwake(viewModel.sessionState == .listening)
         .task {
             guard !didAutoStartSession else { return }
             didAutoStartSession = true
@@ -94,13 +102,19 @@ struct ReadAloudSessionView: View {
                 finishedRead = nil
                 viewModel.reset()
                 dismiss()
+            }, onPracticeMisses: { text in
+                guard let misses = ReadAloudPassage.custom(from: text) else { return }
+                finishedRead = nil
+                drilledPassage = misses
+                lastAutoScrolledWordIndex = 0
+                Task { await viewModel.startSession(passage: misses) }
             })
         }
         .sheet(item: $selectedWord) { detail in
             WordDetailSheet(
                 detail: detail,
                 pronunciationService: pronunciationService,
-                micActive: viewModel.isListening
+                micActive: viewModel.isMicOpen
             )
         }
         .alert(
@@ -245,7 +259,7 @@ struct ReadAloudSessionView: View {
     /// it. Position is carried by the highlight and the colour ramp instead,
     /// neither of which touches layout.
     private var passageText: some View {
-        let words = passage.words
+        let words = currentPassage.words
         let states = viewModel.wordStates
 
         return WrappingHStack(spacing: 6, lineSpacing: 12, metricsKey: passageFontSize) {
@@ -272,6 +286,9 @@ struct ReadAloudSessionView: View {
                     .id("word_\(index)")
             }
         }
+        // A new passage gets a new layout: the flow cache is keyed on word
+        // count and font size, which two passages can share.
+        .id(currentPassage.id)
     }
 
     /// Words not yet reached are noise to VoiceOver; processed words carry
@@ -338,7 +355,7 @@ struct ReadAloudSessionView: View {
                 pronunciationService.stop()
             } else {
                 viewModel.pauseForModel()
-                pronunciationService.speak(text: passage.text, rate: 0.42)
+                pronunciationService.speak(text: currentPassage.text, rate: 0.42)
                 // Nothing to wait for if the synthesiser declined the text.
                 if !pronunciationService.isSpeaking {
                     viewModel.resumeAfterModel()
@@ -353,18 +370,49 @@ struct ReadAloudSessionView: View {
     }
 
     private var micStatus: (label: String, color: Color) {
+        if viewModel.isStalled { return ("Mic stopped", AppColors.warning) }
         if viewModel.isHearingModel { return ("Hearing it", AppColors.toolReadAloud) }
+        if viewModel.isHeldBySystem { return ("Paused", AppColors.scoreEmpty) }
         if viewModel.isListening { return ("Listening...", AppColors.success) }
         return ("Not listening", AppColors.scoreEmpty)
+    }
+
+    /// The mic stopped and could not be brought back automatically. The read
+    /// is held, not lost: this used to end the session, and the only way on
+    /// was to start the passage again from the first word.
+    private var stalledNotice: some View {
+        VStack(spacing: 10) {
+            Text("The mic stopped. Your place is saved, so you can pick up where you left off.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            GlassButton(
+                title: "Resume reading",
+                icon: "mic.fill",
+                style: .primary,
+                size: .medium,
+                fullWidth: true
+            ) {
+                Haptics.medium()
+                viewModel.resumeListening()
+            }
+            .accessibilityLabel("Resume reading from where you stopped")
+        }
     }
 
     private var bottomControls: some View {
         let status = micStatus
 
         return VStack(spacing: 12) {
-            hearItButton
-                .disabled(!viewModel.isListening)
-                .opacity(viewModel.isListening ? 1 : 0.5)
+            if viewModel.isStalled {
+                stalledNotice
+            } else {
+                hearItButton
+                    .disabled(!viewModel.isListening)
+                    .opacity(viewModel.isListening ? 1 : 0.5)
+            }
 
             HStack(spacing: 20) {
                 HStack(spacing: 8) {
