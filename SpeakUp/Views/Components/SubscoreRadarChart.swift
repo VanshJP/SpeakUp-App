@@ -113,6 +113,12 @@ struct SubscoreRadarChart: View {
     /// Draws every wedge in a single Canvas pass rather than one SwiftUI Shape
     /// per ring, so the view count stays flat during the draw-in animation.
     ///
+    /// Radius encodes the value continuously. It used to quantize into six
+    /// buckets aligned to the score bands, which meant everything from 60 to 79
+    /// drew an identical shape. Five different subscores rendering the same
+    /// made the chart decorative rather than informative. The concentric rings
+    /// survive as a *scale grid* drawn across the full annulus: they are
+    /// graph paper now, not the encoding.
     private func wedgeCanvas(outerRadius: CGFloat, innerRadius: CGFloat) -> some View {
         let count = max(axes.count, 1)
         let step = 2 * Double.pi / Double(count)

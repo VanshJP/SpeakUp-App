@@ -350,7 +350,10 @@ struct FilterChip: View {
 
 /// Selected matches `SectionPicker` (solid white). Idle is quiet glass.
 /// The chrome swap itself never animates. Call sites wrap selection in
-/// their own animation.
+/// `withAnimation`, and Liquid Glass does not cross-fade: mid-spring the
+/// effect samples its backdrop wrong and renders as a dark rectangle that
+/// clips the label for a beat. Hard-cut the surface; let the list content
+/// spring underneath.
 ///
 /// This used to live beside `FilterPill` in `Components/FilterPill.swift`.
 /// That file was deleted with the tool pages' filter bars, but `FilterChip`

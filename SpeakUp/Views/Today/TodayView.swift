@@ -1068,6 +1068,7 @@ private extension View {
 /// Rocks ±0.3° on a 0.9s period. Driven by `TimelineView` so a drop or
 /// re-render cannot restart the swing - the old `@State` + `repeatForever`
 /// version jumped back to the start of the ease every time a block moved,
+/// which is what made edit mode feel like the page was shaking.
 private struct WiggleModifier: ViewModifier {
     let active: Bool
     let phase: Double
