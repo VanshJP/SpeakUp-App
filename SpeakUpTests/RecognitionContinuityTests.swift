@@ -75,6 +75,77 @@ struct RecognitionContinuityTests {
         #expect(classify("how are you", "How are you?", closed: true) == .revision)
     }
 
+    // MARK: - Pauses
+
+    /// The pause is the one signal that separates new speech from a revision
+    /// when the held utterance is only a word or two.
+    @Test func aLoneFillerAfterAPauseIsNewSpeech() {
+        let held = words("so I think um we should go")
+        #expect(RecognitionContinuity.classify(previous: held, next: ["um"], previousClosed: false, afterPause: true) == .restart)
+        // Without the pause it reads as a shrunken copy, and waits.
+        #expect(RecognitionContinuity.classify(previous: held, next: ["um"], previousClosed: false) == .ignore)
+    }
+
+    @Test func aShortUtteranceBeforeAPauseIsKept() {
+        let start = Date()
+        var transcript = RequestTranscript()
+        transcript.apply("The quick", utteranceEnded: false, at: start)
+        transcript.apply("brown", utteranceEnded: false, at: start.addingTimeInterval(2))
+        transcript.apply("brown fox", utteranceEnded: false, at: start.addingTimeInterval(2.2))
+
+        #expect(transcript.text == "The quick brown fox")
+    }
+
+    @Test func aQuickRewriteOfAShortUtteranceIsStillARevision() {
+        let start = Date()
+        var transcript = RequestTranscript()
+        transcript.apply("I", utteranceEnded: false, at: start)
+        transcript.apply("Hi there", utteranceEnded: false, at: start.addingTimeInterval(0.3))
+
+        #expect(transcript.text == "Hi there")
+    }
+
+    // MARK: - Whole-request finals
+
+    /// Partials restart after a pause, then the final restates the whole
+    /// request. Treated as a revision of the second utterance it would put
+    /// the first one in twice.
+    @Test func aFinalThatRestatesTheWholeRequestReplacesIt() {
+        let start = Date()
+        var transcript = RequestTranscript()
+        for (offset, partial) in ["The", "The morning", "The morning train"].enumerated() {
+            transcript.apply(partial, utteranceEnded: false, at: start.addingTimeInterval(Double(offset) * 0.25))
+        }
+        for (offset, partial) in ["Commuters", "Commuters hurried"].enumerated() {
+            transcript.apply(partial, utteranceEnded: false, at: start.addingTimeInterval(3 + Double(offset) * 0.25))
+        }
+        transcript.apply("The morning train. Commuters hurried.", utteranceEnded: true, at: start.addingTimeInterval(4.5))
+
+        #expect(transcript.text == "The morning train. Commuters hurried.")
+        #expect(transcript.committed.isEmpty)
+    }
+
+    @Test func longNewSpeechAfterATinyUtteranceIsNotARestatement() {
+        // "stop", pause, then a long second utterance: long, but it does not
+        // carry the committed word, so the committed word stays.
+        #expect(
+            RecognitionContinuity.classify(
+                previous: ["look", "both", "ways", "then"],
+                next: ["look", "both", "ways", "then", "cross"],
+                previousClosed: false,
+                committed: ["stop"]
+            ) == .revision
+        )
+        #expect(
+            RecognitionContinuity.classify(
+                previous: words("commuters hurried"),
+                next: words("the morning train commuters hurried"),
+                previousClosed: false,
+                committed: words("the morning train")
+            ) == .wholeRequest
+        )
+    }
+
     // MARK: - Ignored
 
     @Test func blankAndShrunkenResultsNeverTakeWordsBack() {

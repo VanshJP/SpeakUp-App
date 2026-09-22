@@ -62,9 +62,17 @@ private nonisolated struct PendingResults: Sendable {
     /// Results that ended an utterance, oldest first. Kept in order rather
     /// than coalesced: each one is the signal that tells a restart from a
     /// revision (see `RequestTranscript`), and there is one per pause.
-    var closed: [String] = []
+    var closed: [HeardResult] = []
     /// The newest partial since the last of those. Latest-wins.
-    var latest: String?
+    var latest: HeardResult?
+}
+
+/// One transcript and when the recognizer delivered it. The time is taken in
+/// the callback, because a coalesced partial can wait for the main actor and
+/// the gap before it is how `RequestTranscript` spots a pause.
+private nonisolated struct HeardResult: Sendable {
+    let transcript: String
+    let at: Date
 }
 
 // MARK: - Read Aloud Service
@@ -392,13 +400,14 @@ class ReadAloudService {
                 // empty. That result is the one that must not be coalesced
                 // away.
                 let endsUtterance = result.speechRecognitionMetadata != nil
+                let heard = HeardResult(transcript: transcript, at: Date())
                 pendingResults.withLock { pending in
                     var entry = pending[segment] ?? PendingResults()
                     if endsUtterance {
-                        entry.closed.append(transcript)
+                        entry.closed.append(heard)
                         entry.latest = nil
                     } else {
-                        entry.latest = transcript
+                        entry.latest = heard
                     }
                     pending[segment] = entry
                 }
@@ -628,10 +637,15 @@ class ReadAloudService {
             isInterrupted = true
             holdCapture()
         case .ended:
-            // Rebuild regardless of what the options say. `.shouldResume` is
-            // advice about resuming *playback*; a reader who has just put the
-            // phone down wants the mic back either way, and a session that is
-            // still taken fails into a stall they can resume from.
+            // `didBecomeActive` may have rebuilt already - Siri and a declined
+            // call end that way - and rebuilding a working graph a second time
+            // would cut off whatever the reader is saying.
+            guard isInterrupted || isStalled else { return }
+            // Otherwise rebuild regardless of what the options say.
+            // `.shouldResume` is advice about resuming *playback*; a reader who
+            // has just put the phone down wants the mic back either way, and a
+            // session that is still taken fails into a stall they can resume
+            // from.
             isInterrupted = false
             resumeCapture(reason: "interruption ended")
         @unknown default:
@@ -855,11 +869,11 @@ class ReadAloudService {
             let slot = segmentID - segmentBaseID
             guard slot >= 0, slot < segments.count, let results = pending[segmentID] else { continue }
             let before = segments[slot]
-            for transcript in results.closed {
-                segments[slot].apply(transcript, utteranceEnded: true)
+            for closed in results.closed {
+                segments[slot].apply(closed.transcript, utteranceEnded: true, at: closed.at)
             }
             if let latest = results.latest {
-                segments[slot].apply(latest, utteranceEnded: false)
+                segments[slot].apply(latest.transcript, utteranceEnded: false, at: latest.at)
             }
             if segments[slot] != before {
                 changed = true

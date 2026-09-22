@@ -62,7 +62,10 @@ struct ReadAloudResult: Identifiable {
             .map { words[$0].joined(separator: " ").trimmingCharacters(in: .punctuationCharacters) }
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
-        return ReadAloudPassage.normalizedCustomText(text)
+        // A take with many misses can run past one scored section. Cut at a
+        // stretch or word boundary, never mid-word; the misses left over are
+        // there for the next pass.
+        return ReadAloudPassage.practiceSizedExcerpt(from: text)
     }
 }
 

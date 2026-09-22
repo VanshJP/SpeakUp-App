@@ -104,7 +104,9 @@ struct ConfidenceExerciseView: View {
     /// Speak the step, wait for the line to finish, hold, advance. Cancelled
     /// by any change to `guidedStepKey`, so a manual Next never double-steps.
     private func runGuidedStep() async {
-        guard isGuided, !isComplete else { return }
+        // A task cancelled before it first ran must not reach the audio
+        // session after the screen has handed it back.
+        guard !Task.isCancelled, isGuided, !isComplete else { return }
         holdProgress = 0
         didUseGuidance = true
 

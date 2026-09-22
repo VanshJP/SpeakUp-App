@@ -49,6 +49,10 @@ enum DrillProgressStore {
 
     private static var defaults: UserDefaults { .standard }
 
+    /// Decoded once per launch. `DrillMode.description` reads through here,
+    /// and view bodies read that on every render.
+    private static var cached: [String: DrillRecord]?
+
     static func record(for mode: DrillMode) -> DrillRecord? {
         records[mode.rawValue]
     }
@@ -77,14 +81,16 @@ enum DrillProgressStore {
     }
 
     private static var records: [String: DrillRecord] {
-        guard
-            let data = defaults.data(forKey: recordsKey),
-            let decoded = try? JSONDecoder().decode([String: DrillRecord].self, from: data)
-        else { return [:] }
+        if let cached { return cached }
+        let decoded = defaults.data(forKey: recordsKey)
+            .flatMap { try? JSONDecoder().decode([String: DrillRecord].self, from: $0) }
+            ?? [:]
+        cached = decoded
         return decoded
     }
 
     private static func save(_ records: [String: DrillRecord]) {
+        cached = records
         guard let data = try? JSONEncoder().encode(records) else { return }
         defaults.set(data, forKey: recordsKey)
     }

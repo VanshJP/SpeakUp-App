@@ -52,6 +52,15 @@ class LiveTranscriptionService {
     /// display back down.
     private var utteranceWordCount = 0
     private var utteranceFillerCount = 0
+    /// When the result that last changed the live utterance arrived. A long
+    /// gap before the next partial marks a pause.
+    private var utteranceHeardAt: Date?
+    /// What the live request has committed so far - its earlier utterances -
+    /// so a final that restates the whole request replaces them instead of
+    /// being counted on top of them.
+    private var requestWords: [String] = []
+    private var requestWordCount = 0
+    private var requestFillerCount = 0
     /// Cumulative offset so `lastSegmentEndTime` stays monotonic across
     /// recognition restarts (SFSpeech resets timestamps per request).
     private var segmentTimeOffset: TimeInterval = 0
@@ -310,6 +319,9 @@ class LiveTranscriptionService {
         // A new request starts its transcript empty. Whatever the last one
         // heard is finished; bank it rather than let the next result replace it.
         commitUtterance()
+        requestWords = []
+        requestWordCount = 0
+        requestFillerCount = 0
         recognitionGeneration += 1
         let generation = recognitionGeneration
 
@@ -333,11 +345,14 @@ class LiveTranscriptionService {
             // that reads `isActive` / `lastSegmentEndTime`.
             let hadError = error != nil
             let isFinal = result?.isFinal ?? false
+            // Stamped here rather than on the main actor, which can hold a
+            // callback back and hide the pause in front of it.
+            let heardAt = Date()
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 // Ignore callbacks from cancelled generations (restart/stop).
                 guard self.isActive, self.recognitionGeneration == generation else { return }
-                if let result { self.processPartialResult(result) }
+                if let result { self.processPartialResult(result, heardAt: heardAt) }
 
                 // SFSpeech auto-finalizes after a pause. Previously we tore
                 // down AVAudioEngine here, which yanked the shared input graph
@@ -392,10 +407,12 @@ class LiveTranscriptionService {
     }
 
     @MainActor
-    private func processPartialResult(_ result: SFSpeechRecognitionResult) {
+    private func processPartialResult(_ result: SFSpeechRecognitionResult, heardAt: Date) {
         let segments = result.bestTranscription.segments
         let heard = RecognitionContinuity.words(in: segments.map(\.substring).joined(separator: " "))
         let endsUtterance = result.speechRecognitionMetadata != nil
+        let afterPause = !endsUtterance
+            && (utteranceHeardAt.map { heardAt.timeIntervalSince($0) >= RecognitionContinuity.restartGap } ?? false)
 
         // Same rules as Read Aloud: a result that starts over after a pause is
         // a new utterance, not a revision of the old one, and a blank or
@@ -403,7 +420,9 @@ class LiveTranscriptionService {
         switch RecognitionContinuity.classify(
             previous: utteranceWords,
             next: heard,
-            previousClosed: utteranceIsClosed
+            previousClosed: utteranceIsClosed,
+            afterPause: afterPause,
+            committed: requestWords
         ) {
         case .ignore:
             utteranceIsClosed = utteranceIsClosed || endsUtterance
@@ -411,11 +430,15 @@ class LiveTranscriptionService {
         case .restart:
             commitUtterance()
             utteranceIsClosed = endsUtterance
+        case .wholeRequest:
+            absorbRequestIntoUtterance()
+            utteranceIsClosed = endsUtterance
         case .revision:
             let grew = heard.count > utteranceWords.count
             utteranceIsClosed = endsUtterance || (utteranceIsClosed && !grew)
         }
         utteranceWords = heard
+        utteranceHeardAt = heardAt
 
         let wordCount = segments.count
         guard wordCount > 0 else {
@@ -472,7 +495,26 @@ class LiveTranscriptionService {
     private func commitUtterance() {
         committedWordCount += utteranceWordCount
         committedFillerCount += utteranceFillerCount
+        requestWords += utteranceWords
+        requestWordCount += utteranceWordCount
+        requestFillerCount += utteranceFillerCount
         resetUtterance()
+    }
+
+    /// The recognizer restated the whole request in one result. Move what the
+    /// request had committed back into the live utterance, so the restated
+    /// words count once and the session total does not move, and mark their
+    /// segments as already tagged for the per-word filler tallies.
+    @MainActor
+    private func absorbRequestIntoUtterance() {
+        committedWordCount -= requestWordCount
+        committedFillerCount -= requestFillerCount
+        utteranceWordCount += requestWordCount
+        utteranceFillerCount += requestFillerCount
+        lastProcessedSegmentCount += requestWordCount
+        requestWords = []
+        requestWordCount = 0
+        requestFillerCount = 0
     }
 
     @MainActor
@@ -481,6 +523,7 @@ class LiveTranscriptionService {
         utteranceIsClosed = false
         utteranceWordCount = 0
         utteranceFillerCount = 0
+        utteranceHeardAt = nil
         lastProcessedSegmentCount = 0
     }
 

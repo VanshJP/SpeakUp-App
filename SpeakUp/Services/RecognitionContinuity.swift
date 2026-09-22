@@ -24,6 +24,10 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
     /// The recognizer moved on to a new utterance. Keep what is held and
     /// start another.
     case restart
+    /// The result restates everything the request has heard: a final that
+    /// carries the whole request after its partials restarted. Replace the
+    /// committed utterances and the held one with it, or they count twice.
+    case wholeRequest
     /// A blank or shrunken copy of what is already held. Drop it.
     case ignore
 
@@ -34,6 +38,11 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
     /// How many words past the common prefix `sharedWordCount` compares.
     static let comparisonWindow = 64
 
+    /// A held utterance that has not changed for this long before a partial
+    /// arrives was followed by a pause, which is when the recognizer restarts.
+    /// Partials inside continuous speech land a few hundred milliseconds apart.
+    static let restartGap: TimeInterval = 1.0
+
     /// Classifies `next` against the utterance currently held.
     ///
     /// - Parameters:
@@ -42,11 +51,36 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
     ///   - previousClosed: The recognizer marked the held utterance finished
     ///     (a result carrying `speechRecognitionMetadata`). Whatever follows is
     ///     new speech unless it repeats or continues that utterance.
-    static func classify(previous: [String], next: [String], previousClosed: Bool) -> RecognitionContinuity {
+    ///   - afterPause: `next` is a partial that arrived after the held
+    ///     utterance had been unchanged for `restartGap`. Finals and
+    ///     utterance-ending results settle late and never count as a pause.
+    ///   - committed: Utterances this request already committed, in
+    ///     `words(in:)` form, so a result restating all of them is recognized.
+    static func classify(
+        previous: [String],
+        next: [String],
+        previousClosed: Bool,
+        afterPause: Bool = false,
+        committed: [String] = []
+    ) -> RecognitionContinuity {
         guard !previous.isEmpty else { return .revision }
         guard !next.isEmpty else { return .ignore }
 
+        if !committed.isEmpty, restatesWholeRequest(committed: committed, held: previous, next: next) {
+            return .wholeRequest
+        }
+
         let prefix = commonPrefixLength(previous, next)
+
+        // After a pause, a partial that no longer starts the way the held
+        // utterance did, and shares little with it, is new speech. Without the
+        // pause every rule below has to guess, and they guess "revision" for a
+        // one- or two-word utterance (those are revised whole all the time) and
+        // "ignore" for new speech that repeats a held word, like a lone "um".
+        if afterPause, prefix == 0,
+           sharedWordCount(previous, next) * 2 < min(previous.count, comparisonWindow) {
+            return .restart
+        }
 
         if previousClosed {
             // A recognizer that does keep the whole request in one transcript
@@ -77,6 +111,21 @@ nonisolated enum RecognitionContinuity: Equatable, Sendable {
         // its start is not mistaken for new speech and counted twice.
         let compared = prefix + min(previous.count - prefix, comparisonWindow)
         return sharedWordCount(previous, next) * 2 >= compared ? .revision : .restart
+    }
+
+    /// Whether `next` restates the committed utterances and the held one
+    /// rather than adding to them. It has to be about as long as all of them,
+    /// carry most of the committed words themselves - long new speech is not a
+    /// restatement - and share most of the whole in order.
+    private static func restatesWholeRequest(committed: [String], held: [String], next: [String]) -> Bool {
+        let whole = committed + held
+        guard next.count + revisionSlack >= whole.count else { return false }
+        guard sharedWordCount(committed, next) * 4 >= min(committed.count, comparisonWindow) * 3 else {
+            return false
+        }
+        let prefix = commonPrefixLength(whole, next)
+        let compared = prefix + min(whole.count - prefix, comparisonWindow)
+        return sharedWordCount(whole, next) * 4 >= compared * 3
     }
 
     // MARK: - Comparison form
@@ -151,28 +200,48 @@ nonisolated struct RequestTranscript: Equatable, Sendable {
     private(set) var live = ""
     /// The recognizer marked `live` finished. See `RecognitionContinuity`.
     private(set) var liveIsClosed = false
+    /// When the result that last changed `live` arrived. A long quiet gap
+    /// before the next partial is what a restart looks like.
+    private(set) var liveHeardAt: Date?
 
     init() {}
 
-    /// - Parameter utteranceEnded: The result carried
-    ///   `speechRecognitionMetadata`, which the recognizer attaches when it
-    ///   considers an utterance over - on every final, and on some systems at
-    ///   each pause.
-    mutating func apply(_ transcript: String, utteranceEnded: Bool) {
+    /// - Parameters:
+    ///   - utteranceEnded: The result carried `speechRecognitionMetadata`,
+    ///     which the recognizer attaches when it considers an utterance over -
+    ///     on every final, and on some systems at each pause.
+    ///   - time: When the result arrived from the recognizer, not when it was
+    ///     applied: coalescing can hold a partial back.
+    mutating func apply(_ transcript: String, utteranceEnded: Bool, at time: Date = Date()) {
         let held = RecognitionContinuity.words(in: live)
         let incoming = RecognitionContinuity.words(in: transcript)
+        let afterPause = !utteranceEnded
+            && (liveHeardAt.map { time.timeIntervalSince($0) >= RecognitionContinuity.restartGap } ?? false)
 
-        switch RecognitionContinuity.classify(previous: held, next: incoming, previousClosed: liveIsClosed) {
+        switch RecognitionContinuity.classify(
+            previous: held,
+            next: incoming,
+            previousClosed: liveIsClosed,
+            afterPause: afterPause,
+            committed: committed.flatMap(RecognitionContinuity.words(in:))
+        ) {
         case .revision:
             // A finished utterance reported again stays finished; one that
             // grew means the recognizer carried on inside it.
             let grew = incoming.count > held.count
             liveIsClosed = utteranceEnded || (liveIsClosed && !grew)
             live = transcript
+            liveHeardAt = time
         case .restart:
             committed.append(live)
             live = transcript
             liveIsClosed = utteranceEnded
+            liveHeardAt = time
+        case .wholeRequest:
+            committed = []
+            live = transcript
+            liveIsClosed = utteranceEnded
+            liveHeardAt = time
         case .ignore:
             liveIsClosed = liveIsClosed || utteranceEnded
         }

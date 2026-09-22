@@ -147,9 +147,13 @@ newest transcript as-is erased everything before the pause, and alignment put
 the reader back near word one: the "read restarts from zero" report. Every
 result now goes through `RequestTranscript.apply`, which asks the pure
 `RecognitionContinuity.classify` whether it is a revision, a new utterance
-(commit the old one), or a blank / shrunken copy (ignore it). A result carrying
+(commit the old one), a restatement of the whole request (replace everything
+held, or the first utterance counts twice), or a blank / shrunken copy (ignore
+it). Two signals decide the hard cases: a result carrying
 `speechRecognitionMetadata` marks the end of an utterance and is never coalesced
-away (`PendingResults.closed`). Pinned in `SpeakUpTests/RecognitionContinuityTests.swift`.
+away (`PendingResults.closed`), and a partial arriving after `restartGap` of
+quiet (stamped when the recognizer delivered it, `HeardResult.at`) is new speech
+even after a one-word utterance. Pinned in `SpeakUpTests/RecognitionContinuityTests.swift`.
 
 **The mic is held, never lost.** Every way capture can go down is a *hold* on
 the read, not the end of it — hearing the model line (`isPaused`), a call or
