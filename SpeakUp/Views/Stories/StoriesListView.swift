@@ -128,18 +128,7 @@ struct StoriesListView: View {
 
     private func section(title: String, icon: String, stories: [Story]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 4)
+            GlassSectionHeader(title, icon: icon)
 
             VStack(spacing: 8) {
                 ForEach(stories) { story in

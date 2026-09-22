@@ -45,7 +45,7 @@ struct RoutineSettingsView: View {
 
     private var chainSection: some View {
         VStack(spacing: 10) {
-            GlassSectionHeader("In your routine", icon: "list.bullet.indent")
+            GlassSectionHeader("In your routine", icon: TodayHomeModule.routine.icon)
 
             GlassCard(padding: 4) {
                 VStack(spacing: 0) {
@@ -60,7 +60,7 @@ struct RoutineSettingsView: View {
 
     private func chainRow(_ step: RoutineStep, index: Int) -> some View {
         HStack(spacing: 12) {
-            OnboardingGlyph(icon: step.icon, tint: step.tint, size: 30)
+            IconChip(icon: step.icon, tint: step.tint, size: 30)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(step.title)
@@ -138,7 +138,7 @@ struct RoutineSettingsView: View {
                             apply(PracticeRoutine.adding(step, to: steps))
                         } label: {
                             HStack(spacing: 12) {
-                                OnboardingGlyph(icon: step.icon, tint: step.tint, size: 30)
+                                IconChip(icon: step.icon, tint: step.tint, size: 30)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(step.title)

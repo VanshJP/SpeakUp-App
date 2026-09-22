@@ -176,14 +176,7 @@ struct LessonContentView: View {
 
     private func sectionChrome(title: String, icon: String, color: Color) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(color)
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(color.opacity(0.15))
-                )
+            IconChip(icon: icon, tint: color, size: 32)
 
             Text(title)
                 .font(.headline)

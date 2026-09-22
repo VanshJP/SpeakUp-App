@@ -128,10 +128,7 @@ struct LessonBoardHeader: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(isReviewing ? "Reviewing" : "Today's focus")
-                        .font(.system(size: 11, weight: .semibold))
-                        .textCase(.uppercase)
-                        .tracking(0.8)
-                        .foregroundStyle(identity.accent)
+                        .eyebrowStyle(identity.accent)
 
                     Text(lesson.title)
                         .font(.title3.weight(.bold))
@@ -190,7 +187,8 @@ struct LessonBoardHeader: View {
     }
 }
 
-/// Segmented lesson progress - Speak / Duolingo-style track above the step chips.
+/// Segmented lesson progress in the sticky bottom bar - the one track on the
+/// lesson screen, Speak / Duolingo style.
 struct LessonProgressTrack: View {
     let total: Int
     let currentIndex: Int
@@ -219,116 +217,6 @@ struct LessonProgressTrack: View {
         if index == currentIndex { return accent }
         if index < currentIndex { return accent.opacity(0.55) }
         return Color.white.opacity(0.12)
-    }
-}
-
-/// Labeled step strip - Learn / Practice / Review. Icons always visible;
-/// completion is a corner badge, never a replacement for the role glyph.
-///
-/// The chips *are* the track: they already carry current, done and locked per
-/// step, so an eyebrow count and a segmented bar above them were the same
-/// three facts drawn three times. The thin bar survives in the sticky bottom
-/// bar, where it is the only progress on screen once this scrolls away.
-struct LessonPlanStrip: View {
-    let lesson: CurriculumLesson
-    let currentIndex: Int
-    let completedIds: Set<String>
-    let accent: Color
-    let onSelect: (Int) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
-                planChip(index: index, activity: activity)
-            }
-        }
-        .padding(10)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AppColors.cardStroke, lineWidth: 1)
-                }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Lesson plan, step \(currentIndex + 1) of \(lesson.activities.count)")
-    }
-
-    private func planChip(index: Int, activity: CurriculumActivity) -> some View {
-        let isCompleted = completedIds.contains(activity.id)
-        let isCurrent = index == currentIndex
-        let canSelect = isCompleted || index <= currentIndex
-        let color = activity.type.teacherColor
-
-        return Button {
-            guard canSelect else { return }
-            Haptics.light()
-            onSelect(index)
-        } label: {
-            VStack(spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(chipFill(isCompleted: isCompleted, isCurrent: isCurrent, color: color))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(
-                                    chipStroke(isCompleted: isCompleted, isCurrent: isCurrent, color: color),
-                                    lineWidth: isCurrent ? 1.5 : 1
-                                )
-                        }
-
-                    Image(systemName: activity.type.teacherIcon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isCurrent || isCompleted ? color : .white.opacity(0.45))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    if isCompleted {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(AppColors.success)
-                            .background(
-                                Circle()
-                                    .fill(Color.black.opacity(0.65))
-                                    .padding(-2)
-                            )
-                            .offset(x: 5, y: -5)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .frame(height: 44)
-                .shadow(
-                    color: isCurrent ? accent.opacity(0.35) : .clear,
-                    radius: isCurrent ? 8 : 0,
-                    y: 2
-                )
-
-                Text("\(index + 1) \(activity.type.teacherRole)")
-                    .font(.system(size: 10, weight: isCurrent ? .semibold : .medium))
-                    .foregroundStyle(isCurrent ? Color.white : Color.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .opacity(canSelect || isCurrent ? 1 : 0.45)
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSelect)
-        .accessibilityLabel("\(activity.type.teacherRole), step \(index + 1)")
-        .accessibilityValue(isCompleted ? "Completed" : (isCurrent ? "Current" : "Upcoming"))
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
-    }
-
-    private func chipFill(isCompleted: Bool, isCurrent: Bool, color: Color) -> Color {
-        if isCurrent { return color.opacity(0.22) }
-        if isCompleted { return AppColors.success.opacity(0.12) }
-        return Color.white.opacity(0.05)
-    }
-
-    private func chipStroke(isCompleted: Bool, isCurrent: Bool, color: Color) -> Color {
-        if isCurrent { return color }
-        if isCompleted { return AppColors.success.opacity(0.4) }
-        return AppColors.cardStroke
     }
 }
 

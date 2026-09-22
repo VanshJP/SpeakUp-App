@@ -28,7 +28,7 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 2. Warm-ups and drills accept `sourceStory` from Library send-to actions.
 3. Deep links: `speakup://story`, `speakup://story/new`.
 4. Tagging must skip cleanly when no LLM backend is available.
-5. Recording detail opened from Story practice history supplies `RecordingDetailSource.story`; “Practice Again” routes through the parent `((Story, RecordingDuration) -> Void)` callback so the next take keeps the same Story and target duration instead of becoming one-minute prompt-less free practice.
+5. Recording detail opened from Story practice history supplies `RecordingDetailSource.story`; “Practice again” routes through the parent `((Story, RecordingDuration) -> Void)` callback so the next take keeps the same Story and target duration instead of becoming one-minute prompt-less free practice.
 6. **`StoryFolderBar` is `FilterChip`** — the same chip the Prompts tab filters with, so the two halves of the
    Library look like one control. It used to be a bespoke capsule filled with the folder's own color when
    selected (plus a white count bubble and a divider), which made the selected story chip the loudest thing on
@@ -51,6 +51,8 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
    same-normalized-name `StoryFolder` (unfiles their stories) so siblings cannot resurrect the chip.
    Folder scope is a clearable filter: re-tapping the selected chip returns to All; `hasActiveFilters` /
    Clear Filters include `folderSelection != .all`.
+
+9. **Nothing touches a story after deleting it.** `StoryEditorView` drops `draftStory` (and its autosave) *before* `deleteStory`: its `onDisappear` runs `finalSave()`, which otherwise wrote the editor's fields straight back into the deleted row. `StoryDetailView` renders nothing past `storyIsGone` (`isDeleted || story.isDeleted || story.modelContext == nil`) and pops itself when the editor sheet it presented deleted the story - it used to stay open on a story that no longer existed. Same rule as `RecordingDetailView.deleteRecording`: stop reading, then delete.
 
 ## Cross-links
 

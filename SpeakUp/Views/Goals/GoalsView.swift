@@ -27,7 +27,7 @@ struct GoalsView: View {
 
                         if !viewModel.activeGoals.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
-                                GlassSectionHeader("Active Goals", icon: "target")
+                                GlassSectionHeader("Active goals", icon: "target")
 
                                 ForEach(viewModel.activeGoals) { goal in
                                     GoalCard(goal: goal, onDelete: {
@@ -38,7 +38,7 @@ struct GoalsView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 10) {
-                            GlassSectionHeader("Add a Goal", icon: "plus.circle")
+                            GlassSectionHeader("Add a goal", icon: "plus.circle")
 
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                                 ForEach(GoalTemplate.templates, id: \.title) { template in

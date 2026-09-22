@@ -239,7 +239,7 @@ struct HistoryView: View {
                     message: selectedFilter == .all
                         ? "Complete your first practice session to see it here."
                         : "Try adjusting your filters or search terms.",
-                    buttonTitle: selectedFilter == .all && searchText.isEmpty ? "Choose Today's Prompt" : nil,
+                    buttonTitle: selectedFilter == .all && searchText.isEmpty ? "Choose today's prompt" : nil,
                     buttonAction: selectedFilter == .all && searchText.isEmpty ? onShowToday : nil
                 )
             } else {

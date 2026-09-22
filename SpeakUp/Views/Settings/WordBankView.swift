@@ -311,11 +311,7 @@ struct WordBankView: View {
             } label: {
                 GlassCard(cornerRadius: 16, tint: AppColors.categorySage.opacity(0.07), padding: 14) {
                     HStack(spacing: 12) {
-                        Image(systemName: "character.book.closed.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(AppColors.categorySage)
-                            .frame(width: 32, height: 32)
-                            .background { Circle().fill(AppColors.categorySage.opacity(0.18)) }
+                        IconChip(icon: "character.book.closed.fill", tint: AppColors.categorySage, size: 32)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Browse the word library")
@@ -555,7 +551,7 @@ struct WordBankView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.caption)
-                        Text("Reset to Defaults")
+                        Text("Reset to defaults")
                             .font(.subheadline.weight(.medium))
                     }
                     .foregroundStyle(.secondary)
@@ -579,7 +575,7 @@ struct WordBankView: View {
         let unconditional = viewModel.activeFillerWords.filter { !$0.isContextDependent }
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Always Detected", icon: "exclamationmark.triangle.fill")
+                GlassSectionHeader("Always detected", icon: "exclamationmark.triangle.fill")
 
                 if unconditional.isEmpty {
                     Text("All unconditional fillers removed")
@@ -605,7 +601,7 @@ struct WordBankView: View {
         let contextual = viewModel.activeFillerWords.filter { $0.isContextDependent }
         return GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassSectionHeader("Context-Dependent", icon: "text.magnifyingglass")
+                GlassSectionHeader("Context-dependent", icon: "text.magnifyingglass")
 
                 Text("These are only flagged when speech patterns suggest filler usage (e.g. surrounded by pauses).")
                     .font(.caption2)

@@ -298,13 +298,14 @@ struct ProgressChartsContent: View {
                             lineWidth: 6
                         )
 
-                        Text("\(latest)")
-                            .font(.system(size: 21, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText())
+                        // Climbs with the ring - both ride `heroRingShown`.
+                        CountUpText(
+                            value: heroRingShown ? Double(latest) : 0,
+                            font: .system(size: 21, weight: .bold, design: .rounded)
+                        )
                     }
                     .frame(width: 58, height: 58)
-                    .animation(AppMotion.reveal.delay(0.1), value: heroRingShown)
+                    .motion(AppMotion.reveal.delay(0.1), value: heroRingShown)
                     .onAppear { heroRingShown = true }
 
                     VStack(alignment: .leading, spacing: 5) {
@@ -459,7 +460,7 @@ struct ScoreProgressChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Overall Score", icon: "chart.xyaxis.line") {
+                GlassCardTitle("Overall score", icon: "chart.xyaxis.line") {
                     if model.points.count >= 3 {
                         HStack(spacing: 4) {
                             Circle().fill(AppColors.primary.opacity(0.4)).frame(width: 6, height: 6)
@@ -659,7 +660,7 @@ struct FillerTrendChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Filler Words per Session", icon: "exclamationmark.bubble.fill") {
+                GlassCardTitle("Filler words per session", icon: "exclamationmark.bubble.fill") {
                     if weeklyData.count >= 2 {
                         HStack(spacing: 4) {
                             Image(systemName: overallTrend < -1 ? "arrow.down.right" : overallTrend > 1 ? "arrow.up.right" : "arrow.right")
@@ -953,7 +954,7 @@ struct SkillBreakdownCard: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Skill Breakdown", icon: "star.fill") {
+                GlassCardTitle("Skill breakdown", icon: "star.fill") {
                     Text("Latest take")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -1025,7 +1026,7 @@ struct SessionFrequencyChart: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
-                GlassCardTitle("Sessions per Week", icon: "calendar") {
+                GlassCardTitle("Sessions per week", icon: "calendar") {
                     if weeklyCounts.count >= 2 {
                         Text("\(goalHitRate)% goal hit")
                             .font(.caption2.weight(.semibold))

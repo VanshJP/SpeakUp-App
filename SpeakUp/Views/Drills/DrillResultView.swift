@@ -5,28 +5,31 @@ struct DrillResultView: View {
     let onTryAgain: () -> Void
     let onDone: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The ring sweeps and the number climbs on arrival - the same count-up
+    /// and odometer ticks as the session reveal, sized for a 30-second rep.
+    @State private var counted = false
+
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
             ZStack {
                 RingProgress(
-                    progress: Double(result.score) / 100,
+                    progress: counted ? Double(result.score) / 100 : 0,
                     color: result.passed ? AppColors.success : AppColors.error,
                     lineWidth: 8
                 )
                 .frame(width: 140, height: 140)
 
                 VStack(spacing: 4) {
-                    Text("\(result.score)")
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                    CountUpText(
+                        value: counted ? Double(result.score) : 0,
+                        font: .system(size: 44, weight: .bold, design: .rounded)
+                    )
 
-                    Text(result.passed ? "Passed" : "Try Again")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(result.passed ? AppColors.success : AppColors.error)
-                        .textCase(.uppercase)
-                        .tracking(0.8)
+                    Text(result.passed ? "Passed" : "Try again")
+                        .eyebrowStyle(result.passed ? AppColors.success : AppColors.error)
                 }
             }
 
@@ -39,7 +42,7 @@ struct DrillResultView: View {
             Spacer()
 
             VStack(spacing: 12) {
-                GlassButton(title: "Try Again", style: .primary, size: .large, fullWidth: true) {
+                GlassButton(title: "Try again", style: .primary, size: .large, fullWidth: true) {
                     onTryAgain()
                 }
 
@@ -49,5 +52,24 @@ struct DrillResultView: View {
             }
             .padding(.bottom, 20)
         }
+        .task { await reveal() }
+    }
+
+    private func reveal() async {
+        guard !reduceMotion else {
+            counted = true
+            landingHaptic()
+            return
+        }
+        withAnimation(.easeOut(duration: 0.9)) { counted = true }
+        async let ticking: Void = Haptics.playCountUp(to: result.score, duration: 0.9, cutoff: 0.8)
+        try? await Task.sleep(for: .milliseconds(850))
+        await ticking
+        guard !Task.isCancelled else { return }
+        landingHaptic()
+    }
+
+    private func landingHaptic() {
+        if result.passed { Haptics.success() } else { Haptics.light() }
     }
 }

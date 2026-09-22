@@ -20,6 +20,8 @@ struct RecordingView: View {
     /// Snapshot for the reveal - never read `recording.analysis` from body.
     @State private var revealAnalysis: SpeechAnalysis?
     @State private var revealBaselines = PersonalAverage.Baselines()
+    /// The streak day this take earned, if it was the day's first.
+    @State private var revealStreakDay: Int?
     @State private var revealTask: Task<Void, Never>?
     /// What the speaker is meant to be working on this take. Loaded separately
     /// from the configure task so resolving it can never delay the countdown.
@@ -251,6 +253,7 @@ struct RecordingView: View {
             score: revealAnalysis?.speechScore.overall ?? recording.overallScore ?? 0,
             baselines: revealBaselines,
             weakestAxisLabel: weakestAxisLabel(from: revealAnalysis),
+            streakDay: revealStreakDay,
             onDismiss: { navigate(to: recording) }
         )
     }
@@ -279,16 +282,49 @@ struct RecordingView: View {
 
         let container = modelContext.container
         let id = recording.id
+        let takenAt = recording.date
+        let frozenDays = userSettings.first?.streakFrozenDays ?? []
         revealTask?.cancel()
         revealTask = Task {
-            let baselines = await PersonalAverage.all(
+            async let baselines = PersonalAverage.all(
                 excluding: id,
                 container: container
             )
+            async let streakDay = Self.streakDayEarned(
+                by: id,
+                takenAt: takenAt,
+                frozenDays: frozenDays,
+                container: container
+            )
+            let (resolvedBaselines, resolvedStreakDay) = await (baselines, streakDay)
             guard !Task.isCancelled else { return }
-            revealBaselines = baselines
+            revealBaselines = resolvedBaselines
+            revealStreakDay = resolvedStreakDay
             withAnimation(AppMotion.settle) { revealRecording = recording }
         }
+    }
+
+    /// Dates only - never the analysis blobs - so it costs next to nothing
+    /// beside the baselines it runs alongside.
+    private static func streakDayEarned(
+        by recordingID: UUID,
+        takenAt date: Date,
+        frozenDays: [Date],
+        container: ModelContainer
+    ) async -> Int? {
+        await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            var descriptor = FetchDescriptor<Recording>(
+                predicate: #Predicate { $0.id != recordingID }
+            )
+            descriptor.propertiesToFetch = [\.date]
+            let otherDays = ((try? context.fetch(descriptor)) ?? []).map(\.date)
+            return StreakProtection.dayStarted(
+                byTakeOn: date,
+                otherPracticeDays: otherDays,
+                frozenDays: frozenDays
+            )
+        }.value
     }
 
     private func navigate(to recording: Recording) {
@@ -651,7 +687,8 @@ struct RecordingView: View {
     private func handleRecordingCompletion(_ recording: Recording) {
         guard completedRecording == nil, !hasNavigated else { return }
         viewModel.submitForAnalysis(recording)
-        Haptics.success()
+        // No haptic here: `stopRecording` already fired the success buzz on
+        // every path that lands here, and a second one read as a double tap.
         withAnimation(AppMotion.settle) {
             completedRecording = recording
         }

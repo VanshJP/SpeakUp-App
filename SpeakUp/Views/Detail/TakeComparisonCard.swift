@@ -18,10 +18,7 @@ struct TakeComparisonCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Take \(takeNumber) · same prompt")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.6)
+                        .eyebrowStyle()
 
                     Spacer()
 

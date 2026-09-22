@@ -476,6 +476,11 @@ struct TodayView: View {
         }
     }
 
+    /// True when the routine block is on Today and has something to deal.
+    private var showsRoutine: Bool {
+        homeModules.contains(.routine) && moduleHasContent(.routine)
+    }
+
     /// The routine block. Hidden at a chain of one, because a routine with
     /// nothing but the take in it is the session module said twice.
     @ViewBuilder
@@ -485,6 +490,7 @@ struct TodayView: View {
             RoutineCard(
                 steps: steps,
                 completed: routine.progress.completed,
+                takeSeconds: viewModel.selectedDuration.seconds,
                 onStart: startRoutineStep,
                 onEdit: { showingRoutineSettings = true }
             )
@@ -514,7 +520,7 @@ struct TodayView: View {
     /// so the module is just the header plus that one object. The header takes
     /// `promptSectionTitle` because a story day is not a prompt day.
     private var sessionModule: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             GlassSectionHeader(promptSectionTitle, icon: "mic.fill")
 
             interactivePromptSection
@@ -548,13 +554,26 @@ struct TodayView: View {
     @ViewBuilder
     private var focusSection: some View {
         if let plan = viewModel.coachPlan, plan.sessionCount >= Self.focusMinimumSessions {
-            CoachFocusCard(
-                plan: plan,
-                onPractice: self.handleFocusRoute,
-                onPracticeAgain: {
-                    onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+            VStack(alignment: .leading, spacing: 12) {
+                GlassSectionHeader("Today's focus", icon: TodayHomeModule.focus.icon) {
+                    HStack(spacing: 6) {
+                        Text("Last \(plan.sessionCount)")
+                            .font(.caption.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        TrendChip(trend: plan.trend)
+                    }
                 }
-            )
+
+                CoachFocusCard(
+                    plan: plan,
+                    onPractice: self.handleFocusRoute,
+                    onPracticeAgain: {
+                        onStartRecording(viewModel.todaysPrompt, viewModel.selectedDuration)
+                    },
+                    showsHeader: false
+                )
+            }
         }
     }
 
@@ -817,7 +836,7 @@ struct TodayView: View {
     /// invariants 11-13 before changing it.
     private var sessionStartFooter: SessionStartFooter {
         SessionStartFooter(
-            startTitle: isAwaitingStartingLine ? "Set My Starting Line" : "Start Speaking",
+            startTitle: isAwaitingStartingLine ? "Set my starting line" : "Start speaking",
             showFreeTalk: !isAwaitingStartingLine,
             startHint: isAwaitingStartingLine
                 ? "Records your first \(viewModel.selectedDuration.displayName) take on the topic above"
@@ -921,7 +940,9 @@ struct TodayView: View {
                 reason: "Your last \(plan.sessionCount) takes point at \(plan.focus.title.lowercased())"
             )
         }
-        if !viewModel.practicedToday {
+        // The routine card already deals today's first step. A "start with a
+        // warm-up" banner under it was the same instruction twice.
+        if !viewModel.practicedToday, !showsRoutine {
             return PrepSuggestion(tool: .warmUp, reason: "You haven't practised yet today")
         }
         return nil
@@ -935,19 +956,11 @@ struct TodayView: View {
             openPrepTool(tool)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: tool.icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(tool.color)
-                    .frame(width: 36, height: 36)
-                    .background {
-                        Circle().fill(tool.color.opacity(0.18))
-                    }
+                IconChip(icon: tool.icon, tint: tool.color, size: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(suggestion.reason)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .textCase(.uppercase)
+                        .eyebrowStyle()
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -1000,13 +1013,7 @@ struct TodayView: View {
         } label: {
             GlassCard(tint: AppColors.primary.opacity(0.08), padding: 16) {
                 HStack(spacing: 14) {
-                    Image(systemName: PracticeToolKind.learn.icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .frame(width: 40, height: 40)
-                        .background {
-                            Circle().fill(AppColors.primary.opacity(0.18))
-                        }
+                    IconChip(icon: PracticeToolKind.learn.icon, size: 40)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(PracticeToolKind.learn.title)

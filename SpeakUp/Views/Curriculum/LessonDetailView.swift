@@ -90,17 +90,10 @@ struct LessonDetailView: View {
                     .zIndex(10)
             }
         }
+        .navigationTitle(stepTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                let role = currentActivity.type.teacherRole
-                Text("\(role) · \(currentStepIndex + 1)/\(lesson.activities.count)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("\(role), step \(currentStepIndex + 1) of \(lesson.activities.count)")
-            }
-        }
+        .toolbarTitleMenu { stepMenu }
         .fullScreenCover(item: $activeSheet) { sheet in
             sheetContent(for: sheet)
         }
@@ -222,17 +215,6 @@ struct LessonDetailView: View {
                         isReviewing: isRevisitingCompletedLesson,
                         isCompact: currentStepIndex > 0
                     )
-
-                    LessonPlanStrip(
-                        lesson: lesson,
-                        currentIndex: currentStepIndex,
-                        completedIds: resolvedCompletedIds,
-                        accent: lessonIdentity.accent
-                    ) { index in
-                        practiceResult = nil
-                        confidenceExerciseOpened = false
-                        currentStepIndex = index
-                    }
 
                     LessonCoachCue(activity: currentActivity)
 
@@ -363,11 +345,7 @@ struct LessonDetailView: View {
         GlassCard(tint: AppColors.warning.opacity(0.08)) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
-                    Image(systemName: mode.icon)
-                        .font(.title2)
-                        .foregroundStyle(mode.color)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(mode.color.opacity(0.15)))
+                    IconChip(icon: mode.icon, tint: mode.color, size: 44)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(mode.title)
@@ -381,7 +359,7 @@ struct LessonDetailView: View {
                     Spacer()
                 }
 
-                GlassButton(title: "Start Drill", icon: "bolt.fill", style: .primary, fullWidth: true) {
+                GlassButton(title: "Start drill", icon: "bolt.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     let vm = DrillViewModel()
                     vm.targetWPM = userSettings.first.resolvedTargetWPM
@@ -416,11 +394,7 @@ struct LessonDetailView: View {
         GlassCard(tint: AppColors.success.opacity(0.08)) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
-                    Image(systemName: "figure.walk")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.success)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(AppColors.success.opacity(0.15)))
+                    IconChip(icon: "figure.walk", tint: AppColors.success, size: 44)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(exercise.title)
@@ -436,7 +410,7 @@ struct LessonDetailView: View {
                     Spacer()
                 }
 
-                GlassButton(title: "Start Exercise", icon: "play.fill", style: .primary, fullWidth: true) {
+                GlassButton(title: "Start exercise", icon: "play.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     let vm = WarmUpViewModel()
                     vm.selectExercise(exercise)
@@ -450,11 +424,7 @@ struct LessonDetailView: View {
         GlassCard(tint: AppColors.categoryBrandBright.opacity(0.08)) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
-                    Image(systemName: "heart.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.categoryBrandBright)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(AppColors.categoryBrandBright.opacity(0.15)))
+                    IconChip(icon: "heart.fill", tint: AppColors.categoryBrandBright, size: 44)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(exercise.title)
@@ -471,12 +441,12 @@ struct LessonDetailView: View {
                 }
 
                 if confidenceExerciseOpened {
-                    GlassButton(title: "Mark as Done", icon: "checkmark", style: .primary, fullWidth: true) {
+                    GlassButton(title: "Mark as done", icon: "checkmark", style: .primary, fullWidth: true) {
                         CurriculumActivitySignalStore.markExerciseCompleted(activity.exerciseId ?? "")
                         completeCurrentActivity()
                     }
                 } else {
-                    GlassButton(title: "Start Exercise", icon: "play.fill", style: .primary, fullWidth: true) {
+                    GlassButton(title: "Start exercise", icon: "play.fill", style: .primary, fullWidth: true) {
                         Haptics.medium()
                         activeSheet = .confidence(exercise)
                     }
@@ -502,10 +472,7 @@ struct LessonDetailView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Listen for")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(lessonIdentity.accent)
-                            .textCase(.uppercase)
-                            .tracking(0.4)
+                            .eyebrowStyle(lessonIdentity.accent)
 
                         Text(lesson.objective)
                             .font(.callout)
@@ -525,10 +492,7 @@ struct LessonDetailView: View {
                                     reviewTarget = ReviewTarget(id: recording.id)
                                 } label: {
                                     HStack(spacing: 10) {
-                                        Image(systemName: "waveform")
-                                            .foregroundStyle(lessonIdentity.accent)
-                                            .frame(width: 28, height: 28)
-                                            .background(Circle().fill(lessonIdentity.accent.opacity(0.15)))
+                                        IconChip(icon: "waveform", tint: lessonIdentity.accent, size: 28)
 
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(recording.displayTitle)
@@ -578,20 +542,11 @@ struct LessonDetailView: View {
 
     private func activityHeader(_ activity: CurriculumActivity, isCompleted: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: activity.type.teacherIcon)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(activity.type.teacherColor)
-                .frame(width: 40, height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(activity.type.teacherColor.opacity(0.15))
-                )
+            IconChip(icon: activity.type.teacherIcon, tint: activity.type.teacherColor, size: 40)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(activity.type.teacherRole.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(activity.type.teacherColor)
+                Text(activity.type.teacherRole)
+                    .eyebrowStyle(activity.type.teacherColor)
 
                 Text(activity.title)
                     .font(.title3.weight(.semibold))
@@ -734,6 +689,33 @@ struct LessonDetailView: View {
     }
 
     // MARK: - Navigation
+
+    /// "Learn · 1 of 2". Its title menu is the way back to a step already
+    /// reached - it replaced a strip of step tiles under the lesson board that
+    /// drew the same facts as this title and the bottom bar's track.
+    private var stepTitle: String {
+        "\(currentActivity.type.teacherRole) · \(currentStepIndex + 1) of \(lesson.activities.count)"
+    }
+
+    @ViewBuilder
+    private var stepMenu: some View {
+        ForEach(Array(lesson.activities.enumerated()), id: \.element.id) { index, activity in
+            let isDone = resolvedCompletedIds.contains(activity.id)
+            Button {
+                Haptics.light()
+                practiceResult = nil
+                confidenceExerciseOpened = false
+                currentStepIndex = index
+            } label: {
+                Label(
+                    "\(index + 1). \(activity.type.teacherRole)",
+                    systemImage: isDone ? "checkmark.circle.fill" : activity.type.teacherIcon
+                )
+            }
+            // Only steps already reached; the lesson is taught in order.
+            .disabled(index == currentStepIndex || !(isDone || index < currentStepIndex))
+        }
+    }
 
     private func advanceStep() {
         guard currentStepIndex < lesson.activities.count - 1 else {

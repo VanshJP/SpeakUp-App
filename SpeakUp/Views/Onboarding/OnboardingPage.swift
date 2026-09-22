@@ -74,30 +74,6 @@ struct OnboardingPage<Content: View, Footer: View>: View {
     }
 }
 
-// MARK: - Glyph
-
-struct OnboardingGlyph: View {
-    let icon: String
-    var tint: Color = AppColors.primary
-    var size: CGFloat = 38
-
-    var body: some View {
-        Image(systemName: icon)
-            .font(.system(size: size * 0.44, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(width: size, height: size)
-            .background {
-                RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                    .fill(tint.opacity(0.15))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                            .stroke(AppColors.cardStroke, lineWidth: 0.5)
-                    }
-            }
-            .accessibilityHidden(true)
-    }
-}
-
 // MARK: - Primary CTA
 
 struct OnboardingCTA: View {

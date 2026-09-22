@@ -13,13 +13,9 @@ struct StoryPromptCard: View {
                 HStack(alignment: .center, spacing: 8) {
                     HStack(spacing: 5) {
                         Image(systemName: "book.pages")
-                            .font(.system(size: 10, weight: .semibold))
                         Text("Story")
-                            .font(.system(size: 11, weight: .semibold))
-                            .textCase(.uppercase)
-                            .tracking(0.6)
                     }
-                    .foregroundStyle(AppColors.primary)
+                    .eyebrowStyle(AppColors.primary)
                     .layoutPriority(-1)
 
                     Spacer(minLength: 8)

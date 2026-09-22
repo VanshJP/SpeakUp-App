@@ -42,7 +42,7 @@ nonisolated enum TodayHomeModule: String, CaseIterable, Identifiable, Sendable, 
         switch self {
         case .rings: return "circle.circle"
         case .weeklyRecap: return "chart.line.uptrend.xyaxis"
-        case .routine: return "list.bullet.indent"
+        case .routine: return "checklist"
         case .focus: return "scope"
         case .session: return "mic.fill"
         case .tools: return "wrench.and.screwdriver.fill"

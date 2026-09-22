@@ -125,7 +125,7 @@ struct BeforeAfterReplayView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                GlassButton(title: "Share Card", icon: "square.and.arrow.up", style: .secondary, size: .small) {
+                GlassButton(title: "Share card", icon: "square.and.arrow.up", style: .secondary, size: .small) {
                     Haptics.medium()
                     ProgressCardRenderer.share(card, trigger: "then_vs_now") {
                         if ReviewRequestService.shared.requestIfEligible(

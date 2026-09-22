@@ -74,3 +74,23 @@ struct NearestWordIndexTests {
         #expect(words([0.0, 1.0]).nearestIndex(to: 9.0) == nil)
     }
 }
+
+// MARK: - Count-up haptic ticks
+
+struct CountUpTickTests {
+    /// One tick per ten the number passes, never past the count's end, and
+    /// spreading out as the ease-out slows - the wheel-settling feel.
+    @Test func ticksFollowTheEaseOut() {
+        let times = Haptics.countUpTickTimes(to: 81, duration: 0.9)
+        #expect(times.count == 8)
+        #expect(times.allSatisfy { $0 > 0 && $0 <= 0.9 })
+        let gaps = zip(times.dropFirst(), times).map { $0 - $1 }
+        #expect(gaps.allSatisfy { $0 > 0 })
+        #expect(gaps.last! > gaps.first!)
+    }
+
+    @Test func aScoreUnderOneStepHasNoTicks() {
+        #expect(Haptics.countUpTickTimes(to: 7, duration: 0.9).isEmpty)
+        #expect(Haptics.countUpTickTimes(to: 0, duration: 0.9).isEmpty)
+    }
+}

@@ -6,6 +6,7 @@ struct LessonCompletionView: View {
     let onNextLesson: () -> Void
     let onBackToCurriculum: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConfetti = false
     @State private var trophyScale: CGFloat = 0.3
 
@@ -103,7 +104,7 @@ struct LessonCompletionView: View {
                                 .frame(width: 44, height: 44)
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Tomorrow's board")
+                                    Text("Up next")
                                         .font(.caption.weight(.medium))
                                         .foregroundStyle(nextIdentity.accent)
 
@@ -143,8 +144,8 @@ struct LessonCompletionView: View {
             .scrollIndicators(.hidden)
 
             if showConfetti {
-                ConfettiView()
-                    .allowsHitTesting(false)
+                // Bursts from the lesson glyph at the top of the page.
+                ConfettiView(origin: UnitPoint(x: 0.5, y: 0.16))
             }
         }
         // The arrival is decoration; both exits ride `.introReveal`, which
@@ -153,7 +154,7 @@ struct LessonCompletionView: View {
         // callback away from a screen with no way off it.
         .onAppear {
             Haptics.success()
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6)) {
                 trophyScale = 1.0
             }
         }

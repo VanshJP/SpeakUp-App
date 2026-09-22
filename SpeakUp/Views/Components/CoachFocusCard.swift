@@ -7,13 +7,16 @@ struct CoachFocusCard: View {
     let plan: CoachPlan
     var onPractice: ((CoachPracticeRoute) -> Void)?
     var onPracticeAgain: (() -> Void)?
+    /// Today draws the title as a section header above the card, like every
+    /// other block there; Recording Detail keeps it inside.
+    var showsHeader = true
 
     private var showsCTA: Bool { onPractice != nil || onPracticeAgain != nil }
 
     var body: some View {
         GlassCard(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
-                header
+                if showsHeader { header }
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: plan.focus.icon)
@@ -65,16 +68,13 @@ struct CoachFocusCard: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Text(showsCTA ? "Today's Focus" : "Your Focus")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .tracking(0.6)
+            Text(showsCTA ? "Today's focus" : "Your focus")
+                .eyebrowStyle()
 
             Spacer()
 
             Text("Last \(plan.sessionCount)")
-                .font(.system(size: 10, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundStyle(.tertiary)
 
             TrendChip(trend: plan.trend)
@@ -85,7 +85,7 @@ struct CoachFocusCard: View {
     private var actionButton: some View {
         if plan.isGraduating, let onPracticeAgain {
             GlassButton(
-                title: "Practice Again",
+                title: "Practice again",
                 icon: "mic.fill",
                 style: .secondary,
                 fullWidth: true
@@ -105,7 +105,7 @@ struct CoachFocusCard: View {
             }
         } else if let onPracticeAgain {
             GlassButton(
-                title: "Practice Again",
+                title: "Practice again",
                 icon: "mic.fill",
                 style: .secondary,
                 fullWidth: true

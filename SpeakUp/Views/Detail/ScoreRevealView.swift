@@ -5,26 +5,35 @@ import SwiftUI
 /// The reveal is scaled to the band so the app's reaction matches the result:
 ///
 /// - **Strong (80+)**: confetti, success haptic, the score is the celebration.
-/// - **Solid (60-79)**: the number climbs and lands. No particles; a good
-///   session doesn't need a parade, and spending confetti here would make it
-///   worthless at 90.
+/// - **Solid (60-79)**: the number climbs and lands. Confetti only for a
+///   personal best; a good session doesn't need a parade, and spending
+///   confetti on every solid take would make it worthless at 90.
 /// - **Building (<60)**: no celebration language at all. The verdict, then one
-///   forward-looking line naming what held it back. Honest, not a failure state,
-///   and never congratulatory: a low score met with confetti reads as sarcasm.
+///   forward-looking line naming what held it back. A personal best still
+///   gets its pill and its haptic, just not the party. Honest, not a failure
+///   state, and never congratulatory: a low score met with confetti reads
+///   as sarcasm.
 struct ScoreRevealView: View {
     let score: Int
     let baselines: PersonalAverage.Baselines
     let weakestAxisLabel: String?
+    /// The streak day this take earned, when it was the day's first.
+    var streakDay: Int? = nil
     let onDismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var counted = false
+    @State private var landed = false
     @State private var showVerdict = false
     @State private var showContext = false
     @State private var showConfetti = false
     @State private var showHint = false
     @State private var showBest = false
+    @State private var showStreak = false
+    @State private var streakLit = false
+
+    private static let countDuration = 0.9
 
     private enum Band {
         case strong, solid, building
@@ -47,13 +56,20 @@ struct ScoreRevealView: View {
         baselines.personalBestLabel(for: score)
     }
 
+    /// A strong take, or a personal best that is at least solid. A best at 45
+    /// still gets its pill and its haptic, just not the party.
+    private var celebrates: Bool {
+        band == .strong || (band == .solid && personalBestLabel != nil)
+    }
+
     var body: some View {
         // No background of its own: `RecordingView` keeps the session canvas
         // under the whole act, so the score lands on the stage the take used.
         ZStack {
             if showConfetti {
-                ConfettiView()
-                    .allowsHitTesting(false)
+                // Behind the content, launched from behind the dial, so the
+                // pieces burst out of the score rather than fall on it.
+                ConfettiView(origin: UnitPoint(x: 0.5, y: 0.42))
             }
 
             VStack(spacing: 0) {
@@ -113,6 +129,31 @@ struct ScoreRevealView: View {
                     .tracking(0.5)
             }
         }
+        // A bloom in the score's own color that swells as the number lands.
+        // In a background so it can overhang the dial without moving layout.
+        .background {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [scoreColor.opacity(0.32), scoreColor.opacity(0.08), .clear],
+                        center: .center,
+                        startRadius: 70,
+                        endRadius: 200
+                    )
+                )
+                .frame(width: 400, height: 400)
+                .scaleEffect(landed ? 1 : 0.6)
+                .opacity(landed ? 1 : 0)
+                .allowsHitTesting(false)
+        }
+        .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? false : landed) { dial, scale in
+            dial.scaleEffect(scale)
+        } keyframes: { _ in
+            KeyframeTrack {
+                SpringKeyframe(1.06, duration: 0.14, spring: .snappy)
+                SpringKeyframe(1.0, duration: 0.5, spring: .bouncy)
+            }
+        }
     }
 
     private var verdictBlock: some View {
@@ -129,17 +170,43 @@ struct ScoreRevealView: View {
                 .multilineTextAlignment(.center)
                 .opacity(showContext ? 1 : 0)
 
-            if let personalBestLabel {
-                StatusPill(
-                    text: personalBestLabel,
-                    color: AppColors.warning,
-                    glyph: .icon("trophy.fill"),
-                    fillOpacity: 0.18
-                )
-                .opacity(showBest ? 1 : 0)
-                .scaleEffect(showBest ? 1 : 0.8)
-                .padding(.top, 4)
+            if personalBestLabel != nil || streakDay != nil {
+                // Laid out from the start and revealed by opacity, so the
+                // second badge arriving never shoves the first sideways.
+                ViewThatFits {
+                    HStack(spacing: 8) { badges }
+                    VStack(spacing: 8) { badges }
+                }
+                .padding(.top, 6)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var badges: some View {
+        if let personalBestLabel {
+            RevealBadge(tint: AppColors.warning, isLit: true) {
+                Image(systemName: "trophy.fill")
+            } label: {
+                Text(personalBestLabel)
+            }
+            .opacity(showBest ? 1 : 0)
+            .scaleEffect(showBest ? 1 : 0.8)
+        }
+
+        if let streakDay {
+            // Ignites on its own beat: the flame goes from ash to amber and the
+            // day rolls forward, the way the Today chip will read next visit.
+            let shownDay = streakLit ? streakDay : max(streakDay - 1, 1)
+            RevealBadge(tint: AppColors.warning, isLit: streakLit) {
+                Image(systemName: "flame.fill")
+                    .symbolEffect(.bounce, value: reduceMotion ? false : streakLit)
+            } label: {
+                Text(streakDay <= 1 ? "Streak started" : "Day \(shownDay) streak")
+                    .contentTransition(.numericText(value: Double(shownDay)))
+            }
+            .opacity(showStreak ? 1 : 0)
+            .scaleEffect(showStreak ? 1 : 0.8)
         }
     }
 
@@ -167,6 +234,7 @@ struct ScoreRevealView: View {
         "Session complete. Score \(score) out of 100, "
             + "\(AppColors.scoreVerdict(for: score)). \(contextLine). "
             + (personalBestLabel.map { "\($0). " } ?? "")
+            + (streakDay.map { $0 <= 1 ? "Streak started. " : "Day \($0) streak. " } ?? "")
             + "Tap for the full breakdown."
     }
 
@@ -177,9 +245,12 @@ struct ScoreRevealView: View {
     private func choreograph() async {
         guard !reduceMotion else {
             counted = true
+            landed = true
             showVerdict = true
             showContext = true
             showBest = true
+            showStreak = true
+            streakLit = true
             showHint = true
             bandHaptic()
             try? await Task.sleep(for: .seconds(2.4))
@@ -187,18 +258,31 @@ struct ScoreRevealView: View {
             return
         }
 
-        withAnimation(AppMotion.reveal) { counted = true }
+        withAnimation(.easeOut(duration: Self.countDuration)) { counted = true }
 
-        try? await Task.sleep(for: .milliseconds(850))
+        // The odometer ticks under the climbing number, then the band's
+        // thump lands with the verdict.
+        let landingAt = 0.85
+        async let ticking: Void = Haptics.playCountUp(
+            to: score,
+            duration: Self.countDuration,
+            cutoff: landingAt - 0.05
+        )
+        try? await Task.sleep(for: .seconds(landingAt))
+        await ticking
         guard !Task.isCancelled else { return }
-        withAnimation(AppMotion.settle) { showVerdict = true }
+
+        withAnimation(AppMotion.settle) {
+            landed = true
+            showVerdict = true
+        }
         bandHaptic()
 
         try? await Task.sleep(for: .milliseconds(180))
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.35)) { showContext = true }
 
-        if band == .strong {
+        if celebrates {
             showConfetti = true
         }
 
@@ -209,11 +293,25 @@ struct ScoreRevealView: View {
             Haptics.success()
         }
 
+        if streakDay != nil {
+            try? await Task.sleep(for: .milliseconds(320))
+            guard !Task.isCancelled else { return }
+            withAnimation(AppMotion.settle) { showStreak = true }
+
+            try? await Task.sleep(for: .milliseconds(380))
+            guard !Task.isCancelled else { return }
+            withAnimation(AppMotion.snap) { streakLit = true }
+            Haptics.medium()
+        }
+
         try? await Task.sleep(for: .milliseconds(700))
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.4)) { showHint = true }
 
-        try? await Task.sleep(for: .milliseconds(personalBestLabel != nil ? 1900 : 1400))
+        var linger = 1400
+        if personalBestLabel != nil { linger += 500 }
+        if streakDay != nil { linger += 600 }
+        try? await Task.sleep(for: .milliseconds(linger))
         guard !Task.isCancelled else { return }
         onDismiss()
     }
@@ -227,11 +325,45 @@ struct ScoreRevealView: View {
     }
 }
 
-#Preview("Strong, personal best") {
+// MARK: - Reveal Badge
+
+/// The reveal's pills - personal best, streak - sized for a hero moment
+/// rather than a list row. `isLit` lets a badge arrive in ash and ignite.
+private struct RevealBadge<Icon: View, Title: View>: View {
+    let tint: Color
+    let isLit: Bool
+    @ViewBuilder let icon: Icon
+    @ViewBuilder let label: Title
+
+    var body: some View {
+        HStack(spacing: 6) {
+            icon
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(isLit ? tint : .white.opacity(0.35))
+
+            label
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background {
+            Capsule()
+                .fill(tint.opacity(isLit ? 0.18 : 0.06))
+                .overlay {
+                    Capsule().strokeBorder(tint.opacity(isLit ? 0.4 : 0.12), lineWidth: 0.5)
+                }
+        }
+    }
+}
+
+#Preview("Strong, personal best, streak") {
     ScoreRevealView(
         score: 91,
-        baselines: .init(score: 74, best: 88, priorSessionCount: 6),
+        baselines: .init(score: 74, best: 88, priorSessionCount: 6, seenAllHistory: true),
         weakestAxisLabel: nil,
+        streakDay: 5,
         onDismiss: {}
     )
     .background { AppBackground(style: .recording) }
@@ -262,6 +394,7 @@ struct ScoreRevealView: View {
         score: 66,
         baselines: .init(),
         weakestAxisLabel: nil,
+        streakDay: 1,
         onDismiss: {}
     )
     .background { AppBackground(style: .recording) }

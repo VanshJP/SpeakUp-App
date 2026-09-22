@@ -46,7 +46,7 @@ struct NextStep {
                 score: 100,
                 technique: nil,
                 coaching: "Bank another rep while it's working.",
-                actionTitle: "Practice Again",
+                actionTitle: "Practice again",
                 action: .practiceAgain
             )
         }
@@ -58,7 +58,7 @@ struct NextStep {
                 score: weakest.1,
                 technique: nil,
                 coaching: plan?.headline ?? "Nothing scored below 75 this session. Bank another rep while it's working.",
-                actionTitle: "Practice Again",
+                actionTitle: "Practice again",
                 action: .practiceAgain
             )
         }
@@ -83,7 +83,7 @@ struct NextStep {
             return ("Vocal Warm-Up", .warmUp)
         case .drill(let raw):
             guard let mode = DrillMode(rawValue: raw) else {
-                return ("Practice Again", .practiceAgain)
+                return ("Practice again", .practiceAgain)
             }
             return ("\(mode.title) · \(mode.defaultDurationSeconds)s", .drill(mode))
         }
@@ -102,10 +102,7 @@ struct NextStepCard: View {
         GlassCard(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
                 Text(step.isStrong ? "Nice session" : "Work on this next")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.6)
+                    .eyebrowStyle()
 
                 if !step.isStrong {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {

@@ -158,7 +158,7 @@ struct FirstRecordingSetupSheet: View {
         @ViewBuilder accessory: () -> Accessory
     ) -> some View {
         HStack(spacing: 12) {
-            OnboardingGlyph(icon: icon, tint: tint, size: 30)
+            IconChip(icon: icon, tint: tint, size: 30)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {

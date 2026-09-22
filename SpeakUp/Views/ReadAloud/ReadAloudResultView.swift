@@ -39,10 +39,7 @@ struct ReadAloudResultView: View {
                                 .font(.system(size: 36, weight: .bold, design: .rounded))
                                 .foregroundStyle(.white)
                             Text("Accuracy")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .tracking(0.8)
+                                .eyebrowStyle()
                         }
                     }
 
@@ -93,7 +90,7 @@ struct ReadAloudResultView: View {
                     wordReviewSection
 
                     VStack(spacing: 12) {
-                        GlassButton(title: "Try Again", icon: "arrow.clockwise", style: .primary) {
+                        GlassButton(title: "Try again", icon: "arrow.clockwise", style: .primary) {
                             Haptics.medium()
                             onRetry()
                         }
@@ -118,7 +115,7 @@ struct ReadAloudResultView: View {
 
     private var wordReviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Word Review", systemImage: "doc.text.magnifyingglass")
+            Label("Word review", systemImage: "doc.text.magnifyingglass")
                 .font(.headline)
 
             HStack(spacing: 16) {

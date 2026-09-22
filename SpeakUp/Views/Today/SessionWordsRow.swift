@@ -17,10 +17,8 @@ struct SessionWordsRow: View {
                     .accessibilityHidden(true)
 
                 FlowLayout(spacing: 6) {
-                    Text("USE")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.35))
+                    Text("Use")
+                        .eyebrowStyle(.tertiary)
                         .frame(height: chipHeight)
                         .accessibilityHidden(true)
 

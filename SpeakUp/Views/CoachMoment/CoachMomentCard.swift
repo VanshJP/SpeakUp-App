@@ -3,7 +3,7 @@ import SwiftUI
 /// Inline coach note - Today and session-detail surfaces.
 ///
 /// Same grammar as `FriendChallengeCard`: glass, one eyebrow, one body, one
-/// capsule CTA, easy dismiss. Never competes with Start Speaking.
+/// capsule CTA, easy dismiss. Never competes with Start speaking.
 struct CoachMomentCard: View {
     let moment: CoachMoment
     let onAccept: () -> Void
@@ -14,25 +14,11 @@ struct CoachMomentCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 8) {
                     Text("Coach note")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .textCase(.uppercase)
-                        .tracking(0.7)
+                        .eyebrowStyle(tint)
 
                     Spacer(minLength: 0)
 
-                    Button("Dismiss", systemImage: "xmark") {
-                        Haptics.light()
-                        onDismiss()
-                    }
-                    .labelStyle(.iconOnly)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                    .buttonStyle(GlassPressStyle())
-                    .accessibilityLabel("Dismiss coach note")
+                    DismissButton(label: "Dismiss coach note", action: onDismiss)
                 }
 
                 Text(moment.title)
@@ -91,12 +77,12 @@ struct CoachMomentOverlay: View {
                     onDismiss()
                 }
 
-            VStack(spacing: 24) {
-                if !reduceMotion {
-                    ConfettiView()
-                        .frame(height: 120)
-                }
+            // Full screen: squeezed into a 120pt strip inside the card, the
+            // burst had nowhere to go.
+            ConfettiView(origin: UnitPoint(x: 0.5, y: 0.3))
+                .ignoresSafeArea()
 
+            VStack(spacing: 24) {
                 Image(systemName: "gift.fill")
                     .font(.system(size: 56))
                     .foregroundStyle(AppColors.primary)

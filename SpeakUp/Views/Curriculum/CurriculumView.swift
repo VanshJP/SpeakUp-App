@@ -99,18 +99,13 @@ struct CurriculumView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 6) {
                         Image(systemName: isReviewing ? "arrow.counterclockwise" : "mic.fill")
-                            .font(.system(size: 10, weight: .semibold))
                         Text(isReviewing ? "Reinforce" : "Studio session")
-                            .font(.system(size: 10, weight: .semibold))
-                            .textCase(.uppercase)
-                            .tracking(0.6)
                         Spacer()
                         Text("\(viewModel.completedLessonsCount)/\(viewModel.totalLessonsCount) · Week \(phase.week)")
-                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.tertiary)
                             .monospacedDigit()
                     }
-                    .foregroundStyle(.secondary)
+                    .eyebrowStyle()
 
                     HStack(alignment: .top, spacing: 14) {
                         ZStack {
@@ -290,10 +285,7 @@ struct CurriculumView: View {
                     .accessibilityHidden(true)
 
                 Text("Chapter \(phase.week)")
-                    .font(.system(size: 10, weight: .semibold))
-                    .textCase(.uppercase)
-                    .tracking(0.6)
-                    .foregroundStyle(.tertiary)
+                    .eyebrowStyle(.tertiary)
 
                 if isComplete {
                     Image(systemName: "checkmark.circle.fill")
@@ -455,9 +447,7 @@ struct CurriculumView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .font(.caption2.weight(.semibold))
-        .textCase(.uppercase)
-        .tracking(0.4)
+        .eyebrowStyle()
     }
 
     private func rowTint(for state: LessonNodeState, accent: Color) -> Color {

@@ -247,7 +247,7 @@ struct AIModelSettingsView: View {
     private var localModelActions: some View {
         switch llmService.localLLM.modelState {
         case .notDownloaded:
-            GlassButton(title: "Download Model", icon: "arrow.down.circle", style: .primary, fullWidth: true) {
+            GlassButton(title: "Download model", icon: "arrow.down.circle", style: .primary, fullWidth: true) {
                 Haptics.medium()
                 Task { await llmService.setupLocalModel() }
             }
@@ -272,7 +272,7 @@ struct AIModelSettingsView: View {
 
         case .downloaded:
             HStack(spacing: 10) {
-                GlassButton(title: "Load Model", icon: "play.fill", style: .primary, fullWidth: true) {
+                GlassButton(title: "Load model", icon: "play.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     Task { await llmService.localLLM.loadModel() }
                 }

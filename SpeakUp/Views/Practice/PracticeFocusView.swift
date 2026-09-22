@@ -35,11 +35,7 @@ struct PracticeImproveEntryRow: View {
         NavigationLink(value: PracticeImproveRoute()) {
             GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.07), padding: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "target")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.primary)
-                        .frame(width: 36, height: 36)
-                        .background { Circle().fill(AppColors.primary.opacity(0.18)) }
+                    IconChip(icon: "target", size: 36)
 
                     // The count sits under the copy rather than beside it.
                     // Sharing the row's width with the title wrapped both -
@@ -128,11 +124,7 @@ struct PracticeFocusRow: View {
         NavigationLink(value: focus) {
             GlassCard(cornerRadius: 16, tint: focus.color.opacity(0.06), padding: 13) {
                 HStack(spacing: 12) {
-                    Image(systemName: focus.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(focus.color)
-                        .frame(width: 34, height: 34)
-                        .background { Circle().fill(focus.color.opacity(0.18)) }
+                    IconChip(icon: focus.icon, tint: focus.color, size: 34)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(focus.title)
@@ -222,11 +214,7 @@ struct PracticeFocusDetailView: View {
         return NavigationLink(value: PracticeToolRoute(tool: tool, focus: focus)) {
             GlassCard(cornerRadius: 16, tint: tool.color.opacity(0.06), padding: 14) {
                 HStack(spacing: 13) {
-                    Image(systemName: tool.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(tool.color)
-                        .frame(width: 36, height: 36)
-                        .background { Circle().fill(tool.color.opacity(0.18)) }
+                    IconChip(icon: tool.icon, tint: tool.color, size: 36)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(tool.title)

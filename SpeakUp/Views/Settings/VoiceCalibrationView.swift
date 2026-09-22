@@ -231,13 +231,13 @@ struct VoiceCalibrationView: View {
     private var actionButtons: some View {
         switch phase {
         case .ready:
-            GlassButton(title: "Start Reading", icon: "mic.fill", style: .primary, size: .large, fullWidth: true) {
+            GlassButton(title: "Start reading", icon: "mic.fill", style: .primary, size: .large, fullWidth: true) {
                 startCalibration()
             }
         case .recording:
             VStack(spacing: 10) {
                 if wordTracker.progressPercentage >= 0.6 {
-                    GlassButton(title: "Finish Early", icon: "checkmark", style: .primary, size: .medium, fullWidth: true) {
+                    GlassButton(title: "Finish early", icon: "checkmark", style: .primary, size: .medium, fullWidth: true) {
                         finishCalibration()
                     }
                 }
