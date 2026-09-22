@@ -304,6 +304,40 @@ struct WordBankView: View {
                 dictationPreview(tint: AppColors.primary)
             }
 
+            // The reading end of the same list. This tab is a form for typing
+            // words in; the library is where you find one worth typing.
+            NavigationLink {
+                WordLibraryView()
+            } label: {
+                GlassCard(cornerRadius: 16, tint: AppColors.categorySage.opacity(0.07), padding: 14) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "character.book.closed.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppColors.categorySage)
+                            .frame(width: 32, height: 32)
+                            .background { Circle().fill(AppColors.categorySage.opacity(0.18)) }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Browse the word library")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.white)
+                            Text("Search any word, read the definition, add it here")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .buttonStyle(GlassPressStyle())
+            .accessibilityLabel("Browse the word library")
+
             vocabWordsSection
 
             HStack(spacing: 8) {

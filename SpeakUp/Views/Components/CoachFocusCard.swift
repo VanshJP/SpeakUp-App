@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The one thing the speaker is working on, and whether it is moving.
-/// because `NextStepCard` already owns the action on that screen.
+/// Carries no action on Recording Detail, because `NextStepCard` already owns
+/// the action on that screen.
 struct CoachFocusCard: View {
     let plan: CoachPlan
     var onPractice: ((CoachPracticeRoute) -> Void)?
@@ -39,7 +40,11 @@ struct CoachFocusCard: View {
                     tint: AppColors.tint(for: plan.focus)
                 )
 
-                Text(plan.headline)
+                // `focusNote`, not `headline`: the row above already draws
+                // the dimension, the score, the target and the arrow, and the
+                // headline's job is to state all four for a reader who has
+                // none of them - the LLM prompt.
+                Text(plan.focusNote)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

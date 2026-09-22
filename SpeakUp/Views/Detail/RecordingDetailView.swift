@@ -1215,32 +1215,43 @@ struct RecordingDetailView: View {
     // MARK: - Share CTA Section
 
     @ViewBuilder
+    /// One row. This was a full card with a heading, a subtitle restating the
+    /// heading, and a full-width button restating both - three lines of chrome
+    /// between the coaching and the breakdown, for a share sheet.
     private func shareCTASection(_ recording: Recording) -> some View {
         let hasPrompt = recording.prompt != nil
-        GlassCard(tint: AppColors.primary.opacity(0.1)) {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(hasPrompt ? "Challenge a friend" : "Share your score")
-                        .font(.subheadline.weight(.medium))
-                    Text(hasPrompt
-                         ? "Send your score and a link to this prompt"
-                         : "Create a shareable score card")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        let title = hasPrompt ? "Challenge a friend" : "Share your score"
 
-                GlassButton(
-                    title: hasPrompt ? "Share challenge" : "Share score",
-                    icon: "square.and.arrow.up",
-                    style: .secondary,
-                    fullWidth: true
-                ) {
-                    Haptics.light()
-                    pendingShareRecording = recording
+        return Button {
+            Haptics.light()
+            pendingShareRecording = recording
+        } label: {
+            GlassCard(cornerRadius: 16, tint: AppColors.primary.opacity(0.08), padding: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.primary)
+                        .frame(width: 32, height: 32)
+                        .background { Circle().fill(AppColors.primary.opacity(0.18)) }
+
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
                 }
-                .accessibilityLabel(hasPrompt ? "Challenge a friend" : "Share your score")
+                .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget - 28)
             }
         }
+        .buttonStyle(GlassPressStyle())
+        .accessibilityLabel(title)
+        .accessibilityHint(hasPrompt
+                           ? "Sends your score and a link to this prompt"
+                           : "Creates a shareable score card")
     }
 
     // MARK: - Tab Content

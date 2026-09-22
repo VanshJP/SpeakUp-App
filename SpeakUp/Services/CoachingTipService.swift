@@ -256,7 +256,7 @@ nonisolated enum CoachingTipService {
             title: "\(focus.title): \(score) This Session",
             message: plan.map { "That is above your \($0.focusAverage) average. Two more like it and this stops being your focus." }
                 ?? "Strong on your focus area this session. Keep the same approach.",
-            teachingPoint: focus.technique.how,
+            teachingPoint: focus.fullTechnique,
             suggestedPractice: focus.practiceRoute
         )
     }
@@ -361,7 +361,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.pace.icon,
             title: title,
             message: message,
-            teachingPoint: "\(CoachDimension.pace.technique.name): \(CoachDimension.pace.technique.how)",
+            teachingPoint: "\(CoachDimension.pace.fullTechnique)",
             suggestedPractice: CoachDimension.pace.practiceRoute,
             evidenceTime: context.evidence.fastestStretch?.at
         )
@@ -402,7 +402,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.pauses.icon,
             title: title,
             message: message,
-            teachingPoint: "\(CoachDimension.pauses.technique.name): \(CoachDimension.pauses.technique.how)",
+            teachingPoint: "\(CoachDimension.pauses.fullTechnique)",
             suggestedPractice: CoachDimension.pauses.practiceRoute,
             evidenceTime: context.evidence.longestHesitation?.at
         )
@@ -441,7 +441,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.clarity.icon,
             title: title,
             message: message,
-            teachingPoint: "\(CoachDimension.clarity.technique.name): \(CoachDimension.clarity.technique.how)",
+            teachingPoint: "\(CoachDimension.clarity.fullTechnique)",
             suggestedPractice: CoachDimension.clarity.practiceRoute
         )
     }
@@ -505,7 +505,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.structure.icon,
             title: title,
             message: message,
-            teachingPoint: "\(CoachDimension.structure.technique.name): \(CoachDimension.structure.technique.how)",
+            teachingPoint: "\(CoachDimension.structure.fullTechnique)",
             suggestedPractice: CoachDimension.structure.practiceRoute
         )
     }
@@ -528,7 +528,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.delivery.icon,
             title: "Put Weight on the Key Words",
             message: message,
-            teachingPoint: "\(CoachDimension.delivery.technique.name): \(CoachDimension.delivery.technique.how)",
+            teachingPoint: "\(CoachDimension.delivery.fullTechnique)",
             suggestedPractice: CoachDimension.delivery.practiceRoute
         )
     }
@@ -549,7 +549,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.vocalVariety.icon,
             title: "Widen Your Range",
             message: message,
-            teachingPoint: "\(CoachDimension.vocalVariety.technique.name): \(CoachDimension.vocalVariety.technique.how)",
+            teachingPoint: "\(CoachDimension.vocalVariety.fullTechnique)",
             suggestedPractice: CoachDimension.vocalVariety.practiceRoute
         )
     }
@@ -575,7 +575,7 @@ nonisolated enum CoachingTipService {
             icon: CoachDimension.vocabulary.icon,
             title: title,
             message: message,
-            teachingPoint: "\(CoachDimension.vocabulary.technique.name): \(CoachDimension.vocabulary.technique.how)",
+            teachingPoint: "\(CoachDimension.vocabulary.fullTechnique)",
             suggestedPractice: CoachDimension.vocabulary.practiceRoute
         )
     }
@@ -601,7 +601,7 @@ nonisolated enum CoachingTipService {
             title: answeringPrompt ? "Answer the Question First" : "Tighten the Thread",
             message: message,
             teachingPoint: answeringPrompt
-                ? "\(CoachDimension.relevance.technique.name): \(CoachDimension.relevance.technique.how)"
+                ? "\(CoachDimension.relevance.fullTechnique)"
                 : "Bridge every idea to the one before it out loud, \"which means\", \"the flip side of that\", \"so what that gives you is\". The connection is obvious to you because you thought it; it is invisible to a listener until you say it.",
             suggestedPractice: CoachDimension.relevance.practiceRoute,
             evidenceTime: context.evidence.opening == nil ? nil : 0

@@ -22,6 +22,7 @@ The user controls **how hard** the fresh words are (`vocabChallengeLevelOverride
 | Lexicon | `SpeakUp/Data/DefaultVocabLexicon.swift` (three tiers, `level` 0/1/2) |
 | Models | `SpeakUp/Models/VocabChallenge.swift` (`VocabChallengePreferences.resolvedIntroLevel`) |
 | Per-recording snapshot | `Recording.vocabChallengeDayStamp` / `.vocabChallengeWords` (additive optionals) |
+| Word library (browse / look up / add) | `SpeakUp/Views/Words/WordLibraryView.swift` |
 | Today brief strip | `SpeakUp/Views/Today/SessionWordsRow.swift` |
 | Session result card | `SpeakUp/Views/Today/VocabChallengeResultCard.swift` |
 | Settings | `WordWorkoutSettingsView` (hosts `VocabChallengeSettingsCard`, still defined in `WordBankView.swift`) |
@@ -46,6 +47,17 @@ The user controls **how hard** the fresh words are (`vocabChallengeLevelOverride
 14. The snapshot is authoritative over the day cache. If the user later skips/refills that day's words elsewhere, old recordings still show what they were actually shown; an empty or malformed snapshot hides the card instead of rendering a hollow one.
 15. Uniqueness is layered: the curated pool is deep enough for months (≥100 per tier, asserted by test); fresh draws exclude everything with an FSRS schedule **and** everything graded inside a 21-day window (`freshnessWindowDays`), so chance never re-deals a card the user just saw. Deliberate FSRS returns are exempt — spaced repetition repeating a missed word is the design, not a bug.
 16. Generated words are second-class until proven: they join the intro pool only after `FreshWordSanitizer` validation, they never shadow a curated entry with the same key, and they get FSRS schedules on the same terms as lexicon words (`lexiconEntry(for:)` merges both stores, or they could never come back as reviews). The generator runs fire-and-forget from `TodayView.task`, throttled to one attempt per six hours, refilling only when live stock drops below ten; any failure degrades silently to the curated lexicon.
+
+## Word library
+
+`WordLibraryView` is the reading end of the same data. Settings → Word Lists is a form for typing words *in*; the library is where you find one worth typing. It lists the curated lexicon by tier (`WordLibraryTier`: Everyday / Sharper / Advanced, the stored `level` 0/1/2 named for what they are to a speaker), the accepted generated words beneath them, and the user's own bank words that the lexicon does not already carry. A word opens a sheet with its gloss, its "say it out loud" prompt, `PronunciationService.speak`, `DictionaryView` (the system `UIReferenceLibraryViewController`) and one Add / Remove control.
+
+Rules:
+
+1. **Adding goes through `SettingsViewModel`**, same as `WordBankView`. Word-bank safety (`WordSafety`), de-duplication, the filler-word check and persistence live there; a second path to `UserSettings.vocabWords` would be a second definition of what counts as an addable word.
+2. **The catalog is built once**, in `onAppear`, into `@State`. It merges, filters by tier and sorts ~400 entries and decodes `GeneratedVocabStore.entries()` out of `UserDefaults` - none of which belongs on the path a keystroke in the search field takes. Filtering that cache per keystroke is what search does.
+3. **A search that matches nothing is still a word.** A single-token query of two or more characters that is in neither the catalog nor the bank offers a lookup card into the system dictionary. The lexicon is four hundred words; the dictionary is not.
+4. Doors: `WordLibraryEntryRow` on Library → Tools (a full-width row beside `PracticeImproveEntryRow`, not a fifth tile - see [today-library.md](./today-library.md)), pushed by `WordLibraryRoute`; and a row at the top of Word Lists → Vocab.
 
 ## Level control shape
 

@@ -26,10 +26,12 @@ extension RoutineStep {
 /// Today's routine: the chain, where the user is in it, and one control that
 /// starts the link they are on.
 ///
-/// Rendered as a labelled ladder rather than a checklist of equals. Everything
-/// before the current step is a tick, the current step carries the only action
-/// on the card, and everything after is a preview - so the card answers "what
-/// now" in one glance instead of offering five choices again.
+/// Drawn as a horizontal rail, not a vertical checklist. Three tall rows with
+/// a connector down the left cost a third of the home screen to say "three
+/// things, you are on the first", and only one of them - the one named on the
+/// button - could be tapped at all. Every marker on the rail is a door now, so
+/// skipping ahead to the take does not mean scrolling past the routine to find
+/// the session module underneath it.
 struct RoutineCard: View {
     let steps: [RoutineStep]
     let completed: Set<RoutineStep>
@@ -41,17 +43,20 @@ struct RoutineCard: View {
     }
 
     var body: some View {
-        GlassCard(padding: 18) {
+        GlassCard(padding: 16) {
             VStack(alignment: .leading, spacing: 14) {
                 header
 
-                VStack(spacing: 0) {
-                    ForEach(Array(steps.enumerated()), id: \.element) { index, step in
-                        row(step, isLast: index == steps.count - 1)
-                    }
-                }
+                chain
 
                 if let current {
+                    Text(current.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityHidden(true)
+
                     GlassButton(
                         title: current.actionTitle,
                         icon: current.icon,
@@ -101,64 +106,88 @@ struct RoutineCard: View {
         }
     }
 
-    // MARK: Row
+    // MARK: Chain
 
-    private func row(_ step: RoutineStep, isLast: Bool) -> some View {
-        let isDone = completed.contains(step)
-        let isCurrent = step == current
-
-        return HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 0) {
-                marker(isDone: isDone, isCurrent: isCurrent, tint: step.tint)
-                if !isLast {
-                    // The rail is what makes this read as a chain rather than a
-                    // list. It stops at the last marker so the card does not
-                    // trail a line into nothing.
-                    Rectangle()
-                        .fill(AppColors.cardStroke)
-                        .frame(width: 1)
-                        .frame(maxHeight: .infinity)
-                }
+    private var chain: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(steps.enumerated()), id: \.element) { index, step in
+                stepCell(step, index: index)
             }
-            .frame(width: 22)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(step.title)
-                    .font(.subheadline.weight(isCurrent ? .semibold : .medium))
-                    .foregroundStyle(isDone ? AnyShapeStyle(.secondary) : AnyShapeStyle(.white))
-                    .strikethrough(isDone, color: .secondary)
-
-                if isCurrent {
-                    Text(step.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.bottom, isLast ? 0 : 12)
-
-            Spacer(minLength: 0)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(stepLabel(step, isDone: isDone, isCurrent: isCurrent))
     }
 
-    private func marker(isDone: Bool, isCurrent: Bool, tint: Color) -> some View {
-        ZStack {
-            Circle()
-                .fill(isDone ? AppColors.success.opacity(0.18) : tint.opacity(isCurrent ? 0.18 : 0.08))
-                .frame(width: 22, height: 22)
+    private func stepCell(_ step: RoutineStep, index: Int) -> some View {
+        let isDone = completed.contains(step)
+        let isCurrent = step == current
+        let leadingFilled = index > 0 && completed.contains(steps[index - 1])
 
-            if isDone {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(AppColors.success)
-            } else {
-                Circle()
-                    .fill(isCurrent ? tint : tint.opacity(0.35))
-                    .frame(width: isCurrent ? 8 : 6, height: isCurrent ? 8 : 6)
+        return Button {
+            Haptics.light()
+            onStart(step)
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    // Rail halves rather than one line behind the row: a
+                    // segment is lit by the step *before* it, so the fill
+                    // tracks the chain instead of the marker it sits under.
+                    HStack(spacing: 0) {
+                        railHalf(filled: leadingFilled)
+                            .padding(.trailing, markerRadius + 4)
+                            .opacity(index == 0 ? 0 : 1)
+                        railHalf(filled: isDone)
+                            .padding(.leading, markerRadius + 4)
+                            .opacity(index == steps.count - 1 ? 0 : 1)
+                    }
+
+                    marker(isDone: isDone, isCurrent: isCurrent, step: step)
+                }
+                .frame(maxWidth: .infinity)
+
+                Text(step.shortTitle)
+                    .font(.system(size: 10, weight: isCurrent ? .semibold : .medium))
+                    .foregroundStyle(isCurrent ? Color.white : Color.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(stepLabel(step, isDone: isDone, isCurrent: isCurrent))
+        .accessibilityHint(step.actionTitle)
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    /// Half the marker's width. The rail stops short of it on both sides -
+    /// the marker's fill is translucent glass, so running the line behind it
+    /// would show through and turn the circle into a bullseye.
+    private var markerRadius: CGFloat { 16 }
+
+    private func railHalf(filled: Bool) -> some View {
+        Capsule()
+            .fill(filled ? AppColors.success.opacity(0.55) : AppColors.cardStroke)
+            .frame(height: 2)
+    }
+
+    private func marker(isDone: Bool, isCurrent: Bool, step: RoutineStep) -> some View {
+        let tint = step.tint
+
+        return ZStack {
+            Circle()
+                .fill(isDone ? AppColors.success.opacity(0.18) : tint.opacity(isCurrent ? 0.22 : 0.10))
+
+            Circle()
+                .stroke(
+                    isCurrent ? tint : (isDone ? AppColors.success.opacity(0.4) : AppColors.cardStroke),
+                    lineWidth: isCurrent ? 1.5 : 1
+                )
+
+            Image(systemName: isDone ? "checkmark" : step.icon)
+                .font(.system(size: isDone ? 12 : 13, weight: .semibold))
+                .foregroundStyle(isDone ? AppColors.success : (isCurrent ? tint : tint.opacity(0.5)))
+        }
+        .frame(width: markerRadius * 2, height: markerRadius * 2)
+        .shadow(color: isCurrent ? tint.opacity(0.3) : .clear, radius: isCurrent ? 6 : 0, y: 1)
     }
 
     private func stepLabel(_ step: RoutineStep, isDone: Bool, isCurrent: Bool) -> String {

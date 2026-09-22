@@ -38,6 +38,12 @@ After a take: staged analyzing, score reveal, transcript / playback / coaching, 
 7. Prompt text on a share card and in the share URL is opt-in. Scores-only shares must not put the prompt (or `beat`) on the link. Story sessions may show the title on the card but never encode story body into the URL.
 8. `ShareCardSheet` is the one share surface: variant tabs (Scores / Challenge) over a live preview, a `ScoreCardTheme` filter strip, then Save / Copy / Share. `.scores` **must** stay the default selection — the default card carries no prompt. Themes change only the card backdrop (all stay dark, so the hero body needs no per-theme colors) and persist to `UserSettings.shareCardTheme`; the render cache is keyed by variant **and** theme. Save and Copy log `share_complete` too; they are the same intent by another route.
 9. Share captions are three lines at most (headline, prompt quote, URL). Explanation belongs on the card or in the sheet's subtitle, not in text the recipient reads.
+10. **Nothing on this screen is said twice.** The page already draws the dimension, the score, the window and the trend as chrome, so prose beside them carries meaning, not a read-back of the pixels above it:
+    - `CoachDimension.technique` is `(name, how, why)`. `how` is the instruction a card asks for in the second before you speak; `why` is what earns it and belongs behind a disclosure. `fullTechnique` re-joins them for teaching points and the LLM prompt. `NextStepCard` takes `how` plus the technique's **name**; it never takes the joined form.
+    - `CoachFocusCard` prints `CoachPlan.focusNote`, not `headline`. `headline` names the dimension, the number, the window and the direction, and exists for readers that have none of them on screen: `CoachingPrompt`, and `NextStep` on a session where nothing scored low enough to coach. Printing it under a row that already draws all four was the same fact five times.
+    - `graduationLine` states the bar, not the dimension: "Three sessions at 85 to move on.", with the target already shown as `/ 85`.
+    - `NextStepCard` labels its score **this take**. It is the session's subscore while the Coaching tab prints the rolling average for the same dimension, and two different numbers under one word read as a bug.
+    - The share CTA is one row (icon, title, chevron), not a card with a heading, a subtitle restating the heading and a full-width button restating both.
 
 ## Coaching layer
 

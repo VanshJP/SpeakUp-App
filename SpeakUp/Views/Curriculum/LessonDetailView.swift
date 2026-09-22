@@ -211,7 +211,7 @@ struct LessonDetailView: View {
     private var lessonContent: some View {
         ScrollViewReader { proxy in
             PageScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 14) {
                     Color.clear
                         .frame(height: 0)
                         .id("scrollTop")
@@ -219,7 +219,8 @@ struct LessonDetailView: View {
                     LessonBoardHeader(
                         lesson: lesson,
                         identity: lessonIdentity,
-                        isReviewing: isRevisitingCompletedLesson
+                        isReviewing: isRevisitingCompletedLesson,
+                        isCompact: currentStepIndex > 0
                     )
 
                     LessonPlanStrip(
@@ -237,7 +238,7 @@ struct LessonDetailView: View {
 
                     activityContent(for: currentActivity)
 
-                    Spacer().frame(height: 24)
+                    Spacer().frame(height: 16)
                 }
                 .padding(.horizontal, AppLayout.pageHorizontal)
                 .padding(.top, 8)
@@ -253,10 +254,6 @@ struct LessonDetailView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
-    }
-
-    private func isActivityDone(_ activity: CurriculumActivity) -> Bool {
-        completedActivityIds.contains(activity.id) || viewModel.isActivityCompleted(activity.id)
     }
 
     // MARK: - Activity Content Dispatch
@@ -314,36 +311,25 @@ struct LessonDetailView: View {
         }
     }
 
+    /// Launch controls only. The activity header above already prints the
+    /// description and the board prints the objective; this card reprinting
+    /// both is why the practice step read as the same paragraph three times.
     private func practiceLaunchCard(_ activity: CurriculumActivity) -> some View {
         GlassCard(tint: AppColors.glassTintPrimary) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(activity.description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 14) {
+                if activity.targetDuration != nil || activity.frameworkHint != nil {
+                    HStack(spacing: 16) {
+                        if let duration = activity.targetDuration {
+                            Label("\(durationLabel(duration))", systemImage: "timer")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(AppColors.primary)
+                        }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Hold this focus")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(lessonIdentity.accent)
-                        .textCase(.uppercase)
-                        .tracking(0.4)
-                    Text(lesson.objective)
-                        .font(.callout.weight(.medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 16) {
-                    if let duration = activity.targetDuration {
-                        Label("\(durationLabel(duration))", systemImage: "timer")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(AppColors.primary)
-                    }
-
-                    if let framework = activity.frameworkHint {
-                        Label(framework, systemImage: "rectangle.3.group")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(AppColors.categoryNeutralCool)
+                        if let framework = activity.frameworkHint {
+                            Label(framework, systemImage: "rectangle.3.group")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(AppColors.categoryNeutralCool)
+                        }
                     }
                 }
 
@@ -395,11 +381,6 @@ struct LessonDetailView: View {
                     Spacer()
                 }
 
-                Text(activity.description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
                 GlassButton(title: "Start Drill", icon: "bolt.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
                     let vm = DrillViewModel()
@@ -448,16 +429,12 @@ struct LessonDetailView: View {
                         Text(exercise.instructions)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer()
                 }
-
-                Text(activity.description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 GlassButton(title: "Start Exercise", icon: "play.fill", style: .primary, fullWidth: true) {
                     Haptics.medium()
@@ -486,16 +463,12 @@ struct LessonDetailView: View {
                         Text(exercise.description)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer()
                 }
-
-                Text(activity.description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if confidenceExerciseOpened {
                     GlassButton(title: "Mark as Done", icon: "checkmark", style: .primary, fullWidth: true) {
@@ -689,30 +662,19 @@ struct LessonDetailView: View {
     // MARK: - Bottom Bar
 
     private var bottomBar: some View {
-        let doneCount = lesson.activities.filter { isActivityDone($0) }.count
-
-        return VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                ForEach(0..<lesson.activities.count, id: \.self) { index in
-                    let activity = lesson.activities[index]
-                    Capsule()
-                        .fill(isActivityDone(activity) ? AppColors.success : Color.white.opacity(0.15))
-                        .frame(height: 3)
-                }
-            }
-            .accessibilityHidden(true)
-
-            HStack {
-                Text("\(doneCount) of \(lesson.activities.count) done")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-            }
+        VStack(spacing: 10) {
+            LessonProgressTrack(
+                total: lesson.activities.count,
+                currentIndex: currentStepIndex,
+                completedIds: resolvedCompletedIds,
+                activityIds: lesson.activities.map(\.id),
+                accent: lessonIdentity.accent
+            )
 
             bottomBarActions
         }
         .padding(.horizontal, AppLayout.pageHorizontal)
-        .padding(.top, 12)
+        .padding(.top, 10)
         .padding(.bottom, 10)
         .background {
             Rectangle()
