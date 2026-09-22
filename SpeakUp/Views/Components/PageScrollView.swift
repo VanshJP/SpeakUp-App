@@ -1,9 +1,15 @@
 import SwiftUI
 
 /// A vertical page scroller that cannot scroll sideways.
+///
+/// `ScrollView`'s axes decide which way content is allowed to grow *unbounded*.
 /// They do not stop it growing the other way: if any child measures wider than
-/// fixed-width frame, or ordinary content at an accessibility text size - the
+/// the viewport (a pill row pinned with `.fixedSize()`, a long unbroken word, a
+/// fixed-width frame, or ordinary content at an accessibility text size), the
+/// scroll view's content size grows with it and UIKit pans horizontally,
 /// because a scroll view scrolls on any axis where content exceeds bounds.
+/// The page ends up draggable sideways with everything cut off at the right.
+/// Clamping the content to the container width makes the overflow clip instead.
 struct PageScrollView<Content: View>: View {
     var showsIndicators: Bool = true
     @ViewBuilder var content: Content

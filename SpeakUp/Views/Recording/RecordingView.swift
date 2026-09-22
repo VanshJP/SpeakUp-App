@@ -510,6 +510,15 @@ struct RecordingView: View {
     /// The dial, in a slot that owns everything the top bar and the controls
     /// didn't take.
     ///
+    /// The countdown draws the same slot in the same place at the same size:
+    /// the target comes from the slot's width, which both screens share, so
+    /// the hand-off moves nothing but the prompt card shrinking. The two
+    /// screens' *heights* differ a lot (this one's bottom carries a record
+    /// button inside up to 220pt of waveform), but height only ever steps the
+    /// dial down a rung, and only when a screen genuinely cannot show the
+    /// shared size. Nothing moves it within a take either: everything feeding
+    /// the slot's height is fixed once recording starts, which is why the
+    /// coaching cue sits in a lane reserved before the take (`coachingCueLane`).
     private var sessionStage: some View {
         SessionDialSlot(spacing: 24) { diameter in
             if let framework = selectedFramework, viewModel.isRecording {
@@ -652,7 +661,12 @@ struct RecordingView: View {
 // MARK: - Circular Waveform View (surrounds record button)
 
 /// Radial waveform drawn in a single Canvas node inside a TimelineView.
+///
 /// - `audioLevel`: incoming dB reading, smoothed to avoid jitter.
+/// - `style`: user-chosen look (Settings → Recording Look).
+/// - `canvasSize`: geometry scales from the 220pt reference design, so the
+///   same view doubles as a settings thumbnail.
+/// - `simulated`: no mic; drive the envelope from a sine so previews move.
 struct CircularWaveformView: View {
     var audioLevel: Float = 0
     var style: WaveformStyle = .rings
@@ -832,7 +846,14 @@ struct CircularWaveformView: View {
 // MARK: - Mic Level Pill
 
 /// Answers one question - is the mic hearing me? - and stays quiet otherwise.
+///
+/// This used to read Speaking / Silent off the instantaneous level, so it
+/// strobed between every two words: a label that changes four times a sentence
+/// is read as broken, not informative. `AudioService.isHearingInput` starts a
 /// take green, drops to the warning only if the first few seconds bring in
+/// nothing at all, and latches green for good the moment the mic is proven to
+/// work, so this changes at most twice a take, and the words only appear when
+/// there is something to say.
 struct MicLevelPill: View {
     let isHearing: Bool
 

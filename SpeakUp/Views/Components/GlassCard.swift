@@ -159,6 +159,9 @@ struct EmptyStateCard: View {
 /// Empty state for a slot that already sits inside a card - a chart well, a
 /// section body. `EmptyStateCard` would nest a `GlassCard` in a `GlassCard`.
 ///
+/// Exists because four chart fallbacks were each a bare `Text` in a
+/// `minHeight: 100` frame: technically an empty state, visibly an oversight
+/// next to the designed ones elsewhere in the app.
 struct EmptyStateInline: View {
     let icon: String
     let message: String

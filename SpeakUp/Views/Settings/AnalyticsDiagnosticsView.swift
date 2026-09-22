@@ -1,7 +1,12 @@
 import SwiftUI
 
 /// The launch scorecard, computed on this device from the local event log.
-/// here, in full, and it never leaves unless the user exports it.
+///
+/// There is no analytics backend, so this screen is how the beta gates
+/// (activation rate, time to value) actually get read: a tester opens it,
+/// exports the JSON, and sends it over. It doubles as the honest answer to
+/// "what do you collect?" Everything recorded is right here, in full, and it
+/// never leaves unless the user exports it.
 struct AnalyticsDiagnosticsView: View {
     private var analytics: AnalyticsService { AnalyticsService.shared }
 

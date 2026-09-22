@@ -2,8 +2,11 @@ import Foundation
 import SwiftData
 
 /// The baseline a session score is read against.
+///
 /// Bounded to a rolling window rather than all-time: decoding every `analysis`
 /// blob would make the cost grow without limit, and a rolling baseline is the
+/// more useful comparison anyway ("better than I've been lately" beats "better
+/// than I was a year ago").
 // Opt out of default MainActor isolation - baselines decode off-main in
 // `Task.detached`, so window / Baselines must be callable from any isolation.
 nonisolated enum PersonalAverage {
@@ -58,7 +61,12 @@ nonisolated enum PersonalAverage {
     }
 
     /// What a session was practising, as one comparable key.
-    /// `Prompt` by String - so they are normalised here rather than at the two
+    ///
+    /// Story wins over prompt, matching how relevance scoring picks its source
+    /// text (`RecordingProcessingCoordinator.effectivePromptText`). The two ids
+    /// are different types (`Story` is keyed by UUID, `Prompt` by String), so
+    /// they are normalised here rather than at the two call sites that would
+    /// otherwise each have to get it right.
     static func repeatSubject(of recording: Recording) -> String? {
         if let storyId = recording.storyId { return storyId.uuidString }
         guard let promptId = recording.prompt?.id, !promptId.isEmpty else { return nil }
@@ -104,7 +112,14 @@ nonisolated enum PersonalAverage {
     }
 
     /// Baselines plus the coaching plan, from a single fetch and decode.
+    ///
+    /// The plan window deliberately does *not* exclude `currentID`: baselines
+    /// answer "how does this session compare to my others", so the session
     /// itself must be left out, while the plan answers "what am I working on
+    /// now", which the latest session is part of.
+    /// - Parameter repeatSubject: the prompt or story the session being viewed
+    ///   answered, from `repeatSubject(of:)`, used to find the user's previous
+    ///   attempt at the same thing.
     static func snapshot(
         excluding currentID: UUID,
         container: ModelContainer,

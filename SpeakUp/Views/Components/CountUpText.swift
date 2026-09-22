@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// A number that counts through every value on its way to the target.
+///
+/// Drive it from a `withAnimation` (or `.motion`) on whatever state feeds
 /// `value`. Under Reduce Motion the value simply lands, which is correct.
 struct CountUpText: View, Animatable {
     var value: Double

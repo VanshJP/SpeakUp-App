@@ -1,7 +1,16 @@
 import SwiftUI
 
 /// The moment the app exists for: you stopped talking, here is how it went.
-///   and never congratulatory - a low score met with confetti reads as sarcasm.
+///
+/// The reveal is scaled to the band so the app's reaction matches the result:
+///
+/// - **Strong (80+)**: confetti, success haptic, the score is the celebration.
+/// - **Solid (60-79)**: the number climbs and lands. No particles; a good
+///   session doesn't need a parade, and spending confetti here would make it
+///   worthless at 90.
+/// - **Building (<60)**: no celebration language at all. The verdict, then one
+///   forward-looking line naming what held it back. Honest, not a failure state,
+///   and never congratulatory: a low score met with confetti reads as sarcasm.
 struct ScoreRevealView: View {
     let score: Int
     let baselines: PersonalAverage.Baselines
