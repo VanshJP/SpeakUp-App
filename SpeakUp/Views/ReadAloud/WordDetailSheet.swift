@@ -22,6 +22,13 @@ struct WordDetailSheet: View {
         PronunciationService.stripPunctuation(detail.word)
     }
 
+    /// The consonant that separates the word from what was heard in its
+    /// place. Only a miss has one.
+    private var slip: ConsonantSlip? {
+        guard case .mismatched(let spoken) = detail.state else { return nil }
+        return ConsonantAnalyzer.slip(target: cleanedWord, heard: spoken)
+    }
+
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
@@ -30,9 +37,13 @@ struct WordDetailSheet: View {
                 GlassCard {
                     VStack(spacing: 14) {
                         HStack(spacing: 16) {
-                            Text(cleanedWord)
-                                .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
+                            MarkedWordText.make(
+                                cleanedWord,
+                                marking: slip?.letters,
+                                base: .white,
+                                mark: AppColors.error
+                            )
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
 
                             if !micActive {
                                 Button {
@@ -62,6 +73,10 @@ struct WordDetailSheet: View {
                         }
 
                         stateIndicator
+
+                        if let slip {
+                            slipExplanation(slip)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -81,7 +96,7 @@ struct WordDetailSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
         }
-        .presentationDetents([.height(320)])
+        .presentationDetents(slip == nil ? [.height(320)] : [.height(440), .large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showingDictionary) {
             DictionaryView(term: detail.word)
@@ -89,6 +104,23 @@ struct WordDetailSheet: View {
         .onDisappear {
             pronunciationService.stop()
         }
+    }
+
+    // MARK: - Consonant
+
+    private func slipExplanation(_ slip: ConsonantSlip) -> some View {
+        VStack(spacing: 6) {
+            Text(slip.summary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Text(slip.tip)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .multilineTextAlignment(.center)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - State Indicator

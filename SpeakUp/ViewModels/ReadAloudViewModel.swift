@@ -26,6 +26,9 @@ struct ReadAloudResult: Identifiable {
     /// died mid-read, or nothing was heard at all. The result screen shows it
     /// instead of letting a bare "0% · Complete" stand as a verdict.
     var notice: String?
+    /// Consonants that came out as another sound or were not heard, read
+    /// from the words heard in place of the page's.
+    var soundCheck: SoundCheck = .empty
 
     var score: Int {
         Int(accuracy.rounded())
@@ -37,35 +40,26 @@ struct ReadAloudResult: Identifiable {
         Self.missedPhrases(in: passage.words, states: wordStates)
     }
 
-    /// Each missed or skipped word with `context` words either side - a word
-    /// is practised the way its sentence says it, not on its own - with
-    /// overlapping stretches merged, joined as sentences.
+    /// Each missed or skipped word with the words either side of it, as
+    /// `ReadAloudPassage.practiceText(around:in:context:)` builds them.
     ///
     /// Retry replays the whole passage, which spends most of the next take on
     /// words that were already clean. This is the deliberate-practice version:
     /// only the parts that went wrong, straight away.
     static func missedPhrases(in words: [String], states: [WordMatchState], context: Int = 2) -> String? {
         let missed = words.indices.filter { $0 < states.count && states[$0].needsAttention }
-        guard !missed.isEmpty else { return nil }
+        return ReadAloudPassage.practiceText(around: missed, in: words, context: context)
+    }
 
-        var stretches: [ClosedRange<Int>] = []
-        for index in missed {
-            let stretch = max(0, index - context)...min(words.count - 1, index + context)
-            if let last = stretches.last, stretch.lowerBound <= last.upperBound + 1 {
-                stretches[stretches.count - 1] = last.lowerBound...max(last.upperBound, stretch.upperBound)
-            } else {
-                stretches.append(stretch)
+    /// What the recognizer heard in place of each missed word, by word index.
+    static func heardWords(in states: [WordMatchState]) -> [Int: String] {
+        var heard: [Int: String] = [:]
+        for (index, state) in states.enumerated() {
+            if case .mismatched(let spoken) = state {
+                heard[index] = spoken
             }
         }
-
-        let text = stretches
-            .map { words[$0].joined(separator: " ").trimmingCharacters(in: .punctuationCharacters) }
-            .filter { !$0.isEmpty }
-            .joined(separator: ". ")
-        // A take with many misses can run past one scored section. Cut at a
-        // stretch or word boundary, never mid-word; the misses left over are
-        // there for the next pass.
-        return ReadAloudPassage.practiceSizedExcerpt(from: text)
+        return heard
     }
 }
 
@@ -169,7 +163,11 @@ class ReadAloudViewModel {
             mismatchedWords: service.mismatchedWordCount,
             timeTaken: timeTaken,
             wordStates: service.wordStates,
-            notice: notice(for: timeTaken, heardNothing: heardNothing)
+            notice: notice(for: timeTaken, heardNothing: heardNothing),
+            soundCheck: SoundCheck(
+                passage: passage.words,
+                heard: ReadAloudResult.heardWords(in: service.wordStates)
+            )
         )
 
         sessionState = .finished

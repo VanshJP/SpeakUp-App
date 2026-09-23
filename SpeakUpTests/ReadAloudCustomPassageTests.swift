@@ -29,6 +29,12 @@ struct ReadAloudCustomPassageTests {
         #expect(passage.difficulty == .medium)
     }
 
+    @Test func aPassageTheAppBuiltKeepsItsOwnTitle() throws {
+        let passage = try #require(ReadAloudPassage.custom(from: "Think. Three. I think three thin cats", title: "TH practice"))
+        #expect(passage.title == "TH practice")
+        #expect(passage.isCustom)
+    }
+
     @Test func emptyAndWhitespaceRejected() {
         #expect(ReadAloudPassage.custom(from: "") == nil)
         #expect(ReadAloudPassage.custom(from: "   \n\t  ") == nil)

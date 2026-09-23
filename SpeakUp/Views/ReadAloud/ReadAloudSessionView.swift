@@ -15,8 +15,9 @@ struct ReadAloudSessionView: View {
     @State private var pronunciationService = PronunciationService()
     @State private var lastAutoScrolledWordIndex = 0
     @State private var didAutoStartSession = false
-    /// The short passage "Drill what you missed" swaps in, run in this same
-    /// cover. Nil while reading the passage the session opened on.
+    /// The short passage "Drill what you missed" or a sound's Practice swaps
+    /// in, run in this same cover. Nil while reading the passage the session
+    /// opened on.
     @State private var drilledPassage: ReadAloudPassage?
 
     private var currentPassage: ReadAloudPassage { drilledPassage ?? passage }
@@ -102,12 +103,11 @@ struct ReadAloudSessionView: View {
                 finishedRead = nil
                 viewModel.reset()
                 dismiss()
-            }, onPracticeMisses: { text in
-                guard let misses = ReadAloudPassage.custom(from: text) else { return }
+            }, onPractice: { drill in
                 finishedRead = nil
-                drilledPassage = misses
+                drilledPassage = drill
                 lastAutoScrolledWordIndex = 0
-                Task { await viewModel.startSession(passage: misses) }
+                Task { await viewModel.startSession(passage: drill) }
             })
         }
         .sheet(item: $selectedWord) { detail in

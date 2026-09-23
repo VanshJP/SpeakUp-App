@@ -951,7 +951,7 @@ class ReadAloudService {
     /// behavior directly (default isolation would otherwise fence it behind
     /// the main actor).
     ///
-    /// Greedy left-to-right match. Handles the two ways real reading drifts
+    /// Greedy left-to-right match. Handles the three ways real reading drifts
     /// from the page:
     /// - **Skipped words** (reader drops a word): a spoken word that matches a
     ///   nearby *reference* word marks everything between as `.skipped`.
@@ -961,6 +961,9 @@ class ReadAloudService {
     ///   was an insertion, not a miss. Single-word lookahead keeps skip vs
     ///   insert deterministic; deeper stumbles re-sync on the next partial
     ///   result anyway.
+    /// - **Words said wrong** ("free" for "three"): see `isSlip`. Checked
+    ///   before either of the above, which would otherwise explain the slip
+    ///   away as a skip or a filler.
     nonisolated static func computeAlignment(
         reference: [String],
         normalizedReference: [String],
@@ -993,18 +996,35 @@ class ReadAloudService {
                 continue
             }
 
+            let lookAhead = min(refIndex + 3, reference.count)
+            let nextIndex = spokenIndex + 1
+            let nextNorm = nextIndex < spokenWords.count ? normalize(spokenWords[nextIndex]) : nil
+            var saidWrong = isSlip(
+                spokenNorm,
+                at: refIndex,
+                next: nextNorm,
+                normalizedReference: normalizedReference
+            )
+
             // Skipped-reference path: this spoken word belongs further ahead
             // in the passage.
-            let lookAhead = min(refIndex + 3, reference.count)
             var foundAhead = false
 
             if lookAhead > refIndex + 1 {
                 for i in (refIndex + 1)..<lookAhead where spokenNorm == normalizedReference[i] {
-                    markSkipped(refIndex..<i)
-                    newStates[i] = .matched
-                    matched += 1
-                    refIndex = i + 1
-                    foundAhead = true
+                    // "tin" for "Thin." in "Thin. Tin." matches the "Tin."
+                    // ahead as well. If the next word also lands after that
+                    // match, the skip explains both words just as well.
+                    if saidWrong, i + 1 < reference.count, nextNorm == normalizedReference[i + 1] {
+                        saidWrong = false
+                    }
+                    if !saidWrong {
+                        markSkipped(refIndex..<i)
+                        newStates[i] = .matched
+                        matched += 1
+                        refIndex = i + 1
+                        foundAhead = true
+                    }
                     break
                 }
             }
@@ -1016,9 +1036,7 @@ class ReadAloudService {
             // Insertion path: if the NEXT spoken word resolves at or near the
             // current position, this word was said in passing ("um") - drop it
             // without consuming a reference word or counting a miss.
-            let nextIndex = spokenIndex + 1
-            if nextIndex < spokenWords.count {
-                let nextNorm = normalize(spokenWords[nextIndex])
+            if !saidWrong, let nextNorm {
                 let nextResolvesHere = !nextNorm.isEmpty && nextNorm == expectedNorm
                 let nextResolvesAhead = normalizedReference[(refIndex + 1)..<lookAhead]
                     .contains { $0 == nextNorm }
@@ -1039,6 +1057,55 @@ class ReadAloudService {
         }
 
         return (newStates, refIndex, matched, mismatched)
+    }
+
+    /// Whether `spoken` is the reference word at `index` said wrong - "free"
+    /// for "three", "tin" for "thin" - rather than a filler before it or a
+    /// word further ahead: it is a near miss of that word, and the next
+    /// spoken word lands on the word after it.
+    ///
+    /// Without this, a slip followed by a clean word read as a filler plus a
+    /// skip, or in a minimal pair as a skip to the look-alike ahead, and the
+    /// result could only call the word skipped. What was heard, the part
+    /// worth practising, was thrown away. The score is the same either way:
+    /// a skip and a mismatch are both a miss.
+    nonisolated static func isSlip(
+        _ spoken: String,
+        at index: Int,
+        next: String?,
+        normalizedReference: [String]
+    ) -> Bool {
+        guard let next, index + 1 < normalizedReference.count,
+              next == normalizedReference[index + 1]
+        else { return false }
+        return isNearMiss(spoken, of: normalizedReference[index])
+    }
+
+    /// Close enough in spelling to be the same word said wrong: one edit for
+    /// a word of up to three letters, up to half the longer word's letters
+    /// past that. "three" and "free" are two edits apart; "um" and "the" are
+    /// three.
+    nonisolated static func isNearMiss(_ spoken: String, of expected: String) -> Bool {
+        guard !spoken.isEmpty, !expected.isEmpty, spoken != expected else { return false }
+        let spokenLetters = Array(spoken)
+        let expectedLetters = Array(expected)
+        let limit = max(1, max(spokenLetters.count, expectedLetters.count) / 2)
+        guard abs(spokenLetters.count - expectedLetters.count) <= limit else { return false }
+
+        var previous = Array(0...expectedLetters.count)
+        var current = previous
+        for (row, spokenLetter) in spokenLetters.enumerated() {
+            current[0] = row + 1
+            for (column, expectedLetter) in expectedLetters.enumerated() {
+                current[column + 1] = min(
+                    previous[column + 1] + 1,
+                    current[column] + 1,
+                    previous[column] + (spokenLetter == expectedLetter ? 0 : 1)
+                )
+            }
+            swap(&previous, &current)
+        }
+        return previous[expectedLetters.count] <= limit
     }
 
     // MARK: - Scoring

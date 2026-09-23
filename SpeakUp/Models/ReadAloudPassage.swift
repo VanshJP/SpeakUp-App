@@ -23,9 +23,12 @@ nonisolated struct ReadAloudPassage: Identifiable, Hashable {
 
     /// Builds an ephemeral passage from freeform text. Returns `nil` when the
     /// input is empty or only punctuation/whitespace.
-    static func custom(from raw: String) -> ReadAloudPassage? {
+    ///
+    /// - Parameter title: Names a passage the app built, like "TH practice".
+    ///   Nil titles it by length, as for text the user typed.
+    static func custom(from raw: String, title: String? = nil) -> ReadAloudPassage? {
         guard let text = normalizedCustomText(raw) else { return nil }
-        return make(text: text, id: "custom-\(UUID().uuidString)")
+        return make(text: text, id: "custom-\(UUID().uuidString)", title: title)
     }
 
     /// A custom passage the user kept. Identical title/difficulty rules to
@@ -78,13 +81,41 @@ nonisolated struct ReadAloudPassage: Identifiable, Hashable {
         return capped.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func make(text: String, id: String) -> ReadAloudPassage {
+    /// The words at `indices` with `context` words either side - a word is
+    /// practised the way its sentence says it, not on its own - overlapping
+    /// stretches merged, joined as sentences and cut to one take. Nil when
+    /// there is nothing to read.
+    static func practiceText(around indices: [Int], in words: [String], context: Int = 2) -> String? {
+        let indices = indices.filter { words.indices.contains($0) }.sorted()
+        guard !indices.isEmpty else { return nil }
+
+        var stretches: [ClosedRange<Int>] = []
+        for index in indices {
+            let stretch = max(0, index - context)...min(words.count - 1, index + context)
+            if let last = stretches.last, stretch.lowerBound <= last.upperBound + 1 {
+                stretches[stretches.count - 1] = last.lowerBound...max(last.upperBound, stretch.upperBound)
+            } else {
+                stretches.append(stretch)
+            }
+        }
+
+        let text = stretches
+            .map { words[$0].joined(separator: " ").trimmingCharacters(in: .punctuationCharacters) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ". ")
+        // Many stretches can run past one scored section. Cut at a stretch or
+        // word boundary, never mid-word; what is left over is there for the
+        // next pass.
+        return practiceSizedExcerpt(from: text)
+    }
+
+    private static func make(text: String, id: String, title: String? = nil) -> ReadAloudPassage {
         let count = text.split(whereSeparator: { $0.isWhitespace }).count
-        let title: String
+        let lengthTitle: String
         switch count {
-        case 1: title = "Word practice"
-        case 2...20: title = "Sentence practice"
-        default: title = "Paragraph practice"
+        case 1: lengthTitle = "Word practice"
+        case 2...20: lengthTitle = "Sentence practice"
+        default: lengthTitle = "Paragraph practice"
         }
 
         let difficulty: ReadAloudDifficulty
@@ -96,7 +127,7 @@ nonisolated struct ReadAloudPassage: Identifiable, Hashable {
 
         return ReadAloudPassage(
             id: id,
-            title: title,
+            title: title ?? lengthTitle,
             text: text,
             difficulty: difficulty,
             category: .custom

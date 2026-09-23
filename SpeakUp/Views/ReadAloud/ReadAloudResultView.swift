@@ -4,8 +4,9 @@ struct ReadAloudResultView: View {
     let result: ReadAloudResult
     let onRetry: () -> Void
     let onDone: () -> Void
-    /// Runs a short passage built from the stumbles. Nil hides the button.
-    var onPracticeMisses: ((String) -> Void)?
+    /// Runs a short passage built from this take: the stumbles, or the words
+    /// behind one sound to check. Nil hides both practice buttons.
+    var onPractice: ((ReadAloudPassage) -> Void)?
 
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
@@ -89,6 +90,8 @@ struct ReadAloudResultView: View {
                         .accessibilityElement(children: .combine)
                     }
 
+                    soundsSection
+
                     wordReviewSection
 
                     VStack(spacing: 12) {
@@ -97,10 +100,11 @@ struct ReadAloudResultView: View {
                             onRetry()
                         }
 
-                        if let misses = result.missedPhrasesText, let onPracticeMisses {
+                        if let misses = result.missedPhrasesText, onPractice != nil {
                             GlassButton(title: "Drill what you missed", icon: "target", style: .secondary) {
+                                guard let passage = ReadAloudPassage.custom(from: misses) else { return }
                                 Haptics.medium()
-                                onPracticeMisses(misses)
+                                onPractice?(passage)
                             }
                             .accessibilityHint("Reads only the phrases you missed or skipped")
                         }
@@ -119,6 +123,93 @@ struct ReadAloudResultView: View {
         .sheet(item: $selectedWord) { detail in
             WordDetailSheet(detail: detail, pronunciationService: pronunciationService)
         }
+    }
+
+    // MARK: - Sounds to Check
+
+    /// The consonants behind the misses, grouped by sound. The top three
+    /// only: past that, a list stops being a place to start.
+    @ViewBuilder
+    private var soundsSection: some View {
+        let patterns = Array(result.soundCheck.patterns.prefix(3))
+        if !patterns.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Sounds to check", systemImage: "mouth")
+                    .font(.headline)
+
+                Text("Read from the words we heard instead of the ones on the page. Recognition can mishear, so treat these as places to listen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(patterns) { pattern in
+                    soundPatternCard(pattern)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func soundPatternCard(_ pattern: SoundPattern) -> some View {
+        GlassCard(tint: AppColors.error.opacity(0.06), padding: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(pattern.title)
+                        .font(.headline)
+                    Text(pattern.summary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+
+                WrappingHStack(spacing: 14, lineSpacing: 6) {
+                    ForEach(pattern.words, id: \.index) { word in
+                        slipWordPair(word)
+                    }
+                }
+
+                Label {
+                    Text(pattern.tip)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "lightbulb")
+                        .foregroundStyle(AppColors.warning)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                if onPractice != nil, pattern.practiceText != nil {
+                    GlassButton(title: "Practice", icon: "target", style: .secondary, size: .small) {
+                        practice(pattern)
+                    }
+                    .accessibilityHint("Reads these words on their own, then in their sentences")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// "three → free", the letters that changed marked in the word.
+    private func slipWordPair(_ word: SoundSlipWord) -> some View {
+        let target = MarkedWordText.make(
+            word.bareWord,
+            marking: word.bareLetters,
+            base: .white,
+            mark: AppColors.error
+        )
+        let arrow = Text(verbatim: "→").foregroundStyle(.tertiary)
+        let heard = Text(verbatim: word.bareHeard).foregroundStyle(.secondary)
+        return Text("\(target) \(arrow) \(heard)")
+            .font(.subheadline)
+            .accessibilityLabel("\(word.bareWord), heard as \(word.bareHeard). \(word.slip.summary)")
+    }
+
+    private func practice(_ pattern: SoundPattern) {
+        guard let text = pattern.practiceText,
+              let passage = ReadAloudPassage.custom(from: text, title: "\(pattern.title) practice")
+        else { return }
+        Haptics.medium()
+        onPractice?(passage)
     }
 
     // MARK: - Word Review
@@ -148,33 +239,50 @@ struct ReadAloudResultView: View {
                 WrappingHStack(spacing: 6, lineSpacing: 10) {
                     ForEach(Array(result.passage.words.enumerated()), id: \.offset) { index, word in
                         let state = index < result.wordStates.count ? result.wordStates[index] : WordMatchState.upcoming
-                        Text(word)
+                        reviewWordText(word, index: index, state: state)
                             .font(.system(size: reviewFontSize))
-                            .foregroundStyle(reviewWordColor(for: index))
-                            .underline(state.isSettled && state.needsAttention)
                             .padding(.vertical, 1)
                             .onTapGesture {
                                 guard state.isSettled else { return }
                                 Haptics.light()
                                 selectedWord = WordDetail(word: word, index: index, state: state)
                             }
-                            .accessibilityLabel(reviewWordLabel(word, state: state))
+                            .accessibilityLabel(reviewWordLabel(word, index: index, state: state))
                     }
                 }
             }
         }
     }
 
+    /// A miss with a consonant slip marks only that consonant, and the rest
+    /// of the word stays red but quieter, so the marked letters lead.
+    private func reviewWordText(_ word: String, index: Int, state: WordMatchState) -> Text {
+        if let slip = result.soundCheck.slip(at: index) {
+            return MarkedWordText.make(
+                word,
+                marking: slip.letters,
+                base: AppColors.error.opacity(0.6),
+                mark: AppColors.error
+            )
+        }
+        return Text(word)
+            .foregroundStyle(reviewWordColor(for: index))
+            .underline(state.isSettled && state.needsAttention)
+    }
+
     /// Same grammar as the live session's labels, so the two surfaces read
-    /// identically under VoiceOver.
-    private func reviewWordLabel(_ word: String, state: WordMatchState) -> String {
+    /// alike under VoiceOver, plus the consonant when there is one.
+    private func reviewWordLabel(_ word: String, index: Int, state: WordMatchState) -> String {
         switch state {
         case .upcoming, .current:
             return ""
         case .matched:
             return word
         case .mismatched(let spoken):
-            return "missed \(word), you said \(spoken)"
+            guard let slip = result.soundCheck.slip(at: index) else {
+                return "missed \(word), you said \(spoken)"
+            }
+            return "missed \(word), you said \(spoken). \(slip.summary)"
         case .skipped:
             return "\(word), skipped"
         }

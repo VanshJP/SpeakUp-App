@@ -112,6 +112,59 @@ struct ReadAloudAlignmentTests {
         #expect(result.matched == 1)
     }
 
+    // MARK: - Words said wrong
+
+    /// "Free" for "three" followed by a clean word used to read as a filler
+    /// plus a skip, which threw away what was heard - the part the result
+    /// screen needs to point at the consonant.
+    @Test func aNearMissBeforeACleanWordKeepsWhatWasHeard() {
+        let reference = ["three", "people", "came"]
+        let result = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: reference.map(ReadAloudService.normalize),
+            spokenWords: ["free", "people", "came"]
+        )
+
+        #expect(result.states == [.mismatched(spoken: "free"), .matched, .matched])
+        #expect(result.matched == 2)
+        #expect(result.mismatched == 1)
+    }
+
+    /// Minimal pairs put the look-alike right after the word, so a slip
+    /// matched ahead and the pack reported every slip as a skip.
+    @Test func aMinimalPairSaidWrongIsAMissNotASkip() {
+        let reference = ["Thin.", "Tin.", "Thin.", "Tin."]
+        let result = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: reference.map(ReadAloudService.normalize),
+            spokenWords: ["tin", "tin", "tin", "tin"]
+        )
+
+        #expect(result.states == [.mismatched(spoken: "tin"), .matched, .mismatched(spoken: "tin"), .matched])
+        #expect(result.matched == 2)
+        #expect(result.mismatched == 2)
+    }
+
+    @Test func aSkippedLookAlikeStaysSkipped() {
+        let reference = ["tin", "thin", "man"]
+        let result = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: reference.map(ReadAloudService.normalize),
+            spokenWords: ["thin", "man"]
+        )
+
+        #expect(result.states == [.skipped, .matched, .matched])
+    }
+
+    @Test func nearMissesAreCloseSpellingsOnly() {
+        #expect(ReadAloudService.isNearMiss("free", of: "three"))
+        #expect(ReadAloudService.isNearMiss("tin", of: "thin"))
+        #expect(ReadAloudService.isNearMiss("ask", of: "asked"))
+        #expect(!ReadAloudService.isNearMiss("um", of: "the"))
+        #expect(!ReadAloudService.isNearMiss("zebra", of: "the"))
+        #expect(!ReadAloudService.isNearMiss("the", of: "the"))
+    }
+
     // MARK: - Number normalization
 
     @Test func spelledHyphenatedNumbersMatchDigits() {
