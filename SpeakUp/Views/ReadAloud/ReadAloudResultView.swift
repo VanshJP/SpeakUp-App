@@ -10,117 +10,207 @@ struct ReadAloudResultView: View {
 
     @State private var selectedWord: WordDetail?
     @State private var pronunciationService = PronunciationService()
+    /// The ring sweeps and the number counts up on arrival, like a drill result.
+    @State private var counted = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var reviewFontSize: CGFloat = 16
 
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
 
-            PageScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 8) {
-                        Text(result.notice == nil ? "Session Complete" : "Session Ended")
-                            .font(.title2.bold())
+            VStack(spacing: 0) {
+                header
 
-                        Text(result.passage.title)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 20)
+                PageScrollView {
+                    VStack(spacing: 20) {
+                        scoreHero
+                            .padding(.top, 8)
 
-                    ZStack {
-                        RingProgress(
-                            progress: Double(result.score) / 100.0,
-                            color: scoreColor,
-                            lineWidth: 11
-                        )
-                        .frame(width: 140, height: 140)
+                        statsRow
 
-                        VStack(spacing: 2) {
-                            Text("\(result.score)%")
-                                .font(.system(size: 36, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                            Text("Accuracy")
-                                .eyebrowStyle()
-                        }
-                    }
-
-                    HStack(spacing: 12) {
-                        StatBadge(
-                            icon: "checkmark.circle.fill",
-                            value: "\(result.matchedWords)",
-                            label: "Matched",
-                            color: AppColors.success
-                        )
-
-                        StatBadge(
-                            icon: "xmark.circle.fill",
-                            value: "\(result.mismatchedWords)",
-                            label: "Missed",
-                            color: AppColors.error
-                        )
-
-                        StatBadge(
-                            icon: "clock.fill",
-                            value: formattedTime,
-                            label: "Time",
-                            color: AppColors.info
-                        )
-                    }
-
-                    if let paceLabel {
-                        Text(paceLabel)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let notice = result.notice {
-                        GlassCard(tint: AppColors.warning.opacity(0.08), padding: 14) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(AppColors.warning)
-                                Text(notice)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-
-                    soundsSection
-
-                    wordReviewSection
-
-                    VStack(spacing: 12) {
-                        GlassButton(title: "Try again", icon: "arrow.clockwise", style: .primary) {
-                            Haptics.medium()
-                            onRetry()
+                        if let notice = result.notice {
+                            noticeCard(notice)
                         }
 
-                        if let misses = result.missedPhrasesText, onPractice != nil {
-                            GlassButton(title: "Drill what you missed", icon: "target", style: .secondary) {
-                                practice(misses)
-                            }
-                            .accessibilityHint("Reads only the phrases you missed or skipped")
-                        }
+                        soundsSection
 
-                        GlassButton(title: "Done", icon: "checkmark", style: .secondary) {
-                            Haptics.light()
-                            onDone()
-                        }
+                        wordReviewSection
+
+                        actions
+                            .padding(.top, 4)
+                            .padding(.bottom, 32)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 20)
+                .scrollIndicators(.hidden)
             }
         }
         .sheet(item: $selectedWord) { detail in
             WordDetailSheet(detail: detail, pronunciationService: pronunciationService)
         }
+        .task { await reveal() }
+    }
+
+    // MARK: - Header
+
+    /// Pinned, so Done is never below the word review. The page used to open
+    /// on a title that scrolled up under the status bar and end on three
+    /// buttons of three different widths.
+    private var header: some View {
+        ZStack {
+            Text(result.passage.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(1)
+                .padding(.horizontal, 88)
+
+            HStack {
+                Spacer()
+                Button {
+                    Haptics.light()
+                    onDone()
+                } label: {
+                    Text("Done")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: AppLayout.minHitTarget)
+                        .glassBackground(cornerRadius: AppLayout.minHitTarget / 2)
+                }
+                .buttonStyle(GlassPressStyle())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Score
+
+    private var verdict: String {
+        if result.notice != nil { return "Session ended early" }
+        switch result.score {
+        case 95...: return "Clean read"
+        case 80..<95: return "Nearly there"
+        case 60..<80: return "Getting there"
+        default: return "Keep at it"
+        }
+    }
+
+    private var scoreHero: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                RingProgress(
+                    progress: counted ? Double(result.score) / 100.0 : 0,
+                    color: scoreColor,
+                    lineWidth: 12
+                )
+                .frame(width: 150, height: 150)
+
+                VStack(spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        CountUpText(
+                            value: counted ? Double(result.score) : 0,
+                            font: .system(size: 40, weight: .bold, design: .rounded)
+                        )
+                        Text("%")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    Text("Accuracy")
+                        .eyebrowStyle()
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Accuracy \(result.score) percent")
+
+            VStack(spacing: 4) {
+                Text(verdict)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.white)
+
+                if let paceLabel {
+                    Text(paceLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// One tile recipe for all three. They used to carry their own tints -
+    /// green, red and blue glass - so the same box came in three shades and
+    /// the red one read grey.
+    private var statsRow: some View {
+        HStack(spacing: 10) {
+            StatBadge(
+                icon: "checkmark.circle.fill",
+                value: "\(result.matchedWords)",
+                label: "Matched",
+                color: AppColors.success
+            )
+            StatBadge(
+                icon: "xmark.circle.fill",
+                value: "\(result.mismatchedWords)",
+                label: "Missed",
+                color: AppColors.error
+            )
+            StatBadge(
+                icon: "clock.fill",
+                value: formattedTime,
+                label: "Time",
+                color: AppColors.info
+            )
+        }
+    }
+
+    private func noticeCard(_ notice: String) -> some View {
+        GlassCard(tint: AppColors.warning.opacity(0.08), padding: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(AppColors.warning)
+                Text(notice)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Actions
+
+    private var actions: some View {
+        VStack(spacing: 12) {
+            GlassButton(title: "Try again", icon: "arrow.clockwise", style: .primary, size: .large, fullWidth: true) {
+                Haptics.medium()
+                onRetry()
+            }
+
+            if let misses = result.missedPhrasesText, onPractice != nil {
+                GlassButton(title: "Drill what you missed", icon: "target", style: .secondary, size: .large, fullWidth: true) {
+                    practice(misses)
+                }
+                .accessibilityHint("Reads only the phrases you missed or skipped")
+            }
+        }
+    }
+
+    private func reveal() async {
+        guard !counted else { return }
+        guard !reduceMotion else {
+            counted = true
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(150))
+        withAnimation(.easeOut(duration: 0.9)) { counted = true }
+        await Haptics.playCountUp(to: result.score, duration: 0.9, cutoff: 0.8)
     }
 
     // MARK: - Sounds to Check
@@ -216,13 +306,14 @@ struct ReadAloudResultView: View {
             Label("Word review", systemImage: "doc.text.magnifyingglass")
                 .font(.headline)
 
-            HStack(spacing: 16) {
+            // Wraps rather than squeezing four labels onto one line.
+            FlowLayout(spacing: 14) {
                 legendItem(color: AppColors.success, label: "Matched")
-                legendItem(color: AppColors.error, label: "Mismatched")
+                legendItem(color: AppColors.error, label: "Said differently")
                 legendItem(color: AppColors.warning, label: "Skipped")
                 legendItem(color: .white.opacity(0.4), label: "Not reached")
             }
-            .font(.caption2)
+            .font(.caption)
 
             HStack(spacing: 6) {
                 Image(systemName: "hand.tap")
@@ -232,7 +323,7 @@ struct ReadAloudResultView: View {
             }
             .font(.caption)
 
-            GlassCard {
+            GlassCard(padding: 16) {
                 WrappingHStack(spacing: 6, lineSpacing: 10) {
                     ForEach(Array(result.passage.words.enumerated()), id: \.offset) { index, word in
                         let state = index < result.wordStates.count ? result.wordStates[index] : WordMatchState.upcoming
@@ -332,20 +423,23 @@ private struct StatBadge: View {
     let color: Color
 
     var body: some View {
-        GlassCard(cornerRadius: 12, tint: color.opacity(0.08), padding: 10) {
+        GlassCard(cornerRadius: 16, padding: 12) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.body)
                     .foregroundStyle(color)
 
                 Text(value)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
 
                 Text(label)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
         }
+        .accessibilityElement(children: .combine)
     }
 }

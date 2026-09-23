@@ -964,6 +964,10 @@ class ReadAloudService {
     /// - **Words said wrong** ("free" for "three"): see `isSlip`. Checked
     ///   before either of the above, which would otherwise explain the slip
     ///   away as a skip or a filler.
+    /// - **Words replaced** ("lady" for "lorry", then back on the page): see
+    ///   `isReplacement`. Also checked first, for the same reason.
+    /// - **Names the recognizer preferred** ("Laurie" for "lorry"): matched.
+    ///   See `ConsonantAnalyzer.isNameSpelling`.
     nonisolated static func computeAlignment(
         reference: [String],
         normalizedReference: [String],
@@ -984,6 +988,7 @@ class ReadAloudService {
         // Each word is compared as the current word and again as the next
         // one, so normalize once.
         let spokenNorms = spokenWords.map { normalize($0) }
+        let passageWords = Set(normalizedReference)
         var spokenIndex = 0
         while spokenIndex < spokenWords.count {
             guard refIndex < reference.count else { break }
@@ -991,7 +996,13 @@ class ReadAloudService {
             let spokenNorm = spokenNorms[spokenIndex]
             let expectedNorm = normalizedReference[refIndex]
 
-            if spokenNorm == expectedNorm {
+            if spokenNorm == expectedNorm
+                || isNameSpelling(
+                    spokenWords[spokenIndex],
+                    normalized: spokenNorm,
+                    of: reference[refIndex],
+                    passage: passageWords
+                ) {
                 newStates[refIndex] = .matched
                 matched += 1
                 refIndex += 1
@@ -1010,12 +1021,20 @@ class ReadAloudService {
             let skipFitsNextWord = matchAhead.map {
                 $0 + 1 < reference.count && nextNorm == normalizedReference[$0 + 1]
             } ?? false
-            let saidWrong = !skipFitsNextWord && isSlip(
-                spokenWords[spokenIndex],
-                at: refIndex,
-                next: nextNorm,
-                reference: reference,
-                normalizedReference: normalizedReference
+            let saidWrong = !skipFitsNextWord && (
+                isSlip(
+                    spokenWords[spokenIndex],
+                    at: refIndex,
+                    next: nextNorm,
+                    reference: reference,
+                    normalizedReference: normalizedReference
+                )
+                || (matchAhead == nil && isReplacement(
+                    spokenNorm,
+                    at: refIndex,
+                    next: nextNorm,
+                    normalizedReference: normalizedReference
+                ))
             )
 
             // Skipped-reference path: this spoken word belongs further ahead
@@ -1081,6 +1100,45 @@ class ReadAloudService {
         else { return false }
         // Compared as spelled: "three" normalizes to "3".
         return isNearMiss(spelling(of: spoken), of: spelling(of: reference[index]))
+    }
+
+    /// Whether `spoken` stood in for the reference word at `index`: it matches
+    /// nothing nearby, it is not a hesitation, and the next spoken word lands
+    /// on the word after this one. The reader said something else here and
+    /// carried on.
+    ///
+    /// This used to count as a filler plus a skip whenever the two words were
+    /// not spelled alike. That threw away what was heard, so the word review
+    /// said "skipped" for a word the reader plainly said, and **Sounds to
+    /// check** - which only reads words with something heard in their place -
+    /// saw a slip on some misses and not on others. A skip and a mismatch are
+    /// both a miss, so accuracy is unchanged. Hesitations still read as
+    /// fillers: "um" where a word should be is a skip.
+    nonisolated static func isReplacement(
+        _ spokenNorm: String,
+        at index: Int,
+        next: String?,
+        normalizedReference: [String]
+    ) -> Bool {
+        guard !spokenNorm.isEmpty, let next, index + 1 < normalizedReference.count,
+              next == normalizedReference[index + 1]
+        else { return false }
+        return !FillerWordList.unconditionalFillers.contains(spokenNorm)
+            && !FillerWordList.contextDependentFillers.contains(spokenNorm)
+    }
+
+    /// `ConsonantAnalyzer.isNameSpelling`, unless what was heard is itself a
+    /// word on the page - a pair passage must never forgive its own pair.
+    /// Alignment re-runs on every partial result, so the cheap checks go
+    /// first and the spoken word arrives already normalized.
+    nonisolated static func isNameSpelling(
+        _ spoken: String,
+        normalized: String,
+        of expected: String,
+        passage: Set<String>
+    ) -> Bool {
+        guard spoken.first?.isUppercase == true, !passage.contains(normalized) else { return false }
+        return ConsonantAnalyzer.isNameSpelling(spoken, of: expected)
     }
 
     /// Close enough in spelling to be the same word said wrong: one edit for

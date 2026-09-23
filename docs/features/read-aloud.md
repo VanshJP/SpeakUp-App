@@ -214,6 +214,20 @@ a skip, or, in a minimal pair, as a skip to the look-alike ahead, so every slip
 in a Minimal pairs pack came back as "skipped" with the heard word thrown away.
 Accuracy is unchanged either way: a skip and a mismatch are both a miss.
 
+The same holds for a word spelled nothing like the page's: a word said in place
+of the page word, followed by the next page word, is that word **replaced**
+(`isReplacement`) and keeps what was heard. It used to read as a filler plus a
+skip whenever the two were not spelled alike, so the review said "skipped" for
+a word the reader plainly said, and Sounds to check found a slip on some misses
+and not others. Hesitations ("um", "well") still read as fillers.
+
+And a **name the recognizer preferred** is the word: "Laurie" for "lorry"
+(`ConsonantAnalyzer.isNameSpelling` — capitalized, same first letter, same
+consonant sounds, same syllables, two or more, and not itself a word on the
+page). Read cleanly, "Red lorry yellow lorry" used to come back with half its
+lorries scored as misses nobody could fix. One-syllable words never qualify:
+that is where vowel pairs live, and consonants cannot vouch for a vowel.
+
 Silence-is-not-a-score applies (see practice-tools invariant 14).
 
 ---
@@ -269,6 +283,7 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - **The session cover is presented on the passage, the result cover on the result** (`fullScreenCover(item:)`). Both used to be `isPresented:` flags over state that `viewModel.reset()` or Retry clears, which drew an empty cover for the length of a dismissal. Gotcha §27.
 - The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), words said wrong kept as misses with what was heard (`isSlip`), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
 - Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
+- Result layout: a pinned header (passage title, **Done**) so leaving never means scrolling past the word review; the accuracy ring counts up with `Haptics.playCountUp` under a one-line verdict; three stat tiles in one neutral recipe (colour lives in the icon — they used to be three shades of tinted glass); the legend wraps; Try again and Drill what you missed are full-width at the end.
 - Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.
 - Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
 - **Nothing about a word's match state may change its measured size.** The whole passage draws at one weight (`Self.passageWeight`); position is carried by the highlight fill and the colour ramp. The current word used to render `.bold` against `.regular` neighbours, and because bold glyphs are wider, every cursor advance re-flowed the rest of the line — the passage visibly squirmed while being read. Auto-scroll re-centres once per `scrollAdvanceWords` (8) rather than every second word, which was the other half of the same complaint.

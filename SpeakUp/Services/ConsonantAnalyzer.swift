@@ -466,6 +466,37 @@ nonisolated enum ConsonantAnalyzer {
         )
     }
 
+    /// Whether `heard` is `target` spelled as a name the recognizer preferred:
+    /// "Laurie" for "lorry", "Carrie" for "carry". Capitalized, the same first
+    /// letter, the same consonant sounds in the same order, and the same number
+    /// of syllables, at least two.
+    ///
+    /// The recognizer writes words, not sounds, and it leans toward names:
+    /// read "red lorry, yellow lorry" cleanly and half the lorries came back
+    /// as "Laurie" and were scored as misses nobody could fix. Kept narrow on
+    /// purpose. Consonants cannot vouch for a vowel, so one-syllable words
+    /// (where vowel pairs like "ship" and "sheep" live) and anything not
+    /// written as a name stay misses.
+    static func isNameSpelling(_ heard: String, of target: String) -> Bool {
+        guard heard.first?.isUppercase == true,
+              let targetSpelled = letters(in: target),
+              let heardSpelled = letters(in: heard),
+              targetSpelled.letters != heardSpelled.letters,
+              targetSpelled.letters.first == heardSpelled.letters.first,
+              abs(targetSpelled.letters.count - heardSpelled.letters.count) <= 2
+        else { return false }
+
+        let syllables = ConsonantSpeller(letters: targetSpelled.letters).syllableCount
+        guard syllables >= 2,
+              syllables == ConsonantSpeller(letters: heardSpelled.letters).syllableCount
+        else { return false }
+
+        let expected = consonants(spelled: targetSpelled).map(\.sound)
+        let said = consonants(spelled: heardSpelled).map(\.sound)
+        return expected.count == said.count
+            && zip(expected, said).allSatisfy { $0.soundsLike($1) }
+    }
+
     // MARK: - Gates
 
     /// Function words that shrink in ordinary connected speech. What the
