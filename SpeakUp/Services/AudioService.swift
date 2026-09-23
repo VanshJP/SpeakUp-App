@@ -276,15 +276,22 @@ class AudioService: NSObject {
             return nil
         }
 
-        // Promote to iCloud only after the file is fully finalized locally.
-        let url = localURL.map { ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: $0) }
+        guard let localURL else {
+            recordingDuration = 0
+            return nil
+        }
 
         // Duration comes from the finalized file, not recorder.currentTime -
         // the latter drifts under audio-session interruptions and sample-rate
         // mismatches (e.g. .voiceChat + HFP), occasionally by 60× or more.
-        recordingDuration = url.flatMap { getAudioDuration(at: $0) } ?? 0
+        // Read from the local copy, before the move, and off the main actor.
+        recordingDuration = await Task.detached(priority: .userInitiated) {
+            AudioService.fileDuration(at: localURL)
+        }.value ?? 0
 
-        return url
+        // Promote to iCloud only after the file is fully finalized locally.
+        // Awaited, never inline: the move blocks on the iCloud daemon.
+        return await ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: localURL)
     }
 
     func cancelRecording() {
@@ -539,7 +546,9 @@ class AudioService: NSObject {
 
     // MARK: - File Management
 
-    func getAudioDuration(at url: URL) -> TimeInterval? {
+    /// Length of a finished audio file. Opens the file, so callers run it off
+    /// the main actor.
+    nonisolated static func fileDuration(at url: URL) -> TimeInterval? {
         do {
             let player = try AVAudioPlayer(contentsOf: url)
             return player.duration

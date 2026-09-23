@@ -186,6 +186,14 @@ final class Recording {
     /// iCloud container first, then local Documents. Path components with `../`
     /// or separators are rejected - see `MediaPath`.
     private static func resolveStoredURL(_ stored: URL?) -> URL? {
+        resolveStoredURL(stored, ubiquityContainer: ICloudStorageService.shared.ubiquityContainerURL)
+    }
+
+    /// The same resolution with the container URL passed in, so a job can read
+    /// the stored path on the main actor and do the file-system checks off it.
+    /// Existence checks inside the iCloud container go through the iCloud
+    /// daemon and can block while it is uploading the take that just ended.
+    nonisolated static func resolveStoredURL(_ stored: URL?, ubiquityContainer: URL?) -> URL? {
         guard let stored else { return nil }
 
         let filename: String
@@ -193,10 +201,7 @@ final class Recording {
         if stored.path.hasPrefix("/") {
             // Legacy absolute path - only honor it inside Documents / iCloud.
             if FileManager.default.fileExists(atPath: stored.path),
-               MediaPath.isUnderAllowedMediaRoot(
-                stored,
-                ubiquityContainer: ICloudStorageService.shared.ubiquityContainerURL
-               ) {
+               MediaPath.isUnderAllowedMediaRoot(stored, ubiquityContainer: ubiquityContainer) {
                 return stored
             }
             // File moved or outside the media root - extract basename and retry.
@@ -211,8 +216,8 @@ final class Recording {
             filename = safe
         }
 
-        // Resolve via iCloud service (checks iCloud container, then local Documents)
-        return ICloudStorageService.shared.resolveFile(named: filename)
+        // Checks the iCloud container, then local Documents.
+        return ICloudStorageService.resolveFile(named: filename, ubiquityContainer: ubiquityContainer)
     }
 
     // Formatted duration string

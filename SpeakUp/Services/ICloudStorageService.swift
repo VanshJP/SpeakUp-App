@@ -5,11 +5,11 @@ import os.log
 /// Falls back to local Documents directory when iCloud is unavailable.
 @Observable
 final class ICloudStorageService {
-    private let logger = Logger.app("iCloudStorage")
+    nonisolated private static let logger = Logger.app("iCloudStorage")
     static let shared = ICloudStorageService()
 
     private let containerIdentifier = "iCloud.cam.vanshpatel.SpeakUp"
-    private let recordingsSubdirectory = "Recordings"
+    nonisolated private static let recordingsSubdirectory = "Recordings"
 
     /// UserDefaults key mirroring the SwiftData iCloudSyncEnabled setting.
     /// Used because ModelContainer is created before SwiftData is available.
@@ -63,7 +63,7 @@ final class ICloudStorageService {
             }
             // Ensure the Recordings subdirectory exists in iCloud
             if let url {
-                let recordingsDir = url.appendingPathComponent("Documents/\(self.recordingsSubdirectory)")
+                let recordingsDir = url.appendingPathComponent("Documents/\(Self.recordingsSubdirectory)")
                 try? FileManager.default.createDirectory(at: recordingsDir, withIntermediateDirectories: true)
             }
         }
@@ -86,11 +86,11 @@ final class ICloudStorageService {
         guard let ubiquityURL = ubiquityContainerURL else { return nil }
         return ubiquityURL
             .appendingPathComponent("Documents")
-            .appendingPathComponent(recordingsSubdirectory)
+            .appendingPathComponent(Self.recordingsSubdirectory)
     }
 
     /// Local-only Documents directory (always available).
-    static let localDocumentsDirectory: URL = {
+    nonisolated static let localDocumentsDirectory: URL = {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }()
 
@@ -99,11 +99,18 @@ final class ICloudStorageService {
     /// Resolves a filename to a full URL, checking iCloud first, then local Documents.
     /// Returns nil if the file doesn't exist in either location, or if `filename`
     /// is not a single safe basename (`MediaPath.sanitizedFilename`).
+    ///
+    /// Touches the file system. Off-main callers use the static form with a
+    /// container URL captured on the main actor.
     func resolveFile(named filename: String) -> URL? {
+        Self.resolveFile(named: filename, ubiquityContainer: ubiquityContainerURL)
+    }
+
+    nonisolated static func resolveFile(named filename: String, ubiquityContainer ubiquityURL: URL?) -> URL? {
         guard let filename = MediaPath.sanitizedFilename(filename) else { return nil }
 
         // Check iCloud container first
-        if let ubiquityURL = ubiquityContainerURL {
+        if let ubiquityURL {
             let iCloudPath = ubiquityURL
                 .appendingPathComponent("Documents")
                 .appendingPathComponent(recordingsSubdirectory)
@@ -126,7 +133,7 @@ final class ICloudStorageService {
         }
 
         // Fall back to local Documents
-        let localPath = Self.localDocumentsDirectory.appendingPathComponent(filename)
+        let localPath = localDocumentsDirectory.appendingPathComponent(filename)
         if FileManager.default.fileExists(atPath: localPath.path),
            MediaPath.isUnderAllowedMediaRoot(localPath) {
             return localPath
@@ -140,12 +147,22 @@ final class ICloudStorageService {
     /// Moves a freshly finished local recording into the iCloud container when
     /// sync is enabled. Returns the ubiquitous URL on success, otherwise the
     /// original local URL so callers always have a readable path.
-    @discardableResult
-    func promoteToICloudIfNeeded(localURL: URL) -> URL {
+    ///
+    /// The move runs off the main actor. `setUbiquitous` is a coordinated write
+    /// that waits on the iCloud daemon, and Apple says never to call it from
+    /// the main thread. It used to run inline in `AudioService.stopRecording`,
+    /// which froze the app for seconds at a time right as a take ended, while
+    /// the daemon was busy with the previous upload.
+    func promoteToICloudIfNeeded(localURL: URL) async -> URL {
         guard isICloudAvailable, let iCloudDir = iCloudRecordingsDirectory else {
             return localURL
         }
+        return await Task.detached(priority: .userInitiated) {
+            Self.promote(localURL: localURL, into: iCloudDir)
+        }.value
+    }
 
+    nonisolated private static func promote(localURL: URL, into iCloudDir: URL) -> URL {
         let fm = FileManager.default
         try? fm.createDirectory(at: iCloudDir, withIntermediateDirectories: true)
 
@@ -162,33 +179,39 @@ final class ICloudStorageService {
     }
 
     /// Moves existing local recordings to iCloud container.
-    /// Called once when iCloud becomes available.
+    /// Called once when iCloud becomes available. Off the main actor for the
+    /// same reason as `promoteToICloudIfNeeded`, once per file.
     func migrateLocalFilesToICloud() async {
         guard isICloudAvailable, let iCloudRecordingsDir = iCloudRecordingsDirectory else { return }
 
-        let localDir = Self.localDocumentsDirectory
-        let fm = FileManager.default
+        await Task.detached(priority: .utility) {
+            let localDir = Self.localDocumentsDirectory
+            let fm = FileManager.default
 
-        guard let files = try? fm.contentsOfDirectory(atPath: localDir.path) else { return }
+            guard let files = try? fm.contentsOfDirectory(atPath: localDir.path) else { return }
 
-        for file in files where file.hasSuffix(".m4a") || file.hasSuffix(".mp4") {
-            let localFile = localDir.appendingPathComponent(file)
-            let iCloudFile = iCloudRecordingsDir.appendingPathComponent(file)
+            for file in files where file.hasSuffix(".m4a") || file.hasSuffix(".mp4") {
+                let localFile = localDir.appendingPathComponent(file)
+                let iCloudFile = iCloudRecordingsDir.appendingPathComponent(file)
 
-            guard !fm.fileExists(atPath: iCloudFile.path) else { continue }
+                guard !fm.fileExists(atPath: iCloudFile.path) else { continue }
 
-            do {
-                try fm.setUbiquitous(true, itemAt: localFile, destinationURL: iCloudFile)
-            } catch {
-                logger.error("Failed to move \(file) to iCloud: \(error.localizedDescription, privacy: .private(mask: .hash))")
+                do {
+                    try fm.setUbiquitous(true, itemAt: localFile, destinationURL: iCloudFile)
+                } catch {
+                    Self.logger.error("Failed to move \(file) to iCloud: \(error.localizedDescription, privacy: .private(mask: .hash))")
+                }
             }
-        }
+        }.value
     }
 
     // MARK: - Download Status
 
     /// Checks whether a file is fully downloaded from iCloud.
-    func isFileDownloaded(at url: URL) -> Bool {
+    ///
+    /// Asks the iCloud daemon for the item's status, which can block while it
+    /// is busy - prefer `waitUntilReadable(_:)` from anything on the main actor.
+    nonisolated func isFileDownloaded(at url: URL) -> Bool {
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
 
         do {
@@ -204,10 +227,32 @@ final class ICloudStorageService {
     }
 
     /// Triggers download of an iCloud file if it's not yet local.
-    func ensureDownloaded(at url: URL) {
+    nonisolated func ensureDownloaded(at url: URL) {
         if !isFileDownloaded(at: url) {
             try? FileManager.default.startDownloadingUbiquitousItem(at: url)
         }
+    }
+
+    /// Kicks the download of `url` if needed and waits up to `attempts` × 200 ms
+    /// for it to land. Every check runs off the main actor; this used to poll
+    /// the daemon from the analysis job's main-actor task, right after the take
+    /// was promoted, when the daemon is slowest to answer.
+    nonisolated func waitUntilReadable(_ url: URL, attempts: Int = 10) async -> Bool {
+        let service = self
+        return await Task.detached(priority: .userInitiated) {
+            let fm = FileManager.default
+            if fm.fileExists(atPath: url.path), service.isFileDownloaded(at: url) {
+                return true
+            }
+            service.ensureDownloaded(at: url)
+            for _ in 0..<attempts {
+                if fm.fileExists(atPath: url.path), service.isFileDownloaded(at: url) {
+                    return true
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            return fm.fileExists(atPath: url.path)
+        }.value
     }
 
     // MARK: - Deletion

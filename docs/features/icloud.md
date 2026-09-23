@@ -21,7 +21,8 @@ Container id (in service): `iCloud.cam.vanshpatel.SpeakUp`.
 2. Fresh install defaults **on** when an iCloud account is present (`resolvedSyncEnabledPreference`).
 3. CloudKit vs local is chosen at **ModelContainer** creation — mid-session flips need careful preference mirroring to UserDefaults; do not casually rebuild the container.
 4. Container creation fallback: CloudKit → local-only → in-memory.
-5. File migration runs as background launch work — do not block UI.
+5. File migration runs as background launch work — do not block UI. `migrateLocalFilesToICloud` does its `setUbiquitous` calls in `Task.detached`: the service is main-actor isolated, so a `Task(priority: .background)` alone used to run every move on the main thread.
+6. **No iCloud file work on the main actor.** A finished take is promoted with the async `promoteToICloudIfNeeded` (awaited in `AudioService.stopRecording`), and jobs resolve and probe media through the `nonisolated` `Recording.resolveStoredURL(_:ubiquityContainer:)` and `waitUntilReadable(_:)`. Both used to run on the main thread right as the daemon began uploading the take, and froze the self-check screen for seconds. See gotcha §29.
 
 ## Cross-links
 

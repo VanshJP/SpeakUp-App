@@ -223,38 +223,45 @@ final class RecordingProcessingCoordinator {
             predicate: #Predicate { $0.id == recordingID }
         )
 
-        guard let recording = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+        guard let queued = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
 
-        if recording.analysis != nil {
-            if recording.isProcessing {
-                recording.isProcessing = false
+        if queued.analysis != nil {
+            if queued.isProcessing {
+                queued.isProcessing = false
                 save(modelContext, context: "clearing processing flag for pre-analyzed recording \(recordingID.uuidString)")
             }
             return
         }
 
-        guard let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL else {
-            recording.isProcessing = false
-            recording.lastProcessingError = "Audio file is missing."
+        // Every file-system check below runs off the main actor. A take that
+        // just ended was just moved into iCloud, and existence and download
+        // status checks on it wait on the iCloud daemon while it uploads. They
+        // used to run here on the main actor, and the app froze on the
+        // self-check screen for as long as the daemon took to answer.
+        let storedAudio = queued.audioURL
+        let storedVideo = queued.videoURL
+        let container = ICloudStorageService.shared.ubiquityContainerURL
+        let resolvedMedia = await Task.detached(priority: .userInitiated) {
+            Recording.resolveStoredURL(storedAudio, ubiquityContainer: container)
+                ?? Recording.resolveStoredURL(storedVideo, ubiquityContainer: container)
+        }.value
+
+        guard let mediaURL = resolvedMedia else {
+            guard let missing = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+            missing.isProcessing = false
+            missing.lastProcessingError = "Audio file is missing."
             save(modelContext, context: "clearing processing flag for missing media \(recordingID.uuidString)")
             return
         }
 
         // Newly promoted iCloud files can briefly report a non-current download
         // status; kick the download and wait a beat before giving up.
-        if !FileManager.default.fileExists(atPath: mediaURL.path)
-            || !ICloudStorageService.shared.isFileDownloaded(at: mediaURL) {
-            ICloudStorageService.shared.ensureDownloaded(at: mediaURL)
-            for _ in 0..<10 {
-                if FileManager.default.fileExists(atPath: mediaURL.path),
-                   ICloudStorageService.shared.isFileDownloaded(at: mediaURL) {
-                    break
-                }
-                try? await Task.sleep(for: .milliseconds(200))
-            }
-        }
+        let mediaReadable = await ICloudStorageService.shared.waitUntilReadable(mediaURL)
 
-        guard FileManager.default.fileExists(atPath: mediaURL.path) else {
+        // The awaits above give up the main actor; re-fetch before writing.
+        guard let recording = fetchRecording(with: descriptor, modelContext: modelContext) else { return }
+
+        guard mediaReadable else {
             recording.isProcessing = false
             recording.lastProcessingError = "Audio file hasn't downloaded from iCloud yet."
             save(modelContext, context: "clearing processing flag for undownloaded media \(recordingID.uuidString)")
@@ -574,8 +581,12 @@ final class RecordingProcessingCoordinator {
     ) async -> (analysis: SpeechAnalysis, markedWords: [TranscriptionWord]) {
         let resultSnapshot = transcription
         let actualDuration = recording.actualDuration
-        let audioLevelSamples = recording.audioLevelSamples ?? []
-        let audioURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
+        // Raw stored values only: the JSON decode and the file lookup both
+        // happen inside the detached task, not on the main actor.
+        let audioLevelData = recording.audioLevelSamplesData
+        let storedAudio = recording.audioURL
+        let storedVideo = recording.videoURL
+        let container = ICloudStorageService.shared.ubiquityContainerURL
         let targetWPM = settings.resolvedTargetWPM
         let trackFillerWords = settings?.trackFillerWords ?? true
         let trackPauses = settings?.trackPauses ?? true
@@ -585,6 +596,10 @@ final class RecordingProcessingCoordinator {
         // MainActor-isolated service instance nor the Whisper model.
         return await Task.detached(priority: .userInitiated) {
             () -> (analysis: SpeechAnalysis, markedWords: [TranscriptionWord]) in
+            let audioLevelSamples = audioLevelData
+                .flatMap { try? JSONDecoder().decode([Float].self, from: $0) } ?? []
+            let audioURL = Recording.resolveStoredURL(storedAudio, ubiquityContainer: container)
+                ?? Recording.resolveStoredURL(storedVideo, ubiquityContainer: container)
             // Recordings saved before `audioLevelSamplesData` existed lost
             // their live samples on relaunch. Stand in peaks regenerated
             // from the file (converted to dB) so delivery metrics stay

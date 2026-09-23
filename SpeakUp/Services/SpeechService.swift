@@ -179,14 +179,16 @@ class SpeechService {
             }
         }
 
-        // Cheap gate: missing/zero-byte files must not enter Whisper → reload → Apple.
-        let fileSize = (try? audioURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
-        if fileSize == 0 || !FileManager.default.fileExists(atPath: audioURL.path) {
-            throw noSpeechError(causes: ["audio: missing or empty file"])
-        }
-
-        let preparation = await withCheckedContinuation { continuation in
+        let preparation: (SpeechIsolationService.Result?, URL)? = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
+                // Cheap gate: missing/zero-byte files must not enter Whisper →
+                // reload → Apple. Checked here rather than on the main actor:
+                // the file usually sits in the iCloud container by now.
+                let fileSize = (try? audioURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
+                guard fileSize != 0, FileManager.default.fileExists(atPath: audioURL.path) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
                 // Decode only what isolation preprocess needs here; speaker
                 // labeling / pitch analysis decode again post-transcription
                 // so no PCM stays resident during the Whisper pass.
@@ -199,6 +201,9 @@ class SpeechService {
             }
         }
 
+        guard let preparation else {
+            throw noSpeechError(causes: ["audio: missing or empty file"])
+        }
         let isolationResult = preparation.0
         let transcriptionURL = preparation.1
         let shouldCleanupProcessedFile = transcriptionURL != audioURL

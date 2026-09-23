@@ -39,6 +39,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | Screen dims or locks in the middle of a drill, warm-up or read | 26 |
 | A sheet or cover opens blank, closes itself, and works on the second tap | 27 |
 | An animation that never plays: confetti invisible, chart draw-in pops | 28 |
+| App freezes for seconds right after a take ends (hang HUD on the self-check) | 29 |
 
 ## Punch list
 
@@ -67,6 +68,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 22. Present a sheet or cover with `isPresented:` and read its content out of a second `@State` — especially with an `onDismiss` that clears that second one.
 23. Store a recognition request's newest transcript as the whole request, or count `max` across results — on device the recognizer restarts a request's transcript after a pause and can send a blank final. Feed results through `RecognitionContinuity` / `RequestTranscript`.
 24. A timed practice screen without `keepsScreenAwake` — Auto-Lock fires during a hands-free minute and takes the mic with it.
+25. File work on a take's media from the main actor — `setUbiquitous`, iCloud status keys, even `fileExists` in the ubiquity container can wait seconds on the iCloud daemon.
 
 ---
 
@@ -502,3 +504,35 @@ value, so SwiftUI calls `body` every frame with the interpolated value -
 `SubscoreRadarChart.RadarWedges`, same trick as `CountUpText`. And prefer
 animating a transform (`rotationEffect`, `scaleEffect`) over state the canvas
 reads whenever the whole drawing moves as one.
+
+---
+
+## 29. iCloud file work on the main actor freezes the app
+
+With iCloud sync on (the default whenever an account is signed in), a finished
+take is moved into the ubiquity container with `FileManager.setUbiquitous`.
+That is a coordinated write that waits on the iCloud daemon, and Apple's docs
+say never to call it from the main thread. It ran inline in
+`AudioService.stopRecording`, and the analysis job then polled
+`ubiquitousItemDownloadingStatusKey`, `fileExists` and `AVAudioFile` on the same
+file from its main-actor task - right as the daemon started uploading it. The
+result was a multi-second hang (the system hang HUD read "9000+ ms") on the
+post-take self-check. Nothing errors; the main thread just waits.
+
+Rules:
+
+- `ICloudStorageService.promoteToICloudIfNeeded` and `migrateLocalFilesToICloud`
+  are `async` and do the move in `Task.detached`. Await them; never add a
+  synchronous path back.
+- Anything that has to find or probe a take's file off a job reads the stored
+  values on the main actor (`recording.audioURL`, the container URL) and calls
+  the `nonisolated` `Recording.resolveStoredURL(_:ubiquityContainer:)` /
+  `ICloudStorageService.resolveFile(named:ubiquityContainer:)` inside a detached
+  task. `ICloudStorageService.waitUntilReadable(_:)` is the off-main download
+  wait.
+- `resolvedAudioURL` / `resolvedVideoURL` still exist for a user tap (play,
+  share), where one check is fine. Do not call them from a job, a `.task` that
+  runs as a screen appears, or `body`.
+- A take's duration is read from the local file before the move, off the main
+  actor (`AudioService.fileDuration(at:)`).
+
