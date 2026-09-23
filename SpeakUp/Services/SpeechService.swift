@@ -95,15 +95,16 @@ class SpeechService {
         } catch {
             causes.append(Self.chainCause(backend: "whisper", error))
             // Hub timeout already spent the budget - don't pay another 45s.
-            if Self.isModelDownloadTimeout(error) {
+            if Self.abandonsWhisper(error) {
                 skipModelReload = true
             }
         }
 
         if !skipModelReload {
             // Retry once with a fresh model in case WhisperKit got into a bad state.
+            // `transcribe` rebuilds it, time-boxed; an explicit unbounded
+            // load here could pin the chain on a wedged build.
             await whisperService.unloadModel()
-            await whisperService.loadModel(modelVariant: "base")
 
             do {
                 let retry = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
@@ -134,9 +135,12 @@ class SpeechService {
 
     /// True when Whisper already burned its Hub download budget. Reload would
     /// just hit the network again - callers should fall through to Apple Speech.
-    private static func isModelDownloadTimeout(_ error: Error) -> Bool {
-        if case WhisperServiceError.modelDownloadTimedOut = error { return true }
-        return false
+    /// A download, model build or decode that overran its wait. The raw-file
+    /// retry and the reload would each pay that wait again, so callers go
+    /// straight to Apple Speech. These used to arrive wrapped or swallowed
+    /// (`modelNotLoaded`), so this check never fired and every leg re-waited.
+    private static func abandonsWhisper(_ error: Error) -> Bool {
+        (error as? WhisperServiceError)?.abandonsWhisper ?? false
     }
 
     /// One link of the fallback chain: backend tag + error domain#code,
@@ -313,14 +317,14 @@ class SpeechService {
             causes.append(Self.chainCause(backend: "whisper", error))
             // A Hub timeout already burned ~45s - reloading would just hit Hub
             // again. Skip straight to Apple Speech after the optional raw retry.
-            if Self.isModelDownloadTimeout(error) {
+            if Self.abandonsWhisper(error) {
                 skipModelReload = true
             }
         }
 
         // Isolation may have over-suppressed speech - try the raw capture before
         // paying for a model reload.
-        if preferredURL != originalURL {
+        if preferredURL != originalURL, !skipModelReload {
             do {
                 let raw = try await whisperService.transcribe(
                     audioURL: originalURL,
@@ -333,15 +337,16 @@ class SpeechService {
                 causes.append("whisper_raw: empty result")
             } catch {
                 causes.append(Self.chainCause(backend: "whisper_raw", error))
-                if Self.isModelDownloadTimeout(error) {
+                if Self.abandonsWhisper(error) {
                     skipModelReload = true
                 }
             }
         }
 
         if !skipModelReload {
+            // `transcribe` rebuilds it, time-boxed; an explicit unbounded
+            // load here could pin the chain on a wedged build.
             await whisperService.unloadModel()
-            await whisperService.loadModel(modelVariant: "base")
 
             let reloadURL = preferredURL != originalURL ? originalURL : preferredURL
             do {
@@ -414,6 +419,12 @@ class SpeechService {
             }
         }
 
+        // Opened off the main actor: the take sits in the iCloud container,
+        // and file work there can wait on the iCloud daemon (gotcha §29).
+        let audioDuration = await Task.detached(priority: .userInitiated) {
+            Self.fileDuration(of: audioURL)
+        }.value
+
         return try await withCheckedThrowingContinuation { continuation in
             let gate = ResumeGate()
 
@@ -440,9 +451,6 @@ class SpeechService {
             // the continuation (and hanging dictation) forever. Force-resume - 
             // scaled to the file, since a flat 90 s aborted long recordings that
             // were still being recognized normally.
-            let audioDuration = (try? AVAudioFile(forReading: audioURL)).map {
-                Double($0.length) / $0.processingFormat.sampleRate
-            } ?? 0
             Task {
                 try? await Task.sleep(for: .seconds(min(600, max(90, audioDuration * 5))))
                 guard gate.claim() else { return }
@@ -456,6 +464,12 @@ class SpeechService {
                 ))
             }
         }
+    }
+
+    nonisolated private static func fileDuration(of url: URL) -> TimeInterval {
+        (try? AVAudioFile(forReading: url)).map {
+            Double($0.length) / $0.processingFormat.sampleRate
+        } ?? 0
     }
 
     private func processAppleTranscription(_ result: SFSpeechRecognitionResult) -> SpeechTranscriptionResult {
