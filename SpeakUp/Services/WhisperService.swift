@@ -25,16 +25,42 @@ class WhisperService {
     // WhisperKit instance
     private var whisperKit: WhisperKit?
 
-    /// Serializes loadModel / transcribe / unloadModel. WhisperKit is not
-    /// reentrant - two recordings processed concurrently (coordinator jobs for
-    /// different recordingIDs) would race one shared instance: torn-down model
-    /// under live inference, double model loads.
+    /// Serializes transcribe / unloadModel. WhisperKit is not reentrant - two
+    /// recordings processed concurrently (coordinator jobs for different
+    /// recordingIDs) would race one shared instance: torn-down model under live
+    /// inference.
     ///
-    /// Release ordering stays safe because the signal fires only after
-    /// transcribe's task group has awaited every child, and it is the
-    /// heartbeat's abort flag - not cancellation - that actually stops
-    /// WhisperKit's internal decode first. See `DecodeHeartbeat`.
+    /// Building the model is deliberately *not* done under this semaphore; see
+    /// `modelBuild`. A decode that overruns its watchdog is abandoned rather
+    /// than awaited, and its instance dropped, so the next caller never shares
+    /// an instance with it. See `awaitDecode`.
     private let semaphore = AsyncSemaphore(value: 1)
+
+    /// The model build in flight, if any. Every caller shares it instead of
+    /// starting a second one.
+    ///
+    /// It is its own task rather than work done while holding `semaphore`, so
+    /// a take can wait on the build itself: awaiting a task raises it to the
+    /// waiter's priority, and waiting on the semaphore raised nothing. The
+    /// launch preload starts this build at background priority. A take that
+    /// ended while it was still running used to queue behind it on the
+    /// semaphore while the system starved it, and the self-check sat on
+    /// "Preparing Speech Engine..." with nothing able to time it out.
+    @ObservationIgnored private var modelBuild: Task<Void, Never>?
+
+    /// Bumped whenever the model or a build is dropped, so a build that
+    /// finishes late cannot install a model nobody is waiting for any more.
+    @ObservationIgnored private var modelGeneration = 0
+
+    /// How long a take waits for a first-time Hub download before falling
+    /// through to on-device Apple Speech.
+    private static let modelDownloadTimeout: TimeInterval = 45
+
+    /// How long a take waits for a build from the on-disk cache. That is
+    /// seconds normally, and up to about a minute for the Neural Engine
+    /// compile after an OS update on an older phone. This is the backstop for
+    /// a build that never finishes, not a performance bar.
+    private static let modelBuildTimeout: TimeInterval = 90
 
     // Filler word prompt to encourage capturing hesitations
     // This prompt biases the model toward transcribing filler sounds
@@ -82,13 +108,14 @@ class WhisperService {
 
     /// Load the Whisper model (call this early, e.g., on app launch)
     /// - Parameter modelVariant: Model variant to use (tiny, base, small, medium, large-v3)
+    ///
+    /// Not time-boxed: nothing is waiting on a preload. A take that needs the
+    /// model waits through `modelForTranscription()` instead, which is.
     func loadModel(modelVariant: String = "base") async {
-        await semaphore.wait()
-        defer { semaphore.signal() }
-        await loadModelLocked(modelVariant: modelVariant)
+        guard let build = startModelBuildIfNeeded(modelVariant: modelVariant) else { return }
+        await build.value
     }
 
-    /// Precondition: semaphore held.
     /// Whether the speech model has ever finished loading on this device.
     ///
     /// The difference matters to the user: a first load downloads roughly
@@ -101,74 +128,155 @@ class WhisperService {
         UserDefaults.standard.bool(forKey: firstLoadCompletedKey)
     }
 
-    private func loadModelLocked(modelVariant: String = "base") async {
-        // Allow re-initialization if model exists but isn't fully loaded
-        guard whisperKit == nil || !isModelLoaded else { return }
+    /// Starts a model build unless the model is loaded or a build is already
+    /// running. Returns the build to wait on, or nil when the model is ready.
+    private func startModelBuildIfNeeded(modelVariant: String = "base") -> Task<Void, Never>? {
+        if whisperKit != nil, isModelLoaded { return nil }
+        if let modelBuild { return modelBuild }
 
         let isFirstLoad = !Self.hasCompletedFirstLoad
         let variantName = "openai_whisper-\(modelVariant)"
 
+        // Prefer a fully local load whenever the Core ML bundle is already
+        // on disk. WhisperKitConfig(download: true) hits Hugging Face
+        // *before* it looks at the cache - on spotty Wi‑Fi that hangs
+        // processing even though the model never needed the network.
+        // Once cached, transcription must work in airplane mode.
+        let config = Self.makeConfig(variantName: variantName)
+
+        modelGeneration += 1
+        let generation = modelGeneration
         isLoadingModel = true
-        defer {
-            isLoadingModel = false
-            isDownloadingModel = false
-        }
+        isDownloadingModel = config.download
+        modelLoadProgress = 0.1
+        errorMessage = nil
 
-        do {
-            modelLoadProgress = 0.1
-            errorMessage = nil
-
-            // Prefer a fully local load whenever the Core ML bundle is already
-            // on disk. WhisperKitConfig(download: true) hits Hugging Face
-            // *before* it looks at the cache - on spotty Wi‑Fi that hangs
-            // processing even though the model never needed the network.
-            // Once cached, transcription must work in airplane mode.
-            let config = Self.makeConfig(variantName: variantName)
-
-            if config.download {
-                // First install (or a wiped cache) still needs the network.
-                // Cap the wait so a flaky connection fails into Apple Speech
-                // instead of spinning the analyzing screen forever.
-                isDownloadingModel = true
-                whisperKit = try await Self.loadWhisperKitWithDownloadTimeout(
-                    config: config,
-                    seconds: 45
-                )
-            } else {
-                whisperKit = try await WhisperKit(config)
+        // Runs at the caller's priority (background for the launch preload)
+        // until a take waits on it and raises it.
+        let build = Task(priority: Task.currentPriority) { [weak self] in
+            let built: Result<WhisperKit, Error>
+            do {
+                built = .success(try await WhisperKit(config))
+            } catch {
+                built = .failure(error)
             }
+            self?.finishModelBuild(
+                built,
+                generation: generation,
+                isFirstLoad: isFirstLoad,
+                modelVariant: modelVariant
+            )
+        }
+        modelBuild = build
+        return build
+    }
 
+    private func finishModelBuild(
+        _ built: Result<WhisperKit, Error>,
+        generation: Int,
+        isFirstLoad: Bool,
+        modelVariant: String
+    ) {
+        // Dropped while it ran: unloaded, or a take gave up on a download.
+        guard generation == modelGeneration else { return }
+
+        modelBuild = nil
+        isLoadingModel = false
+        isDownloadingModel = false
+
+        switch built {
+        case .success(let kit):
+            whisperKit = kit
             modelLoadProgress = 1.0
             isModelLoaded = true
-
             if isFirstLoad {
                 UserDefaults.standard.set(true, forKey: Self.firstLoadCompletedKey)
-                await MainActor.run {
-                    AnalyticsService.shared.log(
-                        .modelDownload(tier: modelVariant, result: "success")
-                    )
-                }
+                AnalyticsService.shared.log(.modelDownload(tier: modelVariant, result: "success"))
             }
-        } catch {
-            let timedOut: Bool = {
-                if case WhisperServiceError.modelDownloadTimedOut = error { return true }
-                return false
-            }()
-            errorMessage = timedOut
-                ? WhisperServiceError.modelDownloadTimedOut.errorDescription
-                : "Failed to load Whisper model: \(error.localizedDescription)"
+        case .failure(let error):
+            errorMessage = "Failed to load Whisper model: \(error.localizedDescription)"
+            whisperKit = nil
             isModelLoaded = false
             modelLoadProgress = 0
-            whisperKit = nil
-
             if isFirstLoad {
-                await MainActor.run {
-                    AnalyticsService.shared.log(
-                        .modelDownload(tier: modelVariant, result: timedOut ? "timeout" : "failed")
-                    )
-                }
+                AnalyticsService.shared.log(.modelDownload(tier: modelVariant, result: "failed"))
             }
         }
+    }
+
+    /// The model, for a take that is waiting on it now.
+    ///
+    /// Waits on the build itself, which raises it to this caller's priority,
+    /// and gives up after a bounded wait instead of pinning the take. Returns
+    /// the error to throw, or nil once the model is ready.
+    private func modelForTranscription() async -> (any Error)? {
+        guard let build = startModelBuildIfNeeded() else { return nil }
+
+        let isDownload = isDownloadingModel
+        let finished = await Self.wait(
+            for: build,
+            upTo: isDownload ? Self.modelDownloadTimeout : Self.modelBuildTimeout
+        )
+        if Task.isCancelled { return CancellationError() }
+        if finished {
+            return whisperKit != nil && isModelLoaded ? nil : WhisperServiceError.modelNotLoaded
+        }
+
+        // A local build is left running: it is not waiting on the network,
+        // and the next take may find it finished.
+        guard isDownload else { return WhisperServiceError.modelBuildTimedOut }
+
+        // A download that overran is cancelled, so it stops spending the
+        // user's connection and the analyzing copy stops saying
+        // "Downloading..." through the Apple Speech fallback.
+        discardModel()
+        errorMessage = WhisperServiceError.modelDownloadTimedOut.errorDescription
+        if !Self.hasCompletedFirstLoad {
+            AnalyticsService.shared.log(.modelDownload(tier: "base", result: "timeout"))
+        }
+        return WhisperServiceError.modelDownloadTimedOut
+    }
+
+    /// Forgets the model and any build in flight. A build that finishes later
+    /// is ignored; a decode still holding the old instance keeps its own
+    /// reference and never shares it with the next caller.
+    private func discardModel() {
+        modelGeneration += 1
+        modelBuild?.cancel()
+        modelBuild = nil
+        whisperKit = nil
+        isModelLoaded = false
+        isLoadingModel = false
+        isDownloadingModel = false
+        modelLoadProgress = 0
+    }
+
+    /// Waits up to `seconds` for `task`. Returns true once it has finished and
+    /// false on timeout or cancellation - without waiting any longer, since a
+    /// wedged task would otherwise pin the caller. The wait runs at the
+    /// caller's priority, which raises `task` to it.
+    nonisolated private static func wait(
+        for task: Task<Void, Never>,
+        upTo seconds: TimeInterval
+    ) async -> Bool {
+        let race = FirstFinisher<Bool>()
+        let priority = Task.currentPriority
+        let finished = try? await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                race.install(continuation)
+                race.adopt(Task.detached(priority: priority) {
+                    await task.value
+                    race.finish(.success(true))
+                })
+                race.adopt(Task.detached(priority: priority) {
+                    try? await Task.sleep(for: .seconds(seconds))
+                    race.finish(.success(false))
+                })
+            }
+        } onCancel: {
+            race.finish(.success(false))
+        }
+        return finished ?? false
     }
 
     // MARK: - Offline-first config
@@ -229,49 +337,21 @@ class WhisperService {
         )
     }
 
-    /// Races Hub download against a wall-clock deadline. Local loads skip this.
-    ///
-    /// `WhisperKit` / `WhisperKitConfig` are not Sendable, so the result is
-    /// stashed in an unchecked box instead of crossing the task-group as `T`.
-    private static func loadWhisperKitWithDownloadTimeout(
-        config: WhisperKitConfig,
-        seconds: TimeInterval
-    ) async throws -> WhisperKit {
-        nonisolated final class Box: @unchecked Sendable {
-            var value: WhisperKit?
-        }
-        let box = Box()
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                box.value = try await WhisperKit(config)
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(seconds))
-                throw WhisperServiceError.modelDownloadTimedOut
-            }
-            // First child to finish wins: success empties the group via
-            // cancelAll; timeout / download error throws out.
-            try await group.next()
-            group.cancelAll()
-        }
-        guard let kit = box.value else {
-            throw WhisperServiceError.modelDownloadTimedOut
-        }
-        return kit
-    }
-
     // MARK: - Transcription
 
     /// Transcribe audio file with filler word detection and optional preferred terms.
     func transcribe(audioURL: URL, preferredTerms: [String] = []) async throws -> SpeechTranscriptionResult {
+        // The model first, outside the semaphore, so a take waits on the build
+        // (and raises its priority) instead of queueing behind it.
+        if let failure = await modelForTranscription() {
+            throw failure
+        }
+
         await semaphore.wait()
         defer { semaphore.signal() }
 
-        // Load model if not loaded
-        if whisperKit == nil {
-            await loadModelLocked()
-        }
-
+        // Unloaded while this call waited its turn (the local LLM claiming
+        // the memory) - the reload leg in `SpeechService` rebuilds it.
         guard let whisperKit else {
             throw WhisperServiceError.modelNotLoaded
         }
@@ -338,48 +418,29 @@ class WhisperService {
 
             // WhisperKit's decoder can hang indefinitely under certain conditions
             // (degenerate audio, prompt edge-cases), so a watchdog runs alongside
-            // it. The watchdog measures decode *progress*, not elapsed time - see
-            // `decodeStallTimeout`. Only one result is ever returned here: without
-            // a `chunkingStrategy` WhisperKit decodes the whole file in a single
-            // task, so `.first` is the complete transcript, not the first chunk.
-            let result: WhisperTranscriptionResult = try await withThrowingTaskGroup(of: WhisperTranscriptionResult.self) { group in
-                group.addTask {
-                    let results = try await whisperKit.transcribe(
-                        audioPath: audioURL.path,
-                        decodeOptions: options,
-                        callback: { _ in
-                            heartbeat.beat()
-                            // `false` is WhisperKit's documented early-stop:
-                            // the only way to actually halt its internal
-                            // decode, since task cancellation never reaches it.
-                            return !heartbeat.shouldAbort
-                        }
-                    )
-                    guard let first = results.first else {
-                        throw WhisperServiceError.noSpeechTranscriptionResult
+            // it - see `awaitDecode`. Only one result is ever returned here:
+            // without a `chunkingStrategy` WhisperKit decodes the whole file in a
+            // single task, so `.first` is the complete transcript, not the first
+            // chunk. The decode is its own task, not a task-group child, so the
+            // watchdog can give up on it: a task group waits for every child
+            // before it rethrows, and a wedged decode never finishes.
+            let kit = WhisperKitBox(whisperKit)
+            let decode = Task.detached(priority: Task.currentPriority) { () async throws -> WhisperTranscriptionResult in
+                let results = try await kit.value.transcribe(
+                    audioPath: audioURL.path,
+                    decodeOptions: options,
+                    callback: { _ in
+                        heartbeat.beat()
+                        // `false` is WhisperKit's documented early-stop.
+                        return !heartbeat.shouldAbort
                     }
-                    return first
+                )
+                guard let first = results.first else {
+                    throw WhisperServiceError.noSpeechTranscriptionResult
                 }
-                group.addTask {
-                    let ceiling = WhisperService.decodeCeiling(for: audioURL)
-                    let deadline = Date().addingTimeInterval(ceiling)
-                    while true {
-                        try await Task.sleep(for: .seconds(5))
-                        guard heartbeat.secondsSinceLastBeat < WhisperService.decodeStallTimeout,
-                              Date() < deadline else {
-                            // Stop the decode BEFORE bailing - once this error
-                            // unwinds, the semaphore hands the shared instance
-                            // to the next caller and a still-running decode
-                            // would race it.
-                            heartbeat.requestAbort()
-                            throw WhisperServiceError.transcriptionTimedOut
-                        }
-                    }
-                }
-                let first = try await group.next()!
-                group.cancelAll()
                 return first
             }
+            let result = try await Self.awaitDecode(decode, heartbeat: heartbeat, audioURL: audioURL)
 
             transcriptionProgress = 1.0
 
@@ -392,13 +453,73 @@ class WhisperService {
                 Self.processWhisperResult(result)
             }.value
 
+        } catch WhisperServiceError.transcriptionTimedOut {
+            // The watchdog gave up on a decode that may still be running on
+            // this instance. Drop it, so the next caller builds a clean one
+            // instead of sharing it, and let `SpeechService` skip the Whisper
+            // retries: a stalled decode would only stall again.
+            if self.whisperKit === whisperKit {
+                discardModel()
+            }
+            throw WhisperServiceError.transcriptionTimedOut
         } catch is CancellationError {
-            // External cancellation (job cancelled, app backgrounding): same
-            // zombie risk as the watchdog - stop the decode before unwinding.
+            // External cancellation (job cancelled, app backgrounding): stop
+            // the decode before unwinding. `awaitDecode` has already done so.
             heartbeat.requestAbort()
             throw CancellationError()
         } catch {
             throw WhisperServiceError.transcriptionFailed(error)
+        }
+    }
+
+    /// Waits for `decode` under a stall watchdog and returns as soon as either
+    /// side settles.
+    ///
+    /// The watchdog measures decode *progress*, not elapsed time - see
+    /// `decodeStallTimeout` - with `decodeCeiling` as the backstop. On a stall
+    /// it flags the heartbeat and cancels the decode (WhisperKit checks
+    /// cancellation before every decoder step), then returns at once rather
+    /// than waiting for the decode to acknowledge: a decode wedged inside
+    /// WhisperKit never would, and waiting on it is what used to leave the
+    /// self-check on "Transcribing..." for good.
+    nonisolated private static func awaitDecode(
+        _ decode: Task<WhisperTranscriptionResult, Error>,
+        heartbeat: DecodeHeartbeat,
+        audioURL: URL
+    ) async throws -> WhisperTranscriptionResult {
+        let race = FirstFinisher<WhisperTranscriptionResult>()
+        let priority = Task.currentPriority
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                race.install(continuation)
+                race.adopt(Task.detached(priority: priority) {
+                    do {
+                        race.finish(.success(try await decode.value))
+                    } catch {
+                        race.finish(.failure(error))
+                    }
+                })
+                race.adopt(Task.detached(priority: priority) {
+                    // Opens the audio file, so it runs here, never on the
+                    // main actor.
+                    let deadline = Date().addingTimeInterval(WhisperService.decodeCeiling(for: audioURL))
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(5))
+                        guard !Task.isCancelled else { return }
+                        if heartbeat.secondsSinceLastBeat >= WhisperService.decodeStallTimeout
+                            || Date() >= deadline {
+                            heartbeat.requestAbort()
+                            decode.cancel()
+                            race.finish(.failure(WhisperServiceError.transcriptionTimedOut))
+                            return
+                        }
+                    }
+                })
+            }
+        } onCancel: {
+            heartbeat.requestAbort()
+            decode.cancel()
+            race.finish(.failure(CancellationError()))
         }
     }
 
@@ -508,9 +629,61 @@ class WhisperService {
     func unloadModel() async {
         await semaphore.wait()
         defer { semaphore.signal() }
-        whisperKit = nil
-        isModelLoaded = false
-        modelLoadProgress = 0
+        // Waits out a decode in flight; a build in flight is simply dropped.
+        discardModel()
+    }
+}
+
+/// Carries the non-Sendable WhisperKit instance into the decode task. Only
+/// one decode ever uses an instance at a time (see `semaphore`).
+nonisolated private final class WhisperKitBox: @unchecked Sendable {
+    let value: WhisperKit
+    init(_ value: WhisperKit) { self.value = value }
+}
+
+/// Hands a continuation to whichever of several racing tasks finishes first,
+/// then cancels the rest. Every lock call stays in a synchronous method -
+/// NSLock is unavailable from asynchronous contexts under Swift 6.
+nonisolated private final class FirstFinisher<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Error>?
+    private var outcome: Result<Value, Error>?
+    private var racers: [Task<Void, Never>] = []
+
+    func install(_ continuation: CheckedContinuation<Value, Error>) {
+        lock.lock()
+        guard let settled = outcome else {
+            self.continuation = continuation
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+        continuation.resume(with: settled)
+    }
+
+    /// Registers a racer, cancelling it straight away if the race is over.
+    func adopt(_ racer: Task<Void, Never>) {
+        lock.lock()
+        let isOver = outcome != nil
+        if !isOver { racers.append(racer) }
+        lock.unlock()
+        if isOver { racer.cancel() }
+    }
+
+    func finish(_ result: Result<Value, Error>) {
+        lock.lock()
+        guard outcome == nil else {
+            lock.unlock()
+            return
+        }
+        outcome = result
+        let waiting = continuation
+        continuation = nil
+        let losers = racers
+        racers = []
+        lock.unlock()
+        losers.forEach { $0.cancel() }
+        waiting?.resume(with: result)
     }
 }
 
@@ -601,6 +774,7 @@ nonisolated private final class AsyncSemaphore: @unchecked Sendable {
 enum WhisperServiceError: LocalizedError {
     case modelNotLoaded
     case modelDownloadTimedOut
+    case modelBuildTimedOut
     case noSpeechTranscriptionResult
     case transcriptionFailed(Error)
     case transcriptionTimedOut
@@ -611,12 +785,25 @@ enum WhisperServiceError: LocalizedError {
             return "Speech model isn't ready yet."
         case .modelDownloadTimedOut:
             return "Speech model download timed out. Check your connection, or try again later. On-device recognition can still finish the take."
+        case .modelBuildTimedOut:
+            return "Speech model took too long to start. On-device recognition can still finish the take."
         case .noSpeechTranscriptionResult:
             return "No transcription result was produced."
         case .transcriptionFailed(let error):
             return "Transcription failed: \(error.localizedDescription)"
         case .transcriptionTimedOut:
             return "Transcription timed out. Try recording a shorter clip or restart the app."
+        }
+    }
+
+    /// A timeout, not a bad transcript: the model is still downloading or
+    /// building, or a decode stalled. Retrying Whisper would only wait again.
+    var abandonsWhisper: Bool {
+        switch self {
+        case .modelDownloadTimedOut, .modelBuildTimedOut, .transcriptionTimedOut:
+            return true
+        case .modelNotLoaded, .noSpeechTranscriptionResult, .transcriptionFailed:
+            return false
         }
     }
 }
