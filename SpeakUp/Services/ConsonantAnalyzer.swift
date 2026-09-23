@@ -5,7 +5,7 @@ import Foundation
 /// A consonant sound, as far as spelling can tell. The TH in "this" and the
 /// TH in "thin" share one case: spelling cannot tell them apart, and the
 /// advice for both is the same.
-nonisolated enum ConsonantSound: String, CaseIterable, Hashable, Sendable {
+nonisolated enum ConsonantSound: String, Sendable {
     case p, b, t, d, k, g, f, v, th, s, z, sh, zh, ch, j, m, n, ng, l, r, w, y, h
 
     /// How the app writes the sound: "TH", "SH", "K".
@@ -60,27 +60,6 @@ nonisolated enum ConsonantSound: String, CaseIterable, Hashable, Sendable {
         case .ch, .j: return "burst"
         case .m, .n, .ng: return "hum"
         case .l, .r, .w, .y: return "glide"
-        }
-    }
-
-    /// The same mouth shape with the voice switched the other way.
-    private var voicingTwin: ConsonantSound? {
-        switch self {
-        case .p: return .b
-        case .b: return .p
-        case .t: return .d
-        case .d: return .t
-        case .k: return .g
-        case .g: return .k
-        case .f: return .v
-        case .v: return .f
-        case .s: return .z
-        case .z: return .s
-        case .sh: return .zh
-        case .zh: return .sh
-        case .ch: return .j
-        case .j: return .ch
-        default: return nil
         }
     }
 
@@ -160,7 +139,8 @@ nonisolated enum ConsonantSound: String, CaseIterable, Hashable, Sendable {
         case (.y, .j):
             return "Keep your tongue off the roof of your mouth and glide into the vowel, as in \"yes\"."
         default:
-            if voicingTwin == heard {
+            // The same mouth shape with the voice switched: P for B, K for G.
+            if place == heard.place, manner == heard.manner, isVoiced != heard.isVoiced {
                 return isVoiced
                     ? "Same mouth shape, voice on. Feel the buzz in your throat."
                     : "Same mouth shape, voice off. Add a small puff of air."
@@ -261,27 +241,19 @@ nonisolated struct SoundSlipWord: Equatable, Sendable {
 
     /// `word` without the punctuation around it, for showing on its own.
     var bareWord: String {
-        String(Array(word)[bareRange])
+        word.trimmingCharacters(in: .punctuationCharacters)
     }
 
     /// `slip.letters`, measured in `bareWord`.
     var bareLetters: Range<Int> {
-        let shift = bareRange.lowerBound
+        let shift = word.prefix { character in
+            character.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
+        }.count
         return (slip.letters.lowerBound - shift)..<(slip.letters.upperBound - shift)
     }
 
     var bareHeard: String {
         heard.trimmingCharacters(in: .punctuationCharacters)
-    }
-
-    private var bareRange: Range<Int> {
-        let characters = Array(word)
-        let isPunctuation: (Character) -> Bool = { character in
-            character.unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
-        }
-        let start = characters.firstIndex { !isPunctuation($0) } ?? 0
-        let end = characters.lastIndex { !isPunctuation($0) }.map { $0 + 1 } ?? characters.count
-        return start..<max(start, end)
     }
 }
 
@@ -352,7 +324,23 @@ nonisolated struct SoundPattern: Identifiable, Equatable, Sendable {
             tip = Self.mostCommon(words.map(\.slip.tip)) ?? sound.tip
         }
 
-        practiceText = ConsonantAnalyzer.practiceText(for: words, in: passageWords)
+        practiceText = Self.drillText(for: words, in: passageWords)
+    }
+
+    /// Each word on its own, then the stretches of the page it came from:
+    /// the sound first in isolation, then in connected speech, where most
+    /// slips happen.
+    private static func drillText(for words: [SoundSlipWord], in passageWords: [String]) -> String? {
+        var seen = Set<String>()
+        let drill = words
+            .map(\.bareWord)
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .prefix(6)
+            .map { $0.prefix(1).uppercased() + String($0.dropFirst()) + "." }
+            .joined(separator: " ")
+        let phrases = ReadAloudPassage.practiceText(around: words.map(\.index), in: passageWords) ?? ""
+        let text = [drill, phrases].filter { !$0.isEmpty }.joined(separator: " ")
+        return ReadAloudPassage.practiceSizedExcerpt(from: text)
     }
 
     /// "F", "F or T", "F, T or S".
@@ -364,28 +352,19 @@ nonisolated struct SoundPattern: Identifiable, Equatable, Sendable {
 
     /// The most frequent item, the earliest on a tie.
     private static func mostCommon(_ items: [String]) -> String? {
-        var counts: [String: Int] = [:]
-        for item in items { counts[item, default: 0] += 1 }
-        var best: (item: String, count: Int)?
-        for item in items {
-            let count = counts[item, default: 0]
-            if count > (best?.count ?? 0) { best = (item, count) }
-        }
-        return best?.item
+        let counts = Dictionary(items.map { ($0, 1) }, uniquingKeysWith: +)
+        guard let top = counts.values.max() else { return nil }
+        return items.first { counts[$0] == top }
     }
 }
 
-/// Every consonant slip in one take: the words, for marking letters in the
-/// word review, and the same slips grouped by sound.
+/// Every consonant slip in one take, grouped by sound, with each one findable
+/// by word index for marking letters in the word review.
 nonisolated struct SoundCheck: Equatable, Sendable {
-    /// Every slip, in reading order.
-    let words: [SoundSlipWord]
     /// Grouped by sound, most frequent first, earliest first on a tie.
     let patterns: [SoundPattern]
 
     private let slipsByIndex: [Int: ConsonantSlip]
-
-    static let empty = SoundCheck(passage: [], heard: [:])
 
     /// - Parameters:
     ///   - passage: The passage's words as written.
@@ -398,7 +377,6 @@ nonisolated struct SoundCheck: Equatable, Sendable {
             else { return nil }
             return SoundSlipWord(index: index, word: passage[index], heard: spoken, slip: slip)
         }
-        self.words = words
         slipsByIndex = Dictionary(uniqueKeysWithValues: words.map { ($0.index, $0.slip) })
 
         var groups: [SoundPatternKey: [SoundSlipWord]] = [:]
@@ -408,12 +386,10 @@ nonisolated struct SoundCheck: Equatable, Sendable {
             if groups[key] == nil { order.append(key) }
             groups[key, default: []].append(word)
         }
-        patterns = order.enumerated()
-            .sorted { lhs, rhs in
-                let left = groups[lhs.element]?.count ?? 0, right = groups[rhs.element]?.count ?? 0
-                return left != right ? left > right : lhs.offset < rhs.offset
-            }
-            .map { SoundPattern(key: $0.element, words: groups[$0.element] ?? [], passageWords: passage) }
+        // `sorted` is stable, so groups of the same size keep reading order.
+        patterns = order
+            .sorted { (groups[$0]?.count ?? 0) > (groups[$1]?.count ?? 0) }
+            .map { SoundPattern(key: $0, words: groups[$0] ?? [], passageWords: passage) }
     }
 
     func slip(at index: Int) -> ConsonantSlip? {
@@ -430,7 +406,7 @@ nonisolated struct SoundCheck: Equatable, Sendable {
 /// pronunciation. What it can do is read a miss: when "three" comes back as
 /// "free", the two differ by exactly one consonant, and that consonant is
 /// the place to listen. Rules of English spelling turn both words into
-/// consonant sounds, an alignment finds the one that changed, and the
+/// consonant sounds, a comparison finds the one that changed, and the
 /// letters that spell it are marked in the word as written.
 ///
 /// Deliberately narrow, because a wrong call teaches the wrong thing:
@@ -447,83 +423,47 @@ nonisolated enum ConsonantAnalyzer {
     /// letters or a letter outside a-z after folding accents: these are
     /// English spelling rules.
     static func consonants(in word: String) -> [SpelledConsonant] {
-        guard let spelled = letters(in: word) else { return [] }
-        return ConsonantSpeller(letters: spelled.letters).read().map { consonant in
-            let start = spelled.offsets[consonant.range.lowerBound]
-            let end = spelled.offsets[consonant.range.upperBound - 1] + 1
-            return SpelledConsonant(sound: consonant.sound, letters: start..<end)
-        }
+        letters(in: word).map(consonants(spelled:)) ?? []
     }
 
     /// The slip that turns `target` into `heard`, or nil when the two do not
     /// differ by exactly one related consonant.
     static func slip(target: String, heard: String) -> ConsonantSlip? {
         guard !target.contains(where: \.isNumber), !heard.contains(where: \.isNumber),
-              let targetLetters = letters(in: target)?.letters,
-              let heardLetters = letters(in: heard)?.letters,
-              targetLetters.count >= 3,
-              targetLetters != heardLetters,
-              !reducedWords.contains(String(targetLetters)),
-              abs(targetLetters.count - heardLetters.count) <= 3,
-              syllableEstimate(targetLetters) == syllableEstimate(heardLetters)
+              let targetSpelled = letters(in: target),
+              let heardSpelled = letters(in: heard),
+              targetSpelled.letters.count >= 3,
+              targetSpelled.letters != heardSpelled.letters,
+              !reducedWords.contains(String(targetSpelled.letters)),
+              abs(targetSpelled.letters.count - heardSpelled.letters.count) <= 3,
+              ConsonantSpeller(letters: targetSpelled.letters).syllableCount
+                == ConsonantSpeller(letters: heardSpelled.letters).syllableCount
         else { return nil }
 
-        let expected = consonants(in: target)
-        let said = consonants(in: heard)
-        let alignment = align(expected.map(\.sound), said.map(\.sound))
-        guard alignment.cost == 1 else { return nil }
-        // A word whose every consonant changed is another word, unless it
-        // only had the one: "she" heard as "see".
-        guard alignment.steps.contains(where: \.isMatch) || (expected.count == 1 && said.count == 1) else {
-            return nil
-        }
+        let expected = consonants(spelled: targetSpelled)
+        let said = consonants(spelled: heardSpelled).map(\.sound)
+        guard let edit = singleEdit(from: expected.map(\.sound), to: said) else { return nil }
 
+        let consonant = expected[edit.index]
         let characters = Array(target)
-        for step in alignment.steps {
-            switch step {
-            case .match:
-                continue
-            case .extra:
-                return nil
-            case .swap(let targetIndex, let heardIndex):
-                let consonant = expected[targetIndex]
-                let heardSound = said[heardIndex].sound
-                guard consonant.sound.isRelated(to: heardSound) else { return nil }
-                return ConsonantSlip(
-                    kind: .swapped(expected: consonant.sound, heard: heardSound),
-                    letters: consonant.letters,
-                    spelling: String(characters[consonant.letters]).lowercased()
-                )
-            case .drop(let targetIndex):
-                let consonant = expected[targetIndex]
-                // Only a silent E may follow the last consonant of a word
-                // that ends on it: "made" ends on its D.
-                let after = letters(in: String(characters[consonant.letters.upperBound...]))?.letters ?? []
-                let atEnd = targetIndex == expected.count - 1 && (after.isEmpty || after == ["e"])
-                return ConsonantSlip(
-                    kind: .dropped(consonant.sound, atEnd: atEnd),
-                    letters: consonant.letters,
-                    spelling: String(characters[consonant.letters]).lowercased()
-                )
-            }
+        let kind: ConsonantSlipKind
+        if let heardSound = edit.heard {
+            guard consonant.sound.isRelated(to: heardSound) else { return nil }
+            kind = .swapped(expected: consonant.sound, heard: heardSound)
+        } else {
+            // A word whose only consonant was not heard is another word.
+            guard !said.isEmpty else { return nil }
+            // Only a silent E may follow the last consonant of a word that
+            // ends on it: "made" ends on its D.
+            let after = letters(in: String(characters[consonant.letters.upperBound...]))?.letters ?? []
+            let atEnd = edit.index == expected.count - 1 && (after.isEmpty || after == ["e"])
+            kind = .dropped(consonant.sound, atEnd: atEnd)
         }
-        return nil
-    }
-
-    /// Each word on its own, then the stretches of the page it came from:
-    /// the sound first in isolation, then in connected speech, where most
-    /// slips happen.
-    static func practiceText(for words: [SoundSlipWord], in passageWords: [String]) -> String? {
-        var seen = Set<String>()
-        let drill = words
-            .map(\.bareWord)
-            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-            .prefix(6)
-            .map { $0.prefix(1).uppercased() + String($0.dropFirst()) + "." }
-            .joined(separator: " ")
-        let phrases = ReadAloudPassage.practiceText(around: words.map(\.index), in: passageWords) ?? ""
-        let text = [drill, phrases].filter { !$0.isEmpty }.joined(separator: " ")
-        return ReadAloudPassage.practiceSizedExcerpt(from: text)
+        return ConsonantSlip(
+            kind: kind,
+            letters: consonant.letters,
+            spelling: String(characters[consonant.letters]).lowercased()
+        )
     }
 
     // MARK: - Gates
@@ -538,7 +478,7 @@ nonisolated enum ConsonantAnalyzer {
     /// The word's letters folded to lowercase a-z, with each one's character
     /// offset in the word. Nil when there are none, or when a letter is
     /// outside a-z even after folding accents.
-    static func letters(in word: String) -> (letters: [Character], offsets: [Int])? {
+    private static func letters(in word: String) -> (letters: [Character], offsets: [Int])? {
         var letters: [Character] = []
         var offsets: [Int] = []
         for (offset, character) in word.enumerated() where character.isLetter {
@@ -553,109 +493,38 @@ nonisolated enum ConsonantAnalyzer {
         return (letters, offsets)
     }
 
-    /// Vowel groups, less a silent final E, a silent -ed and a silent -es.
-    /// Rough, but the same roughness on both words: a slip keeps the beat of
-    /// the word, and a heard word with another beat is another word.
-    static func syllableEstimate(_ letters: [Character]) -> Int {
-        let count = letters.count
-        func isVowel(_ index: Int) -> Bool {
-            index >= 0 && index < count && ConsonantSpeller.vowels.contains(letters[index])
+    /// The speller's sounds, with letter ranges moved to character offsets in
+    /// the word as written.
+    private static func consonants(spelled: (letters: [Character], offsets: [Int])) -> [SpelledConsonant] {
+        var speller = ConsonantSpeller(letters: spelled.letters)
+        return speller.read().map { consonant in
+            let start = spelled.offsets[consonant.letters.lowerBound]
+            let end = spelled.offsets[consonant.letters.upperBound - 1] + 1
+            return SpelledConsonant(sound: consonant.sound, letters: start..<end)
         }
-        func isConsonant(_ index: Int) -> Bool {
-            index >= 0 && index < count && !isVowel(index) && letters[index] != "y"
-        }
-
-        var groups = 0
-        var previousWasVowel = false
-        for index in 0..<count {
-            let yIsConsonant = letters[index] == "y" && isVowel(index + 1) && (index == 0 || !isVowel(index - 1))
-            let vowel = isVowel(index) || (letters[index] == "y" && !yIsConsonant)
-            if vowel && !previousWasVowel { groups += 1 }
-            previousWasVowel = vowel
-        }
-
-        let word = String(letters)
-        if groups > 1 {
-            if count > 2, word.hasSuffix("e"), isConsonant(count - 2),
-               !(word.hasSuffix("le") && isConsonant(count - 3)) {
-                groups -= 1
-            } else if count > 3, word.hasSuffix("ed"), isConsonant(count - 3),
-                      letters[count - 3] != "t", letters[count - 3] != "d" {
-                groups -= 1
-            } else if count > 3, word.hasSuffix("que") || word.hasSuffix("gue") {
-                groups -= 1
-            } else if count > 3, word.hasSuffix("es"), isConsonant(count - 3),
-                      !"sxzcg".contains(letters[count - 3]),
-                      !["ch", "sh"].contains(String(letters[(count - 4)..<(count - 2)])) {
-                groups -= 1
-            }
-        }
-        return max(groups, 1)
     }
 
-    // MARK: - Alignment
+    /// Where `heard` differs from `target` by exactly one sound: swapped, and
+    /// `heard` names what it became, or not heard, and `heard` is nil. Nil for
+    /// any other difference, an extra sound included.
+    ///
+    /// Matched from the end first, so of two equal sounds in a row the
+    /// earlier one is the one reported missing.
+    private static func singleEdit(
+        from target: [ConsonantSound],
+        to heard: [ConsonantSound]
+    ) -> (index: Int, heard: ConsonantSound?)? {
+        let lengthDifference = target.count - heard.count
+        guard lengthDifference == 0 || lengthDifference == 1 else { return nil }
 
-    /// Fewest edits from `target` to `heard`, sounds that spelling cannot
-    /// tell apart counting as equal.
-    private static func align(
-        _ target: [ConsonantSound],
-        _ heard: [ConsonantSound]
-    ) -> (cost: Int, steps: [AlignmentStep]) {
-        let rows = target.count
-        let columns = heard.count
-        var cost = Array(repeating: Array(repeating: 0, count: columns + 1), count: rows + 1)
-        for row in 0...rows { cost[row][0] = row }
-        for column in 0...columns { cost[0][column] = column }
-        if rows > 0, columns > 0 {
-            for row in 1...rows {
-                for column in 1...columns {
-                    let swap = target[row - 1].soundsLike(heard[column - 1]) ? 0 : 1
-                    cost[row][column] = min(
-                        cost[row - 1][column] + 1,
-                        cost[row][column - 1] + 1,
-                        cost[row - 1][column - 1] + swap
-                    )
-                }
-            }
+        var suffix = 0
+        while suffix < heard.count,
+              target[target.count - 1 - suffix].soundsLike(heard[heard.count - 1 - suffix]) {
+            suffix += 1
         }
-
-        var steps: [AlignmentStep] = []
-        var row = rows
-        var column = columns
-        while row > 0 || column > 0 {
-            if row > 0, column > 0 {
-                let same = target[row - 1].soundsLike(heard[column - 1])
-                if cost[row][column] == cost[row - 1][column - 1] + (same ? 0 : 1) {
-                    steps.append(same ? .match : .swap(row - 1, column - 1))
-                    row -= 1
-                    column -= 1
-                    continue
-                }
-            }
-            if row > 0, cost[row][column] == cost[row - 1][column] + 1 {
-                steps.append(.drop(row - 1))
-                row -= 1
-                continue
-            }
-            steps.append(.extra)
-            column -= 1
-        }
-        return (cost[rows][columns], Array(steps.reversed()))
-    }
-}
-
-private nonisolated enum AlignmentStep: Equatable {
-    case match
-    /// Target sound at the first index came out as the heard sound at the
-    /// second.
-    case swap(Int, Int)
-    /// Target sound at this index was not heard.
-    case drop(Int)
-    /// A heard sound the target does not have.
-    case extra
-
-    var isMatch: Bool {
-        self == .match
+        let index = target.count - 1 - suffix
+        guard index >= 0, (0..<index).allSatisfy({ target[$0].soundsLike(heard[$0]) }) else { return nil }
+        return (index, lengthDifference == 0 ? heard[index] : nil)
     }
 }
 
@@ -665,11 +534,14 @@ private nonisolated enum AlignmentStep: Equatable {
 /// pronouncing dictionary: they cover the common patterns and the silent
 /// letters that most words carry. When they guess wrong on a rare word, the
 /// word it is compared with usually shares the spelling and the guess.
+///
+/// Letter ranges here index `letters`, not the word as written.
 private nonisolated struct ConsonantSpeller {
-    static let vowels: Set<Character> = ["a", "e", "i", "o", "u"]
+    private static let vowels: Set<Character> = ["a", "e", "i", "o", "u"]
 
     let letters: [Character]
     let word: String
+    private var sounds: [SpelledConsonant] = []
 
     init(letters: [Character]) {
         self.letters = letters
@@ -678,55 +550,20 @@ private nonisolated struct ConsonantSpeller {
 
     private var count: Int { letters.count }
 
-    func read() -> [(sound: ConsonantSound, range: Range<Int>)] {
-        var sounds: [(sound: ConsonantSound, range: Range<Int>)] = []
-        func emit(_ sound: ConsonantSound, _ start: Int, _ end: Int) {
-            sounds.append((sound, start..<end))
-        }
-
+    mutating func read() -> [SpelledConsonant] {
+        sounds = []
         let greekCh = Self.greekChWords.contains(word) || Self.greekChPrefixes.contains { word.hasPrefix($0) }
         let frenchCh = Self.frenchChWords.contains(word) || Self.frenchChPrefixes.contains { word.hasPrefix($0) }
 
         var index = 0
         while index < count {
             let letter = letters[index]
-            let previous = at(index - 1)
-
-            if Self.vowels.contains(letter) || (letter == "y" && !yIsConsonant(index)) {
+            if isVowel(index) || (letter == "y" && !yIsConsonant(index)) {
                 index += 1
                 continue
             }
-
-            if index == 0 {
-                if let opening = Self.silentOpenings.first(where: { has($0.spelling, at: 0) }) {
-                    emit(opening.sound, 0, 2)
-                    index = 2
-                    continue
-                }
-                if letter == "h", Self.silentHPrefixes.contains(where: { word.hasPrefix($0) }) {
-                    index += 1
-                    continue
-                }
-                if has("who", at: 0) {
-                    emit(.h, 0, 2)
-                    index = 2
-                    continue
-                }
-                if word.hasPrefix("sure") || word.hasPrefix("sugar") {
-                    emit(.sh, 0, 1)
-                    index = 1
-                    continue
-                }
-            }
-
-            if has("tch", at: index) {
-                emit(.ch, index, index + 3)
-                index += 3
-                continue
-            }
-            if has("dg", at: index) {
-                emit(.j, index, index + 2)
-                index += 2
+            if index == 0, let next = readOpening() {
+                index = next
                 continue
             }
             if has("sch", at: index) {
@@ -736,147 +573,152 @@ private nonisolated struct ConsonantSpeller {
                 continue
             }
             if has("ch", at: index) {
+                let sound: ConsonantSound
                 if greekCh || has("chr", at: index) || has("chl", at: index) {
-                    emit(.k, index, index + 2)
-                } else if frenchCh {
-                    emit(.sh, index, index + 2)
+                    sound = .k
                 } else {
-                    emit(.ch, index, index + 2)
+                    sound = frenchCh ? .sh : .ch
                 }
+                emit(sound, index, index + 2)
                 index += 2
                 continue
             }
-            if let digraph = Self.digraphs.first(where: { has($0.spelling, at: index) }) {
-                emit(digraph.sound, index, index + 2)
-                index += 2
-                continue
-            }
-            if has("gh", at: index) {
-                // Silent inside a word - night, though, sighed - unless it is
-                // one of the few that say F.
-                if index == 0 || word.hasPrefix("spaghett") {
-                    emit(.g, index, index + 2)
-                } else if Self.fGhStems.contains(where: { word.contains($0) }) {
-                    emit(.f, index, index + 2)
-                }
-                index += 2
-                continue
-            }
-            if has("gn", at: index), Self.silentGnEndings.contains(tail(from: index + 2)) {
-                index += 1
-                continue
-            }
-            if has("ng", at: index) {
-                if ["e", "es", "ed"].contains(tail(from: index + 2)) {
-                    emit(.n, index, index + 1)
-                    emit(.j, index + 1, index + 2)
-                } else {
-                    emit(.ng, index, index + 2)
-                }
-                index += 2
-                continue
-            }
-            if letter == "n" {
-                let next = at(index + 1)
-                let beforeK = (next == "k" && at(index + 2) != "n") || next == "q" || next == "x"
-                let beforeHardC = next == "c" && !isAny(index + 2, of: "eiy")
-                if beforeK || beforeHardC {
-                    emit(.ng, index, index + 1)
-                    index += 1
-                    continue
-                }
-                if previous == "m", ["", "s"].contains(tail(from: index + 1)) {
-                    index += 1
-                    continue
-                }
-            }
-            if has("ck", at: index) {
-                emit(.k, index, index + 2)
-                index += 2
-                continue
-            }
-            if has("que", at: index), index + 3 == count {
-                emit(.k, index, index + 3)
-                index += 3
-                continue
-            }
-            if has("qu", at: index) {
-                emit(.k, index, index + 1)
-                emit(.w, index + 1, index + 2)
-                index += 2
+            if let spelling = Self.spellings.first(where: { has($0.letters, at: index) }) {
+                emit(spelling.sound, index, index + spelling.letters.count)
+                index += spelling.letters.count
                 continue
             }
 
+            // Letters with more than one reading. Nil falls through to the
+            // plain one.
+            let next: Int?
             switch letter {
-            case "q":
-                emit(.k, index, index + 1)
-                index += 1
+            case "b": next = readB(at: index)
+            case "c": next = readC(at: index)
+            case "d": next = readD(at: index)
+            case "g": next = readG(at: index)
+            case "l": next = readL(at: index)
+            case "n": next = readN(at: index)
+            case "q": next = readQ(at: index)
+            case "s": next = readS(at: index)
+            case "t": next = readT(at: index)
+            case "w": next = readW(at: index)
+            case "h":
+                // Silent before a consonant and at the end: John, oh.
+                if isVowel(index + 1) || at(index + 1) == "y" {
+                    emit(.h, index, index + 1)
+                }
+                next = index + 1
             case "x":
+                // xylophone; box
                 if index == 0 {
                     emit(.z, index, index + 1)
                 } else {
                     emit(.k, index, index + 1)
                     emit(.s, index, index + 1)
                 }
-                index += 1
-            case "c":
-                index = readC(at: index, emit: emit)
-            case "t":
-                index = readT(at: index, previous: previous, emit: emit)
-            case "s":
-                index = readS(at: index, previous: previous, emit: emit)
-            case "g":
-                index = readG(at: index, emit: emit)
-            case "d":
-                let last = sounds.last
-                index = readD(at: index, previous: previous, last: last, emit: emit)
-            case "l":
-                index = readL(at: index, previous: previous, emit: emit)
-            case "b":
-                index = readB(at: index, previous: previous, emit: emit)
-            case "h":
-                if isVowel(index + 1) || at(index + 1) == "y" {
-                    emit(.h, index, index + 1)
-                }
-                index += 1
-            case "w":
-                let silent = Self.silentW.contains { word.hasPrefix($0.word) && index == $0.index }
-                let consonantPosition = index == 0 || !isVowel(index - 1)
-                    || Self.awWords.contains(where: { word.hasPrefix($0) })
-                if !silent, consonantPosition, isVowel(index + 1) {
-                    emit(.w, index, index + 1)
-                }
-                index += 1
-            case "y":
-                emit(.y, index, index + 1)
-                index += 1
+                next = index + 1
             default:
-                if let sound = Self.plainLetters[letter] {
-                    let end = runEnd(index)
-                    emit(sound, index, end)
-                    index = end
-                } else {
-                    index += 1
-                }
+                next = nil
+            }
+            if let next {
+                index = next
+            } else if let sound = Self.plainLetters[letter] {
+                let end = runEnd(index)
+                emit(sound, index, end)
+                index = end
+            } else {
+                index += 1
             }
         }
 
         // One sound spelled across two rules - the S and soft C of
         // "science" - is still one sound.
-        var merged: [(sound: ConsonantSound, range: Range<Int>)] = []
-        for item in sounds {
-            if let last = merged.last, last.sound == item.sound, last.range.upperBound == item.range.lowerBound {
-                merged[merged.count - 1] = (last.sound, last.range.lowerBound..<item.range.upperBound)
+        var merged: [SpelledConsonant] = []
+        for sound in sounds {
+            if let last = merged.last, last.sound == sound.sound, last.letters.upperBound == sound.letters.lowerBound {
+                merged[merged.count - 1] = SpelledConsonant(
+                    sound: last.sound,
+                    letters: last.letters.lowerBound..<sound.letters.upperBound
+                )
             } else {
-                merged.append(item)
+                merged.append(sound)
             }
         }
         return merged
     }
 
+    /// Vowel groups, less a silent final E, a silent -ed and a silent -es.
+    /// Rough, but the same roughness on both words: a slip keeps the beat of
+    /// the word, and a heard word with another beat is another word.
+    var syllableCount: Int {
+        var groups = 0
+        var previousWasVowel = false
+        for index in 0..<count {
+            let vowel = isVowel(index) || (letters[index] == "y" && !yIsConsonant(index))
+            if vowel && !previousWasVowel { groups += 1 }
+            previousWasVowel = vowel
+        }
+        guard groups > 1 else { return 1 }
+
+        func isConsonant(_ index: Int) -> Bool {
+            index >= 0 && index < count && !isVowel(index) && letters[index] != "y"
+        }
+        if count > 2, word.hasSuffix("e"), isConsonant(count - 2),
+           !(word.hasSuffix("le") && isConsonant(count - 3)) {
+            return groups - 1
+        }
+        if count > 3, word.hasSuffix("ed"), isConsonant(count - 3),
+           letters[count - 3] != "t", letters[count - 3] != "d" {
+            return groups - 1
+        }
+        if count > 3, word.hasSuffix("que") || word.hasSuffix("gue") {
+            return groups - 1
+        }
+        if count > 3, word.hasSuffix("es"), isConsonant(count - 3),
+           !"sxzcg".contains(letters[count - 3]),
+           !["ch", "sh"].contains(String(letters[(count - 4)..<(count - 2)])) {
+            return groups - 1
+        }
+        return groups
+    }
+
     // MARK: Letters with several readings
 
-    private func readC(at index: Int, emit: (ConsonantSound, Int, Int) -> Void) -> Int {
+    /// Silent first letters and the few words that open with a sound their
+    /// spelling hides: gnome, psychology, hour, who, sure.
+    private mutating func readOpening() -> Int? {
+        if let opening = Self.silentOpenings.first(where: { has($0.letters, at: 0) }) {
+            emit(opening.sound, 0, 2)
+            return 2
+        }
+        if letters[0] == "h", Self.silentHPrefixes.contains(where: { word.hasPrefix($0) }) {
+            return 1
+        }
+        if has("who", at: 0) {
+            emit(.h, 0, 2)
+            return 2
+        }
+        if word.hasPrefix("sure") || word.hasPrefix("sugar") {
+            emit(.sh, 0, 1)
+            return 1
+        }
+        return nil
+    }
+
+    private mutating func readB(at index: Int) -> Int? {
+        // climb, climbing - but not number
+        if at(index - 1) == "m", Self.silentBEndings.contains(tail(from: index + 1)) {
+            return index + 1
+        }
+        // debt, doubt - but not obtain
+        if at(index + 1) == "t", Self.silentBStems.contains(where: { word.contains($0) }) {
+            return index + 1
+        }
+        return nil
+    }
+
+    private mutating func readC(at index: Int) -> Int {
         if has("cc", at: index) {
             if isAny(index + 2, of: "eiy") {
                 emit(.k, index, index + 1)
@@ -895,27 +737,120 @@ private nonisolated struct ConsonantSpeller {
         return index + 1
     }
 
-    private func readT(at index: Int, previous: Character?, emit: (ConsonantSound, Int, Int) -> Void) -> Int {
-        // nation; question
-        if index > 0, at(index + 1) == "i", isAny(index + 2, of: "aou") {
-            emit(previous == "s" ? .ch : .sh, index, index + 2)
-            return index + 2
+    private mutating func readD(at index: Int) -> Int? {
+        // A past-tense -ed after a consonant letter. It sounds as whatever
+        // the sound touching it asks for: its own syllable after T or D, a
+        // T after a voiceless sound, a D otherwise - including after a
+        // silent letter, as in "sighed".
+        guard index == count - 1, at(index - 1) == "e", count >= 5, let before = at(index - 2),
+              !Self.vowels.contains(before), before != "y", before != "w"
+        else { return nil }
+
+        let last = sounds.last
+        let touching = last?.letters.upperBound == index - 1
+        if touching, let last, last.sound == .t || last.sound == .d {
+            emit(.d, index, index + 1)
+        } else if touching, let last, Self.voiceless.contains(last.sound) {
+            emit(.t, index - 1, index + 1)
+        } else {
+            emit(.d, index - 1, index + 1)
         }
-        // nature, actual
-        if index > 0, at(index + 1) == "u", has("ture", at: index) || isVowel(index + 2) {
-            emit(.ch, index, index + 1)
-            return index + 1
-        }
-        // castle, listen
-        if previous == "s", Self.silentTEndings.contains(tail(from: index + 1)) {
-            return index + 1
-        }
-        let end = runEnd(index)
-        emit(.t, index, end)
-        return end
+        return index + 1
     }
 
-    private func readS(at index: Int, previous: Character?, emit: (ConsonantSound, Int, Int) -> Void) -> Int {
+    private mutating func readG(at index: Int) -> Int {
+        if has("gh", at: index) {
+            // Silent inside a word - night, though, sighed - unless it is
+            // one of the few that say F. Anchored at the start: "rough"
+            // is inside "through" and "brought" too.
+            if index == 0 || word.hasPrefix("spaghett") {
+                emit(.g, index, index + 2)
+            } else if Self.fGhStems.contains(where: { word.hasPrefix($0) }) {
+                emit(.f, index, index + 2)
+            }
+            return index + 2
+        }
+        // sign, designer - but not signal
+        if has("gn", at: index), Self.silentGnEndings.contains(tail(from: index + 2)) {
+            return index + 1
+        }
+        if has("gue", at: index), index + 3 == count {
+            emit(.g, index, index + 3)
+            return index + 3
+        }
+        if has("gu", at: index), isAny(index + 2, of: "aeiy") {
+            emit(.g, index, index + 2)
+            return index + 2
+        }
+        if has("gg", at: index) {
+            emit(.g, index, index + 2)
+            return index + 2
+        }
+        let hard = Self.hardGStems.contains { has($0, at: index) } || Self.hardGWords.contains { word.contains($0) }
+        emit(isAny(index + 1, of: "eiy") && !hard ? .j : .g, index, index + 1)
+        return index + 1
+    }
+
+    private mutating func readL(at index: Int) -> Int? {
+        let previous = at(index - 1)
+        let next = at(index + 1)
+        // walk, calm, half - but not almost
+        if previous == "a", index >= 2, next == "k" || next == "m" || next == "f" {
+            return index + 1
+        }
+        // folk
+        if previous == "o", next == "k" {
+            return index + 1
+        }
+        // could, wouldn't - but not shoulder
+        if index >= 2, has("ould", at: index - 2), ["", "nt", "ve"].contains(tail(from: index + 2)) {
+            return index + 1
+        }
+        return nil
+    }
+
+    private mutating func readN(at index: Int) -> Int? {
+        if has("ng", at: index) {
+            // change, strange: the G is soft
+            if ["e", "es", "ed"].contains(tail(from: index + 2)) {
+                emit(.n, index, index + 1)
+                emit(.j, index + 1, index + 2)
+            } else {
+                emit(.ng, index, index + 2)
+            }
+            return index + 2
+        }
+        // think, uncle - but not unknown
+        let next = at(index + 1)
+        let beforeK = (next == "k" && at(index + 2) != "n") || next == "q" || next == "x"
+        let beforeHardC = next == "c" && !isAny(index + 2, of: "eiy")
+        if beforeK || beforeHardC {
+            emit(.ng, index, index + 1)
+            return index + 1
+        }
+        // autumn, column
+        if at(index - 1) == "m", ["", "s"].contains(tail(from: index + 1)) {
+            return index + 1
+        }
+        return nil
+    }
+
+    private mutating func readQ(at index: Int) -> Int {
+        // unique
+        if has("que", at: index), index + 3 == count {
+            emit(.k, index, index + 3)
+            return index + 3
+        }
+        if has("qu", at: index) {
+            emit(.k, index, index + 1)
+            emit(.w, index + 1, index + 2)
+            return index + 2
+        }
+        emit(.k, index, index + 1)
+        return index + 1
+    }
+
+    private mutating func readS(at index: Int) -> Int? {
         if has("ssion", at: index) {
             emit(.sh, index, index + 3)
             return index + 3
@@ -939,90 +874,43 @@ private nonisolated struct ConsonantSpeller {
             emit(.zh, index, index + 1)
             return index + 1
         }
-        let end = runEnd(index)
-        emit(.s, index, end)
-        return end
+        return nil
     }
 
-    private func readG(at index: Int, emit: (ConsonantSound, Int, Int) -> Void) -> Int {
-        if has("gue", at: index), index + 3 == count {
-            emit(.g, index, index + 3)
-            return index + 3
-        }
-        if has("gu", at: index), isAny(index + 2, of: "aeiy") {
-            emit(.g, index, index + 2)
+    private mutating func readT(at index: Int) -> Int? {
+        // nation; question
+        if index > 0, at(index + 1) == "i", isAny(index + 2, of: "aou") {
+            emit(at(index - 1) == "s" ? .ch : .sh, index, index + 2)
             return index + 2
         }
-        if has("gg", at: index) {
-            emit(.g, index, index + 2)
-            return index + 2
+        // nature, actual
+        if index > 0, at(index + 1) == "u", has("ture", at: index) || isVowel(index + 2) {
+            emit(.ch, index, index + 1)
+            return index + 1
         }
-        let hard = Self.hardGStems.contains { has($0, at: index) } || Self.hardGWords.contains { word.contains($0) }
-        emit(isAny(index + 1, of: "eiy") && !hard ? .j : .g, index, index + 1)
+        // castle, listen
+        if at(index - 1) == "s", Self.silentTEndings.contains(tail(from: index + 1)) {
+            return index + 1
+        }
+        return nil
+    }
+
+    private mutating func readW(at index: Int) -> Int {
+        let silent = Self.silentW.contains { word.hasPrefix($0.word) && index == $0.index }
+        // A W after a vowel is part of the vowel - power, flow - except in a
+        // few words.
+        let startsSound = index == 0 || !isVowel(index - 1) || Self.awWords.contains { word.hasPrefix($0) }
+        if !silent, startsSound, isVowel(index + 1) {
+            emit(.w, index, index + 1)
+        }
         return index + 1
     }
 
-    private func readD(
-        at index: Int,
-        previous: Character?,
-        last: (sound: ConsonantSound, range: Range<Int>)?,
-        emit: (ConsonantSound, Int, Int) -> Void
-    ) -> Int {
-        // A past-tense -ed after a consonant letter. It sounds as whatever
-        // the sound touching it asks for: its own syllable after T or D, a
-        // T after a voiceless sound, a D otherwise - including after a
-        // silent letter, as in "sighed".
-        if index == count - 1, previous == "e", count >= 5, let before = at(index - 2),
-           !Self.vowels.contains(before), before != "y", before != "w" {
-            let touching = last?.range.upperBound == index - 1
-            if touching, let last, last.sound == .t || last.sound == .d {
-                emit(.d, index, index + 1)
-            } else if touching, let last, Self.voiceless.contains(last.sound) {
-                emit(.t, index - 1, index + 1)
-            } else {
-                emit(.d, index - 1, index + 1)
-            }
-            return index + 1
-        }
-        let end = runEnd(index)
-        emit(.d, index, end)
-        return end
-    }
-
-    private func readL(at index: Int, previous: Character?, emit: (ConsonantSound, Int, Int) -> Void) -> Int {
-        let next = at(index + 1)
-        // walk, calm, half - but not almost
-        if previous == "a", index >= 2, next == "k" || next == "m" || next == "f" {
-            return index + 1
-        }
-        // folk
-        if previous == "o", next == "k" {
-            return index + 1
-        }
-        // could, wouldn't - but not shoulder
-        if index >= 2, has("ould", at: index - 2), ["", "nt", "ve"].contains(tail(from: index + 2)) {
-            return index + 1
-        }
-        let end = runEnd(index)
-        emit(.l, index, end)
-        return end
-    }
-
-    private func readB(at index: Int, previous: Character?, emit: (ConsonantSound, Int, Int) -> Void) -> Int {
-        // climb, climbing - but not number
-        if previous == "m", Self.silentBEndings.contains(tail(from: index + 1)) {
-            return index + 1
-        }
-        // debt, doubt - but not obtain
-        if at(index + 1) == "t", Self.silentBStems.contains(where: { word.contains($0) }) {
-            return index + 1
-        }
-        let end = runEnd(index)
-        emit(.b, index, end)
-        return end
-    }
-
     // MARK: Reading helpers
+
+    private mutating func emit(_ sound: ConsonantSound, _ start: Int, _ end: Int) {
+        sounds.append(SpelledConsonant(sound: sound, letters: start..<end))
+    }
 
     private func at(_ index: Int) -> Character? {
         index >= 0 && index < count ? letters[index] : nil
@@ -1037,9 +925,7 @@ private nonisolated struct ConsonantSpeller {
     }
 
     private func has(_ pattern: String, at index: Int) -> Bool {
-        let pattern = Array(pattern)
-        guard index >= 0, index + pattern.count <= count else { return false }
-        return letters[index..<(index + pattern.count)].elementsEqual(pattern)
+        index >= 0 && index <= count && letters[index...].starts(with: pattern)
     }
 
     private func tail(from index: Int) -> String {
@@ -1062,22 +948,27 @@ private nonisolated struct ConsonantSpeller {
 
     // MARK: Word lists
 
-    private static let silentOpenings: [(spelling: String, sound: ConsonantSound)] = [
-        ("kn", .n), ("gn", .n), ("wr", .r), ("ps", .s), ("pn", .n), ("mn", .n)
+    private static let silentOpenings: [(letters: String, sound: ConsonantSound)] = [
+        ("gn", .n), ("ps", .s), ("pn", .n), ("mn", .n)
     ]
-    private static let digraphs: [(spelling: String, sound: ConsonantSound)] = [
-        ("sh", .sh), ("th", .th), ("ph", .f), ("wh", .w), ("wr", .r), ("rh", .r), ("kh", .k), ("kn", .n)
+    /// Spellings that always read as one sound.
+    private static let spellings: [(letters: String, sound: ConsonantSound)] = [
+        ("tch", .ch), ("dg", .j), ("ck", .k), ("sh", .sh), ("th", .th), ("ph", .f), ("wh", .w),
+        ("wr", .r), ("rh", .r), ("kh", .k), ("kn", .n)
     ]
+    /// Letters read as themselves when no rule above claims them, a doubled
+    /// letter as one sound.
     private static let plainLetters: [Character: ConsonantSound] = [
-        "p": .p, "f": .f, "v": .v, "k": .k, "m": .m, "n": .n, "r": .r, "z": .z, "j": .j
+        "b": .b, "d": .d, "f": .f, "j": .j, "k": .k, "l": .l, "m": .m, "n": .n, "p": .p, "r": .r,
+        "s": .s, "t": .t, "v": .v, "y": .y, "z": .z
     ]
     private static let voiceless: Set<ConsonantSound> = [.p, .k, .f, .s, .sh, .ch, .th]
 
-    /// CH said as K.
+    /// CH said as K. Words opening CHR or CHL need no entry.
     private static let greekChPrefixes = [
-        "chaos", "chaotic", "charact", "chem", "chord", "chorus", "choir", "chlor", "chrom", "chron",
-        "christ", "chris", "charism", "chasm", "cholest", "echo", "stomach", "techn", "orchestr",
-        "mechan", "psych", "architect", "anchor", "monarch", "anarch", "archiv", "archaeo", "orchid"
+        "chaos", "chaotic", "charact", "chem", "chord", "chorus", "choir", "charism", "chasm", "cholest",
+        "echo", "stomach", "techn", "orchestr", "mechan", "psych", "architect", "anchor", "monarch", "anarch",
+        "archiv", "archaeo", "orchid"
     ]
     private static let greekChWords: Set<String> = [
         "tech", "ache", "aches", "ached", "aching", "headache", "headaches"
@@ -1100,7 +991,7 @@ private nonisolated struct ConsonantSpeller {
     private static let silentW: [(word: String, index: Int)] = [("two", 1), ("sword", 1), ("answer", 3)]
     private static let silentBStems = ["debt", "doubt", "subtl"]
     /// W after a vowel that is still a W.
-    private static let awWords = ["away", "aware", "awake", "award", "awhile", "awoke", "reward"]
+    private static let awWords = ["away", "aware", "awake", "award", "awoke", "reward"]
     private static let silentTEndings: Set<String> = [
         "le", "les", "led", "ling", "en", "ens", "ened", "ening", "ener", "eners"
     ]

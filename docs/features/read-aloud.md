@@ -172,7 +172,7 @@ See gotchas §9 and §26.
 **Drill what you missed.** When a take has missed or skipped words, the result
 screen offers a short passage made of each miss with two words of context either
 side, overlapping stretches merged (`ReadAloudResult.missedPhrases`, built by
-`ReadAloudPassage.practiceText(around:in:context:)`). It runs in the same cover
+`ReadAloudPassage.practiceText(around:in:)`). It runs in the same cover
 (`ReadAloudSessionView.drilledPassage`), so the next rep is spent only on what
 went wrong instead of re-reading clean sentences.
 
@@ -181,9 +181,10 @@ scores pronunciation. What it can do is read a miss: when "three" comes back as
 "free", the two words differ by exactly one consonant, and that consonant is
 the place to listen. `ConsonantAnalyzer` turns both words into consonant sounds
 with rules of English spelling (digraphs, silent letters, soft C and G, the
-three sounds of -ed), aligns them, and reports a `ConsonantSlip`: a swap (TH
-sounded like F) or a consonant not heard (the final T, the -ed ending), with the
-character range that spells it in the word as written. It stays narrow on
+three sounds of -ed), finds the one sound that differs, and reports a
+`ConsonantSlip`: a swap (TH sounded like F) or a consonant not heard (the final
+T, the -ed ending), with the character range that spells it in the word as
+written. It stays narrow on
 purpose, because a wrong call sends the reader to fix a sound they made fine:
 
 - exactly one consonant swapped or not heard, never an extra one;
@@ -193,9 +194,10 @@ purpose, because a wrong call sends the reader to fix a sound they made fine:
   connected speech shrinks anyway ("and" as "an");
 - sounds that spelling cannot tell apart (S/Z, SH/ZH, G/J, N/NG) count as equal.
 
-`SoundCheck` (on `ReadAloudResult.soundCheck`, built in `stopSession`) holds
-every slip by word index and groups them into `SoundPattern`s: one per sound,
-plus **Word endings** for every last sound not heard, most frequent first. The
+`SoundCheck` (`ReadAloudResult.soundCheck`, derived from the result's word
+states when it is built) holds every slip by word index and groups them into
+`SoundPattern`s: one per sound, plus **Word endings** for every last sound not
+heard, most frequent first. The
 result screen shows the top three under **Sounds to check** with the words
 ("three → free", letters marked), a placement tip specific to the swap, and a
 **Practice** button that runs each word on its own and then the stretches of
@@ -205,8 +207,9 @@ live during the read as well as on the result. Copy says what was heard
 ("sounded like", "wasn't heard") and never claims a diagnosis or accent work.
 
 The alignment has to keep what was heard for any of this to work. A near miss
-("free" for "three", `isNearMiss`) followed by a word that lands on the next
-page word is that word said wrong (`isSlip`). It used to read as a filler plus
+("free" for "three", `isNearMiss`, measured on the spelling because "three"
+normalizes to "3") followed by a word that lands on the next page word is that
+word said wrong (`isSlip`). It used to read as a filler plus
 a skip, or, in a minimal pair, as a skip to the look-alike ahead, so every slip
 in a Minimal pairs pack came back as "skipped" with the heard word thrown away.
 Accuracy is unchanged either way: a skip and a mismatch are both a miss.

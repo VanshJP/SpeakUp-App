@@ -7,6 +7,20 @@ struct WordDetail: Identifiable {
     let word: String
     let index: Int
     let state: WordMatchState
+    /// The consonant that separates the word from what was heard in its
+    /// place, read once when the word is tapped. Only a miss has one.
+    let slip: ConsonantSlip?
+
+    init(word: String, index: Int, state: WordMatchState) {
+        self.word = word
+        self.index = index
+        self.state = state
+        if case .mismatched(let spoken) = state {
+            slip = ConsonantAnalyzer.slip(target: PronunciationService.stripPunctuation(word), heard: spoken)
+        } else {
+            slip = nil
+        }
+    }
 }
 
 // MARK: - Word Detail Sheet
@@ -22,13 +36,6 @@ struct WordDetailSheet: View {
         PronunciationService.stripPunctuation(detail.word)
     }
 
-    /// The consonant that separates the word from what was heard in its
-    /// place. Only a miss has one.
-    private var slip: ConsonantSlip? {
-        guard case .mismatched(let spoken) = detail.state else { return nil }
-        return ConsonantAnalyzer.slip(target: cleanedWord, heard: spoken)
-    }
-
     var body: some View {
         ZStack {
             AppBackground(style: .subtle)
@@ -39,7 +46,7 @@ struct WordDetailSheet: View {
                         HStack(spacing: 16) {
                             MarkedWordText.make(
                                 cleanedWord,
-                                marking: slip?.letters,
+                                marking: detail.slip?.letters,
                                 base: .white,
                                 mark: AppColors.error
                             )
@@ -74,7 +81,7 @@ struct WordDetailSheet: View {
 
                         stateIndicator
 
-                        if let slip {
+                        if let slip = detail.slip {
                             slipExplanation(slip)
                         }
                     }
@@ -96,7 +103,7 @@ struct WordDetailSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 24)
         }
-        .presentationDetents(slip == nil ? [.height(320)] : [.height(440), .large])
+        .presentationDetents(detail.slip == nil ? [.height(320)] : [.height(440), .large])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showingDictionary) {
             DictionaryView(term: detail.word)

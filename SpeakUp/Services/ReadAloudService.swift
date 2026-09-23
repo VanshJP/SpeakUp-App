@@ -981,11 +981,14 @@ class ReadAloudService {
             }
         }
 
+        // Each word is compared as the current word and again as the next
+        // one, so normalize once.
+        let spokenNorms = spokenWords.map { normalize($0) }
         var spokenIndex = 0
         while spokenIndex < spokenWords.count {
             guard refIndex < reference.count else { break }
 
-            let spokenNorm = normalize(spokenWords[spokenIndex])
+            let spokenNorm = spokenNorms[spokenIndex]
             let expectedNorm = normalizedReference[refIndex]
 
             if spokenNorm == expectedNorm {
@@ -998,37 +1001,30 @@ class ReadAloudService {
 
             let lookAhead = min(refIndex + 3, reference.count)
             let nextIndex = spokenIndex + 1
-            let nextNorm = nextIndex < spokenWords.count ? normalize(spokenWords[nextIndex]) : nil
-            var saidWrong = isSlip(
-                spokenNorm,
+            let nextNorm = nextIndex < spokenNorms.count ? spokenNorms[nextIndex] : nil
+            let matchAhead = ((refIndex + 1)..<lookAhead).first { normalizedReference[$0] == spokenNorm }
+
+            // "tin" for "Thin." in "Thin. Tin." is this word said wrong, but
+            // it also matches the "Tin." ahead. When the next word lands after
+            // that match too, the skip explains both words just as well.
+            let skipFitsNextWord = matchAhead.map {
+                $0 + 1 < reference.count && nextNorm == normalizedReference[$0 + 1]
+            } ?? false
+            let saidWrong = !skipFitsNextWord && isSlip(
+                spokenWords[spokenIndex],
                 at: refIndex,
                 next: nextNorm,
+                reference: reference,
                 normalizedReference: normalizedReference
             )
 
             // Skipped-reference path: this spoken word belongs further ahead
             // in the passage.
-            var foundAhead = false
-
-            if lookAhead > refIndex + 1 {
-                for i in (refIndex + 1)..<lookAhead where spokenNorm == normalizedReference[i] {
-                    // "tin" for "Thin." in "Thin. Tin." matches the "Tin."
-                    // ahead as well. If the next word also lands after that
-                    // match, the skip explains both words just as well.
-                    if saidWrong, i + 1 < reference.count, nextNorm == normalizedReference[i + 1] {
-                        saidWrong = false
-                    }
-                    if !saidWrong {
-                        markSkipped(refIndex..<i)
-                        newStates[i] = .matched
-                        matched += 1
-                        refIndex = i + 1
-                        foundAhead = true
-                    }
-                    break
-                }
-            }
-            if foundAhead {
+            if let matchAhead, !saidWrong {
+                markSkipped(refIndex..<matchAhead)
+                newStates[matchAhead] = .matched
+                matched += 1
+                refIndex = matchAhead + 1
                 spokenIndex += 1
                 continue
             }
@@ -1069,16 +1065,22 @@ class ReadAloudService {
     /// result could only call the word skipped. What was heard, the part
     /// worth practising, was thrown away. The score is the same either way:
     /// a skip and a mismatch are both a miss.
+    ///
+    /// - Parameters:
+    ///   - spoken: The spoken word as heard.
+    ///   - next: The next spoken word, normalized.
     nonisolated static func isSlip(
         _ spoken: String,
         at index: Int,
         next: String?,
+        reference: [String],
         normalizedReference: [String]
     ) -> Bool {
         guard let next, index + 1 < normalizedReference.count,
               next == normalizedReference[index + 1]
         else { return false }
-        return isNearMiss(spoken, of: normalizedReference[index])
+        // Compared as spelled: "three" normalizes to "3".
+        return isNearMiss(spelling(of: spoken), of: spelling(of: reference[index]))
     }
 
     /// Close enough in spelling to be the same word said wrong: one edit for
@@ -1131,17 +1133,22 @@ class ReadAloudService {
     /// and punctuation all fold away - and spelled numbers collapse to digits,
     /// because the page says "seventy-two" while the recognizer writes "72".
     nonisolated static func normalize(_ word: String) -> String {
-        let lowered = word
+        let stripped = spelling(of: word)
+        return Self.spelledNumberValue(stripped) ?? stripped
+    }
+
+    /// `normalize` without turning number words into digits: the word as
+    /// spelled, lowercased, with apostrophes, hyphens and edge punctuation
+    /// gone. What a near miss is measured on - "free" is one sound from
+    /// "three", and nothing like "3".
+    nonisolated static func spelling(of word: String) -> String {
+        word
             .lowercased()
             .replacingOccurrences(of: "’", with: "'")
             .replacingOccurrences(of: "-", with: "")
             .replacingOccurrences(of: "'", with: "")
-
-        let stripped = lowered
             .trimmingCharacters(in: .punctuationCharacters)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return Self.spelledNumberValue(stripped) ?? stripped
     }
 
     /// Parses tokens composed entirely of number words to their digit string.

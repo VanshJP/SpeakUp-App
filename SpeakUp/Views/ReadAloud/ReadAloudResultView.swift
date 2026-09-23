@@ -102,9 +102,7 @@ struct ReadAloudResultView: View {
 
                         if let misses = result.missedPhrasesText, onPractice != nil {
                             GlassButton(title: "Drill what you missed", icon: "target", style: .secondary) {
-                                guard let passage = ReadAloudPassage.custom(from: misses) else { return }
-                                Haptics.medium()
-                                onPractice?(passage)
+                                practice(misses)
                             }
                             .accessibilityHint("Reads only the phrases you missed or skipped")
                         }
@@ -178,9 +176,9 @@ struct ReadAloudResultView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-                if onPractice != nil, pattern.practiceText != nil {
+                if onPractice != nil, let text = pattern.practiceText {
                     GlassButton(title: "Practice", icon: "target", style: .secondary, size: .small) {
-                        practice(pattern)
+                        practice(text, title: "\(pattern.title) practice")
                     }
                     .accessibilityHint("Reads these words on their own, then in their sentences")
                 }
@@ -204,10 +202,9 @@ struct ReadAloudResultView: View {
             .accessibilityLabel("\(word.bareWord), heard as \(word.bareHeard). \(word.slip.summary)")
     }
 
-    private func practice(_ pattern: SoundPattern) {
-        guard let text = pattern.practiceText,
-              let passage = ReadAloudPassage.custom(from: text, title: "\(pattern.title) practice")
-        else { return }
+    /// Runs `text` as a short passage in the same cover.
+    private func practice(_ text: String, title: String? = nil) {
+        guard let passage = ReadAloudPassage.custom(from: text, title: title) else { return }
         Haptics.medium()
         onPractice?(passage)
     }

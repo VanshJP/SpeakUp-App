@@ -81,11 +81,12 @@ nonisolated struct ReadAloudPassage: Identifiable, Hashable {
         return capped.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The words at `indices` with `context` words either side - a word is
+    /// The words at `indices` with two words either side - a word is
     /// practised the way its sentence says it, not on its own - overlapping
     /// stretches merged, joined as sentences and cut to one take. Nil when
     /// there is nothing to read.
-    static func practiceText(around indices: [Int], in words: [String], context: Int = 2) -> String? {
+    static func practiceText(around indices: [Int], in words: [String]) -> String? {
+        let context = 2
         let indices = indices.filter { words.indices.contains($0) }.sorted()
         guard !indices.isEmpty else { return nil }
 

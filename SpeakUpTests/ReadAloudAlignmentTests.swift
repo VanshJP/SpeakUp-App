@@ -116,7 +116,8 @@ struct ReadAloudAlignmentTests {
 
     /// "Free" for "three" followed by a clean word used to read as a filler
     /// plus a skip, which threw away what was heard - the part the result
-    /// screen needs to point at the consonant.
+    /// screen needs to point at the consonant. "three" also normalizes to
+    /// "3", so the near miss has to be measured on the spelling.
     @Test func aNearMissBeforeACleanWordKeepsWhatWasHeard() {
         let reference = ["three", "people", "came"]
         let result = ReadAloudService.computeAlignment(

@@ -24,6 +24,16 @@ struct ConsonantAnalyzerTests {
         #expect(sounds("laughed") == [.l, .f, .t])
     }
 
+    /// GH says F only in a handful of words, and "rough" sits inside
+    /// "through" and "brought", which say nothing for it.
+    @Test func ghSaysFOnlyWhereTheWordStartsThatWay() {
+        #expect(sounds("enough") == [.n, .f])
+        #expect(sounds("roughly") == [.r, .f, .l])
+        #expect(sounds("through") == [.th, .r])
+        #expect(sounds("brought") == [.b, .r, .t])
+        #expect(ConsonantAnalyzer.slip(target: "through", heard: "threw") == nil)
+    }
+
     @Test func pastTenseEndingsSoundAsTheWordAsks() {
         #expect(sounds("walked") == [.w, .k, .t])
         #expect(sounds("needed") == [.n, .d, .d])
@@ -142,13 +152,25 @@ struct ConsonantAnalyzerTests {
         let passage = "I see a ship".components(separatedBy: " ")
         let check = SoundCheck(passage: passage, heard: [3: "sheep"])
 
-        #expect(check.words.isEmpty)
         #expect(check.patterns.isEmpty)
-        #expect(SoundCheck.empty.patterns.isEmpty)
+        #expect(check.slip(at: 3) == nil)
     }
 
-    @Test func onlyMissesCarryAHeardWord() {
-        let states: [WordMatchState] = [.matched, .mismatched(spoken: "free"), .skipped, .current]
-        #expect(ReadAloudResult.heardWords(in: states) == [1: "free"])
+    @Test func aResultReadsItsOwnMissesDownToTheConsonant() throws {
+        let passage = try #require(ReadAloudPassage.custom(from: "I saw three people wait"))
+        let result = ReadAloudResult(
+            passage: passage,
+            accuracy: 60,
+            matchedWords: 3,
+            totalWords: 5,
+            mismatchedWords: 2,
+            timeTaken: 4,
+            wordStates: [.matched, .skipped, .mismatched(spoken: "free"), .matched, .current]
+        )
+
+        #expect(result.soundCheck.patterns.flatMap(\.words).map(\.index) == [2])
+        #expect(result.soundCheck.slip(at: 2)?.kind == .swapped(expected: .th, heard: .f))
+        // A skipped word has nothing heard to compare.
+        #expect(result.soundCheck.slip(at: 1) == nil)
     }
 }

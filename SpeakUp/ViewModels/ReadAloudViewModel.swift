@@ -27,8 +27,30 @@ struct ReadAloudResult: Identifiable {
     /// instead of letting a bare "0% · Complete" stand as a verdict.
     var notice: String?
     /// Consonants that came out as another sound or were not heard, read
-    /// from the words heard in place of the page's.
-    var soundCheck: SoundCheck = .empty
+    /// from the words heard in place of the page's. Stored rather than
+    /// computed: the word review asks for it once per word.
+    let soundCheck: SoundCheck
+
+    init(
+        passage: ReadAloudPassage,
+        accuracy: Double,
+        matchedWords: Int,
+        totalWords: Int,
+        mismatchedWords: Int,
+        timeTaken: TimeInterval,
+        wordStates: [WordMatchState],
+        notice: String? = nil
+    ) {
+        self.passage = passage
+        self.accuracy = accuracy
+        self.matchedWords = matchedWords
+        self.totalWords = totalWords
+        self.mismatchedWords = mismatchedWords
+        self.timeTaken = timeTaken
+        self.wordStates = wordStates
+        self.notice = notice
+        soundCheck = SoundCheck(passage: passage.words, heard: Self.heardWords(in: wordStates))
+    }
 
     var score: Int {
         Int(accuracy.rounded())
@@ -41,18 +63,18 @@ struct ReadAloudResult: Identifiable {
     }
 
     /// Each missed or skipped word with the words either side of it, as
-    /// `ReadAloudPassage.practiceText(around:in:context:)` builds them.
+    /// `ReadAloudPassage.practiceText(around:in:)` builds them.
     ///
     /// Retry replays the whole passage, which spends most of the next take on
     /// words that were already clean. This is the deliberate-practice version:
     /// only the parts that went wrong, straight away.
-    static func missedPhrases(in words: [String], states: [WordMatchState], context: Int = 2) -> String? {
+    static func missedPhrases(in words: [String], states: [WordMatchState]) -> String? {
         let missed = words.indices.filter { $0 < states.count && states[$0].needsAttention }
-        return ReadAloudPassage.practiceText(around: missed, in: words, context: context)
+        return ReadAloudPassage.practiceText(around: missed, in: words)
     }
 
     /// What the recognizer heard in place of each missed word, by word index.
-    static func heardWords(in states: [WordMatchState]) -> [Int: String] {
+    private static func heardWords(in states: [WordMatchState]) -> [Int: String] {
         var heard: [Int: String] = [:]
         for (index, state) in states.enumerated() {
             if case .mismatched(let spoken) = state {
@@ -163,11 +185,7 @@ class ReadAloudViewModel {
             mismatchedWords: service.mismatchedWordCount,
             timeTaken: timeTaken,
             wordStates: service.wordStates,
-            notice: notice(for: timeTaken, heardNothing: heardNothing),
-            soundCheck: SoundCheck(
-                passage: passage.words,
-                heard: ReadAloudResult.heardWords(in: service.wordStates)
-            )
+            notice: notice(for: timeTaken, heardNothing: heardNothing)
         )
 
         sessionState = .finished
