@@ -5,6 +5,8 @@ struct ConfidenceExerciseView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var currentStepIndex = 0
     @State private var isComplete = false
+    /// The side the next step card slides in from.
+    @State private var stepEdge: Edge = .trailing
 
     /// Reads each step aloud, holds, and moves on by itself.
     ///
@@ -28,11 +30,12 @@ struct ConfidenceExerciseView: View {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
-                            .font(.title2.weight(.semibold))
+                            .font(.headline.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(.ultraThinMaterial))
+                            .glassCircle()
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Close exercise")
 
                     Spacer()
@@ -140,9 +143,7 @@ struct ConfidenceExerciseView: View {
                 .font(.headline)
                 .foregroundStyle(.white.opacity(0.6))
 
-            Text("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.4))
+            stepProgress
 
             Spacer()
 
@@ -162,8 +163,25 @@ struct ConfidenceExerciseView: View {
                 .padding(.vertical, 16)
                 .frame(maxWidth: .infinity)
                 .id(currentStepIndex)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: stepEdge)),
+                    removal: .opacity
+                ))
             }
+            // Swipe between steps, like paging a card; Next and Back stay for
+            // anyone who would rather tap.
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { drag in
+                        guard abs(drag.translation.width) > abs(drag.translation.height) else { return }
+                        if drag.translation.width < -50 {
+                            advance()
+                        } else if drag.translation.width > 50 {
+                            goBack()
+                        }
+                    }
+            )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
             .accessibilityValue(exercise.step(safelyAt: currentStepIndex))
@@ -176,11 +194,30 @@ struct ConfidenceExerciseView: View {
             }
 
             Spacer()
-
-            ProgressView(value: Double(currentStepIndex + 1), total: Double(exercise.steps.count))
-                .tint(exercise.category.color)
-                .padding(.horizontal, 20)
         }
+    }
+
+    /// One segment per step - the same bar the warm-up runner shows.
+    private var stepProgress: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 5) {
+                ForEach(0..<exercise.steps.count, id: \.self) { index in
+                    Capsule()
+                        .fill(index <= currentStepIndex
+                              ? exercise.category.color.opacity(index == currentStepIndex ? 0.75 : 1)
+                              : Color.white.opacity(0.14))
+                        .frame(height: 4)
+                }
+            }
+            .frame(maxWidth: 240)
+            .motion(AppMotion.slide, value: currentStepIndex)
+
+            Text("Step \(currentStepIndex + 1) of \(exercise.steps.count)")
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.5))
+                .contentTransition(.numericText())
+        }
+        .accessibilityHidden(true)
     }
 
     // MARK: - Complete
@@ -219,8 +256,7 @@ struct ConfidenceExerciseView: View {
                 HStack(spacing: 12) {
                     if currentStepIndex > 0 {
                         GlassButton(title: "Back", style: .secondary, size: .large, fullWidth: true) {
-                            ChirpPlayer.shared.play(.tick)
-                            withAnimation(AppMotion.slide) { currentStepIndex -= 1 }
+                            goBack()
                         }
                     }
 
@@ -238,7 +274,15 @@ struct ConfidenceExerciseView: View {
         .padding(.bottom, 8)
     }
 
+    private func goBack() {
+        guard currentStepIndex > 0 else { return }
+        ChirpPlayer.shared.play(.tick)
+        stepEdge = .leading
+        withAnimation(AppMotion.slide) { currentStepIndex -= 1 }
+    }
+
     private func advance() {
+        stepEdge = .trailing
         withAnimation(AppMotion.slide) {
             if currentStepIndex < exercise.steps.count - 1 {
                 currentStepIndex += 1

@@ -80,6 +80,8 @@ class DrillViewModel {
     private var timer: Timer?
     private var audioLevelTimer: Timer?
     private var totalDuration: Int = 0
+    /// The ladder rung the current run uses.
+    private var runningLevel = 0
     /// Whether live transcription is actually running for this drill. Pause
     /// Practice scores from mic metering alone; transcription-scored modes
     /// from transcription, so a silent death there must end the drill early
@@ -122,9 +124,13 @@ class DrillViewModel {
 
     // MARK: - Start Drill
 
-    func startDrill(mode: DrillMode) {
+    /// - Parameter level: The rung of the drill's ladder to run. Nil runs
+    ///   the longest one unlocked - what the drill list shows.
+    func startDrill(mode: DrillMode, level: Int? = nil) {
         selectedMode = mode
-        totalDuration = mode.currentDurationSeconds
+        let unlocked = DrillProgressStore.record(for: mode)?.level ?? 0
+        runningLevel = min(max(0, level ?? unlocked), max(0, mode.durationLadder.count - 1))
+        totalDuration = mode.durationSeconds(atLevel: runningLevel)
         timeRemaining = totalDuration
         score = 0
         isActive = true
@@ -565,10 +571,12 @@ class DrillViewModel {
             details += ". Recognition stopped early."
         }
 
+        let clearedRound = passed && completedRound
         let progress = DrillProgressStore.recordRun(
             mode: mode,
             score: drillScore,
-            passed: passed && completedRound
+            passed: clearedRound,
+            ranLevel: runningLevel
         )
 
         result = DrillResult(
@@ -582,6 +590,13 @@ class DrillViewModel {
                 score: drillScore,
                 previous: progress.previous,
                 updated: progress.updated
+            ),
+            level: runningLevel,
+            longerRoundSeconds: Self.longerRound(
+                for: mode,
+                ranLevel: runningLevel,
+                cleared: clearedRound,
+                unlockedLevel: progress.updated.level
             )
         )
         score = drillScore
@@ -613,12 +628,25 @@ class DrillViewModel {
         updated: DrillRecord
     ) -> String? {
         if updated.level > (previous?.level ?? 0) {
-            return "Round cleared. The next one runs \(mode.durationSeconds(atLevel: updated.level)) seconds."
+            return "Round cleared. \(mode.durationSeconds(atLevel: updated.level))-second rounds are unlocked."
         }
         if let previous, previous.runs > 0, score > previous.best {
             return "New personal best, up from \(previous.best)."
         }
         return nil
+    }
+
+    /// The next rung up, offered after a cleared round when it is open.
+    /// Nil on a miss, on the top rung, and on a single-rung drill.
+    static func longerRound(
+        for mode: DrillMode,
+        ranLevel: Int,
+        cleared: Bool,
+        unlockedLevel: Int
+    ) -> Int? {
+        let next = ranLevel + 1
+        guard cleared, next < mode.durationLadder.count, next <= unlockedLevel else { return nil }
+        return mode.durationSeconds(atLevel: next)
     }
 
     func cleanup() {

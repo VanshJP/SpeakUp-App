@@ -10,6 +10,16 @@ class WarmUpViewModel {
     var timeRemaining: Int = 0
     var isComplete = false
     var selectedRounds: Int = 3
+    /// False until the first Begin, so the runner can open on what the
+    /// exercise is and how long it takes instead of mid-step with a clock.
+    var hasStarted = false
+    /// Seconds left in the "get ready" count before a breathing exercise's
+    /// first step, nil when not counting in. A breathing round that starts
+    /// the instant Begin is tapped catches you mid-breath.
+    var leadInRemaining: Int?
+
+    static let leadInSeconds = 3
+    static let roundsRange = 1...10
 
     private var baseExercise: WarmUpExercise?
     private var timer: Timer?
@@ -36,6 +46,34 @@ class WarmUpViewModel {
         baseExercise?.category == .breathing
     }
 
+    var isLeadingIn: Bool { leadInRemaining != nil }
+
+    var nextStep: ExerciseStep? {
+        guard let steps = currentExercise?.steps,
+              steps.indices.contains(currentStepIndex + 1) else { return nil }
+        return steps[currentStepIndex + 1]
+    }
+
+    /// Steps in one breathing round; the whole exercise for everything else.
+    var stepsPerRound: Int {
+        guard canCustomizeRounds, let base = baseExercise else {
+            return max(1, currentExercise?.steps.count ?? 1)
+        }
+        return max(1, base.steps.count / Self.encodedRounds)
+    }
+
+    var totalRounds: Int { canCustomizeRounds ? selectedRounds : 1 }
+
+    var currentRound: Int {
+        min(totalRounds, currentStepIndex / stepsPerRound + 1)
+    }
+
+    var totalSeconds: Int { currentExercise?.durationSeconds ?? 0 }
+
+    /// Default breathing seeds encode this many rounds (pinned in
+    /// `PracticeToolProgressTests`); one round is the first third.
+    private static let encodedRounds = 3
+
     func selectExercise(_ exercise: WarmUpExercise) {
         baseExercise = exercise
         selectedRounds = 3
@@ -44,8 +82,8 @@ class WarmUpViewModel {
 
     /// Called when the user changes the rounds stepper before starting.
     func rebuildWithRounds(_ rounds: Int) {
-        guard !isRunning else { return }
-        selectedRounds = rounds
+        guard !hasStarted else { return }
+        selectedRounds = min(Self.roundsRange.upperBound, max(Self.roundsRange.lowerBound, rounds))
         applyRounds()
     }
 
@@ -53,10 +91,9 @@ class WarmUpViewModel {
         guard let exercise = baseExercise else { return }
         let steps: [ExerciseStep]
 
-        if exercise.category == .breathing, exercise.steps.count >= 3 {
+        if exercise.category == .breathing, exercise.steps.count >= Self.encodedRounds {
             // Default exercises encode 3 rounds; extract one cycle and repeat.
-            let defaultRounds = 3
-            let cycleSize = max(1, exercise.steps.count / defaultRounds)
+            let cycleSize = max(1, exercise.steps.count / Self.encodedRounds)
             let oneRound = Array(exercise.steps.prefix(cycleSize))
             steps = Array(repeating: oneRound, count: selectedRounds).flatMap { $0 }
         } else {
@@ -76,6 +113,8 @@ class WarmUpViewModel {
         // A runner left running by a mid-exercise ✕ must not present the next
         // one pre-paused - the play button would need two taps to start.
         isRunning = false
+        hasStarted = false
+        leadInRemaining = nil
         timeRemaining = steps.first?.durationSeconds ?? 0
     }
 
@@ -84,10 +123,29 @@ class WarmUpViewModel {
         reset()
     }
 
+    /// Begin, or resume after a pause. The first Begin on a breathing
+    /// exercise counts in before the first step.
     func start() {
+        guard !isComplete else { return }
+        if !hasStarted {
+            hasStarted = true
+            if currentExercise?.category == .breathing {
+                leadInRemaining = Self.leadInSeconds
+                isRunning = true
+                ChirpPlayer.shared.play(.tick)
+                startTimer()
+                return
+            }
+        }
         isRunning = true
-        chirpForCurrentStep()
+        if !isLeadingIn {
+            chirpForCurrentStep()
+        }
         startTimer()
+    }
+
+    func togglePlayback() {
+        if isRunning { pause() } else { start() }
     }
 
     func pause() {
@@ -102,6 +160,13 @@ class WarmUpViewModel {
     }
 
     func skip() {
+        if isLeadingIn {
+            // Skip on the count-in means "start now", not "lose step one".
+            leadInRemaining = nil
+            chirpForCurrentStep()
+            return
+        }
+        hasStarted = true
         advanceStep()
     }
 
@@ -117,6 +182,18 @@ class WarmUpViewModel {
     @MainActor
     private func tick() {
         guard isRunning else { return }
+
+        if let leadIn = leadInRemaining {
+            if leadIn > 1 {
+                leadInRemaining = leadIn - 1
+                ChirpPlayer.shared.play(.tick)
+            } else {
+                leadInRemaining = nil
+                chirpForCurrentStep()
+                Haptics.light()
+            }
+            return
+        }
 
         if timeRemaining > 1 {
             timeRemaining -= 1

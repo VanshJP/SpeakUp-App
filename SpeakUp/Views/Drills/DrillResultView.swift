@@ -2,7 +2,10 @@ import SwiftUI
 
 struct DrillResultView: View {
     let result: DrillResult
+    /// Runs the same length again.
     let onTryAgain: () -> Void
+    /// Runs the next rung up. Offered only when the result has one.
+    var onLonger: (() -> Void)? = nil
     let onDone: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,8 +61,38 @@ struct DrillResultView: View {
             Spacer()
 
             VStack(spacing: 12) {
-                GlassButton(title: "Try again", style: .primary, size: .large, fullWidth: true) {
-                    onTryAgain()
+                // A cleared round offers the longer one as the next step and
+                // keeps the same length a tap away. The ladder used to climb
+                // behind "Try again", so the button that said "again" quietly
+                // ran a longer round, and there was no way to repeat the one
+                // just cleared.
+                if let longer = result.longerRoundSeconds, let onLonger {
+                    GlassButton(
+                        title: "Go \(longer)s",
+                        icon: "arrow.up.right",
+                        style: .primary,
+                        size: .large,
+                        fullWidth: true
+                    ) {
+                        Haptics.medium()
+                        onLonger()
+                    }
+                    .accessibilityLabel("Go longer: \(longer) seconds")
+
+                    GlassButton(
+                        title: "Repeat \(result.roundSeconds)s",
+                        icon: "arrow.clockwise",
+                        style: .secondary,
+                        size: .large,
+                        fullWidth: true
+                    ) {
+                        onTryAgain()
+                    }
+                    .accessibilityLabel("Repeat the \(result.roundSeconds)-second round")
+                } else {
+                    GlassButton(title: "Try again", style: .primary, size: .large, fullWidth: true) {
+                        onTryAgain()
+                    }
                 }
 
                 GlassButton(title: "Done", style: .secondary, size: .large, fullWidth: true) {
