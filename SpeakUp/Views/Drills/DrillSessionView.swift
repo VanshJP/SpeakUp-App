@@ -39,6 +39,8 @@ struct DrillSessionView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
+        // A drill is up to a minute of talking without touching the glass.
+        .keepsScreenAwake(viewModel.isActive)
         .onChange(of: viewModel.isActive) { _, active in
             if active { ChirpPlayer.shared.play(.tick) }
         }
@@ -202,37 +204,99 @@ struct DrillSessionView: View {
 
     // MARK: - Mode Displays
 
-    private var fillerDisplay: some View {
-        FillerCounterOverlay(count: viewModel.liveFillerCount)
-    }
+    /// The topic, and the technique to use on it. The habit drills used to
+    /// open on a bare clock, so the first seconds of the round went on
+    /// deciding what to talk about - which is where fillers come from.
+    private var topicCard: some View {
+        VStack(spacing: 8) {
+            Text(viewModel.impromptuPrompt)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-    private var paceDisplay: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "speedometer")
-                .foregroundStyle(AppColors.info)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(Int(viewModel.liveWPM)) WPM")
-                    .font(.title3.weight(.bold).monospacedDigit())
-                    .foregroundStyle(
-                        viewModel.liveWPM >= 130 && viewModel.liveWPM <= 170 ? AppColors.success :
-                        viewModel.liveWPM >= 115 && viewModel.liveWPM <= 185 ? AppColors.warning : AppColors.error
-                    )
-                    .contentTransition(.numericText())
-                    .animation(.default, value: Int(viewModel.liveWPM))
-
-                Text("target 130-170")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.6))
+            if let cue = viewModel.selectedMode?.coachingCue {
+                Text(cue)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Capsule().fill(.ultraThinMaterial))
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+                }
+        )
+    }
+
+    private var fillerDisplay: some View {
+        VStack(spacing: 14) {
+            topicCard
+            FillerCounterOverlay(count: viewModel.liveFillerCount)
+        }
+    }
+
+    /// Pace over the last ten seconds against the user's own target, with
+    /// which way to move. It used to show the average since the start - which
+    /// stops moving a few seconds in - against a fixed 130-170 band that
+    /// ignored the target the drill is actually scored on.
+    private var paceDisplay: some View {
+        let now = viewModel.rollingWPM
+        let target = Double(viewModel.targetWPM)
+
+        return VStack(spacing: 14) {
+            topicCard
+
+            HStack(spacing: 8) {
+                Image(systemName: "speedometer")
+                    .foregroundStyle(AppColors.info)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(Int(now)) WPM")
+                        .font(.title3.weight(.bold).monospacedDigit())
+                        .foregroundStyle(paceTone(now: now, target: target))
+                        .contentTransition(.numericText())
+                        .animation(.default, value: Int(now))
+
+                    Text(paceHint(now: now, target: target))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(.ultraThinMaterial))
+        }
+    }
+
+    private func paceTone(now: Double, target: Double) -> Color {
+        guard now > 0 else { return .white.opacity(0.6) }
+        let offBy = abs(now - target)
+        if offBy <= DrillViewModel.paceBand { return AppColors.success }
+        if offBy <= DrillViewModel.paceBand * 1.75 { return AppColors.warning }
+        return AppColors.error
+    }
+
+    /// Which way to move, not only where you are.
+    private func paceHint(now: Double, target: Double) -> String {
+        let band = "target \(Int(target)) ±\(Int(DrillViewModel.paceBand))"
+        guard now > 0 else { return band }
+        if now > target + DrillViewModel.paceBand { return "\(band) · ease off" }
+        if now < target - DrillViewModel.paceBand { return "\(band) · pick it up" }
+        return "\(band) · hold it here"
     }
 
     private var pauseDisplay: some View {
         VStack(spacing: 14) {
+            topicCard
+
             HStack(spacing: 10) {
                 Image(systemName: viewModel.pauseMarkerActive ? "pause.circle.fill" : "mic.circle.fill")
                     .font(.title2)

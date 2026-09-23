@@ -2,9 +2,9 @@
 
 **Summary:** Practice reading scripted text with word-level accuracy scoring. Pick a catalog passage or a saved passage, or add personal text in a focused composer. The composer accepts typing, Clipboard paste, and TXT, RTF, RTFD, or PDF imports. Users can hear a TTS model, optionally open the system dictionary for a single word, then record and match against the source.
 
-Any passage can be **heard first** (TTS model line, then speak it back) from inside the session, and **Minimal pairs** packs score through the same engine.
+Any passage can be **heard first** (TTS model line, then speak it back) from inside the session, and **Minimal pairs** packs score through the same engine. A missed word that differs from what was heard by one consonant gets that consonant marked, named and coached (**Sounds to check**).
 
-**Key symbols:** `ReadAloudPassage`, `ReadAloudCategory`, `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `ReadAloudService`, `PronunciationService`, `DictionaryView`
+**Key symbols:** `ReadAloudPassage`, `ReadAloudCategory`, `ReadAloudSelectionView`, `ReadAloudSessionView`, `ReadAloudResultView`, `ReadAloudService`, `ConsonantAnalyzer`, `SoundCheck`, `PronunciationService`, `DictionaryView`
 
 **Related:** [SPEECH.md](../../SPEECH.md) (alignment), [practice-tools.md](practice-tools.md), [monetization.md](monetization.md)
 
@@ -111,7 +111,7 @@ Not in `DefaultReadAloudPassages.all`. `isCustom` is `category == .custom`.
 
 The seed catalog is still static: saving writes to `UserSettings`, never to `DefaultReadAloudPassages.all`.
 
-`ReadAloudCategory.custom` is for typing only; catalog listings use `catalogCases` / `catalogCases(for:)` and never `allCases`.
+`ReadAloudCategory.custom` is for typing only and never appears in `DefaultReadAloudPassages.all`; the catalog lists passages grouped by focus, so no category listing is needed.
 
 ---
 
@@ -119,10 +119,11 @@ The seed catalog is still static: saving writes to `UserSettings`, never to `Def
 
 Unchanged for custom vs catalog:
 
-1. Show source text; record via `AudioService`.
-2. Transcribe (`SpeechService`).
+1. Show source text; capture on a live `AVAudioEngine` tap feeding on-device `SFSpeech` recognition (`AudioService` only supplies the permission and record-capable session).
+2. Stitch every recognition result into one transcript (`RequestTranscript` per request, see below).
 3. `ReadAloudService.computeAlignment(reference:normalizedReference:spokenWords:)` — matched / missed / extra.
-4. Show `ReadAloudResultView`, then reset on Done or run the same passage on Retry.
+4. Read each miss down to the consonant (`SoundCheck`, below).
+5. Show `ReadAloudResultView`, then reset on Done, run the same passage on Retry, or run **Drill what you missed** or a sound's **Practice** (below).
 
 The session auto-starts listening; there is no pre-roll state to tap through.
 
@@ -135,13 +136,83 @@ History persistence as future product work, not as an implemented contract.
 closes a request after a pause in speech and again at the request's own
 audio-duration ceiling; a reader working through a paragraph triggers both,
 several times. `ReadAloudService` re-arms on the same engine and tap
-(`armRecognition`) and keeps one transcript slot per request
-(`segmentTranscripts`, joined by the pure `joinTranscripts`), so alignment sees
-one continuous read and the reader never loses their place. It also rolls over
-proactively every 45 s, and rebuilds the whole capture graph on an
-`AVAudioEngineConfigurationChange` or after an interruption. Only a recognizer
-that fails three times in a row inside a second — a device missing its on-device
-assets — ends the session. See gotchas §9 and §26.
+(`armRecognition`) and keeps one `RequestTranscript` per request (`segments`,
+joined by the pure `joinTranscripts`), so alignment sees one continuous read and
+the reader never loses their place. It also rolls over proactively every 45 s,
+waiting up to 10 s for a gap between words so no word is cut in half.
+
+**…and the recognizer restarting inside a request.** On device, SFSpeech can
+start a request's transcript over from empty after a pause of a second or two —
+`isFinal` still false — and can deliver a blank final. Storing each request's
+newest transcript as-is erased everything before the pause, and alignment put
+the reader back near word one: the "read restarts from zero" report. Every
+result now goes through `RequestTranscript.apply`, which asks the pure
+`RecognitionContinuity.classify` whether it is a revision, a new utterance
+(commit the old one), a restatement of the whole request (replace everything
+held, or the first utterance counts twice), or a blank / shrunken copy (ignore
+it). Two signals decide the hard cases: a result carrying
+`speechRecognitionMetadata` marks the end of an utterance and is never coalesced
+away (`PendingResults.closed`), and a partial arriving after `restartGap` of
+quiet (stamped when the recognizer delivered it, `HeardResult.at`) is new speech
+even after a one-word utterance. Pinned in `SpeakUpTests/RecognitionContinuityTests.swift`.
+
+**The mic is held, never lost.** Every way capture can go down is a *hold* on
+the read, not the end of it — hearing the model line (`isPaused`), a call or
+Siri (`isInterrupted`), the app leaving the foreground (`isBackgrounded`), and
+automatic recovery failing (`isStalled`). Holds keep `segments` and every
+matched word; `rebuildCaptureGraph` brings capture back on `didBecomeActive`, an
+interruption's `.ended`, or the reader's **Resume reading**. A stall gets one
+automatic retry after 1.5 s, then waits for the reader; it used to end the
+session, which left Retry — the passage from the top — as the only way on.
+Held time (`heldDuration(until:)`) is subtracted from the clock and from wpm.
+The session keeps the screen awake (`keepsScreenAwake`): a read is minutes of
+speaking without a touch, and Auto-Lock used to lock the phone mid-passage.
+See gotchas §9 and §26.
+
+**Drill what you missed.** When a take has missed or skipped words, the result
+screen offers a short passage made of each miss with two words of context either
+side, overlapping stretches merged (`ReadAloudResult.missedPhrases`, built by
+`ReadAloudPassage.practiceText(around:in:)`). It runs in the same cover
+(`ReadAloudSessionView.drilledPassage`), so the next rep is spent only on what
+went wrong instead of re-reading clean sentences.
+
+**Sounds to check.** The recognizer hears words, not sounds, so nothing here
+scores pronunciation. What it can do is read a miss: when "three" comes back as
+"free", the two words differ by exactly one consonant, and that consonant is
+the place to listen. `ConsonantAnalyzer` turns both words into consonant sounds
+with rules of English spelling (digraphs, silent letters, soft C and G, the
+three sounds of -ed), finds the one sound that differs, and reports a
+`ConsonantSlip`: a swap (TH sounded like F) or a consonant not heard (the final
+T, the -ed ending), with the character range that spells it in the word as
+written. It stays narrow on
+purpose, because a wrong call sends the reader to fix a sound they made fine:
+
+- exactly one consonant swapped or not heard, never an extra one;
+- a swap only between related sounds (same place or manner, or a common swap
+  such as TH/T, V/W, B/V), so "house" heard as "home" is a misread, not an S;
+- same syllable count, at least three letters, and no function words that
+  connected speech shrinks anyway ("and" as "an");
+- sounds that spelling cannot tell apart (S/Z, SH/ZH, G/J, N/NG) count as equal.
+
+`SoundCheck` (`ReadAloudResult.soundCheck`, derived from the result's word
+states when it is built) holds every slip by word index and groups them into
+`SoundPattern`s: one per sound, plus **Word endings** for every last sound not
+heard, most frequent first. The
+result screen shows the top three under **Sounds to check** with the words
+("three → free", letters marked), a placement tip specific to the swap, and a
+**Practice** button that runs each word on its own and then the stretches of
+the page it came from. The word review marks the slipped letters in the passage,
+and `WordDetailSheet` shows the marked word, the one-line summary and the tip,
+live during the read as well as on the result. Copy says what was heard
+("sounded like", "wasn't heard") and never claims a diagnosis or accent work.
+
+The alignment has to keep what was heard for any of this to work. A near miss
+("free" for "three", `isNearMiss`, measured on the spelling because "three"
+normalizes to "3") followed by a word that lands on the next page word is that
+word said wrong (`isSlip`). It used to read as a filler plus
+a skip, or, in a minimal pair, as a skip to the look-alike ahead, so every slip
+in a Minimal pairs pack came back as "skipped" with the heard word thrown away.
+Accuracy is unchanged either way: a skip and a mismatch are both a miss.
 
 Silence-is-not-a-score applies (see practice-tools invariant 14).
 
@@ -169,9 +240,17 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 | `SpeakUp/Views/ReadAloud/DictionaryView.swift` | System dictionary sheet |
 | `SpeakUp/Services/ReadAloudDocumentImporter.swift` | On-device TXT, rich text, and PDF extraction |
 | `SpeakUp/Services/PronunciationService.swift` | TTS + define gate |
-| `SpeakUp/Services/ReadAloudService.swift` | Session listening + `computeAlignment` |
+| `SpeakUp/Services/ReadAloudService.swift` | Session listening, holds / stalls + `computeAlignment` / `isSlip` |
+| `SpeakUp/Services/ConsonantAnalyzer.swift` | Spelling to consonant sounds, one-consonant slips, `SoundCheck` / `SoundPattern` |
+| `SpeakUp/Views/ReadAloud/MarkedWordText.swift` | A word with one consonant's letters marked, as a single `Text` |
+| `SpeakUp/Views/ReadAloud/WordDetailSheet.swift` | Tap-a-word sheet: hear it, define it, the consonant that slipped |
+| `SpeakUp/Services/RecognitionContinuity.swift` | `RecognitionContinuity` + `RequestTranscript`: in-request restart handling, shared with live transcription and dictation |
+| `SpeakUp/Extensions/View+KeepsScreenAwake.swift` | Idle-timer hold for every timed practice screen |
 | `SpeakUp/ViewModels/ReadAloudViewModel.swift` | Selection / session VM |
-| `SpeakUpTests/ReadAloudAlignmentTests.swift` | Alignment core + request-boundary stitching |
+| `SpeakUpTests/ReadAloudAlignmentTests.swift` | Alignment core, words said wrong, request-boundary stitching |
+| `SpeakUpTests/ConsonantAnalyzerTests.swift` | Spelling rules, slips vs. different words, pattern grouping and practice text |
+| `SpeakUpTests/RecognitionContinuityTests.swift` | In-request restarts, blank finals, end-to-end "never snaps back" |
+| `SpeakUpTests/PracticeToolProgressTests.swift` | `missedPhrases` (with drill ladder and catalog checks) |
 | `SpeakUpTests/ReadAloudCustomPassageTests.swift` | Custom factory + define gate |
 | `SpeakUpTests/PracticeFocusTests.swift` | Focus axis + derived catalog listings |
 
@@ -182,12 +261,13 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Presented from Practice Hub **tools** section (pushed full page through `ToolPresentation.pushed` via `navigationDestination`), Today, and RecordingDetail next-steps as sheets, not its own tab.
 - Difficulty coloring uses `AppColors.difficultyColor`, not raw system colors.
 - Keep passage seed data in `Data/`, not inline in views. Custom “Practice anything” passages are ephemeral (`ReadAloudPassage.custom`); kept ones persist on `UserSettings.savedReadAloudTexts`. Neither is appended to the seed array.
-- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segmentTranscripts` and every matched word intact. Time spent hearing the model is subtracted from the take (`modelPlaybackSeconds`) so the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. Copy must not claim accent therapy; the score remains alignment and clarity.
-- Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy.
-- **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts; recognition failure sets `service.recognitionFailureMessage`, ends the session within 250 ms, and lands on the result screen as a warning notice, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
-- **A dead mic must never sit under a live clock.** `ReadAloudViewModel.startTimer` also ends the session when `service.isListening` goes false while the state still says `.listening`. Recognition now survives its own request boundaries, so that only fires for something unforeseen — and the old behaviour there (frozen passage, "Not listening", a disabled Done button, restart from the top) is precisely what a dropped read felt like.
+- **"Hear it" is a control, not a mode.** It was a Shadow-mode toggle at the top of the catalog that had to be flipped *before* a passage opened, which put it furthest from the moment it is wanted: mid-read, having just fumbled a line. It is one full-width secondary button in the session now, live on every passage for the whole read. Pressing it calls `ReadAloudService.pauseForModelPlayback()` — the mic goes down, because a live recogniser would score the synthesiser as the reader — plays `PronunciationService.speak(text:rate:)`, and resumes on `isSpeaking` falling, with `segments` and every matched word intact. It is one of the service's holds, so the clock stops while the model plays and the result's wpm measures reading, not listening. **Never disabled while the model plays**: that is exactly when someone reaches for it, and the only way past the voiceover used to be sitting through it — it reads Stop instead. Copy must not claim accent therapy; the score remains alignment and clarity.
+- Minimal pairs (`ReadAloudCategory.minimalPairs`) score word hits via the same alignment engine, not phoneme accuracy. A slip on one word of a pair is a miss with the heard word kept, not a skip (`isSlip`), which is what lets **Sounds to check** name the consonant.
+- **Sounds to check reads misses, it does not score sounds.** `ConsonantAnalyzer` only runs on `.mismatched(spoken:)` words and only reports one related consonant. Keep it that narrow: widening it (extra consonants, unrelated swaps, function words) mostly flags misreads, and the tip would coach a sound the reader made fine. Marked letters change colour and underline only, never weight or size (see the metrics note below).
+- **Silence is not a score.** Mic permission + the record-capable session come from a session-scoped `AudioService.requestPermission()` before the engine starts. A recognizer that stops for good sets `service.recognitionFailureMessage` and **stalls** the read (clock stopped, "Mic stopped", **Resume reading**); finishing from there lands on the result screen with a warning notice that says only the part heard was scored, never a confident "0% · Complete". A session that heard nothing for >3 s gets the "didn't catch any words" notice and `Haptics.warning()`.
+- **A dead mic must never sit under a live clock.** `ReadAloudViewModel.startTimer` also ends the session when `service.isListening` goes false while the state still says `.listening`. Every known way to lose the mic is a hold now, so that only fires for something unforeseen — and the old behaviour there (frozen passage, "Not listening", a disabled Done button, restart from the top) is precisely what a dropped read felt like.
 - **The session cover is presented on the passage, the result cover on the result** (`fullScreenCover(item:)`). Both used to be `isPresented:` flags over state that `viewModel.reset()` or Retry clears, which drew an empty cover for the length of a dismissal. Gotcha §27.
-- The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
+- The alignment engine (`ReadAloudService.computeAlignment`) is pure/static and pinned by `SpeakUpTests/ReadAloudAlignmentTests.swift`: reference-skips via lookahead, single-word insertion tolerance (fillers do not consume words), words said wrong kept as misses with what was heard (`isSlip`), and number normalization (page "seventy-two" matches recognizer "72"). Change behavior through tests.
 - Result screen reports actual wpm against the ≈150 promise when the take is long enough to mean it (>5 s).
 - Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.
 - Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
@@ -198,4 +278,3 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Do **not** add a sixth `PracticeToolKind` for “pronounce word”. Extend Read Aloud.
 - Passages the user *types* stay ephemeral (UUID id). Passages the user *keeps* live on `UserSettings`, which is still not the static catalog. Never append to `DefaultReadAloudPassages.all`.
 - `canDefine` must stay single-word; sentences use Hear + Practice only.
-- Filter chips: `catalogCases`, never `allCases` (would show a useless Custom chip).

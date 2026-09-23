@@ -25,10 +25,6 @@ enum WidgetDataProvider {
         defaults?.string(forKey: "todaysPromptText") ?? ""
     }
 
-    static var hasTodaysPrompt: Bool {
-        !todaysPromptText.isEmpty
-    }
-
     static var todaysPromptCategory: String {
         defaults?.string(forKey: "todaysPromptCategory") ?? ""
     }

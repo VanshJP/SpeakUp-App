@@ -55,14 +55,15 @@ enum DrillMode: String, CaseIterable, Identifiable {
 
     /// Duration + mechanic - the cost line under the outcome.
     var description: String {
+        let seconds = currentDurationSeconds
         switch self {
-        case .fillerElimination: return "\(defaultDurationSeconds)s · goal: zero fillers"
-        case .paceControl: return "\(defaultDurationSeconds)s · match target WPM"
-        case .pausePractice: return "\(defaultDurationSeconds)s · pause at markers"
-        case .impromptuSprint: return "\(defaultDurationSeconds)s · PREP beats + topic"
-        case .vocalVariety: return "\(defaultDurationSeconds)s · pitch range score"
-        case .emphasis: return "\(defaultDurationSeconds)s · stress the marked word"
-        case .qaSprint: return "\(defaultDurationSeconds)s · question → answer"
+        case .fillerElimination: return "\(seconds)s · goal: zero fillers"
+        case .paceControl: return "\(seconds)s · hold your target pace"
+        case .pausePractice: return "\(seconds)s · pause at markers"
+        case .impromptuSprint: return "\(seconds)s · PREP beats + topic"
+        case .vocalVariety: return "\(seconds)s · pitch range score"
+        case .emphasis: return "\(seconds)s · stress the marked word"
+        case .qaSprint: return "\(seconds)s · question → answer"
         }
     }
 
@@ -102,6 +103,45 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Longer rounds, unlocked one clean run at a time.
+    ///
+    /// Filler Elimination starts at 15 seconds, which is enough to learn the
+    /// drill and too short to prove anything once you have: the habit-reversal
+    /// studies that cut filled pauses did it over minutes of speech, not one
+    /// breath. A drill with a single rung never changes length.
+    var durationLadder: [Int] {
+        switch self {
+        case .fillerElimination: return [15, 30, 45, 60]
+        default: return [defaultDurationSeconds]
+        }
+    }
+
+    func durationSeconds(atLevel level: Int) -> Int {
+        let ladder = durationLadder
+        return ladder[min(max(0, level), ladder.count - 1)]
+    }
+
+    /// The round this drill runs at right now: its default, or the rung of
+    /// `durationLadder` the user has earned.
+    var currentDurationSeconds: Int {
+        durationSeconds(atLevel: DrillProgressStore.record(for: self)?.level ?? 0)
+    }
+
+    /// The technique to use while the clock runs, shown under the topic. Nil
+    /// where the drill's own display already says what to do.
+    ///
+    /// Filler Elimination's line is the competing response from habit-reversal
+    /// training - notice the filler coming and do something incompatible with
+    /// it instead - which is the part of that method that did the work.
+    var coachingCue: String? {
+        switch self {
+        case .fillerElimination: return "Feel an “um” coming? Close your lips and pause instead."
+        case .paceControl: return "Running fast? Finish the sentence, then take a full breath."
+        case .pausePractice: return "When the marker lights, stop completely and let the silence land."
+        case .impromptuSprint, .vocalVariety, .emphasis, .qaSprint: return nil
+        }
+    }
+
     /// What the session actually shows while you run it - the concrete thing
     /// a tile promises so the format is understood before committing.
     var liveFeedback: String {
@@ -113,14 +153,6 @@ enum DrillMode: String, CaseIterable, Identifiable {
         case .vocalVariety: return "Pitch range after the take"
         case .emphasis: return "Marked word + energy swing"
         case .qaSprint: return "Question with CLEAR beats"
-        }
-    }
-
-    /// Prep countdown should reveal the prompt before the clock starts.
-    var preparesPromptUpFront: Bool {
-        switch self {
-        case .impromptuSprint, .vocalVariety, .emphasis, .qaSprint: return true
-        case .fillerElimination, .paceControl, .pausePractice: return false
         }
     }
 
@@ -145,4 +177,7 @@ struct DrillResult: Identifiable {
     let date: Date
     let details: String
     let passed: Bool
+    /// Progress worth calling out: a new personal best, a longer round
+    /// unlocked. Nil on an ordinary run.
+    var milestone: String?
 }

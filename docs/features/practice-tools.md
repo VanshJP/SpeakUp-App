@@ -15,6 +15,7 @@ Prep and targeted practice surfaces, optionally linked to a Story from Library s
 | Item row | `SpeakUp/Views/Components/PracticeItemRow.swift` |
 | Shared tile | `SpeakUp/Views/Components/ToolTile.swift` — `ToolTileLabel` (Today strip + History Review grid), `ToolCategoryCard` (Library Tools grid) |
 | Review catalog | `SpeakUp/Models/ReviewToolKind.swift` — Compare / Listen back / Goals / Journal |
+| Screen awake | `SpeakUp/Extensions/View+KeepsScreenAwake.swift` — `keepsScreenAwake(_:)`, on every runner |
 
 ## Warm-ups
 
@@ -28,15 +29,31 @@ Categories: breathing / tongue twisters / vocal / articulation. The page
 **groups by `WarmUpCategory.focus`**, not by the category — the category is the
 row's tag. Covered focuses: steady nerves, clarity, presence.
 
+Evidence-led additions: **Physiological Sigh** (`cyclic_sighing` — double inhale,
+long exhale; the exhale-focused breathwork that beat mindfulness meditation on
+mood and respiratory rate in Balban et al., *Cell Reports Medicine* 2023) and
+**Hum Into Speech** (`hum_into_speech` — the resonant-voice bridge from hum to
+words, so the warmed-up tone is the one you speak with). Every breathing seed
+encodes exactly three rounds (the rounds picker rebuilds from the first third)
+and every seed's `durationSeconds` equals its steps' sum; both are pinned in
+`SpeakUpTests/PracticeToolProgressTests.swift`.
+
 ## Drills
 
 | Role | Path |
 |------|------|
 | Views | `SpeakUp/Views/Drills/` — selection, session, result |
 | VM | `DrillViewModel` |
-| Model | `DrillMode.swift` — `outcome` + duration `description`, `AppColors` identity tones |
+| Model | `DrillMode.swift` — `outcome` + duration `description`, `durationLadder`, `coachingCue`, `AppColors` identity tones |
+| Memory | `SpeakUp/Models/DrillProgress.swift` — `DrillRecord` (best / last / runs / level, pure `folding`), `DrillProgressStore` (one `UserDefaults` JSON blob) |
+| Prompts | `SpeakUp/Data/DefaultDrillPrompts.swift` — familiar topics for the habit drills, harder ones for the thinking drills |
 
 Modes: filler elimination / pace control / pause practice / impromptu sprint (PREP cues) / vocal variety / emphasis / Q&A sprint. Grouped by `DrillMode.focus`; `initialFocus` arrives from the outcome browser.
+
+- **Every drill has something to say.** Filler Elimination, Pace Control and Pause Practice used to open on a bare clock; they now get a low-planning familiar topic (fillers cluster where a speaker is still deciding what to say) plus a `coachingCue`. The topic is picked at selection so the prep countdown shows it and Try again keeps it.
+- **Drills remember.** `DrillViewModel.publishResult` folds each run into `DrillProgressStore`; rows show `Best N` (and `Level x of y` on a laddered drill), and the result screen calls out `DrillResult.milestone` — a new personal best, or a longer round unlocked.
+- **Filler Elimination climbs a ladder**: 15 → 30 → 45 → 60 s (`durationLadder`), one rung per clean run that went the full round. The competing response from habit-reversal training ("close your lips and pause instead") is the in-session cue, and a result with fillers names which ones (from `liveFillerWordCounts`).
+- **Pace Control shows pace over the last 10 s** (`rollingWPM`, `paceWindowSeconds`) against the user's own target ± `paceBand`, with which way to move. The score is 60 % closeness of the average to target plus 40 % share of seconds spent inside the band — holding a pace is the skill, and a take swinging 110 ↔ 190 can still average 150.
 
 `CoachDimension.vocalVariety` → `vocalVariety` drill; `delivery` → `emphasis`. Impromptu and Q&A show timed structure beats (PREP / CLEAR-lite). Vocal Variety scores post-stop via `PitchAnalysisService` on the discarded take.
 
@@ -51,6 +68,9 @@ Kinds: calming / visualization / progressive / affirmation — displayed under
 outcome names ("Settle the body", "Rehearse it going well", "Face it in steps",
 "Quiet the inner critic"). Grouped by `ConfidenceCategory.focus`, which covers
 steady nerves and mindset. Sheet title is **Calm** (matches Today / Library naming).
+
+- **No generic affirmations.** `power_statements` keeps its id (lesson `w4_l1_a2` launches it) but is now **Reframe the Nerves** — reappraising arousal as excitement, the version of self-talk that improved speeches (Brooks 2014). Repeating positive self-statements made people with low self-esteem feel worse (Wood et al. 2009). **Coach Yourself by Name** (`self_distanced_talk`) is self-distanced talk (Kross et al. 2014). Lessons launch exercises by id; `everyLessonExerciseStillExists` pins that.
+- **Guided mode** ("Guide me" in the runner) reads each step aloud through `PronunciationService.prepareForGuidance()` (spoken-audio playback, heard with the ring switch off), holds for `ConfidenceExercise.guidedHoldSeconds`, and advances. Grounding and visualization start "close your eyes"; the runner used to make you open them for every step.
 
 ## Invariants
 
@@ -68,9 +88,9 @@ steady nerves and mindset. Sheet title is **Calm** (matches Today / Library nami
 11. **Explain once, at the surface where the choice is made.** The Library Tools tab renders a compact **category grid**, then pushes the chosen practice tool (`ToolPresentation.pushed`). Review tools open sheets / pushes via `ContentView` callbacks (same doors as History → Progress). Searchable across title/outcome/best-for, empty state on no match. Today's prep strip and History's Review grid both use the compact `ToolTileLabel`; Library uses the denser `ToolCategoryCard`. Two densities, shared catalogs (`PracticeToolKind` / `ReviewToolKind`) — do not hand-roll a third tile dialect.
 12. **Every item is a `PracticeItemRow`** — dial, title, subtitle, optional tag chip, play affordance. Drills used to be a 2x2 of 176pt tiles and Read Aloud a bespoke `PassageCard`; four items each stacking an icon, title, outcome, live-feedback label and duration (two of them tinted) is five things competing inside one card, and it made Drills the odd page out. Cost is split by size: the **dial** takes one short unit that fits its 8pt label (`45s`, `3m`, `2m`), the **chip** takes the qualifier that doesn't — Calm's step count (it used to be crammed into the dial as "3m · 4 steps"), a drill's `liveFeedback`, a passage's difficulty + word count. Read Aloud keeps its "N of M passages" caption while filters are active.
 13. **Timers tell the truth.** Step/duration clocks finish inside the tick that reaches zero (a "48s" box-breathing round lasts 48s, and 4-7-8 runs 4-7-8). Drill countdowns likewise; the drill timer also stops the session early with an "ended early: recognition stopped" note if transcription dies mid-drill. Drill prep uses one `fullScreenCover` that owns countdown → session — never an overlay clipped to the Library tools list (that rendered the dial as a card-shaped box).
-14. **Silence is not a score.** A drill whose mic or speech recognition can't start sets `errorMessage` and exits via alert — it never awards a clean-run result for audio that was never heard. Pause Practice is exempt (it scores metering silence). Read Aloud carries the same doctrine as result notices (see [read-aloud.md](./read-aloud.md)).
+14. **Silence is not a score.** A drill whose mic or speech recognition can't start sets `errorMessage` and exits via alert — it never awards a clean-run result for audio that was never heard. A silent take scores 0 too: Filler Elimination needs `max(5, duration / 3)` words (silence used to pass as "Clean run" and would now climb the ladder), Impromptu and Q&A score 0 below their word minimums instead of the 50-point floor, and Pause Practice needs voice in at least a quarter of the metering frames between markers (its markers score silence, so a silent take used to hit all three). Read Aloud carries the same doctrine as result notices (see [read-aloud.md](./read-aloud.md)).
 14a. `DrillResultView` owns the result haptic: the ring sweeps and the number counts up with `Haptics.playCountUp`, then success (passed) or light (not). `DrillViewModel.finishDrill` fires none - both firing buzzed twice for one result.
-15. Pace-control drills score against `DrillViewModel.targetWPM` (from `UserSettings.resolvedTargetWPM`), not a fixed 130–170 band. Result copy names that target.
+15. Pace-control drills score against `DrillViewModel.targetWPM` (from `UserSettings.resolvedTargetWPM`), not a fixed 130–170 band — and so does the live display, which used to print "target 130-170" whatever the setting said. Result copy names that target and the share of time on pace.
 16. Breathing circle scale is computed from accumulated phase time (`TimelineView`, paused when paused) — never `withAnimation`, which cannot be cancelled and desyncs from the clock.
 17. **One axis: `PracticeFocus`.** The four tools are *formats* — how long
     they take and whether the mic opens — and `PracticeToolKind.format` is the
@@ -102,6 +122,8 @@ steady nerves and mindset. Sheet title is **Calm** (matches Today / Library nami
     full-width card above the catalog the page exists to show.
 21. **A runner is presented on its subject, never on a flag.** `DrillSelectionView` hands the `DrillMode` to `fullScreenCover(item:)` and `DrillFlowView` owns the countdown → session phase as its own state. It used to be three `@State` values — a presentation flag, the mode the cover unwrapped, and the phase — with an `onDismiss` clearing the last two. SwiftUI runs `onDismiss` *after* the dismissal animation, so starting a second drill while the first was animating out opened the cover onto a mode that had just been nilled: blank screen, immediate self-dismiss, works on the second tap. `ConfidenceToolsView` and `ReadAloudSelectionView` present the same way. Gotcha §27.
 22. **Countdown Cancel is immediate.** `CountdownOverlayView` ticks via a cancellable `.task` loop and sets `hasCompleted` on Cancel / Start Now so a stray tick cannot complete a dismissed countdown. Own the hit surface (`.contentShape` + full-screen frame) — a parent scroll used to eat the first taps.
+23. **Every runner keeps the screen awake while it runs** (`keepsScreenAwake`: Read Aloud while listening, drills while active, warm-ups while running, Calm until complete). They are all minutes of speaking or breathing without a touch; Auto-Lock used to dim and lock the phone mid-exercise, and in Read Aloud it took the microphone with it.
+24. **Live counts add across utterances.** `LiveTranscriptionService.liveWordCount` / `liveFillerCount` are committed-plus-live, banking each utterance when a request ends or the recognizer restarts inside one (`RecognitionContinuity`). They used to be `max(total, this request)`, so every word and filler after the first pause went uncounted — pace drills scored slow and Filler Elimination could pass a run with fillers in it. A final that restates the whole request moves that request's committed counts back into the live utterance (`absorbRequestIntoUtterance`) so nothing counts twice.
 
 ## Read-Aloud
 

@@ -85,7 +85,7 @@ struct NextStep {
             guard let mode = DrillMode(rawValue: raw) else {
                 return ("Practice again", .practiceAgain)
             }
-            return ("\(mode.title) · \(mode.defaultDurationSeconds)s", .drill(mode))
+            return ("\(mode.title) · \(mode.currentDurationSeconds)s", .drill(mode))
         }
     }
 }

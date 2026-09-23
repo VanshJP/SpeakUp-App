@@ -333,7 +333,7 @@ struct DefaultCurriculum {
                             ])
                         ),
                         .exercise(id: "w4_l1_a1", title: "Grounding exercise", description: "The 5-4-3-2-1 technique anchors you in the present moment. Name 5 things you see, 4 you hear, 3 you feel, 2 you smell, 1 you taste.", exerciseId: "grounding_54321"),
-                        .exercise(id: "w4_l1_a2", title: "Power statements", description: "Read through affirmation statements designed to build speaking confidence. Say each one out loud with conviction.", exerciseId: "power_statements"),
+                        .exercise(id: "w4_l1_a2", title: "Reframe the nerves", description: "Treat a racing heart as excitement instead of fighting it. Say \"I'm excited\" out loud, then name what you're excited to share.", exerciseId: "power_statements"),
                     ]
                 ),
 

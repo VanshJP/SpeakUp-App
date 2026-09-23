@@ -42,57 +42,16 @@ class DrillViewModel {
     private var pauseTimings: [Int] = []
     private var silentFramesInPause = 0
     private var totalFramesInPause = 0
+    /// Metering frames between the markers, and how many of them had a voice
+    /// in them. A pause is only a pause next to speech.
+    private var framesOutsidePause = 0
+    private var voicedFramesOutsidePause = 0
+    private static let minimumVoicedRatio = 0.25
 
-    // Impromptu Sprint state
+    /// What to talk about this round - a topic, a line to read, or a
+    /// question, depending on the drill. Every drill has one now; see
+    /// `DefaultDrillPrompts`.
     var impromptuPrompt: String = ""
-    private static let impromptuTopics = [
-        "Describe your perfect weekend from start to finish",
-        "Why is your favorite food the best one out there?",
-        "Explain a hobby to someone who's never heard of it",
-        "Convince someone to visit your favorite place",
-        "Talk about a book or movie that changed your perspective",
-        "What would you do with an extra hour each day?",
-        "Describe your morning routine and why it works for you",
-        "What's the best advice you've ever received?",
-        "If you could have dinner with anyone, who and why?",
-        "Pitch a brand new app idea in 30 seconds",
-        "Talk about a skill you'd love to master and why",
-        "Explain something interesting you learned recently",
-        "Why should everyone try your favorite activity?",
-        "Describe a place that feels like home to you",
-        "What's one thing you'd change about how people communicate?",
-        "Tell the story of your most memorable travel experience",
-        "Explain why a simple everyday object is actually amazing",
-        "What's a common misconception people have about your field?",
-    ]
-
-    private static let vocalVarietyLines = [
-        "The storm rolled in, then the sky cracked open with light.",
-        "Please lower your voice here, then lift it on the final word: victory.",
-        "Start soft and low, then climb until the last phrase rings clear.",
-        "Whisper the opening, speak the middle, project the close.",
-        "Glide from your lowest comfortable note to your highest on this line.",
-    ]
-
-    private static let emphasisPrompts: [(line: String, target: String)] = [
-        ("I am absolutely CERTAIN this will work.", "CERTAIN"),
-        ("We need this done TODAY, not next week.", "TODAY"),
-        ("That was the BEST decision we made all year.", "BEST"),
-        ("Never underestimate a simple CLEAR answer.", "CLEAR"),
-        ("This matters NOW more than it ever has.", "NOW"),
-        ("She was the ONLY person who stayed.", "ONLY"),
-    ]
-
-    private static let qaQuestions = [
-        "What's the biggest challenge in your field right now, and how would you solve it?",
-        "Why should someone trust your recommendation?",
-        "What would you do differently if you started over tomorrow?",
-        "How do you explain your work to someone outside your field?",
-        "What's one risk worth taking this year, and why?",
-        "Where do most teams waste time, and what would you cut first?",
-        "What does success look like for you in six months?",
-        "How would you handle a question you don't know the answer to?",
-    ]
 
     /// Word the emphasis drill wants stressed (uppercase in the prompt line).
     var emphasisTargetWord: String = ""
@@ -101,6 +60,22 @@ class DrillViewModel {
     /// Live peak-over-median energy swing (dB) for emphasis / variety HUD.
     private(set) var liveEnergySwing: Double = 0
     private var levelSamples: [Float] = []
+
+    // Pace Control state
+
+    /// Seconds of speech the live pace is measured over. The drill used to
+    /// show words per minute since the start, which barely moves once a few
+    /// seconds are in: speeding up at the forty-second mark read as no change.
+    static let paceWindowSeconds = 10
+    /// Either side of the target that still counts as on pace.
+    static let paceBand = 20.0
+    /// Words per minute over the last `paceWindowSeconds`, or since the start
+    /// until that much has elapsed.
+    private(set) var rollingWPM: Double = 0
+    /// Words heard by the end of each elapsed second.
+    private var wordsBySecond: [Int] = []
+    private var paceSecondsInBand = 0
+    private var paceSecondsMeasured = 0
 
     private var timer: Timer?
     private var audioLevelTimer: Timer?
@@ -149,7 +124,7 @@ class DrillViewModel {
 
     func startDrill(mode: DrillMode) {
         selectedMode = mode
-        totalDuration = mode.defaultDurationSeconds
+        totalDuration = mode.currentDurationSeconds
         timeRemaining = totalDuration
         score = 0
         isActive = true
@@ -160,12 +135,15 @@ class DrillViewModel {
         isAnalyzingPitch = false
         liveEnergySwing = 0
         levelSamples = []
+        resetPace()
 
         // Pause Practice: schedule 3 pause windows evenly across the drill
         pauseMarkerActive = false
         pauseMarkersHit = 0
         silentFramesInPause = 0
         totalFramesInPause = 0
+        framesOutsidePause = 0
+        voicedFramesOutsidePause = 0
         if mode == .pausePractice {
             let spacing = totalDuration / (pauseMarkersTotal + 1)
             pauseTimings = (1...pauseMarkersTotal).map { i in
@@ -175,10 +153,10 @@ class DrillViewModel {
             pauseTimings = []
         }
 
-        // Prompted modes: keep the topic picked at selection time (so the
-        // prep countdown can show it and retries stay fair); only fall back
-        // to a fresh pick when entering without one.
-        if mode.preparesPromptUpFront, impromptuPrompt.isEmpty {
+        // Keep the topic picked at selection time, so the prep countdown can
+        // show it and a retry stays fair; only fall back to a fresh pick when
+        // entering without one (a lesson launches the session directly).
+        if impromptuPrompt.isEmpty {
             preparePrompt(for: mode)
         }
 
@@ -190,25 +168,25 @@ class DrillViewModel {
     }
 
     func preparePrompt(for mode: DrillMode) {
+        emphasisTargetWord = ""
         switch mode {
+        case .fillerElimination, .paceControl, .pausePractice:
+            impromptuPrompt = DefaultDrillPrompts.familiarTopics.randomElement()
+                ?? "Walk through your morning routine, step by step"
         case .impromptuSprint:
-            impromptuPrompt = Self.impromptuTopics.randomElement() ?? "Talk about anything!"
-            emphasisTargetWord = ""
+            impromptuPrompt = DefaultDrillPrompts.impromptuTopics.randomElement()
+                ?? "Talk about anything!"
         case .vocalVariety:
-            impromptuPrompt = Self.vocalVarietyLines.randomElement()
+            impromptuPrompt = DefaultDrillPrompts.vocalVarietyLines.randomElement()
                 ?? "Glide your pitch from low to high on this sentence."
-            emphasisTargetWord = ""
         case .emphasis:
-            let pick = Self.emphasisPrompts.randomElement()
+            let pick = DefaultDrillPrompts.emphasisPrompts.randomElement()
                 ?? ("I am absolutely CERTAIN this will work.", "CERTAIN")
             impromptuPrompt = pick.line
             emphasisTargetWord = pick.target
         case .qaSprint:
-            impromptuPrompt = Self.qaQuestions.randomElement()
+            impromptuPrompt = DefaultDrillPrompts.qaQuestions.randomElement()
                 ?? "What's the biggest challenge in your field right now?"
-            emphasisTargetWord = ""
-        default:
-            break
         }
     }
 
@@ -279,6 +257,9 @@ class DrillViewModel {
             if selectedMode == .pausePractice {
                 updatePauseState()
             }
+            if selectedMode == .paceControl {
+                samplePace()
+            }
         } else {
             timeRemaining = 0
             finishDrill()
@@ -317,6 +298,34 @@ class DrillViewModel {
         totalFramesInPause = 0
     }
 
+    // MARK: - Pace
+
+    /// One sample per elapsed second. Once a full window is in hand, each
+    /// second is also judged against the target band - that is what the
+    /// score's steadiness half measures.
+    private func samplePace() {
+        wordsBySecond.append(liveWordCount)
+        let elapsed = wordsBySecond.count
+        let window = Self.paceWindowSeconds
+        guard elapsed > window else {
+            rollingWPM = liveWPM
+            return
+        }
+        let recent = wordsBySecond[elapsed - 1] - wordsBySecond[elapsed - 1 - window]
+        rollingWPM = Double(recent) / Double(window) * 60
+        paceSecondsMeasured += 1
+        if abs(rollingWPM - Double(targetWPM)) <= Self.paceBand {
+            paceSecondsInBand += 1
+        }
+    }
+
+    private func resetPace() {
+        rollingWPM = 0
+        wordsBySecond = []
+        paceSecondsInBand = 0
+        paceSecondsMeasured = 0
+    }
+
     // MARK: - Audio Level Monitoring (reuses same approach as RecordingViewModel)
 
     private func startAudioLevelMonitoring() {
@@ -328,6 +337,11 @@ class DrillViewModel {
                     self.totalFramesInPause += 1
                     if self.audioLevel < -40 {
                         self.silentFramesInPause += 1
+                    }
+                } else if self.isActive, self.selectedMode == .pausePractice {
+                    self.framesOutsidePause += 1
+                    if self.audioLevel >= -40 {
+                        self.voicedFramesOutsidePause += 1
                     }
                 }
                 if self.isActive {
@@ -433,6 +447,9 @@ class DrillViewModel {
         let elapsed = Double(totalDuration - timeRemaining)
         let finalFillerCount = liveFillerCount
         let finalWPM = elapsed > 2 ? Double(liveWordCount) / elapsed * 60 : 0
+        // Ran to the bell rather than tapping out. Only a full round can earn
+        // the next rung of a duration ladder.
+        let completedRound = timeRemaining == 0
 
         let drillScore: Int
         var details: String
@@ -440,34 +457,75 @@ class DrillViewModel {
 
         switch mode {
         case .fillerElimination:
-            drillScore = finalFillerCount == 0 ? 100 : max(0, 100 - finalFillerCount * 25)
-            passed = finalFillerCount == 0
-            details = finalFillerCount == 0
-                ? "Clean run: zero fillers"
-                : "\(finalFillerCount) filler(s) detected"
+            // Silence has no fillers in it, and used to pass as a clean run.
+            let spokeEnough = liveWordCount >= max(5, totalDuration / 3)
+            if !spokeEnough {
+                drillScore = 0
+                passed = false
+                details = "Too little speech to score. Keep talking for the whole round."
+            } else if finalFillerCount == 0 && completedRound {
+                drillScore = 100
+                passed = true
+                details = "Clean run: zero fillers in \(totalDuration) seconds"
+            } else if finalFillerCount == 0 {
+                // Clean, but tapped out early: the score is the share of the
+                // round that was actually spoken, so the ring and the verdict
+                // agree.
+                drillScore = min(99, Int((elapsed / Double(max(1, totalDuration)) * 100).rounded()))
+                passed = false
+                details = "Clean for \(Int(elapsed)) seconds. Run the full round to clear it."
+            } else {
+                drillScore = max(0, 100 - finalFillerCount * 25)
+                passed = false
+                let words = fillerBreakdown.map { ": \($0)" } ?? ""
+                details = "\(finalFillerCount) filler\(finalFillerCount == 1 ? "" : "s")\(words). Swap each one for a closed-mouth pause."
+            }
 
         case .paceControl:
             let sigma = 35.0
             let target = Double(targetWPM)
             let deviation = finalWPM - target
-            drillScore = max(0, Int(100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))))
+            let closeness = 100.0 * exp(-(deviation * deviation) / (2 * sigma * sigma))
+            // Holding the pace is the skill, not averaging it: a take that
+            // swings from 110 to 190 can still average 150.
+            if paceSecondsMeasured > 0 {
+                let steadiness = Double(paceSecondsInBand) / Double(paceSecondsMeasured)
+                drillScore = max(0, Int((0.6 * closeness + 0.4 * steadiness * 100).rounded()))
+                details = "Average pace: \(Int(finalWPM)) WPM (target: \(targetWPM)) · on pace \(Int((steadiness * 100).rounded()))% of the time"
+            } else {
+                drillScore = max(0, Int(closeness))
+                details = "Average pace: \(Int(finalWPM)) WPM (target: \(targetWPM))"
+            }
             passed = drillScore >= 70
-            details = "Average pace: \(Int(finalWPM)) WPM (target: \(targetWPM))"
 
         case .pausePractice:
-            drillScore = pauseMarkersTotal > 0
-                ? Int(Double(pauseMarkersHit) / Double(pauseMarkersTotal) * 100)
+            // The markers score silence, so a silent take used to hit all
+            // three. The pauses only mean something between stretches of
+            // speech.
+            let voicedRatio = framesOutsidePause > 0
+                ? Double(voicedFramesOutsidePause) / Double(framesOutsidePause)
                 : 0
-            passed = pauseMarkersHit >= 2
-            if pauseMarkersHit == pauseMarkersTotal {
-                details = "All \(pauseMarkersTotal) pause markers hit"
+            if voicedRatio < Self.minimumVoicedRatio {
+                drillScore = 0
+                passed = false
+                details = "We didn't hear you speaking between the markers. Talk through the round and go quiet only when a marker lights."
             } else {
-                details = "Hit \(pauseMarkersHit) of \(pauseMarkersTotal) pause markers"
+                drillScore = pauseMarkersTotal > 0
+                    ? Int(Double(pauseMarkersHit) / Double(pauseMarkersTotal) * 100)
+                    : 0
+                passed = pauseMarkersHit >= 2
+                if pauseMarkersHit == pauseMarkersTotal {
+                    details = "All \(pauseMarkersTotal) pause markers hit"
+                } else {
+                    details = "Hit \(pauseMarkersHit) of \(pauseMarkersTotal) pause markers"
+                }
             }
 
         case .impromptuSprint:
-            drillScore = max(50, 100 - finalFillerCount * 10)
+            // Too little speech scores zero, not the fifty-point floor: a
+            // silent sprint used to show a full ring over "too little speech".
             passed = finalFillerCount <= 2 && liveWordCount >= 8
+            drillScore = liveWordCount < 8 ? 0 : max(50, 100 - finalFillerCount * 10)
             details = liveWordCount < 8
                 ? "Too little speech to score the sprint"
                 : "Spoke with \(finalFillerCount) filler(s) on a PREP-cued topic"
@@ -496,8 +554,8 @@ class DrillViewModel {
                 : "No speech detected. Emphasis needs a full sentence."
 
         case .qaSprint:
-            drillScore = max(50, 100 - finalFillerCount * 10)
             passed = finalFillerCount <= 2 && liveWordCount >= 10
+            drillScore = liveWordCount < 10 ? 0 : max(50, 100 - finalFillerCount * 10)
             details = liveWordCount < 10
                 ? "Answer was too short to score"
                 : "Q&A answer with \(finalFillerCount) filler(s) · CLEAR beats"
@@ -507,18 +565,60 @@ class DrillViewModel {
             details += ". Recognition stopped early."
         }
 
+        let progress = DrillProgressStore.recordRun(
+            mode: mode,
+            score: drillScore,
+            passed: passed && completedRound
+        )
+
         result = DrillResult(
             mode: mode,
             score: drillScore,
             date: Date(),
             details: details,
-            passed: passed
+            passed: passed,
+            milestone: Self.milestone(
+                for: mode,
+                score: drillScore,
+                previous: progress.previous,
+                updated: progress.updated
+            )
         )
         score = drillScore
         isComplete = true
         CurriculumActivitySignalStore.markDrillCompleted(mode.rawValue)
         // No haptic here: `DrillResultView` lands one with its count-up, and
         // firing both buzzed twice for a single result.
+    }
+
+    /// "“um” ×2, “like” ×1" - which fillers this run leaned on, most frequent
+    /// first. Knowing *which* one is the awareness half of habit reversal.
+    private var fillerBreakdown: String? {
+        let counts = liveTranscriptionService.liveFillerWordCounts
+            .filter { $0.value > 0 }
+            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+        guard !counts.isEmpty else { return nil }
+        return counts.prefix(3)
+            .map { "“\($0.key)” ×\($0.value)" }
+            .joined(separator: ", ")
+    }
+
+    /// The line the result screen calls out: a longer round unlocked, or a
+    /// personal best beaten. Nil on an ordinary run, and on a first run, which
+    /// has nothing to beat.
+    static func milestone(
+        for mode: DrillMode,
+        score: Int,
+        previous: DrillRecord?,
+        updated: DrillRecord
+    ) -> String? {
+        if updated.level > (previous?.level ?? 0) {
+            return "Round cleared. The next one runs \(mode.durationSeconds(atLevel: updated.level)) seconds."
+        }
+        if let previous, previous.runs > 0, score > previous.best {
+            return "New personal best, up from \(previous.best)."
+        }
+        return nil
     }
 
     func cleanup() {
@@ -534,5 +634,6 @@ class DrillViewModel {
         levelSamples = []
         liveEnergySwing = 0
         isAnalyzingPitch = false
+        resetPace()
     }
 }
