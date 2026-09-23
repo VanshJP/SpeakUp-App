@@ -33,6 +33,12 @@ extension View {
     func glassBackground(cornerRadius: CGFloat = 16) -> some View {
         self.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
+
+    /// Round, interactive glass behind an icon-only control - a runner's ✕
+    /// and transport buttons.
+    func glassCircle() -> some View {
+        self.glassEffect(.regular.interactive(), in: .circle)
+    }
 }
 
 // MARK: - Glass Section Header

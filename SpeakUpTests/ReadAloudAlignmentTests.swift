@@ -99,7 +99,10 @@ struct ReadAloudAlignmentTests {
         #expect(spoken == "zebra")
     }
 
-    @Test func substitutionBeforeResolvableWordIsForgivenAsInsertion() {
+    /// A word said in place of the page's, followed by the next page word, is
+    /// that word replaced - not a filler plus a skip. The skip reading threw
+    /// away what was heard, which is all Sounds to check has to work with.
+    @Test func aReplacedWordKeepsWhatWasHeard() {
         let reference = ["the", "cat"]
         let result = ReadAloudService.computeAlignment(
             reference: reference,
@@ -107,9 +110,46 @@ struct ReadAloudAlignmentTests {
             spokenWords: ["zebra", "cat"]
         )
 
-        #expect(result.states[0] == .skipped)
-        #expect(result.states[1] == .matched)
+        #expect(result.states == [.mismatched(spoken: "zebra"), .matched])
         #expect(result.matched == 1)
+        #expect(result.mismatched == 1)
+    }
+
+    @Test func aHesitationWhereAWordShouldBeIsStillASkip() {
+        let reference = ["the", "cat", "sat"]
+        let result = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: reference.map(ReadAloudService.normalize),
+            spokenWords: ["um", "cat", "sat"]
+        )
+
+        #expect(result.states == [.skipped, .matched, .matched])
+        #expect(result.matched == 2)
+    }
+
+    /// Read cleanly, "red lorry, yellow lorry" came back with half its lorries
+    /// spelled as the name. Same sounds, so they count.
+    @Test func aNameTheRecognizerPreferredCountsAsTheWord() {
+        let reference = ["Red", "lorry", "yellow", "lorry."]
+        let result = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: reference.map(ReadAloudService.normalize),
+            spokenWords: ["red", "Laurie", "yellow", "lorry"]
+        )
+
+        #expect(result.states.allSatisfy { $0 == .matched })
+        #expect(result.matched == 4)
+    }
+
+    @Test func aLowercaseSoundAlikeIsStillAMiss() {
+        let reference = ["the", "matter", "is"]
+        let result = ReadAloudService.computeAlignment(
+            reference: reference,
+            normalizedReference: reference.map(ReadAloudService.normalize),
+            spokenWords: ["the", "motor", "is"]
+        )
+
+        #expect(result.states[1] == .mismatched(spoken: "motor"))
     }
 
     // MARK: - Words said wrong

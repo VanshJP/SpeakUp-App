@@ -148,6 +148,18 @@ struct ConsonantAnalyzerTests {
         #expect(check.patterns.first?.practiceText == "Think. Three. I think three thin cats")
     }
 
+    @Test func aNameSpellingOfTheSameSoundsIsTheWord() {
+        #expect(ConsonantAnalyzer.isNameSpelling("Laurie", of: "lorry"))
+        #expect(ConsonantAnalyzer.isNameSpelling("Carrie", of: "carry"))
+        // Lowercase is a word the recognizer chose, not a name it preferred.
+        #expect(!ConsonantAnalyzer.isNameSpelling("laurie", of: "lorry"))
+        // One syllable is where vowel pairs live.
+        #expect(!ConsonantAnalyzer.isNameSpelling("Sheep", of: "ship"))
+        // Another consonant is another word.
+        #expect(!ConsonantAnalyzer.isNameSpelling("Lolly", of: "lorry"))
+        #expect(!ConsonantAnalyzer.isNameSpelling("Lorry", of: "lorry"))
+    }
+
     @Test func aTakeWithoutConsonantSlipsHasNothingToCheck() {
         let passage = "I see a ship".components(separatedBy: " ")
         let check = SoundCheck(passage: passage, heard: [3: "sheep"])

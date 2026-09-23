@@ -407,9 +407,11 @@ struct RecordingDetailView: View {
             if coachAnalysis != nil {
                 ReviewRequestService.shared.markFirstResultSeen()
             }
-            playableMediaAvailable = hasPlayableMedia(recording)
+            let mediaURL = await Self.resolveMediaURL(for: recording)
+            guard !Task.isCancelled else { return }
+            playableMediaAvailable = mediaURL != nil
             resolveVocabWorkoutIfNeeded(for: recording)
-            prepareDetailAssets(for: recording)
+            prepareDetailAssets(for: recording, mediaURL: mediaURL)
             configurePlaybackState(for: recording)
 
             readySetupTask?.cancel()
@@ -1779,9 +1781,8 @@ struct RecordingDetailView: View {
         }
     }
 
-    private func prepareDetailAssets(for recording: Recording) {
+    private func prepareDetailAssets(for recording: Recording, mediaURL: URL?) {
         guard waveformHeights.isEmpty || audioService.playbackDuration <= 0 else { return }
-        let mediaURL = recording.resolvedAudioURL ?? recording.resolvedVideoURL
         let needsWaveform = waveformHeights.isEmpty
         let cachedPeaks = recording.waveformPeaks
 
@@ -2094,8 +2095,17 @@ struct RecordingDetailView: View {
         }
     }
 
-    private func hasPlayableMedia(_ recording: Recording) -> Bool {
-        (recording.resolvedAudioURL ?? recording.resolvedVideoURL) != nil
+    /// The take's media file, looked up off the main actor. Right after a take
+    /// the file has just moved into iCloud, and existence checks there wait on
+    /// the iCloud daemon; this ran on the main actor as the score landed.
+    private static func resolveMediaURL(for recording: Recording) async -> URL? {
+        let storedAudio = recording.audioURL
+        let storedVideo = recording.videoURL
+        let container = ICloudStorageService.shared.ubiquityContainerURL
+        return await Task.detached(priority: .userInitiated) {
+            Recording.resolveStoredURL(storedAudio, ubiquityContainer: container)
+                ?? Recording.resolveStoredURL(storedVideo, ubiquityContainer: container)
+        }.value
     }
 
 }

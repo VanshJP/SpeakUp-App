@@ -69,7 +69,9 @@ class WhisperService {
     /// that keeps emitting tokens while the seek point never advances through
     /// the file. Deliberately loose - the stall detector handles every ordinary
     /// hang long before this fires.
-    private static func decodeCeiling(for audioURL: URL) -> TimeInterval {
+    /// Opens the audio file, so it runs inside the watchdog task, never on
+    /// the main actor.
+    nonisolated private static func decodeCeiling(for audioURL: URL) -> TimeInterval {
         let audioDuration = (try? AVAudioFile(forReading: audioURL)).map {
             Double($0.length) / $0.processingFormat.sampleRate
         } ?? 0
@@ -340,7 +342,6 @@ class WhisperService {
             // `decodeStallTimeout`. Only one result is ever returned here: without
             // a `chunkingStrategy` WhisperKit decodes the whole file in a single
             // task, so `.first` is the complete transcript, not the first chunk.
-            let ceiling = WhisperService.decodeCeiling(for: audioURL)
             let result: WhisperTranscriptionResult = try await withThrowingTaskGroup(of: WhisperTranscriptionResult.self) { group in
                 group.addTask {
                     let results = try await whisperKit.transcribe(
@@ -360,6 +361,7 @@ class WhisperService {
                     return first
                 }
                 group.addTask {
+                    let ceiling = WhisperService.decodeCeiling(for: audioURL)
                     let deadline = Date().addingTimeInterval(ceiling)
                     while true {
                         try await Task.sleep(for: .seconds(5))

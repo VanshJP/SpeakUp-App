@@ -19,14 +19,19 @@ struct DrillSessionView: View {
 
                 if viewModel.isComplete, let result = viewModel.result {
                     Spacer()
-                    DrillResultView(result: result) {
-                        if let mode = viewModel.selectedMode {
-                            viewModel.startDrill(mode: mode)
+                    DrillResultView(
+                        result: result,
+                        onTryAgain: {
+                            viewModel.startDrill(mode: result.mode, level: result.level)
+                        },
+                        onLonger: {
+                            viewModel.startDrill(mode: result.mode, level: result.level + 1)
+                        },
+                        onDone: {
+                            viewModel.cleanup()
+                            dismiss()
                         }
-                    } onDone: {
-                        viewModel.cleanup()
-                        dismiss()
-                    }
+                    )
                     Spacer()
                 } else {
                     drillContent

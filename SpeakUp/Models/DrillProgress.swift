@@ -25,15 +25,27 @@ nonisolated struct DrillRecord: Codable, Equatable, Sendable {
     /// The record after one more run. Pure, so the ladder rules are pinned
     /// without `UserDefaults`.
     ///
-    /// - Parameter rungs: How many rungs the drill's ladder has. A pass on the
-    ///   top rung stays there.
-    static func folding(_ previous: DrillRecord?, score: Int, passed: Bool, rungs: Int) -> DrillRecord {
+    /// - Parameters:
+    ///   - rungs: How many rungs the drill's ladder has. A pass on the top
+    ///     rung stays there.
+    ///   - ranLevel: The rung the run used; nil means the highest one open.
+    ///     Only a pass at the highest open rung opens the next. A pass on a
+    ///     shorter round someone chose to repeat used to climb too, so two
+    ///     easy 15-second runs unlocked 45 seconds without ever running 30.
+    static func folding(
+        _ previous: DrillRecord?,
+        score: Int,
+        passed: Bool,
+        rungs: Int,
+        ranLevel: Int? = nil
+    ) -> DrillRecord {
         var record = previous ?? DrillRecord()
         record.best = max(record.best, score)
         record.last = score
         record.runs += 1
-        if passed {
-            record.level = min(record.level + 1, max(0, rungs - 1))
+        let ran = ranLevel ?? record.level
+        if passed, ran >= record.level {
+            record.level = min(ran + 1, max(0, rungs - 1))
         }
         return record
     }
@@ -65,7 +77,8 @@ enum DrillProgressStore {
     static func recordRun(
         mode: DrillMode,
         score: Int,
-        passed: Bool
+        passed: Bool,
+        ranLevel: Int? = nil
     ) -> (previous: DrillRecord?, updated: DrillRecord) {
         var all = records
         let previous = all[mode.rawValue]
@@ -73,7 +86,8 @@ enum DrillProgressStore {
             previous,
             score: score,
             passed: passed,
-            rungs: mode.durationLadder.count
+            rungs: mode.durationLadder.count,
+            ranLevel: ranLevel
         )
         all[mode.rawValue] = updated
         save(all)

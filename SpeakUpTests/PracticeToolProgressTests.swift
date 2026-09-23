@@ -32,10 +32,42 @@ struct PracticeToolProgressTests {
     }
 
     @Test func singleRungDrillsNeverChangeLength() {
-        let mode = DrillMode.paceControl
+        let mode = DrillMode.vocalVariety
         let record = DrillRecord.folding(nil, score: 90, passed: true, rungs: mode.durationLadder.count)
         #expect(record.level == 0)
         #expect(mode.durationSeconds(atLevel: record.level) == mode.defaultDurationSeconds)
+    }
+
+    @Test func everyDrillStartsAtItsDefaultLengthAndOnlyGetsLonger() {
+        for mode in DrillMode.allCases {
+            let ladder = mode.durationLadder
+            #expect(ladder.first == mode.defaultDurationSeconds)
+            #expect(ladder == ladder.sorted())
+            #expect(Set(ladder).count == ladder.count)
+        }
+        #expect(DrillMode.impromptuSprint.durationLadder.prefix(3) == [30, 45, 60])
+    }
+
+    /// Repeating a shorter round you already cleared must not open the rung
+    /// after the one you have not run yet.
+    @Test func onlyAPassAtTheTopOpenRungClimbs() {
+        let rungs = DrillMode.fillerElimination.durationLadder.count
+        let atThirty = DrillRecord(best: 100, last: 100, runs: 1, level: 1)
+
+        let repeatedFifteen = DrillRecord.folding(atThirty, score: 100, passed: true, rungs: rungs, ranLevel: 0)
+        #expect(repeatedFifteen.level == 1)
+
+        let clearedThirty = DrillRecord.folding(atThirty, score: 100, passed: true, rungs: rungs, ranLevel: 1)
+        #expect(clearedThirty.level == 2)
+    }
+
+    @Test func aClearedRoundOffersTheNextRungOnly() {
+        let mode = DrillMode.impromptuSprint
+        #expect(DrillViewModel.longerRound(for: mode, ranLevel: 0, cleared: true, unlockedLevel: 1) == 45)
+        #expect(DrillViewModel.longerRound(for: mode, ranLevel: 0, cleared: false, unlockedLevel: 1) == nil)
+        // Top rung: nothing longer.
+        #expect(DrillViewModel.longerRound(for: mode, ranLevel: 3, cleared: true, unlockedLevel: 3) == nil)
+        #expect(DrillViewModel.longerRound(for: .vocalVariety, ranLevel: 0, cleared: true, unlockedLevel: 0) == nil)
     }
 
     @Test func milestonesCallOutLevelUpsAndBestsButNotFirstRuns() {
@@ -51,7 +83,7 @@ struct PracticeToolProgressTests {
         let cleared = DrillRecord.folding(nil, score: 100, passed: true, rungs: 4)
         #expect(
             DrillViewModel.milestone(for: .fillerElimination, score: 100, previous: nil, updated: cleared)
-                == "Round cleared. The next one runs 30 seconds."
+                == "Round cleared. 30-second rounds are unlocked."
         )
     }
 

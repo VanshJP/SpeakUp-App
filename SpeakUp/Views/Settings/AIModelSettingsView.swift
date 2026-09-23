@@ -31,24 +31,14 @@ struct AIModelSettingsView: View {
     // MARK: - Dictation Card
 
     private var dictationCard: some View {
-        GlassCard(tint: AppColors.primary.opacity(0.05)) {
+        aiCard {
             HStack(spacing: 12) {
-                Image(systemName: "waveform")
-                    .font(.title3)
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 36, height: 36)
-                    .background(AppColors.primary.opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Auto-format Dictation")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Clean up punctuation, capitalization, and paragraphs when you dictate into a note.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
+                cardHeader(
+                    icon: "waveform",
+                    tint: AppColors.primary,
+                    title: "Auto-format Dictation",
+                    subtitle: "Clean up punctuation, capitalization, and paragraphs when you dictate into a note."
+                )
 
                 Toggle("", isOn: Binding(
                     get: { settings?.autoFormatDictation ?? true },
@@ -61,27 +51,47 @@ struct AIModelSettingsView: View {
         }
     }
 
+    // MARK: - Card Chrome
+
+    /// Every card on this page is one width, one padding and one header recipe.
+    /// They used to differ on all three: the privacy card shrank to its text and
+    /// sat narrower than the rest, icons came in three sizes (36pt square, 40pt
+    /// square, a bare glyph), and titles in three weights.
+    private func aiCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        GlassCard(padding: 16) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func cardHeader(icon: String, tint: Color, title: String, subtitle: String) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            IconChip(icon: icon, tint: tint, size: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     // MARK: - Subviews
 
     private var appleIntelligenceCard: some View {
-        GlassCard {
+        aiCard {
             HStack(spacing: 12) {
-                Image(systemName: "cpu")
-                    .font(.title2)
-                    .foregroundStyle(AppColors.primary)
-                    .frame(width: 40, height: 40)
-                    .background(AppColors.primary.opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Apple Intelligence")
-                        .font(.headline)
-                    Text("Built-in on-device model")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
+                cardHeader(
+                    icon: "cpu",
+                    tint: AppColors.primary,
+                    title: "Apple Intelligence",
+                    subtitle: "Built-in on-device model"
+                )
 
                 Text("Active")
                     .font(.caption2.weight(.bold))
@@ -96,25 +106,15 @@ struct AIModelSettingsView: View {
     // MARK: - Local Model Card
 
     private var localModelCard: some View {
-        GlassCard(tint: AppColors.categoryBrandBright.opacity(0.05)) {
+        aiCard {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.categoryBrandBright)
-                        .frame(width: 40, height: 40)
-                        .background(AppColors.categoryBrandBright.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Local AI Model")
-                            .font(.headline)
-                        Text("\(llmService.localLLM.modelDisplayName) • \(llmService.localLLM.approximateModelSize)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
+                    cardHeader(
+                        icon: "arrow.down.circle",
+                        tint: AppColors.categoryBrandBright,
+                        title: "Local AI Model",
+                        subtitle: "\(llmService.localLLM.modelDisplayName) • \(llmService.localLLM.approximateModelSize)"
+                    )
 
                     localModelStatusBadge
                 }
@@ -333,18 +333,22 @@ struct AIModelSettingsView: View {
     // MARK: - Features Card
 
     private var featuresCard: some View {
-        GlassCard(tint: AppColors.primary.opacity(0.05)) {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("What does this power?", systemImage: "questionmark.circle")
-                    .font(.subheadline.weight(.semibold))
+        aiCard {
+            VStack(alignment: .leading, spacing: 12) {
+                cardHeader(
+                    icon: "sparkles",
+                    tint: AppColors.primary,
+                    title: "What does this power?",
+                    subtitle: "Unlocked by an on-device model"
+                )
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     featureBullet(
                         icon: "brain",
                         text: "Smarter coherence scoring that understands meaning, not just keywords"
                     )
                     featureBullet(
-                        icon: "sparkles",
+                        icon: "lightbulb",
                         text: "Personalized AI coaching tips based on your speech performance"
                     )
                 }
@@ -353,42 +357,35 @@ struct AIModelSettingsView: View {
                     Text("Download the local AI model above or use a device with Apple Intelligence to unlock these features.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.top, 4)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     // MARK: - Privacy Card
 
     private var privacyCard: some View {
-        GlassCard {
-            HStack(spacing: 12) {
-                Image(systemName: "lock.shield")
-                    .font(.title3)
-                    .foregroundStyle(AppColors.success)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("100% On-Device")
-                        .font(.subheadline.weight(.medium))
-                    Text("All AI processing happens privately on your device. No data is sent to any server.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+        aiCard {
+            cardHeader(
+                icon: "lock.shield",
+                tint: AppColors.success,
+                title: "100% On-Device",
+                subtitle: "All AI processing happens privately on your device. No data is sent to any server."
+            )
         }
     }
 
     private func featureBullet(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(AppColors.primary)
-                .frame(width: 16)
+                .frame(width: 40)
             Text(text)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

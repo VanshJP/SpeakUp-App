@@ -218,7 +218,10 @@ struct RecordingView: View {
                     onSavedAndClosed?(recording)
                     onCancel()
                 },
-                analysisReady: recording.overallScore != nil || recording.transcriptionText != nil
+                analysisReady: recording.overallScore != nil || recording.transcriptionText != nil,
+                isStillProcessing: recording.isProcessing
+                    || RecordingProcessingCoordinator.shared.isProcessing(recording.id),
+                waitsForScore: true
             )
         }
         .task(id: gateStateKey(for: recording)) {

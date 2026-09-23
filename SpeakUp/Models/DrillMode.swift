@@ -103,16 +103,23 @@ enum DrillMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Longer rounds, unlocked one clean run at a time.
+    /// Longer rounds, unlocked one passed round at a time.
     ///
     /// Filler Elimination starts at 15 seconds, which is enough to learn the
     /// drill and too short to prove anything once you have: the habit-reversal
     /// studies that cut filled pauses did it over minutes of speech, not one
-    /// breath. A drill with a single rung never changes length.
+    /// breath. The same holds for every drill where holding the skill longer
+    /// is the harder version - pace, pauses, thinking on your feet. Vocal
+    /// Variety and Emphasis work one fixed line, which a longer clock does not
+    /// make harder, so they keep a single rung and never change length.
     var durationLadder: [Int] {
         switch self {
         case .fillerElimination: return [15, 30, 45, 60]
-        default: return [defaultDurationSeconds]
+        case .paceControl: return [60, 90, 120]
+        case .pausePractice: return [45, 60, 90]
+        case .impromptuSprint: return [30, 45, 60, 90]
+        case .qaSprint: return [45, 60, 90]
+        case .vocalVariety, .emphasis: return [defaultDurationSeconds]
         }
     }
 
@@ -180,4 +187,13 @@ struct DrillResult: Identifiable {
     /// Progress worth calling out: a new personal best, a longer round
     /// unlocked. Nil on an ordinary run.
     var milestone: String?
+    /// The rung of `mode.durationLadder` this run used, so Try again repeats
+    /// the same length instead of whatever the ladder says now.
+    var level: Int = 0
+    /// Length of the next rung when this run unlocked it (or it was already
+    /// open). The result offers it as its own button; a pass used to bump the
+    /// ladder silently, so Try again quietly ran a longer round.
+    var longerRoundSeconds: Int?
+
+    var roundSeconds: Int { mode.durationSeconds(atLevel: level) }
 }
