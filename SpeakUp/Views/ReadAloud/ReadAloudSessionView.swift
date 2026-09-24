@@ -24,8 +24,6 @@ struct ReadAloudSessionView: View {
 
     @ScaledMetric(relativeTo: .title2) private var passageFontSize: CGFloat = 22
 
-    /// One weight for the whole passage. See `passageText`.
-    private static let passageWeight: Font.Weight = .semibold
     /// Roughly a line of reading before the scroll view re-centres.
     private static let scrollAdvanceWords = 8
 
@@ -42,9 +40,18 @@ struct ReadAloudSessionView: View {
 
                 ScrollViewReader { proxy in
                     PageScrollView {
-                        passageText
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 24)
+                        ReadAloudPassageText(
+                            words: currentPassage.words,
+                            states: viewModel.wordStates,
+                            fontSize: passageFontSize,
+                            selectedWord: $selectedWord
+                        )
+                        // A new passage gets a new layout: the flow cache is
+                        // keyed on word count and font size, which two
+                        // passages can share.
+                        .id(currentPassage.id)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 24)
                     }
                     .onChange(of: viewModel.currentWordIndex) { _, newIndex in
                         // Re-centring every second word meant the passage slid
@@ -188,15 +195,7 @@ struct ReadAloudSessionView: View {
 
             Spacer()
 
-            Text(viewModel.formattedElapsedTime)
-                .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule().fill(.ultraThinMaterial)
-                }
-                .accessibilityLabel("Elapsed \(viewModel.formattedElapsedTime)")
+            ReadAloudClock(viewModel: viewModel)
 
             Spacer()
 
@@ -246,78 +245,6 @@ struct ReadAloudSessionView: View {
         .accessibilityLabel("Passage progress")
         .accessibilityValue("\(Int(viewModel.progressPercentage * 100)) percent")
     }
-
-    // MARK: - Passage Text
-
-    /// Every word is drawn at one fixed weight, and nothing about a word's
-    /// state may change its measured size.
-    ///
-    /// The current word used to render `.bold` while its neighbours stayed
-    /// `.regular`. Bold glyphs are wider, so each time the cursor advanced the
-    /// word under it grew, the word behind it shrank, and every word after
-    /// them on the line re-flowed - the passage visibly squirmed as you read
-    /// it. Position is carried by the highlight and the colour ramp instead,
-    /// neither of which touches layout.
-    private var passageText: some View {
-        let words = currentPassage.words
-        let states = viewModel.wordStates
-
-        return WrappingHStack(spacing: 6, lineSpacing: 12, metricsKey: passageFontSize) {
-            ForEach(Array(words.enumerated()), id: \.offset) { index, word in
-                let state = index < states.count ? states[index] : WordMatchState.upcoming
-                Text(word)
-                    .font(.system(size: passageFontSize, weight: Self.passageWeight, design: .default))
-                    .foregroundStyle(wordColor(state))
-                    .underline(state.needsAttention)
-                    .padding(.vertical, 2)
-                    .padding(.horizontal, 2)
-                    .background {
-                        if state == .current {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(AppColors.primary.opacity(0.28))
-                        }
-                    }
-                    .onTapGesture {
-                        guard state.isSettled else { return }
-                        Haptics.light()
-                        selectedWord = WordDetail(word: word, index: index, state: state)
-                    }
-                    .accessibilityLabel(wordLabel(word, state: state))
-                    .id("word_\(index)")
-            }
-        }
-        // A new passage gets a new layout: the flow cache is keyed on word
-        // count and font size, which two passages can share.
-        .id(currentPassage.id)
-    }
-
-    /// Words not yet reached are noise to VoiceOver; processed words carry
-    /// their match state so a non-visual reader can audit their reading.
-    private func wordLabel(_ word: String, state: WordMatchState) -> String {
-        switch state {
-        case .upcoming:
-            return ""
-        case .current:
-            return "\(word), current"
-        case .matched:
-            return word
-        case .mismatched(let spoken):
-            return "missed \(word), you said \(spoken)"
-        case .skipped:
-            return "\(word), skipped"
-        }
-    }
-
-    private func wordColor(_ state: WordMatchState) -> Color {
-        switch state {
-        case .upcoming: return .white.opacity(0.45)
-        case .current: return .white
-        case .matched: return AppColors.success
-        case .mismatched: return AppColors.error
-        case .skipped: return AppColors.warning
-        }
-    }
-
 
     private var accuracyColor: Color {
         // Accuracy is a score, so it rides the score ramp rather than the
@@ -442,6 +369,104 @@ struct ReadAloudSessionView: View {
                 .disabled(!viewModel.isListening)
                 .opacity(viewModel.isListening ? 1 : 0.5)
             }
+        }
+    }
+}
+
+// MARK: - Clock
+
+/// Reads `elapsedTime` in its own body, so the tick redraws this capsule and
+/// not the session screen. Read from the session view, a clock that wrote four
+/// times a second rebuilt every word of the passage four times a second.
+private struct ReadAloudClock: View {
+    let viewModel: ReadAloudViewModel
+
+    var body: some View {
+        let elapsed = viewModel.formattedElapsedTime
+
+        Text(elapsed)
+            .font(.system(size: 18, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background {
+                Capsule().fill(.ultraThinMaterial)
+            }
+            .accessibilityLabel("Elapsed \(elapsed)")
+    }
+}
+
+// MARK: - Passage Text
+
+/// The passage, one view per word. Its own view so a session-screen pass that
+/// changes neither the words nor their states skips the rebuild.
+///
+/// Every word is drawn at one fixed weight, and nothing about a word's state
+/// may change its measured size. The current word used to render `.bold`
+/// while its neighbours stayed `.regular`. Bold glyphs are wider, so each time
+/// the cursor advanced the word under it grew, the word behind it shrank, and
+/// every word after them on the line re-flowed - the passage visibly squirmed
+/// as you read it. Position is carried by the highlight and the colour ramp
+/// instead, neither of which touches layout.
+private struct ReadAloudPassageText: View {
+    let words: [String]
+    let states: [WordMatchState]
+    let fontSize: CGFloat
+    @Binding var selectedWord: WordDetail?
+
+    private static let weight: Font.Weight = .semibold
+
+    var body: some View {
+        WrappingHStack(spacing: 6, lineSpacing: 12, metricsKey: fontSize) {
+            ForEach(Array(words.enumerated()), id: \.offset) { index, word in
+                let state = index < states.count ? states[index] : WordMatchState.upcoming
+                Text(word)
+                    .font(.system(size: fontSize, weight: Self.weight, design: .default))
+                    .foregroundStyle(wordColor(state))
+                    .underline(state.needsAttention)
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 2)
+                    .background {
+                        if state == .current {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(AppColors.primary.opacity(0.28))
+                        }
+                    }
+                    .onTapGesture {
+                        guard state.isSettled else { return }
+                        Haptics.light()
+                        selectedWord = WordDetail(word: word, index: index, state: state)
+                    }
+                    .accessibilityLabel(wordLabel(word, state: state))
+                    .id("word_\(index)")
+            }
+        }
+    }
+
+    /// Words not yet reached are noise to VoiceOver; processed words carry
+    /// their match state so a non-visual reader can audit their reading.
+    private func wordLabel(_ word: String, state: WordMatchState) -> String {
+        switch state {
+        case .upcoming:
+            return ""
+        case .current:
+            return "\(word), current"
+        case .matched:
+            return word
+        case .mismatched(let spoken):
+            return "missed \(word), you said \(spoken)"
+        case .skipped:
+            return "\(word), skipped"
+        }
+    }
+
+    private func wordColor(_ state: WordMatchState) -> Color {
+        switch state {
+        case .upcoming: return .white.opacity(0.45)
+        case .current: return .white
+        case .matched: return AppColors.success
+        case .mismatched: return AppColors.error
+        case .skipped: return AppColors.warning
         }
     }
 }

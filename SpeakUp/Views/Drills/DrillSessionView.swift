@@ -186,8 +186,8 @@ struct DrillSessionView: View {
         VStack(spacing: 8) {
             ZStack {
                 if viewModel.isActive {
-                    CircularWaveformView(
-                        audioLevel: viewModel.audioLevel,
+                    DrillWaveform(
+                        viewModel: viewModel,
                         style: WaveformStyle(rawValue: userSettings.first?.waveformStyle ?? 0) ?? .rings
                     )
                 }
@@ -477,5 +477,18 @@ struct DrillSessionView: View {
                 .foregroundColor(.white)
             Text("\(head)\(emphasis)\(tail)")
         }
+    }
+}
+
+// MARK: - Waveform
+
+/// Reads `audioLevel` in its own body. The meter updates ten times a second,
+/// and read from the session view it re-ran the whole drill screen each time.
+private struct DrillWaveform: View {
+    let viewModel: DrillViewModel
+    let style: WaveformStyle
+
+    var body: some View {
+        CircularWaveformView(audioLevel: viewModel.audioLevel, style: style)
     }
 }
