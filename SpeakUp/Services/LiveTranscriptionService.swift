@@ -4,6 +4,26 @@ import Speech
 import AVFoundation
 import os
 
+/// One recognition result, lifted out of the non-`Sendable`
+/// `SFSpeechRecognitionResult` in the callback. The time is taken there too:
+/// a coalesced partial can wait for the main actor, and the gap before it is
+/// how a pause is spotted.
+private nonisolated struct LiveHeardResult: Sendable {
+    let words: [String]
+    let timestamps: [TimeInterval]
+    let durations: [TimeInterval]
+    let endsUtterance: Bool
+    let heardAt: Date
+}
+
+/// Results waiting for the main actor from one recognition request. Same
+/// shape as Read Aloud's: results that end an utterance stay in order, since
+/// each one tells a restart from a revision; partials are latest-wins.
+private nonisolated struct LivePendingResults: Sendable {
+    var closed: [LiveHeardResult] = []
+    var latest: LiveHeardResult?
+}
+
 @Observable
 class LiveTranscriptionService {
     private let logger = Logger.app("LiveTranscription")
@@ -37,6 +57,12 @@ class LiveTranscriptionService {
     /// main actor at every recognition restart, so it cannot be plain isolated
     /// state. The critical section is one `append`.
     private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(uncheckedState: nil)
+    /// Results waiting for the main actor, per recognition generation. See
+    /// `drainPendingResults()`.
+    private let pendingResults = OSAllocatedUnfairLock<[Int: LivePendingResults]>(initialState: [:])
+    /// True while exactly one drain is queued on the main actor, however fast
+    /// partials arrive.
+    private let isDrainScheduled = OSAllocatedUnfairLock<Bool>(initialState: false)
     private var recognitionTask: SFSpeechRecognitionTask?
     /// How many of the live utterance's segments have been tagged for fillers.
     private var lastProcessedSegmentCount = 0
@@ -285,6 +311,7 @@ class LiveTranscriptionService {
         recognitionTask?.cancel()
         recognitionTask = nil
         requestBox.withLock { $0 = nil }
+        pendingResults.withLock { $0 = [:] }
     }
 
     @MainActor
@@ -348,32 +375,92 @@ class LiveTranscriptionService {
             isTapInstalled = true
         }
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            // Hop onto the main actor before touching any state so teardown
-            // and partial-result writes never race the 10 Hz recording timer
-            // that reads `isActive` / `lastSegmentEndTime`.
+        recognitionTask = recognizer.recognitionTask(with: request) {
+            [weak self, pendingResults, isDrainScheduled] result, error in
+            // State is only touched on the main actor, so teardown and
+            // partial-result writes never race the 10 Hz recording timer that
+            // reads `isActive` / `lastSegmentEndTime`.
             let hadError = error != nil
             let isFinal = result?.isFinal ?? false
             // Stamped here rather than on the main actor, which can hold a
             // callback back and hide the pause in front of it.
             let heardAt = Date()
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                // Ignore callbacks from cancelled generations (restart/stop).
-                guard self.isActive, self.recognitionGeneration == generation else { return }
-                if let result { self.processPartialResult(result, heardAt: heardAt) }
 
-                // SFSpeech auto-finalizes after a pause. Previously we tore
-                // down AVAudioEngine here, which yanked the shared input graph
-                // out from under AVAudioRecorder mid-take and left the rest of
-                // the m4a silent - Whisper then scored the session as Silent.
-                // Keep the engine running and open a fresh recognition request.
-                if hadError || isFinal {
-                    self.restartRecognitionPreservingEngine()
+            if let result {
+                // Updates coalesce (gotcha punch list #20). Each callback used
+                // to spawn its own main-actor task, and behind a busy main
+                // actor those queued without bound, each holding a result.
+                // Latest-wins for partials, one drain in flight.
+                let segments = result.bestTranscription.segments
+                let heard = LiveHeardResult(
+                    words: segments.map(\.substring),
+                    timestamps: segments.map(\.timestamp),
+                    durations: segments.map(\.duration),
+                    endsUtterance: result.speechRecognitionMetadata != nil,
+                    heardAt: heardAt
+                )
+                pendingResults.withLock { pending in
+                    var entry = pending[generation] ?? LivePendingResults()
+                    if heard.endsUtterance {
+                        entry.closed.append(heard)
+                        entry.latest = nil
+                    } else {
+                        entry.latest = heard
+                    }
+                    pending[generation] = entry
+                }
+                let needsDrain = isDrainScheduled.withLock { scheduled -> Bool in
+                    guard !scheduled else { return false }
+                    scheduled = true
+                    return true
+                }
+                if needsDrain {
+                    Task { @MainActor [weak self] in
+                        self?.drainPendingResults()
+                    }
+                }
+            }
+
+            if hadError || isFinal {
+                Task { @MainActor [weak self] in
+                    self?.handleRequestEnd(generation: generation)
                 }
             }
         }
         return true
+    }
+
+    /// Applies what the live request has produced since the last drain.
+    /// Results from a cancelled generation (restart, stop) are dropped, as the
+    /// per-callback guard used to.
+    @MainActor
+    private func drainPendingResults() {
+        isDrainScheduled.withLock { $0 = false }
+        let pending = pendingResults.withLock { current -> [Int: LivePendingResults] in
+            let snapshot = current
+            current = [:]
+            return snapshot
+        }
+        guard isActive, let results = pending[recognitionGeneration] else { return }
+        for closed in results.closed {
+            processPartialResult(closed)
+        }
+        if let latest = results.latest {
+            processPartialResult(latest)
+        }
+    }
+
+    /// SFSpeech auto-finalizes after a pause. Previously we tore down
+    /// AVAudioEngine here, which yanked the shared input graph out from under
+    /// AVAudioRecorder mid-take and left the rest of the m4a silent - Whisper
+    /// then scored the session as Silent. Keep the engine running and open a
+    /// fresh recognition request, after applying what this one finished with.
+    @MainActor
+    private func handleRequestEnd(generation: Int) {
+        guard isActive, recognitionGeneration == generation else { return }
+        drainPendingResults()
+        guard isActive, recognitionGeneration == generation else { return }
+        restartRecognitionPreservingEngine()
     }
 
     /// Re-arms speech recognition without stopping AVAudioEngine, so the
@@ -416,10 +503,10 @@ class LiveTranscriptionService {
     }
 
     @MainActor
-    private func processPartialResult(_ result: SFSpeechRecognitionResult, heardAt: Date) {
-        let segments = result.bestTranscription.segments
-        let heard = RecognitionContinuity.words(in: segments.map(\.substring).joined(separator: " "))
-        let endsUtterance = result.speechRecognitionMetadata != nil
+    private func processPartialResult(_ result: LiveHeardResult) {
+        let heard = RecognitionContinuity.words(in: result.words.joined(separator: " "))
+        let endsUtterance = result.endsUtterance
+        let heardAt = result.heardAt
         let afterPause = !endsUtterance
             && (utteranceHeardAt.map { heardAt.timeIntervalSince($0) >= RecognitionContinuity.restartGap } ?? false)
 
@@ -449,7 +536,7 @@ class LiveTranscriptionService {
         utteranceWords = heard
         utteranceHeardAt = heardAt
 
-        let wordCount = segments.count
+        let wordCount = result.words.count
         guard wordCount > 0 else {
             // Preserve the counter through transient empty partials - the
             // recognizer occasionally emits zero-segment revisions between
@@ -464,9 +551,9 @@ class LiveTranscriptionService {
         let processedCount = lastProcessedSegmentCount
         lastProcessedSegmentCount = wordCount
 
-        let words = segments.map { $0.substring }
-        let timestamps = segments.map { $0.timestamp }
-        let durations = segments.map { $0.duration }
+        let words = result.words
+        let timestamps = result.timestamps
+        let durations = result.durations
 
         let fillerCount = FillerDetectionPipeline.countFillers(
             words: words,
@@ -475,7 +562,7 @@ class LiveTranscriptionService {
             config: fillerConfig
         )
 
-        let endTime = segments.last.map { $0.timestamp + $0.duration } ?? 0
+        let endTime = (timestamps.last ?? 0) + (durations.last ?? 0)
 
         // Monotonic within an utterance: partial revisions routinely
         // reinterpret a word that was tagged as a filler into a non-filler (or
