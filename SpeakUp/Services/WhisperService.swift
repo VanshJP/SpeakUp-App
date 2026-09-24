@@ -670,6 +670,8 @@ nonisolated private final class WhisperKitBox: @unchecked Sendable {
 nonisolated private final class WhisperDecodeExecutor: TaskExecutor {
     static let shared = WhisperDecodeExecutor()
 
+    /// Concurrent is load-bearing: the sampler's inner `Task` inherits this
+    /// executor, and on a serial queue it would wait behind its own blocker.
     private let queue = DispatchQueue(
         label: "com.vansh.SpeakUpMore.whisper-decode",
         qos: .userInitiated,

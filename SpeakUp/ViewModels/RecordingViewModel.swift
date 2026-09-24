@@ -117,11 +117,15 @@ class RecordingViewModel {
     /// then landed on the analyzing screen. Utility priority keeps it out of the
     /// recording's way; the analysis raises it by waiting on the same build.
     ///
-    /// Skipped while the LLM is resident: building beside it mid-take is the
+    /// Skipped while the LLM is resident or loading: building beside it mid-take is the
     /// memory spike that gets an app killed, and a killed take is lost. The
     /// analysis unloads the LLM first and builds after, as before.
     func warmUpSpeechModel() {
-        guard let speechService, llmService?.localLLM.isModelReady != true else { return }
+        guard let speechService else { return }
+        if let localLLM = llmService?.localLLM {
+            if localLLM.isModelReady { return }
+            if case .loading = localLLM.modelState { return }
+        }
         Task(priority: .utility) {
             await speechService.preloadModel()
         }

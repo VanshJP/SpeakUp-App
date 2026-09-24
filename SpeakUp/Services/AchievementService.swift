@@ -20,13 +20,13 @@ class AchievementService {
         let allCategoriesCovered: Bool
     }
 
-    /// Check all achievements against current data and unlock any that are newly earned.
     /// The achievements the scan can only settle by decoding each take's
     /// analysis. Once all of them are unlocked the decode has nothing to add.
     private static let analysisDerivedIDs: Set<String> = [
         "score_80", "score_95", "zero_fillers", "word_workout"
     ]
 
+    /// Check all achievements against current data and unlock any that are newly earned.
     @MainActor
     func checkAchievements(context: ModelContext, listenBackCount: Int = 0) async {
         let container = context.container

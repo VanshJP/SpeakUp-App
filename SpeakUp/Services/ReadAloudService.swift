@@ -1209,12 +1209,6 @@ class ReadAloudService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Parses tokens composed entirely of number words to their digit string.
-    /// Handles both spaced ("one hundred") and fused ("onehundred",
-    /// "seventytwo" - hyphens were stripped upstream) forms by greedily
-    /// consuming the longest number-word prefix at each step. Returns nil for
-    /// anything containing a non-number word - including plain digits, which
-    /// are already canonical.
     // Built once. `normalize` runs for every word of the spoken transcript on
     // every recognition drain, and this used to rebuild the table and sort its
     // keys for each word.
@@ -1231,6 +1225,12 @@ class ReadAloudService {
     private nonisolated static let numberScaleMarkers: Set<String> = ["hundred", "thousand"]
     private nonisolated static let numberWordsLongestFirst = numberLexicon.keys.sorted { $0.count > $1.count }
 
+    /// Parses tokens composed entirely of number words to their digit string.
+    /// Handles both spaced ("one hundred") and fused ("onehundred",
+    /// "seventytwo" - hyphens were stripped upstream) forms by greedily
+    /// consuming the longest number-word prefix at each step. Returns nil for
+    /// anything containing a non-number word - including plain digits, which
+    /// are already canonical.
     private nonisolated static func spelledNumberValue(_ token: String) -> String? {
         guard !token.isEmpty, token.contains(where: \.isLetter) else { return nil }
 

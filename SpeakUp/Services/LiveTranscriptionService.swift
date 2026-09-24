@@ -16,9 +16,9 @@ private nonisolated struct LiveHeardResult: Sendable {
     let heardAt: Date
 }
 
-/// Results waiting for the main actor from one recognition request. Same
-/// shape as Read Aloud's: results that end an utterance stay in order, since
-/// each one tells a restart from a revision; partials are latest-wins.
+/// Results waiting for the main actor from one recognition request. Results
+/// that end an utterance, and partials a restart would overwrite, stay in
+/// order in `closed`; other partials are latest-wins.
 private nonisolated struct LivePendingResults: Sendable {
     var closed: [LiveHeardResult] = []
     var latest: LiveHeardResult?
@@ -143,6 +143,9 @@ class LiveTranscriptionService {
 
     /// Request speech recognition authorization (must be called before start).
     func requestAuthorization() async -> Bool {
+        // Build the recognizer here, ahead of `start()`, so it has the same
+        // head start it had when `init` built it.
+        _ = recognizer
         await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
@@ -405,6 +408,12 @@ class LiveTranscriptionService {
                         entry.closed.append(heard)
                         entry.latest = nil
                     } else {
+                        // A partial that shrinks is the recognizer starting
+                        // over after a pause, possibly with no metadata. Keep
+                        // the longer one in order rather than lose its words.
+                        if let previous = entry.latest, heard.words.count < previous.words.count {
+                            entry.closed.append(previous)
+                        }
                         entry.latest = heard
                     }
                     pending[generation] = entry

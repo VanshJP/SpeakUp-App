@@ -1100,6 +1100,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
         // 4. Generate tokens
         var result = ""
+        var wasCancelled = false
 
         for i in 0..<maxTokens {
             // Check cancellation every ~8 tokens. Tightened from 10 to keep
@@ -1107,6 +1108,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             // so a memory-pressure abort completes before jetsam fires.
             if i % 8 == 0 && isCancelled {
                 Self.logger.debug("Generation cancelled")
+                wasCancelled = true
                 break
             }
 
@@ -1134,6 +1136,9 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         llama_sampler_reset(smpl)
         lock.unlock()
 
+        // A cancelled generation is cut off mid-answer. Returning the fragment
+        // read as a short success: "VOCABULARY: 5" from a model writing 55.
+        if wasCancelled { return nil }
         return result.isEmpty ? nil : result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
