@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AnalysisSettingsView: View {
     @Bindable var viewModel: SettingsViewModel
+    @State private var pendingTargetWPMSave: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -144,7 +145,15 @@ struct AnalysisSettingsView: View {
         }
         .onChange(of: viewModel.targetWPM) { _, _ in
             guard !viewModel.isSyncing else { return }
-            Task { await viewModel.saveSettings() }
+            // Debounced. A drag moves this on every step, and each save is a
+            // store write, a CloudKit export and a full reminder reschedule.
+            // Not cancelled on disappear, so leaving mid-settle still saves.
+            pendingTargetWPMSave?.cancel()
+            pendingTargetWPMSave = Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                await viewModel.saveSettings()
+            }
         }
         .onChange(of: viewModel.autoPaceTarget) { _, _ in
             guard !viewModel.isSyncing else { return }

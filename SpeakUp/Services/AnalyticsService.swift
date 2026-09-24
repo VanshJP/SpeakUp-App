@@ -33,11 +33,19 @@ final class AnalyticsService {
     private var sink: AnalyticsSink
 
     /// Mirrors the most recent events so the diagnostics screen can render
-    /// without re-reading the file on every keystroke.
+    /// without re-reading the file on every keystroke. Holds this launch's
+    /// events until that screen asks for the stored ones
+    /// (`refreshRecentEvents`); reading them here made launch wait on
+    /// decoding up to two thousand events on the main thread.
     private(set) var recentEvents: [RecordedAnalyticsEvent] = []
 
     private init(sink: AnalyticsSink = LocalAnalyticsSink()) {
         self.sink = sink
+    }
+
+    /// Replaces the mirror with the full stored log. For the diagnostics
+    /// screen, which is the only reader of older events.
+    func refreshRecentEvents() {
         recentEvents = sink.allEvents()
     }
 
@@ -114,7 +122,15 @@ nonisolated final class LocalAnalyticsSink: AnalyticsSink, @unchecked Sendable {
     }()
 
     init() {
-        events = Self.load(from: fileURL)
+        events = []
+        // Loaded on the sink's own queue, not in the caller's init - the
+        // analytics service is created on the main thread at launch. Every
+        // record, read and flush is queued behind this, so none sees the log
+        // before it has loaded.
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.events = Self.load(from: self.fileURL)
+        }
     }
 
     func record(_ event: RecordedAnalyticsEvent) {

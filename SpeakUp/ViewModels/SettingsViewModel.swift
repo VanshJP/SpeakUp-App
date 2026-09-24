@@ -811,14 +811,20 @@ class SettingsViewModel {
             // Delete all recordings and their files (local + iCloud)
             let recordingDescriptor = FetchDescriptor<Recording>()
             let recordings = try context.fetch(recordingDescriptor)
+            // Only the stored paths are read here. Resolving and deleting a
+            // file in the ubiquity container waits on the iCloud daemon
+            // (gotcha §29), and this did it on the main thread once per take.
+            let storedMedia = recordings.flatMap { [$0.audioURL, $0.videoURL] }.compactMap { $0 }
+            let ubiquityContainer = ICloudStorageService.shared.ubiquityContainerURL
             for recording in recordings {
-                if let audioURL = recording.resolvedAudioURL {
-                    ICloudStorageService.shared.removeFile(at: audioURL)
-                }
-                if let videoURL = recording.resolvedVideoURL {
-                    ICloudStorageService.shared.removeFile(at: videoURL)
-                }
                 context.delete(recording)
+            }
+            Task.detached(priority: .utility) {
+                for stored in storedMedia {
+                    if let url = Recording.resolveStoredURL(stored, ubiquityContainer: ubiquityContainer) {
+                        try? FileManager.default.removeItem(at: url)
+                    }
+                }
             }
 
             // Delete all goals

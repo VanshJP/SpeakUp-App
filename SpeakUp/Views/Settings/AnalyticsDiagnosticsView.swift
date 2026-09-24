@@ -35,6 +35,9 @@ struct AnalyticsDiagnosticsView: View {
         }
         .navigationTitle("Usage Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
+        // The service keeps only this launch's events in memory; the stored
+        // log is read here, where it is shown.
+        .onAppear { analytics.refreshRecentEvents() }
         .alert("Clear diagnostics?", isPresented: $showingResetAlert) {
             Button("Clear", role: .destructive) { analytics.reset() }
             Button("Cancel", role: .cancel) {}
