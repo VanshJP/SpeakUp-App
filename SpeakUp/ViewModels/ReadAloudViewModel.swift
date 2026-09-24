@@ -291,7 +291,11 @@ class ReadAloudViewModel {
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                guard let self, self.startTime != nil else { continue }
+                // Gone means done. `continue` here spun this loop at 4 Hz for
+                // the rest of the process once the view model was released,
+                // since nothing is left to cancel it.
+                guard let self else { return }
+                guard self.startTime != nil else { continue }
                 self.elapsedTime = self.readingTime()
 
                 guard self.sessionState == .listening else { continue }

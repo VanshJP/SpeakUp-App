@@ -1215,21 +1215,28 @@ class ReadAloudService {
     /// consuming the longest number-word prefix at each step. Returns nil for
     /// anything containing a non-number word - including plain digits, which
     /// are already canonical.
+    // Built once. `normalize` runs for every word of the spoken transcript on
+    // every recognition drain, and this used to rebuild the table and sort its
+    // keys for each word.
+    private nonisolated static let numberLexicon: [String: Int] = [
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9,
+        "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+        "fourteen": 14, "fifteen": 15, "sixteen": 16,
+        "seventeen": 17, "eighteen": 18, "nineteen": 19,
+        "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+        "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+        "hundred": 0, "thousand": 0, "and": 0
+    ]
+    private nonisolated static let numberScaleMarkers: Set<String> = ["hundred", "thousand"]
+    private nonisolated static let numberWordsLongestFirst = numberLexicon.keys.sorted { $0.count > $1.count }
+
     private nonisolated static func spelledNumberValue(_ token: String) -> String? {
         guard !token.isEmpty, token.contains(where: \.isLetter) else { return nil }
 
-        let lexicon: [String: Int] = [
-            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-            "six": 6, "seven": 7, "eight": 8, "nine": 9,
-            "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
-            "fourteen": 14, "fifteen": 15, "sixteen": 16,
-            "seventeen": 17, "eighteen": 18, "nineteen": 19,
-            "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
-            "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
-            "hundred": 0, "thousand": 0, "and": 0
-        ]
-        let scaleMarkers: Set<String> = ["hundred", "thousand"]
-        let sortedWords = lexicon.keys.sorted { $0.count > $1.count }
+        let lexicon = numberLexicon
+        let scaleMarkers = numberScaleMarkers
+        let sortedWords = numberWordsLongestFirst
 
         var parts: [String] = []
         var rest = Substring(token)
