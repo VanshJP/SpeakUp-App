@@ -20,8 +20,12 @@ struct StoryDetailView: View {
     @State private var showingEditor = false
     @State private var toastMessage: String?
     @State private var isDeleted = false
+    @State private var displayCache = StoryDisplayCache()
 
     private var settings: UserSettings? { settingsList.first }
+
+    /// Decoded content + word stats for the current `updatedAt`.
+    private var display: StoryDisplayCache { displayCache.refreshed(for: story) }
 
     /// Deleted from this page or from the editor sheet on top of it. Once
     /// true, nothing here reads the story again: its attributes went with the
@@ -90,8 +94,12 @@ struct StoryDetailView: View {
             Text("This story will be permanently deleted.")
         }
         .onAppear {
+            viewModel.surfaceAppeared()
             guard !storyIsGone else { return }
             reloadRecordings()
+        }
+        .onDisappear {
+            viewModel.surfaceDisappeared()
         }
     }
 
@@ -132,10 +140,11 @@ struct StoryDetailView: View {
     }
 
     private func reloadRecordings() {
-        recordingSummaries = PracticeRecordingSummary.from(
-            recordings: viewModel.linkedRecordings(for: story)
-        )
-        chartPoints = PracticeDataPoint.from(summaries: recordingSummaries)
+        Task {
+            let summaries = await viewModel.linkedTakeSummaries(for: story)
+            recordingSummaries = summaries
+            chartPoints = PracticeDataPoint.from(summaries: summaries)
+        }
     }
 
     // MARK: - Hero Header
@@ -170,8 +179,8 @@ struct StoryDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 12) {
-                    Label("\(story.wordCount) words", systemImage: "text.word.spacing")
-                    Label(story.estimatedReadingTime, systemImage: "clock")
+                    Label("\(display.wordCount) words", systemImage: "text.word.spacing")
+                    Label(display.readingTime, systemImage: "clock")
                     Label(
                         story.inputMethod == "dictated" ? "Dictated" : "Typed",
                         systemImage: story.inputMethod == "dictated" ? "waveform" : "keyboard"
@@ -300,8 +309,9 @@ struct StoryDetailView: View {
                 showingEditor = true
             } label: {
                 GlassCard {
-                    if story.attributedContent.length > 0 {
-                        AttributedTextView(attributedText: styledForDisplay(story.attributedContent))
+                    let text = display.text
+                    if text.length > 0 {
+                        AttributedTextView(attributedText: text)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
                         Text("Tap to start writing…")
@@ -335,17 +345,6 @@ struct StoryDetailView: View {
             .padding(.vertical, 5)
             .animation(.easeInOut(duration: 0.2), value: showCopied)
         }
-    }
-
-    private func styledForDisplay(_ attributed: NSAttributedString) -> NSAttributedString {
-        let mutable = NSMutableAttributedString(attributedString: attributed)
-        let range = NSRange(location: 0, length: mutable.length)
-        mutable.enumerateAttribute(.foregroundColor, in: range, options: []) { value, subRange, _ in
-            if value == nil {
-                mutable.addAttribute(.foregroundColor, value: UIColor.white, range: subRange)
-            }
-        }
-        return mutable
     }
 
     // MARK: - Tags
@@ -547,5 +546,39 @@ struct StoryDetailView: View {
                 .font(.body)
                 .frame(width: 28, height: 28)
         }
+    }
+}
+
+// MARK: - Display Cache
+
+/// The content card's styled RTFD and word stats, rebuilt only when
+/// `updatedAt` moves (every content write bumps it). A reference box held in
+/// `@State` so body fills it synchronously: first paint already has the styled
+/// text, and later passes (toast flips, a take's Story writes) reuse it
+/// without decoding again or writing view state mid-update.
+private final class StoryDisplayCache {
+    private var stamp: Date?
+    private(set) var text = NSAttributedString()
+    private(set) var wordCount = 0
+    private(set) var readingTime = ""
+
+    func refreshed(for story: Story) -> StoryDisplayCache {
+        guard stamp != story.updatedAt else { return self }
+        stamp = story.updatedAt
+        text = Self.styledForDisplay(story.attributedContent)
+        wordCount = story.wordCount
+        readingTime = Story.readingTime(words: wordCount)
+        return self
+    }
+
+    private static func styledForDisplay(_ attributed: NSAttributedString) -> NSAttributedString {
+        let mutable = NSMutableAttributedString(attributedString: attributed)
+        let range = NSRange(location: 0, length: mutable.length)
+        mutable.enumerateAttribute(.foregroundColor, in: range, options: []) { value, subRange, _ in
+            if value == nil {
+                mutable.addAttribute(.foregroundColor, value: UIColor.white, range: subRange)
+            }
+        }
+        return mutable
     }
 }
