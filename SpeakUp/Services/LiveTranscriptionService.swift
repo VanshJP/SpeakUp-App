@@ -146,7 +146,7 @@ class LiveTranscriptionService {
         // Build the recognizer here, ahead of `start()`, so it has the same
         // head start it had when `init` built it.
         _ = recognizer
-        await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
             }
