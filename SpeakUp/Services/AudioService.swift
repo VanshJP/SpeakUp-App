@@ -239,7 +239,11 @@ class AudioService: NSObject {
         }
     }
 
-    func stopRecording() async -> URL? {
+    /// - Parameter promoteToICloud: false for a throwaway take (a drill, a
+    ///   calibration, dictation) that is read once and deleted. Promoting one
+    ///   starts an iCloud upload the delete then has to chase, and file work on
+    ///   a ubiquitous file waits on the iCloud daemon (gotcha §29).
+    func stopRecording(promoteToICloud: Bool = true) async -> URL? {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
@@ -288,6 +292,8 @@ class AudioService: NSObject {
         recordingDuration = await Task.detached(priority: .userInitiated) {
             AudioService.fileDuration(at: localURL)
         }.value ?? 0
+
+        guard promoteToICloud else { return localURL }
 
         // Promote to iCloud only after the file is fully finalized locally.
         // Awaited, never inline: the move blocks on the iCloud daemon.

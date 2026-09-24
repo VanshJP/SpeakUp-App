@@ -413,18 +413,17 @@ class DrillViewModel {
     }
 
     private func finishWithPitchAnalysis(mode: DrillMode, endedEarly: Bool) async {
-        let url = await audioService.stopRecording()
-        defer {
-            if let url {
-                try? FileManager.default.removeItem(at: url)
-            }
-            isAnalyzingPitch = false
-        }
+        // A drill take is read once and deleted, so it never goes to iCloud.
+        let url = await audioService.stopRecording(promoteToICloud: false)
+        defer { isAnalyzingPitch = false }
 
+        // Decode, analysis and delete all off the main actor. The decode used
+        // to run here on it: a whole take of AAC, synchronously.
         var pitch: PitchMetrics?
-        if let url, let pcm = MonoPCM.decode(url: url) {
+        if let url {
             pitch = await Task.detached(priority: .userInitiated) {
-                PitchAnalysisService.analyze(monoPCM: pcm)
+                defer { try? FileManager.default.removeItem(at: url) }
+                return MonoPCM.decode(url: url).flatMap { PitchAnalysisService.analyze(monoPCM: $0) }
             }.value
         }
 

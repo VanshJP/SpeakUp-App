@@ -68,6 +68,13 @@ struct VoiceCalibrationView: View {
                 }
             }
         }
+        // The recorder here is the app-wide `AudioService`. A swipe away mid-take
+        // used to leave it recording with no end, and the story editor's
+        // dictation then found it already running.
+        .interactiveDismissDisabled(phase == .recording || phase == .analyzing)
+        .onDisappear {
+            if phase == .recording { cancelCalibration() }
+        }
     }
 
     // MARK: - Subviews
@@ -286,17 +293,17 @@ struct VoiceCalibrationView: View {
         phase = .analyzing
 
         Task {
-            guard let audioURL = await audioService.stopRecording() else {
+            // Read once and deleted, so it never goes to iCloud.
+            guard let audioURL = await audioService.stopRecording(promoteToICloud: false) else {
                 errorMessage = "Recording failed. Please try again."
                 phase = .ready
                 return
             }
 
             let profile = await Task.detached(priority: .userInitiated) {
-                ConversationIsolationService.extractVoiceProfile(from: audioURL)
+                defer { try? FileManager.default.removeItem(at: audioURL) }
+                return ConversationIsolationService.extractVoiceProfile(from: audioURL)
             }.value
-
-            try? FileManager.default.removeItem(at: audioURL)
 
             if let profile {
                 Haptics.success()
@@ -312,9 +319,9 @@ struct VoiceCalibrationView: View {
 
     private func cancelCalibration() {
         wordTracker.stop()
-        Task {
-            let _ = await audioService.stopRecording()
-            phase = .ready
-        }
+        // Cancel, not stop: a stop kept the file, promoted it to iCloud and
+        // never deleted it, so every cancelled calibration left a take behind.
+        audioService.cancelRecording()
+        phase = .ready
     }
 }
