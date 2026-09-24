@@ -620,7 +620,7 @@ struct ScoreProgressChart: View {
 
 // MARK: - Weekly Bucket
 
-nonisolated struct WeeklyBucket: Identifiable {
+nonisolated struct WeeklyBucket: Identifiable, Equatable {
     let id: Date
     let avgFillers: Double
     let sessionCount: Int
@@ -629,27 +629,31 @@ nonisolated struct WeeklyBucket: Identifiable {
 // MARK: - Filler Trend Chart
 
 struct FillerTrendChart: View {
-    let points: [ChartRecordingPoint]
-
     @State private var selectedIndex: Int?
 
-    private var weeklyData: [WeeklyBucket] {
+    /// Weekly buckets, built once per `points` change like the other charts'
+    /// `PlotModel`. As a computed property body regrouped every point about a
+    /// dozen times per pass, and scrubbing runs a pass per step.
+    private let weeklyData: [WeeklyBucket]
+    private let overallTrend: Double
+
+    init(points: [ChartRecordingPoint]) {
+        _selectedIndex = State(initialValue: nil)
+
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: points) { p in
             calendar.startOfDay(for: p.date.startOfWeek)
         }
 
-        return grouped.map { (weekStart, recs) in
+        let weeks = grouped.map { (weekStart, recs) in
             let totalFillers = recs.map(\.fillerCount).reduce(0, +)
             let avg = recs.isEmpty ? 0 : Double(totalFillers) / Double(recs.count)
             return WeeklyBucket(id: weekStart, avgFillers: avg, sessionCount: recs.count)
         }
         .sorted { $0.id < $1.id }
-    }
 
-    private var overallTrend: Double {
-        guard weeklyData.count >= 2 else { return 0 }
-        return weeklyData.last!.avgFillers - weeklyData.first!.avgFillers
+        weeklyData = weeks
+        overallTrend = weeks.count >= 2 ? weeks.last!.avgFillers - weeks.first!.avgFillers : 0
     }
 
     private var selectedBucketID: Date? {
@@ -985,33 +989,39 @@ struct SkillBreakdownCard: View {
 
 // MARK: - Session Frequency Chart
 
-nonisolated private struct WeeklyFrequencyBucket: Identifiable {
+nonisolated private struct WeeklyFrequencyBucket: Identifiable, Equatable {
     let id: Date
     let sessionCount: Int
 }
 
 struct SessionFrequencyChart: View {
-    let points: [ChartRecordingPoint]
-
     @Query private var userSettings: [UserSettings]
     @State private var selectedIndex: Int?
 
-    private var weeklyGoal: Int {
-        userSettings.first?.weeklyGoalSessions ?? 5
-    }
+    /// Built once per `points` change; see `FillerTrendChart.weeklyData`.
+    private let weeklyCounts: [WeeklyFrequencyBucket]
 
-    private var weeklyCounts: [WeeklyFrequencyBucket] {
+    init(points: [ChartRecordingPoint]) {
+        _userSettings = Query()
+        _selectedIndex = State(initialValue: nil)
+
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: points) { p in
             calendar.startOfDay(for: p.date.startOfWeek)
         }
 
-        return grouped.map { (weekStart, recs) in
+        weeklyCounts = grouped.map { (weekStart, recs) in
             WeeklyFrequencyBucket(id: weekStart, sessionCount: recs.count)
         }
         .sorted { $0.id < $1.id }
     }
 
+    private var weeklyGoal: Int {
+        userSettings.first?.weeklyGoalSessions ?? 5
+    }
+
+    // Depends on the goal setting, so it stays computed; it walks the
+    // already-built buckets, not the points.
     private var goalHitRate: Int {
         guard !weeklyCounts.isEmpty else { return 0 }
         let hit = weeklyCounts.filter { $0.sessionCount >= weeklyGoal }.count

@@ -350,12 +350,20 @@ class DrillViewModel {
                         self.voicedFramesOutsidePause += 1
                     }
                 }
-                if self.isActive {
+                // Only the two drills that show the swing, or score on it,
+                // pay for the sort.
+                if self.isActive, self.selectedMode == .vocalVariety || self.selectedMode == .emphasis {
                     self.levelSamples.append(self.audioLevel)
                     if self.levelSamples.count > 600 {
                         self.levelSamples.removeFirst(self.levelSamples.count - 600)
                     }
-                    self.liveEnergySwing = Self.energySwing(in: self.levelSamples)
+                    // The HUD prints whole dB and hides at zero. A write that
+                    // changes neither would only re-run the drill screen.
+                    let swing = Self.energySwing(in: self.levelSamples)
+                    if swing.rounded(.toNearestOrEven) != self.liveEnergySwing.rounded(.toNearestOrEven)
+                        || (swing > 0) != (self.liveEnergySwing > 0) {
+                        self.liveEnergySwing = swing
+                    }
                 }
             }
         }
