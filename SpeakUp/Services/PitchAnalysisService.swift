@@ -39,6 +39,8 @@ nonisolated enum PitchAnalysisService {
         var hannWindow = [Float](repeating: 0, count: windowSize)
         vDSP_hann_window(&hannWindow, vDSP_Length(windowSize), Int32(vDSP_HALF_WINDOW))
         var windowed = [Float](repeating: 0, count: windowSize)
+        var squares = [Float](repeating: 0, count: windowSize)
+        var energyPrefix = [Double](repeating: 0, count: windowSize + 1)
 
         data.withUnsafeBufferPointer { dataPtr in
             guard let base = dataPtr.baseAddress else { return }
@@ -46,7 +48,14 @@ nonisolated enum PitchAnalysisService {
             while offset + windowSize <= data.count {
                 totalFrames += 1
                 vDSP_vmul(base + offset, 1, hannWindow, 1, &windowed, 1, vDSP_Length(windowSize))
-                if let f0 = estimateF0(windowed: windowed, sampleRate: sr, minLag: minLag, maxLag: maxLag) {
+                if let f0 = estimateF0(
+                    windowed: windowed,
+                    squares: &squares,
+                    energyPrefix: &energyPrefix,
+                    sampleRate: sr,
+                    minLag: minLag,
+                    maxLag: maxLag
+                ) {
                     f0Values.append(f0)
                 }
                 offset += hopSize
@@ -125,13 +134,36 @@ nonisolated enum PitchAnalysisService {
 
     // MARK: - F0 Estimation (Autocorrelation)
 
-    private static func estimateF0(windowed: [Float], sampleRate: Double, minLag: Int, maxLag: Int) -> Float? {
+    /// `squares` and `energyPrefix` are per-recording scratch, sized to the
+    /// window (`energyPrefix` one longer), so a frame allocates nothing.
+    private static func estimateF0(
+        windowed: [Float],
+        squares: inout [Float],
+        energyPrefix: inout [Double],
+        sampleRate: Double,
+        minLag: Int,
+        maxLag: Int
+    ) -> Float? {
         let n = windowed.count
         guard maxLag < n, minLag < maxLag else { return nil }
 
         var energy: Float = 0
         vDSP_dotpr(windowed, 1, windowed, 1, &energy, vDSP_Length(n))
         guard energy > 1e-10 else { return nil }
+
+        // The two energies each lag normalizes by are a head and a tail of
+        // the same running sum of squares, so they come from one prefix pass
+        // per frame instead of two dot products per lag. That was two thirds
+        // of the work: about 500 lags a frame at 44.1 kHz, a hundred frames
+        // per second of audio, on every take's analysis. Summed in Double so
+        // the energies match the dot products to float rounding.
+        vDSP_vsq(windowed, 1, &squares, 1, vDSP_Length(n))
+        var running = 0.0
+        energyPrefix[0] = 0
+        for i in 0..<n {
+            running += Double(squares[i])
+            energyPrefix[i + 1] = running
+        }
 
         var bestLag = minLag
         var bestCorr: Float = -1
@@ -146,10 +178,9 @@ nonisolated enum PitchAnalysisService {
                 var corr: Float = 0
                 vDSP_dotpr(base, 1, base + lag, 1, &corr, vDSP_Length(overlapLen))
 
-                var energy0: Float = 0
-                var energy1: Float = 0
-                vDSP_dotpr(base, 1, base, 1, &energy0, vDSP_Length(overlapLen))
-                vDSP_dotpr(base + lag, 1, base + lag, 1, &energy1, vDSP_Length(overlapLen))
+                // Samples [0, n - lag) and [lag, n).
+                let energy0 = Float(energyPrefix[overlapLen])
+                let energy1 = Float(energyPrefix[n] - energyPrefix[lag])
                 let norm = sqrt(energy0 * energy1)
                 guard norm > 1e-10 else { continue }
                 corr /= norm
