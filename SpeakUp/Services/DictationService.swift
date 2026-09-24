@@ -373,6 +373,18 @@ class DictationService {
         recognitionTask?.cancel()
         recognitionTask = nil
         requestBox.withLock { $0 = nil }
+
+        // `.record` silences every output, and the synthesiser speaking a word
+        // in the Word Library or the Read Aloud composer sets no category of its
+        // own, so it stayed mute until some other screen reconfigured the
+        // session. Hand back the ambient category the cue chirps expect, the
+        // same way `PronunciationService.endGuidance` does - synchronously, so
+        // a screen configuring its own session next cannot be overwritten, and
+        // only when the category is still ours.
+        let session = AVAudioSession.sharedInstance()
+        if session.category == .record {
+            try? session.setCategory(.ambient, mode: .default)
+        }
     }
 }
 

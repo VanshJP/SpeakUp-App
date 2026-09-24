@@ -451,6 +451,10 @@ class ReadAloudService {
     /// instead, keeping the engine, the tap, and every word already matched.
     private func handleSegmentEnd(segment segmentID: Int, failure: String?) {
         guard isListening, !isSuspended else { return }
+        // No engine while listening means a rebuild is waiting on the session.
+        // It cancelled this request on purpose and arms a fresh one; answering
+        // the cancellation would count it as a dead request.
+        guard audioEngine != nil else { return }
         // A retired request delivering its own final is the expected shape of a
         // rollover, and a task cancelled by the previous session reports an
         // error long after its slots are gone; only the live request asks for
@@ -709,6 +713,13 @@ class ReadAloudService {
     /// Rebuilds the capture graph in place and re-arms recognition on it,
     /// keeping `segments` - and therefore the reader's place in the passage -
     /// intact.
+    ///
+    /// An interruption leaves the session deactivated, and the engine will not
+    /// start again until it is back. Re-activating it happens off the main
+    /// actor: `setActive` blocks until the audio server answers, and this runs
+    /// exactly when the reader starts speaking again - after the model line, a
+    /// call, Resume. Same stall `AudioService.configureRecordingSession` moved
+    /// off the main thread. The engine is built once the session is up.
     private func rebuildCaptureGraph(reason: String) {
         guard isListening, !isSuspended else { return }
         logger.info("Read Aloud rebuilding capture graph: \(reason, privacy: .public)")
@@ -720,9 +731,22 @@ class ReadAloudService {
         removeEngineObservers()
         audioEngine = nil
 
-        // An interruption leaves the session deactivated; the engine will not
-        // start again until it is back.
-        try? AVAudioSession.sharedInstance().setActive(true)
+        Task { [weak self] in
+            try? await Task.detached(priority: .userInitiated) {
+                try AVAudioSession.sharedInstance().setActive(true)
+            }.value
+            self?.startCaptureGraph()
+        }
+    }
+
+    /// Second half of `rebuildCaptureGraph`, once the session is active.
+    ///
+    /// Anything may have happened while it came up. A hold - the model line
+    /// again, a call, the app leaving - owns the mic now and its own way back
+    /// rebuilds; Done ended the read; and when two rebuilds overlap, the first
+    /// to land builds the engine and the other must not replace it.
+    private func startCaptureGraph() {
+        guard isListening, !isSuspended, audioEngine == nil else { return }
 
         let engine = AVAudioEngine()
         do {

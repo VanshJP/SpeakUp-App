@@ -161,7 +161,12 @@ the read, not the end of it — hearing the model line (`isPaused`), a call or
 Siri (`isInterrupted`), the app leaving the foreground (`isBackgrounded`), and
 automatic recovery failing (`isStalled`). Holds keep `segments` and every
 matched word; `rebuildCaptureGraph` brings capture back on `didBecomeActive`, an
-interruption's `.ended`, or the reader's **Resume reading**. A stall gets one
+interruption's `.ended`, or the reader's **Resume reading**. The rebuild
+re-activates the session in a detached task, because `setActive` blocks until
+the audio server answers and every way back lands just as the reader starts
+speaking; the engine is built afterwards in `startCaptureGraph`, only if the
+read is still listening, unheld, and no overlapping rebuild got there first.
+A stall gets one
 automatic retry after 1.5 s, then waits for the reader; it used to end the
 session, which left Retry — the passage from the top — as the only way on.
 Held time (`heldDuration(until:)`) is subtracted from the clock and from wpm.
