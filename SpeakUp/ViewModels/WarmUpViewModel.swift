@@ -172,7 +172,14 @@ class WarmUpViewModel {
 
     private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+        // Weak in the timer's block too. A `[weak self]` only on the inner
+        // task makes this block hold `self` strongly, so the run loop kept the
+        // view model alive and ticking until something called `cleanup()`.
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard self != nil else {
+                timer.invalidate()
+                return
+            }
             Task { @MainActor [weak self] in
                 self?.tick()
             }
