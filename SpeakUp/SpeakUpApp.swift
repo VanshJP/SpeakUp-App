@@ -272,7 +272,9 @@ struct SpeakUpApp: App {
                     context.insert(def.toModel())
                 }
             }
-            try context.save()
+            if context.hasChanges {
+                try context.save()
+            }
         } catch {
             Self.logger.error("Error seeding achievements: \(error.localizedDescription, privacy: .private(mask: .hash))")
         }

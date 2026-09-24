@@ -1878,9 +1878,11 @@ struct RecordingDetailView: View {
     /// advanced metric the lossy SwiftData copy drops, so patching that copy
     /// (the old approach) lost the series again on the next analysis rewrite.
     private func populateWPMTimeSeriesIfNeeded(recordingID: UUID) async {
+        // `coachAnalysis` is `fullAnalysis`, already decoded off the main
+        // actor; reading `recording.fullAnalysis` here decoded it again on it.
         guard let recording,
               recording.id == recordingID,
-              var analysis = recording.fullAnalysis,
+              var analysis = coachAnalysis,
               analysis.wpmTimeSeries == nil,
               let words = sessionWords,
               words.count >= 2 else { return }
@@ -1917,9 +1919,12 @@ struct RecordingDetailView: View {
         coherenceEnhanceInFlight = true
         defer { coherenceEnhanceInFlight = false }
 
+        // Starts from the cached full analysis (see
+        // `populateWPMTimeSeriesIfNeeded`), which carries the advanced metrics
+        // this read-modify-write must not strip.
         guard case .ready(let recording) = detailScreenState,
               recording.id == recordingID,
-              var analysis = recording.fullAnalysis else { return }
+              var analysis = coachAnalysis else { return }
 
         let transcript = resolvedTranscript(for: recording)
         guard !transcript.isEmpty else { return }

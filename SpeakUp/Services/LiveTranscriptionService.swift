@@ -22,7 +22,17 @@ class LiveTranscriptionService {
     var lastSegmentEndTime: TimeInterval = 0
 
     private var audioEngine: AVAudioEngine?
-    private var recognizer: SFSpeechRecognizer?
+    /// Made on first use, not in `init`. `RecordingView` holds its view model
+    /// in `@State`, whose initial value is rebuilt and thrown away every time
+    /// the view is re-created - and `ContentView` re-creates it whenever the
+    /// analysis job writes settings. Building a recognizer is a round trip to
+    /// the speech daemon, so each throwaway cost one on the main thread.
+    @ObservationIgnored private var cachedRecognizer: SFSpeechRecognizer?
+    private var recognizer: SFSpeechRecognizer? {
+        if let cachedRecognizer { return cachedRecognizer }
+        cachedRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        return cachedRecognizer
+    }
     /// Read from the realtime audio thread by the tap block and swapped on the
     /// main actor at every recognition restart, so it cannot be plain isolated
     /// state. The critical section is one `append`.
@@ -79,7 +89,6 @@ class LiveTranscriptionService {
     @ObservationIgnored nonisolated(unsafe) private var configurationObserver: NSObjectProtocol?
 
     init() {
-        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,

@@ -566,8 +566,10 @@ final class RecordingProcessingCoordinator {
     /// `RecordingViewModel.stopRecording()` runs before analysis exists, so the
     /// score half of story stats can only be updated here.
     private func updateStoryBestScore(for recording: Recording, modelContext: ModelContext) {
+        // The projection `setAnalysis` just wrote, not `analysis`, which would
+        // decode the blob again on the main actor.
         guard let storyId = recording.storyId,
-              let score = recording.analysis?.speechScore.overall,
+              let score = recording.overallScore,
               score > 0 else { return }
         var descriptor = FetchDescriptor<Story>(predicate: #Predicate { $0.id == storyId })
         descriptor.fetchLimit = 1

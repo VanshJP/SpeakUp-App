@@ -1155,7 +1155,14 @@ private struct DetailSkeletonView: View {
         .scrollIndicators(.hidden)
         .scrollDisabled(true)
         .task {
-            takeShape = TakeScanView.bars(from: recording.audioLevelSamples ?? [])
+            // Off the main actor, like the self-check's copy: a `.task` on a
+            // view runs on it, and this is a JSON decode of the whole take.
+            guard let data = recording.audioLevelSamplesData else { return }
+            let bars = await Task.detached(priority: .userInitiated) {
+                TakeScanView.bars(from: (try? JSONDecoder().decode([Float].self, from: data)) ?? [])
+            }.value
+            guard !Task.isCancelled else { return }
+            takeShape = bars
         }
     }
 
