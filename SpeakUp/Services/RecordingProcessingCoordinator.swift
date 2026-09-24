@@ -254,6 +254,15 @@ final class RecordingProcessingCoordinator {
             return
         }
 
+        // Takes stay local until the job is done with them (see
+        // `AudioService.stopRecording`), so the file never moves mid-read.
+        // A file already in iCloud is left where it is.
+        defer {
+            Task(priority: .background) {
+                _ = await ICloudStorageService.shared.promoteToICloudIfNeeded(localURL: mediaURL)
+            }
+        }
+
         // Newly promoted iCloud files can briefly report a non-current download
         // status; kick the download and wait a beat before giving up.
         let mediaReadable = await ICloudStorageService.shared.waitUntilReadable(mediaURL)

@@ -250,33 +250,38 @@ struct OnboardingGoalStep: View {
 
 // MARK: - Level
 
+/// The same `FeelingDial` the post-take self-check uses, so the first control
+/// a new user turns is one they will meet again after every take. The tint
+/// stays neutral: the self-check's red-to-green ramp would grade "Finding my
+/// feet" as a bad answer, and the face only goes as low as unsure.
 struct OnboardingLevelStep: View {
     let counter: String?
     let selected: SpeakerLevel?
     let onSelect: (SpeakerLevel) -> Void
     let onContinue: () -> Void
 
+    private static let question = "How do you feel about speaking today?"
+
     var body: some View {
         OnboardingPage(
             counter: counter,
-            title: "How do you feel about speaking today?"
+            title: Self.question
         ) {
-            VStack(spacing: 10) {
-                ForEach(SpeakerLevel.allCases) { level in
-                    OnboardingChoiceCard(
-                        title: feelingTitle(for: level),
-                        subtitle: feelingSubtitle(for: level),
-                        isSelected: selected == level
-                    ) {
-                        onSelect(level)
-                    }
-                    .opacity(cardOpacity(for: level))
-                }
-            }
-            .motion(AppMotion.snap, value: selected)
+            FeelingDial(
+                question: Self.question,
+                options: SpeakerLevel.allCases.map { Self.option(for: $0) },
+                selected: selected.flatMap { SpeakerLevel.allCases.firstIndex(of: $0) },
+                step: 34,
+                tint: { _ in AppColors.primary },
+                lowestMood: -0.35,
+                onSelect: { onSelect(SpeakerLevel.allCases[$0]) }
+            )
+            // Full bleed: the wheel is meant to run off the screen.
+            .padding(.horizontal, -20)
 
             if let level = selected {
                 payoffLine(payoff(for: level))
+                    .frame(maxWidth: .infinity)
             }
         } footer: {
             OnboardingCTA(
@@ -289,24 +294,11 @@ struct OnboardingLevelStep: View {
         .motion(AppMotion.settle, value: selected)
     }
 
-    private func cardOpacity(for level: SpeakerLevel) -> Double {
-        guard let selected else { return 1 }
-        return level == selected ? 1 : 0.55
-    }
-
-    private func feelingTitle(for level: SpeakerLevel) -> String {
+    private static func option(for level: SpeakerLevel) -> FeelingDial.Option {
         switch level {
-        case .beginner: return "Finding my feet"
-        case .intermediate: return "Getting comfortable"
-        case .advanced: return "Sharpening up"
-        }
-    }
-
-    private func feelingSubtitle(for level: SpeakerLevel) -> String {
-        switch level {
-        case .beginner: return "I avoid speaking when I can."
-        case .intermediate: return "I'm fine. I want to be good."
-        case .advanced: return "I'm good. I'm chasing great."
+        case .beginner: .init(label: "Finding my feet", line: "I avoid speaking when I can.")
+        case .intermediate: .init(label: "Getting comfortable", line: "I'm fine. I want to be good.")
+        case .advanced: .init(label: "Sharpening up", line: "I'm good. I'm chasing great.")
         }
     }
 
@@ -364,4 +356,10 @@ private func payoffLine(_ text: String) -> some View {
     .id(text)
     .transition(.opacity.combined(with: .offset(y: 6)))
     .accessibilityElement(children: .combine)
+}
+
+#Preview("Level") {
+    @Previewable @State var level: SpeakerLevel? = .intermediate
+    OnboardingLevelStep(counter: "3 of 4", selected: level, onSelect: { level = $0 }, onContinue: {})
+        .appBackground(.primary)
 }

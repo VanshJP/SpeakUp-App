@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Learn tab - skill studio of capability chapters. Detail: `LessonDetailView`.
+/// Learn tab - Skill Studio of capability chapters. Detail: `LessonDetailView`.
 ///
 /// Not a Duolingo-style path. Speaking gains come from proving one skill with your
 /// voice, so the page surfaces outcomes and modalities (learn / drill / speak),
@@ -63,7 +63,7 @@ struct CurriculumView: View {
                     .textCase(.uppercase)
                     .tracking(0.8)
 
-                Text("Skill studio")
+                Text("Skill Studio")
                     .font(.title2.bold())
                     .foregroundStyle(.white)
             }

@@ -361,12 +361,13 @@ struct CrutchSwapsCard: View {
 
     private func spokenLine(_ pieces: [FragmentPiece], tint: Color, strikeTarget: Bool) -> Text {
         pieces.enumerated().reduce(Text("")) { accumulated, item in
-            accumulated + spokenSpan(
+            let span = spokenSpan(
                 item.element,
                 tint: tint,
                 strike: strikeTarget,
                 trailingSpace: item.offset < pieces.count - 1
             )
+            return Text("\(accumulated)\(span)")
         }
     }
 
@@ -375,12 +376,15 @@ struct CrutchSwapsCard: View {
 
         if piece.isTarget {
             let word = Text(piece.text).font(.caption.weight(.semibold)).foregroundStyle(tint)
-            return (strike ? word.strikethrough(true, color: tint.opacity(0.8)) : word) + gap
+            let styled = strike ? word.strikethrough(true, color: tint.opacity(0.8)) : word
+            return Text("\(styled)\(gap)")
         }
         if piece.text == "\u{2026}" {
-            return Text(piece.text).font(.caption).italic().foregroundStyle(.tertiary) + gap
+            let ellipsis = Text(piece.text).font(.caption).italic().foregroundStyle(.tertiary)
+            return Text("\(ellipsis)\(gap)")
         }
-        return Text(piece.text).font(.caption).foregroundStyle(.secondary) + gap
+        let plain = Text(piece.text).font(.caption).foregroundStyle(.secondary)
+        return Text("\(plain)\(gap)")
     }
 
     /// The corrected line reads as the recommendation: full-strength text with
@@ -390,15 +394,15 @@ struct CrutchSwapsCard: View {
             let piece = item.element
             let gap = item.offset < pieces.count - 1 ? Text(" ").font(.caption) : Text("")
 
+            let word: Text
             if piece.isTarget {
-                return accumulated
-                    + Text(piece.text).font(.caption.weight(.bold)).foregroundStyle(AppColors.success)
-                    + gap
+                word = Text(piece.text).font(.caption.weight(.bold)).foregroundStyle(AppColors.success)
+            } else if piece.text == "\u{2026}" {
+                word = Text(piece.text).font(.caption).italic().foregroundStyle(.tertiary)
+            } else {
+                word = Text(piece.text).font(.caption).foregroundStyle(.primary)
             }
-            if piece.text == "\u{2026}" {
-                return accumulated + Text(piece.text).font(.caption).italic().foregroundStyle(.tertiary) + gap
-            }
-            return accumulated + Text(piece.text).font(.caption).foregroundStyle(.primary) + gap
+            return Text("\(accumulated)\(word)\(gap)")
         }
     }
 

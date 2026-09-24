@@ -120,7 +120,7 @@ struct RecordingDetailView: View {
     }
 
     private var feedbackEnabled: Bool {
-        userSettings.first?.sessionFeedbackEnabled ?? false
+        userSettings.first?.sessionFeedbackEnabled ?? true
     }
 
     private func shouldGateFeedback(for recording: Recording) -> Bool {
@@ -139,8 +139,14 @@ struct RecordingDetailView: View {
 
             switch detailScreenState {
             case .loading:
-                ProgressView("Loading...")
-                    .padding(.top, 100)
+                VStack(spacing: 12) {
+                    VoiceLoader(size: .large)
+                        .foregroundStyle(.secondary)
+                    Text("Loading…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 100)
 
             case .missing:
                 ContentUnavailableView(
@@ -359,7 +365,8 @@ struct RecordingDetailView: View {
                 } else if recording.overallScore != nil {
                     if isResolvingSessionData {
                         VStack(spacing: 12) {
-                            ProgressView()
+                            VoiceLoader()
+                                .foregroundStyle(.secondary)
                             Text("Loading your breakdown…")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -854,6 +861,24 @@ struct RecordingDetailView: View {
         }
     }
 
+    // MARK: - Take Timeline Section
+
+    @ViewBuilder
+    private func takeTimelineSection(_ timeline: TakeTimeline) -> some View {
+        if timeline.segments.count > 1 {
+            VStack(alignment: .leading, spacing: 12) {
+                GlassSectionHeader("Take timeline", icon: "waveform.path")
+
+                GlassCard {
+                    // Past AX1 the lane labels squeeze the take to a sliver;
+                    // VoiceOver reads the summary and landmarks instead.
+                    TakeTimelineView(timeline: timeline, playback: playbackViewModel) { playFrom($0) }
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                }
+            }
+        }
+    }
+
     // MARK: - WPM Chart Section
 
     @ViewBuilder
@@ -1222,7 +1247,6 @@ struct RecordingDetailView: View {
 
     // MARK: - Share CTA Section
 
-    @ViewBuilder
     /// One row. This was a full card with a heading, a subtitle restating the
     /// heading, and a full-width button restating both - three lines of chrome
     /// between the coaching and the breakdown, for a share sheet.
@@ -1269,6 +1293,15 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private func breakdownTabContent(_ recording: Recording, analysis: SpeechAnalysis) -> some View {
         statsGrid(analysis)
+
+        if let words = sessionWords {
+            takeTimelineSection(TakeTimeline(
+                words: words,
+                duration: recording.actualDuration,
+                showsPauses: userSettings.first?.trackPauses ?? true,
+                showsFillers: userSettings.first?.trackFillerWords ?? true
+            ))
+        }
 
         vocabWorkoutSection
 
@@ -1385,7 +1418,7 @@ struct RecordingDetailView: View {
 
         if let feedback = recording.sessionFeedback {
             selfAssessmentSection(feedback)
-        } else if userSettings.first?.sessionFeedbackEnabled ?? false {
+        } else if userSettings.first?.sessionFeedbackEnabled ?? true {
             reflectionPromptCard
         }
 
@@ -1430,8 +1463,8 @@ struct RecordingDetailView: View {
             if llmService.isGenerating {
                 GlassCard {
                     HStack(spacing: 12) {
-                        ProgressView()
-                            .tint(AppColors.primary)
+                        VoiceLoader()
+                            .foregroundStyle(AppColors.primary)
                         Text("Generating personalized insights...")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)

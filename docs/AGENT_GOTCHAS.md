@@ -216,8 +216,10 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 **`requiresOnDeviceRecognition` must be `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple. `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
 
+**WhisperKit comes from `argmax-oss-swift` (product `WhisperKit`), pinned ≥ 1.1.0.** Never go below it: before 1.1.0, setting `promptTokens` (our filler prompt, on every take) could return an empty transcript with no error, dropping the take to Apple Speech, which strips most fillers. Debug console logs `Transcribed by <backend>` per take; anything but `whisper*` lost fillers.
+
 **WhisperKit `download: true` is not offline-safe after the first install.** Config init asks Hugging Face for the file list *before* it opens the local cache, so flaky Wi‑Fi freezes "Analyzing…" even when `openai_whisper-base` is already under `Documents/huggingface/`. After the first successful download, load with `modelFolder` pointing at that cache and `download: false` (set `tokenizerFolder` to the Hub base so the tokenizer stays local too). Time-box first-time downloads so a dead connection fails into on-device Apple Speech instead of hanging. Never implement such a time-box as a task group: the group awaits the stuck child before rethrowing, so the timeout never returns. Race through a continuation (`WhisperService.FirstFinisher`), and wait on a shared build *task* rather than a semaphore so the waiter escalates its priority.
-Require both `AudioEncoder` and `TextDecoder` before treating the cache as offline-ready. After any Whisper timeout (`abandonsWhisper`), skip the raw retry and the reload leg and fall through to Apple Speech. Analyzing UI must key "Downloading…" off an in-flight download flag, not `!isModelLoaded`.
+Require both `AudioEncoder` and `TextDecoder` before treating the cache as offline-ready. After any Whisper timeout (`abandonsWhisper`), skip the raw retry and the reload leg and fall through to Apple Speech. The reload leg also never runs after an empty transcript: same model, same file, temperature 0 gives the same empty result. Analyzing UI must key "Downloading…" off an in-flight download flag, not `!isModelLoaded`.
 
 ---
 
@@ -285,6 +287,8 @@ Score aggregations (Today heavy load, History summaries, practice charts) should
 **`BUG IN CLIENT OF CLOUDKIT: … 'remote-notification' background mode`** — real misconfiguration when the sync toggle is on: CloudKit push needs `UIBackgroundModes = [remote-notification]` in the app's Info.plist. It lives in `SpeakUp/Info.plist`; if it ever disappears, subscriptions stop delivering and widgets/notifications silently degrade.
 
 **`CFPrefsPlistSource … kCFPreferencesAnyUser with a container … detaching from cfprefsd`** — fired by touching an App Group suite from a process that does not hold the entitlement (Xcode Previews, some test hosts). Harmless to the shipping app, but don't chase it with re-runs. Both `WidgetDataProvider`s guard on `FileManager.containerURL(forSecurityApplicationGroupIdentifier:) != nil` before touching the suite and return nil otherwise — keep that guard; never "fix" it by falling back to `.standard`, which would write widget data into a domain the widget can never read.
+
+**`[AVAudioSession Hang Risk] AVAudioSession_iOS.mm … can lead to UI unresponsiveness if called on the main thread`** — real. `setActive`, and `AVAudioRecorder.record()` (which re-activates the session), block on the audio server. `AudioService.startRecorder(url:)` activates, builds and starts the recorder in one detached task; route repair does the same. Keep new capture paths off main.
 
 ---
 
@@ -506,7 +510,7 @@ animation that was designed never plays. Three shipped this way at once:
 
 **Two fixes, pick by shape.** Continuous motion that is a function of time
 (particles, scanners) runs in a `TimelineView` and computes positions from
-`timeline.date` - `ConfettiView`, `TakeScanView`. A one-shot draw-in wraps the
+`timeline.date` - `ConfettiView`, `TakeWaveform`. A one-shot draw-in wraps the
 canvas in a small `View, Animatable` whose `animatableData` is the progress
 value, so SwiftUI calls `body` every frame with the interpolated value -
 `SubscoreRadarChart.RadarWedges`, same trick as `CountUpText`. And prefer
@@ -532,6 +536,12 @@ Rules:
 - `ICloudStorageService.promoteToICloudIfNeeded` and `migrateLocalFilesToICloud`
   are `async` and do the move in `Task.detached`. Await them; never add a
   synchronous path back.
+- Off main is not enough on the way out of a take. `AudioService.stopRecording`
+  awaited the move, so the recorder sat on screen for as long as the daemon
+  took before the self-check appeared. It now returns the local file, and
+  `RecordingProcessingCoordinator.process` promotes it when the job finishes
+  (launch migration catches takes that never reach a job). Never put the move
+  back between Stop and the next screen.
 - Anything that has to find or probe a take's file off a job reads the stored
   values on the main actor (`recording.audioURL`, the container URL) and calls
   the `nonisolated` `Recording.resolveStoredURL(_:ubiquityContainer:)` /

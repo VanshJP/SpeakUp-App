@@ -12,7 +12,7 @@ Instructions for coding agents that work on Big Talk / SpeakUp. Humans: this is 
 | Recipes | `/docs/AGENT_PLAYBOOK.md` | Setting / gate / field / widget / test / static verify |
 | Feature briefs | `/docs/features/<slug>.md` | That feature only |
 | Contracts | `/SPEECH.md`, `/ONBOARDING_VISION.md`, listing/release docs | Subsystem named in the index |
-| Typed surface map | `/docs/SURFACE_MAP.md` | Finding a ViewModel / Service / tab entry fast |
+| Typed surface map | `/docs/SURFACE_MAP.md` | `grep -n 'Name'` for any type, Theme token or View modifier; doc-drift fails when stale |
 | Golden evals | `/agent/evals/` | Measuring agent routing quality |
 | Product skill | `.agents/skills/speakup/SKILL.md` | Any SpeakUp product edit |
 | Vendor skills | `.agents/skills/<name>/SKILL.md` | Task matches YAML `description` |
@@ -59,4 +59,4 @@ First-party: `speakup` (router + verify). Vendored: see `.agents/skills/README.m
 3. New first-party skill → `.agents/skills/<name>/SKILL.md` with `name` + `description` (what **and** when). Body < ~150 lines; further detail in `references/`.
 4. New silent trap → `docs/AGENT_GOTCHAS.md`. New recipe → `docs/AGENT_PLAYBOOK.md`. New routing task → `agent/evals/`.
 5. Do not add nested `AGENTS.md` under `SpeakUp/` — closest-file-wins would hide the kernel.
-6. After large file moves, regenerate `docs/SURFACE_MAP.md`.
+6. After adding or moving a type, regenerate `docs/SURFACE_MAP.md` (doc-drift fails otherwise).

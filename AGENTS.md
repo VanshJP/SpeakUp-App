@@ -32,6 +32,7 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 6. Decode `Recording.analysis` on the main thread in `body`. Never `#Predicate` on Codable blob columns (process crash).
 7. New pure types without `nonisolated` - default isolation is MainActor (`SWIFT_DEFAULT_ACTOR_ISOLATION`). Background work breaks. See `docs/AGENT_GOTCHAS.md`.
 8. Caveman in commits, PRs, or code comments. Chat may be caveman; persisted text is normal English.
+9. Read a 700+ line file whole (`Read` without `offset`, `cat`, `sed 1,N`). `rg -n '// MARK:' <file>`, then read one section.
 
 ---
 
@@ -40,9 +41,11 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 | Situation | Open |
 |-----------|------|
 | Unsure where code lives / new feature | `docs/features/README.md` |
+| Find a type / token / modifier by name | `grep -n 'Name' docs/SURFACE_MAP.md` (includes types nested in other files) - before any `rg` over `SpeakUp/` |
+| UI token / reusable component | `docs/features/ui-design-system.md` → `Theme/`, `Views/Components/` |
 | Concurrency, SwiftData, shares, widgets, audio thread | `docs/AGENT_GOTCHAS.md` |
 | Add setting / paid gate / field / widget / test | `docs/AGENT_PLAYBOOK.md` |
-| Scoring, transcription, LLM pass | `SPEECH.md` |
+| Scoring, transcription, fillers, LLM pass | `SPEECH.md` (file list at top) |
 | Onboarding / app tour | `ONBOARDING_VISION.md` (not the research file) |
 | Any SpeakUp product edit | skill `speakup` |
 | Vendor technique (SwiftUI, WidgetKit, a11y, ASO, …) | `.agents/skills/README.md` → one `SKILL.md` |
@@ -76,6 +79,7 @@ Schema: `Recording`, `Prompt`, `UserSettings`, `UserGoal`, `Achievement`, `Curri
 
 - New code: `async/await` only. Services throw; ViewModels map to `errorMessage: String?`. File name = primary type. `// MARK:` sections.
 - Metering/playback: snapshots into POD subviews; dense draw in one `Canvas`. File existence → `@State`, never `FileManager` in `body`.
+- `RecordingViewModel` is split by concern: `RecordingViewModel+{Timer,RecordingControl,AudioMonitoring,Permissions,Computed}.swift`.
 - Media: store via `Recording.relativeURL`; read via `resolvedAudioURL` / `resolvedVideoURL`.
 - Env-injected: `SpeechService`, `AudioService`, `LLMService` only. Everything else `.shared`.
 - Shares: `SharePresenter` only. Widget reloads: fingerprint-gate in `TodayViewModel`. Prompt seed: `seededPromptFingerprint_v1`.
@@ -96,7 +100,7 @@ Probe once: `xcodebuild -version`.
 xcodebuild -scheme SpeakUp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
 
-If that destination is gone, pick the first available iPhone from `xcrun simctl list devices available` - same as CI. StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`.
+That device runs on the iOS 27 runtime. If `xcodebuild` cannot find it (or only pre-26 iPhones exist), create it with `xcrun simctl create "iPhone 17 Pro" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0` (newest runtime from `xcrun simctl list runtimes`), then test. A missing simulator is never a reason to skip tests. StoreKit: `Products.storekit` · SKU `com.vansh.SpeakUpMore.lifetime`. Tests: Swift Testing under `SpeakUpTests/`.
 
 ---
 

@@ -4,6 +4,8 @@ struct FlameAnimationView: View {
     var size: CGFloat = 220
     var isLit: Bool = true
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         if isLit {
             litFlame
@@ -15,7 +17,8 @@ struct FlameAnimationView: View {
     // MARK: - Lit flame
 
     private var litFlame: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+        // 30 fps: the flicker is slow sines, and every frame redraws a blur and shadow.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
 
             let breath = sin(t * 1.6)

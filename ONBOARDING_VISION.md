@@ -152,6 +152,12 @@ welcome → name → goal → level → mic (sound check) → baselineBriefing �
   level), `OnboardingMicStep.swift` (the sound check),
   `OnboardingBaselineSteps.swift` (briefing, guided recorder, analyzing,
   reveal).
+- The level step answers on `FeelingDial`, the same wheel as the post-take
+  self-check, so the first control a user turns is one they meet after every
+  take. Its tint stays neutral (`AppColors.primary`) and the face only goes as
+  low as unsure: the self-check's red-to-green ramp would grade "Finding my
+  feet" as a wrong answer (litmus 5). Continue still commits; release never
+  advances.
 - Persistence/processing: the baseline saves a real `Recording` row
   (title "My baseline") and runs through `RecordingProcessingCoordinator` —
   no special-cased pipeline.

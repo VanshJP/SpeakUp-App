@@ -277,7 +277,7 @@ struct StoryEditorView: View {
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         } else if isTranscribing {
             HStack(spacing: 8) {
-                ProgressView().tint(AppColors.primary).scaleEffect(0.8)
+                VoiceLoader(size: .small).foregroundStyle(AppColors.primary)
                 Text(isFormattingDictation ? "Formatting…" : "Transcribing…")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(AppColors.primary)
@@ -313,7 +313,7 @@ struct StoryEditorView: View {
             }
             if isExtractingTags {
                 HStack(spacing: 4) {
-                    ProgressView().tint(AppColors.primary).scaleEffect(0.6)
+                    VoiceLoader(size: .small).foregroundStyle(AppColors.primary)
                     Text("Tagging…")
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(AppColors.primary)
@@ -805,7 +805,7 @@ struct StoryEditorView: View {
                 }
             }
             // Transcribed once and deleted, so it never goes to iCloud.
-            guard let url = await audioService.stopRecording(promoteToICloud: false) else {
+            guard let url = await audioService.stopRecording() else {
                 errorMessage = "Recording failed."
                 return
             }

@@ -99,6 +99,13 @@ for dead in SessionBriefRow WordAlignmentScorer MetricTile; do
   fi
 done
 
+FRESH_MAP="$(mktemp)"
+scripts/generate-surface-map.sh "$FRESH_MAP" >/dev/null
+if ! diff -q "$FRESH_MAP" docs/SURFACE_MAP.md >/dev/null; then
+  fail "docs/SURFACE_MAP.md is stale; run scripts/generate-surface-map.sh"
+fi
+rm -f "$FRESH_MAP"
+
 if [[ "$ERR" -ne 0 ]]; then
   echo
   echo "agent-doc-drift failed — patch the brief or restore the path/symbol." >&2

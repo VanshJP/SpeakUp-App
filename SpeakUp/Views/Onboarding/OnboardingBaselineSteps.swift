@@ -497,8 +497,8 @@ private struct BaselineRecordControl: View {
 
             case .saving:
                 buttonShell {
-                    ProgressView()
-                        .tint(.white)
+                    VoiceLoader()
+                        .foregroundStyle(.white)
                 }
                 .accessibilityLabel("Saving your take")
             }

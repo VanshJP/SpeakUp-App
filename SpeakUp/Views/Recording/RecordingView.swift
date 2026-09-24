@@ -168,7 +168,7 @@ struct RecordingView: View {
     // MARK: - Feedback Gate (pre-navigation)
 
     private var feedbackEnabled: Bool {
-        userSettings.first?.sessionFeedbackEnabled ?? false
+        userSettings.first?.sessionFeedbackEnabled ?? true
     }
 
     private var feedbackQuestions: [FeedbackQuestion] {

@@ -209,9 +209,8 @@ struct VoiceCalibrationView: View {
                         .foregroundStyle(.secondary)
                 }
             } else if phase == .analyzing {
-                ProgressView()
-                    .tint(AppColors.primary)
-                    .scaleEffect(1.2)
+                VoiceLoader(size: .large)
+                    .foregroundStyle(AppColors.primary)
                 Text("Analyzing your voice...")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -304,7 +303,7 @@ struct VoiceCalibrationView: View {
 
         Task {
             // Read once and deleted, so it never goes to iCloud.
-            guard let audioURL = await audioService.stopRecording(promoteToICloud: false) else {
+            guard let audioURL = await audioService.stopRecording() else {
                 errorMessage = "Recording failed. Please try again."
                 phase = .ready
                 return

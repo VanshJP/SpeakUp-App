@@ -106,7 +106,8 @@ struct ProgressChartsContent: View {
     }
 
     private var loadingState: some View {
-        ProgressView()
+        VoiceLoader(size: .large)
+            .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 56)
     }

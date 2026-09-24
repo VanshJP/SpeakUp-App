@@ -76,7 +76,8 @@ final class ICloudStorageService {
     /// Always local Documents - never the ubiquity container. Writing an open
     /// recorder directly into iCloud Drive races the daemon and can finalize
     /// empty / silent m4a files that later transcribe as "Silent". Sync happens
-    /// after stop via `promoteToICloudIfNeeded(localURL:)` / migration.
+    /// once the analysis job is done with the file, via
+    /// `promoteToICloudIfNeeded(localURL:)`, or at launch via migration.
     var recordingsDirectory: URL {
         Self.localDocumentsDirectory
     }
@@ -152,7 +153,9 @@ final class ICloudStorageService {
     /// that waits on the iCloud daemon, and Apple says never to call it from
     /// the main thread. It used to run inline in `AudioService.stopRecording`,
     /// which froze the app for seconds at a time right as a take ended, while
-    /// the daemon was busy with the previous upload.
+    /// the daemon was busy with the previous upload. Awaited there off main, it
+    /// still held the post-take screen for the same seconds, so it now runs at
+    /// the end of `RecordingProcessingCoordinator.process`.
     func promoteToICloudIfNeeded(localURL: URL) async -> URL {
         guard isICloudAvailable, let iCloudDir = iCloudRecordingsDirectory else {
             return localURL

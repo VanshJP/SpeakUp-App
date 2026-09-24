@@ -429,7 +429,7 @@ class DrillViewModel {
 
     private func finishWithPitchAnalysis(mode: DrillMode, endedEarly: Bool) async {
         // A drill take is read once and deleted, so it never goes to iCloud.
-        let url = await audioService.stopRecording(promoteToICloud: false)
+        let url = await audioService.stopRecording()
         defer { isAnalyzingPitch = false }
 
         // Decode, analysis and delete all off the main actor. The decode used

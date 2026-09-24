@@ -19,7 +19,11 @@ language profile, metric charts, then-vs-now replay, PDF journal export.
 | VMs | `HistoryViewModel` (`RecordingSummary`), `ComparisonViewModel`, `ProgressReplayViewModel` |
 | Services | `JournalExportService`, `ProgressCardRenderer` |
 | Model | `ProgressCardData.swift` |
-| Tests | `SpeakUpTests/LexiconInsightsTests.swift`, `SpeakUpTests/ScenarioReadinessTests.swift` |
+| Tests | `SpeakUpTests/LexiconInsightsTests.swift`, `SpeakUpTests/ScenarioReadinessTests.swift`, `SpeakUpTests/HistoryWeekTests.swift` |
+
+## Recordings list shape
+
+Grouped by calendar week (`HistoryWeek.group`, in `HistoryView.swift`), newest first, after search and filter apply. Each week is a `GlassSectionHeader` ("This week", "Last week", then "Sep 7 – 13", with the year once it is not this one) whose accessory is `N takes · avg S` - the average skips unscored takes and drops out when none scored. The week's takes are rows inside **one** `GlassCard` separated by `MetricRowDivider`, not a card per take: a flat stack of cards repeated the full date on every row and spent most of the screen on chrome. `RecordingRow` is content only (no card of its own) and prints weekday + time, since the header already carries the week.
 
 ## Progress page shape (conclusion → evidence → guidance)
 

@@ -260,8 +260,8 @@ struct SettingsView: View {
                     Spacer()
 
                     if !ICloudStorageService.shared.hasResolvedContainer {
-                        ProgressView()
-                            .tint(.secondary)
+                        VoiceLoader(size: .small)
+                            .foregroundStyle(.secondary)
                     } else if ICloudStorageService.shared.isICloudReachable {
                         Toggle("", isOn: $iCloudSyncEnabled)
                             .labelsHidden()

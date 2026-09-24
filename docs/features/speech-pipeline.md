@@ -29,7 +29,7 @@ This doc only lists wiring and agent gotchas.
 
 1. Detail (or coordinator) enqueues when `recording.analysis == nil`.
 2. Dedupe on `recordingID` inside `RecordingProcessingCoordinator`.
-3. Transcription order: isolation → WhisperKit → raw-URL retry → reload retry → Apple Speech (`SpeechService.transcribeWithAppleSpeech`, not `DictationService`).
+3. Transcription order: isolation → WhisperKit → raw-URL retry → reload retry (only when the last Whisper leg threw; an empty transcript from a working model skips it) → Apple Speech (`SpeechService.transcribeWithAppleSpeech`, not `DictationService`).
 4. Primary-speaker labeling → scoring leg runs detached: `Task.detached` invokes `SpeechAnalysisPipeline.analyze(...)` (the coordinator's old `DispatchQueue.global` bridge is gone — under MainActor-default isolation it compiled clean and still hopped to the main actor).
 5. Optional LLM coherence enhance (Apple Intelligence → local llama → skip).
 6. On success: `AllowanceGate.consume` (not before).

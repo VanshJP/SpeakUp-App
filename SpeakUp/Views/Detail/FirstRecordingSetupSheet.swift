@@ -3,10 +3,11 @@ import SwiftData
 
 /// The handoff that fires on Today once the first score has landed.
 ///
-/// Its whole job is to offer the three things onboarding deliberately withheld
-/// until the user had seen a number - and then get out of the way. It is not a
-/// settings page: session defaults live in Settings and the app tour, which
-/// starts the moment this dismisses, ends by pointing at them.
+/// Its job is to set up how sessions run (take length, countdown, weekly goal)
+/// and offer the three extras onboarding deliberately withheld until the user
+/// had seen a number - then get out of the way. Every row writes through on
+/// change and lives on in Settings → Session Defaults, so nothing is pending
+/// when the sheet closes.
 struct FirstRecordingSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -26,18 +27,20 @@ struct FirstRecordingSetupSheet: View {
                 AppBackground(style: .subtle)
 
                 PageScrollView {
-                    VStack(alignment: .leading, spacing: AppLayout.chapterSpacing) {
+                    VStack(alignment: .leading, spacing: 28) {
                         header
-                        optionsCard
+                        section("Your sessions") { sessionCard }
+                        section("Optional extras") { optionsCard }
                     }
+                    .padding(.top, 28)
                     .pageContentInsets()
                 }
                 .scrollIndicators(.hidden)
                 .safeAreaInset(edge: .bottom) { footer }
             }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            // No bar on the root: an empty inline bar sat the header under the
+            // grabber. `AIModelSettingsView` still gets its own bar when pushed.
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showingAISettings) {
                 AIModelSettingsView()
             }
@@ -67,7 +70,7 @@ struct FirstRecordingSetupSheet: View {
                 .font(.title2.bold())
                 .foregroundStyle(.white)
 
-            Text("Three things we held back until you had a number. Take any of them, or none.")
+            Text("Set how your sessions run. Everything here changes later in Settings.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -78,6 +81,106 @@ struct FirstRecordingSetupSheet: View {
     private var greeting: String {
         let name = settings?.userName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return name.isEmpty ? "Nice work" : "Nice work, \(name)"
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .eyebrowStyle()
+                .padding(.leading, 4)
+            content()
+        }
+    }
+
+    // MARK: - Session Defaults
+
+    /// The three defaults a new user feels on their very next take. The rest of
+    /// Session Defaults (cue sounds, haptics, timer-end behavior) are refinements
+    /// nobody has an opinion on after one recording.
+    private var sessionCard: some View {
+        GlassCard(padding: 4) {
+            VStack(spacing: 0) {
+                rowShell(
+                    icon: "clock",
+                    tint: AppColors.primary,
+                    title: "Take length",
+                    detail: "How long each prompt runs."
+                ) {
+                    valueMenu(
+                        selection: settingBinding(\.defaultDuration, default: 60),
+                        options: RecordingDuration.allCases.map { ($0.rawValue, $0.displayName) }
+                    )
+                }
+
+                rowDivider
+
+                rowShell(
+                    icon: "timer",
+                    tint: AppColors.categoryAmber,
+                    title: "Countdown",
+                    detail: "Thinking time before recording starts."
+                ) {
+                    valueMenu(
+                        selection: settingBinding(\.countdownDuration, default: 10),
+                        options: CountdownDuration.allCases.map { ($0.rawValue, $0.displayName) }
+                    )
+                }
+
+                rowDivider
+
+                rowShell(
+                    icon: "target",
+                    tint: AppColors.success,
+                    title: "Weekly goal",
+                    detail: "How many sessions a week you are aiming for."
+                ) {
+                    valueMenu(
+                        selection: settingBinding(\.weeklyGoalSessions, default: 5),
+                        options: (1...14).map { ($0, "\($0)") }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Writes straight through to `UserSettings`, the same way the reminder and
+    /// calibration rows below do. Today reloads on dismiss to pick up the new
+    /// take length and goal.
+    private func settingBinding(_ keyPath: ReferenceWritableKeyPath<UserSettings, Int>, default fallback: Int) -> Binding<Int> {
+        Binding(
+            get: { settings?[keyPath: keyPath] ?? fallback },
+            set: { value in
+                guard let settings else { return }
+                settings[keyPath: keyPath] = value
+                try? modelContext.save()
+                Haptics.light()
+            }
+        )
+    }
+
+    private func valueMenu(selection: Binding<Int>, options: [(value: Int, label: String)]) -> some View {
+        Menu {
+            Picker("", selection: selection) {
+                ForEach(options, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(options.first { $0.value == selection.wrappedValue }?.label ?? "\(selection.wrappedValue)")
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .frame(minHeight: AppLayout.minHitTarget)
+            .contentShape(Rectangle())
+        }
     }
 
     // MARK: - Options
@@ -147,8 +250,8 @@ struct FirstRecordingSetupSheet: View {
 
     // MARK: - Rows
 
-    /// Shared row shell: glyph, title (plus an optional "already done" pill),
-    /// one line of detail, and whatever control belongs on the trailing end.
+    /// Shared row shell: glyph, title, one line of detail (plus an optional
+    /// "already done" pill), and whatever control belongs on the trailing end.
     private func rowShell<Accessory: View>(
         icon: String,
         tint: Color,
@@ -161,21 +264,23 @@ struct FirstRecordingSetupSheet: View {
             IconChip(icon: icon, tint: tint, size: 30)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-
-                    if let pill {
-                        StatusPill(text: pill, color: AppColors.success, glyph: .icon("checkmark"))
-                    }
-                }
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
 
                 Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // Its own line: beside the title it squeezed "AI coherence
+                // feedback" onto two lines and wrapped the pill text too.
+                if let pill {
+                    StatusPill(text: pill, color: AppColors.success, glyph: .icon("checkmark"))
+                        .fixedSize()
+                        .padding(.top, 3)
+                }
             }
 
             Spacer(minLength: 8)
@@ -198,7 +303,7 @@ struct FirstRecordingSetupSheet: View {
             detail: reminderDetail
         ) {
             if isRequestingReminder {
-                ProgressView().tint(.white)
+                VoiceLoader(size: .small).foregroundStyle(.white)
             } else {
                 Toggle("Daily reminder", isOn: $reminderEnabled)
                     .labelsHidden()
@@ -244,6 +349,8 @@ struct FirstRecordingSetupSheet: View {
     // MARK: - Footer
 
     /// Pinned, so the exit stays in reach however far the sheet is scrolled.
+    /// No material plate behind it - on a short page that was a grey slab
+    /// floating over empty canvas.
     /// Labelled with what happens next rather than "Done", because nothing here
     /// is pending a commit.
     private var footer: some View {
@@ -260,7 +367,6 @@ struct FirstRecordingSetupSheet: View {
         }
         .padding(.horizontal, AppLayout.pageHorizontal)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
     }
 
     // MARK: - Actions

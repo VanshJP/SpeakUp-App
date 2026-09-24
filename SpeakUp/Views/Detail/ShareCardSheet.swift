@@ -187,7 +187,7 @@ struct ShareCardSheet: View {
                                 .multilineTextAlignment(.center)
                                 .padding(24)
                         } else {
-                            ProgressView().tint(.white.opacity(0.5))
+                            VoiceLoader().foregroundStyle(.white.opacity(0.5))
                         }
                     }
                     .aspectRatio(0.62, contentMode: .fit)

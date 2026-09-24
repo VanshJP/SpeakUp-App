@@ -47,6 +47,12 @@ struct ScoreRevealView: View {
 
     private var scoreColor: Color { AppColors.scoreColor(for: score) }
 
+    /// Where the wheel and the count start: your average, so the turn *is*
+    /// the delta. No history yet, and it turns up from zero.
+    private var startScore: Double {
+        Double(min(100, max(0, baselines.score ?? 0)))
+    }
+
     private var delta: Int? {
         guard let average = baselines.score else { return nil }
         return score - average
@@ -79,10 +85,9 @@ struct ScoreRevealView: View {
                     .opacity(showVerdict ? 1 : 0)
 
                 scoreDial
-                    .padding(.top, 24)
+                    .padding(.top, 12)
 
                 verdictBlock
-                    .padding(.top, 28)
 
                 Spacer()
 
@@ -107,50 +112,63 @@ struct ScoreRevealView: View {
 
     // MARK: - Subviews
 
+    /// A 0-100 crown on the shared `ArcDial`, turning from your average to
+    /// this take while the number climbs in the bowl. Only the stops either
+    /// side of the score are in frame, so where it lands reads as a place on
+    /// a scale rather than a fraction of a ring.
     private var scoreDial: some View {
-        ZStack {
-            RingProgress(
-                progress: counted ? Double(score) / 100 : 0,
-                color: scoreColor,
-                lineWidth: 10
-            )
-            .frame(width: 240, height: 240)
-
-            VStack(spacing: 0) {
-                CountUpText(
-                    value: counted ? Double(score) : 0,
-                    font: .displayNumeral,
-                    color: scoreColor
-                )
-
-                Text("/ 100")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .tracking(0.5)
-            }
-        }
-        // A bloom in the score's own color that swells as the number lands.
-        // In a background so it can overhang the dial without moving layout.
-        .background {
+        ArcDial(
+            count: 11,
+            position: (counted ? Double(score) : startScore) / 10,
+            fillsToMarker: true,
+            label: { "\($0 * 10)" },
+            isInteractive: false,
+            height: 250,
+            tint: { AppColors.scoreColor(for: $0 * 10) },
+            glyph: { _ in EmptyView() },
+            hub: { scoreHub }
+        )
+        // Full bleed: the wheel is meant to run off the screen.
+        .padding(.horizontal, -32)
+        // A bloom in the score's own color that swells as the number lands,
+        // centred on the number. Outside the dial, whose clip would square
+        // it off.
+        .background(alignment: .top) {
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [scoreColor.opacity(0.32), scoreColor.opacity(0.08), .clear],
                         center: .center,
-                        startRadius: 70,
-                        endRadius: 200
+                        startRadius: 30,
+                        endRadius: 150
                     )
                 )
-                .frame(width: 400, height: 400)
+                .frame(width: 300, height: 300)
                 .scaleEffect(landed ? 1 : 0.6)
                 .opacity(landed ? 1 : 0)
+                .padding(.top, 27)
                 .allowsHitTesting(false)
         }
-        .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? false : landed) { dial, scale in
-            dial.scaleEffect(scale)
+    }
+
+    private var scoreHub: some View {
+        VStack(spacing: 0) {
+            CountUpText(
+                value: counted ? Double(score) : startScore,
+                font: .displayNumeral,
+                color: scoreColor
+            )
+
+            Text("/ 100")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+                .tracking(0.5)
+        }
+        .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? false : landed) { hub, scale in
+            hub.scaleEffect(scale)
         } keyframes: { _ in
             KeyframeTrack {
-                SpringKeyframe(1.06, duration: 0.14, spring: .snappy)
+                SpringKeyframe(1.08, duration: 0.14, spring: .snappy)
                 SpringKeyframe(1.0, duration: 0.5, spring: .bouncy)
             }
         }
@@ -260,16 +278,11 @@ struct ScoreRevealView: View {
 
         withAnimation(.easeOut(duration: Self.countDuration)) { counted = true }
 
-        // The odometer ticks under the climbing number, then the band's
+        // The dial ticks at every ten it turns past - it animates on the
+        // same curve as the number, from your average - then the band's
         // thump lands with the verdict.
         let landingAt = 0.85
-        async let ticking: Void = Haptics.playCountUp(
-            to: score,
-            duration: Self.countDuration,
-            cutoff: landingAt - 0.05
-        )
         try? await Task.sleep(for: .seconds(landingAt))
-        await ticking
         guard !Task.isCancelled else { return }
 
         withAnimation(AppMotion.settle) {

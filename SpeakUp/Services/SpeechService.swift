@@ -8,83 +8,57 @@ import os
 class SpeechService {
     private let logger = Logger.app("Speech")
 
-    // State
-    var isTranscribing = false
     var hasPermission = false
-    var transcriptionProgress: Double = 0
-    var isModelLoaded: Bool { whisperService.isModelLoaded }
     var isLoadingModel: Bool { whisperService.isLoadingModel }
     var isDownloadingModel: Bool { whisperService.isDownloadingModel }
 
-    /// Which leg of the fallback chain produced the last transcript. Reported
-    /// as a coarse analytics dimension so a rise in Apple Speech fallbacks (a
-    /// Whisper regression) is visible without inspecting any transcript.
-    private(set) var lastTranscriptionBackend = "unknown"
+    /// Which leg of the fallback chain produced the last transcript. Analytics
+    /// dimension, so a rise in Apple Speech fallbacks is visible.
+    private(set) var lastTranscriptionBackend = "unknown" {
+        didSet { logger.debug("Transcribed by \(self.lastTranscriptionBackend, privacy: .public)") }
+    }
 
-    // Transcription backend
     private let whisperService = WhisperService()
 
-    // Fallback: Apple Speech recognizer (for when WhisperKit fails)
+    /// Fallback when Whisper fails.
     private let recognizer: SFSpeechRecognizer?
 
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
 
-    // MARK: - Main-Actor State
-
-    private func setTranscribingState(isTranscribing: Bool, progress: Double? = nil) async {
-        await MainActor.run {
-            self.isTranscribing = isTranscribing
-            if let progress {
-                self.transcriptionProgress = progress
-            }
-        }
-    }
-
     // MARK: - Model Loading
 
-    /// Pre-load the Whisper model (call on app launch for better UX)
     func preloadModel() async {
         await whisperService.loadModel(modelVariant: "base")
     }
 
-    /// Unload the Whisper model to free memory (e.g. before the local LLM loads)
+    /// Frees Whisper's memory before the local LLM loads.
     func unloadWhisperModel() async {
         await whisperService.unloadModel()
     }
 
     // MARK: - Permission
 
+    /// Speech recognition permission, needed only for the Apple Speech leg.
     func requestPermission() async -> Bool {
-        // For WhisperKit, we only need microphone permission (handled by AudioService)
-        // Keep this for backward compatibility
         let status = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status)
             }
         }
-
-        let authorized = status == .authorized
-        await MainActor.run {
-            hasPermission = authorized
-        }
-        return authorized
+        hasPermission = status == .authorized
+        return hasPermission
     }
 
     // MARK: - Lightweight Transcription (text only, no analysis)
 
-    /// Fast transcription that skips isolation, speaker labeling, and filler detection.
-    /// Use for dictation where you only need the raw text.
+    /// Dictation: raw text, no isolation, speaker labeling or scoring.
     func transcribeTextOnly(audioURL: URL, preferredTerms: [String] = []) async throws -> String {
-        await setTranscribingState(isTranscribing: true)
-        defer {
-            Task { await self.setTranscribingState(isTranscribing: false) }
-        }
         let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         var causes: [String] = []
+        var shouldReload = false
 
-        var skipModelReload = false
         do {
             let primary = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
             let text = trim(primary.text)
@@ -94,18 +68,13 @@ class SpeechService {
             causes.append("whisper: empty transcript")
         } catch {
             causes.append(Self.chainCause(backend: "whisper", error))
-            // Hub timeout already spent the budget - don't pay another 45s.
-            if Self.abandonsWhisper(error) {
-                skipModelReload = true
-            }
+            shouldReload = !Self.abandonsWhisper(error)
         }
 
-        if !skipModelReload {
-            // Retry once with a fresh model in case WhisperKit got into a bad state.
-            // `transcribe` rebuilds it, time-boxed; an explicit unbounded
-            // load here could pin the chain on a wedged build.
+        // A rebuild only helps a model that errored. `transcribe` rebuilds it,
+        // time-boxed.
+        if shouldReload {
             await whisperService.unloadModel()
-
             do {
                 let retry = try await whisperService.transcribe(audioURL: audioURL, preferredTerms: preferredTerms)
                 let text = trim(retry.text)
@@ -115,7 +84,6 @@ class SpeechService {
                 causes.append("whisper_reload: empty transcript")
             } catch {
                 causes.append(Self.chainCause(backend: "whisper_reload", error))
-                // Fall through to Apple Speech fallback.
             }
         }
 
@@ -129,30 +97,21 @@ class SpeechService {
 
     // MARK: - Fallback Cause Tracking
 
-    /// UserInfo key carrying the joined fallback-chain causes. Purely
-    /// diagnostic - `localizedDescription` stays the stable user-facing string.
+    /// UserInfo key carrying the joined fallback-chain causes. Diagnostic only.
     private static let fallbackCausesKey = "SpeechService.fallbackCauses"
 
-    /// True when Whisper already burned its Hub download budget. Reload would
-    /// just hit the network again - callers should fall through to Apple Speech.
-    /// A download, model build or decode that overran its wait. The raw-file
-    /// retry and the reload would each pay that wait again, so callers go
-    /// straight to Apple Speech. These used to arrive wrapped or swallowed
-    /// (`modelNotLoaded`), so this check never fired and every leg re-waited.
+    /// A download, build or decode that overran its wait. Every further
+    /// Whisper leg would pay that wait again, so go straight to Apple Speech.
     private static func abandonsWhisper(_ error: Error) -> Bool {
         (error as? WhisperServiceError)?.abandonsWhisper ?? false
     }
 
-    /// One link of the fallback chain: backend tag + error domain#code,
-    /// matching the codes-only diagnostics pattern LLMService uses. Message
-    /// text stays out so the userInfo string carries no user content.
+    /// Backend tag + error domain#code. No message text, so no user content.
     private static func chainCause(backend: String, _ error: Error) -> String {
         let nsError = error as NSError
         return "\(backend): \(nsError.domain)#\(nsError.code)"
     }
 
-    /// Terminal "no speech" failure: logs the accumulated chain and embeds it
-    /// in userInfo so a bare "No speech detected" stays diagnosable.
     private func noSpeechError(causes: [String]) -> SpeechServiceError {
         logger.error("Speech fallback chain exhausted: \(causes.joined(separator: " | "), privacy: .private(mask: .hash))")
         return .transcriptionFailed(
@@ -175,27 +134,17 @@ class SpeechService {
         preferredTerms: [String] = [],
         voiceProfile: VoiceProfile? = nil
     ) async throws -> SpeechTranscriptionResult {
-        await setTranscribingState(isTranscribing: true, progress: 0)
-
-        defer {
-            Task {
-                await self.setTranscribingState(isTranscribing: false, progress: 1.0)
-            }
-        }
-
         let preparation: (SpeechIsolationService.Result?, URL)? = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                // Cheap gate: missing/zero-byte files must not enter Whisper →
-                // reload → Apple. Checked here rather than on the main actor:
-                // the file usually sits in the iCloud container by now.
+                // Missing or empty files never enter the chain. Off main: the
+                // file may already sit in the iCloud container.
                 let fileSize = (try? audioURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
                 guard fileSize != 0, FileManager.default.fileExists(atPath: audioURL.path) else {
                     continuation.resume(returning: nil)
                     return
                 }
-                // Decode only what isolation preprocess needs here; speaker
-                // labeling / pitch analysis decode again post-transcription
-                // so no PCM stays resident during the Whisper pass.
+                // PCM is decoded again after transcription so none stays
+                // resident during the Whisper pass.
                 let monoPCM = MonoPCM.decode(url: audioURL)
                 let isolationResult = monoPCM.flatMap {
                     SpeechIsolationService.preprocessIfBeneficial(monoPCM: $0)
@@ -223,9 +172,6 @@ class SpeechService {
             originalURL: audioURL,
             preferredTerms: preferredTerms
         )
-        await MainActor.run {
-            transcriptionProgress = whisperService.transcriptionProgress
-        }
 
         let postProcessed: SpeechTranscriptionResult = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -241,31 +187,19 @@ class SpeechService {
                     wordsAfterFillerRetagging = FillerDetectionPipeline.tagFillers(in: rawTimings, config: fillerConfig)
                 }
 
-                var finalWords = wordsAfterFillerRetagging
-                // Speaker acoustics from the raw capture - isolation preprocess can
-                // flatten energy/F0 and mis-label the primary speaker.
-                // Decode once here and share with pitch analysis via the result;
-                // short takes that gate out of speaker labeling still pay one decode
-                // (cheaper than the old isolation + speaker + pitch triple).
+                // Speaker acoustics come from the raw capture: isolation can
+                // flatten energy/F0. The decode is shared with pitch analysis.
                 let sharedPCM = MonoPCM.decode(url: audioURL)
                 let speakerLabeled = ConversationIsolationService.labelPrimarySpeaker(
-                    words: finalWords,
+                    words: wordsAfterFillerRetagging,
                     audioURL: audioURL,
                     totalDuration: result.duration,
                     persistentProfile: voiceProfile,
                     monoPCM: sharedPCM
                 )
-                finalWords = speakerLabeled.0
-                let speakerIsolationMetrics = speakerLabeled.1
-                let voiceProfileUpdate = speakerLabeled.2
-                // Every word is kept. Speaker isolation only labels words
-                // (`isPrimarySpeaker`); dropping the non-primary ones here deleted
-                // them from the stored transcript, so the transcript no longer
-                // matched the audio - worst in the back half of a solo recording,
-                // where natural pitch declination and fading energy pull words away
-                // from a voice profile built from the first 12 seconds. `analyze`
-                // still applies the primary-speaker gate for scoring, and the detail
-                // view renders the labels as speaker turns.
+                // Every word is kept; speaker isolation only labels. `analyze`
+                // applies the primary-speaker gate for scoring.
+                let finalWords = speakerLabeled.0
                 let outputText = SpeechService.joinTranscript(
                     from: finalWords,
                     fallback: result.text
@@ -276,8 +210,8 @@ class SpeechService {
                     words: finalWords,
                     duration: result.duration,
                     audioIsolationMetrics: isolationResult?.metrics,
-                    speakerIsolationMetrics: speakerIsolationMetrics,
-                    voiceProfileUpdate: voiceProfileUpdate,
+                    speakerIsolationMetrics: speakerLabeled.1,
+                    voiceProfileUpdate: speakerLabeled.2,
                     monoPCM: sharedPCM
                 ))
             }
@@ -286,89 +220,64 @@ class SpeechService {
         return postProcessed
     }
 
-    /// Whisper → reload retry → original-URL retry (if isolation ran) → Apple Speech.
-    /// Treats an empty transcript as failure so over-gated isolation audio cannot
-    /// permanently produce a Silent session when the raw recording still has speech.
+    /// Whisper on the isolated file → Whisper on the raw file (if isolation
+    /// ran) → Whisper on a rebuilt model (only after an error) → Apple Speech.
+    /// An empty transcript counts as a miss, so over-gated isolation cannot
+    /// turn a take with speech into a silent session.
     private func transcribeWithFallbacks(
         preferredURL: URL,
         originalURL: URL,
         preferredTerms: [String]
     ) async throws -> SpeechTranscriptionResult {
-        let trim: (String) -> String = {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
         let isUsable: (SpeechTranscriptionResult) -> Bool = { result in
-            !trim(result.text).isEmpty || !result.words.isEmpty
+            !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !result.words.isEmpty
         }
         var causes: [String] = []
-        var skipModelReload = false
+        var abandoned = false
+        var lastLegThrew = false
 
-        do {
-            let primary = try await whisperService.transcribe(
-                audioURL: preferredURL,
-                preferredTerms: preferredTerms
-            )
-            if isUsable(primary) {
-                lastTranscriptionBackend = "whisper"
-                return primary
-            }
-            causes.append("whisper: empty result")
-        } catch {
-            causes.append(Self.chainCause(backend: "whisper", error))
-            // A Hub timeout already burned ~45s - reloading would just hit Hub
-            // again. Skip straight to Apple Speech after the optional raw retry.
-            if Self.abandonsWhisper(error) {
-                skipModelReload = true
-            }
-        }
-
-        // Isolation may have over-suppressed speech - try the raw capture before
-        // paying for a model reload.
-        if preferredURL != originalURL, !skipModelReload {
+        func whisper(_ url: URL, backend: String) async -> SpeechTranscriptionResult? {
             do {
-                let raw = try await whisperService.transcribe(
-                    audioURL: originalURL,
-                    preferredTerms: preferredTerms
-                )
-                if isUsable(raw) {
-                    lastTranscriptionBackend = "whisper_raw"
-                    return raw
+                let result = try await whisperService.transcribe(audioURL: url, preferredTerms: preferredTerms)
+                lastLegThrew = false
+                if isUsable(result) {
+                    lastTranscriptionBackend = backend
+                    return result
                 }
-                causes.append("whisper_raw: empty result")
+                causes.append("\(backend): empty result")
             } catch {
-                causes.append(Self.chainCause(backend: "whisper_raw", error))
-                if Self.abandonsWhisper(error) {
-                    skipModelReload = true
-                }
+                causes.append(Self.chainCause(backend: backend, error))
+                lastLegThrew = true
+                if Self.abandonsWhisper(error) { abandoned = true }
             }
+            return nil
         }
 
-        if !skipModelReload {
-            // `transcribe` rebuilds it, time-boxed; an explicit unbounded
-            // load here could pin the chain on a wedged build.
+        if let result = await whisper(preferredURL, backend: "whisper") {
+            return result
+        }
+
+        // Isolation may have over-suppressed speech.
+        if preferredURL != originalURL, !abandoned,
+           let result = await whisper(originalURL, backend: "whisper_raw") {
+            return result
+        }
+
+        // A working model that returned nothing would return nothing again;
+        // a rebuild (unload, then `transcribe` rebuilds time-boxed) only helps
+        // after an error.
+        if lastLegThrew, !abandoned {
             await whisperService.unloadModel()
-
-            let reloadURL = preferredURL != originalURL ? originalURL : preferredURL
-            do {
-                let retry = try await whisperService.transcribe(
-                    audioURL: reloadURL,
-                    preferredTerms: preferredTerms
-                )
-                if isUsable(retry) {
-                    lastTranscriptionBackend = "whisper_reload"
-                    return retry
-                }
-                causes.append("whisper_reload: empty result")
-            } catch {
-                causes.append(Self.chainCause(backend: "whisper_reload", error))
-                // Fall through to Apple Speech.
+            if let result = await whisper(originalURL, backend: "whisper_reload") {
+                return result
             }
         }
 
-        // Prefer the original file for Apple Speech - it never saw the
-        // isolation preprocess and is the closest match to what was recorded.
+        // The original file: closest to what was recorded.
         let apple = try await transcribeWithAppleSpeech(audioURL: originalURL)
         if isUsable(apple) {
+            // Apple Speech drops most fillers; the causes say why Whisper missed.
+            logger.debug("Whisper legs failed: \(causes.joined(separator: " | "), privacy: .public)")
             lastTranscriptionBackend = "apple_speech"
             return apple
         }
@@ -376,7 +285,6 @@ class SpeechService {
         throw noSpeechError(causes: causes + ["apple_speech: empty result"])
     }
 
-    /// Fallback transcription using Apple's SFSpeechRecognizer
     private func transcribeWithAppleSpeech(audioURL: URL) async throws -> SpeechTranscriptionResult {
         guard let recognizer, recognizer.isAvailable else {
             throw SpeechServiceError.recognizerUnavailable
@@ -392,21 +300,12 @@ class SpeechService {
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
         request.shouldReportPartialResults = false
         request.taskHint = .dictation
-
-        // Don't add punctuation - it makes Apple Speech more aggressive
-        // about cleaning up raw speech and removing filler words
+        // Punctuation makes Apple Speech drop fillers.
         request.addsPunctuation = false
-
-        // Unconditional: on-device processing is a product guarantee, not a
-        // preference, and `supportsOnDeviceRecognition` can read false while
-        // assets are still installing. This was the one leg of the chain that
-        // left the device at all. Server-side recognition also stops at roughly
-        // a minute of audio and returns that prefix as a final result, so a long
-        // recording reaching this fallback came back silently truncated.
+        // On-device is a product guarantee. Server recognition also truncates
+        // at about a minute.
         request.requiresOnDeviceRecognition = true
 
-        // Thread-safe resume-once gate - the recognition callback and the
-        // timeout task race on different queues.
         final class ResumeGate: @unchecked Sendable {
             private var resumed = false
             private let lock = NSLock()
@@ -419,8 +318,6 @@ class SpeechService {
             }
         }
 
-        // Opened off the main actor: the take sits in the iCloud container,
-        // and file work there can wait on the iCloud daemon (gotcha §29).
         let audioDuration = await Task.detached(priority: .userInitiated) {
             Self.fileDuration(of: audioURL)
         }.value
@@ -447,10 +344,7 @@ class SpeechService {
                 continuation.resume(returning: transcription)
             }
 
-            // Apple Speech can stall with no final result and no error, leaking
-            // the continuation (and hanging dictation) forever. Force-resume - 
-            // scaled to the file, since a flat 90 s aborted long recordings that
-            // were still being recognized normally.
+            // Apple Speech can stall with neither result nor error.
             Task {
                 try? await Task.sleep(for: .seconds(min(600, max(90, audioDuration * 5))))
                 guard gate.claim() else { return }
@@ -494,9 +388,7 @@ class SpeechService {
             duration: duration
         )
     }
-    
-    /// Join timed words into transcript text. `nonisolated` so the GCD
-    /// post-process path does not hop MainActor just to concatenate strings.
+
     nonisolated private static func joinTranscript(from words: [TranscriptionWord], fallback: String) -> String {
         let resolved = words
             .map(\.word)

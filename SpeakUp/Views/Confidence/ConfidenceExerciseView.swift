@@ -187,10 +187,17 @@ struct ConfidenceExerciseView: View {
             .accessibilityValue(exercise.step(safelyAt: currentStepIndex))
 
             if isGuided {
-                ProgressView(value: holdProgress)
-                    .tint(exercise.category.color.opacity(0.7))
-                    .padding(.horizontal, 60)
-                    .accessibilityLabel("Time on this step")
+                TakeWaveform(
+                    levels: TakeWaveform.track,
+                    mode: .filled(holdProgress),
+                    tint: exercise.category.color.opacity(0.7),
+                    barWidth: 3
+                )
+                .frame(height: 10)
+                .padding(.horizontal, 60)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Time on this step")
+                .accessibilityValue("\(Int(holdProgress * 100)) percent")
             }
 
             Spacer()

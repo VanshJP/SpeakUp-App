@@ -276,8 +276,8 @@ struct AIModelSettingsView: View {
 
         case .loading:
             HStack(spacing: 12) {
-                ProgressView()
-                    .tint(AppColors.primary)
+                VoiceLoader()
+                    .foregroundStyle(AppColors.primary)
                 Text("Loading model into memory...")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -384,8 +384,15 @@ private struct ModelDownloadProgress: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ProgressView(value: localLLM.downloadProgress)
-                .tint(AppColors.primary)
+            TakeWaveform(
+                levels: TakeWaveform.track,
+                mode: .filled(localLLM.downloadProgress),
+                barWidth: 3
+            )
+            .frame(height: 12)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Download progress")
+            .accessibilityValue("\(Int(localLLM.downloadProgress * 100)) percent")
 
             HStack {
                 Text("\(Int(localLLM.downloadProgress * 100))%")

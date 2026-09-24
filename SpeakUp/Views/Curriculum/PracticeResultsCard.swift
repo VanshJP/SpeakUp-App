@@ -187,8 +187,8 @@ struct PracticeResultsCard: View {
 
     private var analyzingPlaceholder: some View {
         HStack(spacing: 12) {
-            ProgressView()
-                .tint(AppColors.primary)
+            VoiceLoader()
+                .foregroundStyle(AppColors.primary)
 
             Text("Analyzing your recording...")
                 .font(.subheadline)

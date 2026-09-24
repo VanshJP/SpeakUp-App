@@ -24,8 +24,8 @@ struct GlassButtonLabel: View {
     private var labelContent: some View {
         HStack(spacing: 8) {
             if isLoading {
-                ProgressView()
-                    .tint(foregroundColor)
+                VoiceLoader(size: .small)
+                    .foregroundStyle(foregroundColor)
             } else {
                 if let icon, iconPosition == .left {
                     Image(systemName: icon)

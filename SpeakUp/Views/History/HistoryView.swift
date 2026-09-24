@@ -246,37 +246,111 @@ struct HistoryView: View {
                     buttonAction: selectedFilter == .all && searchText.isEmpty ? onShowToday : nil
                 )
             } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(items) { summary in
-                        Button {
-                            onSelectRecording(summary.id.uuidString)
-                        } label: {
-                            RecordingRow(summary: summary)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button {
-                                Task {
-                                    await viewModel.toggleFavorite(id: summary.id)
-                                }
-                            } label: {
-                                Label(
-                                    summary.isFavorite ? "Remove Favorite" : "Add to Favorites",
-                                    systemImage: summary.isFavorite ? "heart.slash" : "heart"
-                                )
-                            }
-
-                            Button(role: .destructive) {
-                                summaryToDelete = summary
-                                showingDeleteAlert = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
+                LazyVStack(alignment: .leading, spacing: AppLayout.chapterSpacing) {
+                    ForEach(HistoryWeek.group(items)) { week in
+                        weekSection(week)
                     }
                 }
             }
         }
+    }
+
+    // MARK: - Week Section
+
+    /// One card per week, takes as rows inside it. The header carries the
+    /// week, so a row only needs the weekday and time.
+    private func weekSection(_ week: HistoryWeek) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GlassSectionHeader(week.title()) {
+                Text(week.caption)
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+
+            GlassCard(padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(week.summaries.enumerated()), id: \.element.id) { index, summary in
+                        if index > 0 {
+                            MetricRowDivider()
+                                .padding(.leading, 14)
+                        }
+                        recordingButton(summary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func recordingButton(_ summary: RecordingSummary) -> some View {
+        Button {
+            onSelectRecording(summary.id.uuidString)
+        } label: {
+            RecordingRow(summary: summary)
+                .padding(14)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                Task {
+                    await viewModel.toggleFavorite(id: summary.id)
+                }
+            } label: {
+                Label(
+                    summary.isFavorite ? "Remove Favorite" : "Add to Favorites",
+                    systemImage: summary.isFavorite ? "heart.slash" : "heart"
+                )
+            }
+
+            Button(role: .destructive) {
+                summaryToDelete = summary
+                showingDeleteAlert = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - History Week
+
+/// Recordings bucketed by calendar week, newest week first, each keeping the
+/// order it was handed. Pure so the grouping and titles test without a store.
+nonisolated struct HistoryWeek: Identifiable, Equatable {
+    let start: Date
+    let summaries: [RecordingSummary]
+
+    var id: Date { start }
+
+    static func group(_ summaries: [RecordingSummary], calendar: Calendar = .current) -> [HistoryWeek] {
+        Dictionary(grouping: summaries) { calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start ?? $0.date }
+            .map { HistoryWeek(start: $0.key, summaries: $0.value) }
+            .sorted { $0.start > $1.start }
+    }
+
+    /// "This week", "Last week", then the range: "Sep 8 – 14", with the
+    /// year once it is not this one.
+    func title(now: Date = .now, calendar: Calendar = .current) -> String {
+        if let thisWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start {
+            if start == thisWeek { return "This week" }
+            if calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeek) == start { return "Last week" }
+        }
+        let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+        var style = Date.IntervalFormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated).day()
+        if calendar.component(.year, from: start) != calendar.component(.year, from: now) {
+            style = style.year()
+        }
+        return (start..<end).formatted(style)
+    }
+
+    /// "3 takes · avg 78". The average skips unscored takes and is left off
+    /// when none scored.
+    var caption: String {
+        let count = "\(summaries.count) \(summaries.count == 1 ? "take" : "takes")"
+        let scores = summaries.compactMap(\.overallScore)
+        guard !scores.isEmpty else { return count }
+        return "\(count) · avg \(scores.reduce(0, +) / scores.count)"
     }
 }
 
@@ -392,7 +466,7 @@ struct RecordingRow: View {
 
     private static let detailedDateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMM d, h:mm a"
+        f.setLocalizedDateFormatFromTemplate("EEE h:mm a")
         return f
     }()
 
@@ -411,78 +485,76 @@ struct RecordingRow: View {
     }
 
     var body: some View {
-        GlassCard(padding: 14) {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        Text(summary.displayTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-
-                        if summary.isFavorite {
-                            Image(systemName: "heart.fill")
-                                .font(.caption2)
-                                .foregroundStyle(AppColors.error)
-                        }
-                    }
-
-                    Text(metadataLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(summary.displayTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
 
-                    if let wpm = summary.wpm {
-                        HStack(spacing: 8) {
-                            Text("\(Int(wpm)) wpm")
-                            if let fillers = summary.fillerCount, fillers > 0 {
-                                Text("\(fillers) filler\(fillers == 1 ? "" : "s")")
-                            }
+                    if summary.isFavorite {
+                        Image(systemName: "heart.fill")
+                            .font(.caption2)
+                            .foregroundStyle(AppColors.error)
+                    }
+                }
+
+                Text(metadataLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if let wpm = summary.wpm {
+                    HStack(spacing: 8) {
+                        Text("\(Int(wpm)) wpm")
+                        if let fillers = summary.fillerCount, fillers > 0 {
+                            Text("\(fillers) filler\(fillers == 1 ? "" : "s")")
                         }
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                     }
-                }
-
-                Spacer(minLength: 8)
-
-                // Score gauge - the row's single colored element
-                if let score = summary.overallScore {
-                    ZStack {
-                        RingProgress(
-                            progress: Double(score) / 100,
-                            color: AppColors.scoreColor(for: score),
-                            lineWidth: 3.5
-                        )
-                        .frame(width: 44, height: 44)
-                        Text("\(score)")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-                } else if summary.isProcessing {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.07), lineWidth: 3.5)
-                            .frame(width: 44, height: 44)
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
-                } else if summary.hasError {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.body)
-                        .foregroundStyle(AppColors.warning)
-                        .frame(width: 44, height: 44)
-                } else {
-                    Image(systemName: "waveform")
-                        .font(.body)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 44, height: 44)
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
+                }
             }
+
+            Spacer(minLength: 8)
+
+            // Score gauge - the row's single colored element
+            if let score = summary.overallScore {
+                ZStack {
+                    RingProgress(
+                        progress: Double(score) / 100,
+                        color: AppColors.scoreColor(for: score),
+                        lineWidth: 3.5
+                    )
+                    .frame(width: 44, height: 44)
+                    Text("\(score)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            } else if summary.isProcessing {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.07), lineWidth: 3.5)
+                        .frame(width: 44, height: 44)
+                    VoiceLoader(size: .small)
+                        .foregroundStyle(AppColors.primary)
+                }
+            } else if summary.hasError {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.body)
+                    .foregroundStyle(AppColors.warning)
+                    .frame(width: 44, height: 44)
+            } else {
+                Image(systemName: "waveform")
+                    .font(.body)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 44, height: 44)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
     }
 }

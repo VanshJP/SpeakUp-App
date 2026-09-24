@@ -83,8 +83,8 @@ struct SpeakUpApp: App {
                 .environment(audioService)
                 .environment(llmService)
                 .task {
-                    llmService.localLLM.preloadCleanupHandler = { [weak speechService] in
-                        await speechService?.unloadWhisperModel()
+                    llmService.localLLM.preloadCleanupHandler = {
+                        await speechService.unloadWhisperModel()
                     }
 
                     // Settings must exist before anything else reads them
@@ -94,18 +94,18 @@ struct SpeakUpApp: App {
 
                     startTrialForExistingInstallIfNeeded()
 
+                    // Story folders heal synchronously on the main context.
+                    do {
+                        try StoryFolderSeedService.healIfNeeded(in: sharedModelContainer.mainContext)
+                    } catch {
+                        Self.logger.error("Error seeding story folders: \(error.localizedDescription, privacy: .private(mask: .hash))")
+                    }
+
                     // Seed remaining data concurrently - all independent of each other
                     async let p: () = seedPromptsIfNeeded()
                     async let a: () = seedAchievementsIfNeeded()
                     async let c: () = seedCurriculumIfNeeded()
-                    async let f: () = {
-                        do {
-                            try StoryFolderSeedService.healIfNeeded(in: sharedModelContainer.mainContext)
-                        } catch {
-                            Self.logger.error("Error seeding story folders: \(error.localizedDescription, privacy: .private(mask: .hash))")
-                        }
-                    }()
-                    _ = await (p, a, c, f)
+                    _ = await (p, a, c)
 
                     #if DEBUG
                     ScreenshotSeeder.seedIfRequested(context: sharedModelContainer.mainContext)
@@ -129,15 +129,8 @@ struct SpeakUpApp: App {
                         AttributionStore.shared.logFirstOpenIfNeeded()
                     }
 
-                    // Preload the Whisper model. `Task.detached` does *not*
-                    // get this off the main actor: `SpeechService` and
-                    // `WhisperService` are plain classes, so default isolation
-                    // makes them MainActor (gotcha §7) and the detached task
-                    // hops straight back. On a fresh install this call is a
-                    // ~150 MB Hub download plus a Core ML prewarm, which is the
-                    // heaviest thing the first launch does. Let the first
-                    // screen paint and settle before starting it; nothing needs
-                    // the model until the user's first take, minutes away.
+                    // Delayed so the first screen paints before the heaviest
+                    // launch work (fresh install: ~150 MB download + prewarm).
                     Task.detached(priority: .background) {
                         try? await Task.sleep(for: .seconds(1.5))
                         await speechService.preloadModel()

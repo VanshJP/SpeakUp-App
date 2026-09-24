@@ -144,22 +144,25 @@ struct PlaybackDrawerContainer: View {
         return limit + (offset - limit) * factor
     }
 
+    /// The generator's point heights as 0...1 levels. It floors quiet
+    /// passages at a minimum height already, so a straight ratio keeps them
+    /// visible.
+    private var scrubberLevels: [CGFloat] {
+        guard let top = waveformHeights.max(), top > 0 else { return [] }
+        return waveformHeights.map { $0 / top }
+    }
+
     /// Seekable waveform, shared by both drawer states so the collapsed row
     /// shows exactly the audio the expanded one does.
     private func scrubber(height: CGFloat) -> some View {
         GeometryReader { geometry in
-            let barWidth: CGFloat = 3
-            let spacing: CGFloat = 2
-            let totalBarWidth = barWidth + spacing
-            let barCount = max(1, Int(geometry.size.width / totalBarWidth))
             let width = geometry.size.width
 
-            ScrubberBars(
-                barCount: barCount,
-                playedBars: min(barCount, Int((playbackViewModel.playbackProgress * Double(barCount)).rounded(.up))),
-                heights: waveformHeights,
-                barWidth: barWidth,
-                spacing: spacing
+            TakeWaveform(
+                levels: scrubberLevels,
+                mode: .filled(playbackViewModel.playbackProgress),
+                barWidth: 3,
+                showsPlayhead: true
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())
@@ -281,25 +284,6 @@ struct PlaybackDrawerContainer: View {
         time.minutesSeconds
     }
 }
-
-struct ScrubberBars: View {
-    let barCount: Int
-    let playedBars: Int
-    let heights: [CGFloat]
-    let barWidth: CGFloat
-    let spacing: CGFloat
-
-    var body: some View {
-        HStack(spacing: spacing) {
-            ForEach(0..<barCount, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(i < playedBars ? AppColors.primary : Color.white.opacity(0.2))
-                    .frame(width: barWidth, height: heights.isEmpty ? 16 : heights[i % heights.count])
-            }
-        }
-    }
-}
-
 
 enum PlaybackDrawerState {
     case expanded

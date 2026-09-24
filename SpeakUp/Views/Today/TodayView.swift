@@ -133,7 +133,11 @@ struct TodayView: View {
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading { playArrivalIfNeeded() }
         }
-        .sheet(isPresented: $showingFirstRecordingSetup, onDismiss: startTourIfNeeded) {
+        .sheet(isPresented: $showingFirstRecordingSetup, onDismiss: {
+            // The sheet writes take length and weekly goal straight to settings.
+            Task { await viewModel.loadData() }
+            startTourIfNeeded()
+        }) {
             FirstRecordingSetupSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)

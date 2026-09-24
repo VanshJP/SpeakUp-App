@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Guided **skill studio**: capability chapters and interactive lessons that end in speaking proof (not a decorative path). Distinct from Library → Tools: Learn is a curriculum of skills you demonstrate with your voice; warm-ups/drills/calm are quick prep reps.
+Guided **Skill Studio**: capability chapters and interactive lessons that end in speaking proof (not a decorative path). Distinct from Library → Tools: Learn is a curriculum of skills you demonstrate with your voice; warm-ups/drills/calm are quick prep reps.
 
 ## Value thesis
 
@@ -25,8 +25,8 @@ The page answers *what speaking skill am I building, and how do I prove it?* - n
 1. All eight weeks are open during the beta - the `PaidFeature.fullCurriculum` lock is removed from the UI ([monetization.md](./monetization.md)). Weeks still unlock in order.
 2. Advancement uses durable activity signals in `CurriculumActivitySignalStore` - preserve signal semantics when changing lesson completion UX. Review/practice signals come from `CurriculumSessionSignals.scan(recordings)`: one decode pass over history feeding every activity. Per-activity blob reads were O(activities × recordings) on the main actor; do not reintroduce them.
 3. Seed content stays in `Data/DefaultCurriculum.swift`. New lesson → add a row in `LessonIdentity.catalog` (motif + accent) in the same PR.
-4. `CurriculumView` is a **skill studio**, not a path map:
- - Header: eyebrow **LEARN** + **Skill studio** + trophy (chrome, not a stats card).
+4. `CurriculumView` is a **Skill Studio**, not a path map:
+ - Header: eyebrow **LEARN** + **Skill Studio** + trophy (chrome, not a stats card).
  - **Studio session** card: current lesson framed by objective + `LessonTeachingCopy.roadmap` + `LessonModalityStrip` + primary Start / Practice again. Progress count is a quiet accessory. Not `elevated` (same shadow reason as `CoachFocusCard`).
  - **Prove it again** nudges the prior completed lesson into the first viewport (review is not buried in the chapter list).
  - Chapters use a left-aligned **lesson list** (glyph + title + objective + modality strip + Spoken/Now/Open/Locked). No zig-zag rails, no alternating left/right nodes.

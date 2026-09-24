@@ -93,6 +93,11 @@ struct AnalyzingView: View {
         question.type == .scale ? scaleAnswers[question.id] != nil : boolAnswers[question.id] != nil
     }
 
+    /// True when answering this question finishes the check-in.
+    private func isLastOpen(_ question: FeedbackQuestion) -> Bool {
+        !feedbackQuestions.contains { $0.id != question.id && !isAnswered($0) }
+    }
+
     /// A first load is a ~150 MB download; every load after it takes seconds.
     /// Showing the same spinner for both is what makes a slow first run read as
     /// a hang rather than a download.
@@ -190,53 +195,57 @@ struct AnalyzingView: View {
     // This screen exists to make the wait feel shorter. What it leans on:
     // occupied time passes faster than empty time (one small, tactile question
     // at a time); a wait with visible progress feels shorter than an open-ended
-    // one (the take's own waveform being scanned, and a bar that only finishes
+    // one (the take's own waveform filling as the progress bar, finishing only
     // when the score does); and the take is acknowledged as done before
     // anything is asked. The last answer sets up the reveal - your call against
     // the score - so the remaining wait is anticipation, not dead air.
+    //
+    // Layout: the question owns the page, with no card around it. Scoring
+    // status lives in the floating dock at the bottom, beside the one action,
+    // so the two things competing for attention are never stacked together.
 
     private var selfCheckContent: some View {
-        // Always scroll - the header, status card and a custom question can
-        // overflow a small phone once Dynamic Type climbs.
+        // Always scroll - a custom question can overflow a small phone once
+        // Dynamic Type climbs.
         PageScrollView {
-            VStack(spacing: 16) {
-                takeSavedHeader
-                    .padding(.top, 4)
-
-                scoringStatusCard
-
-                selfCheckCard
-
-                if isWrappingUp && !scoreSettled {
-                    MotivationalTipCard(tipIndex: currentTipIndex, isVisible: showTip)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+            VStack(alignment: .leading, spacing: 24) {
+                if feedbackQuestions.count > 1 || isWrappingUp {
+                    stepSegments
                 }
+
+                takeSavedLine
+
+                ZStack(alignment: .topLeading) {
+                    if isWrappingUp {
+                        wrapUpPage
+                            .transition(pageTransition)
+                    } else if let question = currentQuestion {
+                        questionPage(question)
+                            .id(question.id)
+                            .transition(pageTransition)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
 
                 Spacer(minLength: 12)
             }
             .padding(.horizontal, 20)
+            .padding(.top, 12)
         }
         .scrollIndicators(.hidden)
     }
 
     // MARK: Header
 
-    private var takeSavedHeader: some View {
-        VStack(spacing: 6) {
-            SavedSeal()
-
-            Text("Take saved")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.white)
-
-            Text("\(recording.actualDuration.minutesSeconds) on the record. The hard part's done.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+    /// The acknowledgement, kept to one line so the question gets the page.
+    private var takeSavedLine: some View {
+        Label {
+            Text("Take saved · \(recording.actualDuration.minutesSeconds)")
+        } icon: {
+            Image(systemName: "checkmark")
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        .eyebrowStyle(AppColors.success)
+        .accessibilityLabel("Take saved, \(recording.actualDuration.minutesSeconds). The hard part's done.")
     }
 
     // MARK: Scoring Status
@@ -263,66 +272,52 @@ struct AnalyzingView: View {
         return AppColors.primary
     }
 
-    private var statusIcon: String {
-        if analysisReady { return "checkmark" }
-        if !isStillProcessing { return "exclamationmark" }
-        return "waveform"
-    }
-
-    /// A guess, and only used to pace the bar: transcription scales with the
+    /// A guess, and only used to pace the waveform's fill: transcription scales with the
     /// take, and a model that is still loading adds a few seconds on top.
     private var expectedWait: TimeInterval {
         let base = max(6, recording.actualDuration * 0.35 + 4)
         return isModelLoading || isDownloadingModel ? base + 8 : base
     }
 
-    private var scoringStatusCard: some View {
-        GlassCard(padding: 14) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: statusIcon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(statusTint)
-                        .contentTransition(.symbolEffect(.replace))
-                        .symbolEffect(.variableColor.iterative, options: .repeating, isActive: !scoreSettled)
-                        .frame(width: 32, height: 32)
-                        .background { Circle().fill(statusTint.opacity(0.18)) }
+    private var scoringStatus: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle()
+                    .fill(statusTint)
+                    .frame(width: 7, height: 7)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                    .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(liveStatusTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .contentTransition(.opacity)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(liveStatusTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .contentTransition(.opacity)
 
-                        Text(liveStatusSubtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 0)
+                    Text(liveStatusSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if !takeShape.isEmpty {
-                    TakeScanView(bars: takeShape, isComplete: scoreSettled)
-                        .frame(height: 40)
-                        .transition(.opacity)
-                }
-
-                EstimatedProgressBar(
-                    startedAt: waitStartedAt,
-                    expected: expectedWait,
-                    isComplete: scoreSettled,
-                    tint: statusTint
-                )
-                .frame(height: 4)
+                Spacer(minLength: 0)
             }
+
+            // The waveform is the progress bar. A take with no level
+            // samples draws `TakeWaveform.flat`, so the bar never vanishes.
+            TakeWaveform(
+                levels: takeShape,
+                mode: .estimate(startedAt: waitStartedAt, expected: expectedWait),
+                isComplete: scoreSettled,
+                tint: statusTint
+            )
+            .frame(height: 32)
         }
         .motion(AppMotion.settle, value: scoreSettled)
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: Question Card
+    // MARK: Question Page
 
     private var pageTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
@@ -332,86 +327,71 @@ struct AnalyzingView: View {
         )
     }
 
-    private var selfCheckCard: some View {
-        FeaturedGlassCard(padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 8) {
-                    Image(systemName: isWrappingUp ? "checkmark.message.fill" : "checkmark.message")
-                        .font(.body)
-                        .foregroundStyle(AppColors.primary)
-                        .contentTransition(.symbolEffect(.replace))
-
-                    Text("Quick self-check")
-                        .font(.footnote.weight(.semibold))
-
-                    Spacer()
-
-                    if !isWrappingUp, feedbackQuestions.count > 1 {
-                        Text("\(questionIndex + 1) of \(feedbackQuestions.count)")
-                            .font(.caption.weight(.medium).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .contentTransition(.numericText())
-                    }
-                }
-
-                ZStack(alignment: .topLeading) {
-                    if isWrappingUp {
-                        wrapUpPage
-                            .transition(pageTransition)
-                    } else if let question = currentQuestion {
-                        questionPage(question)
-                            .id(question.id)
-                            .transition(pageTransition)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                // Pages slide inside the card, not across the whole screen.
-                // The clip reaches out to the card's own edge (its 16pt
-                // padding), so the slider thumb's glow is not cut at the ends.
-                .clipShape(Rectangle().inset(by: -16))
-
-                if !isWrappingUp, feedbackQuestions.count > 1 {
-                    stepDots
-                }
-            }
-        }
-    }
-
     @ViewBuilder
     private func questionPage(_ question: FeedbackQuestion) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 20) {
             Text(question.text)
-                .font(.headline)
+                .font(.title2.weight(.bold))
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
 
-            if question.type == .scale {
-                FeelingSlider(
-                    question: question.text,
-                    selected: scaleAnswers[question.id],
-                    onSelect: { value in
-                        withAnimation(AppMotion.snap) {
-                            scaleAnswers[question.id] = value
+            Group {
+                if question.type == .scale {
+                    // The wheel does not move the page on by itself: one
+                    // swipe rarely lands on the far end, and a page that
+                    // leaves on release took the second swipe away. Next
+                    // commits instead.
+                    VStack(spacing: 12) {
+                        FeelingDial(
+                            question: question.text,
+                            options: takeFeelings,
+                            // Answers are stored 1...5; the dial counts from 0.
+                            selected: scaleAnswers[question.id].map { $0 - 1 },
+                            onSelect: { index in
+                                withAnimation(AppMotion.snap) {
+                                    scaleAnswers[question.id] = index + 1
+                                }
+                            }
+                        )
+                        // Full bleed: the wheel is meant to run off the screen.
+                        .padding(.horizontal, -20)
+
+                        GlassButton(
+                            title: isLastOpen(question) ? "Save check-in" : "Next",
+                            icon: "arrow.right",
+                            iconPosition: .right,
+                            style: .primary,
+                            fullWidth: true
+                        ) {
+                            Haptics.light()
+                            pendingAdvance?.cancel()
+                            advance()
                         }
-                        answered()
+                        .disabled(scaleAnswers[question.id] == nil || hasHandedOver)
+                        .opacity(scaleAnswers[question.id] == nil ? 0.4 : 1)
+                        .motion(AppMotion.settle, value: scaleAnswers[question.id] == nil)
                     }
-                )
-            } else {
-                YesNoInput(
-                    selected: boolAnswers[question.id],
-                    onSelect: { value in
-                        Haptics.selection()
-                        withAnimation(AppMotion.snap) {
-                            boolAnswers[question.id] = value
+                } else {
+                    YesNoInput(
+                        selected: boolAnswers[question.id],
+                        onSelect: { value in
+                            Haptics.selection()
+                            withAnimation(AppMotion.snap) {
+                                boolAnswers[question.id] = value
+                            }
+                            answered()
                         }
-                        answered()
-                    }
-                )
+                    )
+                }
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
-    private var stepDots: some View {
+    /// Story-style segments: one per question, tappable to go back. Filled
+    /// through the current one; all filled once the check-in is saved.
+    private var stepSegments: some View {
         HStack(spacing: 6) {
             ForEach(Array(feedbackQuestions.enumerated()), id: \.element.id) { index, question in
                 Button {
@@ -420,23 +400,24 @@ struct AnalyzingView: View {
                     go(to: index)
                 } label: {
                     Capsule()
-                        .fill(dotColor(index: index, question: question))
-                        .frame(width: index == questionIndex ? 20 : 7, height: 7)
-                        .frame(minWidth: 24, minHeight: 24)
+                        .fill(segmentColor(index: index, question: question))
+                        .frame(height: 4)
+                        .frame(maxWidth: .infinity, minHeight: 24)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(isWrappingUp)
                 .accessibilityLabel("Question \(index + 1) of \(feedbackQuestions.count)")
                 .accessibilityValue(isAnswered(question) ? "Answered" : "Not answered")
             }
         }
-        .frame(maxWidth: .infinity)
         .motion(AppMotion.slide, value: questionIndex)
+        .motion(AppMotion.slide, value: isWrappingUp)
     }
 
-    private func dotColor(index: Int, question: FeedbackQuestion) -> Color {
-        if index == questionIndex { return AppColors.primary }
-        return isAnswered(question) ? AppColors.primary.opacity(0.45) : Color.white.opacity(0.15)
+    private func segmentColor(index: Int, question: FeedbackQuestion) -> Color {
+        if isWrappingUp || index == questionIndex { return .white }
+        return isAnswered(question) ? .white.opacity(0.45) : .white.opacity(0.12)
     }
 
     // MARK: Wrap-Up
@@ -461,91 +442,73 @@ struct AnalyzingView: View {
     }
 
     private var wrapUpPage: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(AppColors.success)
-                .symbolEffect(.bounce, value: isWrappingUp)
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 32) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Check-in saved")
+                    .eyebrowStyle()
 
-            Text("Check-in saved")
-                .font(.headline)
-                .foregroundStyle(.white)
+                Text(wrapUpLine)
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
 
-            Text(wrapUpLine)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if !scoreSettled {
+                let tip = MotivationalTipCard.tips[currentTipIndex]
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("While you wait")
+                        .eyebrowStyle()
+                    Text(tip.text)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(showTip ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.4), value: showTip)
+                }
+                .transition(.opacity)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Bottom Action Bar
+    // MARK: - Bottom Dock
 
+    /// Scoring status and the one action share a floating panel, so the wait
+    /// is always in view without competing with the question for the page.
     private var selfCheckBottomBar: some View {
-        // One control, not two. A primary "See your score" button used to pop
-        // in the moment the transcript landed, stacking a second "next" over
-        // the skip control. The skip control now relabels itself in place.
-        let helperText: String
-        if analysisReady {
-            helperText = isWrappingUp ? "Opening it now" : "Finish up, or go straight to it"
-        } else if !isStillProcessing {
-            helperText = "Your recording is safe"
-        } else {
-            helperText = isWrappingUp
-                ? "Your results open the moment they're ready"
-                : "Answer as many as you like, or skip ahead"
-        }
+        VStack(spacing: 14) {
+            scoringStatus
 
-        let buttonTitle: String
-        if analysisReady {
-            buttonTitle = "See your score"
-        } else if scoreSettled {
-            buttonTitle = "See results"
-        } else {
-            buttonTitle = "Skip to results"
-        }
-
-        return VStack(spacing: 0) {
-            Divider()
-                .overlay(Color.white.opacity(0.06))
-
-            // Vertical stack - an HStack put the helper copy beside the skip
-            // control and the two collided at accessibility text sizes.
-            VStack(spacing: 6) {
-                Text(helperText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-                    .contentTransition(.opacity)
-
+            if scoreSettled {
+                GlassButton(
+                    title: analysisReady ? "See your score" : "See results",
+                    icon: "arrow.right",
+                    iconPosition: .right,
+                    style: .primary,
+                    fullWidth: true
+                ) {
+                    handOverNow()
+                }
+                .disabled(hasHandedOver)
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            } else {
                 Button {
                     handOverNow()
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(buttonTitle)
-                            .contentTransition(.opacity)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
+                    Text(isWrappingUp ? "Open results now" : "Skip to results")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(maxWidth: .infinity, minHeight: AppLayout.minHitTarget)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlassPressStyle())
                 .disabled(hasHandedOver)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
         }
+        .padding(16)
+        .glassEffect(.regular, in: .rect(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
         .motion(AppMotion.settle, value: scoreSettled)
         .motion(AppMotion.settle, value: isWrappingUp)
     }
@@ -685,7 +648,7 @@ struct AnalyzingView: View {
     private func loadTakeShape() async {
         guard takeShape.isEmpty, let data = recording.audioLevelSamplesData else { return }
         let bars = await Task.detached(priority: .userInitiated) {
-            TakeScanView.bars(from: (try? JSONDecoder().decode([Float].self, from: data)) ?? [])
+            TakeWaveform.levels(fromDecibels: (try? JSONDecoder().decode([Float].self, from: data)) ?? [])
         }.value
         guard !Task.isCancelled else { return }
         withAnimation(AppMotion.settle) { takeShape = bars }
@@ -719,340 +682,61 @@ struct AnalyzingView: View {
     }
 }
 
-// MARK: - Feeling Slider (extracted subview)
+// MARK: - Take Feelings
 
-/// "How did that go", as a slider. The thumb follows the finger continuously,
-/// the readout above it snaps to the nearest of five notches with a selection
-/// tick per notch, and on release the thumb springs onto that notch. Tapping
-/// the track jumps straight there.
-///
-/// It replaced a row of five small face buttons. A slider is one gesture
-/// instead of a hunt for the right 40pt target, and the big readout gives the
-/// answer somewhere to land.
-///
-/// The in-flight value stays local and commits once on release: the host
-/// moves the card on a beat after `onSelect`, and reporting every notch would
-/// have advanced it while the thumb was still moving.
-private struct FeelingSlider: View {
-    let question: String
-    let selected: Int?
-    let onSelect: (Int) -> Void
-
-    /// 0...1 along the track while a finger is down; nil at rest.
-    @State private var dragFraction: CGFloat?
-    @State private var trackWidth: CGFloat = 0
-    @State private var hintPulse = false
-
-    private static let options: [(label: String, icon: String, line: String)] = [
-        ("Rough", "cloud.bolt.rain.fill", "Hard going this time"),
-        ("Shaky", "cloud.drizzle.fill", "Got through it"),
-        ("Okay", "cloud.sun.fill", "Middle of the road"),
-        ("Good", "sun.max.fill", "Felt solid"),
-        ("Great", "sparkles", "In the zone")
-    ]
-
-    private let thumbSize: CGFloat = 30
-    private let trackHeight: CGFloat = 10
-
-    /// The notch under the finger while dragging, else the committed answer.
-    private var shown: Int? {
-        if let dragFraction { return Self.value(at: dragFraction) }
-        return selected
-    }
-
-    private var thumbFraction: CGFloat {
-        if let dragFraction { return dragFraction }
-        if let selected { return CGFloat(selected - 1) / 4 }
-        return 0.5
-    }
-
-    private var tint: Color {
-        shown.map { AppColors.scoreColor(for: $0 * 20) } ?? .white.opacity(0.5)
-    }
-
-    static func value(at fraction: CGFloat) -> Int {
-        min(5, max(1, Int((fraction * 4).rounded()) + 1))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            readout
-            track
-            HStack {
-                Text("Rough")
-                Spacer()
-                Text("Great")
-            }
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(.tertiary)
-            .accessibilityHidden(true)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(question)
-        .accessibilityValue(shown.map { Self.options[$0 - 1].label } ?? "Not rated")
-        .accessibilityAdjustableAction { direction in
-            let current = selected ?? 3
-            switch direction {
-            case .increment: onSelect(min(5, selected == nil ? 3 : current + 1))
-            case .decrement: onSelect(max(1, selected == nil ? 3 : current - 1))
-            @unknown default: break
-            }
-        }
-    }
-
-    private var readout: some View {
-        HStack(spacing: 12) {
-            Image(systemName: shown.map { Self.options[$0 - 1].icon } ?? "hand.draw.fill")
-                .font(.system(size: 24, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(tint)
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 48, height: 48)
-                .background { Circle().fill(tint.opacity(0.16)) }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(shown.map { Self.options[$0 - 1].label } ?? "Slide to rate")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(tint)
-                    .contentTransition(.interpolate)
-
-                Text(shown.map { Self.options[$0 - 1].line } ?? "Drag the dot, or tap along the line")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.opacity)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .motion(AppMotion.snap, value: shown)
-    }
-
-    private var track: some View {
-        let travel = max(0, trackWidth - thumbSize)
-        let thumbX = thumbSize / 2 + travel * thumbFraction
-
-        return ZStack(alignment: .leading) {
-            // Rail, inset by the thumb's radius so the thumb never overhangs
-            // the card at either end.
-            Capsule()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: trackHeight)
-                .padding(.horizontal, thumbSize / 2 - trackHeight / 2)
-
-            // The full score ramp, revealed up to the thumb, so the fill
-            // under the thumb is the colour the readout is using.
-            LinearGradient(
-                colors: [AppColors.scoreLow, AppColors.scoreMid, AppColors.scoreGood, AppColors.scoreHigh],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(height: trackHeight)
-            .clipShape(Capsule())
-            .padding(.horizontal, thumbSize / 2 - trackHeight / 2)
-            .mask(alignment: .leading) {
-                Capsule()
-                    .frame(width: shown == nil ? 0 : thumbX + trackHeight / 2, height: trackHeight)
-            }
-
-            // Five notches, so the stops are visible before the first drag.
-            ForEach(0..<5, id: \.self) { index in
-                Circle()
-                    .fill(Color.white.opacity(shown.map { $0 - 1 >= index } == true ? 0.9 : 0.25))
-                    .frame(width: 4, height: 4)
-                    .position(x: thumbSize / 2 + travel * CGFloat(index) / 4, y: thumbSize / 2 + 7)
-            }
-
-            thumb
-                .position(x: thumbX, y: thumbSize / 2 + 7)
-        }
-        .frame(height: thumbSize + 14)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { trackWidth = $0 }
-        .contentShape(Rectangle())
-        .gesture(drag(travel: travel))
-        .sensoryFeedback(.selection, trigger: shown) { old, new in
-            dragFraction != nil && old != nil && new != old
-        }
-        .ambientLoop(AppMotion.ambient(duration: 1.1)) { hintPulse = true }
-    }
-
-    private var thumb: some View {
-        ZStack {
-            if shown == nil {
-                // An idle nudge until the first touch, so the control reads as
-                // something to move rather than a finished meter.
-                Circle()
-                    .stroke(AppColors.primary.opacity(hintPulse ? 0 : 0.55), lineWidth: 2)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .scaleEffect(hintPulse ? 1.7 : 1)
-            } else {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [tint.opacity(0.45), .clear],
-                            center: .center,
-                            startRadius: 2,
-                            endRadius: thumbSize
-                        )
-                    )
-                    .frame(width: thumbSize * 2, height: thumbSize * 2)
-            }
-
-            Circle()
-                .fill(Color.white)
-                .frame(width: thumbSize, height: thumbSize)
-                .overlay {
-                    Circle()
-                        .fill(shown == nil ? AppColors.primary : tint)
-                        .frame(width: 10, height: 10)
-                }
-                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-                .scaleEffect(dragFraction == nil ? 1 : 1.12)
-        }
-        .allowsHitTesting(false)
-        .motion(AppMotion.snap, value: dragFraction == nil)
-    }
-
-    private func drag(travel: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { drag in
-                guard travel > 0 else { return }
-                let fraction = (drag.location.x - thumbSize / 2) / travel
-                dragFraction = min(1, max(0, fraction))
-            }
-            .onEnded { _ in
-                guard let dragFraction else { return }
-                let value = Self.value(at: dragFraction)
-                withAnimation(AppMotion.snap) {
-                    self.dragFraction = nil
-                }
-                Haptics.selection()
-                onSelect(value)
-            }
-    }
-}
+/// The self-check's scale, low to high, for `FeelingDial`.
+private let takeFeelings: [FeelingDial.Option] = [
+    .init(label: "Rough", line: "Hard going this time"),
+    .init(label: "Shaky", line: "Got through it"),
+    .init(label: "Okay", line: "Middle of the road"),
+    .init(label: "Good", line: "Felt solid"),
+    .init(label: "Great", line: "In the zone"),
+]
 
 // MARK: - Yes/No Input (extracted subview)
 
+/// Two large round answers, side by side. Selected is the solid white pill
+/// treatment the rest of the app uses for a chosen option; no polarity
+/// colours, since "no" is not a bad answer to "did it make sense?".
 private struct YesNoInput: View {
     let selected: Bool?
     let onSelect: (Bool) -> Void
 
     var body: some View {
-        // Buttons already say No / Yes. The old "Not really" / "Strong"
-        // polarity captions belonged to a slider and sat under the buttons,
-        // colliding with them when the card was height-compressed.
-        HStack(spacing: 12) {
-            optionButton(label: "No", icon: "hand.thumbsdown.fill", value: false, tint: AppColors.warning)
-            optionButton(label: "Yes", icon: "hand.thumbsup.fill", value: true, tint: AppColors.success)
+        HStack(spacing: 28) {
+            optionButton(label: "No", icon: "hand.thumbsdown.fill", value: false)
+            optionButton(label: "Yes", icon: "hand.thumbsup.fill", value: true)
         }
+        .padding(.top, 12)
     }
 
-    private func optionButton(label: String, icon: String, value: Bool, tint: Color) -> some View {
+    private func optionButton(label: String, icon: String, value: Bool) -> some View {
         let isSelected = selected == value
 
         return Button { onSelect(value) } label: {
-            VStack(spacing: 10) {
+            VStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 28))
-                    .foregroundStyle(isSelected ? tint : .white.opacity(0.3))
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color(red: 0.07, green: 0.07, blue: 0.08) : .white.opacity(0.8))
                     .symbolEffect(.bounce, value: isSelected)
+                    .frame(width: 96, height: 96)
+                    .background {
+                        Circle()
+                            .fill(isSelected ? Color.white : AppColors.surfaceLift)
+                            .overlay {
+                                Circle().strokeBorder(isSelected ? .clear : AppColors.cardStroke, lineWidth: 1)
+                            }
+                    }
 
                 Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(isSelected ? .white : .white.opacity(0.5))
+                    .font(.headline)
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? tint.opacity(0.15) : Color.white.opacity(0.04))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(
-                                isSelected ? tint.opacity(0.5) : Color.white.opacity(0.08),
-                                lineWidth: isSelected ? 1.5 : 1
-                            )
-                    }
-            }
-            .scaleEffect(isSelected ? 1.02 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressStyle())
         .accessibilityLabel(label)
-        .accessibilityAddTraits(
-            isSelected ? [.isButton, .isSelected] : .isButton
-        )
-    }
-}
-
-// MARK: - Saved Seal (extracted subview)
-
-/// The "take saved" mark: the seal springs in and a ring breaks off it once.
-/// Resting state is fully shown, so an interrupted animation cannot leave the
-/// header half-drawn.
-private struct SavedSeal: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var burst = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(AppColors.success.opacity(burst ? 0 : 0.5), lineWidth: 2)
-                .frame(width: 48, height: 48)
-                .scaleEffect(burst ? 1.8 : 1)
-
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 38))
-                .foregroundStyle(AppColors.success)
-                .symbolEffect(.bounce, value: burst)
-        }
-        .frame(width: 64, height: 64)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 0.9)) { burst = true }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Estimated Progress Bar (extracted subview)
-
-/// A progress line for a job that reports none. It eases toward 90 % over the
-/// expected wait and only completes when the score actually lands, so it can
-/// run slow but never claims to be done early. A wait with visible progress
-/// feels shorter than an open-ended spinner, which is the whole point here.
-private struct EstimatedProgressBar: View {
-    let startedAt: Date
-    let expected: TimeInterval
-    let isComplete: Bool
-    let tint: Color
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1.0 / 15.0, paused: isComplete)) { timeline in
-            let fraction = isComplete
-                ? 1
-                : Self.fraction(elapsed: timeline.date.timeIntervalSince(startedAt), expected: expected)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.08))
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: geo.size.width * fraction)
-                }
-            }
-        }
-        // Per-tick growth is unanimated; the jump to full when the score
-        // lands is the one step that eases.
-        .motion(AppMotion.settle, value: isComplete)
-        .accessibilityHidden(true)
-    }
-
-    nonisolated static func fraction(elapsed: TimeInterval, expected: TimeInterval) -> CGFloat {
-        guard expected > 0 else { return 0 }
-        return CGFloat(0.9 * (1 - exp(-2.2 * max(0, elapsed) / expected)))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -1159,7 +843,7 @@ private struct DetailSkeletonView: View {
             // view runs on it, and this is a JSON decode of the whole take.
             guard let data = recording.audioLevelSamplesData else { return }
             let bars = await Task.detached(priority: .userInitiated) {
-                TakeScanView.bars(from: (try? JSONDecoder().decode([Float].self, from: data)) ?? [])
+                TakeWaveform.levels(fromDecibels: (try? JSONDecoder().decode([Float].self, from: data)) ?? [])
             }.value
             guard !Task.isCancelled else { return }
             takeShape = bars
@@ -1172,9 +856,8 @@ private struct DetailSkeletonView: View {
         VStack(spacing: 10) {
             // Duration lives in the context strip below - it was printed twice.
             HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(AppColors.primary)
+                VoiceLoader(size: .small)
+                    .foregroundStyle(AppColors.primary)
                 Text("Analyzing")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppColors.primary)
@@ -1186,7 +869,7 @@ private struct DetailSkeletonView: View {
             }
 
             if !takeShape.isEmpty {
-                TakeScanView(bars: takeShape)
+                TakeWaveform(levels: takeShape)
                     .frame(height: 56)
                     .padding(.horizontal, 8)
                     .transition(.opacity)
@@ -1270,103 +953,6 @@ private struct DetailSkeletonView: View {
                     SkeletonMetricRow(labelWidth: [46, 52, 58, 62][i])
                 }
             }
-        }
-    }
-}
-
-// MARK: - Take Scan
-
-/// The take you just gave, drawn as its loudness over time, with a scan line
-/// sweeping across it while the pipeline works. The wait shows *your* speech
-/// being read instead of a spinner that could belong to any app.
-///
-/// The sweep loops on purpose: nothing reports real progress, and a scanner
-/// that restarts reads as "still looking", where stage text that restarts
-/// reads as "started over".
-private struct TakeScanView: View {
-    let bars: [CGFloat]
-    /// Scoring finished: every bar lit, no scan line.
-    var isComplete: Bool = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private static let sweep: Double = 2.6
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || isComplete)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let scan = reduceMotion || isComplete ? -1 : (t / Self.sweep).truncatingRemainder(dividingBy: 1)
-            Canvas { context, size in
-                draw(in: context, size: size, scan: CGFloat(scan))
-            }
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func draw(in context: GraphicsContext, size: CGSize, scan: CGFloat) {
-        let count = bars.count
-        guard count > 0 else { return }
-        let slot = size.width / CGFloat(count)
-        let barWidth = max(1.5, slot * 0.55)
-        let scanX = scan * size.width
-
-        for (index, level) in bars.enumerated() {
-            let x = (CGFloat(index) + 0.5) * slot
-            let height = max(3, level * size.height)
-            let rect = CGRect(x: x - barWidth / 2, y: (size.height - height) / 2, width: barWidth, height: height)
-
-            // Lit where the line is, settled teal where it has been this
-            // sweep, dim ahead of it.
-            let distance = abs(x - scanX)
-            let glow = max(0, 1 - distance / (size.width * 0.12))
-            let color: Color
-            let opacity: Double
-            if isComplete {
-                color = AppColors.success
-                opacity = 0.75
-            } else if scan < 0 {
-                color = AppColors.primary
-                opacity = 0.6
-            } else if glow > 0 {
-                color = AppColors.categoryBrandBright
-                opacity = 0.45 + 0.55 * Double(glow)
-            } else if x < scanX {
-                color = AppColors.primary
-                opacity = 0.7
-            } else {
-                color = .white
-                opacity = 0.16
-            }
-            context.fill(
-                Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                with: .color(color.opacity(opacity))
-            )
-        }
-
-        guard scan >= 0 else { return }
-        var line = context
-        line.blendMode = .plusLighter
-        line.fill(
-            Path(CGRect(x: scanX - 1, y: 0, width: 2, height: size.height)),
-            with: .linearGradient(
-                Gradient(colors: [.clear, AppColors.categoryBrandBright.opacity(0.9), .clear]),
-                startPoint: CGPoint(x: scanX, y: 0),
-                endPoint: CGPoint(x: scanX, y: size.height)
-            )
-        )
-    }
-
-    /// Level samples (dB) → `count` bar heights in 0...1. Averages each
-    /// bucket so a single spike cannot dominate, and floors silence so a
-    /// pause still draws as a quiet stub rather than a gap.
-    nonisolated static func bars(from samples: [Float], count: Int = 56) -> [CGFloat] {
-        guard samples.count >= 4 else { return [] }
-        let bucket = max(1, samples.count / count)
-        return stride(from: 0, to: samples.count, by: bucket).prefix(count).map { start in
-            let slice = samples[start..<min(start + bucket, samples.count)]
-            let mean = slice.reduce(0, +) / Float(slice.count)
-            let unit = CGFloat(min(1, max(0, (mean + 55) / 50)))
-            return 0.1 + 0.9 * pow(unit, 1.3)
         }
     }
 }

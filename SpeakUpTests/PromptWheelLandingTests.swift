@@ -1,39 +1,29 @@
+import SwiftUI
 import Testing
 @testable import SpeakUp
 
 struct PromptWheelLandingTests {
 
-    @Test("A spin lands inside its segment in either direction, never on an edge")
-    func landsInsideSegment() {
-        for segments in [3, 7, 12] {
-            let segmentAngle = 360.0 / Double(segments)
-            for rotation in stride(from: -1000.0, through: 1000, by: 37) {
-                for amount in [-2160.0, -700, 0, 45, 700, 2160] {
-                    for jitter in [-0.3, 0, 0.3] {
-                        let landing = PromptWheelViewModel.landing(
-                            rotation: rotation,
-                            amount: amount,
-                            segments: segments,
-                            jitter: jitter
-                        )
-                        let pointer = PromptWheelViewModel.normalized(-(rotation + landing.total))
-                        let position = pointer / segmentAngle - Double(landing.index)
+    @Test("A spin rests exactly on a stop, and names the stop the dial shows")
+    func landsOnAStop() {
+        for count in [3, 7, 12] {
+            for position in stride(from: -40.0, through: 40, by: 3.7) {
+                for amount in [-60.0, -7.4, -0.3, 0, 0.6, 7.4, 60] {
+                    let landing = PromptWheelViewModel.landing(position: position, amount: amount, count: count)
 
-                        #expect(landing.index >= 0 && landing.index < segments)
-                        #expect(position > 0.19 && position < 0.81)
-                        #expect(abs(landing.total - amount) < segmentAngle)
-                    }
+                    #expect(landing.index >= 0 && landing.index < count)
+                    #expect(landing.target == landing.target.rounded())
+                    #expect(abs(landing.target - (position + amount)) <= 0.5)
+                    #expect(landing.index == ArcDial<EmptyView, EmptyView>.index(at: landing.target, count: count))
                 }
             }
         }
     }
 
-    @Test("Angle folding")
-    func folding() {
-        #expect(PromptWheelViewModel.normalized(-90) == 270)
-        #expect(PromptWheelViewModel.normalized(725) == 5)
-        #expect(PromptWheelViewModel.signedDelta(350) == -10)
-        #expect(PromptWheelViewModel.signedDelta(-350) == 10)
-        #expect(PromptWheelViewModel.signedDelta(180) == 180)
+    @Test("Negative positions wrap to the right category")
+    func wraps() {
+        #expect(PromptWheelViewModel.landing(position: 0, amount: -1, count: 5).index == 4)
+        #expect(PromptWheelViewModel.landing(position: 0, amount: -6, count: 5).index == 4)
+        #expect(PromptWheelViewModel.landing(position: 2.4, amount: 0, count: 5).index == 2)
     }
 }
