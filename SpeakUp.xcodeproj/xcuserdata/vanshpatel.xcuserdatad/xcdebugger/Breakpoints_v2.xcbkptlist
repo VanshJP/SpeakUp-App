@@ -48,8 +48,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "481"
             endingLineNumber = "481"
-            landmarkName = "evaluateOnboardingIfNeeded()"
-            landmarkType = "7">
+            landmarkName = "ContentView"
+            landmarkType = "14">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -66,36 +66,6 @@
             endingLineNumber = "414"
             landmarkName = "routineHandoffOverlay"
             landmarkType = "24">
-            <Locations>
-               <Location
-                  uuid = "FB57C357-E3F4-4019-9541-B2C2EAC8E546 - 7b20de904b20b551"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SpeakUp.ContentView.routineHandoffOverlay.getter : some"
-                  moduleName = "SpeakUp.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/vanshpatel/SpeakUp/SpeakUp/Views/ContentView.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "415"
-                  endingLineNumber = "415">
-               </Location>
-               <Location
-                  uuid = "FB57C357-E3F4-4019-9541-B2C2EAC8E546 - de4a928864e88366"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "closure #1 () -&gt; () in SpeakUp.ContentView.routineHandoffOverlay.getter : some"
-                  moduleName = "SpeakUp.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/vanshpatel/SpeakUp/SpeakUp/Views/ContentView.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "416"
-                  endingLineNumber = "416">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
