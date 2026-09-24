@@ -67,6 +67,13 @@ struct WordBankView: View {
                 stopDictationAndAdd()
             }
         }
+        // Leaving mid-dictation - closing the sheet, or opening the Word
+        // Library - must still hand the mic and the session back.
+        .onDisappear {
+            if dictationEngine.isListening {
+                stopDictationAndAdd()
+            }
+        }
     }
 
     // MARK: - Bottom Input Bar
