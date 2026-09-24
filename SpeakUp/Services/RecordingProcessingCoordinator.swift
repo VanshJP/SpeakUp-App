@@ -345,6 +345,12 @@ final class RecordingProcessingCoordinator {
                 }()
 
                 if llmService.localLLM.isModelReady {
+                    // The unload waits on llama's inference lock, which a
+                    // generation still running for an earlier take holds for
+                    // its whole decode loop - on the CPU, beside Whisper, with
+                    // the model resident. Stop it first so the memory and the
+                    // cores come back before transcription starts.
+                    llmService.localLLM.cancelInflight()
                     llmService.localLLM.unloadModel()
                 }
 
