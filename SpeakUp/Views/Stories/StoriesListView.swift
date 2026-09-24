@@ -99,6 +99,10 @@ struct StoriesListView: View {
         }
         .onAppear {
             viewModel.configure(with: modelContext)
+            viewModel.surfaceAppeared()
+        }
+        .onDisappear {
+            viewModel.surfaceDisappeared()
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
@@ -110,28 +114,23 @@ struct StoriesListView: View {
 
     // MARK: - Story List
 
+    /// Rows are direct children so only on-screen rows build; the extra top
+    /// padding keeps the old 16pt gap between the two sections.
     private var storyList: some View {
-        LazyVStack(spacing: 16, pinnedViews: []) {
-            if !viewModel.pinnedStories.isEmpty {
-                section(title: "Pinned", icon: "pin.fill", stories: viewModel.pinnedStories)
+        let pinned = viewModel.pinnedStories
+        let unpinned = viewModel.unpinnedStories
+        return LazyVStack(alignment: .leading, spacing: 8) {
+            if !pinned.isEmpty {
+                GlassSectionHeader("Pinned", icon: "pin.fill")
+                ForEach(pinned) { story in
+                    storyRow(story)
+                }
             }
 
-            if !viewModel.unpinnedStories.isEmpty {
-                section(
-                    title: viewModel.pinnedStories.isEmpty ? "All Stories" : "Stories",
-                    icon: "note.text",
-                    stories: viewModel.unpinnedStories
-                )
-            }
-        }
-    }
-
-    private func section(title: String, icon: String, stories: [Story]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            GlassSectionHeader(title, icon: icon)
-
-            VStack(spacing: 8) {
-                ForEach(stories) { story in
+            if !unpinned.isEmpty {
+                GlassSectionHeader(pinned.isEmpty ? "All Stories" : "Stories", icon: "note.text")
+                    .padding(.top, pinned.isEmpty ? 0 : 8)
+                ForEach(unpinned) { story in
                     storyRow(story)
                 }
             }
@@ -142,7 +141,7 @@ struct StoriesListView: View {
         Button {
             selectedStory = story
         } label: {
-            CompactStoryRow(story: story)
+            CompactStoryRow(story: story, preview: viewModel.contentPreview(for: story))
         }
         .buttonStyle(GlassPressStyle())
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -285,6 +284,7 @@ enum FolderEditorPresentation: Identifiable {
 
 private struct CompactStoryRow: View {
     let story: Story
+    let preview: String
 
     var body: some View {
         GlassCard(padding: 14) {
@@ -293,7 +293,9 @@ private struct CompactStoryRow: View {
     }
 
     private var rowContent: some View {
-        HStack(alignment: .top, spacing: 12) {
+        // Bind once: each `tags` read decodes the Codable column.
+        let tags = story.tags
+        return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     if story.isFavorite {
@@ -311,18 +313,18 @@ private struct CompactStoryRow: View {
                     Text(story.updatedAt, format: .relative(presentation: .numeric))
                         .foregroundStyle(.secondary)
 
-                    if !story.contentPreview.isEmpty {
+                    if !preview.isEmpty {
                         Text("·")
                             .foregroundStyle(.tertiary)
-                        Text(story.contentPreview)
+                        Text(preview)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
                 .font(.system(size: 13))
 
-                if !story.tags.isEmpty {
-                    tagStrip
+                if !tags.isEmpty {
+                    tagStrip(tags)
                 }
             }
 
@@ -343,9 +345,9 @@ private struct CompactStoryRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var tagStrip: some View {
-        let visible = Array(story.tags.prefix(3))
-        let overflow = story.tags.count - visible.count
+    private func tagStrip(_ tags: [StoryTag]) -> some View {
+        let visible = Array(tags.prefix(3))
+        let overflow = tags.count - visible.count
         return HStack(spacing: 4) {
             ForEach(visible) { tag in
                 StoryTagPill(tag: tag, size: .small)
