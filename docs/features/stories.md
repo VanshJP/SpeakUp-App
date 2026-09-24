@@ -54,6 +54,21 @@ User-authored rich-text scripts in folders. Practice against a Story; relevance 
 
 9. **Nothing touches a story after deleting it.** `StoryEditorView` drops `draftStory` (and its autosave) *before* `deleteStory`: its `onDisappear` runs `finalSave()`, which otherwise wrote the editor's fields straight back into the deleted row. `StoryDetailView` renders nothing past `storyIsGone` (`isDeleted || story.isDeleted || story.modelContext == nil`) and pops itself when the editor sheet it presented deleted the story - it used to stay open on a story that no longer existed. Same rule as `RecordingDetailView.deleteRecording`: stop reading, then delete.
 
+10. **Remote-change refreshes are fingerprint- and visibility-gated.** `NSPersistentStoreRemoteChange` fires for this
+    process's own saves too (simulator probe: every main- and background-context save posts it, CloudKit on or off), so each
+    take's analysis saves used to heal + refetch every Story (RTFD, tags) and re-render the list. Now the list and
+    `StoryDetailView` call `surfaceAppeared` / `surfaceDisappeared`; with neither on screen a burst only sets
+    `needsRemoteRefresh`, replayed on the next appear. When visible, the debounced refresh compares a `StoreFingerprint`
+    (story count, newest `updatedAt`, each folder's id/name/symbol/color/order via `propertiesToFetch`) with the one taken at
+    the last full load and skips heal + reload when equal. Folders have no timestamp, so their fields are compared directly
+    to catch a remote rename. **Every Story write the list shows or sorts by must bump `updatedAt`** (edits, pin, move,
+    stage, take count, best score) or the list misses it.
+11. **Row and detail costs.** Rows are direct children of the `LazyVStack` (only on-screen rows build) and read their
+    preview from `StoriesViewModel.contentPreview(for:)`, memoized per (id, `updatedAt`). `StoryDetailView` decodes RTFD,
+    word count and reading time once per `updatedAt` into a `@State` reference box (`StoryDisplayCache`) filled
+    synchronously in body, so first paint has styled text with no placeholder flash. Linked-take summaries come from
+    `StoriesViewModel.linkedTakeSummaries(for:)` on a detached `ModelContext` (gotchas §3).
+
 ## Cross-links
 
 [today-library.md](./today-library.md) · [recording.md](./recording.md) · [speech-pipeline.md](./speech-pipeline.md) · [practice-tools.md](./practice-tools.md) · [widgets.md](./widgets.md) (`QuickStoryWidget`)

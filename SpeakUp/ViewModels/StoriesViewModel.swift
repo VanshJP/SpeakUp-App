@@ -68,6 +68,10 @@ class StoriesViewModel {
     @ObservationIgnored private var remoteChangeObservationTask: Task<Void, Never>?
     @ObservationIgnored private var remoteChangeRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var healObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var loadedFingerprint: StoreFingerprint?
+    @ObservationIgnored private var visibleSurfaces = 0
+    @ObservationIgnored private var needsRemoteRefresh = false
+    @ObservationIgnored private var previewCache: [UUID: (updatedAt: Date, text: String)] = [:]
 
     func configure(with context: ModelContext) {
         if !hasConfigured {
@@ -99,6 +103,11 @@ class StoriesViewModel {
         do {
             stories = try context.fetch(descriptor)
             folders = try context.fetch(folderDescriptor)
+            loadedFingerprint = StoreFingerprint(
+                storyCount: stories.count,
+                newestStoryUpdate: stories.first?.updatedAt,
+                folders: folders.map(StoreFingerprint.folderKey)
+            )
             if stories.isEmpty, folderSelection != .all {
                 folderSelection = .all
             }
@@ -123,7 +132,14 @@ class StoriesViewModel {
         remoteChangeObservationTask = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: .NSPersistentStoreRemoteChange) {
                 guard !Task.isCancelled, let self else { break }
-                self.scheduleRemoteRefresh()
+                // Fires for this process's own saves too (each take's analysis
+                // saves several times), so only an on-screen Stories surface
+                // pays for a refresh; otherwise it waits for the next appear.
+                if self.visibleSurfaces > 0 {
+                    self.scheduleRemoteRefresh()
+                } else {
+                    self.needsRemoteRefresh = true
+                }
             }
         }
     }
@@ -139,14 +155,53 @@ class StoriesViewModel {
     }
 
     /// Debounce CloudKit notification bursts: each incoming notification resets
-    /// a 250ms timer and only the final trailing edge triggers a heal+reload.
+    /// a 250ms timer and only the final trailing edge checks for a change.
     private func scheduleRemoteRefresh() {
         remoteChangeRefreshTask?.cancel()
         remoteChangeRefreshTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
-            await self?.healAndReload()
+            await self?.refreshIfStoreChanged()
         }
+    }
+
+    /// Heal + full reload only when the cheap fingerprint moved since the last
+    /// load - most bursts are saves to other models (recordings, settings).
+    private func refreshIfStoreChanged() async {
+        guard let context = modelContext else { return }
+        if let current = try? StoreFingerprint.fetch(in: context), current == loadedFingerprint {
+            return
+        }
+        await healAndReload()
+    }
+
+    // MARK: - Visibility
+
+    /// The list and the detail page bracket their time on screen with these,
+    /// so remote-change refreshes run only while one of them is visible.
+    func surfaceAppeared() {
+        visibleSurfaces += 1
+        if needsRemoteRefresh {
+            needsRemoteRefresh = false
+            scheduleRemoteRefresh()
+        }
+    }
+
+    func surfaceDisappeared() {
+        visibleSurfaces = max(0, visibleSurfaces - 1)
+    }
+
+    // MARK: - Row Preview
+
+    /// Row preview memoized per `updatedAt` (every content write bumps it), so
+    /// list rows stop trimming the whole script on each render.
+    func contentPreview(for story: Story) -> String {
+        if let cached = previewCache[story.id], cached.updatedAt == story.updatedAt {
+            return cached.text
+        }
+        let text = story.contentPreview
+        previewCache[story.id] = (story.updatedAt, text)
+        return text
     }
 
     // MARK: - Folder CRUD
@@ -534,22 +589,20 @@ class StoriesViewModel {
 
     // MARK: - Linked Recordings
 
-    func linkedRecordings(for story: Story) -> [Recording] {
-        guard let context = modelContext else { return [] }
-
+    /// Projects the story's takes on a detached context: each summary decodes
+    /// that take's `analysis`, which must stay off the main actor (gotchas §3).
+    func linkedTakeSummaries(for story: Story) async -> [PracticeRecordingSummary] {
+        guard let container = modelContext?.container else { return [] }
         let targetId = story.id
-        var descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        descriptor.predicate = #Predicate<Recording> { recording in
-            recording.storyId == targetId
-        }
-
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            return []
-        }
+        return await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>(
+                predicate: #Predicate { $0.storyId == targetId },
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            let recordings = (try? context.fetch(descriptor)) ?? []
+            return PracticeRecordingSummary.from(recordings: recordings)
+        }.value
     }
 
     // MARK: - Tag Extraction
@@ -595,6 +648,38 @@ class StoriesViewModel {
             .contains(storyFolderID)
     }
 
+}
+
+// MARK: - Store Fingerprint
+
+/// What a remote-change burst must move before Stories reloads. Every write the
+/// list shows or sorts by bumps `Story.updatedAt`; folders have no timestamp,
+/// so their display fields are compared directly (a remote rename must refresh).
+private struct StoreFingerprint: Equatable {
+    var storyCount: Int
+    var newestStoryUpdate: Date?
+    var folders: [String]
+
+    static func folderKey(_ folder: StoryFolder) -> String {
+        "\(folder.id)|\(folder.name)|\(folder.systemImage)|\(folder.colorHex)|\(folder.sortOrder)"
+    }
+
+    static func fetch(in context: ModelContext) throws -> StoreFingerprint {
+        var newest = FetchDescriptor<Story>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        newest.fetchLimit = 1
+        newest.propertiesToFetch = [\.updatedAt]
+
+        var folderDescriptor = FetchDescriptor<StoryFolder>(
+            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.createdAt)]
+        )
+        folderDescriptor.propertiesToFetch = [\.id, \.name, \.systemImage, \.colorHex, \.sortOrder]
+
+        return StoreFingerprint(
+            storyCount: try context.fetchCount(FetchDescriptor<Story>()),
+            newestStoryUpdate: try context.fetch(newest).first?.updatedAt,
+            folders: try context.fetch(folderDescriptor).map(folderKey)
+        )
+    }
 }
 
 // MARK: - Folder Selection

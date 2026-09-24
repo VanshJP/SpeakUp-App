@@ -252,23 +252,8 @@ struct AIModelSettingsView: View {
                 Task { await llmService.setupLocalModel() }
             }
 
-        case .downloading(let progress):
-            VStack(spacing: 8) {
-                ProgressView(value: progress)
-                    .tint(AppColors.primary)
-
-                HStack {
-                    Text("\(Int(progress * 100))%")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Cancel") {
-                        llmService.localLLM.cancelDownload()
-                    }
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(AppColors.error)
-                }
-            }
+        case .downloading:
+            ModelDownloadProgress(localLLM: llmService.localLLM)
 
         case .downloaded:
             HStack(spacing: 10) {
@@ -386,6 +371,33 @@ struct AIModelSettingsView: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - Download Progress
+
+/// The only view that reads `downloadProgress`, so a download tick re-renders
+/// this row and not the settings page around it.
+private struct ModelDownloadProgress: View {
+    let localLLM: LocalLLMService
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ProgressView(value: localLLM.downloadProgress)
+                .tint(AppColors.primary)
+
+            HStack {
+                Text("\(Int(localLLM.downloadProgress * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") {
+                    localLLM.cancelDownload()
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppColors.error)
+            }
         }
     }
 }
