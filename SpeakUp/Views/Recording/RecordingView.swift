@@ -81,6 +81,7 @@ struct RecordingView: View {
                 speechService: speechService,
                 llmService: llmService
             )
+            viewModel.warmUpSpeechModel()
             viewModel.goalId = goalId
             viewModel.storyId = storyId
             viewModel.sessionSource = sessionSource

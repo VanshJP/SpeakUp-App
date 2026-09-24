@@ -186,6 +186,9 @@ final class LocalLLMService {
 
     /// Minimum available memory (bytes) required before running inference.
     nonisolated private static let minimumMemoryForInference: Int = 350 * 1024 * 1024 // 350 MB
+    /// Spare memory, beyond the profile's own requirement, that lets the model
+    /// load beside a resident Whisper model instead of evicting it.
+    private static let coResidentHeadroomBytes: Int = 256 * 1024 * 1024 // 256 MB
     private static let selectedProfileDefaultsKey = "local_llm_selected_profile"
 
     // MARK: - State
@@ -436,20 +439,27 @@ final class LocalLLMService {
 
         modelState = .loading
 
-        // Aggressive memory release: tell observers (WhisperService, etc.) to
-        // unload before we claim multiple GB for llama context. Best-effort - 
-        // a missing host hook is not fatal, just makes the next memory check
-        // more likely to fail.
-        NotificationCenter.default.post(name: .localLLMWillLoad, object: self)
-        if let handler = preloadCleanupHandler {
-            await handler()
+        let required = selectedProfile.minimumRecommendedMemoryBytes
+
+        // Memory release: tell observers (WhisperService, etc.) to unload
+        // before we claim multiple GB for llama context - but only when the
+        // model would not fit beside them. The detail screen loads the model
+        // after every take, and evicting Whisper each time meant every take
+        // after the first rebuilt the speech model on the analyzing screen.
+        // Best-effort - a missing host hook is not fatal, just makes the next
+        // memory check more likely to fail.
+        let availableBeforeCleanup = Int(clamping: os_proc_available_memory())
+        if availableBeforeCleanup < required + Self.coResidentHeadroomBytes {
+            NotificationCenter.default.post(name: .localLLMWillLoad, object: self)
+            if let handler = preloadCleanupHandler {
+                await handler()
+            }
         }
 
         // Pre-check 2: memory headroom, measured *after* cleanup. The
         // pre-cleanup reading would frequently false-negative on devices that
         // had Whisper loaded.
         let availableAfterCleanup = Int(clamping: os_proc_available_memory())
-        let required = selectedProfile.minimumRecommendedMemoryBytes
         if availableAfterCleanup < required {
             modelState = .error(
                 LocalLLMError.insufficientMemory(
@@ -1124,6 +1134,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
 
         // 4. Generate tokens
         var result = ""
+        var wasCancelled = false
 
         for i in 0..<maxTokens {
             // Check cancellation every ~8 tokens. Tightened from 10 to keep
@@ -1131,6 +1142,7 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
             // so a memory-pressure abort completes before jetsam fires.
             if i % 8 == 0 && isCancelled {
                 Self.logger.debug("Generation cancelled")
+                wasCancelled = true
                 break
             }
 
@@ -1158,6 +1170,9 @@ nonisolated final class LLMInferenceEngine: @unchecked Sendable {
         llama_sampler_reset(smpl)
         lock.unlock()
 
+        // A cancelled generation is cut off mid-answer. Returning the fragment
+        // read as a short success: "VOCABULARY: 5" from a model writing 55.
+        if wasCancelled { return nil }
         return result.isEmpty ? nil : result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

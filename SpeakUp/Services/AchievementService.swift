@@ -20,12 +20,26 @@ class AchievementService {
         let allCategoriesCovered: Bool
     }
 
+    /// The achievements the scan can only settle by decoding each take's
+    /// analysis. Once all of them are unlocked the decode has nothing to add.
+    private static let analysisDerivedIDs: Set<String> = [
+        "score_80", "score_95", "zero_fillers", "word_workout"
+    ]
+
     /// Check all achievements against current data and unlock any that are newly earned.
     @MainActor
     func checkAchievements(context: ModelContext, listenBackCount: Int = 0) async {
         let container = context.container
+        // This runs after every take. The decode pass visits every take ever
+        // recorded, so skip it when nothing it could unlock is still locked.
+        let unlockedIDs = Set(
+            ((try? context.fetch(FetchDescriptor<Achievement>())) ?? [])
+                .filter(\.isUnlocked)
+                .map(\.id)
+        )
+        let decodesAnalyses = !Self.analysisDerivedIDs.isSubset(of: unlockedIDs)
         let signals = await Task.detached(priority: .utility) { () -> Signals? in
-            Self.computeSignals(container: container)
+            Self.computeSignals(container: container, decodesAnalyses: decodesAnalyses)
         }.value
 
         guard let signals else { return }
@@ -64,7 +78,10 @@ class AchievementService {
         await checkAchievements(context: context, listenBackCount: listenBackCount)
     }
 
-    nonisolated private static func computeSignals(container: ModelContainer) -> Signals? {
+    /// With `decodesAnalyses` false the analysis-derived flags stay false.
+    /// That is safe: evaluation only ever unlocks, and every achievement those
+    /// flags feed is already unlocked when the caller skips the decode.
+    nonisolated private static func computeSignals(container: ModelContainer, decodesAnalyses: Bool) -> Signals? {
         let context = ModelContext(container)
         let recordings: [Recording]
         do {
@@ -82,7 +99,7 @@ class AchievementService {
         var hasScore95 = false
         var hasZeroFiller = false
         var hasWordWorkout = false
-        for recording in recordings {
+        for recording in recordings where decodesAnalyses {
             guard let analysis = recording.analysis else { continue }
             let overall = analysis.speechScore.overall
             if overall >= 80 { hasScore80 = true }
@@ -172,7 +189,9 @@ class AchievementService {
             }
         }
 
-        try? context.save()
+        if context.hasChanges {
+            try? context.save()
+        }
     }
 
     func clearNewlyUnlocked() {

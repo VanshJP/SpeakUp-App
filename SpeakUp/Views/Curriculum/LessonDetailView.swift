@@ -6,7 +6,16 @@ struct LessonDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var userSettings: [UserSettings]
-    @Query(sort: \Recording.date, order: .reverse) private var recentRecordings: [Recording]
+    /// Only the newest three are shown. Unbounded, this loaded every take on
+    /// the main thread again on each save - several per lesson take while it
+    /// scores under this page.
+    @Query(LessonDetailView.recentRecordingsDescriptor) private var recentRecordings: [Recording]
+
+    private static var recentRecordingsDescriptor: FetchDescriptor<Recording> {
+        var descriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        descriptor.fetchLimit = 3
+        return descriptor
+    }
 
     /// Mutable so "Next Lesson" can swap in place instead of dismissing back to the path.
     @State private var lesson: CurriculumLesson

@@ -60,7 +60,13 @@ nonisolated enum PromptRelevanceService {
         llmService: LLMService?,
         promptText: String? = nil
     ) async -> Int? {
-        let ruleBasedScore = coherenceScore(transcript: transcript)
+        // Detached on purpose. Approachable concurrency makes a nonisolated
+        // `async` function run on its caller's actor, and the caller is the
+        // main-actor `SpeechService`, so the sentence-embedding and tagger
+        // passes below ran on the main thread as the result screen opened.
+        let ruleBasedScore = await Task.detached(priority: .userInitiated) {
+            coherenceScore(transcript: transcript)
+        }.value
 
         if let llm = llmService, await MainActor.run(body: { llm.isAvailable }) {
             if let llmResult = await llm.evaluateCoherence(transcript: transcript, promptText: promptText) {

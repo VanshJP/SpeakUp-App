@@ -111,6 +111,26 @@ class RecordingViewModel {
         installInterruptionHandling()
     }
 
+    /// Starts building the speech model while the take is being recorded, so
+    /// the analysis does not wait on it after Stop. The launch preload usually
+    /// has it ready, but the local LLM can evict it to make room, and a rebuild
+    /// then landed on the analyzing screen. Utility priority keeps it out of the
+    /// recording's way; the analysis raises it by waiting on the same build.
+    ///
+    /// Skipped while the LLM is resident or loading: building beside it mid-take is the
+    /// memory spike that gets an app killed, and a killed take is lost. The
+    /// analysis unloads the LLM first and builds after, as before.
+    func warmUpSpeechModel() {
+        guard let speechService else { return }
+        if let localLLM = llmService?.localLLM {
+            if localLLM.isModelReady { return }
+            if case .loading = localLLM.modelState { return }
+        }
+        Task(priority: .utility) {
+            await speechService.preloadModel()
+        }
+    }
+
     /// Hands the finished take to the analysis pipeline. Views go through here
     /// rather than touching the coordinator directly so enqueue stays a
     /// view-model decision (and stays testable without a view).

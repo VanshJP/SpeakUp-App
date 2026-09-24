@@ -167,15 +167,18 @@ nonisolated enum PersonalAverage {
             // `analysis`, not `fullAnalysis`: the plan only reads subscores,
             // which survive SwiftData's decoder intact. Taking the full mirror
             // here would decode twenty JSON blobs to reach nine integers each.
+            // Each access decodes, and the plan window and the baseline window
+            // overlap almost entirely, so every row in either decodes once here.
+            let decoded = live.prefix(window + 1).map { (id: $0.id, analysis: $0.analysis) }
             let plan = CoachPlanService.plan(
-                window: planWindow.compactMap(\.analysis),
+                window: decoded.prefix(planWindow.count).compactMap { $0.analysis },
                 weights: weights
             )
 
-            let analyses = live
+            let analyses = decoded
                 .filter { $0.id != currentID }
                 .prefix(window)
-                .compactMap(\.analysis)
+                .compactMap { $0.analysis }
                 .filter { $0.speechScore.overall > 0 }
 
             guard !analyses.isEmpty else {

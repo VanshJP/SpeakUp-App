@@ -211,10 +211,13 @@ struct HistoryView: View {
     // MARK: - Recordings Section
 
     private var recordingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if selectedFilter != .all && !filteredSummaries.isEmpty {
+        // Filtered once per render: it runs a search match over every summary,
+        // and this section read it four times.
+        let items = filteredSummaries
+        return VStack(alignment: .leading, spacing: 12) {
+            if selectedFilter != .all && !items.isEmpty {
                 HStack(spacing: 6) {
-                    Text("\(filteredSummaries.count) \(selectedFilter.title.lowercased())")
+                    Text("\(items.count) \(selectedFilter.title.lowercased())")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -232,7 +235,7 @@ struct HistoryView: View {
                 }
             }
 
-            if filteredSummaries.isEmpty {
+            if items.isEmpty {
                 EmptyStateCard(
                     icon: selectedFilter == .all ? "mic.slash" : "magnifyingglass",
                     title: selectedFilter == .all ? "No recordings yet" : "No matches",
@@ -244,7 +247,7 @@ struct HistoryView: View {
                 )
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(filteredSummaries) { summary in
+                    ForEach(items) { summary in
                         Button {
                             onSelectRecording(summary.id.uuidString)
                         } label: {

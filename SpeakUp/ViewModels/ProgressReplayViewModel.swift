@@ -27,26 +27,16 @@ class ProgressReplayViewModel {
 
     @MainActor
     func loadRecordings(context: ModelContext) {
-        let descriptor = FetchDescriptor<Recording>(
-            sortBy: [SortDescriptor(\.date, order: .forward)]
-        )
+        // A count and two small fetches on the transcript proxy (gotcha §2).
+        // This used to decode the analysis of every take ever recorded, on the
+        // main thread, as the sheet opened - to use the first and the last.
+        let analyzed = #Predicate<Recording> { $0.transcriptionText != nil }
+        let analyzedCount = (try? context.fetchCount(FetchDescriptor<Recording>(predicate: analyzed))) ?? 0
 
-        guard let recordings = try? context.fetch(descriptor) else { return }
-
-        // Single decode pass: earliest/latest snapshots, improvement, and the
-        // share card all come out of this loop.
-        var earliest: (recording: Recording, analysis: SpeechAnalysis)?
-        var latest: (recording: Recording, analysis: SpeechAnalysis)?
-        var analyzedCount = 0
-
-        for recording in recordings {
-            guard let analysis = recording.analysis else { continue }
-            analyzedCount += 1
-            if earliest == nil { earliest = (recording, analysis) }
-            latest = (recording, analysis)
-        }
-
-        guard analyzedCount >= 2, let first = earliest, let last = latest else { return }
+        guard analyzedCount >= 2,
+              let first = Self.edgeAnalyzed(in: context, matching: analyzed, order: .forward),
+              let last = Self.edgeAnalyzed(in: context, matching: analyzed, order: .reverse),
+              first.recording.id != last.recording.id else { return }
 
         earliestRecording = first.recording
         latestRecording = last.recording
@@ -63,6 +53,24 @@ class ProgressReplayViewModel {
             sessionCount: analyzedSessionCount
         )
         isLoaded = true
+    }
+
+    /// The earliest (`.forward`) or latest (`.reverse`) take with an analysis.
+    /// Looks a few rows in, in case a transcript ever landed without one.
+    private static func edgeAnalyzed(
+        in context: ModelContext,
+        matching predicate: Predicate<Recording>,
+        order: SortOrder
+    ) -> (recording: Recording, analysis: SpeechAnalysis)? {
+        var descriptor = FetchDescriptor<Recording>(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.date, order: order)]
+        )
+        descriptor.fetchLimit = 5
+        for recording in (try? context.fetch(descriptor)) ?? [] {
+            if let analysis = recording.analysis { return (recording, analysis) }
+        }
+        return nil
     }
 
     private static func snapshot(_ analysis: SpeechAnalysis, date: Date) -> ReplaySessionSnapshot {

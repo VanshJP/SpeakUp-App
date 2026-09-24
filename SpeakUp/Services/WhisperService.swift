@@ -424,8 +424,19 @@ class WhisperService {
             // chunk. The decode is its own task, not a task-group child, so the
             // watchdog can give up on it: a task group waits for every child
             // before it rethrows, and a wedged decode never finishes.
+            //
+            // It runs on `WhisperDecodeExecutor`, not the cooperative pool: see
+            // that type for why. The per-token callback below is delivered
+            // from a low-priority task on the pool, so a busy pool starves it
+            // while the decode itself is fine. The segment callback runs inline
+            // in the decode loop, once per window, so the watchdog still sees
+            // the decode moving when the pool is saturated.
             let kit = WhisperKitBox(whisperKit)
-            let decode = Task.detached(priority: Task.currentPriority) { () async throws -> WhisperTranscriptionResult in
+            let decode = Task.detached(
+                executorPreference: WhisperDecodeExecutor.shared,
+                priority: Task.currentPriority
+            ) { () async throws -> WhisperTranscriptionResult in
+                kit.value.segmentDiscoveryCallback = { _ in heartbeat.beat() }
                 let results = try await kit.value.transcribe(
                     audioPath: audioURL.path,
                     decodeOptions: options,
@@ -639,6 +650,41 @@ class WhisperService {
 nonisolated private final class WhisperKitBox: @unchecked Sendable {
     let value: WhisperKit
     init(_ value: WhisperKit) { self.value = value }
+}
+
+/// Runs WhisperKit's decode on GCD threads instead of Swift's cooperative pool.
+///
+/// WhisperKit 0.15's greedy sampler reads each token out of an `MLTensor` with
+/// `asIntArray()` / `asFloatArray()`, which start a `Task` and block the calling
+/// thread on a `DispatchSemaphore` until it finishes - twice per token. On the
+/// cooperative pool that parks one of its few threads (one per core) for every
+/// token, and the pool never adds a thread to replace a blocked one. Anything
+/// else holding pool threads at the same time - a llama generate or unload,
+/// background SwiftData fetches, the analysis of an earlier take - leaves the
+/// sampler's task waiting for a thread, and the decode crawls or stalls. A
+/// freshly launched app has an idle pool, so the same take decodes quickly
+/// after a relaunch.
+///
+/// GCD notices a worker blocked in the kernel and brings up another, so the
+/// same waits here cost a thread for a moment instead of starving the pool.
+nonisolated private final class WhisperDecodeExecutor: TaskExecutor {
+    static let shared = WhisperDecodeExecutor()
+
+    /// Concurrent is load-bearing: the sampler's inner `Task` inherits this
+    /// executor, and on a serial queue it would wait behind its own blocker.
+    private let queue = DispatchQueue(
+        label: "com.vansh.SpeakUpMore.whisper-decode",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    func enqueue(_ job: consuming ExecutorJob) {
+        let unownedJob = UnownedJob(job)
+        let executor = asUnownedTaskExecutor()
+        queue.async {
+            unownedJob.runSynchronously(on: executor)
+        }
+    }
 }
 
 /// Hands a continuation to whichever of several racing tasks finishes first,

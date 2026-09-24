@@ -486,53 +486,61 @@ struct AnalyzingView: View {
     // MARK: - Bottom Action Bar
 
     private var selfCheckBottomBar: some View {
-        VStack(spacing: 0) {
+        // One control, not two. A primary "See your score" button used to pop
+        // in the moment the transcript landed, stacking a second "next" over
+        // the skip control. The skip control now relabels itself in place.
+        let helperText: String
+        if analysisReady {
+            helperText = isWrappingUp ? "Opening it now" : "Finish up, or go straight to it"
+        } else if !isStillProcessing {
+            helperText = "Your recording is safe"
+        } else {
+            helperText = isWrappingUp
+                ? "Your results open the moment they're ready"
+                : "Answer as many as you like, or skip ahead"
+        }
+
+        let buttonTitle: String
+        if analysisReady {
+            buttonTitle = "See your score"
+        } else if scoreSettled {
+            buttonTitle = "See results"
+        } else {
+            buttonTitle = "Skip to results"
+        }
+
+        return VStack(spacing: 0) {
             Divider()
                 .overlay(Color.white.opacity(0.06))
 
             // Vertical stack - an HStack put the helper copy beside the skip
             // control and the two collided at accessibility text sizes.
             VStack(spacing: 6) {
-                if scoreSettled {
-                    GlassButton(
-                        title: analysisReady ? "See your score" : "See results",
-                        icon: "arrow.right",
-                        iconPosition: .right,
-                        style: .primary,
-                        fullWidth: true
-                    ) {
-                        handOverNow()
-                    }
-                    .disabled(hasHandedOver)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                } else {
-                    Text(isWrappingUp
-                         ? "Your results open the moment they're ready"
-                         : "Answer as many as you like, or skip ahead")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity)
-                        .contentTransition(.opacity)
+                Text(helperText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .contentTransition(.opacity)
 
-                    Button {
-                        handOverNow()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("Skip to results")
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
+                Button {
+                    handOverNow()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(buttonTitle)
+                            .contentTransition(.opacity)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(hasHandedOver)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .disabled(hasHandedOver)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
@@ -1147,7 +1155,14 @@ private struct DetailSkeletonView: View {
         .scrollIndicators(.hidden)
         .scrollDisabled(true)
         .task {
-            takeShape = TakeScanView.bars(from: recording.audioLevelSamples ?? [])
+            // Off the main actor, like the self-check's copy: a `.task` on a
+            // view runs on it, and this is a JSON decode of the whole take.
+            guard let data = recording.audioLevelSamplesData else { return }
+            let bars = await Task.detached(priority: .userInitiated) {
+                TakeScanView.bars(from: (try? JSONDecoder().decode([Float].self, from: data)) ?? [])
+            }.value
+            guard !Task.isCancelled else { return }
+            takeShape = bars
         }
     }
 

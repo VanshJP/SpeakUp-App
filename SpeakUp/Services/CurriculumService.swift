@@ -7,6 +7,9 @@ class CurriculumService {
     var phases: [CurriculumPhase] = DefaultCurriculum.phases
     private var modelContext: ModelContext?
     private var autoCompletedActivityIds: Set<String> = []
+    /// The history scan in flight. A newer refresh (Learn reappearing right
+    /// after a lesson take) cancels it, so only the newest result applies.
+    @ObservationIgnored private var autoCompletionScan: Task<Void, Never>?
 
     @MainActor
     func loadProgress(context: ModelContext) {
@@ -69,8 +72,11 @@ class CurriculumService {
             progress.completedActivityIds.append(activityId)
             progress.lastActivityDate = Date()
         }
-        refreshAutoCompletions(context: context)
+        // The lesson this activity finishes completes now; what the history
+        // scan infers lands a moment later.
+        _ = synchronizeLessonCompletionAndProgress(progress: progress)
         try? context.save()
+        refreshAutoCompletions(context: context)
     }
 
     @MainActor
@@ -96,17 +102,34 @@ class CurriculumService {
 
     // MARK: - Auto Completion
 
+    /// Scans history off the main actor, then applies what it infers.
+    ///
+    /// The scan decodes the analysis of every take ever recorded. It ran on
+    /// the main context each time Learn appeared and after every lesson take,
+    /// so the tab froze for longer the more someone had practised.
     @MainActor
     private func refreshAutoCompletions(context: ModelContext) {
+        autoCompletionScan?.cancel()
+        let container = context.container
+        autoCompletionScan = Task { [weak self] in
+            let signals = await Task.detached(priority: .userInitiated) {
+                let background = ModelContext(container)
+                let recordingDescriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date)])
+                let recordings = (try? background.fetch(recordingDescriptor)) ?? []
+                // One decode pass over history: every `recording.analysis`
+                // access re-decodes a JSON blob, so per-activity reads made
+                // this O(activities × recordings). Activities evaluate against
+                // the signals.
+                return CurriculumSessionSignals.scan(recordings)
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.applyAutoCompletions(signals, context: context)
+        }
+    }
+
+    @MainActor
+    private func applyAutoCompletions(_ signals: CurriculumSessionSignals, context: ModelContext) {
         guard let progress else { return }
-        let recordingDescriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date)])
-        let recordings = (try? context.fetch(recordingDescriptor)) ?? []
-
-        // One decode pass over history: every `recording.analysis` access
-        // re-decodes a JSON blob, so per-activity reads made this
-        // O(activities × recordings). Activities evaluate against the signals.
-        let signals = CurriculumSessionSignals.scan(recordings)
-
         var didMutate = false
         let allActivities = phases.flatMap { $0.lessons }.flatMap { $0.activities }
         for activity in allActivities {
@@ -264,7 +287,7 @@ class CurriculumService {
 /// Everything auto-completion infers from practice history, projected in one
 /// pass. `Recording.analysis` is a Codable blob that re-decodes on every
 /// access - reading it per activity made a refresh O(activities × sessions).
-nonisolated struct CurriculumSessionSignals {
+nonisolated struct CurriculumSessionSignals: Sendable {
     private(set) var recordingCount = 0
     private(set) var analyzedCount = 0
     private(set) var longestDuration: TimeInterval = 0

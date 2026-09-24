@@ -58,12 +58,27 @@ class TodayViewModel {
     /// Cross-session interview readiness, written to the widget payload.
     private var readinessScore = 0
 
+    /// The reload in flight, if any. Today appears on every tab switch and
+    /// every pop back, and each appearance used to start another full-history
+    /// scan beside the one already running.
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    /// An appearance landed mid-reload, so run once more when it finishes.
+    @ObservationIgnored private var reloadRequested = false
+
     nonisolated init() {}
 
     func configure(with context: ModelContext) {
         self.modelContext = context
-        Task { @MainActor in
-            await loadData()
+        guard loadTask == nil else {
+            reloadRequested = true
+            return
+        }
+        loadTask = Task { @MainActor in
+            repeat {
+                reloadRequested = false
+                await loadData()
+            } while reloadRequested
+            loadTask = nil
         }
     }
     
@@ -82,6 +97,7 @@ class TodayViewModel {
         let heavy = await Self.fetchAndCompute(
             container: container,
             hideAnsweredPrompts: hideAnsweredPrompts,
+            countsVocabUsage: vocabChallengePreferences.isEnabled,
             weeklyGoalSessions: weeklyGoalSessions,
             scoreWeights: scoreWeights,
             promptMix: promptMix
@@ -128,6 +144,7 @@ class TodayViewModel {
     private static func fetchAndCompute(
         container: ModelContainer,
         hideAnsweredPrompts: Bool,
+        countsVocabUsage: Bool,
         weeklyGoalSessions: Int,
         scoreWeights: ScoreWeights,
         promptMix: PromptMix
@@ -206,13 +223,17 @@ class TodayViewModel {
             var vocabUsedCounts: [String: Int] = [:]
             var todayTranscripts: [String] = []
             var todayVocabUsages: [VocabWordUsage] = []
-            for recording in recordings {
-                // Bind once - each `analysis` access re-decodes the blob.
-                let analysis = recording.analysis
-                if let usage = analysis?.vocabWordsUsed {
-                    for item in usage where item.count > 0 {
-                        let key = item.word.lowercased()
-                        vocabUsedCounts[key, default: 0] += item.count
+            // Decodes the analysis of every take ever recorded, and only the
+            // word workout reads the result - skip it while that is off.
+            if countsVocabUsage {
+                for recording in recordings {
+                    // Bind once - each `analysis` access re-decodes the blob.
+                    let analysis = recording.analysis
+                    if let usage = analysis?.vocabWordsUsed {
+                        for item in usage where item.count > 0 {
+                            let key = item.word.lowercased()
+                            vocabUsedCounts[key, default: 0] += item.count
+                        }
                     }
                 }
             }
@@ -443,11 +464,6 @@ class TodayViewModel {
 
     }
 
-    private func loadAnsweredPromptIDs(context: ModelContext) {
-        let recordings = (try? context.fetch(FetchDescriptor<Recording>())) ?? []
-        answeredPromptIDs = Set(recordings.compactMap { $0.prompt?.id })
-    }
-
     /// Read the user's stored speaker level. Defaults to `.intermediate`
     /// when no settings row exists yet (cold launch / first install).
     @MainActor
@@ -487,9 +503,11 @@ class TodayViewModel {
                 allPrompts.append(newPrompt)
             }
 
-            // If hiding answered prompts, prefer an unanswered one
+            // If hiding answered prompts, prefer an unanswered one. The
+            // answered set comes from the last reload's background scan, which
+            // Today runs on every appearance; re-reading every recording here
+            // ran on the main thread on each reroll tap.
             if hideAnsweredPrompts {
-                loadAnsweredPromptIDs(context: context)
                 let unanswered = allPrompts.filter { !answeredPromptIDs.contains($0.id) }
                 if let pick = effectivePromptMix.pickRandom(from: unanswered, category: \.category) {
                     candidate = pick

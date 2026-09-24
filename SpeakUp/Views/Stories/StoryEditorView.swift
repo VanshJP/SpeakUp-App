@@ -804,7 +804,8 @@ struct StoryEditorView: View {
                     isFormattingDictation = false
                 }
             }
-            guard let url = await audioService.stopRecording() else {
+            // Transcribed once and deleted, so it never goes to iCloud.
+            guard let url = await audioService.stopRecording(promoteToICloud: false) else {
                 errorMessage = "Recording failed."
                 return
             }

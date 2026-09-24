@@ -13,12 +13,15 @@ enum WidgetDataProvider {
     /// makes cfprefsd log "kCFPreferencesAnyUser … detaching" and every write
     /// would be lost anyway. Never fall back to `.standard` - that domain is
     /// not shared with the widget.
-    private static var defaults: UserDefaults? {
+    ///
+    /// Resolved once. As a computed property it looked the container up and
+    /// opened a new suite on every key written, a dozen-odd per payload.
+    private static let defaults: UserDefaults? = {
         guard FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: suiteName
         ) != nil else { return nil }
         return UserDefaults(suiteName: suiteName)
-    }
+    }()
 
     // MARK: - Write (from main app)
 

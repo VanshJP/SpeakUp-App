@@ -42,6 +42,7 @@ The page answers *what speaking skill am I building, and how do I prove it?* - n
     **Activity descriptions belong to the header.** `activityHeader` prints role (`eyebrowStyle` in the role colour, beside an `IconChip`), title and description with a trailing Done pill; a launch card under it carries controls only (exercise identity, duration/framework labels, the CTA) and never reprints `activity.description` or `lesson.objective`. Bottom bar uses `safeAreaInset` so content clears the sticky CTA. CTAs use pedagogical verbs (`Got it`, `Next · Practice`, `Finish lesson`). Completion restates the objective as "You can now…" plus the worked stages - not a trophy checklist alone.
 12. **Lesson glyphs stay readable when complete.** `LessonGlyphView` never draws a check badge on the Canvas motif. Completed state uses success ink plus a plate-corner badge on the parent (`lessonGlyphPlate` / reinforce nudge).
 13. `CurriculumLesson.studioPlan` is ordered unique `CurriculumActivityType`s; list/meta UI should prefer it over inventing a second role taxonomy.
+14. **Auto-completion scans history off the main actor.** `CurriculumService.refreshAutoCompletions` fetches every take in a detached `ModelContext` (one analysis decode each) and applies the `CurriculumSessionSignals` on the main actor; a newer refresh cancels an older one. It ran on the main context each time Learn appeared and after every lesson take. A manual `completeActivity` still settles its lesson immediately. `LessonDetailView` queries only the three newest recordings it shows.
 
 ## Cross-links
 

@@ -108,8 +108,11 @@ enum AchievementDefinition: String, CaseIterable {
     }
 
     func refreshDisplay(on achievement: Achievement) {
-        achievement.title = title
-        achievement.descriptionText = descriptionText
-        achievement.icon = icon
+        // Only on a real change. A write marks the row dirty whatever the
+        // value, and this runs over every achievement at launch and after
+        // every take, so equal writes cost a save and a CloudKit export each.
+        if achievement.title != title { achievement.title = title }
+        if achievement.descriptionText != descriptionText { achievement.descriptionText = descriptionText }
+        if achievement.icon != icon { achievement.icon = icon }
     }
 }

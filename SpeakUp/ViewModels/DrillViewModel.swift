@@ -237,7 +237,14 @@ class DrillViewModel {
 
     private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+        // Weak in the timer's block too. A `[weak self]` only on the inner
+        // task makes this block hold `self` strongly, so the run loop kept the
+        // view model alive and ticking until something called `cleanup()`.
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard self != nil else {
+                timer.invalidate()
+                return
+            }
             Task { @MainActor [weak self] in
                 self?.tick()
             }
@@ -421,18 +428,17 @@ class DrillViewModel {
     }
 
     private func finishWithPitchAnalysis(mode: DrillMode, endedEarly: Bool) async {
-        let url = await audioService.stopRecording()
-        defer {
-            if let url {
-                try? FileManager.default.removeItem(at: url)
-            }
-            isAnalyzingPitch = false
-        }
+        // A drill take is read once and deleted, so it never goes to iCloud.
+        let url = await audioService.stopRecording(promoteToICloud: false)
+        defer { isAnalyzingPitch = false }
 
+        // Decode, analysis and delete all off the main actor. The decode used
+        // to run here on it: a whole take of AAC, synchronously.
         var pitch: PitchMetrics?
-        if let url, let pcm = MonoPCM.decode(url: url) {
+        if let url {
             pitch = await Task.detached(priority: .userInitiated) {
-                PitchAnalysisService.analyze(monoPCM: pcm)
+                defer { try? FileManager.default.removeItem(at: url) }
+                return MonoPCM.decode(url: url).flatMap { PitchAnalysisService.analyze(monoPCM: $0) }
             }.value
         }
 

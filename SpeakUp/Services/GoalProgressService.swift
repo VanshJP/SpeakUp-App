@@ -73,8 +73,14 @@ enum GoalProgressService {
         container: ModelContainer
     ) async -> [UUID: GoalProgressOutcome] {
         await Task.detached(priority: .userInitiated) {
+            // Only the span some goal covers - this runs on every Today load.
+            guard let earliest = requests.map(\.startDate).min(),
+                  let latest = requests.map(\.effectiveEnd).max() else { return [:] }
             let context = ModelContext(container)
-            let descriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.date)])
+            let descriptor = FetchDescriptor<Recording>(
+                predicate: #Predicate { $0.date >= earliest && $0.date <= latest },
+                sortBy: [SortDescriptor(\.date)]
+            )
             guard let recordings = try? context.fetch(descriptor) else { return [:] }
 
             var sessionCounts: [UUID: Int] = [:]
@@ -84,9 +90,19 @@ enum GoalProgressService {
             var fillerRatios: [UUID: [Double]] = [:]
 
             for recording in recordings {
-                // One decode feeds every goal whose window this session falls in.
-                let analysis = recording.analysis
-                for request in requests where recording.date >= request.startDate && recording.date <= request.effectiveEnd {
+                let inWindow = requests.filter {
+                    recording.date >= $0.startDate && recording.date <= $0.effectiveEnd
+                }
+                // One decode feeds every goal whose window this session falls
+                // in, and only when one of those goals reads the analysis.
+                let readsAnalysis = inWindow.contains { request in
+                    switch request.type {
+                    case .improveScore, .reduceFiller: return true
+                    case .sessionsPerWeek, .practiceStreak, .totalMinutes: return false
+                    }
+                }
+                let analysis = readsAnalysis ? recording.analysis : nil
+                for request in inWindow {
                     switch request.type {
                     case .sessionsPerWeek:
                         sessionCounts[request.id, default: 0] += 1

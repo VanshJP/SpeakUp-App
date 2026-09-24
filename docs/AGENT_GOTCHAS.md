@@ -40,6 +40,9 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | A sheet or cover opens blank, closes itself, and works on the second tap | 27 |
 | An animation that never plays: confetti invisible, chart draw-in pops | 28 |
 | App freezes for seconds right after a take ends (hang HUD on the self-check) | 29 |
+| Analysis crawls or sits on "Transcribing" in a long session, but scores fast after a relaunch | 30 |
+| A `nonisolated` async helper still runs its work on the main thread | 31 |
+| Main-thread cost scales with how often a parent view redraws, not with this view | 32 |
 
 ## Punch list
 
@@ -69,6 +72,9 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 23. Store a recognition request's newest transcript as the whole request, or count `max` across results — on device the recognizer restarts a request's transcript after a pause and can send a blank final. Feed results through `RecognitionContinuity` / `RequestTranscript`.
 24. A timed practice screen without `keepsScreenAwake` — Auto-Lock fires during a hands-free minute and takes the mic with it.
 25. File work on a take's media from the main actor — `setUbiquitous`, iCloud status keys, even `fileExists` in the ubiquity container can wait seconds on the iCloud daemon.
+26. Blocking waits on Swift's cooperative pool — a semaphore, a llama call, a long synchronous loop inside `Task.detached`. The pool does not replace a blocked thread. WhisperKit's decode runs on `WhisperDecodeExecutor` for this reason.
+27. Heavy synchronous work at the top of a `nonisolated async` function — under approachable concurrency it runs on the caller's actor, usually the main one.
+28. An expensive initializer as a `@State` initial value (a recognizer, an audio engine) — it runs and is thrown away every time the parent re-creates the view.
 
 ---
 
@@ -537,4 +543,68 @@ Rules:
   runs as a screen appears, or `body`.
 - A take's duration is read from the local file before the move, off the main
   actor (`AudioService.fileDuration(at:)`).
+
+---
+
+## 30. Blocking waits starve Swift's cooperative pool
+
+Swift concurrency runs `Task` / `Task.detached` work on a pool with about one
+thread per core, and it never adds a thread when one blocks. Anything that
+parks a pool thread on a semaphore, a lock or a long synchronous call takes it
+away from every other task until it returns.
+
+WhisperKit 0.15 does this on every token: its greedy sampler reads the token
+out of an `MLTensor` with `asIntArray()` / `asFloatArray()`, each of which
+starts a `Task` and blocks the calling thread on a `DispatchSemaphore` until it
+finishes. With the pool already busy (a llama generation or unload, detached
+SwiftData scans, an earlier take's scoring) the sampler's task waits for a
+thread, and the decode crawls or stalls on the analyzing screen. A relaunch has
+an idle pool, so the same take then scores quickly - which is what makes this
+look like a state bug rather than a scheduling one.
+
+Rules:
+
+- The decode runs on `WhisperDecodeExecutor`, a `TaskExecutor` over a
+  concurrent GCD queue, via `Task.detached(executorPreference:)`. GCD brings up
+  another worker when one blocks in the kernel. Keep it there.
+- WhisperKit delivers the per-token callback from a low-priority detached task
+  on the pool, so a busy pool starves the stall watchdog's heartbeat while the
+  decode is fine. `segmentDiscoveryCallback` runs inline in the decode loop,
+  once per window, and beats the heartbeat too. Do not drop it.
+- New blocking work (C libraries, `DispatchSemaphore`, file-by-file loops over a
+  library) goes on a GCD queue with a continuation, or a task executor like the
+  one above - not in a bare `Task.detached`.
+
+## 31. `nonisolated async` runs on the caller's actor
+
+`SWIFT_APPROACHABLE_CONCURRENCY` turns on `NonisolatedNonsendingByDefault`: a
+`nonisolated` (or `nonisolated`-type) `async` function runs on whatever actor
+called it. Called from `SpeechService`, a view, or any other MainActor-default
+code, its synchronous parts run on the main thread. `nonisolated` alone does not
+move work off the main actor for `async` functions - only for synchronous ones
+called from a detached task.
+
+`PromptRelevanceService.coherenceScore(transcript:llmService:promptText:)` ran
+its sentence-embedding and tagger passes on the main thread as the result
+screen opened this way. It now wraps them in `Task.detached`.
+
+Rules: an `async` helper that does real work before its first `await` either
+wraps that work in `Task.detached` (the pattern used across `Services/`) or is
+marked `@concurrent`. `await MainActor.run { ... }` inside a helper is a sign
+its author assumed it ran off the main actor - check that it does.
+
+## 32. `@State` initial values are rebuilt on every parent render
+
+`@State private var viewModel = RecordingViewModel()` evaluates
+`RecordingViewModel()` every time the parent re-creates the view, then throws the
+new instance away and keeps the first. `ContentView` re-creates the recorder's
+cover content whenever its `@Query` of `UserSettings` changes, and the analysis
+job writes settings (allowance, auto-calibration) mid-analysis, so the recorder's
+view model was rebuilt several times per take.
+
+That only costs something if the initializer does. `LiveTranscriptionService`
+built its `SFSpeechRecognizer` - a round trip to the speech daemon - in `init`;
+it now builds it on first `start()`. Keep initializers of `@State` values cheap:
+no recognizers, engines, file reads or fetches. Create them on first use or in
+`.task`.
 

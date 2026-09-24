@@ -50,7 +50,13 @@ final class ChirpPlayer {
         guard isEnabled else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            if session.category != .playback && session.category != .playAndRecord {
+            // `.ambient` included: after the first chirp the session already
+            // is, and re-setting it plus `setActive` is a blocking round trip
+            // to the audio server on the main thread - every warm-up second
+            // and every drill filler.
+            if session.category != .playback
+                && session.category != .playAndRecord
+                && session.category != .ambient {
                 try session.setCategory(.ambient, mode: .default)
                 try session.setActive(true)
             }

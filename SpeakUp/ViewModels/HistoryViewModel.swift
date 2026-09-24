@@ -43,14 +43,28 @@ class HistoryViewModel {
 
     private var modelContext: ModelContext?
     private var container: ModelContainer?
+    /// The reload in flight, if any. History appears after every take and on
+    /// every tab switch, and each appearance used to start another full scan
+    /// (one analysis decode per take) beside the one already running.
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    /// An appearance landed mid-reload, so run once more when it finishes.
+    @ObservationIgnored private var reloadRequested = false
 
     nonisolated init() {}
 
     func configure(with context: ModelContext) {
         self.modelContext = context
         self.container = context.container
-        Task {
-            await loadData()
+        guard loadTask == nil else {
+            reloadRequested = true
+            return
+        }
+        loadTask = Task {
+            repeat {
+                reloadRequested = false
+                await loadData()
+            } while reloadRequested
+            loadTask = nil
         }
     }
 
