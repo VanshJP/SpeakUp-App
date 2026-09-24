@@ -6,7 +6,10 @@ import os
 
 enum LocalModelState: Equatable {
     case notDownloaded
-    case downloading(progress: Double)
+    /// Progress lives in `LocalLLMService.downloadProgress`. Carried here, every
+    /// tick re-rendered each view that reads `isModelReady` or
+    /// `LLMService.isAvailable`.
+    case downloading
     case downloaded
     case loading
     case ready
@@ -199,8 +202,16 @@ final class LocalLLMService {
         return false
     }
 
-    var isModelDownloaded: Bool {
-        FileManager.default.fileExists(atPath: Self.modelFilePath(for: selectedProfile).path)
+    /// Size of the selected profile's weights on disk, nil when there are none.
+    /// Stored rather than read from disk on every access - `AIModelSettingsView`
+    /// reads it from `body`. `refreshModelFile()` keeps it current on download,
+    /// delete and profile change.
+    private var modelFileBytes: Int64?
+
+    var isModelDownloaded: Bool { modelFileBytes != nil }
+
+    var modelFileSize: String? {
+        modelFileBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
     }
 
     var modelDisplayName: String { selectedProfile.displayName }
@@ -266,11 +277,9 @@ final class LocalLLMService {
         modelsDirectory.appendingPathComponent(profile.modelFileName)
     }
 
-    var modelFileSize: String? {
+    private func refreshModelFile() {
         let path = Self.modelFilePath(for: selectedProfile).path
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
-              let size = attrs[.size] as? Int64 else { return nil }
-        return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        modelFileBytes = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64
     }
 
     // MARK: - Initialization
@@ -283,6 +292,7 @@ final class LocalLLMService {
             selectedProfile = Self.recommendedProfile(forAvailableMemory: Int(clamping: os_proc_available_memory()))
         }
 
+        refreshModelFile()
         if isModelDownloaded {
             modelState = .downloaded
         }
@@ -349,6 +359,7 @@ final class LocalLLMService {
         selectedProfile = profile
         UserDefaults.standard.set(profile.rawValue, forKey: Self.selectedProfileDefaultsKey)
         downloadProgress = 0
+        refreshModelFile()
         modelState = isModelDownloaded ? .downloaded : .notDownloaded
         return true
     }
@@ -364,7 +375,7 @@ final class LocalLLMService {
         // launch a second copy of the same transfer.
         if case .downloading = modelState { return }
 
-        modelState = .downloading(progress: 0)
+        modelState = .downloading
         downloadProgress = 0
 
         do {
@@ -378,6 +389,7 @@ final class LocalLLMService {
             }
             try FileManager.default.moveItem(at: tempURL, to: dest)
 
+            refreshModelFile()
             modelState = .downloaded
             downloadProgress = 1.0
         } catch is CancellationError {
@@ -418,6 +430,7 @@ final class LocalLLMService {
         // Pre-check 1: file existence. Distinguishes a missing file (re-download
         // path) from a corrupt file (llama internal error path).
         guard FileManager.default.fileExists(atPath: path) else {
+            refreshModelFile()
             modelState = .error(
                 LocalLLMError.fileNotFound(path: path).errorDescription ?? "Model file missing"
             )
@@ -488,6 +501,7 @@ final class LocalLLMService {
     func deleteModel() {
         unloadModel()
         try? FileManager.default.removeItem(at: Self.modelFilePath(for: selectedProfile))
+        refreshModelFile()
         modelState = .notDownloaded
     }
 
@@ -736,6 +750,15 @@ final class LocalLLMService {
 
     // MARK: - Download with Progress
 
+    /// Whether a download tick is worth handing to the main actor. URLSession
+    /// reports every chunk it writes - hundreds of times a second on fast
+    /// Wi-Fi - and each one used to spawn a main-actor task and re-render the
+    /// settings screen. A tick goes through only once it is both a visible step
+    /// (0.5%) and a quarter-second on from the last.
+    nonisolated static func isProgressStep(from last: Double, to progress: Double, elapsed: TimeInterval) -> Bool {
+        abs(progress - last) >= 0.005 && elapsed >= 0.25
+    }
+
     private func downloadWithProgress(url: URL) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             // Re-target the long-lived background-session delegate at this
@@ -745,7 +768,6 @@ final class LocalLLMService {
                 onProgress: { [weak self] progress in
                     Task { @MainActor [weak self] in
                         self?.downloadProgress = progress
-                        self?.modelState = .downloading(progress: progress)
                     }
                 },
                 onComplete: { [weak self] result in
@@ -775,17 +797,29 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
     private let lock = NSLock()
     private var _onProgress: ProgressHandler?
     private var _onComplete: CompletionHandler?
+    /// The last progress handed on, and when. Reset per download.
+    private var lastReported: (progress: Double, at: Date)?
 
     func update(onProgress: @escaping ProgressHandler, onComplete: @escaping CompletionHandler) {
         lock.lock()
         _onProgress = onProgress
         _onComplete = onComplete
+        lastReported = nil
         lock.unlock()
     }
 
-    private func progressHandler() -> ProgressHandler? {
+    /// The progress handler, or nil when `progress` is too close to the last
+    /// value handed on to be worth a main-actor hop.
+    private func progressHandler(for progress: Double) -> ProgressHandler? {
         lock.lock()
         defer { lock.unlock() }
+        let now = Date()
+        if let last = lastReported,
+            !LocalLLMService.isProgressStep(from: last.progress, to: progress, elapsed: now.timeIntervalSince(last.at))
+        {
+            return nil
+        }
+        lastReported = (progress, now)
         return _onProgress
     }
 
@@ -808,7 +842,7 @@ nonisolated private final class DownloadProgressDelegate: NSObject, URLSessionDo
     ) {
         guard totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        progressHandler()?(progress)
+        progressHandler(for: progress)?(progress)
     }
 
     nonisolated func urlSession(

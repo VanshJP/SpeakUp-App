@@ -161,7 +161,12 @@ the read, not the end of it — hearing the model line (`isPaused`), a call or
 Siri (`isInterrupted`), the app leaving the foreground (`isBackgrounded`), and
 automatic recovery failing (`isStalled`). Holds keep `segments` and every
 matched word; `rebuildCaptureGraph` brings capture back on `didBecomeActive`, an
-interruption's `.ended`, or the reader's **Resume reading**. A stall gets one
+interruption's `.ended`, or the reader's **Resume reading**. The rebuild
+re-activates the session in a detached task, because `setActive` blocks until
+the audio server answers and every way back lands just as the reader starts
+speaking; the engine is built afterwards in `startCaptureGraph`, only if the
+read is still listening, unheld, and no overlapping rebuild got there first.
+A stall gets one
 automatic retry after 1.5 s, then waits for the reader; it used to end the
 session, which left Retry — the passage from the top — as the only way on.
 Held time (`heldDuration(until:)`) is subtracted from the clock and from wpm.
@@ -286,8 +291,9 @@ Silence-is-not-a-score applies (see practice-tools invariant 14).
 - Result layout: a pinned header (passage title, **Done**) so leaving never means scrolling past the word review; the accuracy ring counts up with `Haptics.playCountUp` under a one-line verdict; three stat tiles in one neutral recipe (colour lives in the icon — they used to be three shades of tinted glass); the legend wraps; Try again and Drill what you missed are full-width at the end.
 - Results are ephemeral today. Adding History support requires a deliberate `Recording`/analysis shape and media-storage lifecycle; do not imply persistence in UI copy until that exists.
 - Word texts carry state-aware accessibility labels in both session and review ("missed X, you said Y"); upcoming words are hidden from VoiceOver.
-- **Nothing about a word's match state may change its measured size.** The whole passage draws at one weight (`Self.passageWeight`); position is carried by the highlight fill and the colour ramp. The current word used to render `.bold` against `.regular` neighbours, and because bold glyphs are wider, every cursor advance re-flowed the rest of the line — the passage visibly squirmed while being read. Auto-scroll re-centres once per `scrollAdvanceWords` (8) rather than every second word, which was the other half of the same complaint.
+- **Nothing about a word's match state may change its measured size.** The whole passage draws at one weight (`ReadAloudPassageText.weight`); position is carried by the highlight fill and the colour ramp. The current word used to render `.bold` against `.regular` neighbours, and because bold glyphs are wider, every cursor advance re-flowed the rest of the line — the passage visibly squirmed while being read. Auto-scroll re-centres once per `scrollAdvanceWords` (8) rather than every second word, which was the other half of the same complaint.
 - `WrappingHStack` caches its measurement pass per (width, `metricsKey`), with a first-subview probe as a tripwire for callers that do not pass a key. Without the cache it re-measured every subview in **both** `sizeThatFits` and `placeSubviews`, so a 150-word passage cost ~300 text measurements per layout pass, on every partial recognition result. See gotchas §25.
+- **The clock does not rebuild the passage.** The passage is its own view (`ReadAloudPassageText`, taking `words` / `states` / `fontSize` and a `selectedWord` binding), and the elapsed time is read only inside `ReadAloudClock`. `ReadAloudViewModel.startTimer` still polls every 250 ms but writes `elapsedTime` only when the whole second changes. The clock used to be read in the session body, so every quarter second re-ran it: the `ForEach` over every word, and a fresh split of `currentPassage.words`.
 - Transcript updates **coalesce latest-wins** with at most one drain task in flight (`pendingTranscript` / `isDrainScheduled`), and the recognition callback lifts a `String` out before hopping actors — `SFSpeechRecognitionResult` and `any Error` are not `Sendable`.
 
 - Do **not** add a sixth `PracticeToolKind` for “pronounce word”. Extend Read Aloud.

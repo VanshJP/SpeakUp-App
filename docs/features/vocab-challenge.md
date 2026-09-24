@@ -56,6 +56,7 @@ Rules:
 
 1. **Adding goes through `SettingsViewModel`**, same as `WordBankView`. Word-bank safety (`WordSafety`), de-duplication, the filler-word check and persistence live there; a second path to `UserSettings.vocabWords` would be a second definition of what counts as an addable word.
 2. **The catalog is built once**, in `onAppear`, into `@State`. It merges, filters by tier and sorts ~400 entries and decodes `GeneratedVocabStore.entries()` out of `UserDefaults` - none of which belongs on the path a keystroke in the search field takes. Filtering that cache per keystroke is what search does.
+2a. **Rows are direct children of the page's `LazyVStack`**, with each section header padded out to the section gap. Grouping each tier's rows in a `VStack` made every section one lazy child, so all ~400 `GlassCard` rows were built on open and on every keystroke. Saved state comes from one `Set` of lowercased bank words per pass (`savedKeys`), not a scan of the bank for each row.
 3. **A search that matches nothing is still a word.** A single-token query of two or more characters that is in neither the catalog nor the bank offers a lookup card into the system dictionary. The lexicon is four hundred words; the dictionary is not.
 4. Doors: `WordLibraryEntryRow` on Library → Tools (a full-width row beside `PracticeImproveEntryRow`, not a fifth tile - see [today-library.md](./today-library.md)), pushed by `WordLibraryRoute`; and a row at the top of Word Lists → Vocab.
 

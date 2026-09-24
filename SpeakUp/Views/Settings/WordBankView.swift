@@ -50,11 +50,6 @@ struct WordBankView: View {
         }
         .navigationTitle("Word Lists")
         .navigationBarTitleDisplayMode(.inline)
-        // Leaving mid-dictation kept the engine, its tap, the recognition task
-        // and a 10 Hz level timer alive with nothing on screen to stop them.
-        .onDisappear {
-            if dictationEngine.isListening { dictationEngine.stop() }
-        }
         .toolbar {
             if showDismissButton {
                 ToolbarItem(placement: .topBarLeading) {
@@ -68,6 +63,13 @@ struct WordBankView: View {
             }
         }
         .onChange(of: selectedTab) {
+            if dictationEngine.isListening {
+                stopDictationAndAdd()
+            }
+        }
+        // Leaving mid-dictation - closing the sheet, or opening the Word
+        // Library - must still hand the mic and the session back.
+        .onDisappear {
             if dictationEngine.isListening {
                 stopDictationAndAdd()
             }

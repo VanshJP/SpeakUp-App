@@ -296,7 +296,12 @@ class ReadAloudViewModel {
                 // since nothing is left to cancel it.
                 guard let self else { return }
                 guard self.startTime != nil else { continue }
-                self.elapsedTime = self.readingTime()
+                // The clock shows whole seconds. Writing every quarter second
+                // redrew it four times for each change a reader can see.
+                let reading = self.readingTime()
+                if Int(reading) != Int(self.elapsedTime) {
+                    self.elapsedTime = reading
+                }
 
                 guard self.sessionState == .listening else { continue }
 

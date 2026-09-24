@@ -61,29 +61,38 @@ struct WordLibraryView: View {
             uniqueKeysWithValues: WordLibraryTier.allCases.map { ($0, matchingCatalog(in: $0)) }
         )
         let unknown = unmatchedQuery
+        let saved = savedKeys
         let isEmpty = !trimmedQuery.isEmpty
             && unknown == nil
             && ownWords.isEmpty
             && tiers.values.allSatisfy(\.isEmpty)
 
+        // Rows are direct children of the lazy stack, so only the ones on
+        // screen are built. Wrapped in a section `VStack` they were all built
+        // up front - some four hundred cards on open and on every keystroke.
+        // The stack spaces rows; everything else pads out to the gap between
+        // sections.
         return PageScrollView {
-            LazyVStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: Self.rowSpacing) {
                 InlineSearchField(text: $query, prompt: "Search any word…") {
                     EmptyView()
                 }
 
                 if let unknown {
                     lookupCard(unknown)
+                        .padding(.top, Self.sectionSpacing - Self.rowSpacing)
                 }
 
                 if !ownWords.isEmpty {
-                    section(title: "Your words", icon: "bookmark.fill", entries: ownWords)
+                    sectionHeader(title: "Your words", icon: "bookmark.fill", count: ownWords.count)
+                    rows(ownWords, saved: saved)
                 }
 
                 ForEach(WordLibraryTier.allCases) { tier in
                     let entries = tiers[tier] ?? []
                     if !entries.isEmpty {
-                        section(title: tier.title, icon: tier.icon, entries: entries)
+                        sectionHeader(title: tier.title, icon: tier.icon, count: entries.count)
+                        rows(entries, saved: saved)
                     }
                 }
 
@@ -93,6 +102,7 @@ struct WordLibraryView: View {
                         title: "No words match",
                         message: "Nothing here matches \u{201C}\(trimmedQuery)\u{201D}. Search a single word to look it up in the dictionary."
                     )
+                    .padding(.top, Self.sectionSpacing - Self.rowSpacing)
                 }
             }
             .padding(.top, 8)
@@ -104,28 +114,32 @@ struct WordLibraryView: View {
 
     // MARK: - Sections
 
-    private func section(title: String, icon: String, entries: [WordLibraryEntry]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            GlassSectionHeader(title, icon: icon) {
-                Text("\(entries.count)")
-                    .font(.caption.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-            }
+    private static let rowSpacing: CGFloat = 8
+    private static let sectionSpacing: CGFloat = 18
+    private static let headerToRowSpacing: CGFloat = 10
 
-            VStack(spacing: 8) {
-                ForEach(entries) { entry in
-                    WordLibraryRow(
-                        entry: entry,
-                        isSaved: isSaved(entry.word),
-                        onOpen: {
-                            Haptics.light()
-                            selection = entry
-                        },
-                        onAdd: { add(entry.word) }
-                    )
-                }
-            }
+    private func sectionHeader(title: String, icon: String, count: Int) -> some View {
+        GlassSectionHeader(title, icon: icon) {
+            Text("\(count)")
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.top, Self.sectionSpacing - Self.rowSpacing)
+        .padding(.bottom, Self.headerToRowSpacing - Self.rowSpacing)
+    }
+
+    private func rows(_ entries: [WordLibraryEntry], saved: Set<String>) -> some View {
+        ForEach(entries) { entry in
+            WordLibraryRow(
+                entry: entry,
+                isSaved: saved.contains(entry.id),
+                onOpen: {
+                    Haptics.light()
+                    selection = entry
+                },
+                onAdd: { add(entry.word) }
+            )
         }
     }
 
@@ -225,8 +239,14 @@ struct WordLibraryView: View {
         return (catalogKeys.contains(key) || inBank) ? nil : word
     }
 
+    /// The bank, lowercased. Built once per pass: a scan of the bank for each
+    /// of four hundred rows was the other half of a slow keystroke.
+    private var savedKeys: Set<String> {
+        Set(viewModel.vocabWords.map { $0.lowercased() })
+    }
+
     private func isSaved(_ word: String) -> Bool {
-        viewModel.vocabWords.contains { $0.caseInsensitiveCompare(word) == .orderedSame }
+        savedKeys.contains(word.lowercased())
     }
 
     private func add(_ word: String) {

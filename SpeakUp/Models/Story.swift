@@ -118,8 +118,7 @@ final class Story {
         return StoryOccasion(rawValue: occasion)
     }
 
-    var estimatedReadingTime: String {
-        let words = wordCount
+    static func readingTime(words: Int) -> String {
         guard words > 0 else { return "0s" }
         let seconds = max(1, words * 60 / 150)
         if seconds < 60 { return "\(seconds)s" }

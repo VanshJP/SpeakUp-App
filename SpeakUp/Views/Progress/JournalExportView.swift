@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Score + date projection of one analyzed take, decoded off the main thread
-/// so summary math in `body` never re-reads analysis blobs.
-nonisolated struct JournalScorePoint {
+/// Date, length, and score of one take, read off the main thread so summary
+/// math in `body` never touches a model object or an analysis blob.
+nonisolated struct JournalTakePoint {
     let date: Date
-    let score: Int
+    let duration: TimeInterval
+    let score: Int?
 }
 
 struct JournalExportView: View {
@@ -17,14 +18,13 @@ struct JournalExportView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Recording.date, order: .reverse) private var allRecordings: [Recording]
     @Query private var achievements: [Achievement]
 
     @State private var selectedRange: DateRangeOption = .lastMonth
     @State private var includeAchievements = true
     @State private var isExporting = false
     @State private var errorMessage: String?
-    @State private var scorePoints: [JournalScorePoint] = []
+    @State private var takes: [JournalTakePoint] = []
 
     enum DateRangeOption: String, CaseIterable, Identifiable {
         case lastWeek = "Week"
@@ -53,10 +53,6 @@ struct JournalExportView: View {
         }
     }
 
-    private var filteredRecordings: [Recording] {
-        allRecordings.filter { $0.date >= selectedRange.dateFilter }
-    }
-
     private var unlockedAchievementsCount: Int {
         achievements.filter { $0.isUnlocked }.count
     }
@@ -64,31 +60,34 @@ struct JournalExportView: View {
     /// One background decode pass on appear; range filtering is pure date
     /// math done per render against these values. A cancelled pass (view
     /// already gone) never writes.
-    private func loadScorePoints() async {
+    private func loadTakes() async {
         let container = modelContext.container
-        let points = await Task.detached(priority: .userInitiated) { () -> [JournalScorePoint] in
+        let points = await Task.detached(priority: .userInitiated) { () -> [JournalTakePoint] in
             let context = ModelContext(container)
             let descriptor = FetchDescriptor<Recording>(
                 sortBy: [SortDescriptor(\.date, order: .forward)]
             )
             let recordings = (try? context.fetch(descriptor)) ?? []
-            return recordings.compactMap { recording in
-                guard let score = recording.analysis?.speechScore.overall else { return nil }
-                return JournalScorePoint(date: recording.date, score: score)
+            return recordings.map { recording in
+                JournalTakePoint(
+                    date: recording.date,
+                    duration: recording.actualDuration,
+                    score: recording.analysis?.speechScore.overall
+                )
             }
         }.value
 
         guard !Task.isCancelled else { return }
-        scorePoints = points
+        takes = points
     }
 
     var body: some View {
-        let rangeSessions = filteredRecordings
-        let totalMinutes = Int(rangeSessions.reduce(0.0) { $0 + $1.actualDuration }) / 60
-        let rangeScores = scorePoints.filter { $0.date >= selectedRange.dateFilter }
-        let averageScore = rangeScores.isEmpty ? 0 : rangeScores.map(\.score).reduce(0, +) / rangeScores.count
+        let rangeTakes = takes.filter { $0.date >= selectedRange.dateFilter }
+        let totalMinutes = Int(rangeTakes.reduce(0.0) { $0 + $1.duration }) / 60
+        let rangeScores = rangeTakes.compactMap(\.score)
+        let averageScore = rangeScores.isEmpty ? 0 : rangeScores.reduce(0, +) / rangeScores.count
         let improvement = rangeScores.count >= 2
-            ? (rangeScores.last?.score ?? 0) - (rangeScores.first?.score ?? 0)
+            ? (rangeScores.last ?? 0) - (rangeScores.first ?? 0)
             : 0
 
         ZStack {
@@ -103,7 +102,7 @@ struct JournalExportView: View {
 
                             Spacer()
 
-                            Text("\(rangeSessions.count) sessions")
+                            Text("\(rangeTakes.count) sessions")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -139,7 +138,7 @@ struct JournalExportView: View {
 
                         FeaturedGlassCard {
                             JournalSummaryView(
-                                totalSessions: rangeSessions.count,
+                                totalSessions: rangeTakes.count,
                                 totalMinutes: totalMinutes,
                                 averageScore: averageScore,
                                 improvement: improvement,
@@ -165,7 +164,7 @@ struct JournalExportView: View {
                     ) {
                         exportPDF()
                     }
-                    .disabled(rangeSessions.isEmpty || isExporting)
+                    .disabled(rangeTakes.isEmpty || isExporting)
                 }
                 .padding()
             }
@@ -179,45 +178,53 @@ struct JournalExportView: View {
             }
         }
         .task {
-            await loadScorePoints()
+            await loadTakes()
         }
     }
 
+    /// Fetch, snapshot, render, and write all run in one detached task - an
+    /// "All Time" journal lays out every transcript, which froze the spinner
+    /// when it ran on the main actor. Only the result hops back.
     private func exportPDF() {
         isExporting = true
         errorMessage = nil
 
-        let recordings = filteredRecordings
+        let container = modelContext.container
+        let since = selectedRange.dateFilter
         let range = selectedRange.rawValue
         let withAchievements = includeAchievements
-        let achievementsList = achievements
+        let fileName = "BigTalk-Journal-\(Self.journalDateFormatter.string(from: Date())).pdf"
 
         Task {
-            let service = JournalExportService()
-            let data = service.generatePDF(
-                recordings: recordings,
-                dateRange: range,
-                includeAchievements: withAchievements,
-                achievements: achievementsList
-            )
+            let result = await Task.detached(priority: .userInitiated) { () throws -> URL in
+                let context = ModelContext(container)
+                // Predicate on `date` only - never on the analysis blob (gotchas §2).
+                let descriptor = FetchDescriptor<Recording>(
+                    predicate: #Predicate { $0.date >= since },
+                    sortBy: [SortDescriptor(\.date, order: .forward)]
+                )
+                let entries = try context.fetch(descriptor).map(JournalEntry.init)
+                let achievements = withAchievements
+                    ? try context.fetch(FetchDescriptor<Achievement>(predicate: #Predicate { $0.isUnlocked }))
+                        .map { JournalAchievement(icon: $0.icon, title: $0.title) }
+                    : []
 
-            guard let data else {
-                errorMessage = "Failed to generate PDF."
-                isExporting = false
-                return
-            }
-
-            let dateString = Self.journalDateFormatter.string(from: Date())
-            let fileName = "BigTalk-Journal-\(dateString).pdf"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
-            do {
+                let data = JournalExportService().generatePDF(
+                    entries: entries,
+                    dateRange: range,
+                    achievements: achievements
+                )
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
                 try data.write(to: tempURL)
-                isExporting = false
-                SharePresenter.present(url: tempURL)
-            } catch {
+                return tempURL
+            }.result
+
+            isExporting = false
+            switch result {
+            case .success(let url):
+                SharePresenter.present(url: url)
+            case .failure(let error):
                 errorMessage = "Could not save PDF: \(error.localizedDescription)"
-                isExporting = false
             }
         }
     }

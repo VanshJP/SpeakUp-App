@@ -2,7 +2,84 @@ import Foundation
 import SwiftUI
 import UIKit
 
-class JournalExportService {
+// MARK: - Snapshot
+
+/// Everything the journal prints for one take, read from a background
+/// `ModelContext` so rendering never touches a model object.
+nonisolated struct JournalEntry: Sendable {
+    /// The analysis numbers the journal prints. Only headline fields, so the
+    /// lossy SwiftData `analysis` is enough - no `fullAnalysis` mirror decode.
+    nonisolated struct Stats: Sendable {
+        let overall: Int
+        let subscores: SpeechSubscores
+        let wordsPerMinute: Double
+        let totalWords: Int
+        let totalFillerCount: Int
+        let pauseCount: Int
+        let fillerWords: [FillerWord]
+        let vocabWordsUsed: [VocabWordUsage]
+    }
+
+    let date: Date
+    let displayTitle: String
+    let actualDuration: TimeInterval
+    let category: String?
+    let drillMode: String?
+    let stats: Stats?
+    let transcript: String?
+
+    /// Decodes `analysis` once. Call on the context that fetched `recording`.
+    init(_ recording: Recording) {
+        date = recording.date
+        displayTitle = recording.displayTitle
+        actualDuration = recording.actualDuration
+        category = recording.prompt?.category
+        drillMode = recording.drillMode
+        stats = recording.analysis.map { analysis in
+            Stats(
+                overall: analysis.speechScore.overall,
+                subscores: analysis.speechScore.subscores,
+                wordsPerMinute: analysis.wordsPerMinute,
+                totalWords: analysis.totalWords,
+                totalFillerCount: analysis.totalFillerCount,
+                pauseCount: analysis.pauseCount,
+                fillerWords: analysis.fillerWords,
+                vocabWordsUsed: analysis.vocabWordsUsed
+            )
+        }
+        transcript = Self.resolvedTranscript(for: recording)
+    }
+
+    private static func resolvedTranscript(for recording: Recording) -> String? {
+        let wordsTranscript = recording.transcriptionWords?
+            .map(\.word)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let wordsTranscript, !wordsTranscript.isEmpty {
+            return wordsTranscript
+        }
+
+        let fallbackText = recording.transcriptionText?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fallbackText, !fallbackText.isEmpty {
+            return fallbackText
+        }
+
+        return nil
+    }
+}
+
+/// An unlocked achievement as the journal prints it.
+nonisolated struct JournalAchievement: Sendable {
+    let icon: String
+    let title: String
+}
+
+// MARK: - Renderer
+
+/// Lays out the journal PDF from value snapshots. Pure UIKit drawing, safe to
+/// run off the main actor - `JournalExportView` runs it in a detached task.
+nonisolated class JournalExportService {
 
     private let pageWidth: CGFloat = 612
     private let pageHeight: CGFloat = 792
@@ -35,21 +112,20 @@ class JournalExportService {
         .foregroundColor: UIColor.gray
     ]
 
+    /// `entries` must be oldest first. `achievements` holds the unlocked ones
+    /// to print; pass none to leave the section out.
     func generatePDF(
-        recordings: [Recording],
+        entries: [JournalEntry],
         dateRange: String,
-        includeAchievements: Bool,
-        achievements: [Achievement]
-    ) -> Data? {
+        achievements: [JournalAchievement]
+    ) -> Data {
         let pdfRenderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight))
 
-        let analyzed = recordings.filter { $0.analysis != nil }
-        let analyzedSorted = analyzed.sorted { $0.date < $1.date }
-        let allSorted = recordings.sorted { $0.date < $1.date }
+        let analyzed = entries.compactMap(\.stats)
 
-        let totalSessions = recordings.count
-        let totalMinutes = Int(recordings.reduce(0.0) { $0 + $1.actualDuration }) / 60
-        let scores = analyzedSorted.compactMap { $0.analysis?.speechScore.overall }
+        let totalSessions = entries.count
+        let totalMinutes = Int(entries.reduce(0.0) { $0 + $1.actualDuration }) / 60
+        let scores = analyzed.map(\.overall)
         let avgScore = scores.isEmpty ? 0 : scores.reduce(0, +) / scores.count
         let improvement = scores.count >= 2 ? (scores.last ?? 0) - (scores.first ?? 0) : 0
 
@@ -71,17 +147,17 @@ class JournalExportService {
                 "Total Practice Time: \(totalMinutes) minutes",
                 "Average Score: \(avgScore)/100",
                 "Score Change: \(improvement >= 0 ? "+" : "")\(improvement) points",
-                "Most Improved: \(mostImprovedMetric(recordings: analyzedSorted))"
+                "Most Improved: \(mostImprovedMetric(analyzed))"
             ]
             for line in summaryLines {
                 y = drawText(line, at: y, attrs: bodyAttrs, indent: 10)
             }
 
             // Subscore averages
-            if !analyzedSorted.isEmpty {
+            if !analyzed.isEmpty {
                 y += 8
                 y = drawText("Average Subscores", at: y, attrs: subheaderAttrs, indent: 10)
-                let subscores = analyzedSorted.compactMap(\.analysis).map { $0.speechScore.subscores }
+                let subscores = analyzed.map(\.subscores)
                 let avgClarity = subscores.map(\.clarity).reduce(0, +) / subscores.count
                 let avgPace = subscores.map(\.pace).reduce(0, +) / subscores.count
                 let avgFiller = subscores.map(\.fillerUsage).reduce(0, +) / subscores.count
@@ -90,7 +166,7 @@ class JournalExportService {
             }
 
             // Top filler words across all sessions
-            let allFillers = aggregateFillerWords(from: analyzedSorted)
+            let allFillers = aggregateFillerWords(from: analyzed)
             if !allFillers.isEmpty {
                 y += 8
                 y = drawText("Most Common Filler Words", at: y, attrs: subheaderAttrs, indent: 10)
@@ -102,57 +178,54 @@ class JournalExportService {
             y = drawSeparator(at: y, context: context)
 
             // MARK: - Achievements
-            if includeAchievements {
-                let unlocked = achievements.filter { $0.isUnlocked }
-                if !unlocked.isEmpty {
-                    y = checkPageBreak(y: y, needed: 60, context: context)
-                    y = drawText("Achievements Unlocked (\(unlocked.count))", at: y, attrs: headerAttrs)
-                    y += 4
+            if !achievements.isEmpty {
+                y = checkPageBreak(y: y, needed: 60, context: context)
+                y = drawText("Achievements Unlocked (\(achievements.count))", at: y, attrs: headerAttrs)
+                y += 4
 
-                    for achievement in unlocked {
-                        y = checkPageBreak(y: y, needed: 20, context: context)
-                        y = drawText("\(achievement.icon) \(achievement.title)", at: y, attrs: bodyAttrs, indent: 10)
-                    }
-
-                    y += 10
-                    y = drawSeparator(at: y, context: context)
+                for achievement in achievements {
+                    y = checkPageBreak(y: y, needed: 20, context: context)
+                    y = drawText("\(achievement.icon) \(achievement.title)", at: y, attrs: bodyAttrs, indent: 10)
                 }
+
+                y += 10
+                y = drawSeparator(at: y, context: context)
             }
 
             // MARK: - Individual Sessions
             y = checkPageBreak(y: y, needed: 60, context: context)
-            y = drawText("Session Details (\(allSorted.count) sessions)", at: y, attrs: headerAttrs)
+            y = drawText("Session Details (\(entries.count) sessions)", at: y, attrs: headerAttrs)
             y += 6
 
-            for (index, recording) in allSorted.enumerated() {
+            for (index, entry) in entries.enumerated() {
                 // Estimate space needed for this session
-                let estimatedHeight: CGFloat = recording.analysis != nil ? 160 : 60
+                let estimatedHeight: CGFloat = entry.stats != nil ? 160 : 60
                 y = checkPageBreak(y: y, needed: estimatedHeight, context: context)
 
                 // Session header
                 let sessionNum = index + 1
-                let dateStr = recording.date.formatted(date: .abbreviated, time: .shortened)
-                let title = recording.displayTitle
-                let durationStr = recording.formattedDuration
+                let dateStr = entry.date.formatted(date: .abbreviated, time: .shortened)
+                let title = entry.displayTitle
+                let durationStr = entry.actualDuration.minutesSeconds
 
                 y = drawText("Session \(sessionNum): \(title)", at: y, attrs: subheaderAttrs)
                 y = drawText("\(dateStr)  •  Duration: \(durationStr)", at: y, attrs: captionAttrs, indent: 0)
                 y += 2
 
-                if let prompt = recording.prompt {
-                    y = drawText("Category: \(prompt.category)", at: y, attrs: captionAttrs, indent: 0)
+                if let category = entry.category {
+                    y = drawText("Category: \(category)", at: y, attrs: captionAttrs, indent: 0)
                 }
 
-                if let drillMode = recording.drillMode {
+                if let drillMode = entry.drillMode {
                     y = drawText("Mode: \(drillMode)", at: y, attrs: captionAttrs, indent: 0)
                 }
 
-                if let analysis = recording.analysis {
+                if let analysis = entry.stats {
                     y += 4
 
                     // Score + subscores
-                    let scoreStr = "Score: \(analysis.speechScore.overall)/100"
-                    let sub = analysis.speechScore.subscores
+                    let scoreStr = "Score: \(analysis.overall)/100"
+                    let sub = analysis.subscores
                     let subscoreStr = "Clarity: \(sub.clarity)  •  Pace: \(sub.pace)  •  Fillers: \(sub.fillerUsage)  •  Pauses: \(sub.pauseQuality)"
                     y = drawText(scoreStr, at: y, attrs: bodyAttrs, indent: 10)
                     y = drawText(subscoreStr, at: y, attrs: captionAttrs, indent: 10)
@@ -176,7 +249,7 @@ class JournalExportService {
                 }
 
                 // Transcript
-                if let transcript = resolvedTranscript(for: recording) {
+                if let transcript = entry.transcript {
                     y += 4
                     y = checkPageBreak(y: y, needed: 40, context: context)
                     y = drawText("Transcript:", at: y, attrs: subheaderAttrs, indent: 10)
@@ -193,7 +266,7 @@ class JournalExportService {
                 y += 12
 
                 // Light separator between sessions
-                if index < allSorted.count - 1 {
+                if index < entries.count - 1 {
                     y = drawLightSeparator(at: y, context: context)
                     y += 6
                 }
@@ -204,24 +277,6 @@ class JournalExportService {
         }
 
         return data
-    }
-
-    private func resolvedTranscript(for recording: Recording) -> String? {
-        let wordsTranscript = recording.transcriptionWords?
-            .map(\.word)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let wordsTranscript, !wordsTranscript.isEmpty {
-            return wordsTranscript
-        }
-
-        let fallbackText = recording.transcriptionText?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let fallbackText, !fallbackText.isEmpty {
-            return fallbackText
-        }
-
-        return nil
     }
 
     // MARK: - Drawing Helpers
@@ -333,13 +388,8 @@ class JournalExportService {
 
     // MARK: - Data Helpers
 
-    private func mostImprovedMetric(recordings: [Recording]) -> String {
-        guard recordings.count >= 2 else { return "N/A" }
-
-        let first = recordings.first?.analysis?.speechScore.subscores
-        let last = recordings.last?.analysis?.speechScore.subscores
-
-        guard let f = first, let l = last else { return "N/A" }
+    private func mostImprovedMetric(_ analyzed: [JournalEntry.Stats]) -> String {
+        guard analyzed.count >= 2, let f = analyzed.first?.subscores, let l = analyzed.last?.subscores else { return "N/A" }
 
         let improvements = [
             ("Clarity", l.clarity - f.clarity),
@@ -351,12 +401,11 @@ class JournalExportService {
         return improvements.max(by: { $0.1 < $1.1 })?.0 ?? "N/A"
     }
 
-    private func aggregateFillerWords(from recordings: [Recording]) -> [FillerWord] {
+    private func aggregateFillerWords(from analyzed: [JournalEntry.Stats]) -> [FillerWord] {
         var totals: [String: Int] = [:]
 
-        for recording in recordings {
-            guard let fillers = recording.analysis?.fillerWords else { continue }
-            for filler in fillers {
+        for stats in analyzed {
+            for filler in stats.fillerWords {
                 totals[filler.word, default: 0] += filler.count
             }
         }
