@@ -83,10 +83,6 @@ struct SpeakUpApp: App {
                 .environment(audioService)
                 .environment(llmService)
                 .task {
-                    llmService.localLLM.preloadCleanupHandler = {
-                        await speechService.unloadWhisperModel()
-                    }
-
                     // Settings must exist before anything else reads them
                     await ensureSettingsExist()
 
@@ -129,11 +125,13 @@ struct SpeakUpApp: App {
                         AttributionStore.shared.logFirstOpenIfNeeded()
                     }
 
-                    // Delayed so the first screen paints before the heaviest
-                    // launch work (fresh install: ~150 MB download + prewarm).
-                    Task.detached(priority: .background) {
+                    // Makes sure the system speech model is on the device
+                    // before the first take (usually already installed; a
+                    // fresh device downloads it once). Delayed so the first
+                    // screen paints first.
+                    Task(priority: .background) {
                         try? await Task.sleep(for: .seconds(1.5))
-                        await speechService.preloadModel()
+                        try? await speechService.prepareModel()
                     }
                     Task(priority: .background) {
                         await llmService.loadLocalModelIfNeeded()
@@ -160,8 +158,7 @@ struct SpeakUpApp: App {
                     await PurchaseService.shared.refreshEntitlement()
                     RecordingProcessingCoordinator.shared.resumeDeferredRecordings(
                         modelContext: sharedModelContainer.mainContext,
-                        speechService: speechService,
-                        llmService: llmService
+                        speechService: speechService
                     )
                 }
                 AnalyticsService.shared.log(.sessionStart())

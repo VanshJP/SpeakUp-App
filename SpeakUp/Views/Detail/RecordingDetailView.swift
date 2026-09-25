@@ -196,7 +196,6 @@ struct RecordingDetailView: View {
                 // alone instead of re-asking what Save & close skipped.
                 AnalyzingView(
                     recording: recording,
-                    isModelLoading: speechService.isLoadingModel,
                     isDownloadingModel: speechService.isDownloadingModel,
                     feedbackEnabled: offersSelfCheck(for: recording),
                     feedbackQuestions: feedbackQuestionsForAnalyzing,
@@ -743,8 +742,7 @@ struct RecordingDetailView: View {
         RecordingProcessingCoordinator.shared.enqueue(
             recordingID: recording.id,
             modelContext: modelContext,
-            speechService: speechService,
-            llmService: llmService
+            speechService: speechService
         )
     }
 
@@ -2031,7 +2029,7 @@ struct RecordingDetailView: View {
         let wpmData = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 // Pure pipeline static - never construct `SpeechService` off the
-                // main actor (its init would spin up Whisper under MainActor default).
+                // main actor (it is MainActor-isolated).
                 let data = SpeechAnalysisPipeline.computeWPMTimeSeries(
                     words: words,
                     actualDuration: durationSnapshot

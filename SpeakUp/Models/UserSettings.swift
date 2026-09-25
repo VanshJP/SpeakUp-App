@@ -424,7 +424,7 @@ final class UserSettings {
 
     // MARK: - Transcription Bias
 
-    /// Unified list of user-defined terms to bias Whisper transcription toward.
+    /// Unified list of user-defined terms to bias transcription toward.
     /// Combines the user's name, the dictation dictionary, the vocabulary word
     /// bank, and custom filler words (always-detected and context-dependent).
     /// De-duplicated case-insensitively; the name leads, followed by the

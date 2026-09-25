@@ -2,7 +2,7 @@
 
 Kernel only. `CLAUDE.md` → this file. Detail is on-demand - never ingest `docs/features/` wholesale.
 
-**Product:** Big Talk - on-device speech practice (WhisperKit, multi-axis scoring, optional on-device LLM).  
+**Product:** Big Talk - on-device speech practice (Apple SpeechAnalyzer, multi-axis scoring, optional on-device LLM).  
 **Code:** `SpeakUp*` / `SpeakUp/` · bundle `com.vansh.SpeakUpMore` · widget `com.vansh.SpeakUpMore.SpeakUpWidget`  
 **Stack:** iOS 26.0+ · SwiftUI · SwiftData · SPM · `@Observable` (never `ObservableObject`)
 
@@ -24,7 +24,7 @@ Senior engineer, repo on disk. Optimize for correct shipped source, not conversa
 
 ## NEVER
 
-1. Install SPM / run `xcodebuild -resolvePackageDependencies` unless asked (WhisperKit is huge).
+1. Install SPM / run `xcodebuild -resolvePackageDependencies` unless asked (llama.swift ships a 600 MB binary).
 2. Drive Simulator / `idb` / XCUITest click-loops unless the user asked for UI automation **and** a simulator exists.
 3. SwiftData: additive schema only. Do not rename, remove, or make non-optional a stored `@Attribute`.
 4. `@StateObject` / `@ObservedObject`. ViewModels never take `ModelContext`. Views: `@Query` / `@Environment(\.modelContext)`.

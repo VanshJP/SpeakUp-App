@@ -51,13 +51,6 @@ nonisolated enum LocalLLMError: LocalizedError, Sendable {
     }
 }
 
-extension Notification.Name {
-    /// Posted by `LocalLLMService` immediately before it initializes the heavy
-    /// `LLMInferenceEngine`. Listeners (e.g. `WhisperService`) should unload
-    /// their own large in-memory models so the LLM can claim the RAM.
-    static let localLLMWillLoad = Notification.Name("LocalLLM.willLoadHeavyModel")
-}
-
 // MARK: - LocalLLMService
 
 @MainActor @Observable
@@ -186,9 +179,6 @@ final class LocalLLMService {
 
     /// Minimum available memory (bytes) required before running inference.
     nonisolated private static let minimumMemoryForInference: Int = 350 * 1024 * 1024 // 350 MB
-    /// Spare memory, beyond the profile's own requirement, that lets the model
-    /// load beside a resident Whisper model instead of evicting it.
-    private static let coResidentHeadroomBytes: Int = 256 * 1024 * 1024 // 256 MB
     private static let selectedProfileDefaultsKey = "local_llm_selected_profile"
 
     // MARK: - State
@@ -252,15 +242,6 @@ final class LocalLLMService {
         config.waitsForConnectivity = true
         return URLSession(configuration: config, delegate: downloadDelegate, delegateQueue: nil)
     }()
-
-    /// Optional hook awaited just before the `LLMInferenceEngine` is created.
-    /// Host code (typically `LLMService` at app startup) should set this to a
-    /// closure that unloads other heavy in-memory assets - primarily the
-    /// Whisper model - so the LLM can claim the RAM. When `nil`, the
-    /// `Notification.Name.localLLMWillLoad` notification is still posted so
-    /// observers can react.
-    @ObservationIgnored
-    var preloadCleanupHandler: (@MainActor @Sendable () async -> Void)?
 
     // MARK: - Model File Management
 
@@ -441,29 +422,13 @@ final class LocalLLMService {
 
         let required = selectedProfile.minimumRecommendedMemoryBytes
 
-        // Memory release: tell observers (WhisperService, etc.) to unload
-        // before we claim multiple GB for llama context - but only when the
-        // model would not fit beside them. The detail screen loads the model
-        // after every take, and evicting Whisper each time meant every take
-        // after the first rebuilt the speech model on the analyzing screen.
-        // Best-effort - a missing host hook is not fatal, just makes the next
-        // memory check more likely to fail.
-        let availableBeforeCleanup = Int(clamping: os_proc_available_memory())
-        if availableBeforeCleanup < required + Self.coResidentHeadroomBytes {
-            NotificationCenter.default.post(name: .localLLMWillLoad, object: self)
-            if let handler = preloadCleanupHandler {
-                await handler()
-            }
-        }
-
-        // Pre-check 2: memory headroom, measured *after* cleanup. The
-        // pre-cleanup reading would frequently false-negative on devices that
-        // had Whisper loaded.
-        let availableAfterCleanup = Int(clamping: os_proc_available_memory())
-        if availableAfterCleanup < required {
+        // Pre-check 2: memory headroom. Nothing else in the app holds a
+        // model to evict - speech runs in the system's own process.
+        let available = Int(clamping: os_proc_available_memory())
+        if available < required {
             modelState = .error(
                 LocalLLMError.insufficientMemory(
-                    availableBytes: availableAfterCleanup,
+                    availableBytes: available,
                     requiredBytes: required
                 ).errorDescription ?? "Insufficient memory"
             )

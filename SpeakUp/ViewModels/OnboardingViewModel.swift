@@ -123,10 +123,10 @@ final class OnboardingViewModel {
     private let audioService = AudioService()
     private var levelMonitorTask: Task<Void, Never>? = nil
 
-    // Speech recognition permission. Requested alongside the mic so the
-    // Apple Speech fallback transcriber (used when WhisperKit is unavailable
-    // or recovering) is pre-authorized. Denial is non-blocking, since WhisperKit
-    // remains the primary transcriber and does not require this permission.
+    // Speech recognition permission. Requested alongside the mic so the live
+    // recognizers (the in-take filler counter, Read Aloud, dictation) are
+    // pre-authorized. Denial is non-blocking: scoring a finished take runs on
+    // SpeechAnalyzer, which does not need this permission.
     var hasSpeechPermission = false
 
     // Vocab + dictionary seeds. Seeded silently from the level pick - the

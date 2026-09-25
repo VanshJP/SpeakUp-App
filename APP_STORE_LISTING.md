@@ -198,12 +198,14 @@ With the shipped `LocalAnalyticsSink`, the honest answers are:
 
 "Collect" in Apple's definition means transmitted off the device. Big Talk
 transmits nothing: recordings, transcripts, scores, and the usage log all stay
-in the app container, and the only network calls are model downloads from
-Hugging Face and the user's own iCloud sync when they turn it on.
+in the app container, and the only network calls are the optional coaching
+model download from Hugging Face, iOS's own one-time download of its speech
+model, and the user's own iCloud sync when they turn it on.
 
-That claim depends on one enforcement detail: every `SFSpeech*RecognitionRequest`
-in the app sets `requiresOnDeviceRecognition = true` **unconditionally**
-(`SpeechService`, `DictationService`, `LiveTranscriptionService`,
+Finished takes are transcribed by Apple's `SpeechAnalyzer`, which has no server
+path. The live recognizers are the enforcement detail: every
+`SFSpeech*RecognitionRequest` in the app sets `requiresOnDeviceRecognition =
+true` **unconditionally** (`DictationService`, `LiveTranscriptionService`,
 `ReadAloudService`). Left unset — or made conditional on
 `supportsOnDeviceRecognition`, which reads false while assets install — Apple
 Speech is free to stream microphone audio to Apple's servers, and the sentence

@@ -37,6 +37,12 @@ struct FillerPipelineTests {
         #expect(!tagged[2].isFiller)
     }
 
+    @Test func fillerPhraseMatchesThroughPunctuation() {
+        // Transcripts attach the comma: "you know, we tried".
+        let tagged = FillerDetectionPipeline.tagFillers(in: timings(["You", "know,", "we", "tried"]))
+        #expect(tagged.map(\.isFiller) == [true, true, false, false])
+    }
+
     @Test func timingsSurviveThePipeline() {
         let input = timings(["um", "speech"])
         let tagged = FillerDetectionPipeline.tagFillers(in: input)

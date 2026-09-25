@@ -68,6 +68,7 @@ Looking for a type, token or modifier by name: `grep -n 'Name' docs/SURFACE_MAP.
 | `LocalLLMService` | `SpeakUp/Services/LocalLLMService.swift` |
 | `MonoPCM` | `SpeakUp/Services/MonoPCM.swift` |
 | `NotificationService` | `SpeakUp/Services/NotificationService.swift` |
+| `OnDeviceTranscriber` | `SpeakUp/Services/OnDeviceTranscriber.swift` |
 | `PitchAnalysisService` | `SpeakUp/Services/PitchAnalysisService.swift` |
 | `PracticeRhythm` | `SpeakUp/Services/PracticeRhythm.swift` |
 | `PracticeRoutineService` | `SpeakUp/Services/PracticeRoutineService.swift` |
@@ -100,10 +101,10 @@ Looking for a type, token or modifier by name: `grep -n 'Name' docs/SURFACE_MAP.
 | `VocabMatcher` | `SpeakUp/Services/VocabMatcher.swift` |
 | `VocabScheduler` | `SpeakUp/Services/VocabScheduler.swift` |
 | `WeeklyProgressService` | `SpeakUp/Services/WeeklyProgressService.swift` |
-| `WhisperService` | `SpeakUp/Services/WhisperService.swift` |
 | `WidgetDataProvider` | `SpeakUp/Services/WidgetDataProvider.swift` |
 | `WordSafety` | `SpeakUp/Services/WordSafety.swift` |
 | `WordSwapSuggester` | `SpeakUp/Services/WordSwapSuggester.swift` |
+| `WordTimingRefiner` | `SpeakUp/Services/WordTimingRefiner.swift` |
 
 ## Design system
 
@@ -242,6 +243,7 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Services/LiveTranscriptionService.swift` | LiveHeardResult, LivePendingResults |
 | `SpeakUp/Services/LocalLLMService.swift` | LocalModelState, LocalLLMError, ModelProfile, DownloadProgressDelegate, ProgressHandler, CompletionHandler, LLMInferenceEngine |
 | `SpeakUp/Services/NotificationService.swift` | TriggerResolution |
+| `SpeakUp/Services/OnDeviceTranscriber.swift` | Backend, Transcript, TimedRun, Engine, Race, OnDeviceTranscriberError |
 | `SpeakUp/Services/PracticeRhythm.swift` | Suggestion |
 | `SpeakUp/Services/PracticeRoutineService.swift` | Handoff |
 | `SpeakUp/Services/ProgressCardRenderer.swift` | ProgressCardView |
@@ -255,15 +257,13 @@ Types living in a differently named file, plus Theme / Extensions / Components m
 | `SpeakUp/Services/ReviewRequestService.swift` | Trigger |
 | `SpeakUp/Services/ScenarioReadinessEngine.swift` | PracticeScenario, ScenarioMomentum, ScenarioReadiness, TrajectorySummary |
 | `SpeakUp/Services/ScoreCardRenderer.swift` | ScoreCardTheme, ScoreCardView |
-| `SpeakUp/Services/SpeechIsolationService.swift` | Result |
 | `SpeakUp/Services/SpeechScoringEngine.swift` | GibberishResult, EnhancedSpeechMetrics |
-| `SpeakUp/Services/SpeechService.swift` | ResumeGate, SpeechAnalysisPipeline, SpeechTranscriptionResult, PauseInfo, SpeechServiceError |
+| `SpeakUp/Services/SpeechService.swift` | SpeechAnalysisPipeline, SpeechTranscriptionResult, PauseInfo, SpeechServiceError |
 | `SpeakUp/Services/StructuralRepetitionDetector.swift` | Clause, Run |
 | `SpeakUp/Services/VocabChallengeStore.swift` | CachedDay |
 | `SpeakUp/Services/VocabFreshWords.swift` | GeneratedVocabStore, FreshWordSanitizer, VocabFreshWordGenerator |
 | `SpeakUp/Services/VocabScheduler.swift` | VocabGrade, VocabReviewState |
 | `SpeakUp/Services/WeeklyProgressService.swift` | WeeklyProgressData |
-| `SpeakUp/Services/WhisperService.swift` | WhisperTranscriptionResult, WhisperKitBox, WhisperDecodeExecutor, FirstFinisher, DecodeHeartbeat, AsyncSemaphore, WhisperServiceError |
 | `SpeakUp/Services/WordSafety.swift` | Rejection |
 | `SpeakUp/Services/WordSwapSuggester.swift` | FragmentPiece, SwapEdit, Kind, WordSwapOption, WordSwapOccurrence, WordSwapMoment, SwapToken |
 | `SpeakUp/Theme/AppBackground.swift` | Style · appBackground |

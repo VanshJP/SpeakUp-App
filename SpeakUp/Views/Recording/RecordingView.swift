@@ -5,7 +5,6 @@ struct RecordingView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var userSettings: [UserSettings]
     @Environment(SpeechService.self) private var speechService
-    @Environment(LLMService.self) private var llmService
     @State private var viewModel = RecordingViewModel()
     @State private var selectedFramework: SpeechFramework?
     @State private var showingVocabStrip = true
@@ -65,11 +64,14 @@ struct RecordingView: View {
                     .transition(.scale(scale: 0.92).combined(with: .opacity))
                     .zIndex(10)
             } else if let completedRecording {
+                // Fade only, in and out. The analyzing screen scrolls, and
+                // `PageScrollView` sizes its column with
+                // `containerRelativeFrame`; under a scale transition that
+                // layout never settles - the scroll view re-reports its size,
+                // the column re-measures - and the main thread spins until iOS
+                // kills the app. That was the post-take freeze (gotcha §33).
                 feedbackGateContent(for: completedRecording)
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 1.04).combined(with: .opacity),
-                        removal: .scale(scale: 0.96).combined(with: .opacity)
-                    ))
+                    .transition(.opacity)
                     .zIndex(5)
             } else {
                 recordingContent
@@ -85,10 +87,9 @@ struct RecordingView: View {
                 duration: duration,
                 timerEndBehavior: timerEndBehavior,
                 countdownStyle: countdownStyle,
-                speechService: speechService,
-                llmService: llmService
+                speechService: speechService
             )
-            viewModel.warmUpSpeechModel()
+            viewModel.prepareSpeechModel()
             viewModel.goalId = goalId
             viewModel.storyId = storyId
             viewModel.sessionSource = sessionSource
@@ -210,7 +211,6 @@ struct RecordingView: View {
         ZStack {
             AnalyzingView(
                 recording: recording,
-                isModelLoading: speechService.isLoadingModel,
                 isDownloadingModel: speechService.isDownloadingModel,
                 feedbackEnabled: checkInActive,
                 feedbackQuestions: feedbackQuestions,

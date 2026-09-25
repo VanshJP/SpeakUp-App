@@ -17,7 +17,7 @@ nonisolated struct FillerWordConfig: Sendable {
 /// MainActor call sites alike.
 nonisolated struct FillerWordList {
     // Words that are ALWAYS fillers (hesitation sounds)
-    // Includes variations that Whisper might transcribe
+    // Includes the spelling variations transcribers write
     static let unconditionalFillers: Set<String> = [
         "um", "umm", "ummm", "ummmm", "hum",
         "uh", "uhh", "uhhh", "uhhhh",
@@ -113,10 +113,13 @@ nonisolated struct FillerWordList {
         return false
     }
 
-    /// Check if two consecutive words form a filler phrase
+    /// Check if two consecutive words form a filler phrase. Punctuation is
+    /// ignored: transcripts attach it to the word, and the classic filler use
+    /// ("you know, we tried") always carries a comma.
     static func isFillerPhrase(_ word1: String, _ word2: String) -> Bool {
-        let phrase = "\(word1.lowercased()) \(word2.lowercased())"
-        return fillerPhrases.contains(phrase)
+        let first = word1.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        let second = word2.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        return fillerPhrases.contains("\(first) \(second)")
     }
 
     // MARK: - Private Helpers

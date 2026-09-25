@@ -110,7 +110,6 @@ struct OnboardingBaselineBriefingStep: View {
 struct OnboardingBaselineStep: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SpeechService.self) private var speechService
-    @Environment(LLMService.self) private var llmService
 
     let viewModel: OnboardingViewModel
     let userName: String
@@ -423,8 +422,7 @@ struct OnboardingBaselineStep: View {
             RecordingProcessingCoordinator.shared.enqueue(
                 recordingID: recording.id,
                 modelContext: modelContext,
-                speechService: speechService,
-                llmService: llmService
+                speechService: speechService
             )
             AnalyticsService.shared.log(.onboardingStep("baseline", action: "take_saved"))
             savedRecording = recording
@@ -453,8 +451,7 @@ struct OnboardingBaselineStep: View {
         RecordingProcessingCoordinator.shared.enqueue(
             recordingID: recording.id,
             modelContext: modelContext,
-            speechService: speechService,
-            llmService: llmService
+            speechService: speechService
         )
     }
 }

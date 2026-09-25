@@ -914,7 +914,7 @@ struct StoryEditorView: View {
 
     // MARK: - Helpers
 
-    /// Assemble the bias-term list handed to Whisper for dictation in this editor.
+    /// Assemble the bias-term list handed to the transcriber for dictation in this editor.
     /// Includes the unified user bias terms (dictation bank + vocab bank + custom fillers)
     /// plus the current story's tag values, so story-specific names/places/people transcribe
     /// consistently across multiple dictation takes. De-duplicated case-insensitively.

@@ -14,4 +14,4 @@ Increase the weight of pace in the overall speech score by 5%.
 ## Forbidden
 
 - Decoding `Recording.analysis` in a SwiftUI `body`
-- Touching Whisper/audio-thread code for a weights tweak
+- Touching transcription/audio-thread code for a weights tweak

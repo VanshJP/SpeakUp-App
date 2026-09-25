@@ -20,7 +20,7 @@ Progressive disclosure for Big Talk / SpeakUp. **Open only the row you are chang
 |------|------|------|------|-------|
 | Boot, tabs, deep links, DI | [architecture.md](./architecture.md) | `SpeakUpApp.swift`, `ContentView.swift` | gotchas §1, §6 | — |
 | Recording session / audio | [recording.md](./recording.md) | `Views/Recording/`, `RecordingViewModel*`, `AudioService` | gotchas §4, §9 | `axiom-media` |
-| Transcription / scoring wiring | [speech-pipeline.md](./speech-pipeline.md) | `Services/*Speech*`, `RecordingProcessingCoordinator` | **`SPEECH.md`**, gotchas §2, §5, §9 | `axiom-media` |
+| Transcription / scoring wiring | [speech-pipeline.md](./speech-pipeline.md) | `Services/*Speech*`, `OnDeviceTranscriber`, `WordTimingRefiner`, `RecordingProcessingCoordinator` | **`SPEECH.md`**, gotchas §2, §5, §9 | `axiom-media` |
 | Analyzing / detail / share | [recording-detail.md](./recording-detail.md) | `Views/Detail/`, `SharePresenter`, `SharedPromptLink` · self-check wait screen (`AnalyzingView`, `FeelingDial`) | gotchas §2b, §3, §7, §29 | — |
 | Stories | [stories.md](./stories.md) | `Views/Stories/`, `Story*`, `StoryFolderHealing` (+ `StoryFolderSeedService`), `StoryTaggingService` | — | — |
 | Read-Aloud | [read-aloud.md](./read-aloud.md) | `Views/ReadAloud/`, `ReadAloudService`, `RecognitionContinuity`, `ReadAloudDocumentImporter`, `PronunciationService` · toolbar add action / paste + import / saved rail / focus-grouped catalog / hear-it / holds + stalls / drill what you missed / minimal pairs / sounds to check (`ConsonantAnalyzer`) | gotchas §9, §25, §26 | `axiom-media` |

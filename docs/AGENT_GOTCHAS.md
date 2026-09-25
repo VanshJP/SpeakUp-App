@@ -36,6 +36,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | Highlighted text drifts while it updates; long session freezes then the app dies | 25 |
 | Mic dies partway through a long session and the screen freezes on "Not listening" | 26 |
 | Read Aloud snaps back toward word one after a pause; drill word / filler counts stop growing | 9, 26 |
+| Take fails "Audio format is not supported"; simulator never scores; no pauses between transcript words | 9 |
 | Screen dims or locks in the middle of a drill, warm-up or read | 26 |
 | A sheet or cover opens blank, closes itself, and works on the second tap | 27 |
 | An animation that never plays: confetti invisible, chart draw-in pops | 28 |
@@ -43,6 +44,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 | Analysis crawls or sits on "Transcribing" in a long session, but scores fast after a relaunch | 30 |
 | A `nonisolated` async helper still runs its work on the main thread | 31 |
 | Main-thread cost scales with how often a parent view redraws, not with this view | 32 |
+| App freezes the instant a take stops (100% CPU, SwiftUI layout on every sample, iOS kills it) | 33 |
 
 ## Punch list
 
@@ -57,7 +59,7 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 8. Absolute media paths; skip `resolvedAudioURL`; unsanitized `../` filenames.
 9. Edit only one of the two `WidgetDataProvider`s.
 10. Change onboarding without `ONBOARDING_VISION.md`.
-11. Lower `noSpeechThreshold` "to catch more speech" — it deletes 30 s windows.
+11. Hand `SpeechAnalyzer` a file instead of PCM converted to `bestAvailableAudioFormat`, or read pauses off its raw word ranges (they tile each phrase) without `WordTimingRefiner`.
 12. Make `requiresOnDeviceRecognition` conditional — audio leaves the device.
 13. `installTap` / `removeTap` on a running `AVAudioEngine` — audio-thread segfault, no app frames.
 14. Plain `ScrollView` for a full-screen page — use `PageScrollView`.
@@ -72,9 +74,10 @@ Companion: [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) · index: [features/README.m
 23. Store a recognition request's newest transcript as the whole request, or count `max` across results — on device the recognizer restarts a request's transcript after a pause and can send a blank final. Feed results through `RecognitionContinuity` / `RequestTranscript`.
 24. A timed practice screen without `keepsScreenAwake` — Auto-Lock fires during a hands-free minute and takes the mic with it.
 25. File work on a take's media from the main actor — `setUbiquitous`, iCloud status keys, even `fileExists` in the ubiquity container can wait seconds on the iCloud daemon.
-26. Blocking waits on Swift's cooperative pool — a semaphore, a llama call, a long synchronous loop inside `Task.detached`. The pool does not replace a blocked thread. WhisperKit's decode runs on `WhisperDecodeExecutor` for this reason.
+26. Blocking waits on Swift's cooperative pool — a semaphore, a llama call, a long synchronous loop inside `Task.detached`. The pool does not replace a blocked thread.
 27. Heavy synchronous work at the top of a `nonisolated async` function — under approachable concurrency it runs on the caller's actor, usually the main one.
 28. An expensive initializer as a `@State` initial value (a recognizer, an audio engine) — it runs and is thrown away every time the parent re-creates the view.
+29. A scale transition (or animated `scaleEffect`) on a subtree that contains a `PageScrollView` / any `containerRelativeFrame` scroll content — layout never settles and the main thread spins until the watchdog kills the app.
 
 ---
 
@@ -202,7 +205,9 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 ## 9. Speech recognition: audio-thread and audio-eater traps
 
-**`DecodingOptions.noSpeechThreshold` is the silence trigger, not a sensitivity dial.** WhisperKit throws away an entire 30 s window — no error, no gap marker, seek jumps forward — when `noSpeechProb >` the threshold and the window also fails `logProbThreshold` (`SegmentSeeker.findSeekPointAndSegments`). **Lowering it drops more audio, not less.** 0.4 vs the 0.6 default deleted quiet stretches in the middle and back half of recordings. Same shape for `temperatureFallbackCount`: cutting it below default writes off marginal windows a retry would have decoded.
+**`SpeechAnalyzer` takes only the formats its modules list.** Anything else - including a file handed to `analyzeSequence(from:)` / `start(inputAudioFile:)` - fails with `SFSpeechErrorDomain` 3, "Audio format is not supported". Convert to `SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith:)` first (`OnDeviceTranscriber.convert`). In the simulator both transcribers list **no** formats, so a finished take cannot be transcribed there at all: test scoring on a device.
+
+**`SpeechTranscriber` word ranges tile each phrase edge to edge.** A pause is inside the word before it, so gap-based metrics read zero pauses. `WordTimingRefiner.refine` pulls each word onto its voiced audio before anything reads gaps. **Hesitations need `SpeechTranscriber`:** `DictationTranscriber` (the fallback on iPhone 11-class phones) strips "um"/"uh" with or without punctuation.
 
 **Never `installTap` / `removeTap` on a *running* `AVAudioEngine`.** Installing a tap makes AVAudioEngine set the input node's output format, which reconfigures `AURemoteIO`'s converter while its realtime IO thread is inside `AUHALOutputUnit_InputAvailableCallback` — callback pointer goes null, `EXC_BAD_ACCESS` on the audio thread, backtrace names no app code. `LiveTranscriptionService` hit this ~60 s into every session when SFSpeech auto-finalized and `restartRecognitionPreservingEngine` re-installed the tap. **Install the tap once, before `engine.start()`.** To re-arm recognition, swap the `SFSpeechAudioBufferRecognitionRequest` the tap block appends to (`requestBox`, `OSAllocatedUnfairLock`) and leave the tap alone. Teardown: `engine.stop()` *before* `removeTap`. Same rule for `DictationService` / `ReadAloudService`.
 
@@ -214,12 +219,9 @@ App Group: `group.com.speakup.shared` (also caches entitlement). Change keys / p
 
 **A capture session left as `.record` mutes the whole app.** `AVSpeechSynthesizer` plays through the shared session and sets no category of its own, so after dictation it spoke silently until some other screen reconfigured the session. An owner that takes `.record` hands it back on teardown - `DictationService.cleanup()` restores `.ambient`, synchronously and only while the category is still `.record`, so it never overwrites a screen that configured its own.
 
-**`requiresOnDeviceRecognition` must be `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`SpeechService`, `DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Unset, the recognizer may stream microphone audio to Apple. `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
+**`requiresOnDeviceRecognition` must be `true` unconditionally** on every `SFSpeech*RecognitionRequest` (`DictationService`, `LiveTranscriptionService`, `ReadAloudService`). Finished takes go through `SpeechAnalyzer`, which has no server path. Unset, the recognizer may stream microphone audio to Apple. `APP_STORE_LISTING.md` §3 claims the app transmits nothing. Do **not** guard with `if recognizer.supportsOnDeviceRecognition` — that reads false while assets install, which is exactly when audio would leave the device. An unavailable recognizer must fail loudly.
 
-**WhisperKit comes from `argmax-oss-swift` (product `WhisperKit`), pinned ≥ 1.1.0.** Never go below it: before 1.1.0, setting `promptTokens` (our filler prompt, on every take) could return an empty transcript with no error, dropping the take to Apple Speech, which strips most fillers. Debug console logs `Transcribed by <backend>` per take; anything but `whisper*` lost fillers.
-
-**WhisperKit `download: true` is not offline-safe after the first install.** Config init asks Hugging Face for the file list *before* it opens the local cache, so flaky Wi‑Fi freezes "Analyzing…" even when `openai_whisper-base` is already under `Documents/huggingface/`. After the first successful download, load with `modelFolder` pointing at that cache and `download: false` (set `tokenizerFolder` to the Hub base so the tokenizer stays local too). Time-box first-time downloads so a dead connection fails into on-device Apple Speech instead of hanging. Never implement such a time-box as a task group: the group awaits the stuck child before rethrowing, so the timeout never returns. Race through a continuation (`WhisperService.FirstFinisher`), and wait on a shared build *task* rather than a semaphore so the waiter escalates its priority.
-Require both `AudioEncoder` and `TextDecoder` before treating the cache as offline-ready. After any Whisper timeout (`abandonsWhisper`), skip the raw retry and the reload leg and fall through to Apple Speech. The reload leg also never runs after an empty transcript: same model, same file, temperature 0 gives the same empty result. Analyzing UI must key "Downloading…" off an in-flight download flag, not `!isModelLoaded`.
+**Never time-box an await with a task group.** The group awaits every child before it rethrows, so a timeout cannot fire past a wedged call. Race through a continuation (`OnDeviceTranscriber.withDeadline`). Debug console logs `Transcribed by <backend>` per take; `dictation_transcriber` means hesitations were not transcribed.
 
 ---
 
@@ -264,7 +266,7 @@ An `@Observable` type's dictionary-typed stored property initialized with `[]` t
 ## 16. Audio consumers take `MonoPCM`, not `AVAudioFile`
 
 Pre-refactor, one analysis whole-file-decoded the PCM three times (isolation preprocess, speaker labeling, pitch), materializing ~115 MB per 10-minute take each time. Now every consumer takes a `MonoPCM` value and decodes via `MonoPCM.decode(url:)` only where its gating requires samples — short takes that gate out of speaker labeling decode nothing. Do not reintroduce direct `AVAudioFile` reads in scoring consumers.
-Pass the post-Whisper buffer into speaker labeling and pitch via `SpeechTranscriptionResult.monoPCM` — do not re-decode the file for each consumer. Isolation may decode separately before Whisper; do not keep that buffer alive across inference.
+The transcription job decodes once (`SpeechService.transcribeTake`) and hands the same buffer to the transcriber, `WordTimingRefiner`, the noise measurement and speaker labeling, then to pitch via `SpeechTranscriptionResult.monoPCM`. Do not re-decode the file for any consumer.
 
 ---
 
@@ -563,27 +565,20 @@ thread per core, and it never adds a thread when one blocks. Anything that
 parks a pool thread on a semaphore, a lock or a long synchronous call takes it
 away from every other task until it returns.
 
-WhisperKit 0.15 does this on every token: its greedy sampler reads the token
-out of an `MLTensor` with `asIntArray()` / `asFloatArray()`, each of which
-starts a `Task` and blocks the calling thread on a `DispatchSemaphore` until it
-finishes. With the pool already busy (a llama generation or unload, detached
-SwiftData scans, an earlier take's scoring) the sampler's task waits for a
-thread, and the decode crawls or stalls on the analyzing screen. A relaunch has
-an idle pool, so the same take then scores quickly - which is what makes this
-look like a state bug rather than a scheduling one.
+WhisperKit 0.15 did this on every token (its sampler blocked on a
+`DispatchSemaphore` twice per token), and with the pool busy - a llama
+generation or unload, detached SwiftData scans, an earlier take's scoring - the
+decode crawled on the analyzing screen while a relaunch, with an idle pool,
+scored the same take quickly. That made it look like a state bug rather than a
+scheduling one. Transcription now runs in the system's speech process, but the
+rule stands for anything else that blocks.
 
 Rules:
 
-- The decode runs on `WhisperDecodeExecutor`, a `TaskExecutor` over a
-  concurrent GCD queue, via `Task.detached(executorPreference:)`. GCD brings up
-  another worker when one blocks in the kernel. Keep it there.
-- WhisperKit delivers the per-token callback from a low-priority detached task
-  on the pool, so a busy pool starves the stall watchdog's heartbeat while the
-  decode is fine. `segmentDiscoveryCallback` runs inline in the decode loop,
-  once per window, and beats the heartbeat too. Do not drop it.
 - New blocking work (C libraries, `DispatchSemaphore`, file-by-file loops over a
-  library) goes on a GCD queue with a continuation, or a task executor like the
-  one above - not in a bare `Task.detached`.
+  library) goes on a GCD queue with a continuation, or a `TaskExecutor` over a
+  concurrent GCD queue (`Task.detached(executorPreference:)`) - not in a bare
+  `Task.detached`. GCD brings up another worker when one blocks in the kernel.
 
 ## 31. `nonisolated async` runs on the caller's actor
 
@@ -617,4 +612,39 @@ built its `SFSpeechRecognizer` - a round trip to the speech daemon - in `init`;
 it now builds it on first `start()`. Keep initializers of `@State` values cheap:
 no recognizers, engines, file reads or fetches. Create them on first use or in
 `.task`.
+
+## 33. Scale transitions around a `PageScrollView` never settle
+
+The post-take freeze. `RecordingView` handed the recorder over to the analyzing
+screen with `.transition(.scale(scale: 1.04).combined(with: .opacity))`, and the
+analyzing screen (self-check or skeleton) is a `PageScrollView`, whose column is
+sized with `containerRelativeFrame(.horizontal)`. Under the scale transform that
+layout never converges: the scroll view commits its geometry, the column
+re-measures against it, the scroll view adjusts its offset, and SwiftUI flushes
+another transaction - forever, inside one render pass. The main thread sat at
+100% the instant a take stopped, nothing on screen responded (Save & close
+included), and FrontBoard's watchdog killed the app (`0x8BADF00D`, "scene-update
+watchdog" or "Failed to terminate gracefully"). Every one of 19 kill reports
+from the phone had the main thread in SwiftUI layout with no app frame on top.
+
+It looked like an analysis hang for months because the job never got to run:
+the old Whisper model build needed the main actor, so the screen said
+"Preparing Speech Engine..." until the app died. The same take scored fine from
+History after a relaunch - no scale transition there.
+
+How it was found, for the next one: an Instruments trace on device
+(`xcrun xctrace record --template SwiftUI --launch -- <bundle id>`), stacks
+symbolicated with `atos` against the build's `SpeakUp.debug.dylib`, then a
+simulator repro with no UI driving (`-seedScreenshotData`, a debug hook that
+opens `speakup://record`, a take that stops itself) bisected by launch flags.
+Removing either the scroll view or the scale transition fixed it; a fade with
+the same spring did too.
+
+Rules:
+
+- Full-screen content that scrolls fades in and out. No `.scale` transition or
+  animated `scaleEffect` on a subtree containing a `PageScrollView` or any
+  `containerRelativeFrame` scroll content.
+- A scaled child *inside* a scroll view (a card, a pill) is fine; the loop needs
+  the scroll view itself under the transform.
 

@@ -1,67 +1,44 @@
 import Foundation
-import AVFoundation
 
-/// Speech-focused audio enhancement prior to ASR.
-/// Applies a light high-pass filter and adaptive noise gate to reduce
-/// stationary background noise while preserving near-field speech.
-/// Pure DSP - runs off the main actor inside `SpeechService.transcribe`'s
-/// GCD workers. Must stay `nonisolated` under MainActor default isolation.
+/// Measures how much stationary background noise a take carries, for the
+/// scoring pipeline's reliability stabilization (`residualNoiseScore`).
+///
+/// It used to also write a high-passed, noise-gated copy of the take for
+/// Whisper to read. `SpeechTranscriber` handles room noise itself and a gate
+/// can only take speech away from it, so the transcriber reads the original
+/// file and only the measurement is left. The numbers are unchanged: they
+/// still describe the take as the gate would have left it.
+/// Pure DSP - must stay `nonisolated` under MainActor default isolation.
 nonisolated enum SpeechIsolationService {
-    nonisolated struct Result: Sendable {
-        let processedAudioURL: URL
-        let metrics: AudioIsolationMetrics
-    }
-
-    static func preprocessIfBeneficial(monoPCM: MonoPCM) -> Result? {
+    /// Nil when the take is short or already clean (SNR 22 dB or better), or
+    /// when a gate would not have helped - the same takes the old preprocess
+    /// skipped, so scoring sees the same inputs.
+    static func metrics(for monoPCM: MonoPCM) -> AudioIsolationMetrics? {
         guard monoPCM.samples.count > Int(monoPCM.sampleRate * 1.5) else { return nil }
 
         let baselineSNR = estimateSNR(samples: monoPCM.samples, sampleRate: monoPCM.sampleRate)
-
-        // Skip processing if audio already has excellent signal quality.
-        // Lowered threshold from 18 dB to 22 dB:
-        // - 18 dB was too conservative: recordings with 15-18 dB SNR benefit from processing
-        //   but were being skipped, leaving noisy audio going into Whisper.
-        // - 22 dB is a more realistic "already clean enough" threshold for mobile recordings.
-        //   Studio-quality speech is typically 30+ dB; 22 dB still has audible background noise.
-        // - This means more recordings get processed, improving Whisper accuracy and
-        //   downstream speaker isolation quality.
+        // 22 dB is a realistic "already clean enough" bar for phone takes;
+        // studio speech is typically 30+ dB.
         guard baselineSNR < 22.0 else { return nil }
 
         let highPassed = applyHighPassFilter(to: monoPCM.samples)
         let gated = applyAdaptiveNoiseGate(to: highPassed, sampleRate: monoPCM.sampleRate)
         let improvedSNR = estimateSNR(samples: gated, sampleRate: monoPCM.sampleRate)
         let delta = improvedSNR - baselineSNR
-
-        // Skip writing an alternate file when enhancement does not improve signal quality.
         guard delta > 0.3 else { return nil }
 
-        let outputURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("speakup_isolated_\(UUID().uuidString).caf")
-
-        guard writeMonoPCM(samples: gated, sampleRate: monoPCM.sampleRate, to: outputURL) else {
-            return nil
-        }
-
-        // Adjusted suppression score formula to account for the new 22 dB skip threshold.
-        // Previously: (delta + 2.0) / 8.0 - a 6 dB improvement scored 100.
-        // Now: (delta + 1.5) / 10.0 - a 8.5 dB improvement scores 100.
-        // This gives a more honest score since we're now processing noisier audio.
+        // (delta + 1.5) / 10: an 8.5 dB improvement scores 100.
         let suppressionScore = max(0, min(100, Int(((delta + 1.5) / 10.0) * 100.0)))
-        // Adjusted residual noise score to match the new skip threshold.
-        // Previously: (improvedSNR + 5.0) / 20.0 - 15 dB output SNR scored 100.
-        // Now: (improvedSNR + 5.0) / 27.0 - 22 dB output SNR scores 100.
-        // This prevents inflated residualNoiseScore values from over-dampening reliability.
+        // (SNR + 5) / 27: 22 dB output SNR scores 100, matching the skip bar,
+        // so residual noise never over-dampens reliability.
         let residualNoiseScore = max(0, min(100, Int(((improvedSNR + 5.0) / 27.0) * 100.0)))
 
-        return Result(
-            processedAudioURL: outputURL,
-            metrics: AudioIsolationMetrics(
-                estimatedInputSNRDb: baselineSNR,
-                estimatedOutputSNRDb: improvedSNR,
-                suppressionDeltaDb: delta,
-                suppressionScore: suppressionScore,
-                residualNoiseScore: residualNoiseScore
-            )
+        return AudioIsolationMetrics(
+            estimatedInputSNRDb: baselineSNR,
+            estimatedOutputSNRDb: improvedSNR,
+            suppressionDeltaDb: delta,
+            suppressionScore: suppressionScore,
+            residualNoiseScore: residualNoiseScore
         )
     }
 
@@ -178,35 +155,5 @@ nonisolated enum SpeechIsolationService {
         let sorted = values.sorted()
         let index = Int((Double(sorted.count - 1) * clampedP).rounded())
         return sorted[max(0, min(sorted.count - 1, index))]
-    }
-
-    // MARK: - Audio I/O
-
-    private static func writeMonoPCM(samples: [Float], sampleRate: Double, to outputURL: URL) -> Bool {
-        guard let format = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 1,
-            interleaved: false
-        ) else { return false }
-
-        guard let buffer = AVAudioPCMBuffer(
-            pcmFormat: format,
-            frameCapacity: AVAudioFrameCount(samples.count)
-        ) else { return false }
-        buffer.frameLength = AVAudioFrameCount(samples.count)
-
-        guard let channelData = buffer.floatChannelData else { return false }
-        for i in 0..<samples.count {
-            channelData[0][i] = samples[i]
-        }
-
-        do {
-            let file = try AVAudioFile(forWriting: outputURL, settings: format.settings)
-            try file.write(from: buffer)
-            return true
-        } catch {
-            return false
-        }
     }
 }
